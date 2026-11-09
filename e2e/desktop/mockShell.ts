@@ -95,6 +95,12 @@ export async function installMockShell(page: Page): Promise<void> {
     const recovery = new Map<string, { entry: Record<string, unknown>; text: string }>();
     const sidecars = new Map<string, { mime: string; base64: string }>();
     const docsImages = new Map<string, string>();
+    /** The note's JSON, as the shell lifts it out (`docs.rs`'s `marker_of`). */
+    const noteOf = (svg: string) => {
+      const open = '<metadata id="draftcanvas-docs">';
+      const start = svg.indexOf(open) + open.length;
+      return svg.slice(start, svg.indexOf('</metadata>', start)).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+    };
     const markdownFiles = new Map<string, { text: string; version: number }>();
     const markdownHandles = new Map<string, string>();
     let nextMarkdownFile: { name: string; text: string; imageDir: string } | null = null;
@@ -353,19 +359,19 @@ export async function installMockShell(page: Page): Promise<void> {
       sidecar_read: (args: { handle: string }) => sidecars.get(args.handle) ?? null,
       sidecar_write: (args: { handle: string; mime: string; base64: string }) => void sidecars.set(args.handle, args),
       sidecar_remove: (args: { handle: string }) => void sidecars.delete(args.handle),
-      docs_status: (args: { handle: string }) => {
+      docs_status: (args: { handle: string; withSvg?: boolean }) => {
         const stem = files.get(args.handle)!.name;
         const images = [...docsImages]
           .filter(([name]) => name === `${stem}.svg` || (name.startsWith(`${stem}.`) && name.endsWith('.svg')))
           .sort(([a], [b]) => a.localeCompare(b))
           .map(([name, svg]) => {
             const ours = svg.includes('<metadata id="draftcanvas-docs">');
-            return { name, state: ours ? 'ours' : 'foreign', svg: ours ? svg : null, modifiedMs: ours ? Date.now() : null };
+            return { name, state: ours ? 'ours' : 'foreign', marker: ours ? noteOf(svg) : null, svg: ours && args.withSvg ? svg : null, modifiedMs: ours ? Date.now() : null };
           });
         return { images };
       },
       docs_publish: (bytes: unknown, options: unknown) => {
-        const { handle, name } = meta(options) as { handle: string; name: string };
+        const { handle, name, fresh } = meta(options) as { handle: string; name: string; fresh?: boolean };
         const stem = files.get(handle)!.name;
         if (name !== `${stem}.svg` && !(name.startsWith(`${stem}.`) && name.endsWith('.svg'))) throw { kind: 'Io', message: `${name} isn't a picture name for this diagram` };
         const svg = decode(bytes);
@@ -373,6 +379,7 @@ export async function installMockShell(page: Page): Promise<void> {
         if (current !== undefined && !current.includes('<metadata id="draftcanvas-docs">')) {
           throw { kind: 'AlreadyExists', message: `${name} already exists beside this diagram and wasn't made by Draft Canvas, so it was left alone. Rename one of them to publish.` };
         }
+        if (current !== undefined && fresh) throw { kind: 'AlreadyExists', message: `${name} appeared beside the diagram since Draft Canvas looked, so it was left alone.` };
         docsImages.set(name, svg);
         return { outcome: current === svg ? 'unchanged' : 'written', imageName: name };
       },

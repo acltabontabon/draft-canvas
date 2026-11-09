@@ -16,13 +16,13 @@ function store(): { file: DraftDocument; system: DraftNode; api: DraftNode } {
   return { file, system, api };
 }
 
-const ours = (name: string, source: string, view: string[]): PictureFile => ({
-  name,
-  state: 'ours',
-  svg: `<svg>${markerElement(source, settings(view))}</svg>`,
-  modifiedMs: null,
-});
-const foreign = (name: string): PictureFile => ({ name, state: 'foreign', svg: null, modifiedMs: null });
+const ours = (name: string, source: string, view: string[]): PictureFile => {
+  const svg = `<svg>${markerElement(source, settings(view))}</svg>`;
+  return { name, state: 'ours', marker: readMarkerJson(svg), svg, modifiedMs: null };
+};
+const foreign = (name: string): PictureFile => ({ name, state: 'foreign', marker: null, svg: null, modifiedMs: null });
+/** What the shell sends as `marker`: the note's JSON, unescaped. */
+const readMarkerJson = (svg: string) => svg.slice(svg.indexOf('>', svg.indexOf('<metadata')) + 1, svg.indexOf('</metadata>')).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
 
 describe('level picture names', () => {
   it('names the whole diagram after the file, and a level after its shape', () => {
@@ -30,6 +30,23 @@ describe('level picture names', () => {
     expect(levelImageNames(file, 'online-store', [])).toEqual(['online-store.svg']);
     expect(levelImageNames(file, 'online-store', [system.id])).toEqual(['online-store.online-store.svg']);
     expect(levelImageNames(file, 'online-store', [system.id, api.id])).toEqual(['online-store.store-api.svg', 'online-store.online-store.store-api.svg']);
+  });
+
+  it('numbers a level whose shape shares a name with an earlier one, so each has its own file', () => {
+    const file = createDocument('Shop');
+    const room = (text: string) => ({ ...createNode({ type: 'service', x: 0, y: 0, text }), inside: { nodes: [createNode({ type: 'component', x: 0, y: 0, text: 'X' })], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } });
+    const first = room('Service');
+    const second = room('Service');
+    file.nodes.push(first, second);
+    expect(levelImageNames(file, 'shop', [first.id])[0]).toBe('shop.service.svg');
+    expect(levelImageNames(file, 'shop', [second.id])[0]).toBe('shop.service-2.svg');
+  });
+
+  it('keeps a name within what a disk allows, whatever the script', () => {
+    const { file, system } = store();
+    const long = { ...file, nodes: [{ ...system, text: '設計'.repeat(40) }] };
+    const [name] = levelImageNames(long, '図'.repeat(60), [system.id]);
+    expect(new TextEncoder().encode(name).length).toBeLessThanOrEqual(240);
   });
 
   it('makes a file-name part of any shape name, never with a dot', () => {
@@ -53,7 +70,9 @@ describe('finding a level’s picture', () => {
     const nested = [system.id, api.id];
     expect(pictureFor([foreign('online-store.store-api.svg')], file, 'online-store', nested)).toEqual({ state: 'none', name: 'online-store.online-store.store-api.svg' });
     const both = [foreign('online-store.store-api.svg'), ours('online-store.online-store.store-api.svg', 'other.draftcanvas', [])];
-    expect(pictureFor(both, file, 'online-store', nested)).toEqual({ state: 'taken', name: 'online-store.store-api.svg', why: 'foreign' });
+    expect(pictureFor(both, file, 'online-store', nested)).toEqual({ state: 'none', name: 'online-store.store-api-2.svg' });
+    const all = [...both, ...[2, 3, 4, 5, 6, 7, 8, 9].map((n) => foreign(`online-store.store-api-${n}.svg`))];
+    expect(pictureFor(all, file, 'online-store', nested)).toEqual({ state: 'taken', name: 'online-store.store-api.svg', why: 'foreign' });
     expect(pictureFor([ours('online-store.svg', 'online-store.v2.draftcanvas', [])], file, 'online-store', [])).toEqual({ state: 'taken', name: 'online-store.svg', why: 'other' });
   });
 

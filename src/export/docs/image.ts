@@ -20,7 +20,7 @@ import { displayNameFor } from '../../document/factory';
 import type { DraftDocument } from '../../document/types';
 import { hasInside, ownerAt, viewOf } from '../../depth/tree';
 import { loadTechnologyIcons } from '../../nodes/technology';
-import { renderDocumentSvg } from '../../render/svg/document';
+import { renderDocumentSvg, type ResolvedBackground } from '../../render/svg/document';
 // The renderer's own escaping: it also drops characters XML forbids, which would make the file unreadable.
 import { escapeXmlText } from '../../render/svg/element';
 import { resolveExportBackground } from '../background';
@@ -73,18 +73,18 @@ function oneLine(text: string): string {
 /**
  * The docs image of `file` at `settings.view`. `source` is the `.draftcanvas` file's own name, as the
  * Markdown's repository will hold it; it goes into the note, so a reader of the SVG knows where to
- * edit it.
+ * edit it. `background` is the file's background, already read, when several levels are drawn at
+ * once: every level shows the same one, and reading and encoding it is the costly part.
  */
-export async function renderDocsImage(file: DraftDocument, source: string, settings: DocsSettings): Promise<DocsRender> {
+export async function renderDocsImage(file: DraftDocument, source: string, settings: DocsSettings, background?: ResolvedBackground): Promise<DocsRender> {
   if (!levelExists(file, settings.view)) return { ok: false, reason: 'missing-view' };
   const view = viewOf(file, settings.view);
   if (!view) return { ok: false, reason: 'missing-view' };
   await loadTechnologyIcons(view.nodes);
-  const background = await resolveExportBackground(view, true);
   const rendered = renderDocumentSvg(view, {
     theme: settings.theme,
     preset: settings.style,
-    background,
+    background: background ?? (await resolveExportBackground(view, true)),
     includeBackground: true,
     // Open points stay, as they do in every picture: a published diagram that silently dropped
     // them would present each unsettled assumption as decided.

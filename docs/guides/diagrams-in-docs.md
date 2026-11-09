@@ -87,8 +87,9 @@ gets one picture per level, each in its own file beside the diagram:
 | Inside Online store | [online-store.online-store.svg](../media/guides/docs-example/online-store.online-store.svg) |
 | Inside Online store / Store API | [online-store.store-api.svg](../media/guides/docs-example/online-store.store-api.svg) |
 
-A level's picture is named after its shape the first time you publish it, and keeps that name:
-renaming the shape later doesn't move the file your Markdown points at. Every save redraws all of a
+A level's picture is named after its shape (numbered when two shapes share a name) the first time
+you publish it, and keeps that name: renaming the shape later doesn't move the file your Markdown
+points at. Every save redraws all of a
 diagram's pictures that follow saves.
 
 ![The Docs tab with a second level chosen: it is marked published, and the README preview shows it going in right after the first.](../media/guides/export-docs-levels.png)

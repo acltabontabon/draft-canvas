@@ -22,8 +22,9 @@ pub struct DocsImage {
     /// another file has the name.
     #[ts(type = "\"ours\" | \"foreign\"")]
     pub state: String,
-    /// The picture's SVG, when it is ours, so the page can tell which level it shows and whether
-    /// it is current.
+    /// The note's JSON, when it is ours: which diagram, level and look it was drawn with.
+    pub marker: Option<String>,
+    /// The picture's SVG, when it is ours and was asked for, so the page can tell whether it is current.
     pub svg: Option<String>,
     pub modified_ms: Option<f64>,
 }
@@ -58,9 +59,13 @@ pub struct MarkdownFile {
     pub image_dir: String,
 }
 
-fn status_now(state: &crate::state::AppState, handle: &str) -> Result<DocsStatus, AppError> {
+fn status_now(
+    state: &crate::state::AppState,
+    handle: &str,
+    with_svg: bool,
+) -> Result<DocsStatus, AppError> {
     let grant = state.file(handle)?;
-    let images = docs::list_images(&grant.path)?
+    let images = docs::list_images(&grant.path, with_svg)?
         .into_iter()
         .map(|(name, read)| DocsImage {
             name,
@@ -70,6 +75,7 @@ fn status_now(state: &crate::state::AppState, handle: &str) -> Result<DocsStatus
                 "foreign"
             }
             .into(),
+            marker: read.marker,
             svg: read.text,
             modified_ms: read.modified_ms,
         })
@@ -77,9 +83,18 @@ fn status_now(state: &crate::state::AppState, handle: &str) -> Result<DocsStatus
     Ok(DocsStatus { images })
 }
 
+/// The pictures beside the diagram. `with_svg` sends each one's whole text too, which only the Docs
+/// tab needs (to tell whether a picture is current); a save's redraw reads the notes alone.
 #[tauri::command]
-pub async fn docs_status(app: AppHandle, handle: String) -> Result<DocsStatus, AppError> {
-    run_blocking(&app, move |_, state| status_now(state, &handle)).await
+pub async fn docs_status(
+    app: AppHandle,
+    handle: String,
+    with_svg: Option<bool>,
+) -> Result<DocsStatus, AppError> {
+    run_blocking(&app, move |_, state| {
+        status_now(state, &handle, with_svg.unwrap_or(false))
+    })
+    .await
 }
 
 #[derive(Debug, Deserialize)]
@@ -87,6 +102,9 @@ struct PublishMeta {
     handle: Handle,
     /// `payments.svg` or `payments.<level>.svg`; anything else is refused (`docs::named_image_path`).
     name: String,
+    /// The page found the name free: create it, never replace what took it since.
+    #[serde(default)]
+    fresh: bool,
 }
 
 /// Writes a picture beside the diagram. The page names it; Rust holds it to a picture name beside the
@@ -97,7 +115,7 @@ pub async fn docs_publish(app: AppHandle, request: Request<'_>) -> Result<DocsPu
     let bytes = bytes.to_vec();
     run_blocking(&app, move |_, state| {
         let grant = state.file(&meta.handle)?;
-        let outcome = docs::publish_image(&grant.path, &meta.name, &bytes)?;
+        let outcome = docs::publish_image(&grant.path, &meta.name, &bytes, meta.fresh)?;
         Ok(DocsPublished {
             outcome: match outcome {
                 Published::Written => "written",
@@ -195,7 +213,7 @@ pub async fn docs_reveal(app: AppHandle, handle: String, name: String) -> Result
     run_blocking(&app, move |_, state| {
         let grant = state.file(&handle)?;
         let path = docs::named_image_path(&grant.path, &name)?;
-        if docs::read_image(&path)?.state != ImageState::Ours {
+        if docs::read_image(&path, false)?.state != ImageState::Ours {
             return Err(AppError::new(
                 ErrorKind::NotFound,
                 format!("{} isn't beside the diagram any more.", file_name(&path)),

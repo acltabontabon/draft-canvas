@@ -53,6 +53,8 @@ export interface DocsPublishing {
   setView: (key: string) => void;
   /** Pictures of this diagram whose level is gone: they stay as they were, and saves pass them by. */
   orphans: string[];
+  /** The folder beside the diagram couldn't be read, so nothing can be published safely. */
+  statusFailed: boolean;
   /** On the desktop with no file yet: publishing beside it waits for a save. */
   draftOnDesktop: boolean;
   /** Not settled yet: the shell's answer or the preview it is compared with is still on its way. */
@@ -75,6 +77,8 @@ export interface DocsPublishing {
   snippet: string;
   markdown: MarkdownFile | null;
   alreadyIn: boolean;
+  /** The chosen Markdown file's headings, read once. */
+  headings: ReturnType<typeof headingsOf>;
   placement: Placement;
   setPlacement: (placement: Placement) => void;
   /** The Markdown around the picture: where it will be added, or where it already is. */
@@ -131,18 +135,27 @@ export function useDocsPublishing({
   const [loading, setLoading] = useState(false);
   const [markdown, setMarkdown] = useState<MarkdownFile | null>(null);
   const [chosenPlacement, setChosenPlacement] = useState<Placement | null>(null);
-  const [preview, setPreview] = useState<Preview>(null);
+  // The preview, and the settings it was drawn with: one drawn for other settings is still shown
+  // while the next is drawn, but never judged against the picture on disk.
+  const [drawn, setDrawn] = useState<{ key: string; preview: Preview } | null>(null);
   const [busy, setBusy] = useState(false);
   const [justDone, setJustDone] = useState<string | null>(null);
+  const [statusFailed, setStatusFailed] = useState(false);
+  // Bumped to look at the pictures again: after a save's redraw wrote them, say.
+  const [statusTick, setStatusTick] = useState(0);
   const running = useRef(false);
   // The editor's level when the panel opened — read once per opening, so walking about afterwards
-  // never changes which level would be published.
-  const openedAt = useRef<string[]>([]);
+  // never changes which level would be published. Null until this opening has been set up, so
+  // nothing is drawn for the last opening's level first.
+  const [openedAt, setOpenedAt] = useState<string[] | null>(null);
 
   /* oxlint-disable react/set-state-in-effect -- each opening starts from the published picture, not the last opening's choices. */
   useEffect(() => {
-    if (!active) return;
-    openedAt.current = [...startPath];
+    if (!active) {
+      setOpenedAt(null);
+      return;
+    }
+    setOpenedAt([...startPath]);
     setChosenView(null);
     setChosenTheme(null);
     setChosenSync(null);
@@ -155,6 +168,7 @@ export function useDocsPublishing({
   useEffect(() => {
     if (!active || !controller || !handleKey) {
       setStatus(null);
+      setStatusFailed(false);
       return;
     }
     let cancelled = false;
@@ -162,10 +176,15 @@ export function useDocsPublishing({
     void controller
       .docsStatus()
       .then((next) => {
-        if (!cancelled) setStatus(next);
+        if (cancelled) return;
+        setStatus(next);
+        setStatusFailed(false);
       })
       .catch(() => {
-        if (!cancelled) setStatus(null);
+        // Without the listing there is no telling which names are free: nothing is published.
+        if (cancelled) return;
+        setStatus(null);
+        setStatusFailed(true);
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -173,18 +192,29 @@ export function useDocsPublishing({
     return () => {
       cancelled = true;
     };
-  }, [active, controller, handleKey]);
+  }, [active, controller, handleKey, statusTick]);
   /* oxlint-enable react/set-state-in-effect */
+
+  // A save's redraw (yours or an agent's) rewrites pictures while the tab is open: look again, so
+  // "current" is judged against what is on disk now.
+  useEffect(() => {
+    if (!active || !controller || !handleKey) return;
+    return controller.onDocsWritten((handle) => {
+      if (handle === handleKey) setStatusTick((tick) => tick + 1);
+    });
+  }, [active, controller, handleKey]);
+
+  const headings = useMemo(() => (markdown ? headingsOf(markdown.text) : []), [markdown]);
 
   // The level the editor was showing when the panel opened: each level has its own picture, so
   // opening inside a shape is how the person says which one they mean.
-  const fallbackView = file && levelExists(file, openedAt.current) ? openedAt.current : [];
+  const fallbackView = file && openedAt && levelExists(file, openedAt) ? openedAt : [];
   const viewKey = chosenView ?? fallbackView.join('/');
   const view = useMemo(() => (viewKey ? viewKey.split('/') : []), [viewKey]);
   const stem = desktopFile?.name ?? '';
   const images = status?.images;
   const mine = useMemo(() => (images && stem ? picturesOf(images, stem) : []), [images, stem]);
-  const picture = file && images && desktopFile ? pictureFor(images, file, stem, view) : null;
+  const picture = file && images && desktopFile ? pictureFor(images, file, stem, view, mine) : null;
   const published = picture?.state === 'ours' ? picture.marker.settings : undefined;
   const theme = chosenTheme ?? published?.theme ?? readThemePreference();
   const sync = chosenSync ?? published?.sync ?? readSyncPreference();
@@ -198,38 +228,45 @@ export function useDocsPublishing({
   // A download has no file to follow, so it is always a snapshot.
   const follows = desktopFile ? sync : false;
   const settings: DocsSettings = useMemo(() => ({ view, theme, style, sync: follows }), [view, theme, style, follows]);
+  const drawKey = `${sourceName}\u0000${JSON.stringify(settings)}`;
+  const ready = active && !!file && openedAt !== null;
 
   /* oxlint-disable react/set-state-in-effect -- the preview is drawn off the render path; it loads icons and the background. */
   useEffect(() => {
-    if (!active || !file) {
-      setPreview(null);
+    if (!ready || !file) {
+      if (!active) setDrawn(null);
       return;
     }
     let cancelled = false;
     void renderDocsImage(file, sourceName, settings)
       .then((rendered) => {
-        if (!cancelled) setPreview(rendered.ok ? { svg: rendered.svg, width: rendered.width, height: rendered.height } : 'missing');
+        if (!cancelled) setDrawn({ key: drawKey, preview: rendered.ok ? { svg: rendered.svg, width: rendered.width, height: rendered.height } : 'missing' });
       })
       .catch(() => {
-        if (!cancelled) setPreview('missing');
+        if (!cancelled) setDrawn({ key: drawKey, preview: 'missing' });
       });
     return () => {
       cancelled = true;
     };
-  }, [active, file, sourceName, settings]);
+  }, [ready, active, file, sourceName, settings, drawKey]);
   /* oxlint-enable react/set-state-in-effect */
 
   if (!active || !file) return null;
+
+  // What is shown, and what may be judged: only a preview of exactly these settings says whether
+  // the picture on disk is current.
+  const preview: Preview = drawn?.preview ?? null;
+  const judged: Preview = drawn && drawn.key === drawKey ? drawn.preview : null;
 
   const levelKey = (path: readonly string[]) => path.join('/');
   const publishedKeys = new Set(mine.map((entry) => levelKey(entry.marker.settings.view)));
   const levels = docsLevels(file).map((level) => ({ ...level, published: publishedKeys.has(levelKey(level.path)) }));
   const orphans = mine.filter((entry) => !levelExists(file, entry.marker.settings.view)).map((entry) => entry.name);
   const title = docsTitleFor(file, view);
-  const current = picture?.state === 'ours' && preview !== null && preview !== 'missing' && picture.svg === preview.svg;
+  const current = picture?.state === 'ours' && judged !== null && judged !== 'missing' && picture.svg === judged.svg;
   // Until both the shell's answer and the preview are in, "current" can't be judged: saying "Out of
   // date" and offering Update for that moment flipped the button under the pointer.
-  const checking = !!desktopFile && (preview === null || (loading && !status));
+  const checking = !!desktopFile && !statusFailed && (judged === null || (loading && !status));
   const unapplied = !!published && !current && !sameSettings(published, settings);
   const foreign = picture?.state === 'taken';
   // From the Markdown file when one is chosen; else from beside the diagram (desktop) or from the
@@ -238,7 +275,6 @@ export function useDocsPublishing({
   const imagePath = fromMarkdown ?? (desktopFile ? imageName : (names?.imagePath ?? ''));
   const snippet = markdownImage(title, imagePath);
   const alreadyIn = markdown && fromMarkdown ? referencesTo(markdown.text, fromMarkdown) > 0 : false;
-  const headings = markdown ? headingsOf(markdown.text) : [];
   // Another level of this diagram already on the page: this one goes in the same section, so a
   // context view and its containers read together. Else the usual guess.
   const besideSibling = markdown ? siblingSection(markdown, mine.map((entry) => entry.name).filter((name) => name !== imageName), headings) : null;
@@ -274,7 +310,7 @@ export function useDocsPublishing({
   const publish = async (): Promise<boolean> => {
     if (!controller) return false;
     if (current) return true;
-    const result = await controller.publishDocs(settings, imageName);
+    const result = await controller.publishDocs(settings, imageName, picture?.state === 'none');
     await refreshStatus();
     setJustDone(result.outcome === 'written' ? `Published ${result.imageName}` : `${result.imageName} is already current`);
     return true;
@@ -299,7 +335,7 @@ export function useDocsPublishing({
     primary = {
       label: 'Download for docs',
       busyLabel: 'Preparing…',
-      disabled: busy || preview === 'missing',
+      disabled: busy || judged === 'missing',
       run: () =>
         guarded(async () => {
           await downloadDocsBundle(file, settings);
@@ -307,6 +343,8 @@ export function useDocsPublishing({
           setJustDone(`Downloaded ${names?.archive}`);
         }, 'Download'),
     };
+  } else if (statusFailed) {
+    primary = { label: 'Publish image', busyLabel: '', disabled: true, run: async () => {} };
   } else if (foreign) {
     primary = { label: `${imageName} is taken`, busyLabel: '', disabled: true, run: async () => {} };
   } else if (checking) {
@@ -316,7 +354,7 @@ export function useDocsPublishing({
     primary = {
       label: `Add to ${md.name}`,
       busyLabel: 'Adding…',
-      disabled: busy || loading || preview === 'missing',
+      disabled: busy || loading || judged === 'missing',
       run: () =>
         guarded(async () => {
           await publish();
@@ -335,7 +373,7 @@ export function useDocsPublishing({
     primary = {
       label: update ? `Update ${imageName}` : 'Publish image',
       busyLabel: target.kind === 'file' && target.dirty ? 'Saving…' : 'Publishing…',
-      disabled: busy || loading || preview === 'missing',
+      disabled: busy || loading || judged === 'missing',
       run: () => guarded(async () => void (await publish()), update ? 'Update' : 'Publish'),
     };
   } else if (markdown && alreadyIn) {
@@ -356,9 +394,13 @@ export function useDocsPublishing({
     viewKey,
     setView: (key) => {
       setChosenView(key);
+      // Each level is its own picture with its own look: a choice made for the last one isn't this one's.
+      setChosenTheme(null);
+      setChosenSync(null);
       setJustDone(null);
     },
     orphans,
+    statusFailed,
     draftOnDesktop: onDesktop && !desktopFile,
     checking,
     unapplied,
@@ -384,6 +426,7 @@ export function useDocsPublishing({
     snippet,
     markdown,
     alreadyIn,
+    headings,
     placement,
     setPlacement: setChosenPlacement,
     excerpt,

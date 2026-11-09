@@ -13,8 +13,11 @@ name: string,
  */
 state: "ours" | "foreign",
 /**
- * The picture's SVG, when it is ours, so the page can tell which level it shows and whether
- * it is current.
+ * The note's JSON, when it is ours: which diagram, level and look it was drawn with.
+ */
+marker: string | null,
+/**
+ * The picture's SVG, when it is ours and was asked for, so the page can tell whether it is current.
  */
 svg: string | null, modifiedMs: number | null, };
 export type DocsStatus = { images: Array<DocsImage>, };

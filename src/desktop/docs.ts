@@ -16,6 +16,7 @@ import { deserializeDocument } from '../export/project';
 import { renderDocsImage } from '../export/docs/image';
 import type { DocsSettings } from '../export/docs/marker';
 import { picturesOf } from '../export/docs/names';
+import { resolveExportBackground } from '../export/background';
 import { logDiagnostic } from '../lib/diagnostics';
 import type { DesktopApi, DocsPublished, Handle } from './api';
 
@@ -42,6 +43,8 @@ export class DocsPublisher {
   private readonly waiting = new Map<Handle, Request>();
   /** Files already told about something that keeps repeating (a missing level, a deferred redraw). */
   private readonly reported = new Set<string>();
+  /** Told after any write to a file's pictures, so an open Docs tab can look again. */
+  private readonly listeners = new Set<(handle: Handle) => void>();
 
   private readonly api: DesktopApi;
   private readonly notify: Notify;
@@ -70,15 +73,27 @@ export class DocsPublisher {
    * Publish or Update: draws `text` with `settings` and writes it as `imageName`, after anything
    * queued for the file.
    */
-  publish(handle: Handle, name: string, text: string, settings: DocsSettings, imageName: string): Promise<DocsPublished> {
+  publish(handle: Handle, name: string, text: string, settings: DocsSettings, imageName: string, fresh = false): Promise<DocsPublished> {
     return this.enqueue(handle, async () => {
       const parsed = deserializeDocument(text);
       if (!parsed.ok) throw new Error(parsed.error);
       const rendered = await renderDocsImage(parsed.document, `${name}.draftcanvas`, settings);
       if (!rendered.ok) throw new Error('The level this picture shows no longer exists.');
       this.reported.delete(`level:${handle}:${imageName}`);
-      return this.api.docsPublish(handle, imageName, rendered.svg);
+      const result = await this.api.docsPublish(handle, imageName, rendered.svg, fresh);
+      this.written(handle);
+      return result;
     });
+  }
+
+  /** Calls `listener` with the file's handle after each write to its pictures. */
+  onWritten(listener: (handle: Handle) => void): () => void {
+    this.listeners.add(listener);
+    return () => void this.listeners.delete(listener);
+  }
+
+  private written(handle: Handle): void {
+    for (const listener of this.listeners) listener(handle);
   }
 
   private enqueue<T>(handle: Handle, job: () => Promise<T>): Promise<T> {
@@ -119,20 +134,24 @@ export class DocsPublisher {
       return;
     }
     // One at a time, each on its own: a level that's gone, or a write that fails, leaves the others
-    // to be drawn.
+    // to be drawn. The background image is read once for them all, not once per picture.
+    const background = await resolveExportBackground(parsed.document, true).catch(() => undefined);
+    let wrote = false;
     for (const picture of pictures) {
       try {
-        const rendered = await renderDocsImage(parsed.document, `${request.name}.draftcanvas`, picture.marker.settings);
+        const rendered = await renderDocsImage(parsed.document, `${request.name}.draftcanvas`, picture.marker.settings, background);
         if (!rendered.ok) {
           this.once(`level:${handle}:${picture.name}`, `${picture.name} wasn’t updated: the level it shows is gone. It stays as it was.`);
           continue;
         }
         this.reported.delete(`level:${handle}:${picture.name}`);
-        await this.api.docsPublish(handle, picture.name, rendered.svg);
+        const result = await this.api.docsPublish(handle, picture.name, rendered.svg);
+        wrote ||= result.outcome === 'written';
       } catch (error) {
         logDiagnostic(error, { operation: 'desktop-docs' });
         this.notify(`Couldn’t update ${picture.name}: ${error instanceof Error ? error.message : 'something went wrong.'}`);
       }
     }
+    if (wrote) this.written(handle);
   }
 }

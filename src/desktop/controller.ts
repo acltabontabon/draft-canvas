@@ -1083,16 +1083,22 @@ export class DesktopController {
     return session.kind === 'file' ? { handle: session.handle, name: session.name, dirty: this.dirty } : null;
   }
 
+  /** The open file's pictures, each with its whole SVG, for the Docs tab. */
   async docsStatus(): Promise<DocsStatus | null> {
     const file = this.docsFile();
-    return file ? this.api.docsStatus(file.handle) : null;
+    return file ? this.api.docsStatus(file.handle, true) : null;
+  }
+
+  /** Calls `listener` after any write to a file's pictures — a Publish, or a save's redraw. */
+  onDocsWritten(listener: (handle: Handle) => void): () => void {
+    return this.docs.onWritten(listener);
   }
 
   /**
    * Writes the picture beside the open file. Unsaved changes are saved first — the picture must show
    * what the file beside it holds — and it is drawn from exactly the text that was saved.
    */
-  async publishDocs(settings: DocsSettings, imageName: string): Promise<DocsPublished> {
+  async publishDocs(settings: DocsSettings, imageName: string, fresh = false): Promise<DocsPublished> {
     if (this.docsFile()?.dirty) await this.save();
     const session = this.session;
     const text = this.savedText;
@@ -1100,7 +1106,7 @@ export class DesktopController {
     if (this.dirty) throw new Error(`Save ${session.name}.draftcanvas first, so the picture matches it.`);
     // Through the publisher's queue, so the redraw that save just asked for (with the settings
     // already on disk) lands first and this one, with the person's choices, lands last.
-    return this.docs.publish(session.handle, session.name, text, settings, imageName);
+    return this.docs.publish(session.handle, session.name, text, settings, imageName, fresh);
   }
 
   async pickDocsMarkdown(): Promise<MarkdownFile | null> {

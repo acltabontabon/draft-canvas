@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { headingsOf, type Placement } from '../../export/docs/markdown';
+import type { Placement } from '../../export/docs/markdown';
 import { SegmentedControl } from '../common/SegmentedControl';
 import { Icon } from '../common/Icon';
 import type { DocsPublishing } from './useDocsPublishing';
@@ -35,8 +35,11 @@ function standing(docs: DocsPublishing): { tone: Tone; badge: string; detail?: s
     };
   }
   const picture = docs.picture;
+  if (docs.statusFailed) {
+    return { tone: 'warn', badge: 'Couldn’t check', note: 'Draft Canvas couldn’t read the folder beside this diagram, so it won’t publish there. Close and open Docs again to retry.' };
+  }
   if (picture?.state === 'taken') {
-    const whose = picture.why === 'foreign' ? 'wasn’t made by Draft Canvas' : 'is another diagram’s picture';
+    const whose = picture.why === 'foreign' ? 'wasn’t made by Draft Canvas' : 'is another Draft Canvas picture';
     return { tone: 'warn', badge: 'Name taken', note: `${picture.name} ${whose}, so it won’t be replaced. Rename the diagram, or move that file, to publish here.` };
   }
   if (docs.checking) return { tone: 'quiet', badge: 'Checking…' };
@@ -53,7 +56,7 @@ function standing(docs: DocsPublishing): { tone: Tone; badge: string; detail?: s
 
 export function ExportDocsPanel({ docs }: { docs: DocsPublishing }) {
   const said = standing(docs);
-  const headings = docs.markdown ? headingsOf(docs.markdown.text) : [];
+  const headings = docs.headings;
   const following = docs.target.kind === 'file' && docs.sync;
   return (
     <div className="dc-export-panel dc-docs-panel">

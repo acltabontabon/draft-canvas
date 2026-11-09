@@ -54,23 +54,29 @@ fn is_level_part(part: &str) -> bool {
             .all(|c| !(c.is_control() || c.is_whitespace() || "/\\:<>\"|?*.".contains(c)))
 }
 
-/// The level part of `name` when it is a picture of `doc`: `Some("")` for `<stem>.svg`, `Some(level)`
-/// for `<stem>.<level>.svg`, `None` for any other name. The page names the picture; this is what
-/// keeps that name one file beside the diagram, never a path out of its folder.
-fn level_of<'a>(doc: &Path, name: &'a str) -> Option<&'a str> {
-    let stem = stem_of(doc);
-    let rest = name.strip_prefix(stem.as_str())?.strip_suffix(".svg")?;
+/// Whether `name` is a picture name of `doc`: `<stem>.svg` or `<stem>.<level>.svg`. The page names
+/// the picture; this is what keeps that name one file beside the diagram, never a path out of its
+/// folder. Case doesn't matter, as it doesn't to the disks most people use (macOS, Windows): a
+/// `Payments.SVG` there is the same file as `payments.svg`.
+fn is_picture_name(doc: &Path, name: &str) -> bool {
+    let (name, stem) = (name.to_lowercase(), stem_of(doc).to_lowercase());
+    let Some(rest) = name
+        .strip_prefix(stem.as_str())
+        .and_then(|rest| rest.strip_suffix(".svg"))
+    else {
+        return false;
+    };
     if rest.is_empty() {
-        return Some("");
+        return true;
     }
-    let level = rest.strip_prefix('.')?;
-    (level.chars().count() <= MAX_LEVEL_CHARS && level.split('.').all(is_level_part))
-        .then_some(level)
+    rest.strip_prefix('.').is_some_and(|level| {
+        level.chars().count() <= MAX_LEVEL_CHARS && level.split('.').all(is_level_part)
+    })
 }
 
 /// The picture of `doc` called `name`, beside it — or an error when `name` isn't one of its pictures.
 pub fn named_image_path(doc: &Path, name: &str) -> Result<PathBuf, AppError> {
-    if level_of(doc, name).is_none() {
+    if !is_picture_name(doc, name) {
         return Err(AppError::bad_request(&format!(
             "{name} isn't a picture name for {}",
             file_name(doc)
@@ -80,8 +86,10 @@ pub fn named_image_path(doc: &Path, name: &str) -> Result<PathBuf, AppError> {
 }
 
 /// Every file beside `doc` named like one of its pictures, by name, with what is in each. Whether a
-/// picture of ours was drawn from *this* diagram is its note's to say; the page reads that.
-pub fn list_images(doc: &Path) -> Result<Vec<(String, ImageRead)>, AppError> {
+/// picture of ours was drawn from *this* diagram is its note's to say; the page reads that. With
+/// `full` false only the start of each file is read, for its note: what a save's redraw needs,
+/// without carrying megabytes of picture back and forth on every save.
+pub fn list_images(doc: &Path, full: bool) -> Result<Vec<(String, ImageRead)>, AppError> {
     let Some(dir) = doc.parent() else {
         return Ok(Vec::new());
     };
@@ -90,14 +98,21 @@ pub fn list_images(doc: &Path) -> Result<Vec<(String, ImageRead)>, AppError> {
     let mut names: Vec<String> = entries
         .filter_map(|entry| entry.ok())
         .filter_map(|entry| entry.file_name().into_string().ok())
-        .filter(|name| level_of(doc, name).is_some())
+        .filter(|name| is_picture_name(doc, name))
         .collect();
     names.sort();
     names.truncate(MAX_IMAGES);
     names
         .into_iter()
         .map(|name| {
-            let read = read_image(&dir.join(&name))?;
+            // One unreadable file is listed as someone else's, not a failure of the whole listing:
+            // a listing that failed left the page unable to tell which names were free.
+            let read = read_image(&dir.join(&name), full).unwrap_or(ImageRead {
+                state: ImageState::Foreign,
+                text: None,
+                marker: None,
+                modified_ms: None,
+            });
             Ok((name, read))
         })
         .filter(|read| {
@@ -127,13 +142,39 @@ pub enum ImageState {
 
 pub struct ImageRead {
     pub state: ImageState,
-    /// The SVG's text, only when it is ours.
+    /// The SVG's text, only when it is ours and was read in full.
     pub text: Option<String>,
+    /// The note's JSON (`{"v":1,"source":…}`), only when it is ours.
+    pub marker: Option<String>,
     pub modified_ms: Option<f64>,
 }
 
-/// What is at `path` now, read without following a symlink.
-pub fn read_image(path: &Path) -> Result<ImageRead, AppError> {
+/// The note sits right after the `<svg>` tag and its `<title>`; this much of a file always holds it.
+const NOTE_WITHIN_BYTES: u64 = 64 * 1024;
+
+/// The note's JSON in `text`, unescaped as `escapeXmlText` escaped it.
+fn marker_of(text: &str) -> Option<String> {
+    let start = text.find(MARKER)? + MARKER.len();
+    let end = start + text[start..].find("</metadata>")?;
+    Some(
+        text[start..end]
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&amp;", "&"),
+    )
+}
+
+/// Whether a note names `doc` as the diagram its picture was drawn from.
+fn drawn_from(doc: &Path, marker: Option<&str>) -> bool {
+    let source = marker
+        .and_then(|json| serde_json::from_str::<serde_json::Value>(json).ok())
+        .and_then(|note| note.get("source")?.as_str().map(str::to_lowercase));
+    source.is_some_and(|source| source == file_name(doc).to_lowercase())
+}
+
+/// What is at `path` now, read without following a symlink: the whole file with `full`, else only
+/// as much as holds its note.
+pub fn read_image(path: &Path, full: bool) -> Result<ImageRead, AppError> {
     let io_err = |e: io::Error| AppError::from_io(&e, Verb::Open, Subject::Path(path));
     let meta = match fs::symlink_metadata(path) {
         Ok(meta) => meta,
@@ -141,6 +182,7 @@ pub fn read_image(path: &Path) -> Result<ImageRead, AppError> {
             return Ok(ImageRead {
                 state: ImageState::None,
                 text: None,
+                marker: None,
                 modified_ms: None,
             })
         }
@@ -149,23 +191,35 @@ pub fn read_image(path: &Path) -> Result<ImageRead, AppError> {
     let foreign = ImageRead {
         state: ImageState::Foreign,
         text: None,
+        marker: None,
         modified_ms: None,
     };
     if !meta.file_type().is_file() || meta.len() > MAX_IMAGE_BYTES {
         return Ok(foreign);
     }
-    let mut bytes = Vec::with_capacity(meta.len() as usize);
+    let limit = if full {
+        MAX_IMAGE_BYTES + 1
+    } else {
+        NOTE_WITHIN_BYTES
+    };
+    let mut bytes = Vec::with_capacity(meta.len().min(limit) as usize);
     File::open(path)
         .map_err(io_err)?
-        .take(MAX_IMAGE_BYTES + 1)
+        .take(limit)
         .read_to_end(&mut bytes)
         .map_err(io_err)?;
-    let Ok(text) = String::from_utf8(bytes) else {
+    let text = if full {
+        let Ok(text) = String::from_utf8(bytes) else {
+            return Ok(foreign);
+        };
+        text
+    } else {
+        // Cut anywhere, perhaps mid-character: only the note near the start is wanted.
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
+    let Some(marker) = marker_of(&text) else {
         return Ok(foreign);
     };
-    if !text.contains(MARKER) {
-        return Ok(foreign);
-    }
     let modified_ms = meta
         .modified()
         .ok()
@@ -173,7 +227,8 @@ pub fn read_image(path: &Path) -> Result<ImageRead, AppError> {
         .map(|d| d.as_millis() as f64);
     Ok(ImageRead {
         state: ImageState::Ours,
-        text: Some(text),
+        text: full.then_some(text),
+        marker: Some(marker),
         modified_ms,
     })
 }
@@ -250,14 +305,35 @@ fn foreign_image(path: &Path) -> AppError {
     .at(Some(crate::paths::display_path(path)))
 }
 
-/// Writes the picture of `doc` called `name` beside it. Refuses a file that isn't ours; skips
-/// identical bytes.
-pub fn publish_image(doc: &Path, name: &str, bytes: &[u8]) -> Result<Published, AppError> {
+fn taken_image(path: &Path, why: &str) -> AppError {
+    AppError::new(
+        ErrorKind::AlreadyExists,
+        format!("{} {why}, so it was left alone.", file_name(path)),
+    )
+    .at(Some(crate::paths::display_path(path)))
+}
+
+/// Writes the picture of `doc` called `name` beside it. Refuses a file that isn't ours, and one of
+/// ours drawn from another diagram; skips identical bytes. With `fresh` (the page found the name
+/// free) it only ever creates: a picture that took the name since is never replaced.
+pub fn publish_image(
+    doc: &Path,
+    name: &str,
+    bytes: &[u8],
+    fresh: bool,
+) -> Result<Published, AppError> {
     check_image(bytes)?;
     let target = named_image_path(doc, name)?;
-    let current = read_image(&target)?;
+    let current = read_image(&target, true)?;
     match current.state {
         ImageState::Foreign => Err(foreign_image(&target)),
+        ImageState::Ours if fresh => Err(taken_image(
+            &target,
+            "appeared beside the diagram since Draft Canvas looked",
+        )),
+        ImageState::Ours if !drawn_from(doc, current.marker.as_deref()) => {
+            Err(taken_image(&target, "is a picture of another diagram"))
+        }
         ImageState::Ours if current.text.as_deref().map(str::as_bytes) == Some(bytes) => {
             Ok(Published::Unchanged)
         }
@@ -420,8 +496,14 @@ mod tests {
     use super::*;
     use tempfile::tempdir;
 
+    /// A docs picture drawn from `payments.draftcanvas`.
     fn svg(body: &str) -> String {
-        format!("<svg xmlns=\"http://www.w3.org/2000/svg\">{MARKER}{{}}</metadata>{body}</svg>")
+        drawn_by("payments.draftcanvas", body)
+    }
+
+    fn drawn_by(source: &str, body: &str) -> String {
+        format!("<svg xmlns=\"http://www.w3.org/2000/svg\">{MARKER}{{&quot;v&quot;:1}}</metadata>{body}</svg>")
+            .replace("{&quot;v&quot;:1}", &format!("{{\"v\":1,\"source\":\"{source}\"}}"))
     }
 
     #[test]
@@ -468,7 +550,7 @@ mod tests {
         fs::write(dir.path().join("payments.notes.svg"), "<svg/>").unwrap();
         fs::write(dir.path().join("payroll.svg"), svg("")).unwrap();
         fs::write(dir.path().join("payments.md"), "x").unwrap();
-        let found: Vec<(String, ImageState)> = list_images(&doc)
+        let found: Vec<(String, ImageState)> = list_images(&doc, true)
             .unwrap()
             .into_iter()
             .map(|(name, read)| (name, read.state))
@@ -482,11 +564,79 @@ mod tests {
             ]
         );
         assert_eq!(
-            publish_image(&doc, "payments.ledger.svg", svg("<line/>").as_bytes()).unwrap(),
+            publish_image(
+                &doc,
+                "payments.ledger.svg",
+                svg("<line/>").as_bytes(),
+                false
+            )
+            .unwrap(),
             Published::Written
         );
-        assert!(publish_image(&doc, "payments.notes.svg", svg("").as_bytes()).is_err());
-        assert!(publish_image(&doc, "../payments.svg", svg("").as_bytes()).is_err());
+        assert!(publish_image(&doc, "payments.notes.svg", svg("").as_bytes(), false).is_err());
+        assert!(publish_image(&doc, "../payments.svg", svg("").as_bytes(), false).is_err());
+    }
+
+    #[test]
+    fn a_new_picture_never_replaces_one_that_took_its_name_and_another_diagrams_is_left_alone() {
+        let dir = tempdir().unwrap();
+        let doc = dir.path().join("payments.draftcanvas");
+        fs::write(dir.path().join("payments.ledger.svg"), svg("<rect/>")).unwrap();
+        // The page found the name free; a picture appeared there since.
+        assert!(publish_image(
+            &doc,
+            "payments.ledger.svg",
+            svg("<circle/>").as_bytes(),
+            true
+        )
+        .is_err());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("payments.ledger.svg")).unwrap(),
+            svg("<rect/>")
+        );
+        // Ours, but drawn from payments.ledger.draftcanvas: not this diagram's to replace.
+        let theirs = drawn_by("payments.ledger.draftcanvas", "<rect/>");
+        fs::write(dir.path().join("payments.ledger.svg"), &theirs).unwrap();
+        let error = publish_image(
+            &doc,
+            "payments.ledger.svg",
+            svg("<circle/>").as_bytes(),
+            false,
+        )
+        .unwrap_err();
+        assert_eq!(error.kind, ErrorKind::AlreadyExists);
+        assert_eq!(
+            fs::read_to_string(dir.path().join("payments.ledger.svg")).unwrap(),
+            theirs
+        );
+        // A fresh name is created.
+        assert_eq!(
+            publish_image(&doc, "payments.api.svg", svg("<line/>").as_bytes(), true).unwrap(),
+            Published::Written
+        );
+    }
+
+    #[test]
+    fn picture_names_match_whatever_their_case_and_a_listing_reads_only_the_note() {
+        let dir = tempdir().unwrap();
+        let doc = dir.path().join("Payments.draftcanvas");
+        fs::write(
+            dir.path().join("payments.SVG"),
+            drawn_by("Payments.draftcanvas", "<rect/>"),
+        )
+        .unwrap();
+        let listed = list_images(&doc, false).unwrap();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].0, "payments.SVG");
+        assert_eq!(listed[0].1.state, ImageState::Ours);
+        assert!(listed[0].1.text.is_none());
+        assert!(listed[0]
+            .1
+            .marker
+            .as_deref()
+            .unwrap()
+            .contains("Payments.draftcanvas"));
+        assert!(named_image_path(&doc, "PAYMENTS.Ledger.svg").is_ok());
     }
 
     #[test]
@@ -496,7 +646,7 @@ mod tests {
         fs::write(&doc, "{}").unwrap();
         let first = svg("<rect/>");
         assert_eq!(
-            publish_image(&doc, "payments.svg", first.as_bytes()).unwrap(),
+            publish_image(&doc, "payments.svg", first.as_bytes(), false).unwrap(),
             Published::Written
         );
         assert_eq!(
@@ -504,12 +654,12 @@ mod tests {
             first
         );
         assert_eq!(
-            publish_image(&doc, "payments.svg", first.as_bytes()).unwrap(),
+            publish_image(&doc, "payments.svg", first.as_bytes(), false).unwrap(),
             Published::Unchanged
         );
         let second = svg("<circle/>");
         assert_eq!(
-            publish_image(&doc, "payments.svg", second.as_bytes()).unwrap(),
+            publish_image(&doc, "payments.svg", second.as_bytes(), false).unwrap(),
             Published::Written
         );
         assert_eq!(
@@ -524,10 +674,13 @@ mod tests {
         let doc = dir.path().join("payments.draftcanvas");
         let theirs = dir.path().join("payments.svg");
         fs::write(&theirs, "<svg><rect/></svg>").unwrap();
-        let error = publish_image(&doc, "payments.svg", svg("").as_bytes()).unwrap_err();
+        let error = publish_image(&doc, "payments.svg", svg("").as_bytes(), false).unwrap_err();
         assert_eq!(error.kind, ErrorKind::AlreadyExists);
         assert_eq!(fs::read_to_string(&theirs).unwrap(), "<svg><rect/></svg>");
-        assert_eq!(read_image(&theirs).unwrap().state, ImageState::Foreign);
+        assert_eq!(
+            read_image(&theirs, true).unwrap().state,
+            ImageState::Foreign
+        );
     }
 
     #[cfg(unix)]
@@ -538,7 +691,7 @@ mod tests {
         fs::write(&elsewhere, svg("<rect/>")).unwrap();
         std::os::unix::fs::symlink(&elsewhere, dir.path().join("payments.svg")).unwrap();
         let doc = dir.path().join("payments.draftcanvas");
-        assert!(publish_image(&doc, "payments.svg", svg("<circle/>").as_bytes()).is_err());
+        assert!(publish_image(&doc, "payments.svg", svg("<circle/>").as_bytes(), false).is_err());
         assert_eq!(fs::read_to_string(&elsewhere).unwrap(), svg("<rect/>"));
     }
 

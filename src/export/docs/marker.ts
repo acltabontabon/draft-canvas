@@ -71,9 +71,14 @@ export function readMarker(svg: string): DocsMarker | null {
   if (start < 0) return null;
   const end = svg.indexOf(MARKER_CLOSE, start + MARKER_OPEN.length);
   if (end < 0) return null;
+  return parseMarker(unescapeXmlText(svg.slice(start + MARKER_OPEN.length, end)));
+}
+
+/** The note's JSON as the desktop shell lifts it out of a picture (already unescaped), checked. */
+export function parseMarker(json: string): DocsMarker | null {
   let value: unknown;
   try {
-    value = JSON.parse(unescapeXmlText(svg.slice(start + MARKER_OPEN.length, end)));
+    value = JSON.parse(json);
   } catch {
     return null;
   }

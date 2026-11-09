@@ -204,7 +204,7 @@ describe('the link holds up', () => {
 describe('the publisher', () => {
   function fakeApi(svg: string | null, publish = vi.fn(async () => ({ outcome: 'written' as const, imageName: 'p.svg' }))) {
     return {
-      docsStatus: vi.fn(async () => ({ images: svg ? [{ name: 'p.svg', state: 'ours' as const, svg, modifiedMs: null }] : [] })),
+      docsStatus: vi.fn(async () => ({ images: svg ? [{ name: 'p.svg', state: 'ours' as const, marker: svg.slice(svg.indexOf('{'), svg.lastIndexOf('}') + 1), svg: null, modifiedMs: null }] : [] })),
       docsPublish: publish,
     } as unknown as DesktopApi & { docsPublish: typeof publish };
   }
@@ -243,6 +243,20 @@ describe('the publisher', () => {
     expect(api.docsPublish).not.toHaveBeenCalled();
     expect(notices).toHaveLength(1);
     expect(notices[0]).toContain('p.svg');
+  });
+
+  it('tells an open Docs tab when a save rewrote the pictures, reading only their notes', async () => {
+    const api = fakeApi(note(follow));
+    const publisher = new DocsPublisher(api, () => {});
+    const heard: string[] = [];
+    const stop = publisher.onWritten((handle) => heard.push(handle));
+    await publisher.refresh('h', 'p', withService('P', 'One'));
+    expect(heard).toEqual(['h']);
+    // The redraw asked for the notes alone, not every picture's whole text.
+    expect(api.docsStatus).toHaveBeenCalledWith('h');
+    stop();
+    await publisher.refresh('h', 'p', withService('P', 'Two'));
+    expect(heard).toEqual(['h']);
   });
 
   it('reports a failed write without throwing into the save', async () => {
