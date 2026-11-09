@@ -10,6 +10,7 @@ import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { motionMs } from '../../lib/motion';
 import { DesktopStatus } from '../../desktop/ui/DesktopStatus';
+import { NodiDock } from '../../desktop/ui/NodiDock';
 import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';
 import { pointsOf } from '../../document/openPoints';
@@ -164,6 +165,8 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
         <ZoomControls />
         <CanvasSettingsButton />
         <HelpMenu />
+        {/* Where the agent companion waits between conversations: the far end, under where it stands. */}
+        {__DESKTOP__ && hostKind() === 'desktop' && <NodiDock />}
       </div>
     </footer>
   );

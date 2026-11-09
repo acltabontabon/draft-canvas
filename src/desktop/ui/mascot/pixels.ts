@@ -4,7 +4,7 @@
  * `Mascot.tsx`.
  */
 
-export type Mood = 'idle' | 'working' | 'waiting' | 'happy' | 'asleep' | 'walking' | 'angry' | 'dizzy' | 'love' | 'surprised' | 'sleepy';
+export type Mood = 'idle' | 'working' | 'waiting' | 'happy' | 'asleep' | 'walking' | 'angry' | 'dizzy' | 'love' | 'surprised' | 'sleepy' | 'jumping';
 
 /** How often the mascot moves: a few frames a second is all pixel motion needs. */
 export const FRAME_MS = 150;
@@ -280,6 +280,9 @@ export function pose(mood: Mood, tick: number): { face: Face; lift: number; stri
       return { face: 'dots1', lift: Math.floor(tick / 4) % 2, screen: channelFrame(channelAt(tick), tick % CHANNEL_TICKS) };
     case 'waiting':
       return { face: tick % 30 === 29 ? 'blink' : 'look', lift: Math.floor(tick / 4) % 2 };
+    // Mid-jump: pleased and still. The jump itself does the moving; a bob inside it reads as a stutter.
+    case 'jumping':
+      return { face: 'happy', lift: 0 };
     case 'happy':
       return { face: 'happy', lift: [0, 2, 1, 0][Math.floor(tick / 2) % 4]! };
     case 'asleep':
@@ -319,7 +322,8 @@ export function frame(mood: Mood, tick: number): Run[] {
   });
   // Drifting up out of the frame: the rows above the top are simply not drawn.
   if (zed) for (const [dx, dy] of ZED) if (zed.y + dy - 3 >= 0) runs.push({ x: zed.x + dx, y: zed.y + dy - 3, width: 1, fill: PALETTE.g! });
-  // The shadow stays on the ground, smaller while the mascot is up.
-  runs.push(lift ? { x: 8, y: HEIGHT - 1, width: 8, fill: SHADOW } : { x: 6, y: HEIGHT - 1, width: 12, fill: SHADOW });
+  // The shadow stays on the ground, smaller while the mascot is up; mid-jump there is no ground under
+  // it to stay on, and a shadow carried through the air reads as part of it.
+  if (mood !== 'jumping') runs.push(lift ? { x: 8, y: HEIGHT - 1, width: 8, fill: SHADOW } : { x: 6, y: HEIGHT - 1, width: 12, fill: SHADOW });
   return runs;
 }

@@ -1641,30 +1641,8 @@
   gap: 0;
 }
 
-/* Arriving: Nodi walks on from beyond the canvas's right edge to its place, stepping as it goes
-   (`walking` frames), and greets once it stops. The same walk takes it off for a break. */
-@media (prefers-reduced-motion: no-preference) {
-  .dc-companion[data-arriving='true'] {
-    animation: dc-nodi-arrive 1400ms linear backwards;
-  }
-
-  .dc-companion[data-leaving='true'] {
-    animation: dc-nodi-leave 1400ms linear forwards;
-  }
-}
-
-@keyframes dc-nodi-arrive {
-  from {
-    transform: translateX(140px);
-  }
-}
-
-@keyframes dc-nodi-leave {
-  to {
-    transform: translateX(140px);
-  }
-}
-
+/* Nodi jumps up out of its bunk in the status bar and back down into it (`mascot/flight.ts`, Web
+   Animations on the mascot's button). With reduced motion it only fades in and out of the canvas. */
 @media (prefers-reduced-motion: reduce) {
   .dc-companion[data-arriving='true'] {
     animation: dc-nodi-fade-in 200ms linear both;
@@ -1707,6 +1685,80 @@
   background: none;
   cursor: pointer;
   line-height: 0;
+  /* Jumps squash and stretch from the feet, onto whatever Nodi lands on. */
+  transform-origin: 50% 100%;
+}
+
+/* Opened, the conversation comes up as Nodi lands on it. */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-companion[data-open='true'] .dc-companion-speech,
+  .dc-companion[data-open='true'] .dc-companion-composer,
+  .dc-companion[data-open='true'] > .dc-companion-footer {
+    animation: dc-companion-rise 240ms cubic-bezier(0.2, 0.7, 0.3, 1) 140ms backwards;
+  }
+}
+
+@keyframes dc-companion-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* Nodi's bunk, the status bar's last item (`NodiDock.tsx`): the size of Nodi drawn small, the same
+   whether Nodi is in it or out on the canvas, so nothing beside it moves. Nodi stands on the bar's
+   bottom edge, its head over the top one, as if it lived in there. */
+.dc-nodi-dock {
+  position: relative;
+  display: block;
+  flex: none;
+  width: 24px;
+  height: 28px;
+  margin: -6px 0 -2px;
+  padding: 0;
+  border: 0;
+  background: none;
+  line-height: 0;
+  transform-origin: 50% 100%;
+}
+
+button.dc-nodi-dock {
+  cursor: pointer;
+}
+
+button.dc-nodi-dock:focus-visible {
+  border-radius: var(--dc-radius);
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Landed: a squash on the way in, then still. */
+  .dc-nodi-dock[data-docked='true'] {
+    animation: dc-nodi-land 320ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  /* Pointed at, it perks up: one pixel taller, a pixel higher. */
+  button.dc-nodi-dock {
+    transition: transform 160ms cubic-bezier(0.2, 0.7, 0.3, 1);
+  }
+
+  button.dc-nodi-dock:hover,
+  button.dc-nodi-dock:focus-visible {
+    transform: translateY(-2px) scale(1.06, 1.06);
+  }
+}
+
+@keyframes dc-nodi-land {
+  0% {
+    transform: scale(1.25, 0.75);
+  }
+  55% {
+    transform: translateY(-2px) scale(0.94, 1.08);
+  }
+  100% {
+    transform: none;
+  }
 }
 
 .dc-companion-mascot:focus-visible {
@@ -2775,4 +2827,272 @@
 
 .dc-companion-token-breakdown dd {
   margin: 0;
+}
+
+/* ─── Nodi's skills (`NodiSkillMenu.tsx`) ──────────────────────────────────────────────────────
+   `/` in Nodi's box: a list over the composer in Nodi's own dialogue-box dress (pixel outline,
+   nameplate), each skill beside a small picture that plays out what it does when highlighted. */
+.dc-companion-composer {
+  position: relative;
+}
+
+.dc-companion-skills {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--dc-text) 14%, transparent);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: 600 14px/1 var(--dc-mono);
+  cursor: pointer;
+}
+
+.dc-companion-skills:hover,
+.dc-companion-skills:focus-visible,
+.dc-companion-skills[aria-pressed='true'] {
+  border-color: var(--dc-selection);
+  color: var(--dc-selection);
+  outline: none;
+}
+
+.dc-skill-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 14px);
+  left: 0;
+  z-index: 1;
+  padding: 12px 6px 6px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  box-shadow:
+    0 -2px 0 0 var(--dc-selection),
+    0 2px 0 0 var(--dc-selection),
+    -2px 0 0 0 var(--dc-selection),
+    2px 0 0 0 var(--dc-selection),
+    0 14px 30px -12px color-mix(in srgb, #000 55%, transparent);
+  transform-origin: 50% 100%;
+}
+
+.dc-skill-menu-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 6px 6px;
+}
+
+/* The nameplate, as the speech bubble's says NODI. */
+.dc-skill-menu-title {
+  position: absolute;
+  top: -11px;
+  left: 10px;
+  padding: 1px 7px 2px;
+  background: var(--dc-selection);
+  color: var(--dc-canvas);
+  font: 700 10px/1.3 var(--dc-font);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dc-skill-menu-keys {
+  margin-left: auto;
+  color: var(--dc-text-faint);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+}
+
+.dc-skill-list {
+  max-height: min(340px, 52vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dc-skill {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Each group named once, above its first skill. */
+.dc-skill[data-group-start]::before {
+  content: attr(data-group-start);
+  position: absolute;
+  top: -15px;
+  left: 8px;
+  color: var(--dc-text-faint);
+  font: 700 9.5px/1 var(--dc-font);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.dc-skill[data-group-start] {
+  position: relative;
+  margin-top: 18px;
+}
+
+.dc-skill[data-group-start]:first-child {
+  margin-top: 14px;
+}
+
+.dc-skill[data-active='true'] {
+  background: color-mix(in srgb, var(--dc-selection) 14%, transparent);
+}
+
+.dc-skill-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dc-skill-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 600 13px/1.3 var(--dc-font);
+}
+
+.dc-skill-slash {
+  color: var(--dc-text-faint);
+  font: 500 11px/1 var(--dc-mono);
+}
+
+.dc-skill[data-active='true'] .dc-skill-slash {
+  color: var(--dc-selection);
+}
+
+.dc-skill-hint {
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-skill-empty {
+  margin: 4px 8px 6px;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+}
+
+/* The picture: boxes and the lines between them, the lit ones in the accent. */
+.dc-skill-glyph {
+  flex: none;
+  overflow: visible;
+}
+
+.dc-skill-box {
+  fill: color-mix(in srgb, var(--dc-text) 10%, transparent);
+  stroke: color-mix(in srgb, var(--dc-text) 55%, transparent);
+  stroke-width: 1;
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+}
+
+.dc-skill-line,
+.dc-skill-messy {
+  fill: none;
+  stroke: color-mix(in srgb, var(--dc-text) 45%, transparent);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dc-skill-messy {
+  opacity: 0;
+}
+
+.dc-skill-box[data-lit='true'] {
+  fill: color-mix(in srgb, var(--dc-selection) 22%, transparent);
+  stroke: var(--dc-selection);
+}
+
+.dc-skill-line[data-lit='true'] {
+  stroke: var(--dc-selection);
+}
+
+.dc-skill[data-active='true'] .dc-skill-box:not([data-lit='true']) {
+  stroke: var(--dc-text);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Opened, the menu pops up from the composer and its skills cascade in. */
+  .dc-skill-menu {
+    animation: dc-skill-menu-in 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .dc-skill {
+    animation: dc-skill-in 240ms cubic-bezier(0.2, 0.8, 0.2, 1) backwards;
+    animation-delay: calc(min(var(--i), 10) * 22ms);
+  }
+
+  /* Highlighted, the picture plays the skill: the boxes come in from where they were and settle,
+     then the lines draw in between them. The animation is only there while highlighted, so it plays
+     again each time. */
+  .dc-skill[data-active='true'] .dc-skill-box {
+    animation: dc-skill-settle 520ms cubic-bezier(0.2, 0.9, 0.25, 1.15) backwards;
+    animation-delay: var(--d);
+  }
+
+  .dc-skill[data-active='true'] .dc-skill-line {
+    animation: dc-skill-draw 360ms cubic-bezier(0.3, 0.6, 0.2, 1) backwards;
+    animation-delay: var(--d);
+  }
+
+  /* Tidy: the tangle is there first, and fades as the straight line draws. */
+  .dc-skill[data-active='true'] .dc-skill-messy {
+    animation: dc-skill-untangle 560ms ease-out;
+  }
+}
+
+@keyframes dc-skill-menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.97);
+  }
+}
+
+@keyframes dc-skill-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@keyframes dc-skill-settle {
+  from {
+    opacity: 0.35;
+    transform: translate(var(--sx), var(--sy)) rotate(-8deg) scale(0.85);
+  }
+}
+
+@keyframes dc-skill-draw {
+  from {
+    stroke-dasharray: 1 1;
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dasharray: 1 1;
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes dc-skill-untangle {
+  0%,
+  35% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
 }
