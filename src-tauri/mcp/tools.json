@@ -1379,7 +1379,7 @@
             "label": {
               "type": "string",
               "maxLength": 80,
-              "description": "What flows or happens, e.g. \"Publishes RepaymentReceived\"."
+              "description": "What flows or happens, e.g. \"Publishes OrderPlaced\"."
             },
             "semantic": {
               "enum": [
@@ -3539,7 +3539,7 @@
             "label": {
               "type": "string",
               "maxLength": 80,
-              "description": "What flows or happens, e.g. \"Publishes RepaymentReceived\"."
+              "description": "What flows or happens, e.g. \"Publishes OrderPlaced\"."
             },
             "semantic": {
               "enum": [

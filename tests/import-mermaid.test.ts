@@ -432,4 +432,35 @@ describe('hostile text', () => {
     parseMermaidFlowchart(`flowchart TD\n  A -- x${' '.repeat(60_000)}y`);
     expect(performance.now() - started).toBeLessThan(500);
   });
+
+  it('does not rescan to the end of the line for every unclosed bracket in an & chain', () => {
+    // Each `(((` and `((` without its closer was read to the end of the statement: 88 KB took 7.5 s.
+    const text = `flowchart LR\n${Array.from({ length: 18_500 }, () => 'A((( x )').join(' & ')}`;
+    expect(text.length).toBeGreaterThan(200_000);
+    const started = performance.now();
+    const result = parseMermaidFlowchart(text);
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(result.ok).toBe(true);
+  });
+
+  it('still reads a label well past the 120-character cap, shortened', () => {
+    const result = parsed(`flowchart TD\n  A["${'word '.repeat(80)}"] --> B`);
+    expect(result.create.nodes[0]!.label).toHaveLength(MERMAID_LIMITS.labelLength);
+  });
+
+  it('names a connector from a shape to itself instead of refusing the import', async () => {
+    const text = 'flowchart LR\nA[Worker] --> B[Queue]\nA -->|retry| A';
+    const result = parsed(text);
+    expect(result.create.relationships).toHaveLength(1);
+    expect(result.unsupported).toEqual(['A → A: a connector from a shape to itself']);
+    const imported = await importMermaid(text, 'loop');
+    expect(imported.ok, imported.ok ? '' : imported.error).toBe(true);
+  });
+
+  it('falls back to the id for a label made only of control characters', async () => {
+    const text = 'flowchart LR\nA["\u0001"] --> B["#1;"]';
+    expect(parsed(text).create.nodes.map((n) => n.label)).toEqual(['A', 'B']);
+    const imported = await importMermaid(text, 'controls');
+    expect(imported.ok, imported.ok ? '' : imported.error).toBe(true);
+  });
 });

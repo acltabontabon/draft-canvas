@@ -772,6 +772,10 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
     rebased = true;
   }
 
+  // In the editor now: the ghost of it goes at once, not after the save below, so it never draws
+  // struck-through shapes over what is already gone or doubles what is now real.
+  agentActivity.committed(event.id);
+
   // 5. Durability.
   const receipt = { ...base, title: result.file.metadata.title, ...(rebased ? { rebased: true } : {}), applied: true, where: 'editor', undo: 'editor', ...receiptCounts(result) };
   if (!wasClean) {

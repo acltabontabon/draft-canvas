@@ -60,7 +60,7 @@ Rules for a new version:
 | v17 → v18 | `migrateReadsWritesLabel` | A `writes` connector labelled "reads / writes" becomes `readsWrites` with the label cleared |
 | v18 → v19 | identity | No-op (optional source evidence) |
 | v19 → v20 | `migrateAddWaypoints` | No-op (connector `waypoints`) |
-| v20 → v21 | `migrateTextToMarkdown` | Text node and Text attachment `text` is escaped so it reads the same as Markdown |
+| v20 → v21 | `migrateTextToMarkdown` | Text node and Text attachment `text` (on shapes and connectors) is escaped so it reads the same as Markdown |
 | v21 → v22 | identity | No-op (optional linked compensation fields on connectors) |
 | v22 → v23 | identity | No-op (retired per-connector style overrides are discarded by normalization) |
 

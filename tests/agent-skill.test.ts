@@ -86,9 +86,14 @@ describe('the agent skill', () => {
     const playbook = readFileSync(join(SKILL, 'references', 'mcp-playbook.md'), 'utf8');
     const named = [...playbook.matchAll(/`([A-Z][A-Z_]{2,})`/g)].map((m) => m[1]!);
     expect(named.length).toBeGreaterThan(10);
-    // The app's codes, and the ones the desktop broker answers with before a request reaches it.
+    // The app's codes, and the ones the desktop broker (and its Nodi run policy) answers with before
+    // a request reaches it.
     const known = new Set(
-      [readFileSync(join(__dirname, '..', 'src', 'agent', 'errors.ts'), 'utf8'), readFileSync(join(__dirname, '..', 'src-tauri', 'src', 'agent', 'broker.rs'), 'utf8')]
+      [
+        readFileSync(join(__dirname, '..', 'src', 'agent', 'errors.ts'), 'utf8'),
+        readFileSync(join(__dirname, '..', 'src-tauri', 'src', 'agent', 'broker.rs'), 'utf8'),
+        readFileSync(join(__dirname, '..', 'src-tauri', 'src', 'agent', 'runs.rs'), 'utf8'),
+      ]
         .flatMap((source) => [...source.matchAll(/['"]([A-Z][A-Z_]{2,})['"]/g)].map((m) => m[1]!)),
     );
     expect(named.filter((code) => !known.has(code))).toEqual([]);

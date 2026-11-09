@@ -37,12 +37,12 @@ original stays in place. Repository surveys skip named pipes, sockets and other 
 ## Ask Nodi, on the canvas
 
 Nodi is the desktop app's companion: ask your own Claude Code or Codex about the diagram you are
-looking at, without leaving it for a terminal. It appears in the canvas corner once Draft Canvas finds
-one of them installed, and needs agent access on and the diagram saved in an allowed folder. Until
-then it says what is missing and offers the fix: **Let Nodi in** turns agent access on. If the diagram
-is outside your listed projects, **Add project…** opens the folder picker; choose the folder containing
-the diagram, or a parent folder. Nodi then offers **Allow** *folder* to let agents use it. These steps
-are available from Nodi's box without opening Settings.
+looking at, without leaving it for a terminal. It waits at the end of the status bar once Draft
+Canvas finds one of them installed, and needs agent access on and the diagram saved in an allowed
+folder. Until then it says what is missing and offers the fix: **Let Nodi in** turns agent access
+on. If the diagram is outside your listed projects, **Add project…** opens the folder picker; choose
+the folder containing the diagram, or a parent folder. Nodi then offers **Allow** *folder* to let
+agents use it. These steps are available from Nodi's box without opening Settings.
 
 ![Nodi offering replies about the diagram.](../media/guides/nodi-open.png)
 
@@ -72,12 +72,14 @@ Highlighting a skill plays a small preview of what it will do. Use ↑ and ↓ t
 Tab to complete and Escape to close the list.
 
 - **Arrange**: lay the view out **Left to right** (`/across`) or **Top down** (`/down`), **Along**
-  one of its flows so that flow's steps run in a straight line, **Give it room** (`/roomy`) or
-  **Snug** (`/snug`), or **Tidy connectors** (`/tidy`). Nodi lays these out itself, with no agent
-  and no tokens. Shapes glide to their new places and the connectors redraw. Each is one undo step,
-  and Nodi's reply has an **Undo** button.
-- **Ask**: `/explain` and `/risks` send the question to your agent.
-- **Show**: `/present` plays the diagram's first flow.
+  one of its first three flows (`/follow-…`) so that flow's steps run in a straight line, **Give it
+  room** (`/roomy`) or **Snug** (`/snug`). Nodi lays these out itself, with no agent and no tokens. Shapes glide to their
+  new places and the connectors redraw. Each is one undo step, and Nodi's reply has an **Undo**
+  button. `/tidy` runs **Straighten connectors**, which nudges shapes a few pixels so nearly
+  straight connectors run straight; undo it with `⌘Z`. A shared, read-only diagram offers none of
+  these.
+- **Ask**: `/explain` and `/risks` send the question to your agent, when one is installed.
+- **Show**: `/present` plays the diagram's first flow that has steps.
 
 When your agent could do more outside Nodi's box, Nodi offers it under its suggestions, one click
 each: **Connect** *agent* **everywhere** adds Draft Canvas to that agent's own MCP servers (so a
@@ -216,7 +218,7 @@ In **Settings → AI agents**:
 | Layout refused | Ask for a smaller diagram, or put detail inside services. |
 | Version mismatch, or Settings shows **Update** *agent* | Click it to point the agent at this copy of Draft Canvas. |
 | Claude Code finds Draft Canvas in one folder only | Use **Add to Claude Code**, which sets it up for every project. |
-| No Nodi in the canvas corner | Install Claude Code (2.1.295 or later) or Codex (0.163.0 or later), then reopen the diagram. |
+| No Nodi in the status bar | Install Claude Code (2.1.295 or later) or Codex (0.163.0 or later), then reopen the diagram. |
 | Nodi says the agent isn't signed in | Run `claude` or `codex` once in Terminal to sign in, then try again. A desktop app does not see an `ANTHROPIC_API_KEY` set only in a shell profile; sign in with the CLI instead. |
 
 Tools, limits and error codes: [Agent integration](../reference/agent-integration.md).

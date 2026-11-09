@@ -13,6 +13,7 @@
  * carry, so a hostile 10k-node file is refused in one pass rather than laid out for a minute.
  */
 
+import { CONTROL_CHARS } from '../../document/sanitize';
 import { FRONT_MATTER, HEADER, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
 
 export { looksLikeMermaid } from './sniff';
@@ -111,6 +112,13 @@ const SHAPES: { open: string; close: string; type: MermaidElement['type'] }[] = 
 
 // `A -- text --> B` and `A -. text .-> B` and `A == text ==> B`: an opener, words, a closer.
 const TEXT_ARROW_SPAN = 600;
+/**
+ * How far a shape's closing bracket is looked for. An opener without its closer was read to the end
+ * of the statement once per candidate shape and per `&`-joined node, so `A((( x ) & A((( x ) & …`
+ * took seconds at 88 KB and minutes at the 512 KB cap. Labels are cut at 120 characters anyway, so
+ * the same bound as a text arrow's leaves every label anyone wrote by hand readable.
+ */
+const BRACKET_SPAN = TEXT_ARROW_SPAN;
 const TEXT_ARROW = /^\s*(<)?(x|o)?(--|-\.|==)\s+(.+?)\s+(-{2,}|\.+-|={2,})(>|x|o)?(?=\s|$|\|)/;
 // `-->`, `---`, `-.->`, `==>`, `--x`, `--o`, `<-->`, `~~~` and every longer spelling of each.
 const PLAIN_ARROW = /^\s*(<)?(x|o)?(-{2,}|={2,}|-\.+-|~{3,})(>|x|o)?(?=\s|$|\||[\p{L}\p{N}_("[{>])/u;
@@ -206,7 +214,10 @@ function cleanLabel(raw: string, unsupported: Unsupported): string {
       text = text.replace(/<\/?[a-z][^>]*>/gi, '');
     } while (text !== previous);
   }
+  // After decoding, since `#1;` decodes to one. The agent's reader strips these too, so a label of
+  // nothing else reached it empty and refused the whole import; here it falls back to the id.
   return decodeEntities(text)
+    .replace(CONTROL_CHARS, '')
     .split('\n')
     .map((line) => line.trim())
     .join('\n')
@@ -221,11 +232,13 @@ function fit(text: string, max: number, unsupported: Unsupported): string {
 
 /**
  * Reads the text between a shape's brackets, honouring quotes so a `]` inside `"…"` does not end
- * the label. Returns the label and where the closer ends, or null when the closer never comes.
+ * the label. Returns the label and where the closer ends, or null when the closer does not come
+ * within `BRACKET_SPAN`.
  */
 function readBracketed(text: string, from: number, close: string): { raw: string; end: number } | null {
   let quoted = false;
-  for (let i = from; i < text.length; i += 1) {
+  const last = Math.min(text.length, from + BRACKET_SPAN);
+  for (let i = from; i < last; i += 1) {
     const ch = text[i]!;
     if (ch === '"') quoted = !quoted;
     else if (!quoted && text.startsWith(close, i)) return { raw: text.slice(from, i), end: i + close.length };
@@ -455,6 +468,12 @@ export function parseMermaidFlowchart(text: string): MermaidParse {
             }
             if (arrow.arrow.invisible) {
               unsupported.add('invisible links (~~~)');
+              continue;
+            }
+            // The agent's reader refuses a relationship to itself, and that refusal failed the
+            // whole import for one retry loop.
+            if (from.id === to.id) {
+              unsupported.add(`${from.id.slice(0, 40)} → ${to.id.slice(0, 40)}: a connector from a shape to itself`);
               continue;
             }
             if (relationships.length >= MERMAID_LIMITS.relationships) throw new Limit(`This flowchart has more than ${MERMAID_LIMITS.relationships} arrows; Draft Canvas imports up to ${MERMAID_LIMITS.relationships} at a time.`);

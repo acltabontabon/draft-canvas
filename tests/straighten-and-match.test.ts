@@ -149,6 +149,15 @@ describe('Same width / Same height', () => {
     expect(matchNodeSizes(tall, ['a', 'b'], 'height')).toBe(tall);
   });
 
+  it('leaves a boundary out when shapes are selected with it, and matches boundaries on their own', () => {
+    const frame = (id: string, height: number) => ({ ...createNode({ type: 'group', x: 0, y: 0 }), id, width: 400, height });
+    const doc = docOf([frame('g', 400), service('a', 0, 0), service('b', 300, 40, { height: 90 }), frame('h', 300)], []);
+    const shapes = matchNodeSizes(doc, ['g', 'a', 'b'], 'height');
+    expect(shapes.nodes.map((n) => [n.id, n.height])).toEqual([['g', 400], ['a', 90], ['b', 90], ['h', 300]]);
+    const frames = matchNodeSizes(doc, ['g', 'h'], 'height');
+    expect(frames.nodes.find((n) => n.id === 'h')!.height).toBe(400);
+  });
+
   it('is one undo step each, offered for a selection of two or more', () => {
     reset(docOf([service('a', 0, 0, { width: 120 }), service('b', 300, 40, { width: 200, height: 90 })], []));
     useEditorStore.getState().setSelection({ nodes: ['a', 'b'], edges: [] });

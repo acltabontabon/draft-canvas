@@ -221,6 +221,35 @@ describe('restoreBackup', () => {
     vi.restoreAllMocks();
     expect((await target.listProjects())[0]!.name).toBe('Shop (renamed)');
   });
+
+  it('stores only a clean copy of each manifest project, never the archive\'s object as written', async () => {
+    const { zipFiles } = await import('../src/export/zip');
+    const manifest = {
+      projects: [
+        { id: 'p_extra', name: '  Sh\u0000op\u0007  ', createdAt: 10, updatedAt: 20, injected: { big: 'x'.repeat(1000) } },
+        { id: 'p_long', name: 'n'.repeat(5000), createdAt: Number.NaN, updatedAt: 30 },
+        { id: 'p_blank', name: '\u0001\u0002', createdAt: 'yesterday', updatedAt: Infinity },
+        { id: '', name: 'No id', createdAt: 1, updatedAt: 1 },
+        { name: 'Missing id', createdAt: 1, updatedAt: 1 },
+        null,
+      ],
+      membership: {},
+    };
+    const bytes = zipFiles([{ name: 'projects.json', data: JSON.stringify(manifest) }]);
+    const target = new MemoryRepository();
+    const saveProject = vi.spyOn(target, 'saveProject');
+    const before = Date.now();
+    await restoreBackup(target, bytes);
+    const saved = saveProject.mock.calls.map(([project]) => project);
+    vi.restoreAllMocks();
+    expect(saved.map((p) => p.id)).toEqual(['p_extra', 'p_long', 'p_blank']);
+    for (const project of saved) expect(Object.keys(project).sort()).toEqual(['createdAt', 'id', 'name', 'updatedAt']);
+    expect(saved[0]).toEqual({ id: 'p_extra', name: 'Shop', createdAt: 10, updatedAt: 20 });
+    expect(saved[1]).toMatchObject({ name: 'n'.repeat(200), createdAt: 30, updatedAt: 30 });
+    expect(saved[2]!.name).toBe('Untitled project');
+    expect(saved[2]!.createdAt).toBeGreaterThanOrEqual(before);
+    expect(saved[2]!.updatedAt).toBe(saved[2]!.createdAt);
+  });
 });
 
 describe('backupIsStale', () => {

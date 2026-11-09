@@ -16,6 +16,9 @@ const SEARCH_MATCHES: usize = 60;
 const READ_LINES: usize = 400;
 const READ_BYTES: usize = 64 * 1024;
 const BINARY_SAMPLE: usize = 8 * 1024;
+/// How far past the requested range `read_code` goes on counting lines for `totalLines`. A short
+/// range from the top of a huge generated file shouldn't cost reading all of it.
+const COUNT_BYTES: u64 = 8 * 1024 * 1024;
 const SKIP_DIRS: &[&str] = &[
     ".git",
     "node_modules",
@@ -56,12 +59,24 @@ fn is_secret(name: &str) -> bool {
     (name == ".env" || name.starts_with(".env.")) && name != ".env.example" && name != ".env.sample"
         // direnv's `.envrc` and wrangler's `.dev.vars` hold the same exports `.env` does.
         || [".npmrc", ".pypirc", ".netrc", ".envrc", ".dev.vars", ".git-credentials"].contains(&name.as_str())
-        || ["id_rsa", "id_ed25519", "credentials"]
+        // SSH private keys of every algorithm, their `-cert`/`_sk` variants and backups included.
+        || ["id_rsa", "id_dsa", "id_ecdsa", "id_ed25519", "credentials", "kubeconfig"]
             .iter()
             .any(|prefix| name.starts_with(prefix))
-        || [".pem", ".key", ".p12", ".pfx", ".keystore", ".kdbx"]
-            .iter()
-            .any(|suffix| name.ends_with(suffix))
+        // Terraform state holds every secret a plan touched, in plain text; tfvars often the inputs.
+        || [
+            ".pem", ".key", ".p12", ".pfx", ".keystore", ".kdbx", ".tfstate", ".tfstate.backup",
+            ".tfvars", ".tfvars.json", ".kubeconfig",
+        ]
+        .iter()
+        .any(|suffix| name.ends_with(suffix))
+}
+
+/// Secrets known by their folder as well as their name: Docker's registry logins and the
+/// kubectl config, both under a name too ordinary to refuse everywhere.
+fn is_secret_in(parent: &str, name: &str) -> bool {
+    let (parent, name) = (parent.to_ascii_lowercase(), name.to_ascii_lowercase());
+    parent == ".docker" && name == "config.json" || parent == ".kube" && name == "config"
 }
 
 fn object(args: &Value) -> Result<(), ToolError> {
@@ -95,7 +110,60 @@ fn number_arg(args: &Value, key: &str, default: u64) -> Result<u64, ToolError> {
 
 struct Folder {
     root: PathBuf,
-    ignored: Vec<String>,
+    ignored: Vec<Ignore>,
+}
+
+/// One `.gitignore` pattern, matched against a path relative to the folder with `glob_matches`.
+struct Ignore {
+    /// Relative to the folder; `**` segments stand for any number of folders. A pattern written
+    /// with no slash but a trailing one matches a name at any depth, so it is kept as `**/name`.
+    pattern: String,
+    /// Written with a trailing slash: directories only.
+    directories: bool,
+}
+
+impl Ignore {
+    /// The supported subset: `*` and `**` wildcards, anchored and nested paths. A line using what
+    /// isn't supported (negation, `?`, character classes, escapes) is skipped. Skipping a negation
+    /// can only hide more than git would, never less.
+    fn parse(line: &str) -> Option<Self> {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with(['#', '!']) || line.contains(['?', '[', ']', '\\']) {
+            return None;
+        }
+        let mut directories = line.ends_with('/');
+        let mut line = line.trim_end_matches('/');
+        // `build/**` is everything inside `build`: the same as ignoring the directory itself.
+        if let Some(inside) = line.strip_suffix("/**") {
+            line = inside;
+            directories = true;
+        }
+        // A leading or middle slash anchors the pattern to the folder; a lone name matches anywhere.
+        let anchored = line.contains('/');
+        let line = line.trim_start_matches('/');
+        if line.is_empty() || line.split('/').any(|part| part.is_empty() || part == "..") {
+            return None;
+        }
+        Some(Self {
+            pattern: if anchored {
+                line.to_string()
+            } else {
+                format!("**/{line}")
+            },
+            directories,
+        })
+    }
+
+    fn matches(&self, relative: &str, directory: bool) -> bool {
+        // `glob_matches` compares a pattern without a slash with the last name only; here such a
+        // pattern is anchored (`/generated`), so it must match the whole path.
+        (directory || !self.directories)
+            && if self.pattern.contains('/') {
+                glob_matches(&self.pattern, relative)
+            } else {
+                !relative.contains('/') && star_matches(&self.pattern, relative)
+            }
+    }
 }
 
 impl Folder {
@@ -108,8 +176,9 @@ impl Folder {
             root,
             ignored: Vec::new(),
         };
-        // Only the cheap, unambiguous subset is supported. In particular a symlinked .gitignore
-        // must never be a way to read a second folder, even though its contents aren't returned.
+        // Only the root .gitignore, and only the subset `Ignore::parse` describes. A symlinked
+        // .gitignore must never be a way to read a second folder, even though its contents aren't
+        // returned.
         let ignore = folder.root.join(".gitignore");
         if fs::symlink_metadata(&ignore).is_ok_and(|m| m.is_file()) {
             if let Ok(file) = File::open(ignore) {
@@ -119,22 +188,7 @@ impl Folder {
                     .read_to_string(&mut text)
                     .is_ok()
                 {
-                    folder.ignored = text
-                        .lines()
-                        .map(str::trim)
-                        .filter(|line| {
-                            !line.is_empty()
-                                && !line.starts_with(['#', '!'])
-                                && !line.contains(['?', '[', ']', '\\'])
-                        })
-                        .map(|line| line.trim_matches('/').to_string())
-                        .filter(|line| {
-                            !line.is_empty()
-                                && !line.contains('/')
-                                && (!line.contains('*')
-                                    || line.starts_with("*.") && !line[1..].contains('*'))
-                        })
-                        .collect();
+                    folder.ignored = text.lines().filter_map(Ignore::parse).collect();
                 }
             }
         }
@@ -144,21 +198,25 @@ impl Folder {
     fn check_names(&self, path: &Path) -> Result<(), ToolError> {
         let relative = path.strip_prefix(&self.root).map_err(|_| outside())?;
         let mut current = self.root.clone();
+        let mut walked = String::new();
+        let mut parent = "";
         for part in relative.iter() {
             let name = part.to_str().ok_or_else(unreadable)?;
             current.push(part);
-            if is_secret(name) {
+            if is_secret(name) || is_secret_in(parent, name) {
                 return Err(secret());
             }
+            if !walked.is_empty() {
+                walked.push('/');
+            }
+            walked.push_str(name);
+            parent = name;
             let directory = current.is_dir();
             if directory && SKIP_DIRS.contains(&name.to_ascii_lowercase().as_str())
-                || self.ignored.iter().any(|pattern| {
-                    pattern
-                        .strip_prefix('*')
-                        .map_or(directory && pattern == name, |suffix| {
-                            name.ends_with(suffix)
-                        })
-                })
+                || self
+                    .ignored
+                    .iter()
+                    .any(|rule| rule.matches(&walked, directory))
             {
                 return Err(ToolError::new(
                     "EXCLUDED_PATH",
@@ -486,6 +544,32 @@ fn bounded_line(reader: &mut impl BufRead) -> Result<Option<(String, bool)>, Too
     )))
 }
 
+/// Adds the lines left in `reader` to `total`, a final line without a newline included, reading at
+/// most `budget` bytes. False when the budget ran out first, so `total` is only a lower bound.
+fn count_lines(reader: &mut impl BufRead, total: &mut u64, budget: u64) -> Result<bool, ToolError> {
+    let mut read = 0_u64;
+    let mut open_line = false;
+    loop {
+        let buffer = reader.fill_buf().map_err(|_| unreadable())?;
+        if buffer.is_empty() {
+            *total += u64::from(open_line);
+            return Ok(true);
+        }
+        if read >= budget {
+            *total += u64::from(open_line);
+            return Ok(false);
+        }
+        let take = buffer
+            .len()
+            .min(usize::try_from(budget - read).unwrap_or(usize::MAX));
+        let chunk = &buffer[..take];
+        *total += chunk.iter().filter(|b| **b == b'\n').count() as u64;
+        open_line = chunk.last() != Some(&b'\n');
+        read += take as u64;
+        reader.consume(take);
+    }
+}
+
 fn byte_prefix(text: &str, limit: usize) -> &str {
     let mut end = text.len().min(limit);
     while !text.is_char_boundary(end) {
@@ -494,7 +578,8 @@ fn byte_prefix(text: &str, limit: usize) -> &str {
     &text[..end]
 }
 
-/// Reads a numbered range. totalLines counts the file, including lines outside the returned range.
+/// Reads a numbered range. totalLines counts the file, including lines outside the returned range;
+/// where the file goes on for more than `COUNT_BYTES` past the range, `totalLinesAtLeast` replaces it.
 pub fn read_code(root: &Path, args: &Value) -> ToolResult {
     object(args)?;
     let path = string_arg(args, "path", None)?;
@@ -514,7 +599,16 @@ pub fn read_code(root: &Path, args: &Value) -> ToolResult {
     let mut last = start - 1;
     let mut count = 0;
     let mut truncated = false;
-    while let Some((line, clipped)) = bounded_line(&mut reader)? {
+    let mut counted = true;
+    loop {
+        // Nothing more to return: only the count is left, so lines are no longer assembled.
+        if total >= end || truncated {
+            counted = count_lines(&mut reader, &mut total, COUNT_BYTES)?;
+            break;
+        }
+        let Some((line, clipped)) = bounded_line(&mut reader)? else {
+            break;
+        };
         total += 1;
         if total < start || total > end {
             continue;
@@ -541,10 +635,14 @@ pub fn read_code(root: &Path, args: &Value) -> ToolResult {
         "path": folder.relative(&path),
         "startLine": start,
         "endLine": last,
-        "totalLines": total,
         "text": text,
         "truncated": truncated,
     });
+    result[if counted {
+        "totalLines"
+    } else {
+        "totalLinesAtLeast"
+    }] = json!(total);
     if truncated {
         result["hint"] = json!("Ask for the next line range to continue reading.");
     }
@@ -688,6 +786,16 @@ mod tests {
             "credentials.json",
             "vault.kdbx",
             "PRIVATE.KEY",
+            "id_ecdsa",
+            "id_ecdsa_sk",
+            "id_dsa",
+            "terraform.tfstate",
+            "terraform.tfstate.backup",
+            "prod.tfvars",
+            "prod.auto.tfvars.json",
+            "kubeconfig",
+            "kubeconfig.yaml",
+            "staging.kubeconfig",
         ] {
             write(dir.path(), name, "needle");
             let err = error(dir.path(), json!({"path": name}), "SECRET_FILE");
@@ -736,6 +844,80 @@ mod tests {
             found["matches"],
             json!([{"path": "src/file.rs", "line": 1, "text": "needle"}])
         );
+    }
+
+    #[test]
+    fn secrets_known_by_their_folder_are_refused_but_the_name_elsewhere_is_not() {
+        let dir = TempDir::new().unwrap();
+        write(dir.path(), ".docker/config.json", "needle");
+        write(dir.path(), ".kube/config", "needle");
+        write(dir.path(), "app/config.json", "needle");
+        error(
+            dir.path(),
+            json!({"path": ".docker/config.json"}),
+            "SECRET_FILE",
+        );
+        error(dir.path(), json!({"path": ".kube/config"}), "SECRET_FILE");
+        let found = search_code(dir.path(), &json!({"query": "needle"})).unwrap();
+        assert_eq!(
+            found["matches"],
+            json!([{"path": "app/config.json", "line": 1, "text": "needle"}])
+        );
+    }
+
+    #[test]
+    fn gitignore_paths_anchors_and_double_stars_are_respected() {
+        let dir = TempDir::new().unwrap();
+        write(
+            dir.path(),
+            ".gitignore",
+            "/generated\nsrc/legacy/\n**/fixtures\ndocs/**/*.tmp\nout/**\ncache/**\nsecrets.txt\n",
+        );
+        for path in [
+            "generated/a.rs",
+            "src/legacy/a.rs",
+            "deep/down/fixtures/a.rs",
+            "docs/a/b/c.tmp",
+            "out/a.rs",
+            "nested/secrets.txt",
+        ] {
+            write(dir.path(), path, "needle");
+            error(dir.path(), json!({"path": path}), "EXCLUDED_PATH");
+        }
+        // Anchored patterns don't reach deeper copies; `cache/**` doesn't hide a file named cache.
+        for path in [
+            "nested/generated/a.rs",
+            "lib/src/legacy/a.rs",
+            "docs/c.md",
+            "cache",
+        ] {
+            write(dir.path(), path, "needle");
+            assert!(
+                read_code(dir.path(), &json!({"path": path})).is_ok(),
+                "{path}"
+            );
+        }
+    }
+
+    #[test]
+    fn counting_lines_past_the_range_stops_at_its_budget() {
+        let mut total = 1;
+        assert!(count_lines(&mut Cursor::new(b"a\nb\nc"), &mut total, 64).unwrap());
+        assert_eq!(total, 4);
+        let mut total = 0;
+        assert!(!count_lines(&mut Cursor::new(b"a\nb\nc\nd\n"), &mut total, 4).unwrap());
+        assert_eq!(total, 2, "a lower bound");
+
+        let dir = TempDir::new().unwrap();
+        let lines = COUNT_BYTES / 2 + 10;
+        write(dir.path(), "big.txt", "x\n".repeat(lines as usize));
+        let read = read_code(dir.path(), &json!({"path": "big.txt", "endLine": 2})).unwrap();
+        assert_eq!(read["text"], "1: x\n2: x\n");
+        assert!(read.get("totalLines").is_none());
+        assert_eq!(read["totalLinesAtLeast"], 2 + COUNT_BYTES / 2);
+        write(dir.path(), "small.txt", "x\n".repeat(10));
+        let read = read_code(dir.path(), &json!({"path": "small.txt", "endLine": 2})).unwrap();
+        assert_eq!(read["totalLines"], 10);
     }
 
     #[test]

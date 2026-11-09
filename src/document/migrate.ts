@@ -575,19 +575,23 @@ function migrateTextToMarkdown(doc: Record<string, unknown>): Record<string, unk
   if (!Array.isArray(doc.nodes)) return doc;
   const escapeText = (item: Record<string, unknown>) =>
     item.type === 'text' && typeof item.text === 'string' && item.text !== '' ? { ...item, text: escapeLegacyText(item.text) } : item;
+  const withAttachments = (host: Record<string, unknown>) =>
+    Array.isArray(host.attachments)
+      ? {
+          ...host,
+          attachments: host.attachments.map((attachment) =>
+            attachment && typeof attachment === 'object' ? escapeText(attachment as Record<string, unknown>) : attachment,
+          ),
+        }
+      : host;
   return {
     ...doc,
-    nodes: doc.nodes.map((raw) => {
-      if (!raw || typeof raw !== 'object') return raw;
-      const node = escapeText(raw as Record<string, unknown>);
-      if (!Array.isArray(node.attachments)) return node;
-      return {
-        ...node,
-        attachments: node.attachments.map((attachment) =>
-          attachment && typeof attachment === 'object' ? escapeText(attachment as Record<string, unknown>) : attachment,
-        ),
-      };
-    }),
+    nodes: doc.nodes.map((raw) => (raw && typeof raw === 'object' ? withAttachments(escapeText(raw as Record<string, unknown>)) : raw)),
+    // Connectors too: the editor never put Text on one, but agents could (v1.12.0–v1.13.1), and
+    // detaching it makes a Text node, which now reads its words as Markdown.
+    ...(Array.isArray(doc.edges)
+      ? { edges: doc.edges.map((raw) => (raw && typeof raw === 'object' ? withAttachments(raw as Record<string, unknown>) : raw)) }
+      : {}),
   };
 }
 

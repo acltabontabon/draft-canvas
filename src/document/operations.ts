@@ -871,18 +871,30 @@ export function distributeNodes(
  * A Junction stays round and is left out, and a boundary is never sized below the shapes it holds
  * (it only ever grows here).
  */
+/**
+ * The shapes Same width / Same height resize among `selected`: never a Junction (a fixed dot), and
+ * boundaries only when nothing but boundaries is selected. A boundary is a frame around shapes, so
+ * ⌘A then Same height must not make every shape as tall as the boundary that holds them.
+ */
+export function sizeMatchTargets<T extends Pick<DraftNode, 'type'>>(selected: readonly T[]): T[] {
+  const sized = selected.filter((node) => node.type !== 'ellipse');
+  const shapes = sized.filter((node) => node.type !== 'group');
+  return shapes.length > 0 ? shapes : sized;
+}
+
 export function matchNodeSizes(
   doc: DraftDocument,
   ids: Iterable<string>,
   dimension: 'width' | 'height',
 ): DraftDocument {
   const set = new Set(ids);
-  const targets = doc.nodes.filter((n) => set.has(n.id) && n.type !== 'ellipse');
+  const targets = sizeMatchTargets(doc.nodes.filter((n) => set.has(n.id)));
   if (targets.length < 2) return doc;
+  const resized = new Set(targets.map((n) => n.id));
   const size = Math.max(...targets.map((n) => n[dimension]));
   let changed = false;
   const nodes = doc.nodes.map((node) => {
-    if (!set.has(node.id) || node.type === 'ellipse' || node[dimension] === size) return node;
+    if (!resized.has(node.id) || node[dimension] === size) return node;
     const max = maxSizeFor(node.type)?.[dimension] ?? Infinity;
     const next = Math.min(size, max);
     if (next === node[dimension]) return node;

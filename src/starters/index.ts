@@ -35,9 +35,8 @@ export function starterById(id: StarterId): ArchitectureStarter | undefined {
 }
 
 /**
- * The five every chooser offers — the home screen, the blank canvas, the desktop's Home. The rest
- * of the catalog stays reachable by name through the command palette (and to an agent through
- * `create_diagram`), and is listed in `docs/guides/examples.md`. Curation is the whole point — a
+ * The five the blank canvas offers. The rest of the catalog stays reachable by name through the
+ * command palette (and to an agent through `create_diagram`), and is listed in `docs/guides/examples.md`. Curation is the whole point — a
  * chooser that listed every starter would be a template picker, which is the opposite of what a
  * blank canvas is for — and the set is frozen: it is chosen for teaching value and how easily each
  * is adapted, not for how many architectures Draft Canvas knows.

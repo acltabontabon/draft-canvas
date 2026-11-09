@@ -8,7 +8,7 @@ import { createAttachment, defaultSizeFor, displayNameFor } from '../document/fa
 import { stepIndexOf } from '../document/flow';
 import { LIMITS } from '../document/limits';
 import { routingPlan } from '../edges/bundles';
-import { boundsOf, descendantsOf, placeNear } from '../document/operations';
+import { boundsOf, descendantsOf, placeNear, sizeMatchTargets } from '../document/operations';
 import {
   CONNECTOR_KINDS,
   EDGE_SEMANTICS,
@@ -1863,7 +1863,7 @@ export function multiCommands(ctx: CommandContext): Command[] {
       });
     }
   }
-  if (outer.filter((node) => node.type !== 'ellipse').length >= 2) {
+  if (sizeMatchTargets(outer).length >= 2) {
     commands.push(
       {
         id: 'match-width',

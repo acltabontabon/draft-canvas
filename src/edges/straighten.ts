@@ -1,3 +1,4 @@
+import { visibleEdges } from '../document/compensation';
 import { moveNodes } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { rectOf } from './routing';
@@ -56,8 +57,8 @@ export function straightenPositions(
   const at = new Map(graph.nodes.map((node) => [node.id, { x: node.x, y: node.y }] as const));
   const live = (id: string): DraftNode => ({ ...byId.get(id)!, ...at.get(id)! });
   // Boundaries are frames, not ends worth straightening onto; the connectors that count join two
-  // ordinary shapes.
-  const edges = graph.edges.filter((edge) => {
+  // ordinary shapes, and are drawn (a folded compensation has no line to straighten).
+  const edges = visibleEdges(graph.edges).filter((edge) => {
     const source = byId.get(edge.source);
     const target = byId.get(edge.target);
     return source && target && edge.source !== edge.target && source.type !== 'group' && target.type !== 'group' && !edge.waypoints?.length;

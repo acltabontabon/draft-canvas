@@ -82,7 +82,7 @@ conversations it waits at the right end of the status bar, and jumps up onto the
 to bring news of a run, or when you click it or press ⌘J. With nothing left to do, it goes back down.
 See [Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas).
 
-![Nodi in the canvas corner, saying hello.](../media/guides/nodi-rest.png)
+![Nodi up on the canvas, saying hello.](../media/guides/nodi-rest.png)
 
 ## Settings
 
@@ -114,12 +114,13 @@ Uninstalling keeps your diagrams and recovery data.
 | `⌘F` on Home | Find a diagram |
 | `⌘W` / `⌘Q` | Close window / quit |
 | `⌘,` | Settings |
+| `⌘J` | Nodi: open or put back to rest |
 
 On Windows, use `Ctrl`. Editor keys: [keyboard shortcuts](keyboard-and-commands.md).
 
 ## Building it yourself
 
-Install Node 22.22+, [Rust](https://www.rust-lang.org/tools/install) and
+Install Node 22.22.2+, [Rust](https://www.rust-lang.org/tools/install) and
 [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/), then:
 
 ```bash

@@ -1355,12 +1355,14 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
       const resting = state.document.nodes.filter((node) => !moving.has(node.id));
       const links: DragLink[] = [];
-      for (const edge of state.document.edges) {
+      // The connectors Straighten would straighten (`edges/straighten.ts`): drawn ones (a folded
+      // compensation has no line to pull on) between two ordinary shapes, never a boundary's frame.
+      for (const edge of visibleEdges(state.document.edges)) {
         const sourceMoves = moving.has(edge.source);
         if (sourceMoves === moving.has(edge.target) || edge.source === edge.target) continue;
         const movingNode = byId.get(sourceMoves ? edge.source : edge.target);
         const fixedNode = byId.get(sourceMoves ? edge.target : edge.source);
-        if (!movingNode || !fixedNode) continue;
+        if (!movingNode || !fixedNode || movingNode.type === 'group' || fixedNode.type === 'group') continue;
         links.push({ edge, moving: movingNode, fixed: rectOf(fixedNode), movingIsSource: sourceMoves });
       }
       dragSnap.current = {
