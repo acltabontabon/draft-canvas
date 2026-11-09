@@ -16,6 +16,7 @@ import type { ThemeName } from '../../render/theme/tokens';
 import type { PersonalityPreset } from '../../theme/usePersonality';
 import { PERSONALITY_PROFILES } from '../../render/roughness/presets';
 import { isRecord } from '../../lib/isRecord';
+import { escapeXmlText } from '../../render/svg/element';
 
 /** How a published image is drawn and kept. Everything here is chosen once, in Use in docs. */
 export interface DocsSettings {
@@ -37,10 +38,6 @@ const MARKER_CLOSE = '</metadata>';
 const MARKER_VERSION = 1;
 
 export const DEFAULT_DOCS_SETTINGS: DocsSettings = { view: [], theme: 'light', style: 'clean', sync: true };
-
-function escapeXmlText(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
 
 function unescapeXmlText(text: string): string {
   return text.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');

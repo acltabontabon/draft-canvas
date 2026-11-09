@@ -121,6 +121,13 @@ describe('the docs image', () => {
     expect(light.ok && dark.ok && light.svg !== dark.svg).toBe(true);
   });
 
+  it('keeps a title with characters XML forbids readable', async () => {
+    const file = { ...payments(), metadata: { ...payments().metadata, title: 'Pay\u0001ments\u000b' } };
+    const rendered = await renderDocsImage(file, 'payments.draftcanvas', top);
+    expect(rendered.ok && rendered.svg).toContain('<title>Payments</title>');
+    expect(rendered.ok && [...rendered.svg].some((char) => char.charCodeAt(0) < 0x20 && !'\t\n\r'.includes(char))).toBe(false);
+  });
+
   it('draws an empty diagram as an empty card', async () => {
     const rendered = await renderDocsImage(createDocument(''), 'untitled.draftcanvas', top);
     expect(rendered.ok && rendered.svg).toContain('<title>Architecture diagram</title>');

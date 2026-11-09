@@ -21,6 +21,8 @@ import type { DraftDocument } from '../../document/types';
 import { hasInside, ownerAt, viewOf } from '../../depth/tree';
 import { loadTechnologyIcons } from '../../nodes/technology';
 import { renderDocumentSvg } from '../../render/svg/document';
+// The renderer's own escaping: it also drops characters XML forbids, which would make the file unreadable.
+import { escapeXmlText } from '../../render/svg/element';
 import { resolveExportBackground } from '../background';
 import { collectRooms } from '../rooms';
 import { markerElement, type DocsSettings } from './marker';
@@ -66,10 +68,6 @@ function oneLine(text: string): string {
   return text.replace(/\s+/g, ' ').trim();
 }
 
-function escapeXml(text: string): string {
-  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
 /**
  * The docs image of `file` at `settings.view`. `source` is the `.draftcanvas` file's own name, as the
  * Markdown's repository will hold it; it goes into the note, so a reader of the SVG knows where to
@@ -99,5 +97,5 @@ export async function renderDocsImage(file: DraftDocument, source: string, setti
 function withDocsHeader(svg: string, title: string, marker: string): string {
   const open = svg.indexOf('>', svg.indexOf('<svg'));
   if (open < 0) return svg;
-  return `${svg.slice(0, open)} role="img">${`<title>${escapeXml(title)}</title>`}${marker}${svg.slice(open + 1)}`;
+  return `${svg.slice(0, open)} role="img">${`<title>${escapeXmlText(title)}</title>`}${marker}${svg.slice(open + 1)}`;
 }

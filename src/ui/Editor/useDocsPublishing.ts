@@ -63,6 +63,11 @@ export interface DocsPublishing {
   busy: boolean;
   primary: DocsAction;
   copyText: string;
+  /**
+   * Whether the Markdown is true right now: on the desktop the picture has to be there first — a
+   * path to a file that doesn't exist yet, or to someone else's SVG, is exactly what not to copy.
+   */
+  canCopy: boolean;
   chooseMarkdown: (() => Promise<void>) | null;
   reveal: (() => Promise<void>) | null;
 }
@@ -340,6 +345,7 @@ export function useDocsPublishing({
     busy,
     primary,
     copyText: snippet,
+    canCopy: !desktopFile || status?.state === 'ours',
     chooseMarkdown,
     reveal,
   };

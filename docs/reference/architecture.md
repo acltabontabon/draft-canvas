@@ -144,6 +144,14 @@ skips identical bytes, and adds to a Markdown file only an insertion into the te
 Pictures are drawn where text is measured, in the app, so there is no headless renderer to drift
 from it.
 
+**Richer previews: decided, not built.** A custom fenced block (```` ```draftcanvas ````) only works
+in a viewer that knows it, never on GitHub. Building it now would split effort from the portable
+SVG, so this release ships the SVG alone. The extension point is the note in every docs image:
+`readMarker` (`export/docs/marker.ts`) gives a viewer the `.draftcanvas` beside the SVG and the level
+it shows. A Markdown preview (VS Code, a docs site) can swap the image for an interactive view of
+that level. It should reuse `renderDocumentSvg` and the reader, never a second renderer, and load no
+remote script.
+
 **Encrypted storage.** Browser records are written plain. `crypto/documentCipher.ts` and
 `crypto/keyStore.ts` only decrypt legacy rows and are called only by `storage/IndexedDbRepository.ts`.
 The passphrase export is separate. See [Security](../../SECURITY.md#browser-storage).

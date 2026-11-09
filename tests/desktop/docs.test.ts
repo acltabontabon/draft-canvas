@@ -3,7 +3,7 @@ import { serializeDocument } from '../../src/export/project';
 import { createDocument, createNode } from '../../src/document/factory';
 import { readMarker, type DocsSettings } from '../../src/export/docs/marker';
 import { DocsPublisher } from '../../src/desktop/docs';
-import type { DesktopApi } from '../../src/desktop/api';
+import { DesktopError, type DesktopApi } from '../../src/desktop/api';
 import { createHarness, type Harness } from './harness';
 
 let h: Harness;
@@ -109,6 +109,66 @@ describe('keeping it updated', () => {
     await h.hostEvent({ type: 'agent-file-written', id: 77, handle: other, displayPath: h.files.get(other)!.displayPath, stamp: 'v1:2', created: false });
     await drained();
     expect(h.docsImages.get(other)).toContain('After');
+  });
+});
+
+describe('the link holds up', () => {
+  const noteFor = (source: string, settings: DocsSettings) =>
+    `<svg xmlns="http://www.w3.org/2000/svg"><metadata id="draftcanvas-docs">${JSON.stringify({ v: 1, source, ...settings })}</metadata></svg>`;
+
+  it('keeps the person’s new choices when publishing also has to save first', async () => {
+    const handle = await openFile('payments', withService('Payments', 'Gateway'));
+    await h.controller.publishDocs(follow);
+    h.edit(withService('Payments', 'Edge router'));
+    // The save inside Publish asks for a redraw with the note on disk (sync on); Publish then writes
+    // the new choice (sync off). The new choice must be what is left.
+    await h.controller.publishDocs({ ...follow, theme: 'dark', sync: false });
+    await drained();
+    const settings = readMarker(h.docsImages.get(handle)!)!.settings;
+    expect(settings).toEqual({ ...follow, theme: 'dark', sync: false });
+    expect(h.docsImages.get(handle)).toContain('Edge router');
+  });
+
+  it('still follows saves after a restart: the note beside the file is the whole link', async () => {
+    const text = withService('Payments', 'Gateway');
+    const handle = h.addFile('payments', text);
+    h.docsImages.set(handle, noteFor('payments.draftcanvas', follow));
+    await h.controller.openHandle(handle);
+    await h.settle();
+    h.edit(withService('Payments', 'After restart'));
+    await h.controller.save();
+    await drained();
+    expect(h.docsImages.get(handle)).toContain('After restart');
+  });
+
+  it('leaves alone a picture that another diagram published', async () => {
+    const handle = h.addFile('payments', withService('Payments', 'Gateway'));
+    const theirs = noteFor('ledger.draftcanvas', follow);
+    h.docsImages.set(handle, theirs);
+    await h.controller.openHandle(handle);
+    await h.settle();
+    h.edit(withService('Payments', 'Changed'));
+    await h.controller.save();
+    await drained();
+    expect(h.docsImages.get(handle)).toBe(theirs);
+  });
+
+  it('says so when renaming the diagram leaves its picture behind', async () => {
+    const handle = await openFile('payments', withService('Payments', 'Gateway'));
+    await h.controller.publishDocs(follow);
+    await h.controller.renameFile(handle, 'billing');
+    expect(h.notices.some((notice) => notice.startsWith('payments.svg stayed where your Markdown points'))).toBe(true);
+  });
+
+  it('reports a refused write and still saves the diagram', async () => {
+    const handle = await openFile('payments', withService('Payments', 'Gateway'));
+    await h.controller.publishDocs(follow);
+    h.api.docsPublish.mockRejectedValueOnce(new DesktopError('PermissionDenied', 'Draft Canvas doesn’t have permission to save payments.svg.'));
+    h.edit(withService('Payments', 'Changed'));
+    await h.controller.save();
+    await drained();
+    expect(h.files.get(handle)!.text).toContain('Changed');
+    expect(h.notices.some((notice) => notice.startsWith('Couldn’t update payments.svg'))).toBe(true);
   });
 });
 

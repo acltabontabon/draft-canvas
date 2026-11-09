@@ -66,6 +66,11 @@ describe('headings', () => {
     ]);
   });
 
+  it('does not end a code block at a fence line that carries an info string', () => {
+    const text = '# A\n\n```\ncode\n```js\nstill code\n```\n\n## Real\n';
+    expect(headingsOf(text).map((heading) => heading.text)).toEqual(['A', 'Real']);
+  });
+
   it('suggests a section that sounds like a diagram belongs there, else the end', () => {
     const headings = headingsOf(README);
     expect(defaultPlacement(headings)).toEqual({ kind: 'section', line: headings[1]!.line });
@@ -111,6 +116,15 @@ describe('adding the image', () => {
     // Adding it once makes a second add a no-op the panel can see.
     const once = insertImage('# Doc\n', { kind: 'end' }, markdownImage('Payments', path)).text;
     expect(referencesTo(once, path)).toBe(1);
+  });
+
+  it('recognises its own reference whatever characters the name holds, so it never adds it twice', () => {
+    for (const name of ['R&D.svg', 'a+b.svg', 'x,y.svg', 'a#1.svg', 'what?.svg', 'diagrams/Q&A (v2).svg', '設計.svg']) {
+      const once = insertImage('# Doc\n', { kind: 'end' }, markdownImage('X', name)).text;
+      expect(referencesTo(once, name), name).toBe(1);
+    }
+    // A fragment or query in a hand-written reference still points at the same file.
+    expect(referencesTo('![x](diagrams/a.svg#light)', 'diagrams/a.svg')).toBe(1);
   });
 
   it('supports several diagrams in one file', () => {

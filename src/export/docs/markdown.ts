@@ -56,7 +56,7 @@ function linesOf(text: string): Line[] {
   return lines;
 }
 
-const FENCE = /^ {0,3}(`{3,}|~{3,})/;
+const FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/;
 const ATX = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))?(?:[ \t]+#+)?[ \t]*$/;
 
 /**
@@ -79,7 +79,9 @@ export function headingsOf(text: string): MarkdownHeading[] {
     if (fenced) {
       const marker = fenced[1]!;
       if (fence === null) fence = marker;
-      else if (marker[0] === fence[0] && marker.length >= fence.length) fence = null;
+      // A closing fence is the same character, at least as long, and nothing after it: a line like
+      // ```js inside a block is the block's text, not its end.
+      else if (marker[0] === fence[0] && marker.length >= fence.length && fenced[2]!.trim() === '') fence = null;
       continue;
     }
     if (fence !== null) continue;
@@ -100,15 +102,31 @@ export function defaultPlacement(headings: readonly MarkdownHeading[]): Placemen
   return likely ? { kind: 'section', line: likely.line } : { kind: 'end' };
 }
 
-function normalizeTarget(target: string): string {
-  let path = target.trim().replace(/^<|>$/g, '').split(/[?#]/)[0] ?? '';
-  try {
-    path = decodeURI(path);
-  } catch {
-    // A malformed escape is left as written; it simply won't match.
-  }
+function withoutDotSlash(path: string): string {
   while (path.startsWith('./')) path = path.slice(2);
   return path;
+}
+
+/**
+ * A link destination as written in the Markdown, back to the path it names: a query or fragment
+ * dropped (only an unencoded `?` or `#` starts one), then each segment decoded the way
+ * `markdownPath` encoded it. `decodeURI` was not enough — it leaves `%26` and `%23` encoded, so a
+ * picture called `R&D.svg` never matched its own reference and was added again on every click.
+ */
+function destinationPath(target: string): string {
+  const raw = target.trim().replace(/^<|>$/g, '').split(/[?#]/)[0] ?? '';
+  const decoded = raw
+    .split('/')
+    .map((segment) => {
+      try {
+        return decodeURIComponent(segment);
+      } catch {
+        // A malformed escape is left as written; it simply won't match.
+        return segment;
+      }
+    })
+    .join('/');
+  return withoutDotSlash(decoded);
 }
 
 const REFERENCE_PATTERNS = [
@@ -118,11 +136,12 @@ const REFERENCE_PATTERNS = [
 ];
 
 function referenceOffsets(text: string, relative: string): number[] {
-  const wanted = normalizeTarget(relative);
+  // `relative` is a plain path (`R&D.svg`, `a#1.svg`), never encoded: only its `./` is dropped.
+  const wanted = withoutDotSlash(relative);
   const offsets: number[] = [];
   for (const pattern of REFERENCE_PATTERNS) {
     for (const match of text.matchAll(pattern)) {
-      if (normalizeTarget(match[1] ?? '') === wanted) offsets.push(match.index);
+      if (destinationPath(match[1] ?? '') === wanted) offsets.push(match.index);
     }
   }
   return offsets.sort((a, b) => a - b);

@@ -93,7 +93,7 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
           <div className="dc-docs-markdown-line">
             {/* Focusable: a long path scrolls, and a keyboard has to be able to scroll it too. */}
             <code tabIndex={0} aria-label="Markdown for this picture">{docs.snippet}</code>
-            <button type="button" className="dc-docs-copy" onClick={onCopy} aria-label="Copy Markdown" title="Copy Markdown">
+            <button type="button" className="dc-docs-copy" onClick={onCopy} disabled={!docs.canCopy} aria-label="Copy Markdown" title={docs.canCopy ? 'Copy Markdown' : 'Publish the image first'}>
               <Icon name="copy" size={13} />
             </button>
           </div>
@@ -101,7 +101,7 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
             {docs.markdown ? (
               <span title={docs.markdown.displayPath}>{docs.alreadyIn ? `Already in ${docs.markdown.name}` : `From ${docs.markdown.name}`}</span>
             ) : docs.target.kind === 'file' ? (
-              <span>From the diagram’s folder</span>
+              <span>{docs.canCopy ? 'From the diagram’s folder' : 'Publish first, then copy'}</span>
             ) : (
               <span>Unzip next to your Markdown file</span>
             )}

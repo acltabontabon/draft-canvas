@@ -58,8 +58,8 @@ What Draft Canvas will and won't do:
   Git.
 - It never edits a Markdown file on its own. **Add to …** adds one line, only when you choose it, and
   only if the file hasn't changed since you picked it.
-- Renaming or moving the diagram ends the link: the old SVG stays where the page points, and the
-  Docs tab offers to publish beside the file's new name.
+- Renaming or moving the diagram ends the link: the old SVG stays where the page points, Draft
+  Canvas tells you so, and the Docs tab offers to publish beside the file's new name.
 - If the level a picture shows is deleted, the next save tells you and leaves the picture as it was.
 
 ## On the web
@@ -88,6 +88,10 @@ web fonts.
 
 Flows don't play in a static image. Share a [read-only link](saving-and-sharing.md#share-a-diagram)
 when readers should step through one.
+
+Draft Canvas has no interactive Markdown preview (zoom, levels, Flow playback inside the page). Any
+such preview would belong to one tool, such as a VS Code extension or a docs site, and never to
+GitHub. So the portable SVG is what ships.
 
 ## Keeping it in Git
 

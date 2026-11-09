@@ -506,7 +506,7 @@ export function ExportDialog() {
     effectiveMode === 'docs'
       ? {
           what: 'Markdown',
-          disabled: !docs || docs.busy,
+          disabled: !docs || docs.busy || !docs.canCopy,
           task: async (): Promise<CopyResult | 'refused'> => ((await copyMarkdownLine(docs?.copyText ?? '')) ? { copied: true } : 'refused'),
         }
       : effectiveMode === 'image' && !levelsOn

@@ -4943,7 +4943,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   cursor: pointer;
 }
 
-.dc-docs-copy:hover {
+.dc-docs-copy:disabled {
+  color: var(--dc-text-faint);
+  cursor: default;
+}
+
+.dc-docs-copy:hover:not(:disabled) {
   background: var(--dc-surface-hover);
   color: var(--dc-text);
 }

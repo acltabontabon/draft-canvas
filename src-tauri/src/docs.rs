@@ -10,7 +10,7 @@
 //! - A Markdown file is only ever *added to*: the new text must be the old text with one contiguous
 //!   block inserted, and the old text must be the file as the person saw it (its stamp).
 
-use crate::docio::{self, create_new_atomic, write_unstamped};
+use crate::docio::{self, create_new_atomic, write_in_place};
 use crate::errors::{AppError, ErrorKind, Subject, Verb};
 use crate::paths::file_name;
 use std::fs::{self, File};
@@ -127,12 +127,33 @@ pub fn check_image(bytes: &[u8]) -> Result<&str, AppError> {
         return Err(refuse("no source note"));
     }
     let lower = text.to_ascii_lowercase();
-    for banned in ["<script", "<foreignobject", "<iframe", "javascript:"] {
+    // Element names only appear unescaped as markup: a label that says "<script>" is written as
+    // `&lt;script&gt;` and never matches.
+    for banned in ["<script", "<foreignobject", "<iframe"] {
         if lower.contains(banned) {
             return Err(refuse("active content"));
         }
     }
+    if has_script_link(&lower) {
+        return Err(refuse("active content"));
+    }
     Ok(text)
+}
+
+/// A `javascript:` URL as a link or source *attribute* (`href="javascript:…"`), not the words in a
+/// label: a shape named "Frontend (JavaScript: React)" refused every publish of its diagram.
+fn has_script_link(lower: &str) -> bool {
+    lower.match_indices("javascript:").any(|(at, _)| {
+        let before = lower[..at].trim_end();
+        let Some(before) = before.strip_suffix(['"', '\'']) else {
+            return false;
+        };
+        let Some(before) = before.trim_end().strip_suffix('=') else {
+            return false;
+        };
+        let name = before.trim_end();
+        name.ends_with("href") || name.ends_with("src")
+    })
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -163,7 +184,9 @@ pub fn publish_image(doc: &Path, bytes: &[u8]) -> Result<Published, AppError> {
             Ok(Published::Unchanged)
         }
         ImageState::Ours => {
-            write_unstamped(&target, bytes)?;
+            // Never written through a link: one that appeared since the look above is replaced,
+            // not followed.
+            write_in_place(&target, bytes)?;
             Ok(Published::Written)
         }
         // Created only if still absent: a file that appeared since the look above is never replaced.
@@ -384,6 +407,23 @@ mod tests {
         assert_eq!(fs::read_to_string(&elsewhere).unwrap(), svg("<rect/>"));
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn a_link_that_appears_at_the_image_path_is_replaced_not_followed() {
+        let dir = tempdir().unwrap();
+        let elsewhere = dir.path().join("elsewhere.svg");
+        fs::write(&elsewhere, "keep me").unwrap();
+        let target = dir.path().join("payments.svg");
+        std::os::unix::fs::symlink(&elsewhere, &target).unwrap();
+        docio::write_in_place(&target, svg("<rect/>").as_bytes()).unwrap();
+        assert_eq!(fs::read_to_string(&elsewhere).unwrap(), "keep me");
+        assert!(!fs::symlink_metadata(&target)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::read_to_string(&target).unwrap(), svg("<rect/>"));
+    }
+
     #[test]
     fn only_a_docs_svg_without_active_content_is_accepted() {
         assert!(check_image(svg("<rect/>").as_bytes()).is_ok());
@@ -392,6 +432,10 @@ mod tests {
         assert!(check_image(svg("<script>alert(1)</script>").as_bytes()).is_err());
         assert!(check_image(svg("<foreignObject/>").as_bytes()).is_err());
         assert!(check_image(svg("<a href=\"javascript:x\"/>").as_bytes()).is_err());
+        assert!(check_image(svg("<a xlink:href = 'JavaScript:x'/>").as_bytes()).is_err());
+        // The words in a label are not a link.
+        assert!(check_image(svg("<text>Frontend (JavaScript: React)</text>").as_bytes()).is_ok());
+        assert!(check_image(svg("<text>&lt;script&gt;</text>").as_bytes()).is_ok());
         assert!(check_image(&[0xff, 0xfe]).is_err());
     }
 

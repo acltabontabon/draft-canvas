@@ -11,7 +11,6 @@ import { dispatchCollabLanEvent, lanRelayOf } from './collabLan';
 import type { LanRelay } from '../collab/lan';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
 import { DocsPublisher } from './docs';
-import { renderDocsImage } from '../export/docs/image';
 import type { DocsSettings } from '../export/docs/marker';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isRecord } from '../lib/isRecord';
@@ -1079,11 +1078,9 @@ export class DesktopController {
     const text = this.savedText;
     if (session.kind !== 'file' || text === null) throw new Error('Save the diagram to a file first.');
     if (this.dirty) throw new Error(`Save ${session.name}.draftcanvas first, so the picture matches it.`);
-    const parsed = deserializeDocument(text);
-    if (!parsed.ok) throw new Error(parsed.error);
-    const rendered = await renderDocsImage(parsed.document, `${session.name}.draftcanvas`, settings);
-    if (!rendered.ok) throw new Error('The level this picture shows no longer exists.');
-    return this.api.docsPublish(session.handle, rendered.svg);
+    // Through the publisher's queue, so the redraw that save just asked for (with the settings
+    // already on disk) lands first and this one, with the person's choices, lands last.
+    return this.docs.publish(session.handle, session.name, text, settings);
   }
 
   async pickDocsMarkdown(): Promise<MarkdownFile | null> {
@@ -1336,7 +1333,13 @@ export class DesktopController {
     const waitFor = this.saving;
     const task = (async (): Promise<T> => {
       if (waitFor) await waitFor;
+      // A docs picture keeps its place: the Markdown points at it there. Looked at before the move so
+      // the person can be told the link ended, rather than finding out from a stale README.
+      const picture = await this.api.docsStatus(handle).catch(() => null);
       const changed = await change();
+      if (picture?.state === 'ours' && picture.imageName.toLowerCase() !== `${changed.name}.svg`.toLowerCase()) {
+        this.ui.notify(`${picture.imageName} stayed where your Markdown points and no longer follows this diagram. Publish again in Use in docs to give it a picture of its own.`);
+      }
       if (this.session.kind === 'file' && this.session.handle === handle) {
         this.session = { ...this.session, handle: changed.handle, name: changed.name, displayPath: changed.displayPath };
         this.publish();
