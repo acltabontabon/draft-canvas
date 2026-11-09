@@ -21,6 +21,8 @@ import { describeUpdate } from '../updates';
 import { desktopStore } from '../store';
 import { forgetTurnSnapshot, unchangedSinceLastTurn } from '../turnSnapshot';
 import { Mascot } from './mascot/Mascot';
+import { JUMP_MS, playJump } from './mascot/flight';
+import { clearNodiDock, dockRect, setNodiDock, useNodiDock } from '../nodiDock';
 import { CHANNEL_MS, CHANNELS, channelClock, type Channel, type Mood } from './mascot/pixels';
 import { CHIP_HEIGHT, chipPlace, revealViewport, type Box } from './chipPlace';
 import { canCreateInside, hasInside } from '../../depth/tree';
@@ -30,6 +32,9 @@ import { commandsFor } from '../../commands/registry';
 import { isStage, type CommandContext } from '../../commands/types';
 import { arrivalLine, updateLine, blockedFolderOf, clockLines, RUN_SALT, smallTalkOf, diagramLines, failLine, doorOf, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf, type Look, type SetupStep, type SnagStep } from './nodiLines';
 import { PointPins } from './PointPins';
+import { NodiSkillMenu, SKILL_LIST_ID, skillOptionId } from './NodiSkillMenu';
+import { matchSkills, skillQuery, skillsFor, type NodiSkill } from './nodiSkills';
+import { shapesOffScreen, withArrangeMotion } from '../../canvas/arrangeMotion';
 import { ProposalHistory } from './ProposalHistory';
 import { countsLabel, useProposalReview } from './useProposalReview';
 
@@ -108,11 +113,16 @@ const greeted = new Set<string>();
 const seenRun = new Map<string, string>();
 /** How long the arrival greeting stays before Nodi goes quiet. */
 const PEEK_MS = 5000;
-/** Nodi's walk on (`desktop.css`'s `dc-nodi-arrive`). */
-const ARRIVAL_MS = 1400;
-/** Quiet long enough to take a break, with a word before walking off. */
-export const IDLE_MS = 90_000;
-const GOODBYE_MS = 2500;
+/** Out on the canvas with nothing to do for this long, Nodi says where it'll be and goes back down to
+ *  its bunk in the status bar (`NodiDock.tsx`). Its own idleness, not the person's: working on the
+ *  diagram is no reason for it to stand around. */
+export const IDLE_MS = 4000;
+/** Long enough to read where it'll be before it goes. */
+const GOODBYE_MS = 3000;
+/** For a jump that never gets to finish (a hidden window holds animations): moved on regardless. */
+const JUMP_SLACK_MS = 400;
+/** Said once this app run: the promise in full, the first time Nodi goes back down. */
+let promised = false;
 const FADE_MS = 200;
 /** How long the bubble lingers once nothing keeps it up, plus its exit (`desktop.css`'s `.dc-companion-say`). */
 const SAY_GONE_MS = 2500 + 200;
@@ -232,6 +242,10 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   const running = working !== null;
 
   const [draft, setDraft] = useState('');
+  // A skill being carried out (a layout playing on the canvas): Nodi looks pleased with itself.
+  const [skilling, setSkilling] = useState(false);
+  // The highlighted skill while `/` is typed (`NodiSkillMenu.tsx`).
+  const [skillAt, setSkillAt] = useState(0);
   // The selection the person left out, by its ids: only that one. Choosing something else asks about
   // it again, rather than a switch staying off for every later selection.
   const [leftOut, setLeftOut] = useState<string | null>(null);
@@ -380,7 +394,9 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   const failed = last?.stop?.kind === 'failed' || last?.stop?.kind === 'refusal';
   const mood: Mood = poked
     ? 'angry'
-    : blocker
+    : skilling
+      ? 'happy'
+      : blocker
       ? 'asleep'
       : running
         ? 'working'
@@ -464,7 +480,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   const points = useMemo(() => pointsOf(turns.at(-1) ?? null, partsHere), [turns, partsHere]);
   const [hot, setHot] = useState<number | null>(null);
   const setPointedIds = useUiStore((s) => s.setPointedIds);
-  const { setViewport } = useReactFlow();
+  const { setViewport, fitView } = useReactFlow();
   const flowStore = useStoreApi();
   const pointAt = useCallback(
     (point: number | null, parts: readonly string[]) => {
@@ -619,8 +635,84 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   });
   const onAction = useCallback((action: LocalAction) => actions.current(action), []);
 
+  // `/` typed first: the skills, narrowed by what follows it. Worked out from the view as it is now,
+  // only while the menu is up; an arrange waits for a run to finish (the agent may be changing it).
+  const query = skillQuery(draft);
+  const skills = useMemo(() => {
+    if (query === null) return [];
+    const view = useEditorStore.getState().document;
+    const all = skillsFor({
+      shapes: view.nodes.filter((n) => !['note', 'text', 'code'].includes(n.type)).length,
+      flows: view.flows.map((f) => ({ id: f.id, title: f.title })),
+      agent: !agentless,
+    });
+    return matchSkills(running || skilling ? all.filter((s) => s.run.kind === 'ask') : all, query);
+  }, [query, agentless, running, skilling]);
+  const skillShown = query !== null ? Math.min(skillAt, Math.max(0, skills.length - 1)) : 0;
+  const runSkill = (skill: NodiSkill) => {
+    setDraft('');
+    setSkillAt(0);
+    const { run } = skill;
+    if (run.kind === 'ask') {
+      send(run.prompt);
+      return;
+    }
+    if (run.kind === 'command') {
+      runAction({ kind: 'command', id: run.id, label: skill.title });
+      return;
+    }
+    setSkilling(true);
+    const asked = `/${skill.slash}`;
+    void withArrangeMotion(() => useEditorStore.getState().arrangeRoom(run.preset), run.preset.direction ?? 'right')
+      .then((moved) => {
+        // Laid out wider than the screen: the camera takes it all in once the shapes have landed,
+        // beside Nodi's box rather than under it.
+        if (moved && shapesOffScreen()) {
+          const box = document.querySelector('.dc-companion[data-open="true"]')?.getBoundingClientRect();
+          void fitView({ padding: { top: '48px', left: '48px', bottom: '48px', right: `${Math.round((box?.width ?? 0) + 56)}px` }, duration: prefersReducedMotion() ? 0 : 420 });
+        }
+        return moved;
+      })
+      .then((moved) =>
+        companion.answer(
+          diagramId,
+          asked,
+          moved ? run.done : 'Already laid out that way, boss. Nothing to move.',
+          moved ? [{ kind: 'command', id: 'undo', label: 'Undo' }] : undefined,
+          agent?.agent,
+        ),
+      )
+      .catch(() => companion.answer(diagramId, asked, 'Couldn’t lay it out, boss: the layout tripped over something. The diagram is as it was.', undefined, agent?.agent))
+      .finally(() => setSkilling(false));
+  };
+
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
     if (event.nativeEvent.isComposing) return;
+    if (query !== null) {
+      const picked = skills[skillShown];
+      if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && skills.length) {
+        event.preventDefault();
+        setSkillAt((skillShown + (event.key === 'ArrowDown' ? 1 : skills.length - 1)) % skills.length);
+        return;
+      }
+      if (event.key === 'Tab' && picked) {
+        event.preventDefault();
+        setDraft(`/${picked.slash}`);
+        return;
+      }
+      if (event.key === 'Enter' && picked) {
+        event.preventDefault();
+        runSkill(picked);
+        return;
+      }
+      // Escape puts the slash away, not Nodi.
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setDraft('');
+        setSkillAt(0);
+        return;
+      }
+    }
     if (event.key === 'Enter') {
       event.preventDefault();
       send();
@@ -687,78 +779,113 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     wasExpanded.current = expanded;
   }, [expanded]);
   const leftAt = useRef(0);
-  // On a diagram's first opening this app run, Nodi walks on from the canvas's edge, then greets.
-  const [arriving, setArriving] = useState(() => !greeted.has(diagramId) && !prefersReducedMotion());
+  // Nodi lives in its bunk at the end of the status bar (`NodiDock.tsx`) and comes up onto the canvas
+  // when it has something to say or is wanted: on a diagram's first opening this app run, to say
+  // hello; with news of a run; when clicked or opened. With nothing left to do it says where it'll
+  // be and jumps back down. Opened again on a diagram it has greeted, it is already down there.
+  const [arriving, setArriving] = useState(() => !greeted.has(diagramId));
   const [peeking, setPeeking] = useState(() => !greeted.has(diagramId));
   // Read under the pointer when its five seconds are up, the hello stays until the bubble goes,
   // rather than being typed over with another line mid-read.
   const [helloHeld, setHelloHeld] = useState(false);
-  const [wandering, setWandering] = useState<'here' | 'goodbye' | 'leaving' | 'away'>('here');
-  const [returned, setReturned] = useState(false);
+  // On the canvas; saying where it'll be; jumping down; down in the bunk.
+  const [wandering, setWandering] = useState<'here' | 'goodbye' | 'leaving' | 'away'>(() => (greeted.has(diagramId) ? 'away' : 'here'));
+  const wanderingNow = useRef(wandering);
+  useLayoutEffect(() => {
+    wanderingNow.current = wandering;
+  }, [wandering]);
   const [trips, setTrips] = useState(0);
-  const lastActivity = useRef<number | null>(null);
-  const needed = open || running || Boolean(last?.proposalId) || unseen || blocker !== null || hovered || focused || poked;
-  const canWander = !needed && !arriving && !peeking && !helloHeld && shown && !yielded && agents !== null;
+  // The first goodbye this app run says the promise in full; decided as it starts, not per render.
+  const firstGoodbye = useRef(false);
+  // What keeps Nodi up on the canvas. A snag isn't one: said on arrival and on hover, it waits in the
+  // bunk (asleep) like anything else, instead of standing there nagging.
+  const busy = open || running || Boolean(last?.proposalId) || unseen || hovered || focused || poked;
+  const canRest = !busy && !arriving && !peeking && !helloHeld && shown && !yielded && agents !== null;
+  const mascotButton = useRef<HTMLButtonElement>(null);
+  // Where the mascot was, measured as the conversation opens or closes, for the hop between the two.
+  const hopFrom = useRef<DOMRect | null>(null);
 
   useEffect(() => {
-    lastActivity.current ??= Date.now();
     let timer: ReturnType<typeof setTimeout> | undefined;
-    let changed = false;
-    const comeBack = () => {
-      if (changed) return;
-      changed = true;
+    if (busy && wandering === 'goodbye') setWandering('here');
+    else if (busy && wandering === 'away') {
+      // News, or wanted: up out of the bunk. (A jump down finishes first, then this.)
       setWandering('here');
-      setReturned(true);
-      setArriving(!open && wandering !== 'goodbye');
-      setPeeking(!open && wandering !== 'goodbye');
-    };
-    const activity = () => {
-      lastActivity.current = Date.now();
-      if (wandering !== 'here') comeBack();
-    };
-    // Input only updates a timestamp while Nodi is here. One timeout checks the remaining quiet
-    // time, so moving the pointer neither renders the companion nor churns a timer per event.
-    const checkIdle = () => {
-      const remaining = IDLE_MS - (Date.now() - lastActivity.current!);
-      if (remaining > 0) timer = setTimeout(checkIdle, remaining);
-      else {
-        setReturned(false);
+      setArriving(true);
+    } else if (wandering === 'here' && canRest)
+      timer = setTimeout(() => {
+        firstGoodbye.current = !promised;
+        promised = true;
         setTrips((n) => n + 1);
         setWandering('goodbye');
-      }
-    };
-    if (wandering !== 'here' && needed) comeBack();
-    else if (wandering === 'here' && canWander) timer = setTimeout(checkIdle, Math.max(0, IDLE_MS - (Date.now() - lastActivity.current!)));
+      }, IDLE_MS);
     else if (wandering === 'goodbye') timer = setTimeout(() => setWandering('leaving'), GOODBYE_MS);
-    else if (wandering === 'leaving') timer = setTimeout(() => setWandering('away'), prefersReducedMotion() ? FADE_MS : ARRIVAL_MS);
-
-    const events = ['pointermove', 'pointerdown', 'click', 'keydown', 'wheel', 'scroll'] as const;
-    for (const event of events) window.addEventListener(event, activity, { capture: true, passive: true });
-    const unsubscribe = useEditorStore.subscribe((state, previous) => {
-      if (state.document !== previous.document || state.outer !== previous.outer || state.selection !== previous.selection) activity();
-    });
-    // The same key can wake Nodi and open it: opening takes precedence over the walk it just began.
-    const unsubscribeOpen = useUiStore.subscribe((state, previous) => {
-      if (!state.companionOpen || previous.companionOpen) return;
-      changed = true;
-      lastActivity.current = Date.now();
-      setWandering('here');
-      setArriving(false);
-      setPeeking(false);
-      setFocused(false);
-    });
-    return () => {
-      clearTimeout(timer);
-      unsubscribe();
-      unsubscribeOpen();
-      for (const event of events) window.removeEventListener(event, activity, true);
-    };
-  }, [wandering, needed, canWander, open, diagramId]);
-  useEffect(() => {
-    if (hovered || !helloHeld) return;
-    const timer = setTimeout(() => setHelloHeld(false), SAY_GONE_MS);
+    else if (wandering === 'leaving') timer = setTimeout(() => setWandering('away'), (prefersReducedMotion() ? FADE_MS : JUMP_MS.sink) + JUMP_SLACK_MS);
     return () => clearTimeout(timer);
-  }, [hovered, helloHeld]);
+  }, [wandering, busy, canRest]);
+  // Opened or closed, from anywhere (a click, the shortcut): where the mascot stood a moment ago,
+  // read before the box redraws, so it hops from there. Opened from the bunk, it jumps up instead.
+  useEffect(
+    () =>
+      useUiStore.subscribe((state, previous) => {
+        if (state.companionOpen === previous.companionOpen) return;
+        hopFrom.current = mascotButton.current?.getBoundingClientRect() ?? null;
+        if (!state.companionOpen) return;
+        setPeeking(false);
+        setFocused(false);
+        if (wanderingNow.current === 'goodbye') setWandering('here');
+        else if (wanderingNow.current !== 'here') {
+          hopFrom.current = null;
+          setWandering('here');
+          setArriving(true);
+        }
+      }),
+    [],
+  );
+  useLayoutEffect(() => {
+    const from = hopFrom.current;
+    hopFrom.current = null;
+    if (from && mascotButton.current && !arriving && !prefersReducedMotion()) playJump(mascotButton.current, 'hop', from);
+  }, [expanded, arriving]);
+  // Up out of the bunk: drawn from the bunk to where Nodi stands. Without the status bar (or Web
+  // Animations), it is simply there.
+  const bunkDrawn = useNodiDock().present;
+  useLayoutEffect(() => {
+    if (!arriving || prefersReducedMotion()) return;
+    const element = mascotButton.current;
+    const from = dockRect();
+    // On the canvas's opening the bunk isn't in the status bar yet: it is drawn in the pass this one's
+    // layout effects start (`setNodiDock` below), still before the first paint. Jumped from then,
+    // not skipped: Nodi used to pop up in place the one time it mattered most.
+    if (!from && !bunkDrawn) return;
+    const jump = element && from ? playJump(element, 'rise', from) : null;
+    if (!jump) {
+      setArriving(false);
+      return;
+    }
+    jump.onfinish = () => setArriving(false);
+    return () => jump.cancel();
+  }, [arriving, bunkDrawn]);
+  // Down into it, staying there (`fill: forwards`) until the bunk's own Nodi takes over.
+  useLayoutEffect(() => {
+    if (wandering !== 'leaving' || prefersReducedMotion()) return;
+    const element = mascotButton.current;
+    const to = dockRect();
+    const jump = element && to ? playJump(element, 'sink', to) : null;
+    if (!jump) {
+      setWandering('away');
+      return;
+    }
+    jump.onfinish = () => setWandering('away');
+  }, [wandering]);
+  // The bunk shows Nodi while it is down there, and keeps its place while it is up here.
+  const present = shown && !yielded && agents !== null;
+  const docked = wandering === 'away' && !open;
+  const bunkMood = blocker ? 'asleep' : 'idle';
+  useLayoutEffect(() => {
+    setNodiDock({ present, docked, resting: bunkMood });
+  }, [present, docked, bunkMood]);
+  useLayoutEffect(() => clearNodiDock, []);
   // The hello itself, about this diagram as it opened: worked out once per diagram, so it doesn't
   // change under the reader as the diagram does.
   const hello = useMemo(() => {
@@ -791,8 +918,8 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   }, [diagramId]);
   useEffect(() => {
     if (!arriving) return;
-    // Ends with the walk's animation; this is only for a walk that never gets to play (a hidden window).
-    const timer = setTimeout(() => setArriving(false), (prefersReducedMotion() ? FADE_MS : ARRIVAL_MS) + 800);
+    // Ends with the jump; this is only for one that never gets to finish (a hidden window).
+    const timer = setTimeout(() => setArriving(false), (prefersReducedMotion() ? FADE_MS : JUMP_MS.rise) + JUMP_SLACK_MS);
     return () => clearTimeout(timer);
   }, [arriving]);
   useEffect(() => {
@@ -822,13 +949,12 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     // What the message would be about: the selection, unless the person left it out.
     selected: about,
     selectedKind: about ? onlyKind : null,
-    seed: seedOf(diagramId) + (wandering === 'goodbye' || (returned && (peeking || helloHeld)) ? trips : RUN_SALT + visits),
+    seed: seedOf(diagramId) + (wandering === 'goodbye' ? trips : RUN_SALT + visits),
     diagram: setupSteps.length ? [`Psst, boss. ${agentName} can’t find me outside this box yet. Open me: it’s one click.`, ...aboutDiagram] : aboutDiagram,
     runSeed: seedOf(last?.runId ?? diagramId),
     clock,
     poked,
-    departure: wandering === 'goodbye',
-    returning: returned && (peeking || helloHeld),
+    departure: wandering === 'goodbye' && (firstGoodbye.current ? 'first' : true),
     arrival: peeking || helloHeld ? hello : undefined,
     // Said with the hello, and then every fourth time Nodi pipes up: news, not nagging.
     update: newVersion && (peeking || visits % 4 === 0) ? newVersion : undefined,
@@ -878,9 +1004,10 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
           data-dc-keyboard-region=""
           data-arriving={arriving ? 'true' : undefined}
           data-leaving={wandering === 'leaving' ? 'true' : undefined}
+          // With reduced motion Nodi fades in and out of the canvas instead of jumping (`desktop.css`).
           onAnimationEnd={(event) => {
-            if (event.animationName === 'dc-nodi-arrive' || event.animationName === 'dc-nodi-fade-in') setArriving(false);
-            if (event.animationName === 'dc-nodi-leave' || event.animationName === 'dc-nodi-fade-out') setWandering('away');
+            if (event.animationName === 'dc-nodi-fade-in') setArriving(false);
+            if (event.animationName === 'dc-nodi-fade-out') setWandering('away');
           }}
           onFocusCapture={() => setFocused(true)}
           onBlurCapture={(event) => {
@@ -925,6 +1052,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
             </button>
           )}
           <button
+            ref={mascotButton}
             type="button"
             className="dc-companion-mascot"
             aria-label="Open Nodi"
@@ -933,7 +1061,8 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
               openFromRest();
             }}
           >
-            <Mascot mood={arriving || wandering === 'leaving' ? (prefersReducedMotion() ? 'idle' : 'walking') : mood} facing={wandering === 'leaving' ? 'right' : 'left'} />
+            {/* Still in the air (the jump does the moving); otherwise whatever it is feeling. */}
+            <Mascot mood={arriving || wandering === 'leaving' ? 'jumping' : mood} />
           </button>
         </div>
       </>
@@ -957,6 +1086,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     >
       <div className="dc-companion-presence">
         <button
+          ref={mascotButton}
           type="button"
           className="dc-companion-mascot"
           aria-label="Hide Nodi"
@@ -965,7 +1095,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
             setOpen(false);
           }}
         >
-          <Mascot mood={mood} />
+          <Mascot mood={arriving ? 'jumping' : mood} />
         </button>
         {/* One surface: the bubble is the conversation, whole while it is short, its earlier turns
             folded once it is long. Its two actions sit on its top edge, opposite the nameplate. */}
@@ -1136,6 +1266,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
       {(!blocker || running) && (
       <>
       <div className="dc-companion-composer">
+        {query !== null && <NodiSkillMenu skills={skills} active={skillShown} query={query} onActive={setSkillAt} onPick={runSkill} />}
         {/* What the message is about is the chip itself: the selection, with × to ask about the whole
             view instead, and back with a click. Nothing selected, nothing to choose: no control. */}
         {selected &&
@@ -1155,16 +1286,39 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
         <label className="dc-sr-only" htmlFor="dc-companion-input">
           Message {agentName}
         </label>
+        {/* The way to the skills for whoever doesn't know to type a slash. */}
+        <button
+          type="button"
+          className="dc-companion-skills"
+          aria-label="Skills"
+          title="Skills: type /"
+          aria-pressed={query !== null}
+          onClick={() => {
+            setDraft(query !== null ? '' : '/');
+            setSkillAt(0);
+            input.current?.focus();
+          }}
+        >
+          /
+        </button>
         <input
           id="dc-companion-input"
           ref={focusInput}
           type="text"
           autoComplete="off"
           spellCheck
+          role="combobox"
+          aria-autocomplete="list"
+          aria-expanded={query !== null && skills.length > 0}
+          aria-controls={query !== null && skills.length > 0 ? SKILL_LIST_ID : undefined}
+          aria-activedescendant={query !== null && skills[skillShown] ? skillOptionId(skills[skillShown]!.slash) : undefined}
           value={draft}
           // Short beside a chip, so it reads whole.
           placeholder={about ? 'Ask about this…' : selected ? 'Ask about the whole view…' : agentless ? 'Ask Nodi…' : `Ask ${agentName} about this diagram…`}
-          onChange={(event) => setDraft(event.target.value)}
+          onChange={(event) => {
+            setDraft(event.target.value);
+            setSkillAt(0);
+          }}
           onKeyDown={onKey}
         />
         {running ? (

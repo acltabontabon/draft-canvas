@@ -23,10 +23,19 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Nodi's skills** — Type `/` in Nodi's box to lay the diagram out left to right, top down, along a
+  flow, roomier or snug, tidy connectors, or ask your agent. Each skill previews what it does, and the
+  shapes glide to their new places. One undo step each. <!-- highlight -->
 - Publish the picture beside the diagram's file, add it to a Markdown file you pick, and have every
   save redraw it. Each level of a diagram gets its own picture, so one README can show a system's
   context and its containers. Draft Canvas only replaces pictures it made and only adds the one line
   to Markdown.
+
+#### Changed
+
+- Nodi waits at the end of the status bar between conversations instead of standing on the canvas.
+  It jumps up to say hello, bring news or answer a click, and goes back down when there is nothing to
+  do.
 
 ### Web
 

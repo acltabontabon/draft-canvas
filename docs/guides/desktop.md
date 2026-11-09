@@ -76,9 +76,11 @@ For coding agents, see [Connect an AI agent](connect-an-ai-agent.md).
 
 ## Nodi
 
-Nodi, in the canvas corner, asks your own Claude Code or Codex about the open diagram: explain it, find
-its risks, or propose a change you review on the canvas. It shows up once one of them is installed;
-⌘J opens it. See [Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas).
+Nodi asks your own Claude Code or Codex about the open diagram: explain it, find its risks, or
+propose a change you review on the canvas. It shows up once one of them is installed. Between
+conversations it waits at the right end of the status bar, and jumps up onto the canvas to say hello,
+to bring news of a run, or when you click it or press ⌘J. With nothing left to do, it goes back down.
+See [Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas).
 
 ![Nodi in the canvas corner, saying hello.](../media/guides/nodi-rest.png)
 

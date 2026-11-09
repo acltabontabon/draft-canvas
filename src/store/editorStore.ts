@@ -302,6 +302,14 @@ export function ownsData(node: Pick<DraftNode, 'type' | 'serviceKind'>): boolean
   return kind === 'generic' || kind === 'api' || kind === 'worker';
 }
 
+/** What a layout skill asks of `arrangeRoom` beyond its defaults (see there). */
+export interface ArrangePreset {
+  direction?: 'right' | 'down';
+  spacing?: 'compact' | 'comfortable' | 'spacious';
+  /** A flow's id: its steps laid out in one straight line, the rest around it. */
+  primaryFlow?: string;
+}
+
 export interface EditorStore {
   /**
    * The room being edited — the whole file at the root (by identity), and one shape's inside
@@ -521,9 +529,10 @@ export interface EditorStore {
    * — same request, same reading direction — as one undo step labelled "Arrange". Every id, note,
    * flow and the selection survive; only positions (and connector anchors) change. Resolves `true`
    * when something moved. The engine is loaded on demand, so a canvas that never arranges never
-   * pays for it.
+   * pays for it. A `preset` (Nodi's layout skills) names what the default leaves to the engine: a
+   * reading direction kept as asked, the spacing, or a flow to lay out straight.
    */
-  arrangeRoom: () => Promise<boolean>;
+  arrangeRoom: (preset?: ArrangePreset) => Promise<boolean>;
   arrangeSelection: () => Promise<boolean>;
   /**
    * Replaces `find` with `replace` in every label of every room of the file (shape names, connector
@@ -2255,7 +2264,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return get().document !== current.document;
   },
 
-  async arrangeRoom() {
+  async arrangeRoom(preset = {}) {
     if (interaction) return false;
     // The layout engine is the agent's chunk, loaded here on demand: the store must not pull it into
     // the editor's bundle, and the agent must never reach back into the store — one direction.
@@ -2282,7 +2291,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           // The same defaults the agent's `{op:"arrange"}` resolves to when it names nothing: the
           // room keeps the way it already reads, manual sizes are kept, and the engine may try the
           // other direction only when it reads clearly better.
-          layout: { direction: readingDirectionOf(doc), spacing: 'comfortable', allowDegraded: false, normalizePeerSizes: false },
+          layout: {
+            direction: preset.direction ?? readingDirectionOf(doc),
+            // A direction asked for is kept: the engine may not turn it on its side.
+            ...(preset.direction ? { directionChosen: true } : {}),
+            spacing: preset.spacing ?? 'comfortable',
+            ...(preset.spacing ? { spacingChosen: true } : {}),
+            // A flow gone since it was offered is simply not followed.
+            ...(preset.primaryFlow && doc.flows.some((f) => f.id === preset.primaryFlow) ? { primaryFlow: preset.primaryFlow } : {}),
+            allowDegraded: false,
+            normalizePeerSizes: false,
+          },
         },
         measureContext(),
         new Problems(),

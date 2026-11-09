@@ -402,10 +402,10 @@ test('an answer about the diagram is pinned on it: numbered points on their part
 test('at rest Nodi speaks up: a greeting on arrival, what it is doing, and news it has', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'dark' });
   await openOrders(page);
-  // It walks on first, then says hello under its own name.
+  // It jumps up out of the status bar first, then says hello under its own name.
   await expect(page.getByRole('img', { name: 'Nodi, on the way' })).toBeVisible();
   await page.waitForTimeout(500);
-  await page.screenshot({ path: test.info().outputPath('nodi-walking.png') });
+  await page.screenshot({ path: test.info().outputPath('nodi-jumping.png') });
   const say = page.locator('.dc-companion-say');
   await expect(say).toBeVisible();
   await expect(say).toHaveAttribute('data-tone', 'greet');

@@ -1,6 +1,6 @@
 import { ReactFlowProvider } from '@xyflow/react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import type { AgentInfo, AgentSettings, CodeFolder, CodeGrant, PromptRequest } from '../../src/desktop/api';
 
 // The apply mode is a preference; a real `localStorage` would leak it from one test into the next.
@@ -12,7 +12,8 @@ vi.mock('../../src/lib/preferences', () => ({
 }));
 
 const { Companion, IDLE_MS } = await import('../../src/desktop/ui/Companion');
-const { goodbyeLine, returnLine, seedOf } = await import('../../src/desktop/ui/nodiLines');
+const { goodbyeLine, seedOf } = await import('../../src/desktop/ui/nodiLines');
+const { NodiDock } = await import('../../src/desktop/ui/NodiDock');
 const { companion } = await import('../../src/desktop/companion');
 const { desktopStore } = await import('../../src/desktop/store');
 const { setDesktopController } = await import('../../src/desktop/useDesktop');
@@ -77,6 +78,8 @@ function mount() {
   return render(
     <ReactFlowProvider>
       <Companion />
+      {/* The status bar's end, where Nodi waits between conversations. */}
+      <NodiDock />
     </ReactFlowProvider>,
   );
 }
@@ -108,12 +111,15 @@ afterEach(() => {
 });
 
 describe('the companion', () => {
-  it('walks on once it knows an agent is there, and opens to a composer', async () => {
+  it('comes up once it knows an agent is there, and opens to a composer', async () => {
     mount();
-    // Nothing until the shell says which agents are installed: no agent, no Nodi.
+    // Nothing until the shell says which agents are installed: no agent, no Nodi, no bunk.
     expect(screen.queryByRole('button', { name: 'Open Nodi' })).toBeNull();
+    expect(document.querySelector('[data-nodi-dock]')).toBeNull();
     await settle();
-    expect(screen.getByRole('img', { name: 'Nodi, on the way' })).toBeTruthy();
+    // Up on the canvas to say hello, its bunk in the status bar kept empty meanwhile.
+    expect(document.querySelector('.dc-companion .dc-companion-mascot')).toBeTruthy();
+    expect(document.querySelector('[data-nodi-dock]')?.tagName).toBe('SPAN');
     // No buttons that say nothing beside it.
     expect(screen.queryByRole('button', { name: 'Open the conversation' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Open Nodi' }));
@@ -260,28 +266,31 @@ describe('the companion', () => {
     expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'yes' });
   });
 
-  describe('taking a break', () => {
-    async function start() {
-      vi.useFakeTimers();
-      await act(async () => { mount(); });
-      await advance(2200);
-      await advance(5000);
-      fireEvent.keyDown(window, { key: 'Shift' });
-    }
-
+  describe('its bunk in the status bar', () => {
+    /** In steps, so a timer an effect sets as another fires gets to fire too. */
     async function advance(ms: number) {
-      await act(async () => { vi.advanceTimersByTime(ms); });
+      for (let left = ms; left > 0 || left === ms; left -= 500) {
+        await act(async () => { vi.advanceTimersByTime(Math.min(500, left)); });
+        if (left <= 500) break;
+      }
     }
 
-    const tripSeed = () => seedOf(doc.metadata.id) + 1;
+    /** A diagram not yet greeted this run, so Nodi comes up to say hello. */
+    async function start(id: string) {
+      vi.useFakeTimers();
+      useEditorStore.setState({ document: { ...doc, metadata: { ...doc.metadata, id } } });
+      await act(async () => { mount(); });
+      await advance(0);
+    }
+
+    const tripSeed = (id: string, trip: number) => seedOf(id) + trip;
     const say = () => document.querySelector('.dc-companion-say');
+    const onCanvas = () => document.querySelector('.dc-companion .dc-companion-mascot');
+    const bunk = () => document.querySelector<HTMLElement>('[data-nodi-dock]');
+    const docked = () => bunk()?.getAttribute('data-docked') === 'true';
 
     it('keeps saying its hello while the bubble goes, instead of typing the next line over it', async () => {
-      vi.useFakeTimers();
-      // A diagram not yet greeted this run, so there is a hello to say.
-      useEditorStore.setState({ document: { ...doc, metadata: { ...doc.metadata, id: 'd_hello00001' } } });
-      await act(async () => { mount(); });
-      await advance(2200);
+      await start('d_hello00001');
       const hello = say()?.getAttribute('aria-label');
       expect(say()?.getAttribute('data-shown')).toBe('true');
       // Its five seconds are up: the bubble starts to go, with the hello still in it.
@@ -292,105 +301,104 @@ describe('the companion', () => {
       expect(say()?.getAttribute('aria-label')).toBe(hello);
     });
 
-    it('says goodbye after idle, walks right, and walks back on a key with a return greeting', async () => {
-      await start();
-      await advance(IDLE_MS - 1);
-      expect(say()?.getAttribute('aria-label')).not.toContain(goodbyeLine(tripSeed()));
+    it('says where it’ll be and goes down to the bunk when idle, and stays there until clicked', async () => {
+      const id = 'd_bunk000001';
+      await start(id);
+      expect(docked()).toBe(false);
+      await advance(5000 + IDLE_MS - 1);
+      expect(say()?.getAttribute('aria-label')).not.toContain('just here');
       await advance(1);
-      expect(say()?.getAttribute('aria-label')).toContain(goodbyeLine(tripSeed()));
+      // The first time this run, the promise itself.
+      expect(say()?.getAttribute('aria-label')).toContain('Boss, if you need me, I’m just here.');
       expect(say()?.getAttribute('data-shown')).toBe('true');
-      await advance(2500);
-      const walking = screen.getByRole('img', { name: 'Nodi, on the way' });
-      expect(walking.style.transform).toBe('scaleX(-1)');
-      expect(walking.closest('.dc-companion')?.getAttribute('data-leaving')).toBe('true');
-      await advance(1400);
-      expect(screen.queryByRole('button', { name: 'Open Nodi' })).toBeNull();
+      await advance(3000);
+      expect(onCanvas()).toBeNull();
       expect(say()).toBeNull();
+      expect(docked()).toBe(true);
+      expect(screen.getByRole('button', { name: 'Open Nodi' })).toBe(bunk());
 
+      // Working on the diagram is no reason for it to come back up.
       fireEvent.keyDown(window, { key: 'a' });
-      expect(screen.getByRole('img', { name: 'Nodi, on the way' }).style.transform).toBe('');
-      expect(document.querySelector('.dc-companion')?.getAttribute('data-arriving')).toBe('true');
-      await advance(2200);
-      expect(say()?.getAttribute('aria-label')).toContain(returnLine(tripSeed()));
-      expect(say()?.getAttribute('data-shown')).toBe('true');
-      await advance(5000);
-      expect(say()?.getAttribute('data-shown')).toBeNull();
-    });
-
-    it('keeps the idle clock in refs for input, document and selection activity', async () => {
-      const snapshots = vi.spyOn(companion, 'snapshot');
-      await start();
-      for (const event of ['pointermove', 'pointerdown', 'click', 'keydown', 'wheel', 'scroll']) {
-        await advance(IDLE_MS - 2);
-        snapshots.mockClear();
-        fireEvent(window, new Event(event));
-        // A parent render reads its conversation snapshot; the mascot's own frame ticks don't.
-        expect(snapshots).not.toHaveBeenCalled();
-        await advance(1);
-        expect(say()?.getAttribute('aria-label')).not.toContain(goodbyeLine(tripSeed()));
-      }
-      await advance(IDLE_MS - 2);
-      act(() => useEditorStore.setState({ document: { ...doc, metadata: { ...doc.metadata, title: 'Updated' } } }));
-      await advance(IDLE_MS - 1);
+      fireEvent.pointerMove(window);
       act(() => useEditorStore.setState({ selection: { nodes: ['db'], edges: [] } }));
-      await advance(IDLE_MS - 1);
-      expect(say()?.getAttribute('aria-label')).not.toContain(goodbyeLine(tripSeed()));
-      await advance(1);
-      expect(say()?.getAttribute('aria-label')).toContain(goodbyeLine(tripSeed()));
+      await advance(60_000);
+      expect(docked()).toBe(true);
+
+      // Clicked there, it comes up into the conversation.
+      fireEvent.click(bunk()!);
+      expect(useUiStore.getState().companionOpen).toBe(true);
+      expect(screen.getByLabelText('Message Claude Code')).toBeTruthy();
+      expect(docked()).toBe(false);
+      expect(bunk()?.tagName).toBe('SPAN');
+
+      // Closed, it rests a moment, then says so again (another line) and goes back down.
+      act(() => useUiStore.getState().setCompanionOpen(false));
+      act(() => useEditorStore.setState({ selection: { nodes: [], edges: [] } }));
+      expect(onCanvas()).toBeTruthy();
+      await advance(IDLE_MS);
+      expect(say()?.getAttribute('aria-label')).toContain(goodbyeLine(tripSeed(id, 2)));
+      await advance(3000);
+      expect(docked()).toBe(true);
     });
 
-    it('stays while a run is going, and while its answer or proposal needs attention', async () => {
+    it('comes up with news, and stays up while a run is going or its answer or proposal needs attention', async () => {
+      // Greeted already: it starts in the bunk.
+      vi.useFakeTimers();
+      await act(async () => { mount(); });
+      await advance(0);
+      expect(docked()).toBe(true);
       act(() => companion.begin(doc.metadata.id, 'idle-run', 'Check this', null));
-      await start();
+      await advance(0);
+      expect(docked()).toBe(false);
       await advance(IDLE_MS + 10_000);
       expect(screen.getByRole('img', { name: 'Nodi, working' })).toBeTruthy();
-      expect(document.querySelector('[data-leaving="true"]')).toBeNull();
       act(() => companion.apply('idle-run', { type: 'stopped', reason: { kind: 'end-turn' }, summary: 'Done.', costMicroUsd: null, usage: null }));
       await advance(IDLE_MS + 10_000);
       expect(say()?.getAttribute('data-tone')).toBe('done');
       act(() => companion.setProposal('idle-run', 'idle-proposal'));
       await advance(IDLE_MS + 10_000);
       expect(say()?.getAttribute('data-tone')).toBe('waiting');
-      expect(screen.getByRole('button', { name: 'Open Nodi' })).toBeTruthy();
+      expect(docked()).toBe(false);
+      expect(screen.getByRole('button', { name: 'Open Nodi' })).toBe(onCanvas());
     });
 
-    it('stays for a snag, hover or focus, and cancels a goodbye when activity resumes', async () => {
+    it('waits under a hover or focus, takes back a goodbye on one, and goes down with a snag instead of nagging', async () => {
+      const id = 'd_bunk000002';
       desktopStore.update({ agent: { ...ACCESS, enabled: false } });
-      await start();
-      await advance(IDLE_MS + 10_000);
+      await start(id);
       expect(say()?.getAttribute('data-tone')).toBe('blocked');
-      fireEvent.mouseEnter(screen.getByRole('button', { name: 'Open Nodi' }).closest('.dc-companion')!);
+      await advance(5000 + IDLE_MS + 3000);
+      expect(docked()).toBe(true);
+      // Asleep down there: there is something to set up first.
+      expect(screen.getByRole('img', { name: 'Nodi, not set up' })).toBeTruthy();
+
       act(() => desktopStore.update({ agent: ACCESS }));
-      await advance(IDLE_MS);
-      expect(say()?.getAttribute('aria-label')).not.toContain(goodbyeLine(tripSeed()));
-      act(() => screen.getByRole('button', { name: 'Open Nodi' }).focus());
-      fireEvent.mouseLeave(document.querySelector('.dc-companion')!);
-      await advance(IDLE_MS);
-      expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Open Nodi' }));
+      fireEvent.click(bunk()!);
+      act(() => useUiStore.getState().setCompanionOpen(false));
+      const rest = () => document.querySelector('.dc-companion')!;
+      fireEvent.mouseEnter(rest());
+      await advance(IDLE_MS * 3);
+      expect(onCanvas()).toBeTruthy();
+      act(() => (onCanvas() as HTMLElement).focus());
+      fireEvent.mouseLeave(rest());
+      await advance(IDLE_MS * 3);
+      expect(onCanvas()).toBeTruthy();
       act(() => (document.activeElement as HTMLElement).blur());
-      await advance(0);
-      expect(say()?.getAttribute('aria-label')).toContain(goodbyeLine(tripSeed()));
-      fireEvent.pointerMove(window);
+      await advance(IDLE_MS);
+      expect(say()?.getAttribute('aria-label')).toContain(goodbyeLine(tripSeed(id, 2)));
+      // Pointed at while saying it, it stays.
+      fireEvent.mouseEnter(rest());
       await advance(4000);
-      expect(screen.getByRole('button', { name: 'Open Nodi' })).toBeTruthy();
-      expect(document.querySelector('[data-leaving="true"]')).toBeNull();
+      expect(onCanvas()).toBeTruthy();
+      expect(docked()).toBe(false);
     });
 
-    it('opens immediately through companionOpen while away', async () => {
-      await start();
-      await advance(IDLE_MS);
-      await advance(2500);
-      await advance(1400);
-      expect(screen.queryByRole('button', { name: 'Open Nodi' })).toBeNull();
-      act(() => useUiStore.getState().setCompanionOpen(true));
-      expect(screen.getByLabelText('Message Claude Code')).toBeTruthy();
-      expect(document.querySelector('[data-arriving="true"]')).toBeNull();
-      act(() => useUiStore.getState().setCompanionOpen(false));
-      await advance(IDLE_MS);
-      await advance(2500);
-      await advance(1400);
-      expect(screen.queryByRole('button', { name: 'Open Nodi' })).toBeNull();
-      // EditorScreen handles the shortcut after the window's activity capture listener.
+    it('opens straight from the bunk through companionOpen, as the shortcut does', async () => {
+      vi.useFakeTimers();
+      await act(async () => { mount(); });
+      await advance(0);
+      expect(docked()).toBe(true);
+      // EditorScreen handles the shortcut after the window's own listeners.
       const shortcut = () => useUiStore.getState().setCompanionOpen(true);
       window.addEventListener('keydown', shortcut);
       try {
@@ -399,25 +407,67 @@ describe('the companion', () => {
         window.removeEventListener('keydown', shortcut);
       }
       expect(screen.getByLabelText('Message Claude Code')).toBeTruthy();
+      expect(docked()).toBe(false);
       act(() => useUiStore.getState().setCompanionOpen(false));
-      expect(document.querySelector('[data-arriving="true"]')).toBeNull();
+      await advance(IDLE_MS + 3000);
+      expect(docked()).toBe(true);
     });
 
-    it('fades without walking under reduced motion, keeping both lines', async () => {
+    it('fades in and out instead of jumping under reduced motion', async () => {
       vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: true })));
-      await start();
-      await advance(IDLE_MS);
-      expect(say()?.getAttribute('aria-label')).toContain(goodbyeLine(tripSeed()));
-      await advance(2500);
-      expect(screen.queryByRole('img', { name: 'Nodi, on the way' })).toBeNull();
-      await advance(200);
-      expect(screen.queryByRole('button', { name: 'Open Nodi' })).toBeNull();
-      fireEvent.keyDown(window, { key: 'a' });
-      expect(screen.queryByRole('img', { name: 'Nodi, on the way' })).toBeNull();
-      await advance(1000);
-      expect(say()?.getAttribute('aria-label')).toContain(returnLine(tripSeed()));
-      expect(say()?.getAttribute('data-shown')).toBe('true');
+      await start('d_bunk000003');
+      expect(document.querySelector('.dc-companion')?.getAttribute('data-arriving')).toBe('true');
+      await advance(600);
+      expect(document.querySelector('.dc-companion')?.getAttribute('data-arriving')).toBeNull();
+      await advance(5000 + IDLE_MS + 3000);
+      expect(document.querySelector('.dc-companion')?.getAttribute('data-leaving')).toBe('true');
+      await advance(600);
+      expect(onCanvas()).toBeNull();
+      expect(docked()).toBe(true);
     });
+  });
+
+  it('offers its skills on a slash, plays a layout and says so, and puts the slash away on Escape', async () => {
+    const arrangeRoom = vi.fn(async () => true);
+    const real = useEditorStore.getState().arrangeRoom;
+    onTestFinished(() => useEditorStore.setState({ arrangeRoom: real }));
+    useEditorStore.setState({
+      document: { ...doc, nodes: [...doc.nodes, createNode({ id: 'api', type: 'service', x: 300, y: 0, text: 'Orders API' })] },
+      arrangeRoom,
+    });
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    const input = screen.getByLabelText('Message Claude Code');
+    fireEvent.change(input, { target: { value: '/' } });
+    const options = screen.getAllByRole('option');
+    expect(options[0]!.textContent).toContain('Left to right');
+    expect(options[0]!.getAttribute('aria-selected')).toBe('true');
+    expect(input.getAttribute('aria-activedescendant')).toBe(options[0]!.id);
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    expect(screen.getAllByRole('option')[1]!.getAttribute('aria-selected')).toBe('true');
+    // Escape takes the slash back, not Nodi.
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(useUiStore.getState().companionOpen).toBe(true);
+
+    // Narrowed, then run: Arrange as asked, no agent run, and Nodi says what it did with an Undo.
+    fireEvent.change(input, { target: { value: '/roo' } });
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await settle();
+    expect(arrangeRoom).toHaveBeenCalledWith({ spacing: 'spacious' });
+    expect(controller.companionSend).not.toHaveBeenCalled();
+    expect(screen.getByText(/Gave everything some room/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+    expect((input as HTMLInputElement).value).toBe('');
+
+    // The slash button opens them too; a question skill goes to the agent.
+    fireEvent.click(screen.getByRole('button', { name: 'Skills' }));
+    fireEvent.change(input, { target: { value: '/risks' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await settle();
+    expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'What are the risks here?' });
   });
 
   it('sends what was typed, about the selection, as a proposal by default', async () => {
@@ -806,7 +856,8 @@ describe('the companion', () => {
   it('gets cross when poked over and over', async () => {
     mount();
     await settle();
-    for (let i = 0; i < 4; i += 1) {
+    // Five clicks: the first only brings it up out of its bunk; the four after are pokes.
+    for (let i = 0; i < 5; i += 1) {
       fireEvent.click(screen.getByRole('button', { name: /^(Open|Hide) Nodi$/ }));
       await settle();
     }

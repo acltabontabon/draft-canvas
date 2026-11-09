@@ -65,6 +65,20 @@ are available from Nodi's box without opening Settings.
    ones fold behind one line. On its top edge, the pencil starts a new conversation and `>_` copies a
    command that continues it in your agent's own terminal UI.
 
+### Nodi's skills
+
+Type `/` in Nodi's box, or click the **/** button beside it, for what Nodi can do in one go.
+Highlighting a skill plays a small preview of what it will do. Use ↑ and ↓ to choose, Enter to run,
+Tab to complete and Escape to close the list.
+
+- **Arrange**: lay the view out **Left to right** (`/across`) or **Top down** (`/down`), **Along**
+  one of its flows so that flow's steps run in a straight line, **Give it room** (`/roomy`) or
+  **Snug** (`/snug`), or **Tidy connectors** (`/tidy`). Nodi lays these out itself, with no agent
+  and no tokens. Shapes glide to their new places and the connectors redraw. Each is one undo step,
+  and Nodi's reply has an **Undo** button.
+- **Ask**: `/explain` and `/risks` send the question to your agent.
+- **Show**: `/present` plays the diagram's first flow.
+
 When your agent could do more outside Nodi's box, Nodi offers it under its suggestions, one click
 each: **Connect** *agent* **everywhere** adds Draft Canvas to that agent's own MCP servers (so a
 conversation you continue in its terminal still reaches the diagram), and **Teach** *agent* **to
