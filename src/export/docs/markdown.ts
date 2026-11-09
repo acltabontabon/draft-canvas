@@ -92,7 +92,11 @@ export function headingsOf(text: string): MarkdownHeading[] {
 }
 
 /** Where the image goes: at the end of the section under a heading, or at the end of the file. */
-export type Placement = { kind: 'end' } | { kind: 'section'; line: number };
+/**
+ * Where the image goes: at the end, under a heading's own text (`section`, by the heading's line),
+ * or right after a line (`after`) — another picture of the same diagram, so the levels sit together.
+ */
+export type Placement = { kind: 'end' } | { kind: 'section'; line: number } | { kind: 'after'; line: number };
 
 const LIKELY_SECTION = /architect|diagram|design|overview|system|structure/i;
 
@@ -170,8 +174,8 @@ export interface Insertion {
 
 /**
  * The file with `snippet` added as its own paragraph — after the chosen heading's own text (before
- * the next heading, whatever its level), or at the end. Blank lines around it are
- * added only where there aren't any already, and in the file's own line ending.
+ * the next heading, whatever its level), right after a chosen line, or at the end. Blank lines
+ * around it are added only where there aren't any already, and in the file's own line ending.
  */
 export function insertImage(text: string, placement: Placement, snippet: string): Insertion {
   const eol = text.includes('\r\n') ? '\r\n' : '\n';
@@ -185,6 +189,9 @@ export function insertImage(text: string, placement: Placement, snippet: string)
     // the same place as "End of file", which isn't what choosing a heading means.
     const next = at >= 0 ? headings[at + 1] : undefined;
     if (next) offset = lines[next.line]!.start;
+  } else if (placement.kind === 'after') {
+    const following = lines[placement.line + 1];
+    if (following) offset = following.start;
   }
 
   let inserted: string;
@@ -195,11 +202,14 @@ export function insertImage(text: string, placement: Placement, snippet: string)
     const blankBefore = text.length === 0 || /\n[ \t]*\r?\n[ \t]*$/.test(text) || trimmed.length === 0;
     inserted = `${endsWithEol || text.length === 0 ? '' : eol}${blankBefore ? '' : eol}${snippet}${eol}`;
   } else {
-    // Before a heading, which always starts a line: a blank line above unless one is there, and
-    // one below so the heading stays a heading.
+    // At the start of a line (a heading's, or the one after the chosen line): a blank line above
+    // unless one is there, and one below unless one is there — so a heading stays a heading and a
+    // paragraph after doesn't run into the image.
     const before = text.slice(0, offset).replace(/\r?\n$/, '');
     const lastLine = before.slice(before.lastIndexOf('\n') + 1);
-    inserted = `${lastLine.trim() === '' ? '' : eol}${snippet}${eol}${eol}`;
+    const nextBreak = text.indexOf('\n', offset);
+    const nextLine = text.slice(offset, nextBreak < 0 ? text.length : nextBreak);
+    inserted = `${lastLine.trim() === '' ? '' : eol}${snippet}${eol}${nextLine.trim() === '' ? '' : eol}`;
   }
   const result = text.slice(0, offset) + inserted + text.slice(offset);
   const imageAt = offset + inserted.indexOf(snippet);

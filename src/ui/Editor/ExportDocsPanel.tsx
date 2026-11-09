@@ -5,7 +5,13 @@ import { Icon } from '../common/Icon';
 import type { DocsPublishing } from './useDocsPublishing';
 
 function placementKey(placement: Placement): string {
-  return placement.kind === 'end' ? 'end' : `line:${placement.line}`;
+  return placement.kind === 'end' ? 'end' : `${placement.kind === 'after' ? 'after' : 'line'}:${placement.line}`;
+}
+
+function placementOf(key: string): Placement {
+  if (key === 'end') return { kind: 'end' };
+  const [kind, line] = key.split(':');
+  return { kind: kind === 'after' ? 'after' : 'section', line: Number(line) };
 }
 
 function relativeTime(ms: number | null | undefined): string | null {
@@ -96,17 +102,23 @@ export function ExportDocsPanel({ docs }: { docs: DocsPublishing }) {
         )}
 
         <span className="dc-export-label" aria-hidden="true">Look</span>
-        <SegmentedControl
-          name="docs-theme"
-          legend="Look"
-          value={docs.theme}
-          onChange={docs.setTheme}
-          disabled={docs.busy}
-          options={[
-            { value: 'light', label: 'Light' },
-            { value: 'dark', label: 'Dark' },
-          ]}
-        />
+        <div className="dc-docs-look">
+          <SegmentedControl
+            name="docs-theme"
+            legend="Look"
+            value={docs.theme}
+            onChange={docs.setTheme}
+            disabled={docs.busy}
+            options={[
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
+          />
+          <label className="dc-check" title="No background behind the diagram, so it sits on the page itself. Choose the look that matches the page: a light picture on a dark page is hard to read.">
+            <input type="checkbox" checked={docs.transparent} disabled={docs.busy} onChange={(event) => docs.setTransparent(event.target.checked)} />
+            <span>Transparent</span>
+          </label>
+        </div>
 
         <span className="dc-export-label dc-export-label-top" aria-hidden="true">Markdown</span>
         <div className="dc-docs-markdown">
@@ -131,7 +143,7 @@ export function ExportDocsPanel({ docs }: { docs: DocsPublishing }) {
           </p>
         </div>
 
-        {docs.markdown && !docs.alreadyIn && headings.length > 0 && (
+        {docs.markdown && !docs.alreadyIn && (headings.length > 0 || docs.sibling) && (
           <>
             <label className="dc-export-label" htmlFor="dc-docs-section">Section</label>
             <select
@@ -139,11 +151,9 @@ export function ExportDocsPanel({ docs }: { docs: DocsPublishing }) {
               className="dc-select"
               value={placementKey(docs.placement)}
               disabled={docs.busy}
-              onChange={(event) => {
-                const value = event.target.value;
-                docs.setPlacement(value === 'end' ? { kind: 'end' } : { kind: 'section', line: Number(value.slice(5)) });
-              }}
+              onChange={(event) => docs.setPlacement(placementOf(event.target.value))}
             >
+              {docs.sibling && <option value={`after:${docs.sibling.line}`}>After {docs.sibling.name}</option>}
               {headings.map((heading) => (
                 <option key={heading.line} value={`line:${heading.line}`}>
                   {heading.text || 'Untitled'}

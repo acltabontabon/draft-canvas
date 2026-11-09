@@ -11,7 +11,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 #### Added
 
 - **Use in docs** — Put a diagram in a README or any Markdown page as an ordinary SVG, with the
-  editable `.draftcanvas` beside it. The picture never carries the diagram inside it.
+  editable `.draftcanvas` beside it, light, dark or transparent. The picture never carries the
+  diagram inside it.
   <!-- highlight -->
 
 #### Fixed

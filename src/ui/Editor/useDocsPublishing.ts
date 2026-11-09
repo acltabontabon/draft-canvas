@@ -14,6 +14,7 @@ import type { DocsStatus, MarkdownFile } from '../../desktop/api';
 
 const THEME_PREFERENCE = 'docs-theme';
 const SYNC_PREFERENCE = 'docs-sync';
+const TRANSPARENT_PREFERENCE = 'docs-transparent';
 
 /** A README is white for most readers, and a light picture reads on a dark page too: it's a card. */
 function readThemePreference(): ThemeName {
@@ -24,15 +25,17 @@ function readSyncPreference(): boolean {
   return readPreference(SYNC_PREFERENCE) !== 'off';
 }
 
-/** The section holding the first of `names` the Markdown file already shows, as a placement. */
-function siblingSection(markdown: MarkdownFile, names: readonly string[], headings: ReturnType<typeof headingsOf>): Placement | null {
+/**
+ * The last of `names` the Markdown file already shows, and its line: the new picture goes right
+ * after it, wherever it is — under a heading, or above the first one.
+ */
+function lastSibling(markdown: MarkdownFile, names: readonly string[]): { line: number; name: string } | null {
+  let found: { line: number; name: string } | null = null;
   for (const name of names) {
-    const at = referenceLine(markdown.text, markdown.imageDir ? `${markdown.imageDir}/${name}` : name);
-    if (at < 0) continue;
-    const heading = headings.filter((entry) => entry.line < at).at(-1);
-    return heading ? { kind: 'section', line: heading.line } : { kind: 'end' };
+    const line = referenceLine(markdown.text, markdown.imageDir ? `${markdown.imageDir}/${name}` : name);
+    if (line >= 0 && (!found || line > found.line)) found = { line, name };
   }
-  return null;
+  return found;
 }
 
 export type Preview = { svg: string; width: number; height: number } | 'missing' | null;
@@ -65,6 +68,9 @@ export interface DocsPublishing {
   setTheme: (theme: ThemeName) => void;
   sync: boolean;
   setSync: (sync: boolean) => void;
+  /** No background behind the diagram: it sits on the page itself. */
+  transparent: boolean;
+  setTransparent: (transparent: boolean) => void;
   /** The chosen level's picture beside the file (desktop with a file only). */
   picture: LevelPicture | null;
   loading: boolean;
@@ -79,6 +85,8 @@ export interface DocsPublishing {
   alreadyIn: boolean;
   /** The chosen Markdown file's headings, read once. */
   headings: ReturnType<typeof headingsOf>;
+  /** Another picture of this diagram already in the Markdown file, which this one can follow. */
+  sibling: { line: number; name: string } | null;
   placement: Placement;
   setPlacement: (placement: Placement) => void;
   /** The Markdown around the picture: where it will be added, or where it already is. */
@@ -131,6 +139,7 @@ export function useDocsPublishing({
   const [chosenView, setChosenView] = useState<string | null>(null);
   const [chosenTheme, setChosenTheme] = useState<ThemeName | null>(null);
   const [chosenSync, setChosenSync] = useState<boolean | null>(null);
+  const [chosenTransparent, setChosenTransparent] = useState<boolean | null>(null);
   const [status, setStatus] = useState<DocsStatus | null>(null);
   const [loading, setLoading] = useState(false);
   const [markdown, setMarkdown] = useState<MarkdownFile | null>(null);
@@ -159,6 +168,7 @@ export function useDocsPublishing({
     setChosenView(null);
     setChosenTheme(null);
     setChosenSync(null);
+    setChosenTransparent(null);
     setMarkdown(null);
     setChosenPlacement(null);
     setJustDone(null);
@@ -218,6 +228,7 @@ export function useDocsPublishing({
   const published = picture?.state === 'ours' ? picture.marker.settings : undefined;
   const theme = chosenTheme ?? published?.theme ?? readThemePreference();
   const sync = chosenSync ?? published?.sync ?? readSyncPreference();
+  const transparent = chosenTransparent ?? (published ? published.transparent === true : readPreference(TRANSPARENT_PREFERENCE) === 'on');
   // The look a published picture was drawn in stays its look: the app's own personality setting is
   // a preference about the canvas, and changing it shouldn't quietly restyle a README.
   const style = published?.style ?? preset;
@@ -227,7 +238,10 @@ export function useDocsPublishing({
   const imageName = desktopFile ? (picture?.name ?? (file ? levelImageNames(file, stem, view)[0]! : `${stem}.svg`)) : (names?.image ?? '');
   // A download has no file to follow, so it is always a snapshot.
   const follows = desktopFile ? sync : false;
-  const settings: DocsSettings = useMemo(() => ({ view, theme, style, sync: follows }), [view, theme, style, follows]);
+  const settings: DocsSettings = useMemo(
+    () => ({ view, theme, style, sync: follows, ...(transparent ? { transparent: true } : {}) }),
+    [view, theme, style, follows, transparent],
+  );
   const drawKey = `${sourceName}\u0000${JSON.stringify(settings)}`;
   const ready = active && !!file && openedAt !== null;
 
@@ -275,10 +289,10 @@ export function useDocsPublishing({
   const imagePath = fromMarkdown ?? (desktopFile ? imageName : (names?.imagePath ?? ''));
   const snippet = markdownImage(title, imagePath);
   const alreadyIn = markdown && fromMarkdown ? referencesTo(markdown.text, fromMarkdown) > 0 : false;
-  // Another level of this diagram already on the page: this one goes in the same section, so a
-  // context view and its containers read together. Else the usual guess.
-  const besideSibling = markdown ? siblingSection(markdown, mine.map((entry) => entry.name).filter((name) => name !== imageName), headings) : null;
-  const placement = chosenPlacement ?? besideSibling ?? defaultPlacement(headings);
+  // Another level of this diagram already on the page: this one goes right after it, so a context
+  // view and its containers read together. Else the usual guess.
+  const sibling = markdown ? lastSibling(markdown, mine.map((entry) => entry.name).filter((name) => name !== imageName)) : null;
+  const placement = chosenPlacement ?? (sibling ? { kind: 'after' as const, line: sibling.line } : defaultPlacement(headings));
   const insertion = markdown && !alreadyIn ? insertImage(markdown.text, placement, snippet) : null;
   // Where it goes, or — once it is there — where it already is.
   const shownAt = markdown && fromMarkdown && !insertion ? referenceLine(markdown.text, fromMarkdown) : -1;
@@ -397,6 +411,7 @@ export function useDocsPublishing({
       // Each level is its own picture with its own look: a choice made for the last one isn't this one's.
       setChosenTheme(null);
       setChosenSync(null);
+      setChosenTransparent(null);
       setJustDone(null);
     },
     orphans,
@@ -416,6 +431,12 @@ export function useDocsPublishing({
       writePreference(SYNC_PREFERENCE, next ? 'on' : 'off');
       setJustDone(null);
     },
+    transparent,
+    setTransparent: (next) => {
+      setChosenTransparent(next);
+      writePreference(TRANSPARENT_PREFERENCE, next ? 'on' : 'off');
+      setJustDone(null);
+    },
     picture,
     loading,
     imageName,
@@ -427,6 +448,7 @@ export function useDocsPublishing({
     markdown,
     alreadyIn,
     headings,
+    sibling,
     placement,
     setPlacement: setChosenPlacement,
     excerpt,

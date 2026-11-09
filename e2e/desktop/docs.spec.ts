@@ -113,6 +113,10 @@ test('publishes beside the file, adds to a Markdown file once, and follows saves
   await expect(dialog.getByRole('button', { name: 'Update payments.svg' })).toBeEnabled();
   await dialog.getByRole('checkbox', { name: 'Redraw on every save' }).check();
   await expect(dialog.getByRole('status')).toHaveText('Up to date');
+  await dialog.getByRole('checkbox', { name: 'Transparent' }).check();
+  await expect(dialog.getByRole('status')).toHaveText('Not applied');
+  await dialog.getByRole('checkbox', { name: 'Transparent' }).uncheck();
+  await expect(dialog.getByRole('status')).toHaveText('Up to date');
 
   await dialog.getByRole('button', { name: 'Close' }).click();
   await page.getByRole('button', { name: 'Service', exact: true }).click();
@@ -157,11 +161,12 @@ test('gives each level its own picture, and puts the next one beside the first o
   await expect(level.locator('option', { hasText: 'Whole diagram · published' })).toHaveCount(1);
   await expect(level.locator('option', { hasText: 'Inside Ledger · published' })).toHaveCount(1);
 
-  // A README already showing the whole diagram: the level goes in the same section, after it.
+  // A README already showing the whole diagram: the level goes right after it.
   const readme = `# Shop\n\n## Architecture\n\n![Payments](docs/diagrams/payments.svg)\n\n## Running locally\n\nnpm start\n`;
   await page.evaluate((text) => window.__shell.nextMarkdown({ name: 'README.md', text, imageDir: 'docs/diagrams' }), readme);
   await dialog.getByRole('button', { name: 'Add to a Markdown file…' }).click();
-  await expect(dialog.getByRole('combobox', { name: 'Section' })).toHaveValue('line:2');
+  await expect(dialog.getByRole('combobox', { name: 'Section' })).toHaveValue('after:4');
+  await expect(dialog.getByRole('combobox', { name: 'Section' }).locator('option').first()).toHaveText('After payments.svg');
   await shot(page, 'docs-desktop-levels');
   await dialog.getByRole('button', { name: 'Add to README.md' }).click();
   await expect(dialog.getByText('Added to README.md')).toBeVisible();

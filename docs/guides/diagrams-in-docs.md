@@ -28,7 +28,8 @@ The preview shows the picture on a page, as a reader will see it. Choose:
   page can show several. The tab opens on the level you're looking at; levels already published
   are marked **published**.
 - **Look** — **Light** or **Dark**. The picture keeps its own background, so it reads on either kind
-  of page.
+  of page. **Transparent** drops that background so the diagram sits on the page itself; choose the
+  look that matches the page, because a light picture on a dark page is hard to read.
 
 ## On the desktop
 
@@ -94,8 +95,8 @@ diagram's pictures that follow saves.
 
 ![The Docs tab with a second level chosen: it is marked published, and the README preview shows it going in right after the first.](../media/guides/export-docs-levels.png)
 
-When the Markdown file already shows another level of the same diagram, **Section** starts at that
-level's section, so the context view and its containers read together. The
+When the Markdown file already shows another level of the same diagram, **Section** starts at
+**After** that picture, so the context view and its containers read together. The
 [sample README](../media/guides/docs-example/sample-readme.md) shows two levels of one diagram and
 a second diagram. This is how GitHub shows it:
 

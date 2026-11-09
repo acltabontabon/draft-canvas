@@ -96,6 +96,21 @@ describe('adding the image', () => {
     expect(insertImage(doc, { kind: 'section', line: 0 }, snippet).text).toBe(`# Payments\n\nIntro.\n\n${snippet}\n\n## Install\n\nnpm i\n`);
   });
 
+  it('goes right after another picture, wherever it is, with one blank line either side', () => {
+    const second = '![B](b.svg)';
+    // Above the first heading: next to its sibling, not at the end of the file.
+    const top = '![A](a.svg)\n\n# Title\n\nText\n';
+    const placed = insertImage(top, { kind: 'after', line: 0 }, second);
+    expect(placed.text).toBe('![A](a.svg)\n\n![B](b.svg)\n\n# Title\n\nText\n');
+    expect(onlyAdds(top, placed.text)).toBe(true);
+    // Text straight after the sibling keeps a blank line from the new picture.
+    expect(insertImage('![A](a.svg)\nCaption\n', { kind: 'after', line: 0 }, second).text).toBe('![A](a.svg)\n\n![B](b.svg)\n\nCaption\n');
+    // The sibling is the last line: the end, finished properly.
+    expect(insertImage('# T\n\n![A](a.svg)', { kind: 'after', line: 2 }, second).text).toBe('# T\n\n![A](a.svg)\n\n![B](b.svg)\n');
+    // The file's own line ending.
+    expect(insertImage('![A](a.svg)\r\n\r\n# T\r\n', { kind: 'after', line: 0 }, second).text).toBe('![A](a.svg)\r\n\r\n![B](b.svg)\r\n\r\n# T\r\n');
+  });
+
   it('goes at the end, finishing an unterminated last line', () => {
     expect(insertImage('# T\n\nText', { kind: 'end' }, snippet).text).toBe(`# T\n\nText\n\n${snippet}\n`);
     expect(insertImage('# T\n\nText\n', { kind: 'end' }, snippet).text).toBe(`# T\n\nText\n\n${snippet}\n`);

@@ -4930,6 +4930,13 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   border-radius: var(--dc-radius-sm);
 }
 
+.dc-docs-look {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+}
+
 .dc-docs-image-line {
   display: flex;
   align-items: center;

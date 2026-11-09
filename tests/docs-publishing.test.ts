@@ -123,6 +123,21 @@ describe('the docs image', () => {
     expect(light.ok && dark.ok && light.svg !== dark.svg).toBe(true);
   });
 
+  it('draws nothing behind the diagram when transparent, and says so in its note', async () => {
+    const opaque = await renderDocsImage(payments(), 'p.draftcanvas', top);
+    const clear = await renderDocsImage(payments(), 'p.draftcanvas', { ...top, transparent: true });
+    if (!opaque.ok || !clear.ok) throw new Error('expected pictures');
+    // The canvas fill is the first rect after <defs>; a transparent picture has none.
+    const backdrop = /<\/defs><rect x="0" y="0" width="[\d.]+" height="[\d.]+" fill=/;
+    expect(opaque.svg).toMatch(backdrop);
+    expect(clear.svg).not.toMatch(backdrop);
+    expect(readMarker(clear.svg)?.settings.transparent).toBe(true);
+    // Written only when on: a picture without the option keeps its exact note.
+    expect(readMarker(opaque.svg)?.settings).toEqual(top);
+    expect(sameSettings({ ...top, transparent: false }, top)).toBe(true);
+    expect(sameSettings({ ...top, transparent: true }, top)).toBe(false);
+  });
+
   it('keeps a title with characters XML forbids readable', async () => {
     const file = { ...payments(), metadata: { ...payments().metadata, title: 'Pay\u0001ments\u000b' } };
     const rendered = await renderDocsImage(file, 'payments.draftcanvas', top);

@@ -324,7 +324,9 @@ pub fn publish_image(
 ) -> Result<Published, AppError> {
     check_image(bytes)?;
     let target = named_image_path(doc, name)?;
-    let current = read_image(&target, true)?;
+    // The note is all that decides whose file it is; the whole file is read only to tell an
+    // unchanged picture from a changed one, and only when the sizes agree.
+    let current = read_image(&target, false)?;
     match current.state {
         ImageState::Foreign => Err(foreign_image(&target)),
         ImageState::Ours if fresh => Err(taken_image(
@@ -334,9 +336,7 @@ pub fn publish_image(
         ImageState::Ours if !drawn_from(doc, current.marker.as_deref()) => {
             Err(taken_image(&target, "is a picture of another diagram"))
         }
-        ImageState::Ours if current.text.as_deref().map(str::as_bytes) == Some(bytes) => {
-            Ok(Published::Unchanged)
-        }
+        ImageState::Ours if holds_exactly(&target, bytes) => Ok(Published::Unchanged),
         ImageState::Ours => {
             // Never written through a link: one that appeared since the look above is replaced,
             // not followed.
@@ -350,6 +350,13 @@ pub fn publish_image(
             Err(e) => Err(e),
         },
     }
+}
+
+/// Whether the file at `path` is exactly `bytes`: by size first, so a picture that changed size (most
+/// changes do) is never read in full just to learn it differs.
+fn holds_exactly(path: &Path, bytes: &[u8]) -> bool {
+    let same_size = fs::symlink_metadata(path).is_ok_and(|meta| meta.len() == bytes.len() as u64);
+    same_size && fs::read(path).is_ok_and(|current| current == bytes)
 }
 
 /// A Markdown file the person picked: real, a regular file, a Markdown extension, a size worth editing.

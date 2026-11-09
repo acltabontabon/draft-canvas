@@ -84,8 +84,10 @@ export async function renderDocsImage(file: DraftDocument, source: string, setti
   const rendered = renderDocumentSvg(view, {
     theme: settings.theme,
     preset: settings.style,
-    background: background ?? (await resolveExportBackground(view, true)),
-    includeBackground: true,
+    // Transparent means nothing behind the diagram: neither the canvas colour nor its image.
+    transparent: settings.transparent === true,
+    background: settings.transparent ? undefined : (background ?? (await resolveExportBackground(view, true))),
+    includeBackground: !settings.transparent,
     // Open points stay, as they do in every picture: a published diagram that silently dropped
     // them would present each unsettled assumption as decided.
     openPoints: true,

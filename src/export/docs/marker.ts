@@ -29,6 +29,11 @@ export interface DocsSettings {
   style: PersonalityPreset;
   /** Saving the source redraws the image. Off: a snapshot, updated only when asked. */
   sync: boolean;
+  /**
+   * No background behind the diagram, so it sits on the page itself. Off (absent) by default: a
+   * light picture on a dark page needs its own paper to be read.
+   */
+  transparent?: boolean;
 }
 
 /** The element the note is kept in. Rust looks for exactly this text before it replaces a file. */
@@ -52,6 +57,8 @@ export function markerElement(source: string, settings: DocsSettings): string {
     theme: settings.theme,
     style: settings.style,
     sync: settings.sync,
+    // Only when on, so every picture published before the option keeps its exact bytes.
+    ...(settings.transparent ? { transparent: true } : {}),
   };
   return `${MARKER_OPEN}${escapeXmlText(JSON.stringify(payload))}${MARKER_CLOSE}`;
 }
@@ -83,13 +90,14 @@ export function parseMarker(json: string): DocsMarker | null {
     return null;
   }
   if (!isRecord(value) || value.v !== MARKER_VERSION) return null;
-  const { source, view, theme, style, sync } = value;
+  const { source, view, theme, style, sync, transparent } = value;
   if (typeof source !== 'string') return null;
   if (!Array.isArray(view) || !view.every((id) => typeof id === 'string') || view.length > 64) return null;
   if (theme !== 'light' && theme !== 'dark') return null;
   if (typeof style !== 'string' || !Object.hasOwn(PERSONALITY_PROFILES, style)) return null;
   if (typeof sync !== 'boolean') return null;
-  return { source, settings: { view: [...view], theme, style: style as PersonalityPreset, sync } };
+  if (transparent !== undefined && typeof transparent !== 'boolean') return null;
+  return { source, settings: { view: [...view], theme, style: style as PersonalityPreset, sync, ...(transparent ? { transparent: true } : {}) } };
 }
 
 export function sameSettings(a: DocsSettings, b: DocsSettings): boolean {
@@ -97,6 +105,7 @@ export function sameSettings(a: DocsSettings, b: DocsSettings): boolean {
     a.theme === b.theme &&
     a.style === b.style &&
     a.sync === b.sync &&
+    !!a.transparent === !!b.transparent &&
     a.view.length === b.view.length &&
     a.view.every((id, index) => id === b.view[index])
   );
