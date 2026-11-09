@@ -169,8 +169,8 @@ export interface Insertion {
 }
 
 /**
- * The file with `snippet` added as its own paragraph — after the last line of the chosen section
- * (before the next heading of the same or a higher level), or at the end. Blank lines around it are
+ * The file with `snippet` added as its own paragraph — after the chosen heading's own text (before
+ * the next heading, whatever its level), or at the end. Blank lines around it are
  * added only where there aren't any already, and in the file's own line ending.
  */
 export function insertImage(text: string, placement: Placement, snippet: string): Insertion {
@@ -180,11 +180,11 @@ export function insertImage(text: string, placement: Placement, snippet: string)
   if (placement.kind === 'section') {
     const headings = headingsOf(text);
     const at = headings.findIndex((heading) => heading.line === placement.line);
-    if (at >= 0) {
-      const level = headings[at]!.level;
-      const next = headings.slice(at + 1).find((heading) => heading.level <= level);
-      if (next) offset = lines[next.line]!.start;
-    }
+    // Right under the chosen heading's own text, before the next heading of any level. Going past
+    // its subsections instead put an image chosen for "# Shop" at the very end of most READMEs —
+    // the same place as "End of file", which isn't what choosing a heading means.
+    const next = at >= 0 ? headings[at + 1] : undefined;
+    if (next) offset = lines[next.line]!.start;
   }
 
   let inserted: string;

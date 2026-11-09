@@ -26,10 +26,19 @@ type Tone = 'quiet' | 'good' | 'warn';
  * in the guide, not on the panel.
  */
 function standing(docs: DocsPublishing): { tone: Tone; badge: string; detail?: string; note?: string } {
-  if (docs.target.kind === 'bundle') return { tone: 'quiet', badge: 'Snapshot', detail: 'A one-off copy. Download again to update it.' };
-  if (docs.loading && !docs.status) return { tone: 'quiet', badge: 'Checking…' };
+  if (docs.target.kind === 'bundle') {
+    return {
+      tone: 'quiet',
+      badge: 'Snapshot',
+      detail: 'A one-off copy. Download again to update it.',
+      note: docs.draftOnDesktop ? 'Save this diagram to a file to publish the picture beside it and redraw it on every save.' : undefined,
+    };
+  }
   const state = docs.status?.state ?? 'none';
-  if (state === 'foreign') return { tone: 'warn', badge: 'Name taken', note: `${docs.imageName} wasn’t made by Draft Canvas, so it won’t be replaced.` };
+  if (state === 'foreign') {
+    return { tone: 'warn', badge: 'Name taken', note: `${docs.imageName} wasn’t made by Draft Canvas, so it won’t be replaced. Rename the diagram, or move that file, to publish here.` };
+  }
+  if (docs.checking) return { tone: 'quiet', badge: 'Checking…' };
   if (docs.lostView) return { tone: 'warn', badge: 'Out of date', note: 'The level it showed is gone. Choose another.' };
   if (state === 'none') return { tone: 'quiet', badge: 'Not published' };
   if (docs.current) {
@@ -37,10 +46,12 @@ function standing(docs: DocsPublishing): { tone: Tone; badge: string; detail?: s
     return { tone: 'good', badge: 'Up to date', detail: when ? `Written ${when}` : undefined };
   }
   if (docs.target.dirty) return { tone: 'warn', badge: 'Unsaved changes', detail: 'Publishing saves the diagram first.' };
+  // A changed choice (level, look, redraw) isn't the diagram going stale: it waits for Update.
+  if (docs.unapplied) return { tone: 'warn', badge: 'Not applied', detail: 'Update the picture to apply your choices.' };
   return { tone: 'warn', badge: 'Out of date' };
 }
 
-export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy: () => void }) {
+export function ExportDocsPanel({ docs }: { docs: DocsPublishing }) {
   const said = standing(docs);
   const headings = docs.markdown ? headingsOf(docs.markdown.text) : [];
   const following = docs.target.kind === 'file' && docs.sync;
@@ -59,7 +70,7 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
           </span>
         </span>
       </div>
-      {said.note && <p className="dc-docs-note" data-tone="warn">{said.note}</p>}
+      {said.note && <p className="dc-docs-note" data-tone={said.tone === 'warn' ? 'warn' : undefined}>{said.note}</p>}
 
       <div className="dc-export-form">
         {docs.levels.length > 1 && (
@@ -92,18 +103,16 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
         <div className="dc-docs-markdown">
           <div className="dc-docs-markdown-line">
             {/* Focusable: a long path scrolls, and a keyboard has to be able to scroll it too. */}
+            {/* One Copy Markdown, in the footer: a second icon here was the same action under the same name. */}
             <code tabIndex={0} aria-label="Markdown for this picture">{docs.snippet}</code>
-            <button type="button" className="dc-docs-copy" onClick={onCopy} disabled={!docs.canCopy} aria-label="Copy Markdown" title={docs.canCopy ? 'Copy Markdown' : 'Publish the image first'}>
-              <Icon name="copy" size={13} />
-            </button>
           </div>
           <p className="dc-docs-hint">
             {docs.markdown ? (
               <span title={docs.markdown.displayPath}>{docs.alreadyIn ? `Already in ${docs.markdown.name}` : `From ${docs.markdown.name}`}</span>
             ) : docs.target.kind === 'file' ? (
-              <span>{docs.canCopy ? 'From the diagram’s folder' : 'Publish first, then copy'}</span>
+              <span>{docs.canCopy ? 'From the diagram’s folder' : docs.status?.state === 'foreign' ? 'Not available while the name is taken' : 'Publish first, then copy'}</span>
             ) : (
-              <span>Unzip next to your Markdown file</span>
+              <span>Put the diagrams folder next to your Markdown file</span>
             )}
             {docs.chooseMarkdown && (
               <button type="button" className="dc-link-button" onClick={() => void docs.chooseMarkdown?.()} disabled={docs.busy}>
@@ -113,7 +122,7 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
           </p>
         </div>
 
-        {docs.markdown && !docs.alreadyIn && (
+        {docs.markdown && !docs.alreadyIn && headings.length > 0 && (
           <>
             <label className="dc-export-label" htmlFor="dc-docs-section">Section</label>
             <select

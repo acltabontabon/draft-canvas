@@ -586,7 +586,7 @@ export function ExportDialog() {
             : <ExportSharePanel choices={shareChoices} choice={chosenShare.key} onChoice={setShareChoice} protectedLink={protectedLink} onProtectedLink={(value) => { setProtectedLink(value); setPassphrase(''); setConfirmation(''); }} passphrase={passphrase} onPassphrase={setPassphrase} confirmation={confirmation} onConfirmation={setConfirmation} busy={busy} onSubmit={() => { if (!cta.disabled) cta.onClick(); }} />)}
           {effectiveMode === 'document' && <ExportDocumentPanel format={documentFormat} onChange={setDocumentFormat} />}
 
-          {effectiveMode === 'docs' && docs && <ExportDocsPanel docs={docs} onCopy={() => void runCopy()} />}
+          {effectiveMode === 'docs' && docs && <ExportDocsPanel docs={docs} />}
 
           {inRoom && effectiveMode !== 'document' && effectiveMode !== 'share' && effectiveMode !== 'docs' && (
             <ExportScope whole={wholeCanvas} roomName={roomName} onChange={setWholeCanvas} />

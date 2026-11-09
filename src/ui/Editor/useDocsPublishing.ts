@@ -3,7 +3,7 @@ import type { DraftDocument } from '../../document/types';
 import type { ThemeName } from '../../render/theme/tokens';
 import type { PersonalityPreset } from '../../theme/usePersonality';
 import { docsLevels, docsTitleFor, levelExists, renderDocsImage } from '../../export/docs/image';
-import { readMarker, type DocsSettings } from '../../export/docs/marker';
+import { readMarker, sameSettings, type DocsSettings } from '../../export/docs/marker';
 import { defaultPlacement, excerptAround, headingsOf, insertImage, markdownImage, referenceLine, referencesTo, type ExcerptLine, type Placement } from '../../export/docs/markdown';
 import { bundleNames, downloadDocsBundle } from '../../export/docs/bundle';
 import { readPreference, writePreference } from '../../lib/preferences';
@@ -40,6 +40,12 @@ export interface DocsPublishing {
   setView: (key: string) => void;
   /** The published level is gone; the picture would show another one. */
   lostView: boolean;
+  /** On the desktop with no file yet: publishing beside it waits for a save. */
+  draftOnDesktop: boolean;
+  /** Not settled yet: the shell's answer or the preview it is compared with is still on its way. */
+  checking: boolean;
+  /** The panel's choices (level, look, redraw) differ from the published picture's; Update applies them. */
+  unapplied: boolean;
   theme: ThemeName;
   setTheme: (theme: ThemeName) => void;
   sync: boolean;
@@ -199,6 +205,11 @@ export function useDocsPublishing({
   const levels = docsLevels(file);
   const title = docsTitleFor(file, view);
   const current = status?.state === 'ours' && preview !== null && preview !== 'missing' && status.svg === preview.svg;
+  // Until both the shell's answer and the preview are in, "current" can't be judged: saying "Out of
+  // date" and offering Update for that moment flipped the button under the pointer.
+  const checking = !!desktopFile && (preview === null || (loading && !status));
+  const unapplied = !!published && !current && !sameSettings(published, settings);
+  const foreign = status?.state === 'foreign';
   // From the Markdown file when one is chosen; else from beside the diagram (desktop) or from the
   // folder the download is unpacked next to (web) — always a path that is true where it says it is.
   const imagePath = markdown ? markdown.imagePath : desktopFile ? imageName : (names?.imagePath ?? '');
@@ -243,7 +254,8 @@ export function useDocsPublishing({
     return true;
   };
 
-  const chooseMarkdown = controller && desktopFile
+  // A taken name can't be published, so there is nothing to add to a Markdown file either.
+  const chooseMarkdown = controller && desktopFile && !foreign
     ? () =>
         guarded(async () => {
           const picked = await controller.pickDocsMarkdown();
@@ -265,12 +277,14 @@ export function useDocsPublishing({
       run: () =>
         guarded(async () => {
           await downloadDocsBundle(file, settings);
-          notify(`Downloaded ${names?.archive}. Unzip it next to your Markdown file.`);
-          onFinished();
+          // The dialog stays open: pasting the Markdown line is the next step, and it's right here.
+          setJustDone(`Downloaded ${names?.archive}`);
         }, 'Download'),
     };
-  } else if (status?.state === 'foreign') {
+  } else if (foreign) {
     primary = { label: `${imageName} is taken`, busyLabel: '', disabled: true, run: async () => {} };
+  } else if (checking) {
+    primary = { label: 'Checking…', busyLabel: '', disabled: true, run: async () => {} };
   } else if (markdown && insertion) {
     const md = markdown;
     primary = {
@@ -298,6 +312,9 @@ export function useDocsPublishing({
       disabled: busy || loading || preview === 'missing',
       run: () => guarded(async () => void (await publish()), update ? 'Update' : 'Publish'),
     };
+  } else if (markdown && alreadyIn) {
+    // Published, current and on the page: nothing left to do here.
+    primary = { label: 'Done', busyLabel: '', disabled: busy, run: async () => onFinished() };
   } else {
     primary = {
       label: 'Add to a Markdown file…',
@@ -316,6 +333,9 @@ export function useDocsPublishing({
       setJustDone(null);
     },
     lostView,
+    draftOnDesktop: onDesktop && !desktopFile,
+    checking,
+    unapplied,
     theme,
     setTheme: (next) => {
       setChosenTheme(next);

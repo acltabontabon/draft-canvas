@@ -93,9 +93,10 @@ test('publishes beside the file, adds to a Markdown file once, and follows saves
   await shot(page, 'docs-desktop-markdown');
   const axe = await new AxeBuilder({ page }).include('.dc-modal-export').analyze();
   expect(axe.violations.map((violation) => `${violation.id}: ${violation.nodes.map((node) => node.target.join(' ')).join(', ')}`)).toEqual([]);
-  // Keyboard: the snippet's Copy button and the placement are reachable without a pointer.
-  await dialog.getByRole('button', { name: 'Copy Markdown' }).first().focus();
-  await expect(dialog.getByRole('button', { name: 'Copy Markdown' }).first()).toBeFocused();
+  // Keyboard: one Copy Markdown, reachable without a pointer.
+  await expect(dialog.getByRole('button', { name: 'Copy Markdown' })).toHaveCount(1);
+  await dialog.getByRole('button', { name: 'Copy Markdown' }).focus();
+  await expect(dialog.getByRole('button', { name: 'Copy Markdown' })).toBeFocused();
 
   await dialog.getByRole('button', { name: 'Add to README.md' }).click();
   await expect(dialog.getByText('Added to README.md')).toBeVisible();
@@ -105,6 +106,13 @@ test('publishes beside the file, adds to a Markdown file once, and follows saves
   // Again: nothing more to add.
   await expect(dialog.getByText('Already in README.md')).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Add to README.md' })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Done' })).toBeEnabled();
+  // A changed choice is named as waiting for Update, not as the diagram going stale.
+  await dialog.getByRole('checkbox', { name: 'Redraw on every save' }).uncheck();
+  await expect(dialog.getByRole('status')).toHaveText('Not applied');
+  await expect(dialog.getByRole('button', { name: 'Update payments.svg' })).toBeEnabled();
+  await dialog.getByRole('checkbox', { name: 'Redraw on every save' }).check();
+  await expect(dialog.getByRole('status')).toHaveText('Up to date');
 
   await dialog.getByRole('button', { name: 'Close' }).click();
   await page.getByRole('button', { name: 'Service', exact: true }).click();
@@ -124,6 +132,8 @@ test('leaves an SVG it did not make alone, and says why', async ({ page }) => {
   await expect(dialog.getByRole('status')).toHaveText('Name taken');
   await expect(dialog.getByText('payments.svg wasn’t made by Draft Canvas, so it won’t be replaced.')).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'payments.svg is taken' })).toBeDisabled();
+  // Nothing to add to a Markdown file while the picture can't be published.
+  await expect(dialog.getByRole('button', { name: 'Choose file…' })).toHaveCount(0);
   expect(await page.evaluate((handle) => window.__shell.docsImage(handle), handle)).toBe('<svg xmlns="http://www.w3.org/2000/svg"><rect/></svg>');
 });
 

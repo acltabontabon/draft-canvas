@@ -81,14 +81,19 @@ describe('headings', () => {
 describe('adding the image', () => {
   const snippet = '![Payments](diagrams/payments.svg)';
 
-  it('goes at the end of the chosen section, before its next sibling heading, and only adds', () => {
+  it('goes under the chosen heading, before the next heading of any level, and only adds', () => {
     const line = headingsOf(README)[1]!.line;
     const { text, line: at, inserted } = insertImage(README, { kind: 'section', line }, snippet);
     expect(onlyAdds(README, text)).toBe(true);
     expect(text.split('\n')[at]).toBe(snippet);
-    // After the subsection, right before "## Running", with blank lines either side.
-    expect(text).toContain(`More.\n\n${snippet}\n\n## Running`);
+    // Under the section's own text, before its "### Details" subsection, with blank lines either side.
+    expect(text).toContain(`How it fits together.\n\n${snippet}\n\n### Details`);
     expect(inserted).toBe(`${snippet}\n\n`);
+  });
+
+  it('puts an image chosen for a top heading under it, not at the end of the file', () => {
+    const doc = '# Payments\n\nIntro.\n\n## Install\n\nnpm i\n';
+    expect(insertImage(doc, { kind: 'section', line: 0 }, snippet).text).toBe(`# Payments\n\nIntro.\n\n${snippet}\n\n## Install\n\nnpm i\n`);
   });
 
   it('goes at the end, finishing an unterminated last line', () => {

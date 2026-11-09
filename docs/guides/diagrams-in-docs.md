@@ -37,8 +37,8 @@ Save the diagram to a file first. Then:
    changes are saved first, so the picture always matches its file.
 2. **Choose file…** under the Markdown line picks the page it goes on. The line then holds the
    path from that page: from a README two folders up, the image is `docs/diagrams/payments.svg`.
-3. **Section** chooses where; the image goes at the end of that section. The preview shows the lines
-   around it before anything is written.
+3. **Section** chooses where: the image goes under that heading's text, before the next heading. The
+   preview shows the lines around it before anything is written.
 4. **Add to README.md** adds that one line. Nothing else in the file changes, and a picture the file
    already shows is never added twice.
 
@@ -65,8 +65,8 @@ What Draft Canvas will and won't do:
 ## On the web
 
 The web app can't write beside your files, so **Download for docs** gives you a ZIP with
-`diagrams/payments.svg` and `diagrams/payments.draftcanvas`. Unzip it next to your Markdown file and
-paste the line from **Copy Markdown**:
+`diagrams/payments.svg` and `diagrams/payments.draftcanvas`. Put the `diagrams` folder next to your
+Markdown file and paste the line from **Copy Markdown**:
 
 ```markdown
 ![Payments](diagrams/payments.svg)

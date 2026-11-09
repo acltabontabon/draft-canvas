@@ -191,6 +191,21 @@ test.describe('Sequence Diagram export', () => {
     expect(text.match(/Save Transaction/g)).toHaveLength(1);
   });
 
+  test('Docs on the web downloads the bundle and stays open for the Markdown line', async ({ page }) => {
+    await importDocument(page, sagaDocument(), 'saga.draftcanvas');
+    await openExport(page);
+    const dialog = page.getByRole('dialog', { name: 'Export & share' });
+    await dialog.locator('[data-mode="docs"]').click();
+    await expect(dialog.getByLabel('Markdown for this picture')).toHaveText('![Payment Saga](diagrams/payment-saga.svg)');
+
+    const download = page.waitForEvent('download');
+    await dialog.getByRole('button', { name: 'Download for docs' }).click();
+    expect((await download).suggestedFilename()).toBe('payment-saga-docs.zip');
+    // Pasting the line is the next step, so the dialog doesn't close under it.
+    await expect(dialog.getByText('Downloaded payment-saga-docs.zip')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Copy Markdown' })).toBeEnabled();
+  });
+
   test('exports PlantUML source when Format is switched', async ({ page }) => {
     await importDocument(page, sagaDocument(), 'saga.draftcanvas');
     const dialog = await openSourceExport(page);
