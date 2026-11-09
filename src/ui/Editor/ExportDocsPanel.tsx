@@ -61,10 +61,10 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
       </div>
       {said.note && <p className="dc-docs-note" data-tone="warn">{said.note}</p>}
 
-      <div className="dc-docs-form">
+      <div className="dc-export-form">
         {docs.levels.length > 1 && (
           <>
-            <label className="dc-docs-label" htmlFor="dc-docs-level">Level</label>
+            <label className="dc-export-label" htmlFor="dc-docs-level">Level</label>
             <select id="dc-docs-level" className="dc-select" value={docs.viewKey} onChange={(event) => docs.setView(event.target.value)} disabled={docs.busy}>
               {docs.levels.map((level) => (
                 <option key={level.path.join('/')} value={level.path.join('/')}>
@@ -75,7 +75,7 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
           </>
         )}
 
-        <span className="dc-docs-label" aria-hidden="true">Look</span>
+        <span className="dc-export-label" aria-hidden="true">Look</span>
         <SegmentedControl
           name="docs-theme"
           legend="Look"
@@ -88,7 +88,7 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
           ]}
         />
 
-        <span className="dc-docs-label" aria-hidden="true">Markdown</span>
+        <span className="dc-export-label dc-export-label-top" aria-hidden="true">Markdown</span>
         <div className="dc-docs-markdown">
           <div className="dc-docs-markdown-line">
             {/* Focusable: a long path scrolls, and a keyboard has to be able to scroll it too. */}
@@ -115,7 +115,7 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
 
         {docs.markdown && !docs.alreadyIn && (
           <>
-            <label className="dc-docs-label" htmlFor="dc-docs-section">Section</label>
+            <label className="dc-export-label" htmlFor="dc-docs-section">Section</label>
             <select
               id="dc-docs-section"
               className="dc-select"
@@ -138,7 +138,7 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
 
         {docs.target.kind === 'file' && (
           <>
-            <span className="dc-docs-label" aria-hidden="true">Updates</span>
+            <span className="dc-export-label" aria-hidden="true">Updates</span>
             <label className="dc-check" title="Each save of the diagram, yours or an agent’s, redraws the picture. Markdown is never changed by this.">
               <input type="checkbox" checked={docs.sync} disabled={docs.busy} onChange={(event) => docs.setSync(event.target.checked)} />
               <span>Redraw on every save</span>

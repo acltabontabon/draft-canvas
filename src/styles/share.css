@@ -159,10 +159,9 @@
 .dc-export-body[data-share='true'] { grid-template-columns: minmax(0, 1fr) 216px; }
 .dc-export-body[data-share='true'] .dc-export-config { padding-top: 0; }
 .dc-export-body[data-share='true'] .dc-export-filename { font-family: inherit; font-weight: 500; font-size: 12px; }
-.dc-share-panel { gap: 0; }
-.dc-share-panel h3 { margin: 0 0 7px; font-size: 17px; letter-spacing: -0.25px; }
-.dc-share-panel .dc-export-panel-description { font-size: 13px; margin: 0 0 21px; }
-.dc-share-panel .dc-field { margin-bottom: 14px; }
+.dc-share-hints { display: flex; flex-direction: column; gap: 4px; }
+.dc-share-hints .dc-export-hint { margin: 0; }
+.dc-share-hints .dc-export-note { margin: 0; }
 .dc-share-panel select, .dc-reader-step-menu select { width: 100%; min-width: 0; min-height: 34px; padding: 7px 9px; border: 1px solid var(--dc-border); border-radius: var(--dc-radius-sm); background: var(--dc-canvas); color: var(--dc-text); font: inherit; font-size: 12px; }
 .dc-share-start-select { position: relative; display: flex; min-width: 0; }
 .dc-share-start-select select {
@@ -179,12 +178,9 @@
 .dc-share-start-select select:focus-visible { outline: 2px solid var(--dc-selection); outline-offset: 2px; }
 .dc-share-start-select:has(select:disabled) { opacity: 0.45; }
 .dc-share-start-select select:disabled { cursor: default; }
-.dc-share-protection { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 0 0 14px; margin: 9px 0 16px; border-bottom: 1px solid var(--dc-border); }
-.dc-share-protection strong { display: block; font-size: 12px; font-weight: 600; margin-bottom: 5px; }
-.dc-share-protection small { font-size: 12px; color: var(--dc-text-muted); }
-.dc-share-protection input { flex-shrink: 0; }
-.dc-share-password { display: flex; gap: 6px; align-items: center; border: 1px solid var(--dc-border); border-radius: var(--dc-radius-sm); padding-right: 4px; margin: -6px 0 14px; }
-.dc-share-password input { min-width: 0; width: 100%; border: 0; background: transparent; color: var(--dc-text); padding: 9px; font: inherit; font-size: 13px; }
+.dc-share-password { display: flex; gap: 6px; align-items: center; min-width: 0; min-height: 34px; border: 1px solid var(--dc-border); border-radius: var(--dc-radius-sm); padding-right: 4px; background: var(--dc-canvas); }
+.dc-share-password:focus-within { outline: 2px solid var(--dc-selection); outline-offset: 1px; }
+.dc-share-password input { min-width: 0; width: 100%; border: 0; background: transparent; color: var(--dc-text); padding: 7px 9px; font: inherit; font-size: 13px; outline: none; }
 .dc-share-hint { color: var(--dc-text-muted); font-size: 12px; line-height: 1.6; margin: 10px 0 0; }
 .dc-modal-export .dc-share-hint { margin: 8px 0 0; font-size: 12px; line-height: 1.5; }
 .dc-share-preview-label { display: flex; align-items: center; min-height: 22px; color: var(--dc-text-muted); text-transform: uppercase; letter-spacing: 1.2px; font-size: 10px; margin: 0 0 12px; }

@@ -150,7 +150,7 @@ test.describe('Sequence Diagram export', () => {
     await expect(page.getByTitle('Sequence Diagram')).toHaveCount(0);
 
     const dialog = await openSourceExport(page);
-    await expect(dialog.getByText('Sequence diagram source generated from your Flows.')).toBeVisible();
+    await expect(dialog.getByRole('radio', { name: 'Flows', exact: true })).toBeChecked();
     // The preview is the generated source, read-only; the artifact is the file tile, never a drawn diagram.
     await expect(dialog.getByTestId('export-source-preview')).toContainText('sequenceDiagram');
     await expect(dialog.locator('.dc-export-file')).toBeVisible();
@@ -215,7 +215,7 @@ test.describe('Sequence Diagram export', () => {
     await importDocument(page, doc, 'no-flows.draftcanvas');
     const dialog = await openSourceExport(page);
 
-    await expect(dialog.getByText('Add a Flow to export sequence diagram source.')).toBeVisible();
+    await expect(dialog.getByText('Add a Flow to export its sequence diagram.')).toBeVisible();
     await expect(dialog.getByRole('button', { name: /Export (Mermaid|PlantUML)/ })).toBeDisabled();
   });
 
@@ -249,9 +249,11 @@ test.describe('Sequence Diagram export', () => {
     await expect(dialog.getByRole('radio', { name: 'PlantUML', exact: true })).toBeChecked();
 
     const download = page.waitForEvent('download');
-    // After Format: the source preview (scrollable, so focusable), then Copy, then Export.
+    // After Format: the source preview (scrollable, so focusable), the privacy lock, then Copy, then Export.
     await page.keyboard.press('Tab');
     await expect(page.locator(':focus')).toHaveAttribute('aria-label', 'PlantUML source');
+    await page.keyboard.press('Tab');
+    await expect(page.locator(':focus')).toHaveAttribute('aria-label', /^Made on your device/);
     await page.keyboard.press('Tab');
     await expect(page.locator(':focus')).toHaveText('Copy');
     await page.keyboard.press('Tab');

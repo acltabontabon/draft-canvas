@@ -43,7 +43,9 @@ import type { ShareStage } from '../../share/compress';
 import { usePersonality } from '../../theme/usePersonality';
 import { useTheme } from '../../theme/useTheme';
 import { Button } from '../common/Button';
+import { SegmentedControl } from '../common/SegmentedControl';
 import { Icon } from '../common/Icon';
+import { Tooltip } from '../common/Tooltip';
 import { Modal } from '../common/Modal';
 import { ExportModePicker } from './ExportModePicker';
 import { ExportDocumentPanel } from './ExportDocumentPanel';
@@ -536,6 +538,11 @@ export function ExportDialog() {
     }
   };
 
+  const privacyNote =
+    effectiveMode === 'share'
+      ? `${protectedLink ? 'Encrypted' : 'Created'} locally. Nothing is uploaded.`
+      : `Made on your device. Nothing about this diagram leaves ${__DESKTOP__ ? 'this computer' : 'your browser'}.`;
+
   return (
     <Modal
       title="Export & share"
@@ -544,15 +551,15 @@ export function ExportDialog() {
       onClose={busy || docs?.busy ? () => {} : close}
       footer={
         <div className="dc-export-footer">
-          <span
-            className="dc-export-footer-note"
-            title={`Nothing about this diagram leaves ${__DESKTOP__ ? 'this computer' : 'your browser'} during export.`}
-          >
-            <Icon name="lock" size={13} />
-            {effectiveMode === 'share'
-              ? `${protectedLink ? 'Encrypted' : 'Created'} locally. Nothing uploaded.`
-              : 'Generated locally on your device.'}
-          </span>
+          {/* Where it was made, said once on hover, focus or click of the lock — not a line of text
+              on every tab. */}
+          <Tooltip content={{ title: privacyNote }} showOnClick>
+            {(tip) => (
+              <button type="button" className="dc-export-privacy" aria-label={privacyNote} {...tip}>
+                <Icon name="lock" size={15} />
+              </button>
+            )}
+          </Tooltip>
           <span className="dc-export-footer-actions">
             {copy && (
               <Button icon="copy" disabled={copy.disabled} onClick={() => void runCopy()}>
@@ -664,16 +671,18 @@ function ExportScope({
   onChange: (whole: boolean) => void;
 }) {
   return (
-    <fieldset className="dc-export-scope">
-      <legend>What to export</legend>
-      <label>
-        <input type="radio" name="dc-export-scope" checked={!whole} onChange={() => onChange(false)} />
-        <span>Inside {roomName}</span>
-      </label>
-      <label>
-        <input type="radio" name="dc-export-scope" checked={whole} onChange={() => onChange(true)} />
-        <span>The whole canvas</span>
-      </label>
-    </fieldset>
+    <div className="dc-export-form">
+      <span className="dc-export-label" aria-hidden="true">Show</span>
+      <SegmentedControl
+        name="dc-export-scope"
+        legend="What to export"
+        value={whole ? 'whole' : 'room'}
+        onChange={(next) => onChange(next === 'whole')}
+        options={[
+          { value: 'room', label: `Inside ${roomName}` },
+          { value: 'whole', label: 'The whole canvas' },
+        ]}
+      />
+    </div>
   );
 }

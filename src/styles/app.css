@@ -4496,11 +4496,52 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   gap: 12px;
 }
 
-.dc-export-panel-description {
-  margin: 0;
+/* Every export tab is the same quiet form: a label column, a control column. The eye reads down one
+   edge instead of across sentences; what a switch does in detail is its tooltip, not a paragraph.
+   The label column is a fixed width so separate forms on one tab (the room scope above the image
+   options) line up with each other. */
+.dc-export-form {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.dc-export-form > .dc-select,
+.dc-export-form > .dc-segmented {
+  justify-self: start;
+  max-width: 100%;
+}
+
+.dc-export-label {
   color: var(--dc-text-muted);
   font-size: 12.5px;
-  line-height: 1.5;
+}
+
+/* For a row whose control is taller than one line: the label sits on its first line. */
+.dc-export-label.dc-export-label-top {
+  align-self: start;
+  padding-top: 7px;
+}
+
+/* A wrapping row of checkboxes: the label sits on the first row's text, not a control's top edge. */
+.dc-export-label.dc-export-label-top:has(+ .dc-export-checks) {
+  padding-top: 2px;
+}
+
+.dc-export-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  min-width: 0;
+}
+
+.dc-export-hint {
+  margin: -4px 0 0;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 /* A row of controls that cluster together when there's room (Format + Palette, Flow + Speed) and
@@ -4683,10 +4724,13 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   white-space: nowrap;
 }
 
+/* One line, cut with an ellipsis: a name broken at its hyphens ("order- / processing") read as two
+   words. The full name is the caption's tooltip. */
 .dc-export-filename-base {
   min-width: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dc-export-filename-ext {
@@ -4748,34 +4792,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-docs-badge[data-tone='warn'] {
   background: color-mix(in srgb, var(--dc-caution) 14%, transparent);
   color: var(--dc-caution);
-}
-
-/* Label column, control column: the eye reads down one edge instead of across sentences. */
-.dc-docs-form {
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  align-items: center;
-  gap: 12px 16px;
-}
-
-.dc-docs-form > .dc-select {
-  justify-self: start;
-  max-width: 100%;
-}
-
-.dc-docs-form > .dc-segmented {
-  justify-self: start;
-}
-
-.dc-docs-label {
-  color: var(--dc-text-muted);
-  font-size: 12.5px;
-}
-
-/* The Markdown row's label sits on the code line, not the middle of code + hint. */
-.dc-docs-form > .dc-docs-label:has(+ .dc-docs-markdown) {
-  align-self: start;
-  padding-top: 7px;
 }
 
 .dc-docs-hint {
@@ -5206,12 +5222,30 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   gap: 8px;
 }
 
-.dc-export-footer-note {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 12px;
+/* The lock: a quiet round control whose tooltip says where the export was made. */
+.dc-export-privacy {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--dc-radius-pill);
+  background: transparent;
   color: var(--dc-text-faint);
+  cursor: help;
+  transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease;
+}
+
+.dc-export-privacy:hover {
+  border-color: var(--dc-border);
+  background: var(--dc-surface-hover);
+  color: var(--dc-text-muted);
+}
+
+.dc-export-privacy:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
 }
 
 .dc-export-footer .dc-button-solid {
@@ -6203,35 +6237,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 /* This room, or the whole canvas — only ever shown while standing inside a shape. */
-.dc-export-scope {
-  display: flex;
-  gap: 16px;
-  margin: 0 0 14px;
-  padding: 0;
-  border: 0;
-}
-
-.dc-export-scope legend {
-  padding: 0;
-  color: var(--dc-text-faint);
-  font-size: 11px;
-  font-variant-caps: all-small-caps;
-  letter-spacing: 0.06em;
-}
-
-.dc-export-scope label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--dc-text-muted);
-  font-size: 13px;
-  cursor: pointer;
-}
-
-.dc-export-scope input:checked + span {
-  color: var(--dc-text);
-}
-
 /* ---------------------------------------------------------- open points panel -- */
 
 .dc-points {
