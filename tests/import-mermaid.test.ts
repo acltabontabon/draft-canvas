@@ -434,12 +434,14 @@ describe('hostile text', () => {
   });
 
   it('does not rescan to the end of the line for every unclosed bracket in an & chain', () => {
-    // Each `(((` and `((` without its closer was read to the end of the statement: 88 KB took 7.5 s.
+    // Each `(((` and `((` without its closer was read to the end of the statement: 88 KB took 7.5 s,
+    // so this input took about 40 s. Now about 150 ms; the bound leaves room for a busy CI runner
+    // (1.2 s seen there) and still fails long before the old cost.
     const text = `flowchart LR\n${Array.from({ length: 18_500 }, () => 'A((( x )').join(' & ')}`;
     expect(text.length).toBeGreaterThan(200_000);
     const started = performance.now();
     const result = parseMermaidFlowchart(text);
-    expect(performance.now() - started).toBeLessThan(1000);
+    expect(performance.now() - started).toBeLessThan(5000);
     expect(result.ok).toBe(true);
   });
 

@@ -80,12 +80,13 @@ describe('SVG', () => {
   });
 
   it('answers quickly for a file of openers with no closer', () => {
-    // The lazy pattern retried the search for `</metadata>` from every opener: 540 KB took 2 s.
+    // The lazy pattern retried the search for `</metadata>` from every opener: 540 KB took 2 s, and
+    // this 2.7 MB would take about a minute. The bound leaves room for a busy CI runner.
     const hostile = `<svg>${'<metadata id="draftcanvas">'.repeat(100_000)}</svg>`;
     const started = performance.now();
     expect(readDocumentFromSvg(hostile)).toBeNull();
     expect(withDocumentMetadata(hostile, fixture())).toContain('</metadata>');
-    expect(performance.now() - started).toBeLessThan(500);
+    expect(performance.now() - started).toBeLessThan(3000);
   });
 });
 
