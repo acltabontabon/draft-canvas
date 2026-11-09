@@ -30,7 +30,7 @@ import {
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { compensationActionCaption, compensationLabelParts } from '../edges/compensationMarker';
 import { compensationDisplayLabel } from '../document/compensation';
@@ -45,8 +45,6 @@ import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
 import { captionAnchor as captionAnchorRect, labelChipRect } from '../edges/describe';
 import { edgeMarkerCenter, type OccupiedRect } from '../openPoints/marker';
-import { layoutText } from '../render/text/layout';
-import { LINE_HEIGHTS } from '../render/text/fonts';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
@@ -577,7 +575,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     : recoveryParts && (labelSide === 'top' || labelSide === 'bottom') ? 'bottom' : labelSide;
   const chipX = sharedAt ? sharedAt.x : labelX;
   const chipY = sharedAt ? sharedAt.y : labelY;
-  const labelLayout = displayLabel ? layoutEdgeLabel(displayLabel) : null;
+  // Fitted to the room this line leaves before a shape or the arrowhead, as the exporter does; a
+  // group's shared label sits at the group's point, where this line's room means nothing.
+  const labelLayout = displayLabel ? layoutEdgeLabel(displayLabel, undefined, sharedLabel ? undefined : route.labelRoom) : null;
   const recoveryLayout = recoveryParts ? layoutRecoveryLabel(recoveryParts.name, recoveryParts.operation) : null;
   const responseLayout = edge.response ? layoutEdgeResponse(edge.response) : null;
   const hasStep = showSequence && typeof stepNumber === 'number';
@@ -591,6 +591,20 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const captionIsUnusual = relationshipStatus === 'unusual' || relationshipStatus === 'questionable';
   const captionCollapsed = Boolean(route.trunkLabel) && !captionIsUnusual;
   const captionAt = captionCollapsed ? route.trunkLabel! : { x: labelX, y: labelY };
+  // The relationship caption, laid out as the exporter lays it out (`layoutConnectorCaption`): one
+  // line fitted to its line's room, the whole caption in its tooltip.
+  const captionText = !hasLabel && edge.semantic
+    ? (() => {
+        const text = compensationActionCaption(edge.compensationFor ? edge.compensationName : undefined, relationshipCaptionLabel(edge.semantic, {
+          hasResponse: edge.hasResponse,
+          deliveryAttempts: edge.deliveryAttempts,
+          source: sourceCategory,
+          target: targetCategory,
+        }));
+        return captionIsUnusual ? `▲ ${text}` : text;
+      })()
+    : null;
+  const captionLayout = captionText ? layoutConnectorCaption(captionText, undefined, captionCollapsed ? undefined : route.labelRoom) : null;
   // Being a numbered step must never cost a connector its words — only the step badge physically
   // landing on them may, which is a question about two points and nothing else (`badgeCrowds`).
   // The glyphs below sit at the midpoint whatever the bundle does; only the caption follows the
@@ -623,19 +637,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       const h = Math.max(recoveryLayout?.height ?? labelLayout.height, hasStep ? 16 : 0) + LABEL_PADDING_Y * 2;
       const { left, top } = labelChipRect(chipSide, chipX, chipY, w, h);
       occupied = { left, top, width: w, height: h };
-    } else if (!hasLabel && !badgeOverCaption && edge.semantic && !captionCollapsed) {
-      const text = compensationActionCaption(edge.compensationFor ? edge.compensationName : undefined, relationshipCaptionLabel(edge.semantic, {
-        hasResponse: edge.hasResponse,
-        deliveryAttempts: edge.deliveryAttempts,
-        source: sourceCategory,
-        target: targetCategory,
-      }));
-      const layout = layoutText(captionIsUnusual ? `▲ ${text}` : text, {
-        font: FONTS.connectorCaption,
-        maxWidth: 120,
-        lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
-        maxLines: 1,
-      });
+    } else if (captionLayout && !badgeOverCaption && !captionCollapsed) {
+      const layout = captionLayout;
       const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout, captionCollapsed ? responseAway : captionAwayForLane(laneOffset, responseAway));
       const left = caption.align === 'start' ? caption.x : caption.align === 'end' ? caption.x - layout.width : caption.x - layout.width / 2;
       occupied = { left, top: caption.y, width: layout.width, height: layout.height };
@@ -983,15 +986,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           *what kind* of call, which is exactly what left a fresh Service→Service connector with
           no visible text at all. `captionAnchor`'s `responseAway` flag is what keeps this from
           landing on top of the response line's own label — see its own doc comment. */}
-      {!hasLabel && !badgeOverCaption && edge.semantic && (() => {
+      {captionLayout && !badgeOverCaption && (() => {
         const captionSide = captionCollapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
         const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionCollapsed ? responseAway : captionAwayForLane(laneOffset, responseAway));
-        const label = compensationActionCaption(edge.compensationFor ? edge.compensationName : undefined, relationshipCaptionLabel(edge.semantic, {
-          hasResponse: edge.hasResponse,
-          deliveryAttempts: edge.deliveryAttempts,
-          source: sourceCategory,
-          target: targetCategory,
-        }));
         return (
           <text
             className="dc-edge-caption"
@@ -1002,7 +999,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             fill={captionIsUnusual ? theme.accents.amber.text : theme.textFaint}
             style={{ font: cssFont(FONTS.connectorCaption) }}
           >
-            {captionIsUnusual ? `▲ ${label}` : label}
+            {captionLayout.truncated && <title>{captionText}</title>}
+            {captionLayout.lines[0]?.text ?? captionText}
           </text>
         );
       })()}

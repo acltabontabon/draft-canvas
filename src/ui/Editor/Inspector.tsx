@@ -311,6 +311,24 @@ export function Inspector() {
               </Button>
             </>
           )}
+          {outer >= 2 && (
+            <>
+              <Button
+                variant="quiet"
+                title="Give them all the widest one’s width"
+                onClick={() => useEditorStore.getState().matchSize('width')}
+              >
+                Same width
+              </Button>
+              <Button
+                variant="quiet"
+                title="Give them all the tallest one’s height"
+                onClick={() => useEditorStore.getState().matchSize('height')}
+              >
+                Same height
+              </Button>
+            </>
+          )}
           <Button
             variant="quiet"
             title="Enclose in a boundary"

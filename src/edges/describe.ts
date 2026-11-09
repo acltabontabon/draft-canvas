@@ -39,7 +39,7 @@ import type { EdgeTracks } from './separation';
 import type { Crossing } from './crossings';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, layoutConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
 import { compensationActionCaption, compensationLabelParts } from './compensationMarker';
 import { compensationDisplayLabel } from '../document/compensation';
 
@@ -444,13 +444,9 @@ export function describeEdge(
       // A collapsed caption sits on the shared trunk, well clear of any member's own badge, so it
       // is measured where it actually lands rather than at this connector's midpoint.
       if (!(badgeAt !== null && badgeCrowds(badgeAt, captionAt))) {
-        const captionLayout = layoutText(text, {
-          font: FONTS.connectorCaption,
-          maxWidth: 120,
-          lineHeight: FONTS.connectorCaption.size * LINE_HEIGHTS.label,
-          maxLines: 1,
-          measurer: ctx.measurer,
-        });
+        // On the trunk the caption is clear of every member's ends; at its own point it fits the room
+        // its line leaves before a shape or the arrowhead (`layoutConnectorCaption`).
+        const captionLayout = layoutConnectorCaption(text, ctx.measurer, collapsed ? undefined : route.labelRoom);
         const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
         const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout, collapsed ? responseAway : captionAwayForLane(ctx.lane ?? 0, responseAway));
         overlay.push({
@@ -502,7 +498,8 @@ export function describeEdge(
   }
 
   if (displayLabel && ctx.sharedLabel?.draws !== false) {
-    const layout = layoutEdgeLabel(displayLabel, ctx.measurer);
+    // A label shared by a group sits at the group's point, not this line's: no room of its own.
+    const layout = layoutEdgeLabel(displayLabel, ctx.measurer, ctx.sharedLabel ? undefined : route.labelRoom);
     const recoveryLayout = recoveryParts ? layoutRecoveryLabel(recoveryParts.name, recoveryParts.operation, ctx.measurer) : null;
 
     // A numbered connector carries its step inside the label chip. Drawing the

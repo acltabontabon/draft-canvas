@@ -14,10 +14,24 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   editable `.draftcanvas` beside it, light, dark or transparent. The picture never carries the
   diagram inside it.
   <!-- highlight -->
+- Dragging a connected shape snaps it to where its connector runs perfectly straight, through the
+  middle of a queue's tube or a Data Store's cylinder. It catches from further away than edge
+  snapping and wins over it. <!-- highlight -->
+- Dragging also shows matching gaps (← 80 → … ← 80 →) and snaps to an even spacing with the shapes
+  in the same row or column.
+- **Straighten connectors** in `⌘K` nudges shapes a few pixels so nearly straight connectors run
+  straight, without rearranging the layout. One undo step.
+- **Same width** and **Same height** beside Align and Distribute give the selected shapes the
+  largest size among them.
 
 #### Fixed
 
 - The EXTERNAL and WORKER captions sit inside their shapes again instead of on the border.
+- A connector's caption sits on its longest straight stretch instead of a short jog, and never over
+  the arrowhead. A caption too long for its line is cut short, with the whole caption on hover.
+- A connector that steps around a shape no longer bends right into its arrowhead.
+- The example diagram lines up by its arrows, so every connector is straight and its first caption
+  is no longer cut off.
 
 ### Desktop
 

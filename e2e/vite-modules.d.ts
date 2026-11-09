@@ -39,5 +39,8 @@ declare module '/src/*' {
   export const describeContext: (theme: any) => any;
   export const LIGHT: unknown;
   export const noteLayout: (node: { noteKind?: string }) => { top: number; bottom: number; lineHeight: number };
+  /** A shape's box with its anchor band, and how far a connector between two is from straight. */
+  export const rectOf: (node: unknown) => unknown;
+  export const straightOffset: (edge: unknown, source: unknown, target: unknown) => { axis: 'x' | 'y'; delta: number } | null;
   export function encodeShareLink(document: unknown, base?: string, start?: { path: string[]; flowId?: string }): Promise<{ url: string } | { tooLarge: true; bytes: number }>;
 }

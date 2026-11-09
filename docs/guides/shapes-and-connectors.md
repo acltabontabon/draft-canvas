@@ -36,6 +36,24 @@ Queue and Data Store artwork also grows when you drag a corner resize handle.
 
 ![Shape toolbar with the Details shortcut and aligned actions.](../media/inspectors/shape-toolbar.png)
 
+## Line things up
+
+Dragging does most of the lining up for you:
+
+- A shape joined to another snaps to where their connector runs perfectly straight. The line goes
+  through each shape's own middle: a queue's tube or a Data Store's cylinder, not the box around it.
+  This catches from a little further away than the other snaps and wins over them.
+- It also snaps to its neighbours' edges and centres, and to an equal gap: when the space to a
+  neighbour matches a gap already in the row or column, both gaps are marked with their size.
+
+For more, select shapes and use the bar at the bottom: **Align**, **Distribute** (three or more),
+and **Same width** / **Same height**, which give every selected shape the largest size among them.
+
+**Straighten connectors** in `⌘K` nudges shapes a few pixels so every connector that is nearly
+straight becomes straight, without rearranging anything else. With a selection, only the selected
+shapes move. **Arrange diagram** is the bigger tool: it lays the whole view out again. Each is one
+undo step.
+
 ## Connect shapes
 
 - Drag from a shape's edge dot onto another shape, or onto empty space to create one.
@@ -49,6 +67,9 @@ otherwise, and reduced-motion preferences turn the trace off.
 The default, **Sculpted Ink**, uses sweeping corners and a carved arrowhead. Replies use a lighter dashed return
 rail, with each caption outside its own line. Two differently named operations keep separate exits;
 a repeated relationship can share a trunk. These details also appear in SVG and PNG exports.
+
+A caption sits on its connector's longest straight stretch, never on a short jog or over the
+arrowhead. One too long for its line is cut short; hover it to read the whole caption.
 
 ![Default connectors: distinct operations, separate return rails and straight glyph attachments.](../media/connectors/style-light-after.png)
 
