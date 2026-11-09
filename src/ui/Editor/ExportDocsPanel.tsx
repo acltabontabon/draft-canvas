@@ -1,6 +1,5 @@
 import { useMemo } from 'react';
 import { headingsOf, type Placement } from '../../export/docs/markdown';
-import { hostKind } from '../../host/hostInfo';
 import { SegmentedControl } from '../common/SegmentedControl';
 import { Icon } from '../common/Icon';
 import type { DocsPublishing } from './useDocsPublishing';
@@ -19,113 +18,107 @@ function relativeTime(ms: number | null | undefined): string | null {
   return new Date(ms).toLocaleDateString();
 }
 
-/** The one sentence that says what this picture is: linked, a snapshot, current or not. */
-function relationship(docs: DocsPublishing): { tone: 'quiet' | 'good' | 'warn'; text: string } {
-  if (docs.target.kind === 'bundle') {
-    return { tone: 'quiet', text: __DESKTOP__ && hostKind() === 'desktop' ? 'A snapshot. Save the diagram to a file to publish it beside the file and keep it updated.' : 'A snapshot of this diagram, with its editable source beside it.' };
-  }
-  if (docs.loading && !docs.status) return { tone: 'quiet', text: 'Looking beside the diagram…' };
+type Tone = 'quiet' | 'good' | 'warn';
+
+/**
+ * Where the picture stands, in a word or two — the badge — and, only when something needs the
+ * person's attention, one short line under it. The longer story lives in the badge's tooltip and
+ * in the guide, not on the panel.
+ */
+function standing(docs: DocsPublishing): { tone: Tone; badge: string; detail?: string; note?: string } {
+  if (docs.target.kind === 'bundle') return { tone: 'quiet', badge: 'Snapshot', detail: 'A one-off copy. Download again to update it.' };
+  if (docs.loading && !docs.status) return { tone: 'quiet', badge: 'Checking…' };
   const state = docs.status?.state ?? 'none';
-  if (state === 'foreign') return { tone: 'warn', text: `${docs.imageName} already exists beside the diagram and wasn’t made by Draft Canvas. It won’t be replaced; rename one of them to publish.` };
-  if (state === 'none') return { tone: 'quiet', text: docs.sync ? 'Not published yet. Once it is, every save redraws the picture.' : 'Not published yet. It will stay a snapshot until you update it here.' };
+  if (state === 'foreign') return { tone: 'warn', badge: 'Name taken', note: `${docs.imageName} wasn’t made by Draft Canvas, so it won’t be replaced.` };
+  if (docs.lostView) return { tone: 'warn', badge: 'Out of date', note: 'The level it showed is gone. Choose another.' };
+  if (state === 'none') return { tone: 'quiet', badge: 'Not published' };
   if (docs.current) {
     const when = relativeTime(docs.status?.modifiedMs);
-    return { tone: 'good', text: docs.sync ? `Up to date${when ? `, written ${when}` : ''}. Every save redraws it.` : `Up to date${when ? `, written ${when}` : ''}. A snapshot: it changes only when you update it here.` };
+    return { tone: 'good', badge: 'Up to date', detail: when ? `Written ${when}` : undefined };
   }
-  if (docs.target.dirty) return { tone: 'warn', text: 'Unsaved changes. Publishing saves the diagram first, so the picture matches its file.' };
-  return { tone: 'warn', text: 'The published picture differs from this diagram or these choices. Updating it keeps the Markdown as it is.' };
+  if (docs.target.dirty) return { tone: 'warn', badge: 'Unsaved changes', detail: 'Publishing saves the diagram first.' };
+  return { tone: 'warn', badge: 'Out of date' };
 }
 
 export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy: () => void }) {
-  const said = relationship(docs);
+  const said = standing(docs);
   const headings = docs.markdown ? headingsOf(docs.markdown.text) : [];
+  const following = docs.target.kind === 'file' && docs.sync;
   return (
     <div className="dc-export-panel dc-docs-panel">
-      <div className="dc-docs-link" data-tone={said.tone} aria-live="polite">
-        <div className="dc-docs-chain">
+      <div className="dc-docs-head">
+        <span className="dc-docs-chain" aria-label={`${docs.sourceName} draws ${docs.imageName}`}>
           <span className="dc-docs-file" title={docs.sourceName}>
             <Icon name="pencil" size={12} />
             <FileName name={docs.sourceName} />
           </span>
-          <span className="dc-docs-arrow" aria-hidden="true" data-sync={docs.target.kind === 'file' && docs.sync ? 'true' : undefined} />
+          <span className="dc-docs-arrow" aria-hidden="true" data-sync={following ? 'true' : undefined} />
           <span className="dc-docs-file" data-published={docs.status?.state === 'ours' ? 'true' : undefined} title={docs.imageName}>
             <Icon name="image" size={12} />
             <FileName name={docs.imageName} />
           </span>
-        </div>
-        <span className="dc-sr-only">: </span>
-        <p className="dc-docs-relationship">{said.text}</p>
+        </span>
       </div>
+      {said.note && <p className="dc-docs-note" data-tone="warn">{said.note}</p>}
 
-      <div className="dc-export-row">
+      <div className="dc-docs-form">
         {docs.levels.length > 1 && (
-          <label className="dc-export-field">
-            <span>Level</span>
-            <select className="dc-select" value={docs.viewKey} onChange={(event) => docs.setView(event.target.value)} disabled={docs.busy}>
+          <>
+            <label className="dc-docs-label" htmlFor="dc-docs-level">Level</label>
+            <select id="dc-docs-level" className="dc-select" value={docs.viewKey} onChange={(event) => docs.setView(event.target.value)} disabled={docs.busy}>
               {docs.levels.map((level) => (
                 <option key={level.path.join('/')} value={level.path.join('/')}>
                   {level.label}
                 </option>
               ))}
             </select>
-          </label>
+          </>
         )}
-        <span className="dc-export-field">
-          <span aria-hidden="true">Look</span>
-          <SegmentedControl
-            name="docs-theme"
-            legend="Look"
-            value={docs.theme}
-            onChange={docs.setTheme}
-            disabled={docs.busy}
-            options={[
-              { value: 'light', label: 'Light' },
-              { value: 'dark', label: 'Dark' },
-            ]}
-          />
-        </span>
-      </div>
-      {docs.lostView && <p className="dc-docs-note" data-tone="warn">The level the published picture showed is gone. Choose the level to show instead.</p>}
 
-      {docs.target.kind === 'file' && (
-        <label className="dc-check" title="After each save of the diagram — by you or an agent — the picture beside it is drawn again. Markdown files are never changed by this.">
-          <input type="checkbox" checked={docs.sync} disabled={docs.busy} onChange={(event) => docs.setSync(event.target.checked)} />
-          <span>
-            Keep {docs.imageName} updated
-            <span className="dc-muted"> on every save</span>
-          </span>
-        </label>
-      )}
+        <span className="dc-docs-label" aria-hidden="true">Look</span>
+        <SegmentedControl
+          name="docs-theme"
+          legend="Look"
+          value={docs.theme}
+          onChange={docs.setTheme}
+          disabled={docs.busy}
+          options={[
+            { value: 'light', label: 'Light' },
+            { value: 'dark', label: 'Dark' },
+          ]}
+        />
 
-      <div className="dc-docs-markdown">
-        <div className="dc-docs-markdown-line">
-          <code aria-label="Markdown for this picture">{docs.snippet}</code>
-          <button type="button" className="dc-docs-copy" onClick={onCopy} aria-label="Copy Markdown" title="Copy Markdown">
-            <Icon name="copy" size={13} />
-          </button>
-        </div>
-        <p className="dc-docs-note">
-          {docs.markdown ? (
-            <>
-              From <strong>{docs.markdown.name}</strong> <span className="dc-muted">{docs.markdown.displayPath}</span>.{' '}
-              {docs.alreadyIn && <>It already shows this picture, so nothing will be added. </>}
-            </>
-          ) : docs.target.kind === 'file' ? (
-            <>Path from a Markdown file beside {docs.sourceName}. </>
-          ) : (
-            <>Unzip the download next to your Markdown file: it holds <code>diagrams/{docs.imageName}</code> and its editable <code>{docs.sourceName}</code>. </>
-          )}
-          {docs.chooseMarkdown && (
-            <button type="button" className="dc-link-button" onClick={() => void docs.chooseMarkdown?.()} disabled={docs.busy}>
-              {docs.markdown ? 'Choose another…' : 'Choose the Markdown file…'}
+        <span className="dc-docs-label" aria-hidden="true">Markdown</span>
+        <div className="dc-docs-markdown">
+          <div className="dc-docs-markdown-line">
+            {/* Focusable: a long path scrolls, and a keyboard has to be able to scroll it too. */}
+            <code tabIndex={0} aria-label="Markdown for this picture">{docs.snippet}</code>
+            <button type="button" className="dc-docs-copy" onClick={onCopy} aria-label="Copy Markdown" title="Copy Markdown">
+              <Icon name="copy" size={13} />
             </button>
-          )}
-        </p>
+          </div>
+          <p className="dc-docs-hint">
+            {docs.markdown ? (
+              <span title={docs.markdown.displayPath}>{docs.alreadyIn ? `Already in ${docs.markdown.name}` : `From ${docs.markdown.name}`}</span>
+            ) : docs.target.kind === 'file' ? (
+              <span>From the diagram’s folder</span>
+            ) : (
+              <span>Unzip next to your Markdown file</span>
+            )}
+            {docs.chooseMarkdown && (
+              <button type="button" className="dc-link-button" onClick={() => void docs.chooseMarkdown?.()} disabled={docs.busy}>
+                {docs.markdown ? 'Change' : 'Choose file…'}
+              </button>
+            )}
+          </p>
+        </div>
+
         {docs.markdown && !docs.alreadyIn && (
-          <label className="dc-export-field">
-            <span>Place it</span>
+          <>
+            <label className="dc-docs-label" htmlFor="dc-docs-section">Section</label>
             <select
-              className="dc-select dc-docs-place"
+              id="dc-docs-section"
+              className="dc-select"
               value={placementKey(docs.placement)}
               disabled={docs.busy}
               onChange={(event) => {
@@ -135,17 +128,27 @@ export function ExportDocsPanel({ docs, onCopy }: { docs: DocsPublishing; onCopy
             >
               {headings.map((heading) => (
                 <option key={heading.line} value={`line:${heading.line}`}>
-                  {`End of “${heading.text || 'Untitled'}”`}
+                  {heading.text || 'Untitled'}
                 </option>
               ))}
-              <option value="end">End of {docs.markdown.name}</option>
+              <option value="end">End of file</option>
             </select>
-          </label>
+          </>
+        )}
+
+        {docs.target.kind === 'file' && (
+          <>
+            <span className="dc-docs-label" aria-hidden="true">Updates</span>
+            <label className="dc-check" title="Each save of the diagram, yours or an agent’s, redraws the picture. Markdown is never changed by this.">
+              <input type="checkbox" checked={docs.sync} disabled={docs.busy} onChange={(event) => docs.setSync(event.target.checked)} />
+              <span>Redraw on every save</span>
+            </label>
+          </>
         )}
       </div>
 
       {docs.justDone && (
-        <p className="dc-docs-done" role="status">
+        <p className="dc-docs-done">
           <Icon name="check" size={13} />
           <span>{docs.justDone}</span>
           {docs.reveal && (
@@ -189,6 +192,7 @@ function cleanLine(line: string): { kind: 'heading' | 'text' | 'blank'; text: st
  */
 export function DocsPreview({ docs }: { docs: DocsPublishing }) {
   const preview = docs.preview;
+  const said = standing(docs);
   const src = useMemo(
     () => (preview && preview !== 'missing' ? `data:image/svg+xml;charset=utf-8,${encodeURIComponent(preview.svg)}` : null),
     [preview],
@@ -224,15 +228,20 @@ export function DocsPreview({ docs }: { docs: DocsPublishing }) {
         )}
       </div>
       <figcaption className="dc-export-caption">
-        <span className="dc-export-filename" title={docs.imageName}>
-          <span className="dc-export-filename-base">{docs.imageName.replace(/\.svg$/, '')}</span>
-          <span className="dc-export-filename-ext">.svg</span>
+        <span className="dc-docs-caption-head">
+          <span className="dc-export-filename" title={docs.imageName}>
+            <span className="dc-export-filename-base">{docs.imageName.replace(/\.svg$/, '')}</span>
+            <span className="dc-export-filename-ext">.svg</span>
+          </span>
+          <span className="dc-docs-badge" data-tone={said.tone} title={said.detail} role="status" aria-live="polite">
+            {said.badge}
+          </span>
         </span>
         <span className="dc-export-meta">
           {preview === 'missing'
             ? 'This level no longer exists'
             : preview
-              ? `${preview.width} × ${preview.height} · picture only, no diagram inside`
+              ? `${preview.width} × ${preview.height} · picture only`
               : 'Drawing…'}
         </span>
       </figcaption>

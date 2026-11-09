@@ -4711,11 +4711,81 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   grid-template-columns: minmax(0, 1fr) 248px;
 }
 
-/* source ──▶ picture, and one sentence saying how the two are tied. */
-.dc-docs-link {
+.dc-export-panel.dc-docs-panel {
+  gap: 18px;
+}
+
+/* source ──▶ picture: the one thing at the top. Where the picture stands is a badge under it. */
+.dc-docs-head {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  min-width: 0;
+}
+
+.dc-docs-caption-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+}
+
+.dc-docs-badge {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: var(--dc-radius-pill);
+  background: color-mix(in srgb, var(--dc-text) 7%, transparent);
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.dc-docs-badge[data-tone='good'] {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+.dc-docs-badge[data-tone='warn'] {
+  background: color-mix(in srgb, var(--dc-caution) 14%, transparent);
+  color: var(--dc-caution);
+}
+
+/* Label column, control column: the eye reads down one edge instead of across sentences. */
+.dc-docs-form {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  align-items: center;
+  gap: 12px 16px;
+}
+
+.dc-docs-form > .dc-select {
+  justify-self: start;
+  max-width: 100%;
+}
+
+.dc-docs-form > .dc-segmented {
+  justify-self: start;
+}
+
+.dc-docs-label {
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+}
+
+/* The Markdown row's label sits on the code line, not the middle of code + hint. */
+.dc-docs-form > .dc-docs-label:has(+ .dc-docs-markdown) {
+  align-self: start;
+  padding-top: 7px;
+}
+
+.dc-docs-hint {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 8px;
+  margin: 0;
+  color: var(--dc-text-faint);
+  font-size: 12px;
 }
 
 .dc-docs-chain {
@@ -4807,30 +4877,15 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   border-color: var(--dc-selection);
 }
 
-.dc-docs-relationship {
-  margin: 0;
-  color: var(--dc-text-muted);
-  font-size: 12.5px;
-  line-height: 1.45;
-}
-
-.dc-docs-link[data-tone='good'] .dc-docs-relationship {
-  color: var(--dc-text);
-}
-
-.dc-docs-link[data-tone='warn'] .dc-docs-relationship,
 .dc-docs-note[data-tone='warn'] {
   color: var(--dc-caution);
-}
-
-.dc-export-field .dc-select.dc-docs-place {
-  max-width: 260px;
 }
 
 .dc-docs-markdown {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 5px;
+  min-width: 0;
 }
 
 .dc-docs-markdown-line {
@@ -4851,6 +4906,12 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   font: 11.5px/1.4 var(--dc-mono);
   white-space: nowrap;
   user-select: all;
+}
+
+.dc-docs-markdown-line code:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
+  border-radius: var(--dc-radius-sm) 0 0 var(--dc-radius-sm);
 }
 
 .dc-docs-copy {
@@ -4920,8 +4981,14 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   align-items: center;
   gap: 4px 6px;
   margin: 0;
+  padding-top: 12px;
+  border-top: 1px solid var(--dc-border);
   color: var(--dc-text);
   font-size: 12.5px;
+}
+
+.dc-docs-done > .dc-link-button {
+  margin-left: auto;
 }
 
 .dc-docs-done > svg {

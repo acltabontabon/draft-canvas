@@ -234,7 +234,7 @@ export function useDocsPublishing({
     if (current) return true;
     const result = await controller.publishDocs(settings);
     await refreshStatus();
-    setJustDone(result.outcome === 'written' ? `${result.imageName} written beside ${sourceName}.` : `${result.imageName} was already up to date.`);
+    setJustDone(result.outcome === 'written' ? `Published ${result.imageName}` : `${result.imageName} is already current`);
     return true;
   };
 
@@ -282,7 +282,7 @@ export function useDocsPublishing({
             return;
           }
           setMarkdown({ ...md, text: insertion.text, stamp: result.stamp });
-          setJustDone(`Added to ${md.name}. ${sync ? `${imageName} follows every save.` : `${imageName} stays as it is until you update it.`}`);
+          setJustDone(`Added to ${md.name}`);
         }, `Adding to ${md.name}`),
     };
   } else if (!current) {

@@ -35,16 +35,16 @@ Save the diagram to a file first. Then:
 
 1. **Publish image** writes `payments.svg` beside `payments.draftcanvas`, in the same folder. Unsaved
    changes are saved first, so the picture always matches its file.
-2. **Choose the Markdown file…** picks the page it goes on. The Markdown line updates to a path from
-   that page: from a README two folders up, the image is `docs/diagrams/payments.svg`.
-3. **Place it** chooses the section; the image goes at the end of it. The preview shows the lines
+2. **Choose file…** under the Markdown line picks the page it goes on. The line then holds the
+   path from that page: from a README two folders up, the image is `docs/diagrams/payments.svg`.
+3. **Section** chooses where; the image goes at the end of that section. The preview shows the lines
    around it before anything is written.
 4. **Add to README.md** adds that one line. Nothing else in the file changes, and a picture the file
    already shows is never added twice.
 
 ![The Docs tab on the desktop, with a README chosen: the preview shows where the picture will go.](../media/guides/export-docs-desktop.png)
 
-With **Keep payments.svg updated** on, every save of the diagram redraws the picture: yours, and an
+With **Redraw on every save** on, every save of the diagram redraws the picture: yours, and an
 AI agent's change once it is saved. The Markdown line stays the same, so the page just shows the new
 picture. Turn it off and the picture is a snapshot that changes only when you choose **Update
 payments.svg**. The setting travels with the SVG, so a teammate who saves the diagram in Draft
@@ -53,7 +53,7 @@ Canvas redraws it too.
 What Draft Canvas will and won't do:
 
 - It only ever replaces an SVG it made. Another `payments.svg` already in that folder is left alone,
-  and the Docs tab says so.
+  and the Docs tab marks it **Name taken**.
 - A save that changes nothing visible leaves the SVG untouched, so it never shows up as a change in
   Git.
 - It never edits a Markdown file on its own. **Add to …** adds one line, only when you choose it, and
