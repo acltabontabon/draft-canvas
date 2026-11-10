@@ -122,14 +122,14 @@ def label(text, parent, location, size, mat=None, flat=False, align='CENTER'):
     return obj
 
 
-def pin(name, location, text, mat=None, says=None):
+def pin(name, location, text, mat=None, says=None, tall=.51):
     """A marker standing on the board: a stalk, a ring, and what it says."""
     pivot = hero.empty(name, location)
-    ring = [V(.19 * math.cos(a), 0, .7 + .19 * math.sin(a)) for a in [math.tau * k / 40 for k in range(41)]]
-    stroke(name + '-ink', [[V(0, 0, 0), V(0, 0, .51)], ring], pivot, mat, rough=False)
-    label(text, pivot, (0, 0, .7), .3, mat)
+    ring = [V(.19 * math.cos(a), 0, tall + .19 + .19 * math.sin(a)) for a in [math.tau * k / 40 for k in range(41)]]
+    stroke(name + '-ink', [[V(0, 0, 0), V(0, 0, tall)], ring], pivot, mat, LINE * 1.2, rough=False)
+    label(text, pivot, (0, 0, tall + .19), .3, mat)
     if says:
-        label(says, pivot, (.27, 0, .7), .25, mat, align='LEFT')
+        label(says, pivot, (.27, 0, tall + .19), .25, mat, align='LEFT')
     return pivot
 
 
@@ -186,7 +186,12 @@ for index, wire in enumerate(BASE_WIRES):
 
 # 1 · Walk through: a request crosses the system, and each step it reaches is numbered.
 # The numbers belong to this walk: they fold away as the camera moves on.
-steps = [pops(pin('step-1', A, '1', says='order placed'), 2.7, 6.5), pops(pin('step-2', SERVICE + V(.5, .22, 0), '2', says='checked out'), 4.0, 6.6), pops(pin('step-3', STORE + V(0, .2, .35), '3', says='saved'), 5.3, 6.7)]
+steps = [
+    # In the request's own mint, and at three heights so their captions clear one another and the cards behind.
+    pops(pin('step-1', A, '1', MINT, 'order placed', .75), 2.7, 6.5),
+    pops(pin('step-2', SERVICE + V(-.4, .25, 0), '2', MINT, 'checked out', .5), 4.0, 6.6),
+    pops(pin('step-3', STORE + V(.2, .2, .35), '3', MINT, 'saved', .22), 5.3, 6.7),
+]
 bpy.ops.mesh.primitive_uv_sphere_add(radius=.075, segments=20, ring_count=10)
 request = bpy.context.active_object
 request.data.materials.append(MINT)
