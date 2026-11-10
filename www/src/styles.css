@@ -3153,3 +3153,14 @@ html:has(.dl[open]) {
   .recorded-paper:is([data-moment='present'], [data-moment='nodi']) .recorded-layer { object-fit: cover; }
   .recorded-paper:is([data-moment='present'], [data-moment='nodi']) .recorded-outline { display: none; }
 }
+
+/* The living whiteboard (scripts/hero-depth.py): a rendered loop over the board of the hero drawing.
+   The numbers are the loop's REGION in the 1672 x 941 illustration. Like the drawing, it is inked by
+   brightness, so its black is clear. The flat diagram is masked away only once the loop is playing. */
+.conversation-depth { position: absolute; left: calc(560 / 1672 * 100%); top: calc(108 / 941 * 100%); width: calc(650 / 1672 * 100%); height: calc(404 / 941 * 100%); filter: url(#charcoal-ink); opacity: 0; pointer-events: none; transition: opacity .4s ease; }
+.studio-art[data-depth] .conversation-depth { opacity: 1; }
+.studio-art[data-depth='on'] .conversation-art {
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1672 941' preserveAspectRatio='none'%3E%3Cpath fill-rule='evenodd' d='M0 0H1672V941H0Z M575 120H1200V500H668V240H575Z M660 180H710V252H660Z M1074 298H1126V382H1074Z'/%3E%3C/svg%3E"), linear-gradient(90deg, transparent, #000 8%, #000 94%, transparent);
+  mask-size: 100% 100%;
+  mask-composite: intersect;
+}

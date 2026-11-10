@@ -1,4 +1,5 @@
 import { setUpRecordedStory } from './recordedStory.js';
+import { setUpHeroDepth } from './heroDepth.js';
 import { setUpSketchDrawing } from './sketchDrawing.js';
 import { setUpStoryRail } from './storyRail.js';
 import editorDemo from '../../docs/media/demo.mp4?url';
@@ -38,6 +39,7 @@ export function setUpStudio() {
     });
   }
   setUpSketchDrawing(art, reduced);
+  setUpHeroDepth(art, reduced);
 
   const story = document.querySelector('.canvas-story');
   const world = story.querySelector('.canvas-world');
