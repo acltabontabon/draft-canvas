@@ -142,4 +142,23 @@ test.describe('Home screen', () => {
     await expect(page.getByRole('button', { name: 'Find a diagram' })).toHaveCount(0);
     await expect(page.locator('.dc-home-shelf-head')).toBeVisible();
   });
+
+  test('a diagram is renamed, duplicated and deleted from the Home shelf', async ({ page }) => {
+    await page.goto('/');
+    await page.getByRole('button', { name: 'New canvas' }).click();
+    await page.getByRole('button', { name: 'Back to your diagrams' }).click();
+    const names = page.locator('.dc-home-draft-name');
+    await page.locator('.dc-home-card').hover();
+    await page.getByRole('button', { name: /^Rename Untitled/ }).click();
+    await page.getByRole('dialog').getByRole('textbox').fill('Checkout');
+    await page.keyboard.press('Enter');
+    await expect(names).toHaveText(['Checkout']);
+    await page.getByRole('button', { name: 'Duplicate Checkout', exact: true }).click();
+    await expect(names).toHaveCount(2);
+    await page.getByRole('button', { name: 'Delete Checkout', exact: true }).click();
+    await page.getByRole('dialog').getByRole('button', { name: 'Delete', exact: true }).click();
+    await expect(names).toHaveCount(1);
+    // The deleted card's button is gone, so focus lands on the card that took its place.
+    await expect(page.locator('.dc-home-draft')).toBeFocused();
+  });
 });

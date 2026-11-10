@@ -2859,8 +2859,6 @@ html:has(.dl[open]) {
 .canvas-reading .story-beat::before { display: none; }
 .canvas-reading .story-beat h2, .story-ending h2 { font: 400 clamp(29px, 3.2vw, 47px)/1.12 var(--serif); letter-spacing: -.035em; }
 .story-ending h2 em { color: #a9b1be; }
-.story-ending #watch-editor { border: 0; background: none; color: #b9c0ca; font: 10px var(--mono); padding: 0; margin-top: 28px; cursor: pointer; }
-.story-ending .canvas-promise { font: 9px/1.8 var(--mono) !important; }
 .studio-footer { background: transparent; border: 0; }
 @media (max-width: 700px) {
   .studio .canvas-journey { display: block; padding: 0; }
@@ -3097,12 +3095,60 @@ html:has(.dl[open]) {
 .studio-footer-glyphs svg { width: 16px; height: 16px; fill: currentColor; }
 .studio-footer-glyphs .studio-coffee-glyph svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
 
-.story-ending h2 { margin-bottom: 30px; }
+/* The ending's last marks are pencilled, not typeset: a play button drawn in one stroke and three ticked promises. */
+.story-ending #watch-editor { display: flex; align-items: center; gap: 12px; margin-top: 30px; padding: 0; border: 0; background: none; color: #c3cad4; font: 17px 'Bradley Hand', 'Segoe Print', var(--serif); cursor: pointer; }
+.story-ending #watch-editor svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .3s var(--ease); }
+.story-ending #watch-editor span { transform: rotate(-1.5deg); }
+.story-ending #watch-editor:hover, .story-ending #watch-editor:focus-visible { color: #fff; }
+.story-ending #watch-editor:hover svg { transform: rotate(-7deg) scale(1.08); }
+.story-ending .canvas-promise { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 30px 0 0; padding: 0; list-style: none; color: #98a1b0; font: 15px 'Bradley Hand', 'Segoe Print', var(--serif); }
+.canvas-promise li { display: flex; align-items: center; gap: 7px; transform: rotate(-1.5deg); }
+.canvas-promise li:nth-child(2) { transform: rotate(1deg); }
+.canvas-promise li::before { content: ''; width: 17px; height: 15px; background: #c3cad4; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 15' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 8.2q2.2 1.8 3.6 4.6Q8.6 5.8 15.4 1.6'/%3E%3C/svg%3E") center / contain no-repeat; }
+@media (scripting: enabled) {
+  .story-ending #watch-editor path:first-child { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset .9s var(--ease), opacity .1s; }
+  .story-ending[data-inked] #watch-editor path:first-child { stroke-dashoffset: 0; opacity: 1; }
+  .canvas-promise li::before { clip-path: inset(0 100% 0 0); transition: clip-path .45s ease-out; }
+  .canvas-promise li:nth-child(2)::before { transition-delay: .22s; }
+  .canvas-promise li:nth-child(3)::before { transition-delay: .44s; }
+  .story-ending[data-inked] .canvas-promise li::before { clip-path: inset(0); }
+}
 
-/* On a phone the single-canvas recordings fill a taller frame and lose their side margins,
-   so the editor reads about a fifth larger. The paired and depth recordings keep their
-   overlays, which are placed against the full 16:10 frame. */
+/* The story's index: a sketch per chapter down the margin. The current one is circled in pencil. */
+.story-rail { position: fixed; z-index: 4; top: 50%; right: max(14px, 1.5vw); display: flex; flex-direction: column; gap: 4px; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity .35s ease; }
+.story-rail[data-open] { opacity: 1; pointer-events: auto; }
+.story-rail::before { content: ''; position: absolute; z-index: -1; top: 20px; right: 20px; bottom: 20px; border-right: 1px dashed #ffffff26; }
+.story-rail button { position: relative; display: flex; align-items: center; justify-content: flex-end; height: 40px; padding: 0; border: 0; background: none; color: #6f7886; cursor: pointer; transition: color .25s ease; }
+.story-rail svg { flex: none; width: 40px; height: 40px; padding: 4px; border-radius: 50%; background: #121417; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; overflow: visible; transition: transform .3s var(--ease); }
+.story-rail .rail-glyph { vector-effect: non-scaling-stroke; }
+/* Hidden outright while undrawn: a round cap leaves a dot at the start of an empty dash. */
+.story-rail .rail-ring { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset .7s var(--ease), opacity .1s; }
+.story-rail span { position: absolute; right: 46px; padding: 3px 9px; border-radius: 4px; background: #121417eb; font: 16px 'Bradley Hand', 'Segoe Print', var(--serif); white-space: nowrap; opacity: 0; transform: translateX(8px) rotate(-2deg); transition: opacity .2s ease, transform .3s var(--ease); pointer-events: none; }
+.story-rail [data-read] { color: #a9b1be; }
+.story-rail [aria-current] { color: #f1f3f6; }
+.story-rail [aria-current] .rail-ring { stroke-dashoffset: 0; opacity: 1; }
+.story-rail button:hover, .story-rail button:focus-visible { color: #fff; outline: none; }
+.story-rail button:hover svg, .story-rail button:focus-visible svg { transform: rotate(-6deg) scale(1.1); }
+/* Keyboard focus opens the whole index; a mouse click must not leave it open. */
+.story-rail:hover span, .story-rail:has(:focus-visible) span { opacity: 1; transform: rotate(-2deg); }
+.story-rail button:nth-child(even) span { rotate: 3deg; }
+/* Narrower than this the margin belongs to the copy, so the index lies along the bottom of the reading column. */
+@media (max-width: 1279px) {
+  .story-rail { top: auto; right: 4vw; bottom: 16px; flex-direction: row; gap: 2px; transform: none; }
+  .story-rail::before { top: 20px; right: 20px; bottom: auto; left: 20px; border-right: 0; border-top: 1px dashed #ffffff26; }
+  .story-rail span { right: auto; bottom: 44px; left: 50%; translate: -50% 0; transform: translateY(6px) rotate(-2deg); }
+  .story-rail:hover span, .story-rail:has(:focus-visible) span { opacity: 0; }
+  .story-rail [aria-current] span, .story-rail button:hover span, .story-rail button:focus-visible span { opacity: 1; transform: rotate(-2deg); }
+  .story-rail:hover [aria-current]:not(:hover) span { opacity: 0; }
+}
 @media (max-width: 700px) {
+  .story-rail { right: auto; left: 50%; bottom: 10px; padding: 2px 8px; border: 1px solid #ffffff14; border-radius: 24px; background: #121417f2; translate: -50% 0; }
+  .story-rail::before { display: none; }
+  .story-rail button, .story-rail svg { width: 38px; height: 38px; }
+  .story-rail svg { background: none; }
+  .story-rail span { display: none; }
+  /* Phones crop the side margins of the two widest recordings, so the editor reads about a fifth larger.
+     The paired and depth recordings keep 16:10: their overlays are positioned against it. */
   .recorded-paper:is([data-moment='present'], [data-moment='nodi']) { aspect-ratio: 4 / 3; }
   .recorded-paper:is([data-moment='present'], [data-moment='nodi']) .recorded-layer { object-fit: cover; }
   .recorded-paper:is([data-moment='present'], [data-moment='nodi']) .recorded-outline { display: none; }

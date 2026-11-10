@@ -79,8 +79,7 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Changed
 
-- Home shows your diagrams first once you have some: Quick Draft, the example and Import sit on one
-  row above them.
+- Rename, duplicate or delete a diagram straight from Home, without opening the gallery.
 - The backup reminder waits until you have a few diagrams, or one more than a day old.
 
 ## [1.18.1] - 2026-11-06

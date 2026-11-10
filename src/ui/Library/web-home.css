@@ -152,59 +152,6 @@
   background: var(--dc-surface);
 }
 
-/* Returning: the three ways in on one row, above the shelf. */
-.dc-web-scene[data-compact] {
-  display: block;
-  margin: 30px auto 34px;
-}
-
-.dc-web-scene[data-compact] .dc-web-workbench {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 14px;
-  padding: 0;
-}
-
-.dc-web-scene[data-compact] .dc-web-workbench::before {
-  display: none;
-}
-
-.dc-web-scene[data-compact] .dc-web-start {
-  flex: 0 1 300px;
-  flex-direction: row;
-  align-items: center;
-  gap: 14px;
-  min-height: 56px;
-  padding: 10px 20px 10px 12px;
-  box-shadow: 4px 5px 0 var(--dc-selection-soft);
-  transform: rotate(-.6deg);
-}
-
-.dc-web-scene[data-compact] .dc-web-start:hover {
-  transform: rotate(0deg) translateY(-1px);
-}
-
-.dc-web-scene[data-compact] .dc-web-start-mark {
-  flex: none;
-  width: 34px;
-  height: 34px;
-  margin-bottom: 0;
-}
-
-.dc-web-scene[data-compact] .dc-web-start-name {
-  font-size: 16px;
-}
-
-.dc-web-scene[data-compact] .dc-web-start-hint {
-  display: none;
-}
-
-.dc-web-scene[data-compact] .dc-web-alternatives {
-  display: flex;
-  margin-top: 0;
-}
-
 @media (max-width: 720px) {
   .dc-web-scene {
     grid-template-columns: minmax(0, 1fr);
@@ -240,23 +187,5 @@
 @media (prefers-reduced-motion: reduce) {
   .dc-web-start {
     transition: none;
-  }
-}
-
-@media (max-width: 720px) {
-  .dc-web-scene[data-compact] {
-    margin: 24px auto 28px;
-  }
-
-  .dc-web-scene[data-compact] .dc-web-start {
-    flex-basis: 100%;
-  }
-
-  .dc-web-scene[data-compact] .dc-web-alternatives {
-    flex: 1;
-  }
-
-  .dc-web-scene[data-compact] .dc-web-alternatives .dc-button {
-    flex: 1;
   }
 }

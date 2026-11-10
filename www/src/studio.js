@@ -1,5 +1,7 @@
 import { setUpRecordedStory } from './recordedStory.js';
 import { setUpSketchDrawing } from './sketchDrawing.js';
+import { setUpStoryRail } from './storyRail.js';
+import editorDemo from '../../docs/media/demo.mp4?url';
 
 export function setUpStudio() {
   const art = document.querySelector('.studio-art');
@@ -44,6 +46,8 @@ export function setUpStudio() {
   const ease = (value) => { const t = clamp(value); return t * t * (3 - 2 * t); };
   const beats = [...story.querySelectorAll('[data-recording]')];
   const renderRecording = setUpRecordedStory(story, reduced);
+  const renderRail = setUpStoryRail(story, beats);
+  const ending = story.querySelector('.story-ending');
   const connection = story.querySelector('.world-connection path');
   connection.classList.add('scroll-stroke');
   let frame = 0;
@@ -83,6 +87,10 @@ export function setUpStudio() {
     const visible = reveal > 0;
     world.style.setProperty('--recording-reveal', String(reveal));
     story.querySelector('.recorded-art').style.visibility = visible ? 'visible' : 'hidden';
+    // The index keeps the reader company through the chapters, and bows out as the ending arrives.
+    const endingTop = ending.getBoundingClientRect().top;
+    renderRail(current, visible && endingTop > viewport * .55);
+    if (endingTop < viewport * .7) ending.dataset.inked = '';
     // Copy is pinned in reading position before the first frame advances.
     renderRecording(current.dataset.recording, visible, rect.top <= viewport * .04 && Number(world.style.getPropertyValue('--chapter-opacity')) > .98);
   }
@@ -91,4 +99,15 @@ export function setUpStudio() {
   window.addEventListener('resize', requestUpdate);
   reduced.addEventListener('change', requestUpdate);
   update();
+
+  const dialog = document.getElementById('editor-film');
+  const video = document.getElementById('editor-film-video');
+  document.getElementById('watch-editor').addEventListener('click', () => {
+    video.src = editorDemo;
+    dialog.showModal();
+    video.play().catch(() => {});
+  });
+  document.getElementById('close-editor-film').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => video.pause());
+  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
 }
