@@ -267,16 +267,49 @@ for index, (row, part, at) in enumerate([(1, 0, 17.0), (5, 2, 17.9)]):
 
 BURIED += [*sheets, code_lines, *evidence]
 
-# 5 · Together: three people on one canvas; one of them adds a card while the others look on.
+# 5 · Together: three people join at the board, each in a chalk of their own with their name over
+# their head, and each with a pointer in the same colour; one of them adds a card while the others look on.
 ARROW = [V(0, 0), V(0, -.44), V(.11, -.33), V(.2, -.54), V(.28, -.5), V(.19, -.3), V(.33, -.3), V(0, 0)]
 NEW = V(-2.55, -.3, .5)
+FIGURE = [V(x / 100, 0, z / 100) for x, z in hero.parse('M-34 0Q-33 40 -18 55Q-10 62 0 62Q10 62 18 55Q33 40 34 0')[0]]
+HEAD = [V(.2 * math.cos(a), 0, .86 + .2 * math.sin(a)) for a in [math.tau * k / 32 for k in range(33)]]
+
+
+def filled(name, outline, parent):
+    """An unlit shape just behind an outline, so a figure hides what it stands in front of."""
+    mesh = bpy.data.meshes.new(name)
+    mesh.from_pydata([p + V(0, .015, 0) for p in outline], [], [list(range(len(outline)))])
+    obj = bpy.data.objects.new(name, mesh)
+    obj.data.materials.append(hero.VOID_MAT)
+    scene.collection.objects.link(obj)
+    obj.parent = parent
+    return obj
+
+
+def person(name, location, mat, at, until, reach=1):
+    """Someone at the board, drawn the way a hand draws a person: a head, shoulders, an arm out."""
+    pivot = pops(hero.empty('person-' + name, location), at, until)
+    arm = [V(reach * .2, 0, .5), V(reach * .44, -.03, .6), V(reach * .56, -.05, .76)]
+    eye = [V(reach * .08, -.01, .9), V(reach * .08, -.01, .85)]
+    stroke(f'person-{name}-ink', [FIGURE, HEAD, arm, eye], pivot, mat, LINE * 1.3, rough=False)
+    filled(f'person-{name}-body', FIGURE[:-1], pivot)
+    filled(f'person-{name}-head', HEAD[:-1], pivot)
+    label(name, pivot, (0, 0, 1.3), .27, mat)
+    return pivot
+
+
+PEOPLE = [
+    ('Alex', V(B.x - .95, B.y + .45, 0), MINT, B + V(-.15, -.3, .3), 1),
+    ('Cris', NEW + V(-.15, -1.05, -NEW.z), None, NEW + V(.2, .1, .35), 1),
+    ('Sam', V(E.x + .55, E.y - .95, 0), WARM, E + V(.35, -.05, .35), -1),
+]
 cursors = []
-for index, home in enumerate([V(.5, .75, 1.5), NEW + V(.2, .1, .55), V(-1.1, -1.35, 1.6)]):
-    cursor = pops(hero.empty(f'cursor-{index}', home), 20.0 + .3 * index, 24.0 + .15 * index)
-    cursor['size'] = 1.5
-    stroke(f'cursor-{index}-ink', [ARROW, [p + V(.36, -.78, 0) for p in rect(.56, .24)]], cursor, [MINT, None, WARM][index], LINE * 1.2, rough=False)
-    label(['Alex', 'Cris', 'Sam'][index], cursor, (.36, -.78, .01), .15, [MINT, None, WARM][index], flat=True)
-    cursors.append((cursor, home))
+for index, (name, stands, chalk, points, reach) in enumerate(PEOPLE):
+    person(name, stands, chalk, 19.9 + .45 * index, 24.0 + .12 * index, reach)
+    cursor = pops(hero.empty(f'cursor-{index}', points), 20.4 + .45 * index, 24.0 + .12 * index)
+    cursor['size'] = .75
+    stroke(f'cursor-{index}-ink', [ARROW], cursor, chalk, LINE * 1.6, rough=False)
+    cursors.append((cursor, points))
 new_card = pops(card('new-card', NEW, .78, .46), 21.3)
 named(new_card, 'Fraud', 21.6, .18)
 new_wire = draws(growing('new-wire', [NEW + V(.39, 0, 0), V(-1.85, NEW.y, .4), V(-1.85, SERVICE.y, .25), SERVICE + V(-.72, 0, 0)]), 22.1, .8)
@@ -397,7 +430,7 @@ def pose(frame):
     nodi.location.z = .12 * math.sin(math.pi * hop)
     for index, (cursor, home) in enumerate(cursors):
         s = (t - 19.6) * (.9 + .2 * index) + index * 2.1
-        cursor.location = home + V(.5 * math.sin(s), .32 * math.sin(1.7 * s + index), 0) * (0.25 if index == 1 else 1)
+        cursor.location = home + V(.22 * math.sin(s), .14 * math.sin(1.7 * s + index), 0) * (0.5 if index == 1 else 1)
 
 
 if __name__ == '__main__':
