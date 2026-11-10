@@ -6,17 +6,21 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+## [1.19.0] - 2026-11-11
+
+Diagrams for your docs. Connectors that snap straight.
+
+Put any diagram in a README as a plain SVG with its editable file beside it, drag shapes into
+straight lines and even gaps, and on desktop give Nodi a `/` to tidy the layout for you.
+
 ### Shared
 
 #### Added
 
-- **Use in docs** — Put a diagram in a README or any Markdown page as an ordinary SVG, with the
-  editable `.draftcanvas` beside it, light, dark or transparent. The picture never carries the
-  diagram inside it.
-  <!-- highlight -->
-- Dragging a connected shape snaps it to where its connector runs perfectly straight, through the
-  middle of a queue's tube or a Data Store's cylinder. It catches from further away than edge
-  snapping and wins over it. <!-- highlight -->
+- **Use in docs** — Put a diagram in a README or any Markdown page as an ordinary SVG in light,
+  dark or transparent, with the editable `.draftcanvas` beside it. <!-- highlight -->
+- **Straight snapping** — Drag a connected shape and it snaps to where its connector runs perfectly
+  straight, through the middle of a queue or a Data Store. <!-- highlight -->
 - Dragging also shows matching gaps (← 80 → … ← 80 →) and snaps to an even spacing with the shapes
   in the same row or column.
 - **Straighten connectors** in `⌘K` nudges shapes a few pixels so nearly straight connectors run
@@ -42,19 +46,15 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
-- **Nodi's skills** — Type `/` in Nodi's box to lay the diagram out left to right, top down, along a
-  flow, roomier or snug, tidy connectors, or ask your agent. Each skill previews what it does, and the
-  shapes glide to their new places. One undo step each. <!-- highlight -->
-- Publish the picture beside the diagram's file, add it to a Markdown file you pick, and have every
-  save redraw it. Each level of a diagram gets its own picture, so one README can show a system's
-  context and its containers. Draft Canvas only replaces pictures it made and only adds the one line
-  to Markdown.
+- **Nodi's skills** — Type `/` in Nodi's box to lay the diagram out across, down or along a flow,
+  roomier or snug, or tidy its connectors. Each previews first and is one undo step. <!-- highlight -->
+- Publish a diagram's picture beside its file, add it to a Markdown file you pick, and have every
+  save redraw it. Each level gets its own picture, so one README can show context and containers.
 
 #### Changed
 
-- Nodi waits at the end of the status bar between conversations instead of standing on the canvas.
-  It jumps up to say hello, bring news or answer a click, and goes back down when there is nothing to
-  do.
+- Nodi waits at the end of the status bar between conversations and jumps up to say hello, bring
+  news or answer a click, instead of standing on the canvas.
 
 #### Fixed
 
@@ -2581,7 +2581,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.19.0...main
+[1.19.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.1...v1.19.0
 [1.18.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.0...v1.18.1
 [1.18.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.17.0...v1.18.0
 [1.17.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.16.1...v1.17.0
