@@ -41,7 +41,7 @@ hyper = { version = "1.11", features = ["server", "http1"] }
 hyper-util = { version = "0.1.20", features = ["server", "http1", "tokio", "service"] }
 futures-util = { version = "0.3", default-features = false, features = ["sink", "std"] }
 # axum's own WebSocket library, named only to tell a frame over the limit from a broken socket.
-tungstenite = { version = "0.29", default-features = false }
+tungstenite = { version = "0.30", default-features = false }
 # Binds `::` as IPv6-only beside `0.0.0.0`, on the same port, which std and tokio can't ask for.
 socket2 = { version = "0.6.5", features = ["all"] }
 if-addrs = "0.15"
