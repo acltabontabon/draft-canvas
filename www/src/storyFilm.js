@@ -4,11 +4,15 @@
 // reading on flies the camera, and scrolling back retraces it.
 //
 // It is not a video. A video can only be scrubbed by seeking, which is never quite smooth and is
-// worst backwards. The film arrives as its frames (scripts/pack-film.mjs) and is drawn to a canvas,
-// so any moment is as near as any other, in either direction.
+// worst backwards. The film arrives as its frames and is drawn to a canvas, so any moment is as
+// near as any other, in either direction. The frames come as ordinary images, a few stacked in
+// each (scripts/pack-film.mjs): this page makes no network request of its own, and images are the
+// browser's to load.
 //
 // INTRO and FILM are the render's own numbers: the length of the opening in which the diagram is
 // drawn, then each stop's seconds counted from the end of that opening.
+import manifest from './filmManifest.json';
+
 export const INTRO = 2;
 export const FILM = {
   dive: [0, 2],
@@ -20,7 +24,6 @@ export const FILM = {
   points: [23.5, 27.5],
   ending: [27.5, 30],
 };
-const pack = (small) => `${import.meta.env.BASE_URL}clips/story-film${small ? '-small' : ''}.bin`;
 // How long the picture takes to close most of the distance to where the scroll is: long enough to
 // glide to rest when the wheel stops, short enough that it never feels behind the hand.
 const GLIDE = .11;
@@ -30,124 +33,87 @@ export function setUpStoryFilm(story, reduced) {
   if (!canvas) return () => {};
   const context = canvas.getContext('2d');
   const small = window.matchMedia('(max-width: 700px)');
+  const size = small.matches ? 'small' : 'large';
+  const { width, height } = manifest.sizes[size];
+  const { frames, fps, perStrip, strips } = manifest;
+  const source = (strip) => `${import.meta.env.BASE_URL}clips/film/${size}/${String(strip).padStart(3, '0')}.webp`;
   const loader = story.querySelector('.film-loader span');
-  let bytes = null;
-  let offsets = null;
-  let count = 0;
-  let fps = 24;
-  let loaded = 0;
   let target = 0;
   let shown = 0;
   let drawn = -1;
   let frame = 0;
   let last = 0;
-  // Decoded frames near the current moment. They are large, so only a window of them is kept.
+  // Decoded strips around the current moment. A decoded strip is large, so only a few are kept.
   const decoded = new Map();
-  const pending = new Set();
-  const KEEP = small.matches ? 40 : 30;
+  const KEEP = 5;
 
-  const available = () => {
-    // Frames arrive in order, so the film can be scrubbed as far as it has downloaded.
-    if (!offsets) return 0;
-    let low = 0;
-    let high = count;
-    while (low < high) {
-      const middle = (low + high + 1) >> 1;
-      if (offsets[middle] <= loaded) low = middle; else high = middle - 1;
+  function want(strip) {
+    if (strip < 0 || strip >= strips || decoded.has(strip)) return;
+    const image = new Image();
+    const entry = { image, ready: false };
+    decoded.set(strip, entry);
+    image.decoding = 'async';
+    image.src = source(strip);
+    image.decode().then(() => { entry.ready = true; wake(); }).catch(() => { if (decoded.get(strip) === entry) decoded.delete(strip); });
+    if (decoded.size > KEEP) {
+      // Let go of whichever strip is furthest from where the film is now; the browser's cache still has its file.
+      const here = shown * fps / perStrip;
+      let furthest = strip;
+      for (const key of decoded.keys()) if (Math.abs(key - here) > Math.abs(furthest - here)) furthest = key;
+      decoded.delete(furthest);
     }
-    return low;
-  };
-  function want(index) {
-    if (index < 0 || index >= available() || decoded.has(index) || pending.has(index) || pending.size >= 6) return;
-    pending.add(index);
-    createImageBitmap(new Blob([bytes.subarray(offsets[index], offsets[index + 1])], { type: 'image/webp' })).then((bitmap) => {
-      pending.delete(index);
-      decoded.set(index, bitmap);
-      if (decoded.size > KEEP) {
-        // Let go of whichever frame is furthest from where the film is now.
-        let furthest = index;
-        for (const key of decoded.keys()) if (Math.abs(key - shown * fps) > Math.abs(furthest - shown * fps)) furthest = key;
-        decoded.get(furthest).close();
-        decoded.delete(furthest);
-      }
-      wake();
-    }).catch(() => pending.delete(index));
   }
-  function paint(bitmap) {
+  function paint(image, row) {
     const scale = Math.min(2, window.devicePixelRatio || 1);
-    const width = Math.round(canvas.clientWidth * scale);
-    const height = Math.round(canvas.clientHeight * scale);
-    if (canvas.width !== width || canvas.height !== height) { canvas.width = width; canvas.height = height; }
+    const stageWidth = Math.round(canvas.clientWidth * scale);
+    const stageHeight = Math.round(canvas.clientHeight * scale);
+    if (canvas.width !== stageWidth || canvas.height !== stageHeight) { canvas.width = stageWidth; canvas.height = stageHeight; }
     // Fill the stage, keeping the side of the frame the scenes are composed on.
-    const fit = Math.max(width / bitmap.width, height / bitmap.height);
+    const fit = Math.max(stageWidth / width, stageHeight / height);
     const across = small.matches ? .22 : 0;
     context.fillStyle = '#000';
-    context.fillRect(0, 0, width, height);
-    context.drawImage(bitmap, (width - bitmap.width * fit) * across, (height - bitmap.height * fit) / 2, bitmap.width * fit, bitmap.height * fit);
+    context.fillRect(0, 0, stageWidth, stageHeight);
+    context.drawImage(image, 0, row * height, width, height, (stageWidth - width * fit) * across, (stageHeight - height * fit) / 2, width * fit, height * fit);
   }
   function step(now) {
     frame = 0;
-    if (!offsets) return;
     const elapsed = Math.min(.05, (now - last) / 1000 || .016);
     last = now;
     const gap = target - shown;
     shown = reduced.matches || Math.abs(gap) < .004 ? target : shown + gap * (1 - Math.exp(-elapsed / GLIDE));
-    const limit = Math.max(0, available() - 1);
-    const index = Math.min(limit, Math.max(0, Math.round(shown * fps)));
-    // Decode this frame and the ones the scroll is heading for.
+    const index = Math.min(frames - 1, Math.max(0, Math.round(shown * fps)));
+    const strip = Math.floor(index / perStrip);
+    // Have this strip decoded, and the ones the scroll is heading for.
     const ahead = gap >= 0 ? 1 : -1;
-    want(index);
-    for (let reach = 1; reach <= 10; reach++) { want(index + ahead * reach); if (reach <= 3) want(index - ahead * reach); }
-    // Draw the exact frame, or until it is ready the nearest one that is.
-    let pick = -1;
-    for (let reach = 0; reach <= 6 && pick < 0; reach++) {
-      if (decoded.has(index - ahead * reach)) pick = index - ahead * reach;
-      else if (decoded.has(index + ahead * reach)) pick = index + ahead * reach;
-    }
-    if (pick >= 0 && pick !== drawn) { paint(decoded.get(pick)); drawn = pick; }
-    if (shown !== target || pick !== index || pending.size) frame = requestAnimationFrame(step);
+    want(strip);
+    want(strip + ahead);
+    want(strip + 2 * ahead);
+    want(strip - ahead);
+    const entry = decoded.get(strip);
+    if (entry?.ready && index !== drawn) { paint(entry.image, index % perStrip); drawn = index; }
+    if (shown !== target || index !== drawn) frame = requestAnimationFrame(step);
   }
   function wake() { if (!frame) { last = performance.now(); frame = requestAnimationFrame(step); } }
 
-  async function load() {
-    const response = await fetch(pack(small.matches));
-    if (!response.ok || !response.body) throw new Error('film');
-    const reader = response.body.getReader();
-    let head = new Uint8Array(0);
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      if (!bytes) {
-        // The index comes first; once it is in, the size of everything else is known.
-        const joined = new Uint8Array(head.length + value.length);
-        joined.set(head);
-        joined.set(value, head.length);
-        head = joined;
-        if (head.length < 20) continue;
-        const view = new DataView(head.buffer);
-        count = view.getUint32(4, true);
-        const start = 20 + 4 * (count + 1);
-        if (head.length < start) continue;
-        fps = view.getUint32(8, true);
-        offsets = new Uint32Array(count + 1);
-        for (let index = 0; index <= count; index++) offsets[index] = view.getUint32(20 + 4 * index, true);
-        bytes = new Uint8Array(offsets[count]);
-        bytes.set(head);
-        loaded = head.length;
-      } else {
-        bytes.set(value, loaded);
-        loaded += value.length;
-      }
-      if (loader) loader.textContent = `chalking the board… ${Math.round(loaded / offsets[count] * 100)}%`;
-      // The board opens as soon as the opening and the first chapter are in; the rest keeps arriving.
-      if (story.dataset.film === undefined && available() > Math.min(count, fps * 7)) story.dataset.film = '';
-      wake();
-    }
-    story.dataset.film = '';
-    wake();
+  // Every strip is asked for once, in order and a few at a time, so that by the time the scroll
+  // reaches a scene its pictures are already in the browser's cache. The board opens as soon as
+  // the opening and the first chapter are in; the rest keeps arriving behind it.
+  let asked = 0;
+  let arrived = 0;
+  function warm() {
+    if (asked >= strips) return;
+    const image = new Image();
+    const done = () => {
+      arrived += 1;
+      if (loader) loader.textContent = `chalking the board… ${Math.round(arrived / strips * 100)}%`;
+      if (arrived >= Math.min(strips, Math.ceil(fps * 7 / perStrip))) { story.dataset.film = ''; wake(); }
+      warm();
+    };
+    image.onload = done;
+    image.onerror = () => { if (story.dataset.film === undefined) story.dataset.film = 'missing'; done(); };
+    image.src = source(asked++);
   }
-  // The privacy rule against network calls is the editor's; this is the marketing site fetching its own asset.
-  load().catch(() => { story.dataset.film = 'missing'; });
+  for (let lane = 0; lane < 4; lane++) warm();
   window.addEventListener('resize', () => { drawn = -1; wake(); });
 
   return (time) => {

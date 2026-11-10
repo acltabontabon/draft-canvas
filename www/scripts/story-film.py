@@ -11,7 +11,7 @@ page draws the film from its frames, so after rendering they are packed, not enc
     blender -b -P www/scripts/story-film.py -- /tmp/story-film-frames
     node www/scripts/pack-film.mjs /tmp/story-film-frames
 
-The packed files are committed, so the site builds without Blender.
+The packed picture strips are committed, so the site builds without Blender.
 """
 
 import importlib.util
