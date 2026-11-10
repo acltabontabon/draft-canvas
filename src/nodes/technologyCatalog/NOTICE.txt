@@ -1,4 +1,4 @@
-Simple Icons 16.35.0 — complete technology catalog
+Simple Icons 16.37.0 — complete technology catalog
 https://github.com/simple-icons/simple-icons
 Package: CC0-1.0; individual logo terms and trademarks may differ.
 The following source, guidelines and license information is retained from the pinned package.
@@ -3725,6 +3725,7 @@ License: no individual license data supplied by Simple Icons; see source and pac
 
 Elixir
 Source: https://github.com/elixir-lang/elixir-lang.github.com/tree/031746384ee23b9be19298c92a9699c56cc05845/images/logo
+Guidelines: https://elixir-lang.org/trademarks/
 License: no individual license data supplied by Simple Icons; see source and package disclaimer.
 
 Elk
@@ -5443,6 +5444,10 @@ License: no individual license data supplied by Simple Icons; see source and pac
 
 HappyCow
 Source: https://www.happycow.net/press-kits
+License: no individual license data supplied by Simple Icons; see source and package disclaimer.
+
+HAProxy
+Source: https://github.com/simple-icons/simple-icons/pull/15025#issuecomment-5835041111
 License: no individual license data supplied by Simple Icons; see source and package disclaimer.
 
 Harbor
@@ -8252,7 +8257,8 @@ Source: https://n26.com
 License: no individual license data supplied by Simple Icons; see source and package disclaimer.
 
 n8n
-Source: https://n8n.io/press
+Source: https://guidelines.n8n.design/logo
+Guidelines: https://guidelines.n8n.design
 License: no individual license data supplied by Simple Icons; see source and package disclaimer.
 
 Namebase
@@ -8426,6 +8432,10 @@ License: no individual license data supplied by Simple Icons; see source and pac
 
 Neutralinojs
 Source: https://github.com/neutralinojs/design-guide/blob/52a7232598ff22cddd810a3079e09a2cc2892609/logo/neutralinojs_logo_vector.svg
+License: no individual license data supplied by Simple Icons; see source and package disclaimer.
+
+New API
+Source: https://www.newapi.ai
 License: no individual license data supplied by Simple Icons; see source and package disclaimer.
 
 New Balance
@@ -8777,6 +8787,11 @@ OCaml
 Source: https://ocaml.org/logo
 Guidelines: https://ocaml.org/logo
 License: Unlicense (https://spdx.org/licenses/Unlicense)
+
+OceanBase
+Source: https://github.com/oceanbase/oceanbase/blob/9098aa6be373240e180ec628a886f39ad0047b7c/images/logo.svg
+Guidelines: https://en.oceanbase.com/legal/service-agreement
+License: no individual license data supplied by Simple Icons; see source and package disclaimer.
 
 OCLC
 Source: https://oclc.org
@@ -14644,6 +14659,11 @@ License: no individual license data supplied by Simple Icons; see source and pac
 
 Zilch
 Source: https://www.zilch.com
+License: no individual license data supplied by Simple Icons; see source and package disclaimer.
+
+Zilliz
+Source: https://zilliz.com
+Guidelines: https://zilliz.com/legal/terms-of-service
 License: no individual license data supplied by Simple Icons; see source and package disclaimer.
 
 Zillow

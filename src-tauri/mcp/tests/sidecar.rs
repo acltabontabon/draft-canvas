@@ -280,6 +280,48 @@ async fn stdout_carries_only_protocol_messages_and_stderr_never_the_token() {
 }
 
 #[tokio::test]
+async fn the_newest_protocol_is_negotiated_down_to_one_with_a_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut child = Command::new(sidecar())
+        .env("DRAFT_CANVAS_AGENT_DIR", dir.path())
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::null())
+        .kill_on_drop(true)
+        .spawn()
+        .unwrap();
+    let mut stdin = child.stdin.take().unwrap();
+    let meta = json!({
+        "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+        "io.modelcontextprotocol/clientCapabilities": {},
+    });
+    for message in [
+        // Stateless, without initialize: progress and cancellation need a session, so refused.
+        json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {"_meta": meta}}),
+        json!({"jsonrpc": "2.0", "id": 2, "method": "initialize", "params": {"protocolVersion": "2026-07-28", "capabilities": {}, "clientInfo": {"name": "raw", "version": "0"}}}),
+    ] {
+        stdin
+            .write_all(format!("{message}\n").as_bytes())
+            .await
+            .unwrap();
+    }
+    let mut stdout = BufReader::new(child.stdout.take().unwrap()).lines();
+    let mut replies = Vec::new();
+    while replies.len() < 2 {
+        let line = tokio::time::timeout(std::time::Duration::from_secs(10), stdout.next_line())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        replies.push(serde_json::from_str::<Value>(&line).unwrap());
+    }
+    assert_eq!(replies[0]["id"], 1);
+    // UNSUPPORTED_PROTOCOL_VERSION.
+    assert_eq!(replies[0]["error"]["code"], -32022, "{}", replies[0]);
+    assert_eq!(replies[1]["result"]["protocolVersion"], "2025-11-25");
+}
+
+#[tokio::test]
 async fn cancelling_during_the_bridge_handshake_never_sends_the_tool_call() {
     let dir = tempfile::tempdir().unwrap();
     let socket = dir.path().join("bridge.sock");

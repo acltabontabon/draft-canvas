@@ -139,8 +139,16 @@ Every refusal carries a `hint` saying what to do; this is the short version.
 | `BUSY`, `TIMEOUT`, `APP_UNRESPONSIVE` | Nothing was changed | Retry the identical request with the same `requestId`, at most twice |
 | `OUTCOME_UNKNOWN` | The app stopped answering mid-change | `read_diagram` and compare before sending anything again |
 | `READ_ONLY` | The diagram is read-only (on disk, or opened read-only) | Don't retry. Tell the person; it changes only once they can edit it |
-| `DOCUMENT_BUSY` | The person has unsaved or recovered changes to that diagram, or the file changed on disk under them | Don't retry. Ask them to save or discard, then `read_diagram` and rebuild the change |
+| `DOCUMENT_BUSY` | The open diagram changed while the request waited; or the person has unsaved or recovered changes the file on disk disagrees with; or `activate` couldn't open it | Changed while waiting: `read_diagram` and send the change again. Unsaved or recovered changes: ask the person to save or discard, then `read_diagram` and rebuild it. `activate`: leave it out to change the file without opening it |
 | `NOT_FOUND` | No such diagram or view | `list_diagrams` again |
+| `NOT_ACTIVE` | `read_selection` or a selection render, but that diagram isn't open | Ask the person to open it and select, or read the whole view with `read_diagram` |
+| `SCOPE_TARGET_MISSING` | An id in `scope` is gone since the selection was captured | `read_selection` again |
+| `CURSOR_STALE` | The diagram changed between pages of a paged read | Read again from the first page |
+| `DUPLICATE_FLOW`, `CONTAINMENT_CYCLE` | Moving inside or out would clash with a flow's title, or put a shape inside itself | Rename the flow first, or pick another owner |
+| `REQUEST_ID_MISMATCH` | That `requestId` was used for a different request | Use a fresh UUID for every new change; reuse one only to retry the identical request |
+| `CANCELLED` | The person stopped the request | Ask before sending it again |
+| `PROPOSAL_ONLY`, `RUN_LIMIT` | In a Nodi run: changes go through review, and only to the run's diagram | Send the same ops with `submit_proposal`; work only on that diagram |
+| `UNSUPPORTED` | The file isn't a diagram Draft Canvas can read | Tell the person; don't overwrite it |
 
 Never answer a failed update by creating a new diagram.
 

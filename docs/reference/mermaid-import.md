@@ -31,7 +31,8 @@ links are skipped. Arrows to subgraphs are skipped too.
 - `@{ shape: … }` nodes become plain shapes.
 - Circle and cross arrowheads become plain arrows; two-headed arrows become one-way.
 - `RL` and `BT` become left-to-right and top-to-bottom.
-- HTML tags in labels are removed.
+- HTML tags and control characters in labels are removed.
+- An arrow from a shape to itself is left out and listed as not drawn.
 - Other diagram kinds, including `sequenceDiagram` and `classDiagram`, are refused.
 
 ## Limits
@@ -45,4 +46,5 @@ links are skipped. Arrows to subgraphs are skipped too.
 | Shape labels | 120 characters |
 | Arrow / subgraph labels | 80 characters |
 
-Long labels are shortened. Inputs exceeding the other limits are refused before layout.
+Long labels are shortened; a bracketed label longer than 600 characters is not read. Inputs
+exceeding the other limits are refused before layout.

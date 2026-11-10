@@ -172,7 +172,12 @@ test.describe('element inspector popover', () => {
     const beforeNodeDrag = (await node.boundingBox())!;
     await page.mouse.move(beforeNodeDrag.x + beforeNodeDrag.width / 2, beforeNodeDrag.y + beforeNodeDrag.height / 2);
     await page.mouse.down();
-    await page.mouse.move(beforeNodeDrag.x + beforeNodeDrag.width / 2 + 100, beforeNodeDrag.y + beforeNodeDrag.height / 2 + 70, { steps: 5 });
+    // WebKit can drop the first moves of a drag while React Flow arms it: seen landing 40px along a
+    // 100px drag. Small steps, then one more move at the target, so the drag ends where it was aimed.
+    const target = { x: beforeNodeDrag.x + beforeNodeDrag.width / 2 + 100, y: beforeNodeDrag.y + beforeNodeDrag.height / 2 + 70 };
+    await page.mouse.move(target.x, target.y, { steps: 15 });
+    await page.mouse.move(target.x + 1, target.y + 1);
+    await page.mouse.move(target.x, target.y);
     await page.mouse.up();
     await expect.poll(async () => (await node.boundingBox())!.x).toBeGreaterThan(beforeNodeDrag.x + 50);
   });

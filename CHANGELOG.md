@@ -32,6 +32,11 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - A connector that steps around a shape no longer bends right into its arrowhead.
 - The example diagram lines up by its arrows, so every connector is straight and its first caption
   is no longer cut off.
+- A Mermaid chart with an arrow from a shape back to itself imports, with that arrow listed as not
+  drawn, instead of being refused whole. So does a label made only of invisible characters.
+- Pasting or dropping a malformed Mermaid chart or SVG no longer freezes the editor.
+- Restoring a backup keeps only what a project needs from it, with a clean, shortened name.
+- Text on a connector from an older file keeps reading as it did when it becomes a Text shape.
 
 ### Desktop
 
@@ -50,6 +55,20 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - Nodi waits at the end of the status bar between conversations instead of standing on the canvas.
   It jumps up to say hello, bring news or answer a click, and goes back down when there is nothing to
   do.
+
+#### Fixed
+
+- Accepting an agent's proposal applies exactly what its preview showed, without pausing the editor
+  to work it out again.
+- An agent's preview leaves the canvas as soon as its change lands, not after the save.
+- When an agent removes a shape that holds a diagram of its own, it is told how much goes with it.
+- An agent can run several reads at once without being told the app is busy, and a request that
+  times out is cancelled in the app too.
+- A Codex run in Nodi waits as long for a slow change as a connected Codex does.
+- An agent's change is never refused because tidying the request log failed, and a log cut short by
+  a full disk no longer loses the next request.
+- Agents reading code skip more secrets (Terraform state and variables, Kubernetes and Docker
+  configs, more SSH keys) and follow `.gitignore` path patterns.
 
 ### Web
 

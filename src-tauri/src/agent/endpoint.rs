@@ -2,7 +2,8 @@
 //! private to this account, naming the socket (or pipe) and the token to present on it.
 //!
 //! The sidecar reads the same file from the same place (`mcp/src/endpoint.rs` spells the location out
-//! independently, because it is a separate program; a test on each side holds them to one layout).
+//! independently, because it is a separate program; its tests hold the identifier and file name to
+//! this side's).
 
 use crate::docio::write_private;
 use crate::errors::Subject;
@@ -20,8 +21,9 @@ pub struct Info {
     /// A Unix socket path, or a Windows pipe name (`\\.\pipe\…`).
     pub endpoint: String,
     pub token: String,
-    /// The app's process id, so a sidecar finding a file left by a crashed app can say "not running"
-    /// instead of timing out on a dead socket.
+    /// The app's process id, for a person looking at the file. The sidecar doesn't read it: a file
+    /// left by a crashed app names a socket nobody listens on, and a refused connection already
+    /// answers `APP_UNAVAILABLE` without waiting.
     pub pid: u32,
 }
 

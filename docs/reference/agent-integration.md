@@ -189,7 +189,9 @@ earlier versions (`history`). The preview clears on Accept, Reject, Dismiss, clo
 document switch. A decided proposal reads as a record, without actions.
 
 **Accept** re-checks the proposal version and diagram revision inside the commit, then applies the
-whole batch as one undo step through `applyToFile`. **Reject** and **Dismiss** never touch the document.
+whole batch as one undo step through `applyToFile`. While the diagram is still the one the dry run
+worked on, it commits that dry run's result, so what lands is what the diff and the canvas preview
+showed; after an edit in between, it works the proposal out again on the current diagram. **Reject** and **Dismiss** never touch the document.
 
 **Crash recovery.** A proposal is recorded as `accepting` before its commit. After a crash, the panel's
 dry run decides:
@@ -246,7 +248,8 @@ agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
   the chat. With it, the connector carries `DRAFT_CANVAS_CODE=1` and offers `list_code`, `search_code`
   and `read_code` instead, and the turn's context names the folder. The app answers them from that one
   folder (`agent/code.rs`): canonical paths inside it only, no symlinks out, no `.git`, dependency or
-  build folders, no secrets (`.env`, keys, credentials), no binaries, and bounded results. The folder
+  build folders, nothing the root `.gitignore` ignores, no secrets (`.env`, keys, credentials,
+  Terraform state, kubeconfig, registry logins), no binaries, and bounded results. The folder
   is the one the person chose for the diagram, else the repository the diagram is saved in, else its
   own folder; "Always" is kept in settings (`codeFolders`), "Just for now" until the app quits. These
   tools are in `RUN_TOOLS` (`src/agent/schema.ts`, generated into `src-tauri/mcp/run-tools.json`), and no
@@ -267,6 +270,11 @@ and calls are kept few:
 - Small talk (a whole message of only "hello", "thanks", "bye", "how are you") is answered by Nodi
   itself (`nodiLines.ts`'s `smallTalkOf`): no run, no tokens. Confirmations such as "yes" and "ok"
   reach the selected agent, including its resumed session after an app restart.
+- Skills (`/` in the box, `nodiSkills.ts`) are worked out from the view when the menu opens: the
+  layouts are the editor's own Arrange with an `ArrangePreset` (direction, spacing or a primary flow,
+  one undo step each, played by `canvas/arrangeMotion.ts`); `/tidy` and `/present` run only when
+  their ⌘K command or a playable flow exists; `/explain` and `/risks` go to the agent. A read-only
+  diagram offers no layout. None of the local skills starts a run or spends tokens.
 
 The agent's session id is kept per diagram and agent in `companion/sessions.json`; the conversation
 shown is also separate per agent, in memory only. Replies may name parts as `[[id]]`; the companion shows their names
@@ -334,7 +342,8 @@ advisories (10 on create).
 ## Retries and the request ledger
 
 Write calls are keyed by `(tool, requestId)` in `agent/ledger.jsonl` in the app's data folder:
-append-only, fsynced, mode 0600, compacted at start-up and every 500 records.
+append-only, fsynced, mode 0600, compacted at start-up and every 500 records. A compaction that fails
+is tried again later and never fails the record that triggered it.
 
 | Retry with the same `requestId` | Answer |
 | --- | --- |
@@ -535,7 +544,7 @@ Per request (`AGENT_LIMITS` in `src/agent/input.ts`). A breach is `LIMIT_EXCEEDE
 | Flow title / step caption / reply label | 100 / 120 / 120 characters |
 | Delivery attempts | 1–50 |
 | Inside-view depth | 3 |
-| Bridge frame | 4 MiB, at most 4 calls in flight per connection |
+| Bridge frame | 4 MiB, at most 4 calls in flight per connection (the sidecar holds a fifth until one ends) |
 
 Text is never truncated. A shape grows to 280 × 320 px; a name that still does not fit is `LIMIT_EXCEEDED`.
 

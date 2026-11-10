@@ -16,11 +16,12 @@ use bridge::{Bridge, RUN_VAR};
 use rmcp::model::{
     CallToolRequestParams, CallToolResponse, CallToolResult, CancelledNotificationParam,
     ContentBlock, Implementation, ListToolsResult, PaginatedRequestParams,
-    ProgressNotificationParam, ServerCapabilities, ServerConfig, Tool,
+    ProgressNotificationParam, ProtocolVersion, ServerCapabilities, ServerConfig, Tool,
 };
 use rmcp::service::{NotificationContext, RequestContext};
 use rmcp::{ErrorData as McpError, RoleServer, ServerHandler, ServiceExt};
 use serde_json::Value;
+use std::borrow::Cow;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
@@ -31,6 +32,8 @@ const RUN_TOOLS_JSON: &str = include_str!("../run-tools.json");
 /// way to ask for them otherwise. Which folder, and whether anything is read, are the app's.
 const CODE_VAR: &str = "DRAFT_CANVAS_CODE";
 const PACKAGE_JSON: &str = include_str!("../../../package.json");
+/// How long a call's answer waits for its last progress messages to go out first.
+const PROGRESS_DRAIN: std::time::Duration = std::time::Duration::from_secs(2);
 
 const INSTRUCTIONS: &str = "Draft Canvas draws editable diagrams in the person's running app. The app sizes, lays out and routes content; use place/route only for exact positions the person asks for.\n\
 Before a first create_diagram, read get_capabilities topics [\"readability\"] once. In short: elements in reading order, entry point first; the main path as a flow in layout.primaryFlow; an about on every note; boundaries only for real ones; past ~15 elements, detail goes in an element's inside view. Apply sensible receipt advisories in the same turn. Leave direction out unless asked, and arrange at most once more: legibility.crossed names the crossing pairs, and repeated layout tweaks rarely fix crossings that come from which relationships exist.\n\
@@ -211,6 +214,15 @@ impl ServerHandler for Server {
             .with_instructions(self.instructions.to_string())
     }
 
+    /// Up to 2025-11-25, the last revision with an `initialize` handshake. From 2026-07-28 a client
+    /// may skip it and run stateless, request by request, and this server relies on a session:
+    /// progress for a call in flight, and cancellation matched to a call by its request id.
+    fn supported_protocol_versions(&self) -> Cow<'static, [ProtocolVersion]> {
+        Cow::Borrowed(ProtocolVersion::known_up_to(
+            &ProtocolVersion::LATEST_WITH_INITIALIZE,
+        ))
+    }
+
     async fn list_tools(
         &self,
         _request: Option<PaginatedRequestParams>,
@@ -242,23 +254,26 @@ impl ServerHandler for Server {
         let calls = self.calls.clone();
         // A client that asked for progress hears where a long request is — the app's stage phrase,
         // nothing more (never geometry or document text).
-        let sink = context.meta.get_progress_token().map(|token| {
-            let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
-            let peer = context.peer.clone();
-            tokio::spawn(async move {
-                let mut step = 0.0;
-                while let Some(message) = rx.recv().await {
-                    step += 1.0;
-                    let _ = peer
-                        .notify_progress(
-                            ProgressNotificationParam::new(token.clone(), step)
-                                .with_message(message),
-                        )
-                        .await;
-                }
-            });
-            tx
-        });
+        let (sink, forwarder) = match context.meta.get_progress_token() {
+            Some(token) => {
+                let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<String>();
+                let peer = context.peer.clone();
+                let forwarder = tokio::spawn(async move {
+                    let mut step = 0.0;
+                    while let Some(message) = rx.recv().await {
+                        step += 1.0;
+                        let _ = peer
+                            .notify_progress(
+                                ProgressNotificationParam::new(token.clone(), step)
+                                    .with_message(message),
+                            )
+                            .await;
+                    }
+                });
+                (Some(tx), Some(forwarder))
+            }
+            None => (None, None),
+        };
         let outcome = tokio::select! {
             outcome = self.bridge.call(
                 &request.name,
@@ -285,6 +300,18 @@ impl ServerHandler for Server {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .remove(&key);
+        // MCP allows no progress for a request after its response, and the forwarder could still
+        // have messages queued. The call has ended, and with it the bridge's only sender for this
+        // call, so the forwarder stops once it has sent what was queued. Bounded all the same:
+        // a client that stops reading mustn't keep the result from being sent at all.
+        if let Some(mut forwarder) = forwarder {
+            if tokio::time::timeout(PROGRESS_DRAIN, &mut forwarder)
+                .await
+                .is_err()
+            {
+                forwarder.abort();
+            }
+        }
         Ok(result(outcome).into())
     }
 

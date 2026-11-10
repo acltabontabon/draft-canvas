@@ -113,7 +113,7 @@ describe('layered layout', () => {
 
   it('widens the gap a long relationship label crosses', () => {
     const short = build({ nodes: [service('a'), service('b')], relationships: [{ id: 'e', from: 'a', to: 'b' }] });
-    const long = build({ nodes: [service('a'), service('b')], relationships: [{ id: 'e', from: 'a', to: 'b', label: 'Publishes RepaymentReceived events after validation' }] });
+    const long = build({ nodes: [service('a'), service('b')], relationships: [{ id: 'e', from: 'a', to: 'b', label: 'Publishes InventoryReserved events after validation' }] });
     const gap = (doc: DraftDocument) => byId(doc, 'b').x - (byId(doc, 'a').x + byId(doc, 'a').width);
     expect(gap(long)).toBeGreaterThan(gap(short));
   });

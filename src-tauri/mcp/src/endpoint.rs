@@ -1,12 +1,14 @@
 //! Finding the running app: `agent.json` in the app's local data folder, the same place the app's
 //! `agent/endpoint.rs` writes it. Spelled out here rather than shared because this is a separate
-//! program that must stay small; `tests/bridge.rs` and the app's own tests hold both to one layout.
+//! program that must stay small; the tests below hold the identifier and file name to the app's.
 
 use serde::Deserialize;
 use std::path::PathBuf;
 
 /// The app's bundle identifier (`tauri.conf.json`), which names its data folder on every platform.
 pub const APP_IDENTIFIER: &str = "com.acltabontabon.draft-canvas";
+/// The app's `INFO_FILE`.
+const INFO_FILE: &str = "agent.json";
 /// Overrides where `agent.json` is looked for — for development and tests, never needed installed.
 pub const DIR_OVERRIDE: &str = "DRAFT_CANVAS_AGENT_DIR";
 
@@ -63,7 +65,7 @@ pub enum Missing {
 
 pub fn read_info() -> Result<Info, Missing> {
     let dir = agent_dir().ok_or(Missing::NotRunningOrDisabled)?;
-    let bytes = match std::fs::read(dir.join("agent.json")) {
+    let bytes = match std::fs::read(dir.join(INFO_FILE)) {
         Ok(bytes) => bytes,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
             return Err(Missing::NotRunningOrDisabled)
@@ -71,4 +73,19 @@ pub fn read_info() -> Result<Info, Missing> {
         Err(_) => return Err(Missing::Unreadable),
     };
     serde_json::from_slice(&bytes).map_err(|_| Missing::Unreadable)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_layout_is_the_apps() {
+        let config: serde_json::Value =
+            serde_json::from_str(include_str!("../../tauri.conf.json")).unwrap();
+        assert_eq!(config["identifier"], APP_IDENTIFIER);
+        let app = include_str!("../../src/agent/endpoint.rs");
+        assert!(app.contains(&format!("pub const INFO_FILE: &str = \"{INFO_FILE}\";")));
+        assert!(app.contains("local_data_dir.join(\"agent\")"));
+    }
 }

@@ -34,11 +34,19 @@ function nodeElements(root: HTMLElement): Map<string, HTMLElement> {
   return out;
 }
 
+const TRANSLATE = /translate\(\s*(-?[\d.]+)px,\s*(-?[\d.]+)px\s*\)/;
+
+/**
+ * Each shape's place in flow coordinates, read from the positioning transform React Flow puts on the
+ * wrapper. Flow space, not the screen: the flight's offsets are applied inside the zoomed viewport,
+ * so screen pixels would start every shape `zoom` times too far (or too near), and a pan while the
+ * layout chunk loads would shift every start.
+ */
 function positions(nodes: Map<string, HTMLElement>): Map<string, Rect> {
   const out = new Map<string, Rect>();
   for (const [id, element] of nodes) {
-    const box = element.getBoundingClientRect();
-    out.set(id, { x: box.left, y: box.top });
+    const match = TRANSLATE.exec(element.style.transform);
+    if (match) out.set(id, { x: Number(match[1]), y: Number(match[2]) });
   }
   return out;
 }

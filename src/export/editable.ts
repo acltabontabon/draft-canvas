@@ -27,7 +27,8 @@ const EDITABLE_KEY = 'draftcanvas';
  * embedding twice never doubles the file.
  */
 export function withDocumentMetadata(svg: string, document: DraftDocument): string {
-  const stripped = svg.replace(metadataPattern(), '');
+  const found = findMetadata(svg);
+  const stripped = found ? `${svg.slice(0, found.start)}${svg.slice(found.end)}` : svg;
   const open = stripped.match(/<svg\b[^>]*>/);
   if (!open || open.index === undefined) return stripped;
   const at = open.index + open[0].length;
@@ -35,15 +36,29 @@ export function withDocumentMetadata(svg: string, document: DraftDocument): stri
   return `${stripped.slice(0, at)}${element}${stripped.slice(at)}`;
 }
 
-function metadataPattern(): RegExp {
-  return new RegExp(`<metadata\\s+id="${EDITABLE_KEY}"\\s*>([\\s\\S]*?)</metadata>`);
+const METADATA_OPEN = new RegExp(`<metadata\\s+id="${EDITABLE_KEY}"\\s*>`);
+const METADATA_CLOSE = '</metadata>';
+
+/**
+ * The first `<metadata id="draftcanvas">` and the nearest `</metadata>` after it — what the lazy
+ * `<metadata…>([\s\S]*?)</metadata>` pattern matched, found in one pass. That pattern retried the
+ * search for a closer from every opener, so a file of openers and no closer took seconds. Once the
+ * first opener has no closer after it, no later one can.
+ */
+function findMetadata(text: string): { start: number; end: number; content: string } | null {
+  const open = METADATA_OPEN.exec(text);
+  if (!open) return null;
+  const from = open.index + open[0].length;
+  const close = text.indexOf(METADATA_CLOSE, from);
+  if (close === -1) return null;
+  return { start: open.index, end: close + METADATA_CLOSE.length, content: text.slice(from, close) };
 }
 
 /** The document an SVG carries, or `null` when it carries none — a plain picture is not an error. */
 export function readDocumentFromSvg(text: string): NormalizeResult | null {
-  const match = text.match(metadataPattern());
-  if (!match) return null;
-  return parseDocument(unescapeXml(match[1]!));
+  const found = findMetadata(text);
+  if (!found) return null;
+  return parseDocument(unescapeXml(found.content));
 }
 
 /** The inverse of `escapeXmlText`/`escapeXmlAttr`, for text this module wrote itself. */

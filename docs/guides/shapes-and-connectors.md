@@ -48,6 +48,7 @@ Dragging does most of the lining up for you:
 
 For more, select shapes and use the bar at the bottom: **Align**, **Distribute** (three or more),
 and **Same width** / **Same height**, which give every selected shape the largest size among them.
+A boundary selected with shapes keeps its size; select only boundaries to match them.
 
 **Straighten connectors** in `⌘K` nudges shapes a few pixels so every connector that is nearly
 straight becomes straight, without rearranging anything else. With a selection, only the selected

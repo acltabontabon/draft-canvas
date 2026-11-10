@@ -955,7 +955,8 @@ export function detourAround(
     return obstacles.every((o) => !points.some((point, i) => i > 0 && segmentEntersRect(points[i - 1]!, point, o))) ? detour : null;
   };
   for (const coordinate of candidates) {
-    if (!clearOf(coordinate)) continue;
+    const clear = clearOf(coordinate);
+    if (!clear) continue;
     // A detour a small step from the target's own level would leave that step as a jog right
     // before the arrowhead: a bent arrow. Running at that level instead drops the jog altogether,
     // where the line is clear there too.
@@ -966,7 +967,7 @@ export function detourAround(
       const levelled = clearOf(level);
       if (levelled) return levelled;
     }
-    return clearOf(coordinate);
+    return clear;
   }
 
   return null;

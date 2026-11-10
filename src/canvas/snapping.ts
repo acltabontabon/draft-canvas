@@ -213,11 +213,16 @@ function spacingCandidate(moving: Rect, rects: readonly Rect[], axis: 'x' | 'y',
   const pairs: { a: Rect; b: Rect; gap: number }[] = [];
   for (let i = 0; i < row.length - 1; i += 1) {
     const a = row[i]!;
-    // Its nearest neighbour further along, not merely the next to start.
+    // Its nearest neighbour further along, not merely the next to start. The row is sorted by start,
+    // so the first that qualifies is the nearest: stopping there keeps a drag past a tall row (a
+    // boundary spanning the diagram) from scanning every pair on every pointer move.
     let b: Rect | undefined;
     for (let j = i + 1; j < row.length; j += 1) {
       const candidate = row[j]!;
-      if (start(candidate) >= end(a) && shareRow(a, candidate) && (!b || start(candidate) < start(b))) b = candidate;
+      if (start(candidate) >= end(a) && shareRow(a, candidate)) {
+        b = candidate;
+        break;
+      }
     }
     // Not the two the moving shape sits between: that gap is its own, not one already there.
     if (b && !(end(a) <= start(moving) + threshold && start(b) >= end(moving) - threshold)) pairs.push({ a, b, gap: start(b) - end(a) });

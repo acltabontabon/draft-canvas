@@ -566,6 +566,13 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     else if (action.kind === 'say') send(action.text);
     else {
       const ctx = buildCommandContext?.();
+      // "Present X" is an option inside ⌘K's Present flow stage, not a command of its own: played
+      // here directly, as that option plays it, when the flow has something to show.
+      const presenting = action.id.startsWith('present-flow:') ? action.id.slice('present-flow:'.length) : null;
+      if (ctx && presenting && ctx.playback.flows.some((flow) => flow.id === presenting)) {
+        ctx.onPresent(presenting);
+        return;
+      }
       const command = ctx ? commandsFor(ctx).find((c) => c.id === action.id) : undefined;
       if (!ctx || !command) {
         useUiStore.getState().openCommandPaletteAt(action.label.replace(/…$/, ''));
@@ -641,12 +648,22 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   const skills = useMemo(() => {
     if (query === null) return [];
     const view = useEditorStore.getState().document;
+    let ctx: CommandContext | undefined;
+    try {
+      ctx = buildCommandContext?.();
+    } catch {
+      ctx = undefined;
+    }
     const all = skillsFor({
       shapes: view.nodes.filter((n) => !['note', 'text', 'code'].includes(n.type)).length,
       flows: view.flows.map((f) => ({ id: f.id, title: f.title })),
       agent: !agentless,
+      readOnly: ctx ? Boolean(ctx.ui.readOnly) : doc.kind === 'file' && doc.readOnly,
+      commands: new Set(ctx ? commandsFor(ctx).map((c) => c.id) : []),
+      presentable: ctx?.playback.flows.map((f) => ({ id: f.id, title: f.title })) ?? [],
     });
     return matchSkills(running || skilling ? all.filter((s) => s.run.kind === 'ask') : all, query);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- read from the stores when the menu opens or narrows, like the view
   }, [query, agentless, running, skilling]);
   const skillShown = query !== null ? Math.min(skillAt, Math.max(0, skills.length - 1)) : 0;
   const runSkill = (skill: NodiSkill) => {
@@ -659,6 +676,10 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     }
     if (run.kind === 'command') {
       runAction({ kind: 'command', id: run.id, label: skill.title });
+      return;
+    }
+    if (run.kind === 'present') {
+      runAction({ kind: 'command', id: `present-flow:${run.flowId}`, label: skill.title });
       return;
     }
     setSkilling(true);

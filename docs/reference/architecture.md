@@ -28,7 +28,7 @@ Dependencies point toward `src/document/`, which is plain data with no React or 
 | `depth/`, `starters/` | `document/` |
 | `layout/` | `document/`, `edges/bundles` |
 | `collab/` | `document/`, `depth/`, `lib/`, its own `transport/` |
-| `continuation/` | `document/`, `edges/routing`, `edges/clearance`, `render/text` |
+| `continuation/` | `document/`, `edges/routing`, `edges/clearance`, `edges/compensationMarker`, `render/text` |
 | `openPoints/` | `document/`, `depth/`, `render/` |
 | `agent/` | the above plus rendering and export; never UI or store |
 

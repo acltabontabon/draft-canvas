@@ -115,7 +115,7 @@ const relationship: Schema = {
     id: id('relationship'),
     from: { type: 'string' },
     to: { type: 'string' },
-    label: text(AGENT_LIMITS.relationshipLabelLength, 'What flows or happens, e.g. "Publishes RepaymentReceived".'),
+    label: text(AGENT_LIMITS.relationshipLabelLength, 'What flows or happens, e.g. "Publishes OrderPlaced".'),
     semantic: { enum: EDGE_SEMANTICS, description: 'Optional: inferred from the two element types when left out.' },
     kind: { enum: CONNECTOR_KINDS, description: 'Optional behaviour: sync, async, event, retry, failure…' },
     directed: { type: 'boolean', description: 'false for an undirected line. Default true.' },

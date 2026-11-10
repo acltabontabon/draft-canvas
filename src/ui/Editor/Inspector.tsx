@@ -12,7 +12,7 @@ import type {
   QueueKind,
   ServiceKind,
 } from '../../document/types';
-import type { AlignEdge } from '../../document/operations';
+import { sizeMatchTargets, type AlignEdge } from '../../document/operations';
 import { ACTOR_FRAME_OPTIONS, ACTOR_ICON_OPTIONS } from '../../canvas/actorOptions';
 import { COMPONENT_ICON_OPTIONS } from '../../canvas/componentOptions';
 import { DATABASE_ICON_OPTIONS } from '../../canvas/dataStoreOptions';
@@ -54,8 +54,11 @@ export function Inspector() {
 
   const onlyNode = nodes.length === 1 ? nodes[0] : null;
   // Align, distribute and group act on the outermost shapes: a boundary's selected contents move with it.
-  const outer = outermostSelected(document.nodes, selection.nodes).length;
+  const outermost = outermostSelected(document.nodes, selection.nodes);
+  const outer = outermost.length;
   const multiple = outer > 1;
+  // Same width / height only where it would resize something: as ⌘K offers them (`sizeMatchTargets`).
+  const sizable = sizeMatchTargets(outermost).length >= 2;
 
   if (nodes.length === 0 && edges.length === 0) return null;
   // A single connector, selected alone, gets its own anchored control
@@ -311,7 +314,7 @@ export function Inspector() {
               </Button>
             </>
           )}
-          {outer >= 2 && (
+          {sizable && (
             <>
               <Button
                 variant="quiet"

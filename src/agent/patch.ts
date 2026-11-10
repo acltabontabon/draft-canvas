@@ -47,7 +47,7 @@ import {
 import { reinferIfEligible } from '../document/reinfer';
 import { freeOriginFor } from '../document/geometry';
 import { DEFAULTS, LIMITS } from '../document/limits';
-import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
+import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
 import { embed, totals, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
 import { effectiveLevel, inheritedLevel } from '../depth/level';
@@ -435,6 +435,14 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
           }
           return;
         }
+      }
+      // A shape's inside view leaves with it (`removeElements`), which the count below (this view
+      // only) doesn't show: said, so the agent and the person reviewing it see what else goes.
+      for (const id of nodeIds) {
+        const inside = view.nodes.find((n) => n.id === id)?.inside;
+        if (!inside) continue;
+        const lost = insideSize(inside);
+        advisories.push(`Removing "${id}" also removes the view inside it: ${lost.nodes} ${lost.nodes === 1 ? 'shape' : 'shapes'}, ${lost.edges} ${lost.edges === 1 ? 'connector' : 'connectors'} and ${lost.flows} ${lost.flows === 1 ? 'flow' : 'flows'}.`);
       }
       view = removed;
       counts.removed += before - (view.nodes.length + view.edges.length);
@@ -1497,4 +1505,17 @@ function automaticRoute(view: DraftDocument, id: string): DraftDocument {
   delete fresh.targetAnchor;
   delete fresh.routeMode;
   return { ...view, edges: view.edges.map((e) => (e.id === id ? fresh : e)) };
+}
+
+/** Everything a shape's inside view holds, its own nested views included. */
+function insideSize(inside: DraftInside): { nodes: number; edges: number; flows: number } {
+  const size = { nodes: inside.nodes.length, edges: inside.edges.length, flows: inside.flows.length };
+  for (const node of inside.nodes) {
+    if (!node.inside) continue;
+    const nested = insideSize(node.inside);
+    size.nodes += nested.nodes;
+    size.edges += nested.edges;
+    size.flows += nested.flows;
+  }
+  return size;
 }

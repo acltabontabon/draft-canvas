@@ -12,12 +12,15 @@ use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, Semaphore};
 
 pub const BRIDGE_VERSION: u32 = 1;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
 /// The app's own budgets add to at most ~95 s for a change that passed its commit gate.
 const CALL_TIMEOUT: Duration = Duration::from_secs(120);
+/// Calls the app runs at once on one connection (`MAX_CONCURRENT_CALLS` in the app's
+/// `agent/bridge.rs`); it answers BUSY past that.
+const MAX_IN_FLIGHT: usize = 4;
 
 /// A failure reaching the app, as the error object a tool result carries.
 pub fn error(code: &str, message: &str, hint: &str, retryable: bool) -> Value {
@@ -96,7 +99,6 @@ fn run_from(value: Option<String>) -> Option<String> {
     })
 }
 
-#[derive(Default)]
 pub struct Bridge {
     conn: tokio::sync::Mutex<Option<Conn>>,
     next: AtomicU64,
@@ -108,6 +110,9 @@ pub struct Bridge {
     run: Option<String>,
     /// Kept across reconnects: a call's sink outlives the connection it was sent on.
     progress: ProgressSinks,
+    /// Every call holds one while it is with the app. A client making parallel read-only calls had
+    /// its fifth answered BUSY; it now waits here for a free slot instead.
+    permits: Semaphore,
 }
 
 impl Bridge {
@@ -117,10 +122,13 @@ impl Bridge {
             .map(|d| d.as_nanos())
             .unwrap_or_default();
         Self {
+            conn: tokio::sync::Mutex::new(None),
+            next: AtomicU64::new(0),
             version,
             session: format!("s{:x}-{nanos:x}", std::process::id()),
             run: run_from(std::env::var(RUN_VAR).ok()),
-            ..Self::default()
+            progress: ProgressSinks::default(),
+            permits: Semaphore::new(MAX_IN_FLIGHT),
         }
     }
 
@@ -144,11 +152,29 @@ impl Bridge {
             id,
             entries: self.progress.clone(),
         };
-        // Include connection and queue waits: a full outgoing queue used to hold the connection
-        // mutex forever, before the reply-only timeout even started.
-        tokio::time::timeout(CALL_TIMEOUT, self.call_as(id, tool, args, on_id))
-            .await
-            .unwrap_or_else(|_| Err(lost()))
+        let sent = AtomicBool::new(false);
+        let on_id = |id| {
+            sent.store(true, Ordering::SeqCst);
+            on_id(id);
+        };
+        // Include slot, connection and queue waits: a full outgoing queue used to hold the
+        // connection mutex forever, before the reply-only timeout even started.
+        let outcome = tokio::time::timeout(CALL_TIMEOUT, async {
+            let _permit = self.permits.acquire().await.map_err(|_| lost())?;
+            self.call_as(id, tool, args, on_id).await
+        })
+        .await;
+        match outcome {
+            Ok(outcome) => outcome,
+            Err(_) => {
+                // The app may still be working on it, holding one of the connection's slots for as
+                // long as it does. Before its commit gate a cancel stops it; past it, nothing does.
+                if sent.load(Ordering::SeqCst) {
+                    self.cancel(id).await;
+                }
+                Err(lost())
+            }
+        }
     }
 
     async fn call_as(
@@ -603,6 +629,74 @@ mod tests {
             .unwrap()
             .alive
             .load(Ordering::SeqCst));
+    }
+
+    fn bridge_on(out: mpsc::Sender<Value>, pending: &Arc<Mutex<PendingMap>>) -> Bridge {
+        Bridge {
+            conn: tokio::sync::Mutex::new(Some(Conn {
+                out,
+                pending: pending.clone(),
+                alive: Arc::new(AtomicBool::new(true)),
+                tasks: Vec::new(),
+            })),
+            ..Bridge::new("test".into())
+        }
+    }
+
+    type PendingMap = HashMap<u64, oneshot::Sender<Value>>;
+
+    #[tokio::test]
+    async fn a_call_past_the_apps_limit_waits_for_a_slot_instead_of_going_out() {
+        let (out, mut received) = mpsc::channel(16);
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let bridge = Arc::new(bridge_on(out, &pending));
+        let calls: Vec<_> = (0..=MAX_IN_FLIGHT)
+            .map(|_| {
+                let bridge = bridge.clone();
+                tokio::spawn(
+                    async move { bridge.call("read_diagram", json!({}), |_| {}, None).await },
+                )
+            })
+            .collect();
+        let mut sent = Vec::new();
+        for _ in 0..MAX_IN_FLIGHT {
+            sent.push(received.recv().await.unwrap()["id"].as_u64().unwrap());
+        }
+        for _ in 0..8 {
+            tokio::task::yield_now().await;
+        }
+        assert!(
+            received.try_recv().is_err(),
+            "the app would answer this one BUSY"
+        );
+        // One finishes: the waiting call goes out.
+        let waiter = pending.lock().unwrap().remove(&sent[0]).unwrap();
+        waiter
+            .send(json!({"type": "result", "id": sent[0], "ok": true, "value": 1}))
+            .unwrap();
+        assert_eq!(received.recv().await.unwrap()["type"], "call");
+        for (id, waiter) in pending.lock().unwrap().drain() {
+            let _ = waiter.send(json!({"type": "result", "id": id, "ok": true, "value": id}));
+        }
+        for call in calls {
+            assert!(call.await.unwrap().is_ok());
+        }
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn a_call_that_times_out_asks_the_app_to_stop_it() {
+        let (out, mut received) = mpsc::channel(4);
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let bridge = bridge_on(out, &pending);
+        let error = bridge
+            .call("read_diagram", json!({}), |_| {}, None)
+            .await
+            .unwrap_err();
+        assert_eq!(error["code"], "CONNECTION_LOST");
+        let call = received.recv().await.unwrap();
+        assert_eq!(call["type"], "call");
+        let cancel = received.recv().await.unwrap();
+        assert_eq!(cancel, json!({"type": "cancel", "id": call["id"]}));
     }
 
     #[tokio::test]

@@ -4,7 +4,7 @@ The web editor is a static site with no backend.
 
 ## Build
 
-With Node.js 22.22 or later, check out a stable `vX.Y.Z` tag of the
+With Node.js 22.22.2 or later, check out a stable `vX.Y.Z` tag of the
 [repository](https://github.com/acltabontabon/draft-canvas) and run:
 
 ```bash
@@ -13,7 +13,8 @@ npm run build
 ```
 
 Deploy `dist/`; `npm run preview` tries it locally. For the landing page and docs too, run
-`npm ci --prefix www` and `npm run build:web`, then deploy `dist-web/`.
+`npm ci --prefix www` and `npm run build:web`, then deploy `dist-web/site/` (landing page and
+docs) and `dist-web/app/` (the editor, the same as `dist/`) as two sites.
 
 ## Serve
 

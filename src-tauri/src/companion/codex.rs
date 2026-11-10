@@ -244,8 +244,11 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
     args
 }
 
-/// `{"draft-canvas"={command="…",args=[],env={DRAFT_CANVAS_RUN="…",…},default_tools_approval_mode="approve"}}`
+/// `{"draft-canvas"={command="…",args=[],env={DRAFT_CANVAS_RUN="…",…},tool_timeout_sec=150,default_tools_approval_mode="approve"}}`
 /// as an inline TOML table.
+///
+/// `tool_timeout_sec` for the same reason a connected Codex gets it (`CODEX_TOOL_TIMEOUT_SECS`):
+/// Codex's own 60 seconds would cut off a large layout before the sidecar's answer arrives.
 ///
 /// The tools are pre-approved for Codex because Draft Canvas is where the approval happens: the run
 /// policy lets a run change one diagram, by proposal unless the person chose direct, and a proposal
@@ -259,9 +262,10 @@ fn server_table(command: &Path, env: &[(&'static str, String)]) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{{}={{command={},args=[],env={{{env}}},default_tools_approval_mode=\"approve\"}}}}",
+        "{{{}={{command={},args=[],env={{{env}}},tool_timeout_sec={},default_tools_approval_mode=\"approve\"}}}}",
         toml_string(SERVER_NAME),
-        toml_string(&command.to_string_lossy())
+        toml_string(&command.to_string_lossy()),
+        clients::CODEX_TOOL_TIMEOUT_SECS,
     )
 }
 
@@ -787,7 +791,7 @@ mod tests {
         let servers = args.iter().find(|a| a.starts_with("mcp_servers=")).unwrap();
         assert_eq!(
             servers,
-            r#"mcp_servers={"draft-canvas"={command="/App/draft-canvas-mcp",args=[],env={DRAFT_CANVAS_RUN="run-1"},default_tools_approval_mode="approve"}}"#
+            r#"mcp_servers={"draft-canvas"={command="/App/draft-canvas-mcp",args=[],env={DRAFT_CANVAS_RUN="run-1"},tool_timeout_sec=150,default_tools_approval_mode="approve"}}"#
         );
         assert!(servers.parse::<toml_edit::DocumentMut>().is_ok());
         let brief = args

@@ -255,18 +255,21 @@ impl Proposals {
     /// Writes `proposal` through to disk before returning — inserted if its id is new, overwritten in
     /// place otherwise (a revise, or a status transition). The caller decides whether that's allowed.
     pub fn put(&mut self, proposal: Proposal) -> io::Result<()> {
-        let mut line = serde_json::to_vec(&proposal).map_err(io::Error::other)?;
-        line.push(b'\n');
-        let mut file = private(OpenOptions::new().create(true).append(true)).open(&self.file)?;
-        file.write_all(&line)?;
-        file.sync_data()?;
+        let line = serde_json::to_vec(&proposal).map_err(io::Error::other)?;
+        super::ledger::append_record(&self.file, &line)?;
         let now = proposal.updated_at;
         self.entries.insert(proposal.id.clone(), proposal);
         // Retention also applies to an app left running for weeks, not just its next launch.
         self.evict(now);
         self.appended += 1;
         if self.appended >= COMPACT_AFTER {
-            self.compact()?;
+            // The proposal is already durable, so a failed rewrite (a rename blocked on Windows, a
+            // full disk) mustn't report it unwritten, nor fail every later put; retry after another
+            // batch of appends.
+            if let Err(e) = self.compact() {
+                eprintln!("Draft Canvas: agent proposals couldn't be compacted ({e})");
+                self.appended = 0;
+            }
         }
         Ok(())
     }
@@ -403,6 +406,24 @@ mod tests {
         store.put(revised).unwrap();
         assert_eq!(store.get("p1").unwrap().version, 2);
         assert_eq!(store.list(None).len(), 1);
+    }
+
+    #[test]
+    fn a_failed_compaction_does_not_fail_the_put() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Proposals::open(dir.path(), 1).unwrap();
+        fs::create_dir(dir.path().join("proposals.jsonl.tmp")).unwrap();
+        store.appended = COMPACT_AFTER - 1;
+        store
+            .put(proposal("p1", ProposalStatus::Pending, 1))
+            .unwrap();
+        store
+            .put(proposal("p2", ProposalStatus::Pending, 2))
+            .unwrap();
+        drop(store);
+        fs::remove_dir(dir.path().join("proposals.jsonl.tmp")).unwrap();
+        let store = Proposals::open(dir.path(), 3).unwrap();
+        assert!(store.get("p1").is_some() && store.get("p2").is_some());
     }
 
     #[test]

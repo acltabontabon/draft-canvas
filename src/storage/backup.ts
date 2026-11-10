@@ -14,6 +14,7 @@
 
 import { cloneDocumentAsNew } from '../document/factory';
 import { LIMITS } from '../document/limits';
+import { cleanText } from '../document/sanitize';
 import type { DraftDocument, Project } from '../document/types';
 import { parseDocument } from '../document/validate';
 import { adoptEmbeddedBackground } from '../export/background';
@@ -122,6 +123,26 @@ export async function buildBackup(repository: DraftRepository): Promise<BackupRe
 
 const decoder = new TextDecoder();
 
+/**
+ * One manifest project, rebuilt from its known fields: `saveProject` stores what it is given, so
+ * extra keys, a 10 MB name or a `NaN` date in a hand-edited archive went into the database as is.
+ * The name is held to the rule a typed one is (control characters out, the dialog's 200-character
+ * cap); a project with no id has nothing for its diagrams to point at.
+ */
+function readProject(raw: unknown, now: number): Project | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const { id, name, createdAt, updatedAt } = raw as Record<string, unknown>;
+  if (typeof id !== 'string' || id === '' || typeof name !== 'string') return null;
+  const created = typeof createdAt === 'number' && Number.isFinite(createdAt) ? createdAt : undefined;
+  const updated = typeof updatedAt === 'number' && Number.isFinite(updatedAt) ? updatedAt : undefined;
+  return {
+    id,
+    name: cleanText(name, LIMITS.maxTitleLength).trim() || 'Untitled project',
+    createdAt: created ?? updated ?? now,
+    updatedAt: updated ?? created ?? now,
+  };
+}
+
 /** `projects.json` read defensively: a hand-edited or foreign archive must not throw. */
 function readManifest(data: Uint8Array | undefined): Manifest {
   const empty: Manifest = { projects: [], membership: {} };
@@ -129,11 +150,9 @@ function readManifest(data: Uint8Array | undefined): Manifest {
   try {
     const raw = JSON.parse(decoder.decode(data)) as Partial<Manifest> | null;
     if (!raw || typeof raw !== 'object') return empty;
+    const now = Date.now();
     const projects = Array.isArray(raw.projects)
-      ? raw.projects.filter(
-          (p): p is Project =>
-            !!p && typeof p === 'object' && typeof p.id === 'string' && typeof p.name === 'string' && typeof p.createdAt === 'number' && typeof p.updatedAt === 'number',
-        )
+      ? (raw.projects as unknown[]).map((p) => readProject(p, now)).filter((p): p is Project => p !== null)
       : [];
     const membership: Record<string, string> = Object.create(null) as Record<string, string>;
     if (raw.membership && typeof raw.membership === 'object') {

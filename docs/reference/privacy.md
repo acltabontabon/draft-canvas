@@ -26,7 +26,8 @@ Web diagrams stay in this browser profile and do not sync.
 - Diagrams are `.draftcanvas` files where you save them, with background images beside them.
 - The app's data folder holds recent files, settings and recovery copies, removed once saved or
   discarded.
-- It reads only files and folders you pick, plus folders you allow for agents.
+- It reads only files and folders you pick, plus folders you allow for agents. **Use in docs**
+  writes its pictures beside the saved diagram and adds one line to a Markdown file you choose.
 
 ## What leaves your machine
 

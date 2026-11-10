@@ -16,6 +16,7 @@ export type SkillGlyph = 'right' | 'down' | 'flow' | 'room' | 'snug' | 'tidy' | 
 export type SkillRun =
   | { kind: 'arrange'; preset: ArrangePreset; done: string }
   | { kind: 'command'; id: string }
+  | { kind: 'present'; flowId: string }
   | { kind: 'ask'; prompt: string };
 
 export interface NodiSkill {
@@ -34,6 +35,12 @@ export interface SkillFacts {
   flows: readonly { id: string; title: string }[];
   /** An agent is there to ask. */
   agent: boolean;
+  /** The diagram can't be changed (a shared copy): nothing that would move or re-route is offered. */
+  readOnly?: boolean;
+  /** The ⌘K commands there are right now; a command skill is offered only when its command is. */
+  commands?: ReadonlySet<string>;
+  /** Flows with something to play (`useFlowPlayback`'s `flows`); `/present` plays the first. */
+  presentable?: readonly { id: string; title: string }[];
 }
 
 /** How many flows get a skill of their own; more are reached by name through ⌘K's arrange. */
@@ -51,7 +58,8 @@ function slug(text: string): string {
 /** The skills there are for this view: no layout with nothing to lay out, no question without an agent. */
 export function skillsFor(facts: SkillFacts): NodiSkill[] {
   const skills: NodiSkill[] = [];
-  if (facts.shapes >= 2) {
+  // A shared copy refuses every edit: a layout offered there could only answer "nothing to move".
+  if (facts.shapes >= 2 && !facts.readOnly) {
     skills.push(
       { slash: 'across', title: 'Left to right', hint: 'Reads across, like a pipeline', group: 'Arrange', glyph: 'right', run: { kind: 'arrange', preset: { direction: 'right' }, done: 'Laid out left to right, boss. Reads like a pipeline now.' } },
       { slash: 'down', title: 'Top down', hint: 'Reads down, callers above what they call', group: 'Arrange', glyph: 'down', run: { kind: 'arrange', preset: { direction: 'down' }, done: 'Stacked top down, boss. Gravity approves.' } },
@@ -75,14 +83,18 @@ export function skillsFor(facts: SkillFacts): NodiSkill[] {
       { slash: 'snug', title: 'Snug', hint: 'Closer together, for a smaller screen', group: 'Arrange', glyph: 'snug', run: { kind: 'arrange', preset: { spacing: 'compact' }, done: 'Packed it snug, boss. Cosy. Slightly claustrophobic.' } },
     );
   }
-  if (facts.shapes >= 2) skills.push({ slash: 'tidy', title: 'Tidy connectors', hint: 'Straighter lines, nothing moved', group: 'Arrange', glyph: 'tidy', run: { kind: 'command', id: 'tidy-connections' } });
+  // Straighten, not Tidy: Tidy exists only once a connector has a manual route, and only re-routes.
+  if (facts.shapes >= 2 && facts.commands?.has('straighten')) {
+    skills.push({ slash: 'tidy', title: 'Straighten connectors', hint: 'Nudges shapes so nearly straight lines run straight', group: 'Arrange', glyph: 'tidy', run: { kind: 'command', id: 'straighten' } });
+  }
   if (facts.agent && facts.shapes > 0) {
     skills.push(
       { slash: 'explain', title: 'Walk me through it', hint: 'Your agent explains the diagram', group: 'Ask', glyph: 'explain', run: { kind: 'ask', prompt: 'Explain this diagram' } },
       { slash: 'risks', title: 'What breaks first?', hint: 'Your agent looks for the weak spots', group: 'Ask', glyph: 'risks', run: { kind: 'ask', prompt: 'What are the risks here?' } },
     );
   }
-  if (facts.flows[0]) skills.push({ slash: 'present', title: `Present “${facts.flows[0].title}”`, hint: 'Play the flow step by step', group: 'Show', glyph: 'present', run: { kind: 'command', id: `present-flow:${facts.flows[0].id}` } });
+  const shown = facts.presentable?.[0];
+  if (shown) skills.push({ slash: 'present', title: `Present “${shown.title}”`, hint: 'Play the flow step by step', group: 'Show', glyph: 'present', run: { kind: 'present', flowId: shown.id } });
   return skills;
 }
 
