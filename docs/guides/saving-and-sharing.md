@@ -19,7 +19,8 @@ If another tab changed the same diagram, choose **Keep mine** or **Load the othe
 3. To bring it back, choose **Restore…**. Existing diagrams are never overwritten; matches come back
    as copies.
 
-The Library reminds you when the last backup is missing or over a week old. Press `/` there to
+Once you have a few diagrams, or one more than a day old, the Library reminds you when the last
+backup is missing or over a week old. Press `/` there to
 search; deleting a project moves its diagrams to **Unorganized**.
 
 ## Export a file

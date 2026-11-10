@@ -14,3 +14,11 @@ export function backupIsStale(lastBackupAt: string | null, now = Date.now(), day
   if (Number.isNaN(at)) return true;
   return now - at > days * 24 * 60 * 60 * 1000;
 }
+
+/**
+ * Whether the Library holds enough to ask about a backup: a few diagrams, or one that has outlived
+ * the day it was made. A just-opened example is neither, and nudging there teaches people to ignore it.
+ */
+export function worthBackingUp(entries: readonly { createdAt: number }[], now = Date.now()): boolean {
+  return entries.length >= 3 || entries.some((entry) => now - entry.createdAt > 24 * 60 * 60 * 1000);
+}

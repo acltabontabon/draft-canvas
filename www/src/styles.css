@@ -2766,7 +2766,7 @@ html:has(.dl[open]) {
 @media (max-width: 700px) { .studio .studio-explore { padding-top: 115px; }.studio .studio-tabs button { font-size: 9px; padding-inline: 4px; }.depth-toolbar { font-size: 6px; }.depth-demo button { font-size: 8px; padding: 6px; }.depth-foot > span { max-width: 50%; font-size: 6px; } }
 @media (prefers-reduced-motion: reduce) { .studio *, .studio *::before, .studio *::after { animation: none !important; transition: none !important; } }
 /* The architecture stays on the page while the reader's thought moves through it. */
-.studio .canvas-story { position: relative; padding: 0 5vw 60px; background: #121417; overflow: visible; }
+.studio .canvas-story { position: relative; padding: 0 5vw 60px; background: #000; overflow: visible; }
 .story-thread { position: absolute; top: 0; bottom: -110px; left: 69%; width: 1px; background: linear-gradient(transparent, #59616d 5%, #59616d 94%, transparent); opacity: .35; }
 .story-composition { max-width: 1400px; margin: auto; display: grid; grid-template-columns: 1.6fr 1fr; gap: 6%; align-items: start; }
 .story-art { position: sticky; top: max(30px, calc((100dvh - 620px) / 2)); align-self: start; margin: 0; padding: 45px 0 25px; min-width: 0; }
@@ -2777,7 +2777,7 @@ html:has(.dl[open]) {
 .story-art svg .story-hand { fill: #aeb7c4; font: italic 21px var(--serif); }
 .story-art .story-pencil { stroke: #596270; stroke-width: .8; }
 .story-art .story-packet { stroke: #e6e9ee; stroke-width: 3; stroke-dasharray: 3 65; animation: story-request 2s linear 3; }
-.story-art .story-cursor path { fill: #121417; stroke: #c8d0dd; }
+.story-art .story-cursor path { fill: #000; stroke: #c8d0dd; }
 .story-art figcaption { color: #808998; text-align: center; font: 9px var(--mono); margin: 12px 0 0; }
 .story-layer { opacity: 0; transition: opacity .3s; }
 .story-layer.is-drawn { opacity: 1; }
@@ -2786,14 +2786,14 @@ html:has(.dl[open]) {
 .story-layer.is-drawn text, .story-layer.is-drawn image { animation: story-annotation 1s .45s both; }
 .story-narrative { position: relative; }
 .story-beat { min-height: 68dvh; display: flex; flex-direction: column; justify-content: center; padding: 70px 0; position: relative; }
-.story-beat::before { content: ''; position: absolute; left: -24px; top: 50%; width: 5px; height: 5px; border: 1px solid #8e96a3; border-radius: 50%; background: #121417; }
+.story-beat::before { content: ''; position: absolute; left: -24px; top: 50%; width: 5px; height: 5px; border: 1px solid #8e96a3; border-radius: 50%; background: #000; }
 .story-beat h2 { font: 400 clamp(29px, 3.2vw, 47px)/1.12 var(--serif); letter-spacing: -.035em; margin-bottom: 26px; }
 .story-beat h2 em { color: #a9b1be; }
 .story-beat > p:not(.studio-eyebrow) { color: #a4acb8; font-size: 14px; line-height: 1.85; max-width: 380px; margin: 0; }
 .story-aside { color: #808998; font: italic 15px/1.5 var(--serif); margin-top: 24px; }
 .story-foot { position: relative; max-width: 1320px; margin: 0 auto; display: flex; justify-content: space-between; gap: 20px; padding: 20px 0; color: #808998; font: 10px/1.6 var(--mono); }
 .story-foot button { color: #c2c9d3; font: inherit; border: 0; background: transparent; padding: 0; cursor: pointer; }
-.studio .studio-close { position: relative; background: #121417; border-top: 0; }
+.studio .studio-close { position: relative; background: #000; border-top: 0; }
 .studio .studio-close::before { content: ''; display: block; width: 100%; height: 40px; border-top: 1px solid #59616d; border-radius: 50%; opacity: .35; margin-bottom: 45px; }
 .studio .close-story-copy { max-width: 300px; color: #98a1b0; font-size: 14px; line-height: 1.7; margin: 0 0 20px; }
 #editor-film-video { display: block; width: 100%; max-height: 80dvh; }
@@ -2801,7 +2801,7 @@ html:has(.dl[open]) {
 @keyframes story-annotation { from { opacity: 0; } to { opacity: 1; } }
 @media (max-width: 700px) {
   .story-composition { display: block; }
-  .story-art { top: 0; z-index: 2; padding: 5px 0 10px; background: linear-gradient(#121417 94%, transparent); }
+  .story-art { top: 0; z-index: 2; padding: 5px 0 10px; background: linear-gradient(#000 94%, transparent); }
   .story-art > svg { width: auto; height: 37dvh; max-width: 100%; margin: auto; }
   .story-art figcaption { font-size: 8px; margin-top: 0; }
   .story-thread { left: 22px; }
@@ -2836,7 +2836,7 @@ html:has(.dl[open]) {
 @media (prefers-reduced-motion: reduce) { .nodi-outline, .nodi-smile { stroke-dashoffset: 0; } }
 
 /* One camera, one drawing surface, from the opening line through the invitation. */
-.studio { background: #121417; }
+.studio { background: #000; }
 .studio-header { border: 0; }
 .studio .canvas-journey { display: grid; grid-template-columns: 64% 36%; padding: 0 4vw 0 0; background: transparent; }
 .world-camera { position: sticky; top: 0; height: 100dvh; overflow: hidden; align-self: start; mask-image: linear-gradient(transparent, #000 5%, #000 94%, transparent); }
@@ -2859,12 +2859,10 @@ html:has(.dl[open]) {
 .canvas-reading .story-beat::before { display: none; }
 .canvas-reading .story-beat h2, .story-ending h2 { font: 400 clamp(29px, 3.2vw, 47px)/1.12 var(--serif); letter-spacing: -.035em; }
 .story-ending h2 em { color: #a9b1be; }
-.story-ending #watch-editor { border: 0; background: none; color: #b9c0ca; font: 10px var(--mono); padding: 0; margin-top: 28px; cursor: pointer; }
-.story-ending .canvas-promise { font: 9px/1.8 var(--mono) !important; }
 .studio-footer { background: transparent; border: 0; }
 @media (max-width: 700px) {
   .studio .canvas-journey { display: block; padding: 0; }
-  .world-camera { height: 42dvh; z-index: 3; background: #121417; mask-image: linear-gradient(#000 94%, transparent); }
+  .world-camera { height: 42dvh; z-index: 3; background: #000; mask-image: linear-gradient(#000 94%, transparent); }
   .canvas-world { width: 100%; max-width: 500px; left: 50%; transform: translateX(-50%) translateY(var(--camera-y, 0px)); margin-left: 0; top: 0; }
   .canvas-world .story-art > svg { width: 100%; height: auto; max-width: none; }
   .canvas-coordinate { display: none; }
@@ -2881,7 +2879,7 @@ html:has(.dl[open]) {
 #art-caption-text.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 @media (max-width: 700px) { .canvas-world { width: min(100%, 47dvh); max-width: 500px; } }
 
-.world-camera { background: #121417; }
+.world-camera { background: #000; }
 .canvas-world { mix-blend-mode: screen; }
 .world-connection path { stroke-dashoffset: 0; animation: trace-thought 2.4s 1.5s both; }
 @media (prefers-reduced-motion: reduce) { .world-connection path { animation: none; } }
@@ -3096,3 +3094,188 @@ html:has(.dl[open]) {
 .studio-footer-glyphs a:hover { color: #e6e9ee; transform: translateY(-2px); }
 .studio-footer-glyphs svg { width: 16px; height: 16px; fill: currentColor; }
 .studio-footer-glyphs .studio-coffee-glyph svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* The ending's last marks are pencilled, not typeset: a play button drawn in one stroke and three ticked promises. */
+.story-ending #watch-editor { display: flex; align-items: center; gap: 12px; margin-top: 30px; padding: 0; border: 0; background: none; color: #c3cad4; font: 17px 'Bradley Hand', 'Segoe Print', var(--serif); cursor: pointer; }
+.story-ending #watch-editor svg { width: 40px; height: 40px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; transition: transform .3s var(--ease); }
+.story-ending #watch-editor span { transform: rotate(-1.5deg); }
+.story-ending #watch-editor:hover, .story-ending #watch-editor:focus-visible { color: #fff; }
+.story-ending #watch-editor:hover svg { transform: rotate(-7deg) scale(1.08); }
+.story-ending .canvas-promise { display: flex; flex-wrap: wrap; gap: 8px 24px; margin: 30px 0 0; padding: 0; list-style: none; color: #98a1b0; font: 15px 'Bradley Hand', 'Segoe Print', var(--serif); }
+.canvas-promise li { display: flex; align-items: center; gap: 7px; transform: rotate(-1.5deg); }
+.canvas-promise li:nth-child(2) { transform: rotate(1deg); }
+.canvas-promise li::before { content: ''; width: 17px; height: 15px; background: #c3cad4; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 17 15' fill='none' stroke='%23000' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1.5 8.2q2.2 1.8 3.6 4.6Q8.6 5.8 15.4 1.6'/%3E%3C/svg%3E") center / contain no-repeat; }
+@media (scripting: enabled) {
+  .story-ending #watch-editor path:first-child { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset .9s var(--ease), opacity .1s; }
+  .story-ending[data-inked] #watch-editor path:first-child { stroke-dashoffset: 0; opacity: 1; }
+  .canvas-promise li::before { clip-path: inset(0 100% 0 0); transition: clip-path .45s ease-out; }
+  .canvas-promise li:nth-child(2)::before { transition-delay: .22s; }
+  .canvas-promise li:nth-child(3)::before { transition-delay: .44s; }
+  .story-ending[data-inked] .canvas-promise li::before { clip-path: inset(0); }
+}
+
+/* The story's index: a sketch per chapter down the margin. The current one is circled in pencil. */
+.story-rail { position: fixed; z-index: 4; top: 50%; right: max(14px, 1.5vw); display: flex; flex-direction: column; gap: 4px; transform: translateY(-50%); opacity: 0; pointer-events: none; transition: opacity .35s ease; }
+.story-rail[data-open] { opacity: 1; pointer-events: auto; }
+.story-rail::before { content: ''; position: absolute; z-index: -1; top: 20px; right: 20px; bottom: 20px; border-right: 1px dashed #ffffff26; }
+.story-rail button { position: relative; display: flex; align-items: center; justify-content: flex-end; height: 40px; padding: 0; border: 0; background: none; color: #6f7886; cursor: pointer; transition: color .25s ease; }
+.story-rail svg { flex: none; width: 40px; height: 40px; padding: 4px; border-radius: 50%; background: #000; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; overflow: visible; transition: transform .3s var(--ease); }
+.story-rail .rail-glyph { vector-effect: non-scaling-stroke; }
+/* Hidden outright while undrawn: a round cap leaves a dot at the start of an empty dash. */
+.story-rail .rail-ring { stroke-dasharray: 1; stroke-dashoffset: 1; opacity: 0; transition: stroke-dashoffset .7s var(--ease), opacity .1s; }
+.story-rail span { position: absolute; right: 46px; padding: 3px 9px; border-radius: 4px; background: #000eb; font: 16px 'Bradley Hand', 'Segoe Print', var(--serif); white-space: nowrap; opacity: 0; transform: translateX(8px) rotate(-2deg); transition: opacity .2s ease, transform .3s var(--ease); pointer-events: none; }
+.story-rail [data-read] { color: #a9b1be; }
+.story-rail [aria-current] { color: #f1f3f6; }
+.story-rail [aria-current] .rail-ring { stroke-dashoffset: 0; opacity: 1; }
+.story-rail button:hover, .story-rail button:focus-visible { color: #fff; outline: none; }
+.story-rail button:hover svg, .story-rail button:focus-visible svg { transform: rotate(-6deg) scale(1.1); }
+/* Keyboard focus opens the whole index; a mouse click must not leave it open. */
+.story-rail:hover span, .story-rail:has(:focus-visible) span { opacity: 1; transform: rotate(-2deg); }
+.story-rail button:nth-child(even) span { rotate: 3deg; }
+/* Narrower than this the margin belongs to the copy, so the index lies along the bottom of the reading column. */
+@media (max-width: 1279px) {
+  .story-rail { top: auto; right: 4vw; bottom: 16px; flex-direction: row; gap: 2px; transform: none; }
+  .story-rail::before { top: 20px; right: 20px; bottom: auto; left: 20px; border-right: 0; border-top: 1px dashed #ffffff26; }
+  .story-rail span { right: auto; bottom: 44px; left: 50%; translate: -50% 0; transform: translateY(6px) rotate(-2deg); }
+  .story-rail:hover span, .story-rail:has(:focus-visible) span { opacity: 0; }
+  .story-rail [aria-current] span, .story-rail button:hover span, .story-rail button:focus-visible span { opacity: 1; transform: rotate(-2deg); }
+  .story-rail:hover [aria-current]:not(:hover) span { opacity: 0; }
+}
+@media (max-width: 700px) {
+  .story-rail { right: auto; left: 50%; bottom: 10px; padding: 2px 8px; border: 1px solid #ffffff14; border-radius: 24px; background: #000f2; translate: -50% 0; }
+  .story-rail::before { display: none; }
+  .story-rail button, .story-rail svg { width: 38px; height: 38px; }
+  .story-rail svg { background: none; }
+  .story-rail span { display: none; }
+}
+
+/* The story film (scripts/story-film.py) is the page's main picture: full-bleed, uncropped on its
+   subject, behind nothing, from the first screen to the last. The board is matte black and so is
+   the film, so its edges are nowhere. Each scene keeps its subject left of centre; the words sit in
+   the room that leaves, and on a phone below it. The scroll scrubs it. */
+.studio { --paper: #000; background: #000; }
+/* A flat board: the old cloudy wash would show the film's rectangle. */
+.studio::after { display: none; }
+.studio .canvas-journey > .story-film { grid-column: 1 / -1; grid-row: 1; align-self: start; position: sticky; top: 0; z-index: 2; width: calc(100% + 4vw); max-width: none; height: 100dvh; pointer-events: none; opacity: 0; transition: opacity .6s ease; }
+.canvas-story[data-film=''] > .story-film { opacity: 1; }
+/* While the film is on its way, a small sketch draws itself where it will be. */
+.film-loader { position: absolute; top: 0; left: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: 14px; width: 64%; height: min(100dvh, 900px); color: #8e96a3; pointer-events: none; transition: opacity .4s ease; }
+.film-loader svg { width: 150px; fill: none; stroke: currentColor; stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; }
+.film-loader path { stroke-dasharray: 1; animation: film-loader 2.4s ease-in-out infinite; }
+.film-loader path:nth-child(2) { animation-delay: .35s; }
+.film-loader path:nth-child(3) { animation-delay: .6s; }
+.film-loader path:nth-child(4) { animation-delay: .8s; }
+.film-loader span { font: 17px 'Bradley Hand', 'Segoe Print', var(--serif); rotate: -2deg; }
+.canvas-story[data-film=''] .film-loader { opacity: 0; }
+.canvas-story[data-film='missing'] .film-loader span { visibility: hidden; }
+@keyframes film-loader { 0% { stroke-dashoffset: 1; } 45%, 80% { stroke-dashoffset: 0; } 100% { stroke-dashoffset: -1; } }
+.studio .canvas-journey > .canvas-reading { grid-column: 2; grid-row: 1; position: relative; z-index: 3; }
+/* The words of a chapter are a paper note pinned to the corner of the board: Draft Canvas's own
+   paper and ink, small enough to leave the film the screen, and plainly in front of it, not across it. */
+@media (min-width: 701px) {
+  /* Pinned, not passing: each note fades in at the same corner as its chapter begins and out as it ends. */
+  /* Unseen until the script says which chapter is on: all six share one corner, and none belongs on a fresh page. */
+  .canvas-reading .story-beat .story-copy { position: fixed; top: auto; right: max(4vw, 62px); bottom: 7vh; z-index: 5; width: min(370px, 30vw); opacity: var(--chapter-opacity, 0); padding: 28px 30px 24px; border-radius: 3px; background: #f4f1e9; color: #1d1c18; box-shadow: 0 22px 44px -20px #000d, 6px 7px 0 #5fd6c92e; rotate: -1.3deg; }
+  .canvas-reading .story-beat:nth-child(even) .story-copy { rotate: 1.1deg; }
+  .canvas-reading .story-beat[data-away] .story-copy { visibility: hidden; }
+  .canvas-reading .story-beat .story-copy::after { content: ''; position: absolute; top: -10px; left: 50%; width: 78px; height: 20px; background: #5fd6c980; translate: -50% 0; rotate: -3deg; }
+  .canvas-reading .story-beat .story-copy h2 { margin-bottom: 14px; color: #1d1c18; font-size: clamp(24px, 2.1vw, 31px); }
+  .canvas-reading .story-beat .story-copy h2 em { color: #0a746b; }
+  .canvas-reading .story-beat .story-copy > p:not(.studio-eyebrow) { max-width: none; margin: 0 0 12px; color: #4f4b42; font-size: 13px; line-height: 1.65; }
+  .canvas-reading .story-beat .story-copy .studio-eyebrow { margin-bottom: 12px; color: #767165; }
+  .canvas-reading .story-beat .story-copy > .story-aside { margin: 0; color: #767165; font-size: 13px; }
+}
+@media (max-width: 700px) {
+  /* On a phone the film has the top of the screen to itself and the words read below it. */
+  /* The words scroll away beneath the stage, never across it. */
+  .studio .canvas-journey > .story-film { display: block; width: 100%; height: 46dvh; z-index: 4; background: #000; }
+  .studio .canvas-journey > .canvas-reading { z-index: 1; }
+  .film-loader { width: 100%; height: 46dvh; z-index: 5; }
+}
+
+/* Draft Canvas's own mint, the colour of what is live in the editor, is the one accent on the board:
+   in the film it marks the request, Nodi and what the agent proposes; on the page, where to go next. */
+.studio { --accent: #5fd6c9; --on-accent: #06211f; }
+.studio-landing .studio-button, .story-ending .studio-button { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.studio-landing .studio-button:hover, .story-ending .studio-button:hover { background: #8be6dc; border-color: #8be6dc; }
+.studio .studio-landing h1 em { padding-bottom: .16em; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 14' preserveAspectRatio='none' fill='none' stroke='%235fd6c9' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8.5C52 3 96 11.500 148 6.500S250 3.500 297 7.500'/%3E%3Cpath d='M38 12Q150 8.500 262 11.500' opacity='.6'/%3E%3C/svg%3E") left bottom / 100% .2em no-repeat; }
+.story-rail [aria-current] { color: var(--accent); }
+.canvas-promise li::before { background: var(--accent); }
+.story-ending #watch-editor svg path:first-child { stroke: var(--accent); }
+.studio-header .header-button:hover { color: var(--accent); }
+
+/* The one recording of the real editor, after the story has been told in pencil. */
+.proof-film { max-width: 1180px; margin: 0 auto; padding: 40px 5vw 120px; }
+.proof-film h2 { font: 400 clamp(29px, 3.2vw, 47px)/1.12 var(--serif); letter-spacing: -.035em; margin: 0 0 40px; }
+.proof-film h2 em { color: #a9b1be; }
+.proof-film figure { position: relative; margin: 0; padding: 2.4% 1.6%; }
+.proof-film video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #0c0d10; border-radius: 3px; }
+.proof-frame { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: #8e96a3; stroke-width: 1.2; vector-effect: non-scaling-stroke; pointer-events: none; }
+.proof-frame path { vector-effect: non-scaling-stroke; }
+@media (max-width: 700px) { .proof-film { padding: 20px 7vw 80px; } .proof-film h2 { font-size: 34px; margin-bottom: 26px; } }
+
+.canvas-reading .story-ending > * { opacity: var(--ending-opacity, 1); }
+
+/* The first screen is only an introduction: the mark, drawn in chalk with a request crossing it, one
+   line about what Draft Canvas is, and the two ways in. The film waits below, with the screen to itself. */
+.studio-landing { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100dvh; padding: 60px 6vw 60px; text-align: center; }
+.landing-name { margin: 0 0 26px; color: #e6e9ee; font: 600 17px/1 var(--sans); letter-spacing: -.01em; }
+.landing-facts { margin: 26px 0 0; color: #808998; font: 10px/1.8 var(--mono); letter-spacing: .08em; }
+.landing-facts a { color: #a9b1be; text-underline-offset: 4px; }
+.landing-facts a:hover { color: var(--accent); }
+.landing-mark { width: clamp(84px, 9vw, 124px); margin-bottom: 18px; overflow: visible; fill: none; stroke: #e6e9ee; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; rotate: -3deg; }
+.landing-mark path { stroke-dasharray: 1; animation: landing-draw .9s var(--ease) both; }
+.landing-mark path:nth-child(2) { animation-delay: .35s; }
+.landing-mark .landing-wire { animation-delay: .8s; }
+.landing-mark .landing-signal { fill: var(--accent); stroke: none; opacity: 0; animation: landing-arrive .3s 1.6s both; }
+@keyframes landing-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes landing-arrive { to { opacity: 1; } }
+.studio .studio-landing h1 { margin: 0; font: 400 clamp(46px, 7vw, 104px)/1.02 var(--serif); letter-spacing: -.04em; }
+.studio .studio-landing h1 em { color: #a9b1be; }
+.landing-lead { max-width: 520px; margin: 34px 0 38px; color: #a4acb8; font-size: clamp(14px, 1.2vw, 17px); line-height: 1.75; }
+.landing-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+.studio-landing .studio-button.landing-ghost { border-color: #3a414c; background: none; color: #e6e9ee; }
+.studio-landing .studio-button.landing-ghost:hover { border-color: var(--accent); background: none; color: var(--accent); }
+.landing-next { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 44px; color: #808998; font: 17px 'Bradley Hand', 'Segoe Print', var(--serif); text-decoration: none; }
+.landing-next svg { width: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; animation: landing-nudge 2.4s ease-in-out infinite; }
+.landing-next:hover { color: var(--accent); }
+@keyframes landing-nudge { 50% { translate: 0 6px; } }
+/* Room for the camera to leave the head-on diagram before the first chapter begins. */
+.story-lead { height: 70dvh; }
+@media (max-width: 700px) {
+  .studio-landing { padding-block: 40px; }
+  .landing-next { margin-top: 40px; }
+  .story-lead { height: 30dvh; }
+}
+@media (scripting: none) and (min-width: 701px) {
+  .canvas-reading .story-beat .story-copy { position: static; margin: 0 0 60px auto; opacity: 1; }
+}
+
+/* The two ways in are made like the editor's own Quick Draft card: a sheet lifted off the board at a
+   slight angle, and beside it a box pencilled twice, the way a hand goes over an outline. */
+.landing-actions { align-items: center; gap: 18px 22px; }
+.studio-landing .studio-button { position: relative; padding: 17px 22px; border-radius: 4px; font-size: 14px; font-weight: 600; transition: transform .25s var(--ease), box-shadow .25s var(--ease), background .2s, color .2s; }
+.studio-landing #hero-cta { rotate: -1.4deg; box-shadow: 5px 6px 0 #5fd6c940, 0 18px 30px -18px #5fd6c966; }
+.studio-landing #hero-cta::after { content: ''; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 13px 13px 0; border-color: #000 #000 #3fb3a6 #3fb3a6; border-bottom-left-radius: 3px; }
+.studio-landing #hero-cta:hover { rotate: 0deg; transform: translateY(-3px); box-shadow: 7px 9px 0 #5fd6c94d, 0 22px 34px -18px #5fd6c980; }
+.studio-landing #hero-cta span { display: inline-block; transition: transform .25s var(--ease); }
+.studio-landing #hero-cta:hover span { transform: translateY(3px); }
+.studio-landing .studio-button.landing-ghost { border: 0; rotate: .8deg; }
+.studio-landing .studio-button.landing-ghost::before, .studio-landing .studio-button.landing-ghost::after { content: ''; position: absolute; inset: 0; border: 1.2px solid #8e96a3; border-radius: 5px 8px 4px 9px; pointer-events: none; transition: border-color .2s, rotate .25s var(--ease); }
+.studio-landing .studio-button.landing-ghost::after { inset: -2px 1px 1px -1px; border-color: #5a626e; border-radius: 8px 4px 9px 5px; rotate: -.9deg; }
+.studio-landing .studio-button.landing-ghost:hover { transform: translateY(-2px); }
+.studio-landing .studio-button.landing-ghost:hover::before, .studio-landing .studio-button.landing-ghost:hover::after { border-color: var(--accent); }
+.studio-landing .studio-button.landing-ghost:hover::after { rotate: .7deg; }
+.studio-landing .studio-button.landing-ghost span { display: inline-block; transition: transform .25s var(--ease); }
+.studio-landing .studio-button.landing-ghost:hover span { transform: translate(2px, -2px); }
+.landing-docs { color: #a9b1be; font: 18px 'Bradley Hand', 'Segoe Print', var(--serif); text-decoration: none; rotate: -1.5deg; }
+.landing-docs span { display: inline-block; transition: transform .25s var(--ease); }
+.landing-docs:hover { color: var(--accent); }
+.landing-docs:hover span { transform: translate(2px, -2px); }
+.studio-landing .landing-promise { justify-content: center; margin-top: 34px; }
+.studio-landing .landing-promise li::before { clip-path: inset(0 100% 0 0); animation: landing-tick .45s ease-out 1.9s both; }
+.studio-landing .landing-promise li:nth-child(2)::before { animation-delay: 2.1s; }
+.studio-landing .landing-promise li:nth-child(3)::before { animation-delay: 2.3s; }
+@keyframes landing-tick { to { clip-path: inset(0); } }
+@media (prefers-reduced-motion: reduce) { .studio-landing .landing-promise li::before { clip-path: inset(0); } .landing-mark path { stroke-dashoffset: 0; } .landing-mark .landing-signal { opacity: 1; } }
+.studio-landing .landing-promise { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 0; list-style: none; color: #98a1b0; font: 16px 'Bradley Hand', 'Segoe Print', var(--serif); }

@@ -221,3 +221,53 @@
   .dc-home-project-welcome > div { flex: 1; min-width: 185px; }
   .dc-home-project-welcome .dc-button { margin: 0 0 0 80px; }
 }
+
+/* Rename, duplicate and delete sit in the corner of a diagram's paper. */
+.dc-home-card {
+  position: relative;
+  min-width: 0;
+}
+
+.dc-home-card .dc-home-draft {
+  width: 100%;
+}
+
+.dc-home-card-actions {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  display: flex;
+  padding: 2px;
+  border: 1px solid var(--dc-border);
+  border-radius: 6px;
+  background: var(--dc-surface-raised);
+  box-shadow: 2px 3px 0 var(--dc-selection-soft);
+  opacity: 0;
+  transform: translateY(-3px) rotate(1.2deg);
+  transition: opacity .14s ease, transform .18s ease;
+}
+
+.dc-home-card:hover .dc-home-card-actions,
+.dc-home-card:focus-within .dc-home-card-actions {
+  opacity: 1;
+  transform: rotate(1.2deg);
+}
+
+.dc-home-card-actions .dc-button {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+}
+
+@media (hover: none) {
+  .dc-home-card-actions {
+    opacity: 1;
+    transform: rotate(1.2deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-home-card-actions {
+    transition: none;
+  }
+}

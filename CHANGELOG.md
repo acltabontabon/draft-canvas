@@ -77,6 +77,11 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Download for docs** gives a ZIP of the picture and its editable source, in a `diagrams` folder to
   put next to your Markdown file.
 
+#### Changed
+
+- Rename, duplicate or delete a diagram straight from Home, without opening the gallery.
+- The backup reminder waits until you have a few diagrams, or one more than a day old.
+
 ## [1.18.1] - 2026-11-06
 
 ### Shared

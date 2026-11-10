@@ -1,0 +1,16 @@
+{
+  "frames": 769,
+  "fps": 24,
+  "perStrip": 6,
+  "strips": 129,
+  "sizes": {
+    "large": {
+      "width": 1600,
+      "height": 900
+    },
+    "small": {
+      "width": 960,
+      "height": 540
+    }
+  }
+}
