@@ -1,6 +1,5 @@
 import { FILM, INTRO, setUpStoryFilm } from './storyFilm.js';
 import { setUpStoryRail } from './storyRail.js';
-import editorDemo from '../../docs/media/demo.mp4?url';
 
 export function setUpStudio() {
   const story = document.querySelector('.canvas-story');
@@ -90,9 +89,10 @@ export function setUpStudio() {
   reduced.addEventListener('change', requestUpdate);
   update();
 
-  // The one recording of the real editor: fetched only when asked for, here or from the ending.
+  // The launch film, the one place the real editor is shown: fetched only when asked for, here or from the ending.
+  const launchFilm = `${import.meta.env.BASE_URL}clips/launch.mp4`;
   const video = document.getElementById('editor-film-video');
-  const load = () => { if (!video.getAttribute('src')) video.src = editorDemo; };
+  const load = () => { if (!video.getAttribute('src')) video.src = launchFilm; };
   video.addEventListener('play', load);
   video.addEventListener('pointerdown', load, { once: true });
   video.addEventListener('focus', load, { once: true });
