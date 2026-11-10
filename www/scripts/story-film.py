@@ -140,7 +140,8 @@ SERVICE = hero.service.location.copy()
 STORE = hero.store.location.copy()
 
 # 1 · Walk through: a request crosses the system, and each step it reaches is numbered.
-steps = [pops(pin('step-1', A, '1'), 2.7), pops(pin('step-2', SERVICE + V(.5, .22, 0), '2'), 4.0, 11.3, 20.2), pops(pin('step-3', STORE + V(0, .2, .35), '3'), 5.3)]
+# The numbers belong to this walk: they fold away as the camera moves on.
+steps = [pops(pin('step-1', A, '1'), 2.7, 6.5), pops(pin('step-2', SERVICE + V(.5, .22, 0), '2'), 4.0, 6.6), pops(pin('step-3', STORE + V(0, .2, .35), '3'), 5.3, 6.7)]
 bpy.ops.mesh.primitive_uv_sphere_add(radius=.075, segments=20, ring_count=10)
 request = bpy.context.active_object
 request.data.materials.append(BRIGHT)
@@ -169,28 +170,31 @@ tick = draws(growing('accepted-tick', [PROPOSED + V(-.2, 0, .02), PROPOSED + V(-
 
 # 3 · Look inside: under the open service is a room of its own, tied to it by four threads.
 ROOM = SERVICE + V(0, -.1, -3.4)
-room = pops(hero.empty('room', ROOM), 12.3)
+BELOW = 19.5  # when the camera leaves the lower level, and it folds away
+BURIED = []  # strokes of the lower level, hidden once it has
+room = pops(hero.empty('room', ROOM), 11.5, BELOW)
 outline = hero.parse('M-110 -62Q-110 -74 -98 -74L98 -74Q110 -74 110 -62L110 62Q110 74 98 74L-98 74Q-110 74 -110 62Z')[0]
 stroke('room-sheet', [[V(x / 100, -y / 100, 0) for x, y in outline]], room)
 parts = [
-    pops(card('part-a', ROOM + V(-.5, .28, .16), .62, .36, .1), 12.9),
-    pops(card('part-b', ROOM + V(.45, .28, .22), .62, .36, .1), 13.2),
-    pops(card('part-c', ROOM + V(-.05, -.34, .3), .74, .36, .1), 13.5),
+    pops(card('part-a', ROOM + V(-.5, .28, .16), .62, .36, .1), 11.9, BELOW),
+    pops(card('part-b', ROOM + V(.45, .28, .22), .62, .36, .1), 12.1, BELOW),
+    pops(card('part-c', ROOM + V(-.05, -.34, .3), .74, .36, .1), 12.3, BELOW),
 ]
 part_wires = [
-    draws(growing('part-ab', [ROOM + V(-.19, .28, .16), ROOM + V(.14, .28, .22)]), 13.8, .4),
-    draws(growing('part-ac', [ROOM + V(-.5, .1, .16), ROOM + V(-.5, -.34, .25), ROOM + V(-.42, -.34, .3)]), 14.0, .5),
-    draws(growing('part-bc', [ROOM + V(.45, .1, .22), ROOM + V(.45, -.34, .27), ROOM + V(.32, -.34, .3)]), 14.2, .5),
+    draws(growing('part-ab', [ROOM + V(-.19, .28, .16), ROOM + V(.14, .28, .22)]), 12.6, .4),
+    draws(growing('part-ac', [ROOM + V(-.5, .1, .16), ROOM + V(-.5, -.34, .25), ROOM + V(-.42, -.34, .3)]), 12.8, .5),
+    draws(growing('part-bc', [ROOM + V(.45, .1, .22), ROOM + V(.45, -.34, .27), ROOM + V(.32, -.34, .3)]), 13.0, .5),
 ]
 corners = [(-.745, .395), (.745, .395), (.745, -.395), (-.745, -.395)]
 room_corners = [(-1.1, .74), (1.1, .74), (1.1, -.74), (-1.1, -.74)]
 threads = pops(stroke('room-threads', [d for (sx, sy), (rx, ry) in zip(corners, room_corners)
                                         for d in dashed([SERVICE + V(sx * .95, sy * .95, -.22), ROOM + V(rx, ry, 0)], 2, 3)],
-                      mat=hero.FAINT_MAT, radius=LINE * .8, rough=False), 12.3)
+                      mat=hero.FAINT_MAT, radius=LINE * .8, rough=False), 11.5)
+BURIED += [threads, *part_wires]
 
 # 4 · From your code: the source the picture was read from, and what in it backs each part.
 CODE = ROOM + V(-2.9, -.05, 0)
-sheets = [pops(card(f'file-{i}', CODE + V(.13 * i, -.09 * i, .26 * i), .95, 1.25, .03), 15.5 + .3 * i) for i in range(3)]
+sheets = [pops(card(f'file-{i}', CODE + V(.13 * i, -.09 * i, .26 * i), .95, 1.25, .03), 15.5 + .3 * i, BELOW) for i in range(3)]
 top = CODE + V(.26, -.18, .52)
 lines = [(0, .5), (.08, .62), (.08, .4), (.16, .5), (.08, .3), (0, .56), (.08, .44), (0, .2)]
 code_lines = pops(stroke('code-lines', [[top + V(-.36 + indent, .47 - .13 * row, .01), top + V(-.36 + indent + length, .47 - .13 * row, .01)]
@@ -201,21 +205,25 @@ for index, (row, part, at) in enumerate([(1, 0, 17.0), (5, 2, 17.9)]):
     a, b = top + V(-.36 + indent, .47 - .13 * row, .02), top + V(-.36 + indent + length, .47 - .13 * row, .02)
     evidence.append(draws(growing(f'proof-{index}', [a, b], radius=LINE * 1.5, mat=BRIGHT), at, .35))
     target = place(parts[part]) + V(-.3, 0, .02)
+    BURIED += evidence[-1:]
     evidence.append(draws(growing(f'proof-thread-{index}', [b + V(.04, 0, 0), b + V(.3, 0, .25), target + V(-.25, 0, .2), target]), at + .3, .6))
+
+BURIED += [code_lines, *evidence]
 
 # 5 · Together: three people on one canvas; one of them adds a card while the others look on.
 ARROW = [V(0, 0), V(0, -.44), V(.11, -.33), V(.2, -.54), V(.28, -.5), V(.19, -.3), V(.33, -.3), V(0, 0)]
 NEW = V(-2.55, -.3, .5)
 cursors = []
-for index, home in enumerate([V(1.9, .4, 1.9), NEW + V(.2, .1, .55), V(-.2, -1.5, 2.0)]):
-    cursor = pops(hero.empty(f'cursor-{index}', home), 19.6 + .3 * index, 27.0)
+for index, home in enumerate([V(.5, .75, 1.5), NEW + V(.2, .1, .55), V(-1.1, -1.35, 1.6)]):
+    cursor = pops(hero.empty(f'cursor-{index}', home), 20.0 + .3 * index, 24.0 + .15 * index)
+    cursor['size'] = 1.5
     stroke(f'cursor-{index}-ink', [ARROW, [p + V(.34, -.78, 0) for p in rect(.52, .2)], [V(.2, -.78, 0), V(.2 + .12 * (index + 1), -.78, 0)]], cursor, rough=False)
     cursors.append((cursor, home))
 new_card = pops(card('new-card', NEW, .78, .46), 21.3)
 new_wire = draws(growing('new-wire', [NEW + V(.39, 0, 0), V(-1.85, NEW.y, .4), V(-1.85, SERVICE.y, .25), SERVICE + V(-.72, 0, 0)]), 22.1, .8)
 
 # 6 · Open questions: what is still unsettled stays pinned to the part it concerns.
-questions = [pops(pin('question-1', E, '?'), 24.5), pops(pin('question-2', new_card.location + V(.1, 0, 0), '?'), 25.3), pops(pin('question-3', D, '?'), 26.1)]
+questions = [pops(pin('question-1', E, '?'), 24.5), pops(pin('question-2', new_card.location + V(.1, 0, 0), '?'), 25.3), pops(pin('question-3', STORE + V(0, .2, .35), '?'), 26.1)]
 
 # The camera: where it looks, how far round and how steeply, and from how far.
 camera_data = bpy.data.cameras.new('film')
@@ -238,10 +246,10 @@ MOVES = [
     (15, (ROOM.x, ROOM.y, ROOM.z + .15), -16, 42, 3.7),
     (16.4, (CODE.x + .7, CODE.y, CODE.z + .3), 14, 42, 4.0),
     (19, (CODE.x + .9, CODE.y, CODE.z + .3), 24, 44, 3.9),
-    (20.8, (-.1, 0, .5), -26, 46, 9.6),
-    (23.5, (-.5, -.1, .5), -16, 50, 9.2),
-    (24.6, (-.4, -.7, .9), 12, 58, 7.4),
-    (27.5, (-.2, -.6, .9), 20, 56, 7.2),
+    (20.9, (-.9, -.1, .6), -24, 46, 7.4),
+    (23.5, (-1.1, -.2, .6), -14, 50, 7.0),
+    (24.7, (-.5, -.7, .9), 12, 58, 6.8),
+    (27.5, (-.3, -.6, .9), 20, 56, 6.6),
     (30, (0, 0, 0), 0, 0, 11.6),
 ]
 
@@ -287,10 +295,13 @@ def pose(frame):
     look(t)
     for obj, at, until, back in POPS:
         size = pop(t, at) * (1 - pop(t, until) if until is not None else 1) + (pop(t, back) if back is not None else 0)
+        size *= obj.get('size', 1)
         obj.scale = (size, size, size)
     for obj, at, seconds in DRAWS:
         obj.data.bevel_factor_end = max(0.0, min(1.0, (t - at) / seconds))
         obj.hide_render = t <= at
+    for obj in BURIED:
+        obj.hide_render = obj.hide_render or t > BELOW
     # The small components inside the service step aside while the camera passes through to the room.
     gone = 1 - pop(t, 11.4) * (1 - pop(t, 28.2))
     hero.inside.scale = (gone * hero.near(-.75),) * 3
