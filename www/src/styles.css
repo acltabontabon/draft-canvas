@@ -3147,11 +3147,6 @@ html:has(.dl[open]) {
   .story-rail button, .story-rail svg { width: 38px; height: 38px; }
   .story-rail svg { background: none; }
   .story-rail span { display: none; }
-  /* Phones crop the side margins of the two widest recordings, so the editor reads about a fifth larger.
-     The paired and depth recordings keep 16:10: their overlays are positioned against it. */
-  .recorded-paper:is([data-moment='present'], [data-moment='nodi']) { aspect-ratio: 4 / 3; }
-  .recorded-paper:is([data-moment='present'], [data-moment='nodi']) .recorded-layer { object-fit: cover; }
-  .recorded-paper:is([data-moment='present'], [data-moment='nodi']) .recorded-outline { display: none; }
 }
 
 /* The living whiteboard (scripts/hero-depth.py): a rendered loop over the board of the hero drawing.
@@ -3164,3 +3159,22 @@ html:has(.dl[open]) {
   mask-size: 100% 100%;
   mask-composite: intersect;
 }
+
+/* The story film (scripts/story-film.py) fills the stage behind the drawing and the recordings. It is
+   white line on black, so screening it over the page leaves only the lines. The scroll scrubs it. */
+.story-film { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; mix-blend-mode: screen; opacity: calc(var(--film-opacity, 0) * .82); pointer-events: none; mask-image: linear-gradient(90deg, transparent, #000 7%, #000 84%, transparent); }
+/* A chapter is the film arriving at its stop, then holding there beside the words. */
+.canvas-reading .story-beat, .canvas-reading [data-recording='inside'] { min-height: 150dvh; }
+@media (max-width: 700px) {
+  .story-film { mask-image: none; }
+}
+
+/* The one recording of the real editor, after the story has been told in pencil. */
+.proof-film { max-width: 1180px; margin: 0 auto; padding: 40px 5vw 120px; }
+.proof-film h2 { font: 400 clamp(29px, 3.2vw, 47px)/1.12 var(--serif); letter-spacing: -.035em; margin: 0 0 40px; }
+.proof-film h2 em { color: #a9b1be; }
+.proof-film figure { position: relative; margin: 0; padding: 2.4% 1.6%; }
+.proof-film video { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #0c0d10; border-radius: 3px; }
+.proof-frame { position: absolute; inset: 0; width: 100%; height: 100%; fill: none; stroke: #8e96a3; stroke-width: 1.2; vector-effect: non-scaling-stroke; pointer-events: none; }
+.proof-frame path { vector-effect: non-scaling-stroke; }
+@media (max-width: 700px) { .proof-film { padding: 20px 7vw 80px; } .proof-film h2 { font-size: 34px; margin-bottom: 26px; } }

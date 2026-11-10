@@ -334,8 +334,10 @@ def pose(frame):
         dot.scale = (visible, visible, visible)
 
 
-for frame in (ONLY or range(FRAMES)):
-    pose(frame)
-    scene.frame_set(frame)
-    scene.render.filepath = f'{OUT}/{frame:04d}.png'
-    bpy.ops.render.render(write_still=True)
+# scripts/story-film.py loads this file for its scene, without rendering the loop.
+if __name__ == '__main__':
+    for frame in (ONLY or range(FRAMES)):
+        pose(frame)
+        scene.frame_set(frame)
+        scene.render.filepath = f'{OUT}/{frame:04d}.png'
+        bpy.ops.render.render(write_still=True)

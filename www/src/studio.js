@@ -1,6 +1,6 @@
-import { setUpRecordedStory } from './recordedStory.js';
 import { setUpHeroDepth } from './heroDepth.js';
 import { setUpSketchDrawing } from './sketchDrawing.js';
+import { FILM, setUpStoryFilm } from './storyFilm.js';
 import { setUpStoryRail } from './storyRail.js';
 import editorDemo from '../../docs/media/demo.mp4?url';
 
@@ -47,11 +47,12 @@ export function setUpStudio() {
   const clamp = (value) => Math.max(0, Math.min(1, value));
   const ease = (value) => { const t = clamp(value); return t * t * (3 - 2 * t); };
   const beats = [...story.querySelectorAll('[data-recording]')];
-  const renderRecording = setUpRecordedStory(story, reduced);
   const renderRail = setUpStoryRail(story, beats);
+  const renderFilm = setUpStoryFilm(story, reduced);
+  // This much of a chapter's scroll flies the camera to its stop; the rest holds there to be read.
+  const FLIGHT = .55;
+  const lerp = ([from, to], amount) => from + (to - from) * clamp(amount);
   const ending = story.querySelector('.story-ending');
-  const connection = story.querySelector('.world-connection path');
-  connection.classList.add('scroll-stroke');
   let frame = 0;
   function update() {
     frame = 0;
@@ -60,11 +61,9 @@ export function setUpStudio() {
     const progress = clamp(-bounds.top / Math.max(1, bounds.height * .85));
     const artHeight = art.querySelector('.art-crop').getBoundingClientRect().height;
     world.style.setProperty('--camera-y', `${-artHeight * progress}px`);
-    world.style.setProperty('--meeting-opacity', String(.95 - progress * .7));
+    // The drawing hands over to the film completely; a ghost of it would sit across every chapter.
+    world.style.setProperty('--meeting-opacity', String(.95 * (1 - progress)));
     const firstTop = beats[0].getBoundingClientRect().top;
-    const line = clamp((viewport * .95 - firstTop) / (viewport * .25));
-    connection.style.strokeDashoffset = String(1 - line);
-    connection.style.opacity = line > 0 ? '1' : '0';
     let current = beats[0];
     for (const beat of beats) if (beat.getBoundingClientRect().top < viewport * .2) current = beat;
     // The outgoing pair clears before the incoming pair enters, avoiding overlapping diagrams.
@@ -84,17 +83,17 @@ export function setUpStudio() {
       }
     }
     const rect = current.getBoundingClientRect();
-    // The next chapter must not ghost through the opening on tall screens.
-    const reveal = line < 1 ? 0 : clamp((viewport * .7 - firstTop) / (viewport * .4));
-    const visible = reveal > 0;
-    world.style.setProperty('--recording-reveal', String(reveal));
-    story.querySelector('.recorded-art').style.visibility = visible ? 'visible' : 'hidden';
-    // The index keeps the reader company through the chapters, and bows out as the ending arrives.
+    // How far through its flight the current chapter is: under 1 the film is travelling, past 1 it has arrived.
+    const flight = (viewport * .2 - rect.top) / (rect.height * FLIGHT);
     const endingTop = ending.getBoundingClientRect().top;
-    renderRail(current, visible && endingTop > viewport * .55);
+    const closing = clamp((viewport * .95 - endingTop) / (viewport * .75));
+    // The film leads into the opening as the drawing slides away, then each chapter takes it further.
+    let time = lerp(FILM.dive, progress);
+    if (flight > 0) time = lerp(FILM[current.dataset.recording], reduced.matches ? 1 : flight);
+    if (closing > 0) time = lerp(FILM.ending, reduced.matches ? 1 : closing);
+    renderFilm(time, clamp(progress * 2));
+    renderRail(current, firstTop < viewport * .5 && endingTop > viewport * .55);
     if (endingTop < viewport * .7) ending.dataset.inked = '';
-    // Copy is pinned in reading position before the first frame advances.
-    renderRecording(current.dataset.recording, visible, rect.top <= viewport * .04 && Number(world.style.getPropertyValue('--chapter-opacity')) > .98);
   }
   function requestUpdate() { if (!frame) frame = requestAnimationFrame(update); }
   window.addEventListener('scroll', requestUpdate, { passive: true });
@@ -102,14 +101,15 @@ export function setUpStudio() {
   reduced.addEventListener('change', requestUpdate);
   update();
 
-  const dialog = document.getElementById('editor-film');
+  // The one recording of the real editor: fetched only when asked for, here or from the ending.
   const video = document.getElementById('editor-film-video');
+  const load = () => { if (!video.getAttribute('src')) video.src = editorDemo; };
+  video.addEventListener('play', load);
+  video.addEventListener('pointerdown', load, { once: true });
+  video.addEventListener('focus', load, { once: true });
   document.getElementById('watch-editor').addEventListener('click', () => {
-    video.src = editorDemo;
-    dialog.showModal();
+    load();
+    video.scrollIntoView({ behavior: reduced.matches ? 'auto' : 'smooth', block: 'center' });
     video.play().catch(() => {});
   });
-  document.getElementById('close-editor-film').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => video.pause());
-  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
 }

@@ -81,6 +81,7 @@
     <main id="main">
       <div class="canvas-journey canvas-story" id="top">
         <div class="world-camera" aria-label="A continuous charcoal canvas">
+          <video class="story-film" muted playsinline preload="none" aria-hidden="true"></video>
           <div class="canvas-world">
         <figure class="studio-art" aria-labelledby="studio-art-caption" data-topic="nodi">
           <div class="art-crop"><div class="art-plate"><img class="conversation-art" src="./scripts/og-illustration.png" width="1672" height="941" alt="A fine-line charcoal illustration of three people and Nodi discussing an architecture diagram" fetchpriority="high"/><video class="conversation-depth" muted loop playsinline preload="none" aria-hidden="true"></video><svg class="art-traces" viewBox="0 0 1672 941" aria-hidden="true">
@@ -97,31 +98,6 @@
             <button type="button" class="art-zone zone-questions" data-topic="questions" aria-label="Explore the open question in the sketch"></button></div></div>
           <figcaption id="studio-art-caption"><span id="art-caption-text" class="sr-only">A thought everyone can follow.</span><button class="replay-drawing" type="button" hidden>Draw again ↺</button></figcaption>
         </figure>
-            <svg class="world-connection" viewBox="0 0 900 1100" aria-hidden="true"><path pathLength="1" d="M564 212H851Q872 212 872 234V394Q872 420 845 420H453V473"/></svg>
-          <figure class="story-art recorded-art" aria-label="Actual Draft Canvas editor recording, revealed as you scroll">
-            <div class="recorded-paper">
-              <video class="recorded-layer" muted playsinline preload="none" aria-hidden="true"></video>
-              <video class="recorded-layer" muted playsinline preload="none" aria-hidden="true"></video>
-              <img class="recorded-still" alt="" hidden />
-              <nav class="depth-guide" aria-label="Demo architecture depth" hidden>
-                <span class="depth-heading">DEPTH / C4</span>
-                <button type="button" aria-label="Return to the architecture overview">
-                  <svg viewBox="0 0 130 62" aria-hidden="true"><path d="M8 32L79 8L122 29L52 55Z M11 35L53 58L120 33 M35 31L54 24L66 30L47 37Z M67 29L86 22L98 28L79 35Z M62 29L71 26"/></svg>
-                  <span>Orders <small>↖ Back to overview</small></span>
-                </button>
-                <div class="depth-branch" aria-hidden="true"><svg viewBox="0 0 130 70"><path pathLength="1" d="M53 0Q52 24 54 48L70 58"/></svg></div>
-                <div class="depth-room"><svg viewBox="0 0 130 62" aria-hidden="true"><path pathLength="1" d="M8 32L79 8L122 29L52 55Z M11 35L53 58L120 33 M35 31L54 24L66 30L47 37Z M67 29L86 22L98 28L79 35Z M62 29L71 26"/></svg><span>Command API <small>Components</small></span></div>
-                <span class="depth-location" role="status">YOU ARE HERE · OVERVIEW</span>
-              </nav>
-              <svg class="recorded-outline" viewBox="0 0 900 520" aria-hidden="true"><path pathLength="1" d="M17 42Q438 30 883 43L879 477Q443 489 20 478L17 42M13 49L17 482M26 486Q449 481 870 484"/></svg>
-              <div class="recording-loader" aria-hidden="true">
-                <svg viewBox="0 0 160 64"><path pathLength="1" d="M12 18Q34 15 56 18L55 45Q33 47 13 45Z"/><path class="pencil-echo" pathLength="1" d="M15 14Q36 12 54 14"/><path pathLength="1" d="M57 31Q77 29 96 32"/><path pathLength="1" d="M89 26L97 32L89 37"/><path pathLength="1" d="M101 17Q125 15 148 18L147 46Q124 48 102 46Z"/></svg>
-                <span>sketching the demo…</span>
-              </div>
-            </div>
-            <figcaption><span class="recording-label">FROM THE ACTUAL EDITOR</span><span class="recording-moment" role="status">An idea takes shape.</span></figcaption>
-            <p class="recording-fallback" hidden>The recording couldn’t load. <button type="button" data-retry-recording>Try again</button></p>
-          </figure>
           </div>
         </div>
         <div class="canvas-reading">
@@ -133,9 +109,9 @@
             <a class="desktop-browser" href="https://app.draftcanvas.dev/" aria-label="Open live editor">Or try it in your browser ↗</a>
           </div>
           <div class="story-narrative" id="features">
-            <div class="story-beat" data-recording="present" data-chapter="Walk through"><div class="story-copy"><p class="studio-eyebrow">EXPLAIN THE SYSTEM THAT REALLY EXISTS</p><h2>Don’t just show it.<br /><em>Walk us through it.</em></h2><p>Follow a request through the services, with the notes and code for each step in view. Everyone leaves with the same picture.</p><span class="story-aside">The real editor. Take a moment to follow the flow.</span></div></div>
+            <div class="story-beat" data-recording="present" data-chapter="Walk through"><div class="story-copy"><p class="studio-eyebrow">EXPLAIN THE SYSTEM THAT REALLY EXISTS</p><h2>Don’t just show it.<br /><em>Walk us through it.</em></h2><p>Follow a request through the services, with the notes and code for each step in view. Everyone leaves with the same picture.</p><span class="story-aside">One request. Every stop along the way.</span></div></div>
             <div class="story-beat" data-recording="nodi" data-chapter="Ask Nodi"><div class="story-copy"><p class="studio-eyebrow">YOUR OWN AGENT · DESKTOP</p><h2>Ask what breaks.<br /><em>Decide what changes.</em></h2><p>Connect your own coding agent. Reason about the architecture with Nodi, compare what it proposes, and accept only what belongs in your design.</p><span class="story-aside">The agent proposes. You stay the author.</span></div></div>
-            <div class="story-beat" data-recording="inside" data-chapter="Look inside"><div class="story-copy"><h2>The big picture.<br /><em>The detail within.</em></h2><p>Open a service to see its components, then step back out. The depth stack on the left keeps your place.</p><span class="story-aside">Go deeper without losing the thread.</span></div></div>
+            <div class="story-beat" data-recording="inside" data-chapter="Look inside"><div class="story-copy"><h2>The big picture.<br /><em>The detail within.</em></h2><p>Open a service to see its components, then step back out. Every level stays connected to the one above.</p><span class="story-aside">Go deeper without losing the thread.</span></div></div>
             <div class="story-beat" data-recording="evidence" data-chapter="From your code"><div class="story-copy"><p class="studio-eyebrow">FROM YOUR REPOSITORY · DESKTOP</p><h2>A picture with<br /><em>something behind it.</em></h2><p>Open your project folder. Source references and assumptions sit beside the architecture, and your agent refreshes the diagram when the code changes.</p><span class="story-aside">Know what was observed. Know what was inferred.</span></div></div>
             <div class="story-beat" data-recording="collaboration" data-chapter="Together"><div class="story-copy"><h2>Bring everyone<br /><em>into the picture.</em></h2><p>Draw together, see each other’s pointers, and follow the owner’s presentation. Live collaboration puts the conversation on the same canvas, without accounts.</p><span class="story-aside">One architecture. More than one perspective.</span></div></div>
             <div class="story-beat" data-recording="points" data-chapter="Open questions"><div class="story-copy"><h2>Keep the questions.<br /><em>They belong here too.</em></h2><p>Mark a tentative dependency, or pin a question to the service it concerns. Unfinished thinking stays with the architecture.</p><span class="story-aside">The next conversation starts with context.</span></div></div>
@@ -230,7 +206,14 @@
               </p>
             </div>
           </dialog>
-      <dialog class="proof-dialog" id="editor-film" aria-label="Draft Canvas editor demonstration"><button type="button" id="close-editor-film">Close ×</button><video id="editor-film-video" poster="./clips/draw.jpg" controls playsinline preload="none"></video></dialog>
+      <section class="proof-film" id="film" aria-labelledby="proof-title">
+        <p class="studio-eyebrow">THE REAL EDITOR · UNDER THREE MINUTES</p>
+        <h2 id="proof-title">Now watch it<br /><em>for real.</em></h2>
+        <figure>
+          <svg class="proof-frame" viewBox="0 0 900 520" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M17 22Q438 10 883 23L879 497Q443 509 20 498L17 22M13 29L17 502M26 506Q449 501 870 504"/></svg>
+          <video id="editor-film-video" poster="./clips/draw.jpg" controls playsinline preload="none" aria-label="Draft Canvas editor demonstration"></video>
+        </figure>
+      </section>
     </main>
     <footer class="studio-footer">
       <span>Draft Canvas · Free &amp; open source</span>
