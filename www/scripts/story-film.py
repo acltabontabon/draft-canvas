@@ -6,17 +6,12 @@ nothing here depends on wall-clock time, only on where in the film a frame is.
 The film opens with INTRO seconds in which the diagram is drawn; the page plays those on arrival.
 After that, CHAPTERS are the film's seconds for each stop, counted from the end of the opening;
 src/storyFilm.js carries the same numbers. The base diagram is the scene in hero-depth.py. The
-output is committed. To re-render both sizes:
+page draws the film from its frames, so after rendering they are packed, not encoded as video:
 
     blender -b -P www/scripts/story-film.py -- /tmp/story-film-frames
-    ffmpeg -y -framerate 24 -i /tmp/story-film-frames/%04d.png -an \
-      -c:v libx264 -profile:v high -crf 21 -preset slow -g 4 -pix_fmt yuv420p \
-      -movflags +faststart www/public/clips/story-film.mp4
-    ffmpeg -y -framerate 24 -i /tmp/story-film-frames/%04d.png -an -vf scale=1024:-2 \
-      -c:v libx264 -profile:v high -crf 23 -preset slow -g 4 -pix_fmt yuv420p \
-      -movflags +faststart www/public/clips/story-film-small.mp4
+    node www/scripts/pack-film.mjs /tmp/story-film-frames
 
-A keyframe every four frames keeps scrubbing responsive in every browser.
+The packed files are committed, so the site builds without Blender.
 """
 
 import importlib.util
@@ -303,7 +298,8 @@ scene.camera = camera
 # Each stop: when, what it looks at, how far round and how steeply, from how far, and how far left
 # of centre the subject sits (a share of the frame's width) so the page's words have room.
 MOVES = [
-    (0, (0, 0, 0), 0, 0, 10.8, .21),
+    # The diagram is drawn head-on in the middle of the frame: at this point it has the screen to itself.
+    (0, (0, 0, 0), 0, 0, 9.4, 0),
     (2, (-1.0, .5, .3), 24, 44, 7.6, .14),
     (4, (-.4, .2, .4), 14, 50, 7.0, .14),
     (6, (.4, -.3, .6), 2, 50, 6.8, .14),

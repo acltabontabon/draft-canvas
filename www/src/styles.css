@@ -3156,7 +3156,7 @@ html:has(.dl[open]) {
 .studio { --paper: #000; background: #000; }
 /* A flat board: the old cloudy wash would show the film's rectangle. */
 .studio::after { display: none; }
-.studio .canvas-journey > .story-film { grid-column: 1 / -1; grid-row: 1; align-self: start; position: sticky; top: 0; z-index: 2; width: calc(100% + 4vw); max-width: none; height: 100dvh; object-fit: cover; object-position: left center; pointer-events: none; opacity: 0; transition: opacity .6s ease; }
+.studio .canvas-journey > .story-film { grid-column: 1 / -1; grid-row: 1; align-self: start; position: sticky; top: 0; z-index: 2; width: calc(100% + 4vw); max-width: none; height: 100dvh; pointer-events: none; opacity: 0; transition: opacity .6s ease; }
 .canvas-story[data-film=''] > .story-film { opacity: 1; }
 /* While the film is on its way, a small sketch draws itself where it will be. */
 .film-loader { position: absolute; top: 0; left: 0; z-index: 2; display: grid; place-content: center; justify-items: center; gap: 14px; width: 64%; height: min(100dvh, 900px); color: #8e96a3; pointer-events: none; transition: opacity .4s ease; }
@@ -3174,7 +3174,8 @@ html:has(.dl[open]) {
    paper and ink, small enough to leave the film the screen, and plainly in front of it, not across it. */
 @media (min-width: 701px) {
   /* Pinned, not passing: each note fades in at the same corner as its chapter begins and out as it ends. */
-  .canvas-reading .story-beat .story-copy { position: fixed; top: auto; right: max(4vw, 62px); bottom: 7vh; z-index: 5; width: min(370px, 30vw); padding: 28px 30px 24px; border-radius: 3px; background: #f4f1e9; color: #1d1c18; box-shadow: 0 22px 44px -20px #000d, 6px 7px 0 #5fd6c92e; rotate: -1.3deg; }
+  /* Unseen until the script says which chapter is on: all six share one corner, and none belongs on a fresh page. */
+  .canvas-reading .story-beat .story-copy { position: fixed; top: auto; right: max(4vw, 62px); bottom: 7vh; z-index: 5; width: min(370px, 30vw); opacity: var(--chapter-opacity, 0); padding: 28px 30px 24px; border-radius: 3px; background: #f4f1e9; color: #1d1c18; box-shadow: 0 22px 44px -20px #000d, 6px 7px 0 #5fd6c92e; rotate: -1.3deg; }
   .canvas-reading .story-beat:nth-child(even) .story-copy { rotate: 1.1deg; }
   .canvas-reading .story-beat[data-away] .story-copy { visibility: hidden; }
   .canvas-reading .story-beat .story-copy::after { content: ''; position: absolute; top: -10px; left: 50%; width: 78px; height: 20px; background: #5fd6c980; translate: -50% 0; rotate: -3deg; }
@@ -3187,7 +3188,7 @@ html:has(.dl[open]) {
 @media (max-width: 700px) {
   /* On a phone the film has the top of the screen to itself and the words read below it. */
   /* The words scroll away beneath the stage, never across it. */
-  .studio .canvas-journey > .story-film { display: block; width: 100%; height: 46dvh; z-index: 4; object-position: 22% 50%; background: #000; }
+  .studio .canvas-journey > .story-film { display: block; width: 100%; height: 46dvh; z-index: 4; background: #000; }
   .studio .canvas-journey > .canvas-reading { z-index: 1; }
   .film-loader { width: 100%; height: 46dvh; z-index: 5; }
 }
@@ -3195,9 +3196,9 @@ html:has(.dl[open]) {
 /* Draft Canvas's own mint, the colour of what is live in the editor, is the one accent on the board:
    in the film it marks the request, Nodi and what the agent proposes; on the page, where to go next. */
 .studio { --accent: #5fd6c9; --on-accent: #06211f; }
-.story-opening .studio-button, .story-ending .studio-button { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
-.story-opening .studio-button:hover, .story-ending .studio-button:hover { background: #8be6dc; border-color: #8be6dc; }
-.studio .story-opening h1 em { padding-bottom: .16em; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 14' preserveAspectRatio='none' fill='none' stroke='%235fd6c9' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8.5C52 3 96 11.500 148 6.500S250 3.500 297 7.500'/%3E%3Cpath d='M38 12Q150 8.500 262 11.500' opacity='.6'/%3E%3C/svg%3E") left bottom / 100% .2em no-repeat; }
+.studio-landing .studio-button, .story-ending .studio-button { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+.studio-landing .studio-button:hover, .story-ending .studio-button:hover { background: #8be6dc; border-color: #8be6dc; }
+.studio .studio-landing h1 em { padding-bottom: .16em; background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 300 14' preserveAspectRatio='none' fill='none' stroke='%235fd6c9' stroke-width='2' stroke-linecap='round'%3E%3Cpath d='M3 8.5C52 3 96 11.500 148 6.500S250 3.500 297 7.500'/%3E%3Cpath d='M38 12Q150 8.500 262 11.500' opacity='.6'/%3E%3C/svg%3E") left bottom / 100% .2em no-repeat; }
 .story-rail [aria-current] { color: var(--accent); }
 .canvas-promise li::before { background: var(--accent); }
 .story-ending #watch-editor svg path:first-child { stroke: var(--accent); }
@@ -3214,3 +3215,38 @@ html:has(.dl[open]) {
 @media (max-width: 700px) { .proof-film { padding: 20px 7vw 80px; } .proof-film h2 { font-size: 34px; margin-bottom: 26px; } }
 
 .canvas-reading .story-ending > * { opacity: var(--ending-opacity, 1); }
+
+/* The first screen is only an introduction: the mark, drawn in chalk with a request crossing it, one
+   line about what Draft Canvas is, and the two ways in. The film waits below, with the screen to itself. */
+.studio-landing { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100dvh; padding: 60px 6vw 60px; text-align: center; }
+.landing-name { margin: 0 0 26px; color: #e6e9ee; font: 600 17px/1 var(--sans); letter-spacing: -.01em; }
+.landing-facts { margin: 26px 0 0; color: #808998; font: 10px/1.8 var(--mono); letter-spacing: .08em; }
+.landing-facts a { color: #a9b1be; text-underline-offset: 4px; }
+.landing-facts a:hover { color: var(--accent); }
+.landing-mark { width: clamp(84px, 9vw, 124px); margin-bottom: 18px; overflow: visible; fill: none; stroke: #e6e9ee; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; rotate: -3deg; }
+.landing-mark path { stroke-dasharray: 1; animation: landing-draw .9s var(--ease) both; }
+.landing-mark path:nth-child(2) { animation-delay: .35s; }
+.landing-mark .landing-wire { animation-delay: .8s; }
+.landing-mark .landing-signal { fill: var(--accent); stroke: none; opacity: 0; animation: landing-arrive .3s 1.6s both; }
+@keyframes landing-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes landing-arrive { to { opacity: 1; } }
+.studio .studio-landing h1 { margin: 0; font: 400 clamp(46px, 7vw, 104px)/1.02 var(--serif); letter-spacing: -.04em; }
+.studio .studio-landing h1 em { color: #a9b1be; }
+.landing-lead { max-width: 520px; margin: 34px 0 38px; color: #a4acb8; font-size: clamp(14px, 1.2vw, 17px); line-height: 1.75; }
+.landing-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+.studio-landing .studio-button.landing-ghost { border-color: #3a414c; background: none; color: #e6e9ee; }
+.studio-landing .studio-button.landing-ghost:hover { border-color: var(--accent); background: none; color: var(--accent); }
+.landing-next { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-top: 44px; color: #808998; font: 17px 'Bradley Hand', 'Segoe Print', var(--serif); text-decoration: none; }
+.landing-next svg { width: 20px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; animation: landing-nudge 2.4s ease-in-out infinite; }
+.landing-next:hover { color: var(--accent); }
+@keyframes landing-nudge { 50% { translate: 0 6px; } }
+/* Room for the camera to leave the head-on diagram before the first chapter begins. */
+.story-lead { height: 70dvh; }
+@media (max-width: 700px) {
+  .studio-landing { padding-block: 40px; }
+  .landing-next { margin-top: 40px; }
+  .story-lead { height: 30dvh; }
+}
+@media (scripting: none) and (min-width: 701px) {
+  .canvas-reading .story-beat .story-copy { position: static; margin: 0 0 60px auto; opacity: 1; }
+}

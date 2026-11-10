@@ -49,26 +49,32 @@
 
   <body class="studio">
     <a class="skip" href="#main">Skip to content</a>
-    <header class="studio-header">
-      <a class="studio-brand" href="#top" aria-label="Draft Canvas, top of page"><svg viewBox="0 0 32 32" width="25" height="25" aria-hidden="true"><rect x="3" y="4" width="16" height="11" rx="3"/><rect x="13" y="19" width="16" height="10" rx="3"/><path d="M11 15v9h2"/></svg>Draft Canvas</a>
-      <nav aria-label="Site"><a href="#features">Explore</a><a href="./docs/" aria-label="Docs">Documentation ↗</a></nav>
-      <a class="studio-button header-button" href="#download" data-download>Get desktop <span>↓</span></a>
-    </header>
     <main id="main">
-      <div class="canvas-journey canvas-story" id="top">
-        <video class="story-film" muted playsinline preload="none" aria-hidden="true"></video>
+      <section class="studio-landing" id="top" aria-labelledby="studio-title">
+        <svg class="landing-mark" viewBox="0 0 128 112" aria-hidden="true">
+          <path pathLength="1" d="M13 17Q11 15 15 14Q44 11 73 14Q77 15 77 19L76 53Q76 58 72 58Q43 61 15 58Q11 57 11 53Z"/>
+          <path pathLength="1" d="M53 79Q52 75 56 74Q85 71 113 74Q117 75 117 79L116 104Q116 108 112 108Q84 111 56 108Q52 107 52 103Z"/>
+          <path class="landing-wire" pathLength="1" d="M44 59Q43 78 44 91Q45 94 52 93"/>
+          <circle class="landing-signal" r="3.4"><animateMotion dur="2.6s" begin="1.6s" repeatCount="indefinite" keyPoints="0;1;1" keyTimes="0;.55;1" calcMode="linear" path="M44 59Q43 78 44 91Q45 94 52 93"/></circle>
+        </svg>
+        <p class="landing-name">Draft Canvas</p>
+        <h1 id="studio-title">Draw it so<br /><em>everyone gets it.</em></h1>
+        <p class="landing-lead">Draft Canvas is a canvas for software architecture: diagrams you can walk through, look inside and keep beside your code.</p>
+        <div class="landing-actions">
+          <a class="studio-button" id="hero-cta" href="#download" data-download>Download desktop <span>↓</span></a>
+          <a class="studio-button landing-ghost" href="https://app.draftcanvas.dev/" aria-label="Open live editor">Open the editor <span>↗</span></a>
+        </div>
+        <p class="landing-facts">Free and open source · No account · <a href="./docs/">Documentation ↗</a></p>
+        <a class="landing-next" href="#features">See it drawn<svg viewBox="0 0 24 44" aria-hidden="true"><path d="M12 3Q10 20 12 39M4 30Q9 35 12 40Q15 34 20 29"/></svg></a>
+      </section>
+      <div class="canvas-journey canvas-story">
+        <canvas class="story-film" aria-hidden="true"></canvas>
         <div class="film-loader" aria-hidden="true">
           <svg viewBox="0 0 160 64"><path pathLength="1" d="M12 18Q34 15 56 18L55 45Q33 47 13 45Z"/><path pathLength="1" d="M57 31Q77 29 100 32"/><path pathLength="1" d="M93 26L101 32L93 37"/><path pathLength="1" d="M104 18Q126 15 148 18L147 45Q125 47 105 45Z"/></svg>
           <span>chalking the board…</span>
         </div>
         <div class="canvas-reading">
-          <div class="story-opening" aria-labelledby="studio-title">
-            <p class="studio-eyebrow">YOUR ARCHITECTURE. ON YOUR DESKTOP.</p>
-            <h1 id="studio-title">It starts with<br /><em>“what happens next?”</em></h1>
-            <p>An order is placed. A service wakes up. Somewhere, a decision needs making. Draw it out in Draft Canvas Desktop—with diagrams beside your code, your own agent, and your team in the same picture.</p>
-            <a class="studio-button" id="hero-cta" href="#download" data-download>Download desktop <span>↓</span></a>
-            <a class="desktop-browser" href="https://app.draftcanvas.dev/" aria-label="Open live editor">Or try it in your browser ↗</a>
-          </div>
+          <div class="story-lead" aria-hidden="true"></div>
           <div class="story-narrative" id="features">
             <div class="story-beat" data-recording="present" data-chapter="Walk through"><div class="story-copy"><p class="studio-eyebrow">EXPLAIN THE SYSTEM THAT REALLY EXISTS</p><h2>Don’t just show it.<br /><em>Walk us through it.</em></h2><p>Follow a request through the services, with the notes and code for each step in view. Everyone leaves with the same picture.</p><span class="story-aside">One request. Every stop along the way.</span></div></div>
             <div class="story-beat" data-recording="nodi" data-chapter="Ask Nodi"><div class="story-copy"><p class="studio-eyebrow">YOUR OWN AGENT · DESKTOP</p><h2>Ask what breaks.<br /><em>Decide what changes.</em></h2><p>Connect your own coding agent. Reason about the architecture with Nodi, compare what it proposes, and accept only what belongs in your design.</p><span class="story-aside">The agent proposes. You stay the author.</span></div></div>

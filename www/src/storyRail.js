@@ -10,7 +10,7 @@ const GLYPHS = {
 };
 const RING = 'M12.4 1.6c6.4-.5 10.5 4.2 10.2 10.4S18.3 22.7 12 22.4 1.4 18.1 1.6 12 5.4 2.2 13.4 1.5';
 
-export function setUpStoryRail(story, beats) {
+export function setUpStoryRail(story, beats, jump) {
   const rail = document.createElement('nav');
   rail.className = 'story-rail';
   rail.setAttribute('aria-label', 'Chapters');
@@ -22,9 +22,9 @@ export function setUpStoryRail(story, beats) {
     mark.innerHTML = `<span>${beat.dataset.chapter}</span><svg viewBox="0 0 24 24" aria-hidden="true">`
       + `<path class="rail-ring" pathLength="1" d="${RING}"/><path class="rail-glyph" transform="translate(4.4 4.4) scale(.63)" d="${GLYPHS[beat.dataset.recording]}"/></svg>`;
     mark.addEventListener('click', () => {
-      // A chapter starts playing once its copy is pinned; land just past that line.
-      const top = beat.getBoundingClientRect().top + window.scrollY + 2;
-      window.scrollTo({ top, behavior: 'smooth' });
+      // Land where the chapter's scene has arrived and its note is up, not on its first frame.
+      const bounds = beat.getBoundingClientRect();
+      jump(bounds.top + window.scrollY - window.innerHeight * .2 + bounds.height * .5);
     });
     mark.addEventListener('keydown', (event) => {
       const step = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1
