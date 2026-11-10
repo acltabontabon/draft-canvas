@@ -3250,3 +3250,32 @@ html:has(.dl[open]) {
 @media (scripting: none) and (min-width: 701px) {
   .canvas-reading .story-beat .story-copy { position: static; margin: 0 0 60px auto; opacity: 1; }
 }
+
+/* The two ways in are made like the editor's own Quick Draft card: a sheet lifted off the board at a
+   slight angle, and beside it a box pencilled twice, the way a hand goes over an outline. */
+.landing-actions { align-items: center; gap: 18px 22px; }
+.studio-landing .studio-button { position: relative; padding: 17px 22px; border-radius: 4px; font-size: 14px; font-weight: 600; transition: transform .25s var(--ease), box-shadow .25s var(--ease), background .2s, color .2s; }
+.studio-landing #hero-cta { rotate: -1.4deg; box-shadow: 5px 6px 0 #5fd6c940, 0 18px 30px -18px #5fd6c966; }
+.studio-landing #hero-cta::after { content: ''; position: absolute; top: 0; right: 0; border-style: solid; border-width: 0 13px 13px 0; border-color: #000 #000 #3fb3a6 #3fb3a6; border-bottom-left-radius: 3px; }
+.studio-landing #hero-cta:hover { rotate: 0deg; transform: translateY(-3px); box-shadow: 7px 9px 0 #5fd6c94d, 0 22px 34px -18px #5fd6c980; }
+.studio-landing #hero-cta span { display: inline-block; transition: transform .25s var(--ease); }
+.studio-landing #hero-cta:hover span { transform: translateY(3px); }
+.studio-landing .studio-button.landing-ghost { border: 0; rotate: .8deg; }
+.studio-landing .studio-button.landing-ghost::before, .studio-landing .studio-button.landing-ghost::after { content: ''; position: absolute; inset: 0; border: 1.2px solid #8e96a3; border-radius: 5px 8px 4px 9px; pointer-events: none; transition: border-color .2s, rotate .25s var(--ease); }
+.studio-landing .studio-button.landing-ghost::after { inset: -2px 1px 1px -1px; border-color: #5a626e; border-radius: 8px 4px 9px 5px; rotate: -.9deg; }
+.studio-landing .studio-button.landing-ghost:hover { transform: translateY(-2px); }
+.studio-landing .studio-button.landing-ghost:hover::before, .studio-landing .studio-button.landing-ghost:hover::after { border-color: var(--accent); }
+.studio-landing .studio-button.landing-ghost:hover::after { rotate: .7deg; }
+.studio-landing .studio-button.landing-ghost span { display: inline-block; transition: transform .25s var(--ease); }
+.studio-landing .studio-button.landing-ghost:hover span { transform: translate(2px, -2px); }
+.landing-docs { color: #a9b1be; font: 18px 'Bradley Hand', 'Segoe Print', var(--serif); text-decoration: none; rotate: -1.5deg; }
+.landing-docs span { display: inline-block; transition: transform .25s var(--ease); }
+.landing-docs:hover { color: var(--accent); }
+.landing-docs:hover span { transform: translate(2px, -2px); }
+.studio-landing .landing-promise { justify-content: center; margin-top: 34px; }
+.studio-landing .landing-promise li::before { clip-path: inset(0 100% 0 0); animation: landing-tick .45s ease-out 1.9s both; }
+.studio-landing .landing-promise li:nth-child(2)::before { animation-delay: 2.1s; }
+.studio-landing .landing-promise li:nth-child(3)::before { animation-delay: 2.3s; }
+@keyframes landing-tick { to { clip-path: inset(0); } }
+@media (prefers-reduced-motion: reduce) { .studio-landing .landing-promise li::before { clip-path: inset(0); } .landing-mark path { stroke-dashoffset: 0; } .landing-mark .landing-signal { opacity: 1; } }
+.studio-landing .landing-promise { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 0; list-style: none; color: #98a1b0; font: 16px 'Bradley Hand', 'Segoe Print', var(--serif); }
