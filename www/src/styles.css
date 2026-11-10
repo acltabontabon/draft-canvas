@@ -3096,3 +3096,14 @@ html:has(.dl[open]) {
 .studio-footer-glyphs a:hover { color: #e6e9ee; transform: translateY(-2px); }
 .studio-footer-glyphs svg { width: 16px; height: 16px; fill: currentColor; }
 .studio-footer-glyphs .studio-coffee-glyph svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 1.2; stroke-linecap: round; stroke-linejoin: round; }
+
+.story-ending h2 { margin-bottom: 30px; }
+
+/* On a phone the single-canvas recordings fill a taller frame and lose their side margins,
+   so the editor reads about a fifth larger. The paired and depth recordings keep their
+   overlays, which are placed against the full 16:10 frame. */
+@media (max-width: 700px) {
+  .recorded-paper:is([data-moment='present'], [data-moment='nodi']) { aspect-ratio: 4 / 3; }
+  .recorded-paper:is([data-moment='present'], [data-moment='nodi']) .recorded-layer { object-fit: cover; }
+  .recorded-paper:is([data-moment='present'], [data-moment='nodi']) .recorded-outline { display: none; }
+}

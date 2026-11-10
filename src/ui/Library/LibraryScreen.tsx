@@ -20,6 +20,7 @@ import { backUpLibrary, restoreLibrary } from './backupActions';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
 import { MovedHouseNotice } from './MovedHouseNotice';
 import { hostKind } from '../../host/hostInfo';
+import { worthBackingUp } from '../../storage/backupStatus';
 import { offersHandoff } from '../../storage/handoff';
 import { ProjectSidebar } from './ProjectSidebar';
 import { headingFor, visibleCanvases, type LibrarySort } from './libraryFilter';
@@ -434,7 +435,7 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
         </div>
 
         <footer className="dc-library-foot">
-          <LocalNote durable={session.durable} repository={session.repository} hasDocuments={session.library.length > 0} />
+          <LocalNote durable={session.durable} repository={session.repository} backupWorthwhile={worthBackingUp(session.library)} />
         </footer>
       </main>
 

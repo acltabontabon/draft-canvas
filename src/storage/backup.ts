@@ -23,7 +23,7 @@ import { unzipFiles, zipFiles } from '../export/zip';
 import { blobToBase64 } from '../lib/base64';
 import type { DraftRepository } from './DraftRepository';
 
-export { backupIsStale, LAST_BACKUP_PREFERENCE } from './backupStatus';
+export { backupIsStale, LAST_BACKUP_PREFERENCE, worthBackingUp } from './backupStatus';
 
 const DOCUMENT_EXTENSION = '.draftcanvas';
 const MANIFEST_NAME = 'projects.json';

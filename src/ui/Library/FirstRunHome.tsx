@@ -2,6 +2,7 @@ import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, 
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { relativeTime } from '../../lib/relativeTime';
+import { worthBackingUp } from '../../storage/backupStatus';
 import { warmModal } from '../common/modalLoader';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
@@ -103,6 +104,7 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
         </header>
         {notice}
         <WebHomeScene
+          compact={hasDiagrams}
           start={
             <button ref={sheetRef} type="button" className="dc-web-start" aria-label="New canvas"
               onClick={() => void session.newDocument()}
@@ -151,7 +153,7 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
             </div>}
           </div>
         </section>
-        {(!session.durable || hasDiagrams) && <div className={session.durable ? 'dc-home-status' : 'dc-home-warn'}><LocalNote durable={session.durable} repository={session.repository} hasDocuments={hasDiagrams} /></div>}
+        {(!session.durable || hasDiagrams) && <div className={session.durable ? 'dc-home-status' : 'dc-home-warn'}><LocalNote durable={session.durable} repository={session.repository} backupWorthwhile={worthBackingUp(session.library)} /></div>}
       </div>
       {creating && <ProjectNameDialog title="New project" submitLabel="Create" submitIcon="plus" initialValue="" onClose={() => setCreating(false)}
         onSubmit={(name) => { void session.createProject(name); setCreating(false); }} />}

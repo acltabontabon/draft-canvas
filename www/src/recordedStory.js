@@ -1,20 +1,15 @@
-import evidence from '../../docs/media/releases/v1.14.0/source-evidence.png';
-
+const clip = (name) => `${import.meta.env.BASE_URL}clips/${name}.mp4`;
 const MOMENTS = {
-  present: { src: `${import.meta.env.BASE_URL}clips/present.mp4`, label: 'A request, its notes, and the code behind it.', theme: 'light' },
-  nodi: { src: `${import.meta.env.BASE_URL}clips/nodi-review.mp4`, label: 'Reason about the design. Review the proposed change.', theme: 'dark' },
-  inside: { src: `${import.meta.env.BASE_URL}clips/inside.mp4`, label: 'From the system into its components.', theme: 'light' },
-  evidence: { src: evidence, label: 'Source references: observed facts and explicit assumptions.', theme: 'dark', still: true },
-  collaboration: { src: `${import.meta.env.BASE_URL}clips/collaboration-paired.mp4`, label: 'One live canvas. Both sides of the conversation.', theme: 'light' },
-  points: { src: `${import.meta.env.BASE_URL}clips/open-points.mp4`, label: 'Add a question to Orders API. Keep it attached and ready for review.', theme: 'dark' },
+  present: { src: clip('present'), theme: 'light' },
+  nodi: { src: clip('nodi-review'), theme: 'dark' },
+  inside: { src: clip('inside'), theme: 'light' },
+  collaboration: { src: clip('collaboration-paired'), theme: 'light' },
 };
 
 // Scroll selects chapters; native playback preserves every frame at a readable pace.
 export function setUpRecordedStory(story, reduced) {
   const videos = [...story.querySelectorAll('.recorded-layer')];
-  const still = story.querySelector('.recorded-still');
   const label = story.querySelector('.recording-moment');
-  const type = story.querySelector('.recording-label');
   const fallback = story.querySelector('.recording-fallback');
   const paper = story.querySelector('.recorded-paper');
   const art = story.querySelector('.recorded-art');
@@ -71,7 +66,7 @@ export function setUpRecordedStory(story, reduced) {
   let arrival = 0;
   const controls = document.createElement('div');
   controls.className = 'recording-controls';
-  controls.innerHTML = '<button type="button" data-play-demo>Pause demo</button><button type="button" data-replay-demo>Replay ↺</button>';
+  controls.innerHTML = '<button type="button" data-play-demo>Pause</button>';
   art.append(controls);
   const playButton = controls.querySelector('[data-play-demo]');
   let returnToOverview = false;
@@ -110,7 +105,7 @@ export function setUpRecordedStory(story, reduced) {
     if (Math.abs(video.currentTime - target) > .09) video.currentTime = target;
   }
   videos.forEach((video) => video.addEventListener('seeked', () => {
-    if (videos[active] === video && video.dataset.chapter === requested && !MOMENTS[requested]?.still) {
+    if (videos[active] === video && video.dataset.chapter === requested) {
       if (folding) startFold();
       else drawDepth(video);
       syncPlayback();
@@ -118,17 +113,17 @@ export function setUpRecordedStory(story, reduced) {
   }));
   function syncPlayback() {
     const video = videos[active];
-    const canPlay = video && video.dataset.chapter === requested && !MOMENTS[requested]?.still
+    const canPlay = video && video.dataset.chapter === requested
       && settled && !pausedByReader && !returnToOverview && !folding && !reduced.matches
       && !document.hidden && !art.hasAttribute('data-loading') && !video.ended;
     videos.forEach((layer) => { if (layer !== video || !canPlay) layer.pause(); });
-    playButton.textContent = video?.ended ? 'Play again' : canPlay ? 'Pause demo' : 'Play demo';
+    playButton.textContent = video?.ended ? 'Play again' : canPlay ? 'Pause' : 'Play';
     if (canPlay) video.playbackRate = .8;
     if (canPlay && video.paused) video.play().catch((error) => {
       if (error.name === 'AbortError') return;
       if (videos[active] === video && video.dataset.chapter === requested) {
         pausedByReader = true;
-        playButton.textContent = 'Play demo';
+        playButton.textContent = 'Play';
       }
     });
     cancelAnimationFrame(motionFrame);
@@ -156,7 +151,6 @@ export function setUpRecordedStory(story, reduced) {
     pausedByReader = !video?.paused;
     syncPlayback();
   });
-  controls.querySelector('[data-replay-demo]').addEventListener('click', replay);
   videos.forEach((video) => video.addEventListener('ended', syncPlayback));
   document.addEventListener('visibilitychange', syncPlayback);
   function select(name) {
@@ -181,7 +175,6 @@ export function setUpRecordedStory(story, reduced) {
       delete art.dataset.loading;
       fallback.hidden = false;
       videos.forEach((layer) => layer.classList.remove('is-current'));
-      still.hidden = true;
     };
     // The sketch never stands in indefinitely: a stalled clip offers a retry instead.
     stall = setTimeout(() => { if (art.hasAttribute('data-loading')) fail(); }, 15000);
@@ -194,27 +187,10 @@ export function setUpRecordedStory(story, reduced) {
       art.dataset.arriving = '';
       arrival = setTimeout(() => { if (run === generation) delete art.dataset.arriving; }, 900);
       depth.hidden = name !== 'inside';
-      label.textContent = item.label;
-      type.textContent = item.still ? 'ACTUAL EDITOR CAPTURE' : 'ACTUAL EDITOR · TAKE A MOMENT TO WATCH';
-      controls.hidden = item.still || reduced.matches;
-      paper.dataset.kind = item.still ? 'capture' : 'recording';
+      label.textContent = '';
+      controls.hidden = reduced.matches;
       paper.dataset.moment = name;
     };
-    if (item.still) {
-      const next = new Image();
-      next.onload = () => {
-        if (run !== generation) return;
-        still.src = item.src;
-        still.alt = item.label;
-        still.dataset.theme = item.theme;
-        still.hidden = false;
-        videos.forEach((video) => video.classList.remove('is-current'));
-        ready();
-      };
-      next.onerror = fail;
-      next.src = item.src;
-      return;
-    }
     const index = active === 0 ? 1 : 0;
     const video = videos[index];
     video.onloadeddata = () => {
@@ -223,7 +199,6 @@ export function setUpRecordedStory(story, reduced) {
         if (run !== generation) return;
         video.onseeked = null;
         active = index;
-        still.hidden = true;
         videos.forEach((layer, i) => layer.classList.toggle('is-current', i === index));
         ready();
         drawDepth(video);
@@ -275,9 +250,6 @@ export function setUpRecordedStory(story, reduced) {
     if (!visible) { syncPlayback(); return; }
     if (requested !== name) select(name);
     else syncPlayback();
-    controls.hidden = !!MOMENTS[name].still || reduced.matches;
-    // Captures stay still rather than pretending to be footage as the wheel moves.
-    paper.style.setProperty('--capture-reveal', '1');
-    paper.style.setProperty('--capture-pan', '0');
+    controls.hidden = reduced.matches;
   };
 }

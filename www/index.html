@@ -76,7 +76,7 @@
     <header class="studio-header">
       <a class="studio-brand" href="#top" aria-label="Draft Canvas, top of page"><svg viewBox="0 0 32 32" width="25" height="25" aria-hidden="true"><rect x="3" y="4" width="16" height="11" rx="3"/><rect x="13" y="19" width="16" height="10" rx="3"/><path d="M11 15v9h2"/></svg>Draft Canvas</a>
       <nav aria-label="Site"><a href="#features">Explore</a><a href="./docs/" aria-label="Docs">Documentation ↗</a></nav>
-      <a class="studio-button header-button" href="#download" data-download>Get desktop <span>↓</span></a>
+      <a class="studio-button header-button" href="#download" data-download>Download <span>↓</span></a>
     </header>
     <main id="main">
       <div class="canvas-journey canvas-story" id="top">
@@ -102,7 +102,6 @@
             <div class="recorded-paper">
               <video class="recorded-layer" muted playsinline preload="none" aria-hidden="true"></video>
               <video class="recorded-layer" muted playsinline preload="none" aria-hidden="true"></video>
-              <img class="recorded-still" alt="" hidden />
               <nav class="depth-guide" aria-label="Demo architecture depth" hidden>
                 <span class="depth-heading">DEPTH / C4</span>
                 <button type="button" aria-label="Return to the architecture overview">
@@ -119,35 +118,28 @@
                 <span>sketching the demo…</span>
               </div>
             </div>
-            <figcaption><span class="recording-label">FROM THE ACTUAL EDITOR</span><span class="recording-moment" role="status">An idea takes shape.</span></figcaption>
+            <figcaption><span class="recording-moment" role="status"></span></figcaption>
             <p class="recording-fallback" hidden>The recording couldn’t load. <button type="button" data-retry-recording>Try again</button></p>
           </figure>
           </div>
         </div>
         <div class="canvas-reading">
           <div class="story-opening" aria-labelledby="studio-title">
-            <p class="studio-eyebrow">YOUR ARCHITECTURE. ON YOUR DESKTOP.</p>
-            <h1 id="studio-title">It starts with<br /><em>“what happens next?”</em></h1>
-            <p>An order is placed. A service wakes up. Somewhere, a decision needs making. Draw it out in Draft Canvas Desktop—with diagrams beside your code, your own agent, and your team in the same picture.</p>
-            <a class="studio-button" id="hero-cta" href="#download" data-download>Download desktop <span>↓</span></a>
+            <h1 id="studio-title">Draw software.<br /><em>Explain how it works.</em></h1>
+            <p>A desktop canvas for software architecture. Free, open source, no account.</p>
+            <a class="studio-button" id="hero-cta" href="#download" data-download>Download <span>↓</span></a>
             <a class="desktop-browser" href="https://app.draftcanvas.dev/" aria-label="Open live editor">Or try it in your browser ↗</a>
           </div>
           <div class="story-narrative" id="features">
-            <div class="story-beat" data-recording="present"><div class="story-copy"><p class="studio-eyebrow">EXPLAIN THE SYSTEM THAT REALLY EXISTS</p><h2>Don’t just show it.<br /><em>Walk us through it.</em></h2><p>Follow a request through the services. Bring the relevant notes and code into view as each step happens. Give the room a shared understanding of how it works.</p><span class="story-aside">The real editor. Take a moment to follow the flow.</span></div></div>
-            <div class="story-beat" data-recording="nodi"><div class="story-copy"><p class="studio-eyebrow">YOUR OWN AGENT · DESKTOP</p><h2>Ask what breaks.<br /><em>Decide what changes.</em></h2><p>Connect your own coding agent to the desktop app. Reason about the architecture together with Nodi. Explore risks, compare the proposed change, and accept only what belongs in your design.</p><span class="story-aside">The agent proposes. You stay the author.</span></div></div>
-            <div class="story-beat" data-recording="inside"><div class="story-copy"><h2>The big picture.<br /><em>The detail within.</em></h2><p>Open a service to explore its components, then return to the overview. The depth stack on the left keeps your place: the overview above, the room you’re exploring below. C4 keeps those levels connected.</p><span class="story-aside">Go deeper without losing the thread.</span></div></div>
-            <div class="story-beat" data-recording="evidence"><div class="story-copy"><p class="studio-eyebrow">FROM YOUR REPOSITORY · DESKTOP</p><h2>A picture with<br /><em>something behind it.</em></h2><p>Open your project folder on desktop. Keep source references and assumptions beside the architecture, and ask your agent to refresh the diagram when the code changes, with evidence you can inspect.</p><span class="story-aside">Know what was observed. Know what was inferred.</span></div></div>
-            <div class="story-beat" data-recording="collaboration"><div class="story-copy"><h2>Bring everyone<br /><em>into the picture.</em></h2><p>Draw together, see each other’s pointers, and follow the owner’s presentation. Live collaboration puts the conversation on the same canvas, without accounts.</p><span class="story-aside">One architecture. More than one perspective.</span></div></div>
-            <div class="story-beat" data-recording="points"><div class="story-copy"><h2>Keep the questions.<br /><em>They belong here too.</em></h2><p>Mark a tentative dependency. Attach a question to the service it concerns. Review open points across rooms, so unfinished thinking stays with the architecture.</p><span class="story-aside">The next conversation starts with context.</span></div></div>
+            <div class="story-beat" data-recording="present"><div class="story-copy"><h2>Don’t just show it.<br /><em>Walk us through it.</em></h2><p>Follow a request through the services, with its notes and code in view. Pin open questions to the part they concern.</p></div></div>
+            <div class="story-beat" data-recording="nodi"><div class="story-copy"><h2>Ask what breaks.<br /><em>Decide what changes.</em></h2><p>Connect your own coding agent. It proposes changes with evidence you can inspect, and you accept only what belongs.</p></div></div>
+            <div class="story-beat" data-recording="inside"><div class="story-copy"><h2>The big picture.<br /><em>The detail within.</em></h2><p>Open a service to see its components, then step back out. The depth stack keeps your place.</p></div></div>
+            <div class="story-beat" data-recording="collaboration"><div class="story-copy"><h2>Bring everyone<br /><em>into the picture.</em></h2><p>Draw together, see each other’s pointers and follow the presenter. No accounts.</p></div></div>
           </div>
           <div class="story-ending" aria-labelledby="close-title">
-            <p class="studio-eyebrow">A SKETCH BECOMES A SHARED UNDERSTANDING.</p>
             <h2 id="close-title">What happens next?<br /><em>That’s your line.</em></h2>
-            <p>Give your architecture a home beside your code. Save editable diagrams in project folders, work offline, and bring your own coding agent into the picture. Start with a shape, a ready-made pattern, or Mermaid.</p>
-            <a class="studio-button" href="#download" data-download>Get Draft Canvas Desktop <span>↓</span></a>
+            <a class="studio-button" href="#download" data-download>Download <span>↓</span></a>
             <a class="desktop-browser" href="https://app.draftcanvas.dev/" aria-label="Open live editor">Or try it in your browser ↗</a>
-            <button type="button" id="watch-editor">Watch Draft Canvas in action ↗</button>
-            <p class="canvas-promise">No account. Stored locally.</p>
           </div>
         </div>
       </div>
@@ -175,10 +167,9 @@
               </svg>
 
               <p class="overline dl-over">Draft Canvas Desktop <span aria-hidden="true">·</span> <span class="dl-version">v__VERSION__</span></p>
-              <h2 class="dl-title" id="dl-title">Put it on your <em>desk.</em></h2>
+              <h2 class="dl-title" id="dl-title">Download for <em>desktop.</em></h2>
               <p class="dl-lead" id="dl-lead">
-                Keep diagrams beside your code. Open project folders, work offline, and connect your own
-                coding agent to reason with Nodi. Review every proposed change before it lands.
+                Diagrams beside your code, offline, with your own coding agent.
               </p>
 
               <ul class="targets" id="targets">
@@ -230,7 +221,6 @@
               </p>
             </div>
           </dialog>
-      <dialog class="proof-dialog" id="editor-film" aria-label="Draft Canvas editor demonstration"><button type="button" id="close-editor-film">Close ×</button><video id="editor-film-video" poster="./clips/draw.jpg" controls playsinline preload="none"></video></dialog>
     </main>
     <footer class="studio-footer">
       <span>Draft Canvas · Free &amp; open source</span>

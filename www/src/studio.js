@@ -1,6 +1,5 @@
 import { setUpRecordedStory } from './recordedStory.js';
 import { setUpSketchDrawing } from './sketchDrawing.js';
-import editorDemo from '../../docs/media/demo.mp4?url';
 
 export function setUpStudio() {
   const art = document.querySelector('.studio-art');
@@ -92,15 +91,4 @@ export function setUpStudio() {
   window.addEventListener('resize', requestUpdate);
   reduced.addEventListener('change', requestUpdate);
   update();
-
-  const dialog = document.getElementById('editor-film');
-  const video = document.getElementById('editor-film-video');
-  document.getElementById('watch-editor').addEventListener('click', () => {
-    video.src = editorDemo;
-    dialog.showModal();
-    video.play().catch(() => {});
-  });
-  document.getElementById('close-editor-film').addEventListener('click', () => dialog.close());
-  dialog.addEventListener('close', () => video.pause());
-  dialog.addEventListener('click', (event) => { if (event.target === dialog) dialog.close(); });
 }

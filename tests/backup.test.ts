@@ -3,7 +3,7 @@ import { createDocument, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
 import type { DraftDocument } from '../src/document/types';
 import { unzipFiles } from '../src/export/zip';
-import { backupFileName, backupIsStale, buildBackup, describeRestore, restoreBackup } from '../src/storage/backup';
+import { backupFileName, backupIsStale, buildBackup, describeRestore, restoreBackup, worthBackingUp } from '../src/storage/backup';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
 import { setFileSaver } from '../src/export/download';
 import { backUpLibrary } from '../src/ui/Library/backupActions';
@@ -259,5 +259,16 @@ describe('backupIsStale', () => {
     expect(backupIsStale('yesterday', now)).toBe(true);
     expect(backupIsStale('2026-09-20T12:00:00Z', now)).toBe(true);
     expect(backupIsStale('2026-09-28T12:00:00Z', now)).toBe(false);
+  });
+});
+
+describe('worthBackingUp', () => {
+  it('waits for a few diagrams, or one that has outlived the day it was made', () => {
+    const now = Date.parse('2026-10-01T12:00:00Z');
+    const fresh = { createdAt: now - 60_000 };
+    expect(worthBackingUp([], now)).toBe(false);
+    expect(worthBackingUp([fresh], now)).toBe(false);
+    expect(worthBackingUp([fresh, fresh, fresh], now)).toBe(true);
+    expect(worthBackingUp([{ createdAt: now - 25 * 60 * 60 * 1000 }], now)).toBe(true);
   });
 });
