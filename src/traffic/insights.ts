@@ -348,7 +348,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       basis: 'modeled',
       nodeIds: [id, ...entries],
       edgeIds: [],
-      text: `All drawn routes from ${names(entries)} to these resources pass through ${name(id)}${others.length > 0 ? `, while ${names(others)} ${others.length === 1 ? 'comes' : 'come'} in another way` : ''}. Replicas and fallback behavior are not established by this drawing.`,
+      text: `All drawn routes from ${names(entries)} to these resources pass through ${name(id)}${others.length > 0 ? `, while ${names(others)} ${others.length === 1 ? 'comes' : 'come'} in another way` : ''}. ${replicaNote(nodes.get(id)?.replicas, name(id))}`,
     });
   }
 
@@ -562,6 +562,22 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
           edgeIds: consumers.flatMap((interaction) => interaction.edgeIds),
           text: `The example treats ${names(consumerIds)} as competing consumers of ${name(node.id)}, with an unknown share each. Assignment, acknowledgements and redelivery behavior are not shown.`,
         });
+      } else {
+        // One consumer drawn, but several instances of it: they compete for the queue's messages.
+        const consumer = consumerIds[0]!;
+        const replicas = nodes.get(consumer)?.replicas ?? 1;
+        if (replicas >= 2) {
+          add({
+            kind: 'competing-consumers',
+            note: `${replicas} instances share it`,
+            focus: [node.id],
+            severity: 'info',
+            basis: 'structural',
+            nodeIds: [node.id, consumer],
+            edgeIds: consumers.flatMap((interaction) => interaction.edgeIds),
+            text: `${replicas} instances of ${name(consumer)} compete for ${name(node.id)}'s messages, each taking about ${shareOf(replicas)} if work is spread evenly. Assignment, acknowledgements and redelivery behavior are not shown.`,
+          });
+        }
       }
     }
     if ((category === 'topic' || category === 'stream') && consumers.length >= 2) {
@@ -716,4 +732,18 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
         SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity] || KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind) || compareText(a.id, b.id),
     )
     .slice(0, MAX_INSIGHTS);
+}
+
+/** "a third", "a quarter", "1/7": one instance's even share of `replicas`. */
+function shareOf(replicas: number): string {
+  const words: Record<number, string> = { 2: 'half', 3: 'a third', 4: 'a quarter', 5: 'a fifth' };
+  return words[replicas] ?? `1/${replicas}`;
+}
+
+/** What a drawing says about running more than one of a hub: its replica count when drawn. */
+function replicaNote(replicas: number | undefined, hubName: string): string {
+  if (replicas !== undefined && replicas >= 2) {
+    return `${hubName} runs as ${replicas} instances; how they fail over is not established by this drawing.`;
+  }
+  return 'Replicas and fallback behavior are not established by this drawing.';
 }

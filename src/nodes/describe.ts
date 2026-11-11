@@ -391,7 +391,7 @@ function shapesFor(node: DraftNode, ctx: DescribeContext): Shape[] {
     case 'actor':
       return actor(node, ctx);
     case 'service':
-      return service(node, ctx);
+      return replicated(node, ctx);
     case 'component':
       return component(node, ctx);
     default:
@@ -600,6 +600,61 @@ function dotsGlyph(rightX: number, cy: number, count: number, color: string, lab
     fill: color,
   }));
   return [{ t: 'group', children: dots }];
+}
+
+/* -------------------------------------------------------------- replicas -- */
+
+/** How far the card behind a replicated Service shows, matching Worker's own back card. */
+const REPLICA_OFFSET = 6;
+
+/**
+ * A Service that runs as several instances (`DraftNode.replicas`): its own card, in front of one
+ * more peeking out bottom-right, and a small `×N` in the front card's free bottom-left corner. A
+ * Worker is already drawn as a stack, so it only gains the mark — two back cards would read as
+ * something else. Every kind keeps its own silhouette on the front card.
+ */
+function replicated(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const count = node.replicas ?? 1;
+  if (count < 2) return service(node, ctx);
+  const ownStack = node.serviceKind === 'worker';
+  const frontWidth = node.width - REPLICA_OFFSET;
+  const frontHeight = node.height - REPLICA_OFFSET;
+  const shapes = ownStack ? service(node, ctx) : service({ ...node, width: frontWidth, height: frontHeight }, ctx);
+  const mark = replicaMark(frontWidth, frontHeight, count, ctx, shapes);
+  if (ownStack) return [...shapes, ...mark];
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const back = outlineShape(
+    `${node.id}:replicas`,
+    ctx,
+    { x: 0.75 + REPLICA_OFFSET, y: 0.75 + REPLICA_OFFSET, w: frontWidth - 1.5, h: frontHeight - 1.5, r: 8 },
+    { fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
+  );
+  return [back, ...shapes, ...mark];
+}
+
+/** The `×N` itself: the variant tag's font, muted, bottom-left of the front card. Left out when
+ *  a long name reaches that corner — the name wins over the mark, as it does over the corner dots. */
+function replicaMark(width: number, height: number, count: number, ctx: DescribeContext, shapes: readonly Shape[]): Shape[] {
+  const layout = layoutText(`×${count}`, {
+    font: FONTS.variantTag,
+    maxWidth: Math.max(16, width - 12),
+    lineHeight: FONTS.variantTag.size * LINE_HEIGHTS.label,
+    maxLines: 1,
+    measurer: ctx.measurer,
+  });
+  const x = 8;
+  const y = height - layout.height - 5;
+  const crowded = shapes.some(
+    (shape) =>
+      shape.t === 'text' &&
+      shape.layout !== layout &&
+      (() => {
+        const left = shape.align === 'middle' ? shape.x - shape.layout.width / 2 : shape.align === 'end' ? shape.x - shape.layout.width : shape.x;
+        return left < x + layout.width + 2 && left + shape.layout.width > x - 2 && shape.y < y + layout.height + 1 && shape.y + shape.layout.height > y - 1;
+      })(),
+  );
+  if (crowded) return [];
+  return [{ t: 'text', x, y, layout, font: FONTS.variantTag, fill: ctx.theme.textMuted, align: 'start' }];
 }
 
 /* ----------------------------------------------------------- dev presets -- */

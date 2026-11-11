@@ -6,6 +6,24 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+### Shared
+
+#### Added
+
+- **Put a shape in between** — Drop a Queue (or a Data Store, Service, Component or Junction) onto a
+  connector and it goes in the middle: `Orders API → orders → Billing`, with both lines dashed and
+  captioned on their own. Placing one there with a shape tool works too. <!-- highlight -->
+- **Delete and keep the line** — `⌥⌫` takes a shape out of the middle and joins the line back up,
+  keeping its flows. <!-- highlight -->
+- **Turn into another shape** — `⇧Q` turns the selection into a Queue, `⇧D` into a Data Store, and
+  so on. Name, connectors, flows and notes stay.
+- **Fan-in in one drag** — With several shapes selected, drag from any one of their dots onto a
+  shape to connect them all.
+- The technology sets the kind: Redis makes a Data Store a Cache, Kafka a Queue a Topic, Stripe a
+  Service External. A kind you picked stays.
+- **Instances** — Name a Service `Fulfilment ×3`, or set the count in its toolbar, and it draws as a
+  stack with a small ×3. Traffic reads the instances as competing consumers.
+
 ## [1.19.0] - 2026-11-11
 
 Diagrams for your docs. Connectors that snap straight.

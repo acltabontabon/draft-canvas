@@ -25,6 +25,7 @@ import { defaultTextFor, maxSizeFor } from '../document/factory';
 import { linkedCompensations, visibleEdges } from '../document/compensation';
 import { openFitViewport } from '../document/geometry';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
+import { canSpliceInto, canSpliceType } from '../document/splice';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { rectOf, type Rect } from '../edges/routing';
 import { straightOffset } from '../edges/straight';
@@ -58,6 +59,7 @@ import { endsBendDrag } from './bendDrag';
 import { DraftEdgeView } from './DraftEdgeView';
 import { EdgeLabelRoot } from './EdgeLabels';
 import { ViewportLayer } from './ViewportLayer';
+import { FanInPreview } from './FanInPreview';
 import { DEPTH_MOVE_MS, depthEase, fitCamera } from './depthCamera';
 import { DraftNodeView } from './DraftNodeView';
 import { Markers } from './Markers';
@@ -173,6 +175,17 @@ function leanToward(from: XYPosition, to: XYPosition | null, zoom: number): XYPo
   if (distance < 1) return { x: 0, y: 0 };
   const scale = Math.min(CAPSULE_NUDGE_MAX_PX, distance) / distance;
   return { x: Math.round(dx * scale), y: Math.round(dy * scale) };
+}
+
+/** Shapes that join a fan-in when selected alongside the one a connection is dragged from. */
+const FAN_IN_TYPES: ReadonlySet<DraftNode['type']> = new Set(['service', 'database', 'queue', 'actor', 'component', 'ellipse']);
+
+/** A connection dropped on a handle: from every fan-in source when the drag carries them, else
+ *  just the one it started from. */
+function connectFrom(source: string, target: string): void {
+  const fanIn = useUiStore.getState().fanInSources;
+  if (fanIn) useEditorStore.getState().connectMany([source, ...fanIn], target);
+  else useEditorStore.getState().connect(source, target);
 }
 
 /** See `onSelectionChange`: more reports than this inside the window is a feedback loop, not clicks. */
@@ -509,7 +522,8 @@ function truncateForAffordance(text: string): string {
 
 export interface CanvasProps {
   /** Called when an armed tool is placed at a point on the canvas (toolbar click, or double-click with a tool armed). */
-  onCreateAt?: (position: { x: number; y: number }) => void;
+  /** `spliceEdgeId`: the click landed on a connector, so the new shape goes into its middle. */
+  onCreateAt?: (position: { x: number; y: number }, spliceEdgeId?: string) => void;
   /**
    * Called instead of creating a node when a connection is dragged onto empty
    * canvas — the caller opens a small type picker and creates+connects once
@@ -695,7 +709,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const attachTarget = attachArmedTarget ? nodeIndex(document.nodes).get(attachArmedTarget) : undefined;
   /** A boolean, not the capsule itself: this only widens the connector hit corridor for the
    *  length of the gesture, so it flips twice per drag and never re-renders on the nudge. */
-  const carryingCapsule = useUiStore((state) => state.dragCapsule !== null);
+  const carryingCapsule = useUiStore((state) => state.dragCapsule !== null || state.spliceDrag);
 
   /** Rectangles of everything not being dragged, and the connectors to them, rebuilt once per gesture. */
   const dragSnap = useRef<DragSnapContext>(NO_DRAG_SNAP);
@@ -1061,6 +1075,27 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
               nudge.current = canAttach && edge ? leanToward(flowPoint, landingPointFor(state.document, edge, getInternalNode), getZoom()) : { x: 0, y: 0 };
             }
             capsuleInside = useUiStore.getState().attachArmedEdgeTarget !== null;
+          } else if (useUiStore.getState().spliceDrag) {
+            // An unconnected Queue, Data Store, Service, Component or Junction held over a
+            // connector goes into the middle of it on drop. Aimed with the pointer, the same point
+            // a person reads as "on the line", through the same corridor a note/code card uses.
+            clearDwell();
+            useUiStore.getState().setAttachArmedTarget(null);
+            useUiStore.getState().setAttachArmedEdgeTarget(null);
+            probingEdges = true;
+            const flowPoint = offset ? { x: livePosition.x + offset.x, y: livePosition.y + offset.y } : aim;
+            const screenPoint = flowToScreenPosition(flowPoint);
+            const lastProbe = lastEdgeProbe.current;
+            if (
+              !lastProbe ||
+              Math.hypot(screenPoint.x - lastProbe.screen.x, screenPoint.y - lastProbe.screen.y) >= EDGE_PROBE_STEP_PX ||
+              Math.hypot(flowPoint.x - lastProbe.flow.x, flowPoint.y - lastProbe.flow.y) >= EDGE_PROBE_STEP_PX
+            ) {
+              lastEdgeProbe.current = { screen: screenPoint, flow: flowPoint };
+              const edgeId = findEdgeDropCandidate(screenPoint.x, screenPoint.y, draggedDoc.id, flowPoint);
+              const canSplice = edgeId !== null && canSpliceInto(state.document, edgeId, draggedDoc.id);
+              useUiStore.getState().setSpliceArmedEdgeTarget(canSplice ? edgeId : null);
+            }
           } else {
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(null);
@@ -1072,6 +1107,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         useUiStore.getState().setAttachArmedTarget(null);
         useUiStore.getState().setAttachArmedEdgeTarget(null);
       }
+      if (!probingEdges) useUiStore.getState().setSpliceArmedEdgeTarget(null);
       if (!probingEdges) lastEdgeProbe.current = null;
 
       // Collapse/expand, decided from the same aim point that decided arming above. This is pure
@@ -1352,6 +1388,17 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       clearDwell();
       useUiStore.getState().setAttachArmedTarget(null);
       useUiStore.getState().setAttachArmedEdgeTarget(null);
+      useUiStore.getState().setSpliceArmedEdgeTarget(null);
+      // Only a shape with no connectors of its own can be dropped into the middle of one: moving a
+      // wired service across lines must never rewire it by accident.
+      const lone = dragged.length === 1 && swept.size === 0 ? byId.get(dragged[0]!.id) : undefined;
+      useUiStore
+        .getState()
+        .setSpliceDrag(
+          lone !== undefined &&
+            canSpliceType(lone.type) &&
+            !state.document.edges.some((edge) => edge.source === lone.id || edge.target === lone.id),
+        );
 
       const resting = state.document.nodes.filter((node) => !moving.has(node.id));
       const links: DragLink[] = [];
@@ -1408,6 +1455,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     setGuides([]);
     useUiStore.getState().setAttachArmedTarget(null);
     useUiStore.getState().setAttachArmedEdgeTarget(null);
+    useUiStore.getState().setSpliceArmedEdgeTarget(null);
     // Back to the committed positions. The document is the pre-drag truth, so there is nothing
     // extra to have remembered.
     const byId = nodeIndex(useEditorStore.getState().document.nodes);
@@ -1444,6 +1492,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       clearCapsule();
       useUiStore.getState().setAttachArmedTarget(null);
       useUiStore.getState().setAttachArmedEdgeTarget(null);
+      useUiStore.getState().setSpliceArmedEdgeTarget(null);
+      useUiStore.getState().setSpliceDrag(false);
       return;
     }
     const state = useEditorStore.getState();
@@ -1458,6 +1508,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     const singleId = draggedIds.size === 1 && sweptDescendants.current.size === 0 ? [...draggedIds][0]! : null;
     const armedHost = useUiStore.getState().attachArmedTarget;
     const armedEdge = useUiStore.getState().attachArmedEdgeTarget;
+    const armedSplice = useUiStore.getState().spliceArmedEdgeTarget;
+    let label: string | undefined;
 
     if (singleId && armedHost) {
       positions.delete(singleId);
@@ -1467,6 +1519,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       positions.delete(singleId);
       if (positions.size > 0) state.commitPositions(positions);
       markArrived(state.attachExistingNodeToEdge(singleId, armedEdge));
+    } else if (singleId && armedSplice) {
+      // Lands where it was dropped — already over the line — then takes the connector's place.
+      state.commitMove(positions, draggedIds);
+      if (useEditorStore.getState().spliceIntoEdge(singleId, armedSplice)) label = 'Insert into connector';
     } else {
       // Membership follows where things landed, for a whole selection or a boundary and what it
       // carries as much as for one shape dropped on its own. `parentId` is what a delete cascades
@@ -1475,7 +1531,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       state.commitMove(positions, draggedIds);
     }
 
-    state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : undefined);
+    state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : label);
     useUiStore.getState().setInteractionActive(false);
     draggingIds.current = new Set();
     dragSnap.current = NO_DRAG_SNAP;
@@ -1485,6 +1541,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     clearCapsule();
     useUiStore.getState().setAttachArmedTarget(null);
     useUiStore.getState().setAttachArmedEdgeTarget(null);
+    useUiStore.getState().setSpliceArmedEdgeTarget(null);
+    useUiStore.getState().setSpliceDrag(false);
   }, [clearCapsule, clearDwell, getNodes]);
 
   useEffect(() => {
@@ -1499,8 +1557,20 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     if (id && draggingIds.current.size > 0 && !nodeIndex(document.nodes).has(id)) finishDrag.current();
   }, [document.nodes]);
 
-  const onConnectStart = useCallback(() => {
+  const onConnectStart = useCallback((_event: MouseEvent | TouchEvent, params: { nodeId: string | null }) => {
     connectCancelled.current = false;
+    // Started from one of several selected shapes: the drop connects all of them (fan-in).
+    const editor = useEditorStore.getState();
+    const from = params.nodeId;
+    const byId = nodeIndex(editor.document.nodes);
+    const others =
+      from && editor.selection.nodes.length > 1 && editor.selection.nodes.includes(from)
+        ? editor.selection.nodes.filter((id) => {
+            const node = byId.get(id);
+            return id !== from && node !== undefined && FAN_IN_TYPES.has(node.type);
+          })
+        : [];
+    useUiStore.getState().setFanInSources(others.length > 0 ? others : null);
     stopWatchingConnect.current?.();
     // Capture phase, and stopped: the editor's own Escape (deselect, or step back out of a room) is
     // gated on `interactionActive`, which a connection drag does not set, so without this one press
@@ -1536,7 +1606,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       if (!connection.source || !connection.target) return;
       // Handles start the gesture, but a new connector follows its shapes by default. Pinning is
       // explicit through "Pin ends here" after the line is drawn.
-      useEditorStore.getState().connect(connection.source, connection.target);
+      connectFrom(connection.source, connection.target);
     },
     [],
   );
@@ -1553,6 +1623,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       stopWatchingConnect.current?.();
+      // Read before it is cleared: `onConnect` (a drop on a handle) has already used it.
+      const fanIn = useUiStore.getState().fanInSources;
+      useUiStore.getState().setFanInSources(null);
       if (connectCancelled.current) {
         // Released after Escape: nothing connects, and nothing is offered in place of it.
         connectCancelled.current = false;
@@ -1577,9 +1650,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         .find((node) => pointInBox(position, node));
 
       if (droppedOn) {
-        if (droppedOn.id !== source) {
-          state.connect(source, droppedOn.id);
-        }
+        if (fanIn) state.connectMany([source, ...fanIn], droppedOn.id);
+        else if (droppedOn.id !== source) state.connect(source, droppedOn.id);
         return;
       }
 
@@ -1919,6 +1991,20 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const scheduleHover = useCallback(
     (event: React.PointerEvent) => {
       const ui = useUiStore.getState();
+      // A shape tool that can go into a connector's middle shows which one a click would put it in.
+      if (ui.armed && canSpliceType(ui.armed.type) && event.pointerType !== 'touch' && event.buttons === 0 && !ui.interactionActive) {
+        if (ui.hoveredEdgeId !== null) setHover(null);
+        hoverAt.current = { clientX: event.clientX, clientY: event.clientY };
+        if (hoverFrame.current !== null) return;
+        hoverFrame.current = requestAnimationFrame(() => {
+          hoverFrame.current = null;
+          const at = hoverAt.current;
+          if (!at || !useUiStore.getState().armed) return;
+          const pick = edgeAtEvent(at);
+          useUiStore.getState().setSpliceArmedEdgeTarget(pick && pick.part !== 'control' ? pick.id : null);
+        });
+        return;
+      }
       if (event.pointerType === 'touch' || event.buttons !== 0 || ui.armed || ui.interactionActive || ui.reconnectDragActive) {
         hoverAt.current = null;
         if (ui.hoveredEdgeId !== null) setHover(null);
@@ -1938,6 +2024,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   );
   const clearHover = useCallback(() => {
     hoverAt.current = null;
+    if (useUiStore.getState().armed) useUiStore.getState().setSpliceArmedEdgeTarget(null);
     if (hoverFrame.current !== null) cancelAnimationFrame(hoverFrame.current);
     hoverFrame.current = null;
     if (useUiStore.getState().hoveredEdgeId !== null) setHover(null);
@@ -2041,7 +2128,19 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         }
         return;
       }
-      if (!interactive || event.button !== 0 || useUiStore.getState().armed) return;
+      const armedTool = useUiStore.getState().armed;
+      if (armedTool && editable && interactive && event.button === 0 && !isEditableTarget(event.target) && canSpliceType(armedTool.type)) {
+        // A Queue, Data Store, Service, Component or Junction placed onto a connector goes into its
+        // middle — the same edit as dropping an unconnected one there.
+        const pick = edgeAtEvent(event);
+        if (pick && pick.part !== 'control') {
+          event.stopPropagation();
+          const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+          onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) }, pick.id);
+          return;
+        }
+      }
+      if (!interactive || event.button !== 0 || armedTool) return;
       if (isEditableTarget(event.target)) return;
       // The click that ends dragging a bend is not a click on the connector.
       if (endsBendDrag()) {
@@ -2067,7 +2166,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       }
       setHover(pick.group ? edgeToSelect(pick, useEditorStore.getState().selection.edges) : pick.id, event);
     },
-    [edgeAtEvent, interactive, onPaneClick, setHover],
+    [edgeAtEvent, editable, interactive, onCreateAt, onPaneClick, screenToFlowPosition, setHover],
   );
 
   // A pan or zoom by the user slides the canvas out from under a menu pinned to a screen point, and
@@ -2259,6 +2358,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         <TrafficReplayProvider active={trafficActive}>
         <ViewportLayer>
           {tracing && <FlowTraceBadges />}
+          {interactive && <FanInPreview />}
           {/*
             Both of these are drag-in-progress chrome, meaningless once the
             gesture that produced them ends — and impossible to produce at all

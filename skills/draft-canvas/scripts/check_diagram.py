@@ -209,7 +209,7 @@ REQUEST_FIELDS = {
 }
 ROOM_FIELDS = {'level', 'nodes', 'relationships', 'groups', 'flows', 'notes'}
 GROUP_FIELDS = {'id', 'label', 'kind', 'parent', 'color'}
-ELEMENT_FIELDS = {'id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'}
+ELEMENT_FIELDS = {'id', 'type', 'label', 'description', 'technology', 'replicas', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'}
 RELATIONSHIP_FIELDS = {
     'id',
     'from',

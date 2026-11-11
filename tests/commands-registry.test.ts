@@ -332,8 +332,10 @@ describe('commandsFor — contextual (8.2)', () => {
       'send-to-back',
       // Wrapping one shape starts a boundary around it.
       'group',
-      'delete',
+      'turn-into-database',
     ]);
+    // Every other shape it could become, then Delete.
+    expect(list.slice(16, 20)).toEqual(['turn-into-queue', 'turn-into-actor', 'turn-into-component', 'delete']);
     expect(list).toContain('add-service');
     expect(list).not.toContain('flow-start-here');
   });

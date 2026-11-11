@@ -277,6 +277,14 @@ export interface UiStore {
   /** The edge id a dragged note/code node is currently armed against — see `Canvas.tsx`'s
    *  drag-to-attach wiring and `dragTargets.ts`'s `findEdgeDropCandidate`. */
   attachArmedEdgeTarget: string | null;
+  /** The connector a dragged, unconnected shape would be put into the middle of if dropped now
+   *  (`spliceIntoEdge`), and whether such a shape is being carried at all — which widens every
+   *  connector's hit corridor for the gesture, as carrying a Note/Code capsule does. */
+  spliceArmedEdgeTarget: string | null;
+  spliceDrag: boolean;
+  /** The other selected shapes a connection drag started from one of them will also connect from
+   *  (`connectMany`) — `null` outside such a drag. */
+  fanInSources: string[] | null;
   /**
    * The Note/Code card currently collapsed into its drag capsule, and where on that card the
    * grab started (`offsetX`/`offsetY`, in flow units from its own top-left — the aim point).
@@ -540,6 +548,9 @@ export interface UiStore {
   setContextMenu: (state: ContextMenuState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
   setAttachArmedEdgeTarget: (edgeId: string | null) => void;
+  setSpliceArmedEdgeTarget: (edgeId: string | null) => void;
+  setSpliceDrag: (spliceDrag: boolean) => void;
+  setFanInSources: (sources: string[] | null) => void;
   setDragCapsule: (dragCapsule: DragCapsuleState | null) => void;
   setReconnectHoverTarget: (nodeId: string | null, handleId?: string | null) => void;
   setReconnectDragActive: (active: boolean) => void;
@@ -676,6 +687,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   contextMenu: null,
   attachArmedTarget: null,
   attachArmedEdgeTarget: null,
+  spliceArmedEdgeTarget: null,
+  spliceDrag: false,
+  fanInSources: null,
   dragCapsule: null,
   reconnectHoverTarget: null,
   reconnectHoverHandle: null,
@@ -729,7 +743,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   moveMenuOpenFor: null,
   clipboardPermissionRequest: null,
 
-  arm: (armed) => set({ armed }),
+  // A connector a placed shape would have gone into is not one any more once the tool changes.
+  arm: (armed) => set({ armed, spliceArmedEdgeTarget: null }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setFindReplaceOpen: (findReplaceOpen) => set({ findReplaceOpen }),
   requestFit: () => set((state) => ({ fitRequestId: state.fitRequestId + 1 })),
@@ -747,6 +762,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (state.attachArmedTarget === attachArmedTarget ? state : { attachArmedTarget })),
   setAttachArmedEdgeTarget: (attachArmedEdgeTarget) =>
     set((state) => (state.attachArmedEdgeTarget === attachArmedEdgeTarget ? state : { attachArmedEdgeTarget })),
+  setSpliceArmedEdgeTarget: (spliceArmedEdgeTarget) =>
+    set((state) => (state.spliceArmedEdgeTarget === spliceArmedEdgeTarget ? state : { spliceArmedEdgeTarget })),
+  setSpliceDrag: (spliceDrag) => set((state) => (state.spliceDrag === spliceDrag ? state : { spliceDrag })),
+  setFanInSources: (fanInSources) => set((state) => (state.fanInSources === fanInSources ? state : { fanInSources })),
   setDragCapsule: (dragCapsule) =>
     set((state) => {
       const current = state.dragCapsule;

@@ -336,6 +336,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
+  /** A dragged, unconnected shape would go into the middle of this connector on drop. Tinted like
+   *  an attach target, with no landing dot: the shape lands where it is, not at the label point. */
+  const spliceTarget = useUiStore((state) => state.spliceArmedEdgeTarget === id);
 
   const sourceNode = useInternalNode(edge?.source ?? '');
   const targetNode = useInternalNode(edge?.target ?? '');
@@ -620,7 +623,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // already folded into `color`); with no accent set, it falls back to the
   // plain selection colour exactly as it always has.
   const strokeColor =
-    selected || attachTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
+    selected || attachTarget || spliceTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
   const conditionText = edge.condition ? `[${edge.condition}]` : null;
 
   // Where the open-point tab sits: beside the label chip or the caption this connector draws at its
@@ -725,6 +728,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-focus-dimmed={focusDimmed ? 'true' : undefined}
       data-flow-active={isActiveStep ? pulseTarget : undefined}
       data-attach-target={attachTarget ? 'true' : undefined}
+      data-splice-target={spliceTarget ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
@@ -783,7 +787,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           strokeWidth: Math.max(CONNECTOR_STYLE.lineWidth,
             isActiveStep
               ? 2.6
-              : selected || attachTarget
+              : selected || attachTarget || spliceTarget
                 ? 2.4
                 : trafficReading === 'shared'
                   ? 2.3

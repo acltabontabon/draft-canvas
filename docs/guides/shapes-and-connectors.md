@@ -17,6 +17,11 @@ Press a key to add a shape. Select it to choose a kind in its toolbar.
 | Boundary | `B` | See [Boundaries](#boundaries) |
 | Text / Note / Code | `T` / `N` / `C` | |
 
+To turn a shape into another, select it and press `Shift` with the new shape's key: `⇧Q` makes it a
+Queue, `⇧D` a Data Store, and so on for Service, Actor and Component. Its name, connectors, flows
+and notes stay; connectors whose meaning was inferred are inferred again. **Turn into…** in `⌘K`
+does the same.
+
 Use **External** for a service you do not own. **Actor frame → Framed** outlines an actor. Drag an
 actor's corner resize handle to grow its glyph and box together.
 Queue and Data Store artwork also grows when you drag a corner resize handle.
@@ -31,6 +36,11 @@ Queue and Data Store artwork also grows when you drag a corner resize handle.
   Small marks and simple notes get a content-sized card. Drag the card's top edge to move it
   out of the way; click empty canvas to dismiss it. Resize the description box from its lower-right
   corner. Right-click for attachment, copy and other actions.
+- A known product also sets the kind, as long as you haven't picked one: Redis or Memcached makes a
+  Data Store a Cache, PostgreSQL makes it SQL, Kafka or SNS makes a Queue a Topic, Kinesis a Stream,
+  and Stripe or Twilio makes a Service External. A kind you choose yourself always stays.
+- Instances: type `×3` (or `x3`) after a Service's name, or use **− ×1 +** in its toolbar. It draws
+  as a stack with a small ×3, and [Traffic](traffic.md) reads it.
 
 ![Technology suggestions for PostgreSQL.](../media/guides/technology-suggestions.png)
 
@@ -58,6 +68,8 @@ undo step.
 ## Connect shapes
 
 - Drag from a shape's edge dot onto another shape, or onto empty space to create one.
+- Several shapes selected? Drag from any one of their dots onto a shape to connect all of them to
+  it at once — a faint line from each shows what the drop will do.
 - Keyboard: select a shape and run **Connect to…** from `⌘K`.
 - Click a connector to change its relationship
   ([rules](../reference/semantics.md#the-capability-matrix)). Drag its end to reconnect it.
@@ -166,6 +178,13 @@ An AI agent using Draft Canvas MCP, including Nodi, can make the same associatio
   DLQs use a muted amber outline and message icon by default, with a neutral fill. This identifies
   the recovery role, not a live error. Any explicit colour choice overrides the default.
 - A Junction (`J`) shares a route. Right-click a bundle → **Convert to junction**.
+- **Put a shape in between**: drag a shape with no connectors of its own onto a connector, or place
+  one there with a shape tool. `Orders API → Billing` with a Queue dropped on it becomes
+  `Orders API → orders → Billing`, both lines dashed and captioned for what they now join. Works for
+  Queues, Data Stores, Services, Components and Junctions; the label, notes and flow steps stay.
+- **Take one out**: select it and press `⌥⌫` (**Delete and join connectors**). `Client → Gateway → API`
+  becomes `Client → API`, keeping its flows. A shape with several ways in *and* out has no single way
+  to join, so `⌥⌫` leaves it; plain `⌫` deletes it.
 
 ## Boundaries
 

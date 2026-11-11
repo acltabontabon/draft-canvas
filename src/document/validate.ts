@@ -549,6 +549,13 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     }
     if (type === 'service') {
       node.serviceKind = oneOf<ServiceKind>(candidate.serviceKind, SERVICE_KINDS, 'generic');
+      const replicas = candidate.replicas;
+      if (typeof replicas === 'number' && Number.isInteger(replicas) && replicas >= 2) {
+        node.replicas = Math.min(replicas, LIMITS.maxReplicas);
+      }
+    }
+    if ((type === 'service' || type === 'database' || type === 'queue') && candidate.kindOrigin === 'technology') {
+      node.kindOrigin = 'technology';
     }
     if (type === 'database') {
       node.databaseKind = oneOf<DatabaseKind>(candidate.databaseKind, DATABASE_KINDS, 'generic');

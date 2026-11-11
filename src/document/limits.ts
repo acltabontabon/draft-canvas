@@ -32,6 +32,8 @@ export const LIMITS = {
   maxDescriptionLength: 280,
   /** "Spring Boot 3, Kotlin" — a line, not a stack listing. */
   maxTechnologyLength: 60,
+  /** The most instances a Service can be drawn with (`DraftNode.replicas`). */
+  maxReplicas: 99,
   maxIdLength: 128,
   /** Coordinates are clamped to keep the viewport maths well-conditioned. */
   maxCoordinate: 1_000_000,

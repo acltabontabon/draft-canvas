@@ -63,7 +63,9 @@ Traffic points out observations such as:
 - queues with no consumer or replay route drawn, and paths around a gateway.
 
 Topology alone cannot establish availability, failure isolation, real backlog, or which component
-is most important to protect. A single shape can represent multiple replicas.
+is most important to protect. A single shape can represent multiple replicas; give a Service its
+instance count (`Fulfilment ×3`) and Traffic treats those instances as competing consumers of the
+queue they read from, each with about a third of its messages.
 
 ## Follow the work
 

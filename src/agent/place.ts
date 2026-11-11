@@ -89,6 +89,7 @@ function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: string): Dr
     ...(parentId ? { parentId } : {}),
   });
   if (spec.evidence?.length) node.evidence = spec.evidence;
+  if (spec.replicas && node.type === 'service') node.replicas = spec.replicas;
   const attachments = attachmentsOf(spec.attachments);
   if (attachments.length) node.attachments = attachments;
   return sizeToFit(node, ctx);

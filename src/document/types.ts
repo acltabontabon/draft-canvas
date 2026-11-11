@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 23;
+export const CURRENT_VERSION = 24;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -390,10 +390,16 @@ export interface DraftNode {
   /**
    * What it is built with ("Spring Boot", "PostgreSQL 16") — displayed as a recognized technology
    * logo or a generic technology mark. The full value is retained for details and source exports.
-   * Architecture shapes only (`C4_TEXT_TYPES`). Not a kind: it never changes the silhouette or the
-   * connector semantics, which follow `serviceKind`/`databaseKind`/… exactly as before.
+   * Architecture shapes only (`C4_TEXT_TYPES`). Setting a known product can set the kind as well —
+   * Redis makes a Data Store a cache, Kafka a Queue a topic (`technologyKind.ts`) — but only a kind
+   * still at its default or one an earlier technology set (`kindOrigin`); a picked kind stays.
    */
   technology?: string;
+  /**
+   * `'technology'`: the kind (`serviceKind`/`databaseKind`/`queueKind`) was set by `technology`
+   * rather than picked, so a later technology may change it again. Absent: picked, or the default.
+   */
+  kindOrigin?: 'technology';
   /**
    * Whether `text` is a system-managed placeholder or a name the user chose — the same
    * "may this be silently recomputed?" question `DraftEdge.semanticsOrigin` answers for an edge's
@@ -414,6 +420,12 @@ export interface DraftNode {
   code?: string;
   /** `service` nodes only. */
   serviceKind?: ServiceKind;
+  /**
+   * `service` nodes only. How many instances of it run — 2 to `LIMITS.maxReplicas`, drawn as a
+   * stack with a small ×N. Absent is one. Read by Traffic: a queue's consumer with replicas has
+   * competing consumers.
+   */
+  replicas?: number;
   /** `database` nodes only. */
   databaseKind?: DatabaseKind;
   /** `queue` nodes only. */

@@ -625,6 +625,8 @@ const MIGRATIONS: Record<number, Migration> = {
   // Keep preview-build v23 files readable. Connector styling is a device preference;
   // normalization discards the retired per-connector overrides.
   22: (document) => document,
+  // Optional `replicas` and `kindOrigin` on nodes; a diagram without them means the same.
+  23: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

@@ -183,7 +183,7 @@ function junctionMenu(node: DraftNode, commands: Command[]): ContextMenuEntry[] 
     pick(commands, ['edit-text']),
     pick(commands, COPY_AND_ORDER),
     pick(commands, ['spotlight']),
-    pick(commands, ['delete']),
+    pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
 
@@ -198,7 +198,7 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
     pick(commands, ATTACH),
     pick(commands, COPY_AND_ORDER),
     pick(commands, lastGroup),
-    pick(commands, ['delete']),
+    pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
 
@@ -280,7 +280,7 @@ function selectionMenu(ctx: CommandContext, commands: Command[]): ContextMenuEnt
     { type: 'icons', label: 'Align and distribute', items: align },
     pick(commands, COPY_AND_ORDER),
     pick(commands, ['spotlight']),
-    pick(commands, ['delete']),
+    pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
 
