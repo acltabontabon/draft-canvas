@@ -43,7 +43,7 @@ import { NO_CROSSINGS, crossingPlan, withoutMoving } from '../edges/crossings';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
 import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
-import { captionAnchor as captionAnchorRect, labelChipRect } from '../edges/describe';
+import { captionAnchor as captionAnchorRect, edgeMetaText, labelChipRect } from '../edges/describe';
 import { edgeMarkerCenter, type OccupiedRect } from '../openPoints/marker';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
@@ -336,6 +336,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
+  /** A dragged, unconnected shape would go into the middle of this connector on drop. Tinted like
+   *  an attach target, with no landing dot: the shape lands where it is, not at the label point. */
+  const spliceTarget = useUiStore((state) => state.spliceArmedEdgeTarget === id);
 
   const sourceNode = useInternalNode(edge?.source ?? '');
   const targetNode = useInternalNode(edge?.target ?? '');
@@ -620,8 +623,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // already folded into `color`); with no accent set, it falls back to the
   // plain selection colour exactly as it always has.
   const strokeColor =
-    selected || attachTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
-  const conditionText = edge.condition ? `[${edge.condition}]` : null;
+    selected || attachTarget || spliceTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
+  // Condition and cadence share one chip, worded once for the canvas and the export (`edgeMetaText`).
+  const conditionText = edgeMetaText(edge);
 
   // Where the open-point tab sits: beside the label chip or the caption this connector draws at its
   // label point, in reading direction — the same rule `edges/describe.ts` applies for the export.
@@ -725,6 +729,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-focus-dimmed={focusDimmed ? 'true' : undefined}
       data-flow-active={isActiveStep ? pulseTarget : undefined}
       data-attach-target={attachTarget ? 'true' : undefined}
+      data-splice-target={spliceTarget ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
@@ -783,7 +788,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           strokeWidth: Math.max(CONNECTOR_STYLE.lineWidth,
             isActiveStep
               ? 2.6
-              : selected || attachTarget
+              : selected || attachTarget || spliceTarget
                 ? 2.4
                 : trafficReading === 'shared'
                   ? 2.3
@@ -1177,7 +1182,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               data-editing={editingCondition ? 'true' : undefined}
               style={{ color }}
               title={mode === 'edit' && !editingCondition ? 'Double-click to edit' : undefined}
-              onDoubleClick={() => mode === 'edit' && useUiStore.getState().readOnly === null && setEditingCondition(true)}
+              onDoubleClick={() => mode === 'edit' && useUiStore.getState().readOnly === null && edge.condition && setEditingCondition(true)}
             >
               {editingCondition ? (
                 <input

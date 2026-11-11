@@ -1,6 +1,8 @@
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
 import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../lib/presets';
+import { bridgeProblems } from '../document/splice';
+import { CONVERTIBLE_TYPES, CONVERTIBLE_TYPE_NAMES, isConvertibleType } from '../document/convert';
 import { reconnectProblem } from '../document/reconnect';
 import { capabilityFor, categoryOf, edgeRelationLabel, isServiceInteraction } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
@@ -1484,6 +1486,18 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       keywords: ['focus', 'highlight', 'dim others'],
       run: (inner) => inner.editor.enterFocus([node.id], []),
     },
+    // Where its data comes from and what it feeds: offered once a shape has a connector at all.
+    ...(node.type !== 'group' && ctx.editor.document.edges.some((e) => e.source === node.id || e.target === node.id)
+      ? [
+          {
+            id: 'show-lineage',
+            title: 'Show lineage',
+            group: 'selection' as const,
+            keywords: ['upstream', 'downstream', 'where does this come from', 'impact', 'data flow', 'trace'],
+            run: (inner: CommandContext) => inner.editor.showLineage(node.id),
+          },
+        ]
+      : []),
     {
       id: 'duplicate',
       title: 'Duplicate',
@@ -1521,7 +1535,10 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
   }
   // Wrapping one shape is how a boundary is often started, as ⌘G already does.
   commands.push(groupCommand(1));
+  commands.push(...turnIntoCommands(ctx));
   commands.push(deleteCommand('Delete'));
+  const keepingLines = deleteKeepingLinesCommand(ctx);
+  if (keepingLines) commands.push(keepingLines);
   return commands;
 }
 
@@ -1545,6 +1562,57 @@ function deleteCommand(title: string): Command {
     keywords: ['remove', 'trash'],
     shortcut: 'Backspace',
     run: (inner) => inner.editor.deleteSelection(),
+  };
+}
+
+/**
+ * "Turn into Queue" and the rest: one flat command per shape the selection could become, each with
+ * its ⇧ + shape-letter key, so the palette finds each by name ("queue") and shows its key. Kept out
+ * of the context menu: four more rows on every shape's menu cost more than they save. Offered for
+ * the types some selected architecture shape isn't already.
+ */
+function turnIntoCommands(ctx: CommandContext): Command[] {
+  const { document, selection } = ctx.editor;
+  const types = new Set(
+    selection.nodes.flatMap((id) => {
+      const node = document.nodes.find((n) => n.id === id);
+      return node && isConvertibleType(node.type) ? [node.type] : [];
+    }),
+  );
+  if (types.size === 0) return [];
+  return CONVERTIBLE_TYPES.filter((type) => !(types.size === 1 && types.has(type))).map((type) => {
+    const letter = ALL_PRESETS.find((preset) => preset.type === type)?.shortcut;
+    return {
+      id: `turn-into-${type}`,
+      title: `Turn into ${CONVERTIBLE_TYPE_NAMES[type]}`,
+      group: 'selection',
+      // Not the shape's own name: an exact keyword hit outranks a title, and "data store" must keep
+      // finding Add Data Store first. The title already carries it.
+      keywords: ['convert', 'change shape', 'change type', 'become', 'swap'],
+      ...(letter ? { shortcut: `Shift ${letter}` } : {}),
+      run: (inner) => inner.editor.convertSelection(type),
+    };
+  });
+}
+
+/**
+ * Deleting shapes out of the middle of a line and joining it back up (`removeAndBridge`). Offered
+ * only when some selected shape has a way in and a way out, and none has several of both.
+ */
+function deleteKeepingLinesCommand(ctx: CommandContext): Command | null {
+  const { document, selection } = ctx.editor;
+  if (selection.nodes.length === 0) return null;
+  const through = selection.nodes.some(
+    (id) => document.edges.some((e) => e.target === id && e.source !== id) && document.edges.some((e) => e.source === id && e.target !== id),
+  );
+  if (!through || bridgeProblems(document, selection.nodes).length > 0) return null;
+  return {
+    id: 'delete-keep-lines',
+    title: 'Delete and join connectors',
+    group: 'selection',
+    keywords: ['remove', 'bridge', 'reconnect', 'keep line', 'splice out', 'bypass'],
+    shortcut: `${ALT_SYMBOL} Backspace`,
+    run: (inner) => inner.editor.deleteSelectionKeepingLines(),
   };
 }
 
@@ -1938,7 +2006,10 @@ export function multiCommands(ctx: CommandContext): Command[] {
       },
     );
   }
+  commands.push(...turnIntoCommands(ctx));
   commands.push(deleteCommand('Delete selection'));
+  const keepingLines = deleteKeepingLinesCommand(ctx);
+  if (keepingLines) commands.push(keepingLines);
   return commands;
 }
 

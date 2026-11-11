@@ -111,9 +111,18 @@ export function InspectorSelect({
     if (open) listRef.current?.focus();
   }, [open]);
 
+  // Keeps the highlighted option in view by scrolling the list alone. `scrollIntoView` also scrolls
+  // every scrollable ancestor, and the connector panel scrolls: a menu opened near its bottom
+  // pushed the whole panel up and hid its top rows behind the open menu.
   useLayoutEffect(() => {
     if (!open) return;
-    listRef.current?.querySelector<HTMLElement>('[data-highlighted="true"]')?.scrollIntoView?.({ block: 'nearest' });
+    const list = listRef.current;
+    const option = list?.querySelector<HTMLElement>('[data-highlighted="true"]');
+    if (!list || !option) return;
+    const top = option.offsetTop;
+    const bottom = top + option.offsetHeight;
+    if (top < list.scrollTop) list.scrollTop = top;
+    else if (bottom > list.scrollTop + list.clientHeight) list.scrollTop = bottom - list.clientHeight;
   }, [open, highlighted, maxHeight]);
 
   // The menu is placed from what was measured when it opened, and a menu that stays open while the

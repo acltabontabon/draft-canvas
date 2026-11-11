@@ -80,6 +80,10 @@ function undescribed(schema: Schema): Schema {
   return out;
 }
 
+/** Services only: how many instances run — drawn as a stack with a small ×N, read by Traffic.
+ *  Explained once, in `get_capabilities`' field notes, to keep the repeated element schema small. */
+const replicasSchema: Schema = { type: 'integer', minimum: AGENT_LIMITS.replicas.min, maximum: AGENT_LIMITS.replicas.max };
+
 /** An element `depth` rooms below the top; with an `inside` while a room may still nest there. */
 const element = (depth: number): Schema => ({
   type: 'object',
@@ -89,6 +93,7 @@ const element = (depth: number): Schema => ({
     label: text(AGENT_LIMITS.labelLength, 'Its name.'),
     description: text(AGENT_LIMITS.descriptionLength, 'C4 description: its responsibility, in a sentence.'),
     technology: text(AGENT_LIMITS.technologyLength, 'One product, as named, e.g. "Spring Boot 3": shows its logo.'),
+    replicas: replicasSchema,
     group: { type: 'string', description: 'Id of the group/boundary it sits in.' },
     color: { enum: ACCENTS },
     evidence: ref('evidence'),
@@ -359,7 +364,7 @@ const opAdd: Schema = {
 const nullable = (schema: Schema): Schema => ({ anyOf: [schema, { type: 'null' }] });
 const setProperties: Record<string, Schema> = {
   label: nullable(text(1000)), text: text(1000), type: { anyOf: [{ enum: ELEMENT_TYPE_NAMES }, { type: 'string', maxLength: 64 }] },
-  description: nullable(text(280)), technology: nullable(text(60)), color: nullable({ enum: ACCENTS }),
+  description: nullable(text(280)), technology: nullable(text(60)), replicas: nullable(replicasSchema), color: nullable({ enum: ACCENTS }),
   group: nullable({ type: 'string' }), kind: nullable({ enum: [...new Set([...Object.keys(GROUP_KINDS), ...NOTE_FORM_NAMES, ...CONNECTOR_KINDS])] }),
   semantic: nullable({ enum: EDGE_SEMANTICS }), directed: { type: 'boolean' }, async: { type: 'boolean' },
   condition: nullable(text(120)), title: text(100),

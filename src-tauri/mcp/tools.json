@@ -1813,6 +1813,11 @@
               "maxLength": 60,
               "description": "One product, as named, e.g. \"Spring Boot 3\": shows its logo."
             },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99
+            },
             "group": {
               "type": "string",
               "description": "Id of the group/boundary it sits in."
@@ -1959,6 +1964,11 @@
               "type": "string",
               "maxLength": 60
             },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99
+            },
             "group": {
               "type": "string"
             },
@@ -2102,6 +2112,11 @@
               "type": "string",
               "maxLength": 60
             },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99
+            },
             "group": {
               "type": "string"
             },
@@ -2244,6 +2259,11 @@
             "technology": {
               "type": "string",
               "maxLength": 60
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99
             },
             "group": {
               "type": "string"
@@ -2595,6 +2615,18 @@
                           {
                             "type": "string",
                             "maxLength": 60
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "replicas": {
+                        "anyOf": [
+                          {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 99
                           },
                           {
                             "type": "null"
@@ -3973,6 +4005,11 @@
               "maxLength": 60,
               "description": "One product, as named, e.g. \"Spring Boot 3\": shows its logo."
             },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99
+            },
             "group": {
               "type": "string",
               "description": "Id of the group/boundary it sits in."
@@ -4119,6 +4156,11 @@
               "type": "string",
               "maxLength": 60
             },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99
+            },
             "group": {
               "type": "string"
             },
@@ -4262,6 +4304,11 @@
               "type": "string",
               "maxLength": 60
             },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99
+            },
             "group": {
               "type": "string"
             },
@@ -4404,6 +4451,11 @@
             "technology": {
               "type": "string",
               "maxLength": 60
+            },
+            "replicas": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 99
             },
             "group": {
               "type": "string"

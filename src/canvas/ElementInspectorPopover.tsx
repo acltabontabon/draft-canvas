@@ -43,6 +43,7 @@ import { effectiveTextRole } from '../nodes/describe';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { familyOf } from '../render/text/fonts';
 import { useEditorStore } from '../store/editorStore';
+import { replicasField } from '../document/replicas';
 import { useUiStore } from '../store/uiStore';
 import { nodeIndex } from '../store/selectors';
 import { useThemeValue } from '../theme/useTheme';
@@ -622,6 +623,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
             layout={typeControl.layout}
           />
         )}
+        {node.type === 'service' && <ReplicaStepper nodeId={node.id} replicas={node.replicas ?? 1} />}
         {node.type === 'actor' && (
           <InspectorSelect
             ariaLabel="Actor frame"
@@ -831,3 +833,25 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
     </>
   );
 });
+
+/** How many instances a Service runs — "×3" on the canvas. One step either way per click; one
+ *  instance is the floor and draws no stack. Typing "×3" after the name does the same. */
+function ReplicaStepper({ nodeId, replicas }: { nodeId: string; replicas: number }) {
+  const set = (count: number) =>
+    useEditorStore.getState().updateNodeById(nodeId, { replicas: replicasField(count) }, 'Change instances');
+  return (
+    <Tooltip content={{ title: 'Instances', description: 'How many copies of this service run. Or type ×3 after its name.' }}>
+      {(tip) => (
+        <span className="dc-element-replicas" role="group" aria-label={`Instances: ${replicas}`} {...tip}>
+          <Button variant="quiet" aria-label="Fewer instances" disabled={replicas <= 1} onClick={() => set(replicas - 1)}>
+            −
+          </Button>
+          <span aria-hidden="true">×{replicas}</span>
+          <Button variant="quiet" aria-label="More instances" disabled={replicas >= LIMITS.maxReplicas} onClick={() => set(replicas + 1)}>
+            +
+          </Button>
+        </span>
+      )}
+    </Tooltip>
+  );
+}

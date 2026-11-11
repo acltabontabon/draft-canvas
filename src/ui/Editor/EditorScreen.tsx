@@ -16,6 +16,7 @@ import { canvasBounds, canvasCenter } from '../../canvas/canvasFrame';
 import type { DraftNode, DraftViewport } from '../../document/types';
 import { loadFailureNotice } from '../../lib/staleChunk';
 import { presetForShortcut, type Preset } from '../../lib/presets';
+import { isConvertibleType, type ConvertibleType } from '../../document/convert';
 import { nearestInDirection, nextRelationshipNeighbor, type Direction } from '../../canvas/spatialNav';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { offerFor, quickConnectItems, type QuickConnectItem } from '../../canvas/quickConnectItems';
@@ -225,7 +226,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const [canvasInstanceKey, setCanvasInstanceKey] = useState(0);
 
   const createAt = useCallback(
-    (preset: Preset, position: { x: number; y: number }, autoEdit = true) => {
+    (preset: Preset, position: { x: number; y: number }, autoEdit = true, spliceEdgeId?: string) => {
       const code = preset.type === 'code' ? (CODE_SAMPLES[preset.language ?? ''] ?? '') : undefined;
       const size =
         preset.type === 'code' && code
@@ -238,7 +239,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // (`point - 88,34`); centred by its own size instead, a Junction lands under the cursor rather
       // than beside it, and a Boundary or code card doesn't hang off below and to the right.
       const { width, height } = size ?? defaultSizeFor(preset.type);
-      const node = useEditorStore.getState().addNode({
+      // Placed onto a connector: made and put into its middle as one undo step.
+      const editor = useEditorStore.getState();
+      if (spliceEdgeId) editor.beginInteraction('Insert into connector');
+      const node = editor.addNode({
         type: preset.type,
         x: Math.round(position.x + 88 - width / 2),
         y: Math.round(position.y + 34 - height / 2),
@@ -250,6 +254,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         language: preset.language,
         code,
       });
+      if (spliceEdgeId) {
+        editor.spliceIntoEdge(node.id, spliceEdgeId);
+        useEditorStore.getState().endInteraction('Insert into connector');
+      }
       arm(null);
       // Whatever made it — a key, the palette, the double-click picker, a click with a tool armed —
       // a new shape opens ready to name, its placeholder selected so typing replaces it. "Service"
@@ -537,8 +545,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   // Stable, so the memoized `Canvas` (and React Flow under it) skips renders the editor makes for
   // its own chrome.
   const onCanvasCreateAt = useCallback(
-    (position: { x: number; y: number }) => {
-      if (armed) createAt(armed, position);
+    (position: { x: number; y: number }, spliceEdgeId?: string) => {
+      if (armed) createAt(armed, position, true, spliceEdgeId);
     },
     [armed, createAt],
   );
@@ -1253,7 +1261,9 @@ export function useKeyboard({
         case 'Backspace':
         case 'Delete':
           event.preventDefault();
-          state.deleteSelection();
+          // ⌥⌫ takes a shape out of the middle of a line and joins the line back up.
+          if (event.altKey) state.deleteSelectionKeepingLines();
+          else state.deleteSelection();
           return;
         case 'Escape': {
           if (useUiStore.getState().recoveryConnect) {
@@ -1461,6 +1471,25 @@ export function useKeyboard({
         }
         default:
           break;
+      }
+
+      // ⇧ + a shape's letter turns the selected shapes into that shape (⇧Q → Queue, ⇧D → Data
+      // Store…), keeping their connectors. By `event.code`, so Caps Lock's capital letter — which
+      // arrives without Shift — still drops a shape rather than converting one.
+      if (event.shiftKey && !event.altKey && !meta && event.code.startsWith('Key')) {
+        const target = presetForShortcut(event.code.slice(3));
+        const convertible =
+          target !== undefined &&
+          isConvertibleType(target.type) &&
+          state.selection.nodes.some((id) => {
+            const node = state.document.nodes.find((n) => n.id === id);
+            return node !== undefined && isConvertibleType(node.type) && node.type !== target.type;
+          });
+        if (convertible && !playback.active && !state.focus.active && !(!focusIsOnCanvas() && keyboardFocusIsOnControl())) {
+          event.preventDefault();
+          if (!event.repeat) state.convertSelection(target.type as ConvertibleType);
+          return;
+        }
       }
 
       if (event.shiftKey || event.altKey) return;

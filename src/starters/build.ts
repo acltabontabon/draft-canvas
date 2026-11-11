@@ -173,6 +173,7 @@ export function buildStarter(
     if (spec.attachments?.length) edge.attachments = spec.attachments.map(createAttachment);
     // Nor a reply-caption input: the reply line is the input, its words are set the way the inspector sets them.
     if (spec.response !== undefined) edge.response = spec.response;
+    if (spec.cadence !== undefined) edge.cadence = spec.cadence;
     if (spec.key !== undefined) edgeIds.set(spec.key, edge.id);
     edges.push(edge);
   }

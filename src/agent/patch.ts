@@ -58,6 +58,7 @@ import {
   AGENT_LIMITS,
   extrasOf,
   readDeliveryAttempts,
+  readReplicas,
   readEvidence,
   readHighlight,
   readLabelStyle,
@@ -717,6 +718,11 @@ function updateOne(
     else if (set.description !== undefined) patch.description = r.text(set.description, `${at}/description`, AGENT_LIMITS.descriptionLength);
     if (clear('technology')) patch.technology = undefined;
     else if (set.technology !== undefined) patch.technology = r.text(set.technology, `${at}/technology`, AGENT_LIMITS.technologyLength, { singleLine: true });
+    if (set.replicas !== undefined) {
+      const replicas = readReplicas(r, set.replicas, `${at}/replicas`, node.type);
+      if (replicas === null) patch.replicas = undefined;
+      else if (replicas !== undefined) patch.replicas = replicas;
+    }
     if (clear('color')) patch.accent = undefined;
     else if (set.color !== undefined) {
       const accent = r.oneOf<Accent>(set.color, `${at}/color`, ACCENTS);

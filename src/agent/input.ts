@@ -66,6 +66,8 @@ export const AGENT_LIMITS = {
   responseLength: LIMITS.maxResponseLength,
   /** `deliveryAttempts` is a whole number in this range — the inspector's own stepper bounds. */
   deliveryAttempts: { min: 1, max: 50 },
+  /** A Service's `replicas`: one instance up to the document's own cap. */
+  replicas: { min: 1, max: LIMITS.maxReplicas },
   insideDepth: LIMITS.maxInsideDepth,
 } as const;
 
@@ -88,6 +90,8 @@ export interface NodeSpec {
   label: string;
   description?: string;
   technology?: string;
+  /** Services only; 2 or more (one instance is the default and isn't stored). */
+  replicas?: number;
   group?: string;
   color?: Accent;
   attachments?: AttachmentSpec[];
@@ -470,6 +474,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const label = r.text(item.label, `${at}/label`, AGENT_LIMITS.labelLength, { required: true });
     const description = r.text(item.description, `${at}/description`, AGENT_LIMITS.descriptionLength);
     const technology = r.text(item.technology, `${at}/technology`, AGENT_LIMITS.technologyLength, { singleLine: true });
+    const replicas = readReplicas(r, item.replicas, `${at}/replicas`, shape?.type);
     const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
     const group = typeof item.group === 'string' ? item.group : undefined;
     if (group !== undefined && !groupIds.has(group)) r.problems.add('INVALID_REFERENCE', `${at}/group`, `no group "${group}" in this view`);
@@ -501,6 +506,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
         label,
         ...(description ? { description } : {}),
         ...(technology ? { technology } : {}),
+        ...(replicas ? { replicas } : {}),
         ...(group ? { group } : {}),
         ...(color ? { color } : {}),
         ...(attachments ? { attachments } : {}),
@@ -824,6 +830,22 @@ export function readResponse(r: Reader, value: unknown, at: string): string | tr
   if (value === null || value === false) return null;
   if (value === true) return true;
   return r.text(value, at, AGENT_LIMITS.responseLength, { singleLine: true, required: true });
+}
+
+/** A Service's instance count; `null` (or 1) is one instance. Refused on any other shape. */
+export function readReplicas(r: Reader, value: unknown, at: string, type: string | undefined): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const { min, max } = AGENT_LIMITS.replicas;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    r.problems.add('INVALID_INPUT', at, `must be a whole number from ${min} to ${max}`);
+    return undefined;
+  }
+  if (type !== undefined && type !== 'service') {
+    r.problems.add('UNSUPPORTED', at, 'replicas belong to a service-like element');
+    return undefined;
+  }
+  return value >= 2 ? value : null;
 }
 
 /** How many delivery attempts come before a dead-letter route is taken; `null` clears it. */

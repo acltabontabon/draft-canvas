@@ -183,7 +183,7 @@ function junctionMenu(node: DraftNode, commands: Command[]): ContextMenuEntry[] 
     pick(commands, ['edit-text']),
     pick(commands, COPY_AND_ORDER),
     pick(commands, ['spotlight']),
-    pick(commands, ['delete']),
+    pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
 
@@ -191,14 +191,14 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
   // `flow-start-here` resolves directly only with exactly one outgoing edge — with more, its
   // `run()` returns a `CommandStage` (a picker), which the stage-command rule excludes.
   const outgoing = ctx.editor.document.edges.filter((edge) => edge.source === node.id);
-  const lastGroup = outgoing.length === 1 ? ['spotlight', 'flow-start-here'] : ['spotlight'];
+  const lastGroup = outgoing.length === 1 ? ['spotlight', 'show-lineage', 'flow-start-here'] : ['spotlight', 'show-lineage'];
   return grouped(nodeHeader(node), [
     pick(commands, ['edit-text', 'look-inside']),
     pick(commands, ['add-consumer', 'add-dead-letter-queue', 'remove-dead-letter-queue', 'add-subscriber']),
     pick(commands, ATTACH),
     pick(commands, COPY_AND_ORDER),
     pick(commands, lastGroup),
-    pick(commands, ['delete']),
+    pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
 
@@ -280,7 +280,7 @@ function selectionMenu(ctx: CommandContext, commands: Command[]): ContextMenuEnt
     { type: 'icons', label: 'Align and distribute', items: align },
     pick(commands, COPY_AND_ORDER),
     pick(commands, ['spotlight']),
-    pick(commands, ['delete']),
+    pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
 

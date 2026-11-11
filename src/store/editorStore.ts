@@ -133,6 +133,12 @@ import {
   inferRelationship,
 } from '../document/connectorSemantics';
 import { inferRelationshipThroughJunctions, reinferIfEligible } from '../document/reinfer';
+import { plainShortcut } from '../lib/platform';
+import { technologyKindPatch } from '../document/technologyKind';
+import { lineageOf } from '../document/dataFlow';
+import { replicasField, splitReplicaCount } from '../document/replicas';
+import { CONVERTIBLE_TYPE_NAMES, convertNodeType, isConvertibleType, type ConvertibleType } from '../document/convert';
+import { bridgeProblems, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
 import type {
   Accent,
   AttachableType,
@@ -431,6 +437,10 @@ export interface EditorStore {
     sourceOffset?: number,
     targetOffset?: number,
   ) => DraftEdge | null;
+  /** Connects every one of `sources` to `target` as one undo step — the fan-in a drag from one of
+   *  several selected shapes makes. Pairs already connected, and `target` itself, are skipped; the
+   *  new connectors come back selected. Empty when nothing could be connected. */
+  connectMany: (sources: readonly string[], target: string) => DraftEdge[];
   updateNodeById: (id: string, patch: Partial<Omit<DraftNode, 'id'>>, label?: string) => void;
   /** Sets or clears (with `''`) an architecture shape's C4 technology/description, growing the
    *  shape — never shrinking it — so what was typed shows in full. */
@@ -463,6 +473,9 @@ export interface EditorStore {
    *  worker→target), their semantics drawn from the same capability matrix as everywhere else —
    *  one undo step. A no-op if the edge or either endpoint no longer resolves. */
   insertWorkerOnEdge: (edgeId: string) => void;
+  /** Puts an existing shape into the middle of a connector: `A → B` becomes `A → node → B`.
+   *  False (and nothing changes) when that shape can't stand there — see `canSpliceInto`. */
+  spliceIntoEdge: (nodeId: string, edgeId: string) => boolean;
   /** "Add DLQ" — creates a compact, connected Dead Letter Queue companion for a plain Queue. A
    *  no-op if the node isn't a plain queue, is itself a generated DLQ, or already has one. */
   addDeadLetterQueue: (queueId: string) => void;
@@ -507,6 +520,10 @@ export interface EditorStore {
    *  edge has none, and never touches `accent`. See `document/edgeSemantics.ts`. */
   setEdgeSemantic: (id: string, semantic: EdgeSemantic | undefined) => void;
   /** Free-text condition chip, e.g. "approved" — display only, never evaluated. */
+  /** How often a connector moves its data ("hourly"); empty clears it. */
+  setEdgeCadence: (id: string, cadence: string | undefined) => void;
+  /** Spotlights everything `nodeId`'s data comes from and everything it feeds (`lineageOf`). */
+  showLineage: (nodeId: string) => void;
   setEdgeCondition: (id: string, condition: string) => void;
   /** Free-text response chip, e.g. "200 Customer" — display only, see `DraftEdge.response`. */
   setEdgeResponse: (id: string, response: string) => void;
@@ -554,6 +571,12 @@ export interface EditorStore {
   /** Moves every selected node by a pixel delta — repeated taps coalesce. */
   nudgeSelection: (dx: number, dy: number) => void;
   deleteSelection: () => void;
+  /** Deletes the selection and joins the lines through each removed shape back up
+   *  (`removeAndBridge`). Refused with a toast when a shape has several ways in and out. */
+  deleteSelectionKeepingLines: () => void;
+  /** Turns every selected architecture shape into `type` in place, keeping its connectors, flows,
+   *  attachments and room (`convertNodeType`). One undo step; nothing happens if none changes. */
+  convertSelection: (type: ConvertibleType) => void;
   duplicateSelection: () => void;
   /** Returns what went onto the clipboard, encoded, or `null` when nothing was copied — so a
    *  native `copy` event can also hand it to the system clipboard (see `EditorScreen`). */
@@ -1741,11 +1764,46 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return edge;
   },
 
+  connectMany(sources, target) {
+    const state = get();
+    const targetNode = state.document.nodes.find((n) => n.id === target);
+    if (!targetNode) return [];
+    const unique = [...new Set(sources)].filter((id) => id !== target);
+    const fresh = unique.filter((id) => !state.document.edges.some((e) => e.source === id && e.target === target));
+    const skipped = unique.length - fresh.length;
+    const sourceNodes = fresh.flatMap((id) => {
+      const node = state.document.nodes.find((n) => n.id === id);
+      return node ? [node] : [];
+    });
+    if (sourceNodes.length === 0) {
+      if (skipped > 0) useUiStore.getState().notify('Already connected.');
+      return [];
+    }
+    if (!roomFor(0, sourceNodes.length)) return [];
+    // Each connector means what a single drag between that pair would have meant.
+    const edges = sourceNodes.map((sourceNode) => {
+      const relationship = inferRelationshipThroughJunctions(state.document, sourceNode, targetNode);
+      return createEdge({
+        source: sourceNode.id,
+        target,
+        kind: relationship?.kind,
+        semantic: relationship?.semantic,
+        async: relationship?.async,
+        semanticsOrigin: relationship ? 'inferred' : undefined,
+      });
+    });
+    state.apply('Connect', (doc) => addEdges(doc, edges), { selection: { nodes: [], edges: edges.map((e) => e.id) } });
+    if (skipped > 0) useUiStore.getState().notify(`Connected ${edges.length} · ${skipped} already connected.`);
+    return edges;
+  },
+
   updateNodeById(id, patch, label = 'Change node') {
     noticeTruncation(patch);
+    // A kind picked here is the person's from now on: a later technology no longer moves it.
+    const picked = KIND_FIELDS.some((field) => field in patch) && !('kindOrigin' in patch);
     get().apply(label, (doc) => {
       const before = doc.nodes.find((n) => n.id === id);
-      let next = updateNode(doc, id, patch);
+      let next = updateNode(doc, id, picked && before?.kindOrigin ? { ...patch, kindOrigin: undefined } : patch);
       if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
       if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
       if (before && 'actorKind' in patch) next = applyActorAutoLabel(next, id, before, patch);
@@ -1754,7 +1812,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         next = growTextToFit(next, id);
       }
       const changesKind = KIND_FIELDS.some((field) => field in patch);
-      if (changesKind || 'text' in patch) next = growArchitectureToFit(next, id);
+      // A replica stack takes a little of the box, so it can need room too.
+      if (changesKind || 'text' in patch || 'replicas' in patch) next = growArchitectureToFit(next, id);
       return changesKind ? reinferIncidentEdges(next, id, doc) : next;
     });
   },
@@ -1769,7 +1828,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     get().apply(
       patch.description !== undefined ? 'Edit description' : 'Edit technology',
-      (doc) => growArchitectureToFit(updateNode(doc, id, fields), id),
+      (doc) => {
+        const before = doc.nodes.find((n) => n.id === id);
+        // The technology can fix the kind: Redis makes a Data Store a cache (`technologyKind.ts`).
+        const kind = before && 'technology' in fields ? technologyKindPatch(before, fields.technology) : null;
+        let next = updateNode(doc, id, kind ? { ...fields, ...kind } : fields);
+        if (kind && before) {
+          // The same follow-ups as a kind picked in the inspector: an automatic name follows the
+          // kind, and connectors whose meaning was inferred are inferred again.
+          next = applyServiceAutoLabel(next, id, before, kind);
+          next = reinferIncidentEdges(next, id, doc);
+        }
+        return growArchitectureToFit(next, id);
+      },
       { coalesceKey: `node-c4:${id}` },
     );
   },
@@ -1786,6 +1857,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       (doc) => {
         const patch: Partial<DraftNode> = { text, textOrigin: 'explicit' };
         if (options?.height !== undefined) patch.height = options.height;
+        // "Fulfilment ×3" on a Service is a name and a replica count; the count is kept apart.
+        const replicas = doc.nodes.find((n) => n.id === id)?.type === 'service' ? splitReplicaCount(text) : null;
+        if (replicas) {
+          patch.text = replicas.name;
+          patch.replicas = replicasField(replicas.count);
+        }
         // A queue-family node's name stacks above its kind caption under the tube, so naming one
         // moves it between the two default boxes (`DEFAULTS.queueHeight`/`queueNamedHeight`):
         // grow when a name first appears, shrink back only when the name is cleared from a box
@@ -1907,60 +1984,25 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }),
     });
 
-    // Both new edges' semantics come from the same capability matrix everything else reads —
-    // never hardcoded — so `Queue → Worker`/`Worker → Topic` fall out as `consumes`/`publishes`
-    // without this action needing to know that itself.
-    const toWorker = capabilityFor(categoryOf(source), categoryOf(worker));
-    const fromWorker = capabilityFor(categoryOf(worker), categoryOf(target));
-    const edgeToWorker = createEdge({
-      source: edge.source,
-      target: worker.id,
-      semantic: toWorker?.defaultRelation,
-      kind: toWorker?.defaultBehavior,
-      async: toWorker?.defaultAsync,
-      semanticsOrigin: toWorker?.defaultRelation ? 'inferred' : undefined,
-      // What the user wrote about the message rides on the leg it enters the worker by. The
-      // response fields don't carry over — a worker in between makes the hop asynchronous.
-      label: edge.label,
-      condition: edge.condition,
-      accent: edge.accent,
-    });
-    if (edge.attachments) edgeToWorker.attachments = edge.attachments;
-    // So do its details and the source it was drawn from: the relationship is still that message,
-    // and dropping them lost what an author or agent had recorded about it.
-    if (edge.details) edgeToWorker.details = edge.details;
-    if (edge.evidence) edgeToWorker.evidence = edge.evidence;
-    const edgeFromWorker = createEdge({
-      source: worker.id,
-      target: edge.target,
-      semantic: fromWorker?.defaultRelation,
-      kind: fromWorker?.defaultBehavior,
-      async: fromWorker?.defaultAsync,
-      semanticsOrigin: fromWorker?.defaultRelation ? 'inferred' : undefined,
-    });
-
+    // What the connector said rides on the leg into the worker, and both legs' meanings come from
+    // the capability matrix, so `Queue → Worker`/`Worker → Topic` fall out as `consumes`/
+    // `publishes` — the same splice a shape dropped onto a connector makes (`spliceNodeIntoEdge`).
     state.apply(
       'Insert worker',
-      // Replacements are added and spliced into any flow steps *before* the original connector
-      // goes, so a flow that told `A → B` now tells `A → W`, `W → B` instead of losing the beat.
-      // An open point about the connector rides on the leg the message enters the worker by, the
-      // same leg its label and attachments ride — never silently lost with the connector it was on.
-      (doc) =>
-        removeElements(
-          retargetOpenPoints(
-            spliceEdgeInFlows(
-              addEdges(addNodes(doc, [worker]), [edgeToWorker, edgeFromWorker]),
-              edgeId,
-              [edgeToWorker.id, edgeFromWorker.id],
-            ),
-            { kind: 'edge', id: edgeId },
-            { kind: 'edge', id: edgeToWorker.id },
-          ),
-          [],
-          [edgeId],
-        ),
+      (doc) => spliceNodeIntoEdge(addNodes(doc, [worker]), edgeId, worker.id).doc,
       { selection: { nodes: [worker.id], edges: [] } },
     );
+  },
+
+  spliceIntoEdge(nodeId, edgeId) {
+    const state = get();
+    if (!canSpliceInto(state.document, edgeId, nodeId)) return false;
+    // One connector becomes two.
+    if (!roomFor(0, 1)) return false;
+    state.apply('Insert into connector', (doc) => spliceNodeIntoEdge(doc, edgeId, nodeId).doc, {
+      selection: { nodes: [nodeId], edges: [] },
+    });
+    return true;
   },
 
   addDeadLetterQueue(queueId) {
@@ -2165,6 +2207,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // the connector is reversed. `label` stays the user's own text, which always wins.
     const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { semantic, semanticsOrigin: 'explicit' };
     get().apply('Set connector type', (doc) => updateEdge(doc, id, patch));
+  },
+
+  setEdgeCadence(id, cadence) {
+    const value = cadence?.slice(0, LIMITS.maxCadenceLength).trim() || undefined;
+    get().apply('Set cadence', (doc) => updateEdge(doc, id, { cadence: value }), { coalesceKey: `edge-cadence:${id}` });
+  },
+
+  showLineage(nodeId) {
+    const { nodeIds, edgeIds } = lineageOf(get().document, nodeId);
+    get().enterFocus(nodeIds, edgeIds);
   },
 
   setEdgeCondition(id, condition) {
@@ -2523,6 +2575,40 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { selection, apply } = get();
     if (selection.nodes.length === 0 && selection.edges.length === 0) return;
     apply('Delete', (doc) => removeElements(doc, selection.nodes, selection.edges), {
+      selection: EMPTY_SELECTION,
+    });
+  },
+
+  convertSelection(type) {
+    const { selection, apply, document } = get();
+    const ids = selection.nodes.filter((id) => {
+      const node = document.nodes.find((n) => n.id === id);
+      return node !== undefined && node.type !== type && isConvertibleType(node.type);
+    });
+    if (ids.length === 0) return;
+    apply(`Turn into ${CONVERTIBLE_TYPE_NAMES[type]}`, (doc) =>
+      ids.reduce((next, id) => {
+        const converted = growArchitectureToFit(convertNodeType(next, id, type), id);
+        // The shape's category changed, so every connector whose meaning was inferred is inferred
+        // again — exactly what a kind change does. A relationship the person chose stays.
+        return reinferIncidentEdges(converted, id, next);
+      }, doc),
+    );
+  },
+
+  deleteSelectionKeepingLines() {
+    const { selection, apply, document } = get();
+    if (selection.nodes.length === 0 && selection.edges.length === 0) return;
+    // Connectors picked alongside the shapes go first: a connector the person chose to delete is
+    // not one to join through.
+    const withoutEdges = removeElements(document, [], selection.edges);
+    if (bridgeProblems(withoutEdges, selection.nodes).length > 0 || !removeAndBridge(withoutEdges, selection.nodes)) {
+      useUiStore.getState().notify(
+        `${plainShortcut('Alt Backspace')} joins up shapes with one way in or one way out. ${plainShortcut('Backspace')} deletes without joining.`,
+      );
+      return;
+    }
+    apply('Delete', (doc) => removeAndBridge(removeElements(doc, [], selection.edges), selection.nodes)?.doc ?? doc, {
       selection: EMPTY_SELECTION,
     });
   },

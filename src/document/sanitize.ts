@@ -27,6 +27,7 @@ export const TEXT_FIELD_LIMITS = {
   technology: LIMITS.maxTechnologyLength,
   label: LIMITS.maxLabelLength,
   condition: LIMITS.maxConditionLength,
+  cadence: LIMITS.maxCadenceLength,
   response: LIMITS.maxResponseLength,
   compensationName: LIMITS.maxCompensationNameLength,
   compensationDescription: LIMITS.maxDescriptionLength,

@@ -52,6 +52,7 @@ import { clampCenterX } from './popoverPlacement';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
+import { CADENCE_PRESETS, DATA_SEMANTICS } from '../document/dataFlow';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 const EDGE_SEMANTIC_LABELS: Record<EdgeSemantic, string> = {
   http: 'HTTP',
@@ -1602,6 +1603,17 @@ function ExpandedPanel({
             )}
             {flowAction && <div className="dc-inspector-flow-action">{flowAction}</div>}
           </div>
+          {(edge.cadence || (edge.semantic && DATA_SEMANTICS.has(edge.semantic))) && (
+            <div className="dc-connector-drawing-row">
+              <span className="dc-inspector-section-label">Cadence</span>
+              <InspectorSelect
+                ariaLabel="Cadence"
+                value={edge.cadence ?? ''}
+                options={cadenceOptions(edge.cadence)}
+                onChange={(value) => useEditorStore.getState().setEdgeCadence(edge.id, value || undefined)}
+              />
+            </div>
+          )}
         </TooltipGroup>
         <div className="dc-connector-attachment-mode">
           <span className="dc-inspector-section-label">Attachment</span>
@@ -1681,4 +1693,12 @@ function ExpandedPanel({
       </section>
     </div>
   );
+}
+
+/** "How often does this move data?" — the common answers, plus whatever this connector already
+ *  says when it is something else ("every 15 min" typed by an agent or a file). */
+function cadenceOptions(current: string | undefined): InspectorSelectOption[] {
+  const presets = CADENCE_PRESETS.map((value) => ({ value, label: value[0]!.toUpperCase() + value.slice(1) }));
+  const custom = current && !(CADENCE_PRESETS as readonly string[]).includes(current) ? [{ value: current, label: current }] : [];
+  return [{ value: '', label: 'Not shown' }, ...custom, ...presets];
 }

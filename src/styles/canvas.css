@@ -520,6 +520,17 @@
   stroke-width: clamp(10px, calc(30px / var(--dc-zoom, 1)), 72px);
 }
 
+/* Lines from the other selected shapes to the pointer while a fan-in connection is dragged. */
+.dc-fan-in-preview {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+
 /* Escape during a new-connector drag. React Flow has no cancel and redraws its live line on every
    pointer move until release, so once cancelled the line is simply not shown (`Canvas.tsx` vetoes
    the connection itself). */
@@ -563,7 +574,9 @@
 /* A dragged note/code card is hovering this connector's own hit corridor — dropping now folds it
  * into an attachment. A brighter, wider glow than selection's, so "drop here" reads as a distinct
  * signal, not as "this happens to be selected". */
-.dc-edge[data-attach-target='true'] .dc-edge-line {
+.dc-edge[data-attach-target='true'] .dc-edge-line,
+/* Same signal for a dragged, unconnected shape that would be put into the middle of this connector. */
+.dc-edge[data-splice-target='true'] .dc-edge-line {
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 55%, transparent));
 }
 
@@ -1966,6 +1979,20 @@
   color: var(--dc-text-muted);
 }
 
+/* A Service's instance count: − ×3 +, the count set in the tabular figures so the row never shifts. */
+.dc-element-replicas {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--dc-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-element-replicas > span {
+  min-width: 2.2ch;
+  text-align: center;
+}
+
 .dc-element-technology svg {
   flex: none;
 }
@@ -2368,8 +2395,9 @@
 }
 
 /* Recovery is a companion sketch beside the connector, so opening it does not turn the
- * inspector into a tall form or make the person scroll past the operation they are editing. */
-.dc-edge-inspector:has(.dc-recovery-action[data-open='true'], .dc-connector-flyout) .dc-popover-inner {
+ * inspector into a tall form or make the person scroll past the operation they are editing. An
+ * open dropdown is the same: it hangs past the panel's edge rather than growing a scroll area. */
+.dc-edge-inspector:has(.dc-recovery-action[data-open='true'], .dc-connector-flyout, .dc-inspector-select-menu) .dc-popover-inner {
   max-height: none;
   overflow: visible;
 }

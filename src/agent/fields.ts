@@ -36,7 +36,7 @@ export function unknownFieldHint(key: string, allowed: readonly string[]): strin
 /** Runtime field sets are also the keys of the published patch schema. */
 export const ROOM_FIELDS = ['level', 'nodes', 'relationships', 'groups', 'flows', 'notes'] as const;
 export const SET_FIELDS = {
-  element: ['label', 'type', 'description', 'technology', 'color', 'group', 'evidence', 'place'],
+  element: ['label', 'type', 'description', 'technology', 'replicas', 'color', 'group', 'evidence', 'place'],
   group: ['label', 'kind', 'group', 'color', 'place'],
   // The three free cards a note can be — a note, a code snippet, a label — and an attachment, which
   // is any of them folded onto a host. `attach` turns one into the other, keeping its id.
@@ -53,7 +53,7 @@ export const SET_FIELDS = {
 export const CREATE_FIELDS = {
   request: ['requestId', 'title', 'project', 'starter', ...ROOM_FIELDS, 'layout', 'open', 'allowDuplicateTitle', 'fallbackType'],
   group: ['id', 'label', 'kind', 'parent', 'color'],
-  element: ['id', 'type', 'label', 'description', 'technology', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'],
+  element: ['id', 'type', 'label', 'description', 'technology', 'replicas', 'group', 'color', 'attachments', 'inside', 'evidence', 'place'],
   relationship: ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'compensationFor', 'compensationVisible', 'compensationName', 'compensationProtocol', 'compensationDescription', 'attachments', 'evidence', 'route'],
   flow: ['id', 'title', 'color', 'variantOf', 'steps'],
   note: ['id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style', 'color'],

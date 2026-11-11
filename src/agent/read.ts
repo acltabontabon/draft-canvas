@@ -306,6 +306,7 @@ function project(
       ...(node.evidence?.length ? { evidence: node.evidence } : {}),
       ...(node.description ? { description: node.description } : {}),
       ...(node.technology ? { technology: node.technology } : {}),
+      ...(node.replicas ? { replicas: node.replicas } : {}),
       // Set by create, add and set.color; read back so an edit can keep or change it knowingly.
       ...(node.accent ? { color: node.accent } : {}),
       ...group,

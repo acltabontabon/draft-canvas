@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { cameraAtRest, create, newCanvas } from './canvas';
+import { cameraAtRest, create, newCanvas, nextFrames } from './canvas';
 
 /** Contextual popover for a single selected element, anchored at the element instead of docked
  *  at the bottom of the screen — mirrors `connector-semantics.spec.ts`'s coverage of the
@@ -137,6 +137,9 @@ test.describe('element inspector popover', () => {
     // there visibly detached from the moving element — hidden outright instead.
     await expect(popover).toBeHidden();
 
+    // WebKit coalesces the burst of moves into the next frame; releasing before it renders dropped
+    // the shape short of the pointer (exactly 60px on, failing the check below).
+    await nextFrames(page);
     await page.mouse.up();
 
     await expect(popover).toBeVisible();

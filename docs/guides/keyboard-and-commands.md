@@ -43,6 +43,8 @@ shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch
 | `⌘C` / `⌘X` / `⌘V` | Copy / cut / paste, also between diagrams |
 | `⌘D` | Duplicate |
 | `Delete` / `Backspace` | Delete |
+| `⌥⌫` | Delete and join the connectors through it (`Client → Gateway → API` leaves `Client → API`) |
+| `⇧S` `⇧D` `⇧Q` `⇧A` `⇧M` | Turn the selection into a Service, Data Store, Queue, Actor or Component |
 | `⌘A` | Select all shapes |
 | `⌘G` / `⌘⇧G` | Group into a boundary / ungroup |
 | `⌘B` / `⌘I` | Bold / italic on the selected Text |

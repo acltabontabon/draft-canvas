@@ -63,6 +63,8 @@ Rules for a new version:
 | v20 → v21 | `migrateTextToMarkdown` | Text node and Text attachment `text` (on shapes and connectors) is escaped so it reads the same as Markdown |
 | v21 → v22 | identity | No-op (optional linked compensation fields on connectors) |
 | v22 → v23 | identity | No-op (retired per-connector style overrides are discarded by normalization) |
+| v23 → v24 | identity | No-op (optional `replicas` on Services and `kindOrigin` on Services, Data Stores and Queues) |
+| v24 → v25 | identity | No-op (optional connector `cadence`) |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.

@@ -9,7 +9,8 @@ handled failures. Stop when the requested scope is supported by evidence. Edit `
   stock."). Relationship labels: a verb phrase from the caller's side, ≤ 32 characters ("Places
   order", "Publishes OrderPlaced"); a pipeline drawn in data direction names what moves
   ([modeling.md](modeling.md#make-the-layouts-job-easy)). `technology`: one product, optionally
-  versioned ("Spring Boot 3"), so its logo shows. Add `semantic` and `kind` when the code says
+  versioned ("Spring Boot 3"), so its logo shows. `replicas` on a service-like element when the
+  deployment says how many run (`replicas: 3` in a Compose file or a Deployment). Add `semantic` and `kind` when the code says
   ([vocabulary.md](vocabulary.md) maps code to them).
 - **Sharpen the evidence**: add `symbol` and `line` for what you read; `basis: "inferred"` for what you
   concluded without seeing it.

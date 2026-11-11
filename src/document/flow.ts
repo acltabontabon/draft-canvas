@@ -592,6 +592,70 @@ export function spliceEdgeInFlows(
 }
 
 /**
+ * The reverse of `spliceEdgeInFlows`: two connectors through a shape that is going away
+ * (`A → G`, `G → B`) become one (`A → B`). Every step that named either now names `mergedEdgeId`.
+ * A flow told the two as consecutive beats, so once the first of them names the merged connector
+ * the second is folded into it — its caption appended, its extra members added — rather than
+ * telling the same connector twice. Extra-member lists get the merged connector in place.
+ * No-op if neither connector is in any flow.
+ */
+export function mergeEdgesInFlows(
+  doc: DraftDocument,
+  incomingEdgeId: string,
+  outgoingEdgeId: string,
+  mergedEdgeId: string,
+): DraftDocument {
+  if (doc.flows.length === 0) return doc;
+  const replaced = (id: string) => (id === incomingEdgeId || id === outgoingEdgeId ? mergedEdgeId : id);
+  let docChanged = false;
+  const flows = doc.flows.map((flow) => {
+    const touches = flow.steps.some(
+      (step) =>
+        step.edgeId === incomingEdgeId ||
+        step.edgeId === outgoingEdgeId ||
+        step.extraEdgeIds?.some((id) => id === incomingEdgeId || id === outgoingEdgeId),
+    );
+    if (!touches) return flow;
+    const steps: DraftFlowStep[] = [];
+    let mergedIndex = flow.steps.findIndex((step) => step.edgeId === mergedEdgeId);
+    for (const step of flow.steps) {
+      const edgeId = step.edgeId === undefined ? undefined : replaced(step.edgeId);
+      const extraEdgeIds = step.extraEdgeIds
+        ?.map(replaced)
+        .filter((id, index, all) => id !== edgeId && all.indexOf(id) === index);
+      const rewritten: DraftFlowStep = { ...step, ...(edgeId !== undefined ? { edgeId } : {}) };
+      if (extraEdgeIds) {
+        if (extraEdgeIds.length > 0) rewritten.extraEdgeIds = extraEdgeIds;
+        else delete rewritten.extraEdgeIds;
+      }
+      if (edgeId === mergedEdgeId && step.edgeId !== mergedEdgeId && mergedIndex >= 0) {
+        // The merged connector already leads a step: fold this one into it.
+        const kept = steps[mergedIndex]!;
+        const caption = [kept.caption, rewritten.caption].filter(Boolean).join(' ').slice(0, LIMITS.maxLabelLength);
+        const extras = [...(kept.extraEdgeIds ?? []), ...(rewritten.extraEdgeIds ?? [])]
+          .filter((id, index, all) => id !== mergedEdgeId && all.indexOf(id) === index)
+          .slice(0, LIMITS.maxExtraMembersPerStep);
+        const nodes = [...(kept.extraNodeIds ?? []), ...(rewritten.extraNodeIds ?? [])]
+          .filter((id, index, all) => all.indexOf(id) === index)
+          .slice(0, LIMITS.maxExtraMembersPerStep);
+        steps[mergedIndex] = {
+          ...kept,
+          ...(caption ? { caption } : {}),
+          ...(extras.length > 0 ? { extraEdgeIds: extras } : {}),
+          ...(nodes.length > 0 ? { extraNodeIds: nodes } : {}),
+        };
+        continue;
+      }
+      if (edgeId === mergedEdgeId && mergedIndex < 0) mergedIndex = steps.length;
+      steps.push(rewritten);
+    }
+    docChanged = true;
+    return { ...flow, steps };
+  });
+  return docChanged ? withFlows(doc, flows) : doc;
+}
+
+/**
  * Repairs (rather than always dropping) a step referencing a deleted
  * connector or node: a dangling primary `edgeId` is cleared, and dangling
  * ids are filtered out of `extraEdgeIds`/`extraNodeIds` — the step survives

@@ -32,6 +32,8 @@ export const LIMITS = {
   maxDescriptionLength: 280,
   /** "Spring Boot 3, Kotlin" — a line, not a stack listing. */
   maxTechnologyLength: 60,
+  /** The most instances a Service can be drawn with (`DraftNode.replicas`). */
+  maxReplicas: 99,
   maxIdLength: 128,
   /** Coordinates are clamped to keep the viewport maths well-conditioned. */
   maxCoordinate: 1_000_000,
@@ -57,6 +59,8 @@ export const LIMITS = {
   /** Bend points on one connector — a hand-routed line needs a handful; more is a scribble. */
   maxWaypointsPerEdge: 32,
   maxConditionLength: 120,
+  /** "daily 02:00 UTC" — a few words, not a schedule. */
+  maxCadenceLength: 32,
   maxResponseLength: 120,
   /**
    * The largest background image a `.draftcanvas` file carries inline (`BackgroundSettings.image`),

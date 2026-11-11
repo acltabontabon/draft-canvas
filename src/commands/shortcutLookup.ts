@@ -20,7 +20,8 @@ import type { Command, CommandContext } from './types';
 
 const NODE_A: DraftNode = { id: 'shortcut-fixture-a', type: 'service', x: 0, y: 0, width: 176, height: 68, z: 0 };
 const NODE_B: DraftNode = { id: 'shortcut-fixture-b', type: 'service', x: 300, y: 0, width: 176, height: 68, z: 0 };
-const NODE_C: DraftNode = { id: 'shortcut-fixture-c', type: 'service', x: 600, y: 0, width: 176, height: 68, z: 0 };
+// A Data Store, so a selection holding it can be turned into a Service: every "Turn into" key is reachable.
+const NODE_C: DraftNode = { id: 'shortcut-fixture-c', type: 'database', x: 600, y: 0, width: 120, height: 114, z: 0 };
 const NODE_GROUP: DraftNode = { id: 'shortcut-fixture-group', type: 'group', x: 0, y: 200, width: 400, height: 200, z: 0 };
 const NODE_TEXT: DraftNode = { id: 'shortcut-fixture-text', type: 'text', x: 0, y: 400, width: 200, height: 36, z: 0 };
 const EDGE_A: DraftEdge = {
@@ -31,10 +32,12 @@ const EDGE_A: DraftEdge = {
   routing: 'smoothstep',
   routeMode: 'direct',
 };
+/** `NODE_B` sits in the middle of a line, so "Delete and join connectors" is offered for it. */
+const EDGE_B: DraftEdge = { ...EDGE_A, id: 'shortcut-fixture-edge-b', source: NODE_B.id, target: NODE_C.id };
 
 const FIXTURE_DOCUMENT = {
   nodes: [NODE_A, NODE_B, NODE_C, NODE_GROUP, NODE_TEXT],
-  edges: [EDGE_A],
+  edges: [EDGE_A, EDGE_B],
   flows: [],
   // One open point, so the commands that only exist once a canvas has something to show are in the
   // catalog this file builds — a command absent from the fixture is a shortcut the help sheet would
@@ -154,6 +157,9 @@ function buildCatalog(): ReadonlyMap<string, ShortcutEntry> {
 
   // Text-only commands (Bold/Italic/Text role…) only appear for `type: 'text'` — a second
   // single-node pass, otherwise identical, is what makes this catalog actually reach them.
+  // A shape in the middle of a line, for the commands that join it back up when it goes.
+  record(map, nodeCommands(buildFixtureContext({ nodes: [NODE_B.id], edges: [] }), NODE_B));
+
   const textCtx = buildFixtureContext({ nodes: [NODE_TEXT.id], edges: [] });
   record(map, nodeCommands(textCtx, NODE_TEXT));
 

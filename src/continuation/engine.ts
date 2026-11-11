@@ -1,4 +1,4 @@
-import { capabilityFor, categoryOf } from '../document/connectorSemantics';
+import { capabilityFor, categoryOf, refinementBetween } from '../document/connectorSemantics';
 import type { DraftDocument, DraftNode, ViewLevel } from '../document/types';
 import { compensationCandidates } from './compensation';
 import { ANCHOR_TYPES, neighborhoodOf } from './context';
@@ -222,7 +222,8 @@ function hasEquivalent(doc: DraftDocument, nb: Neighborhood, fragment: Fragment)
     if (spec.from !== 'anchor') return false;
     const to = resolveRef(doc, nb, fragment, spec.to);
     if (!to) return false;
-    const semantic = spec.semantic ?? capabilityFor(nb.category, categoryOf(to))?.defaultRelation;
+    // A table feeding a table is `transforms` (`refinementBetween`), whatever the plain pairing says.
+    const semantic = spec.semantic ?? refinementBetween(nb.node, to)?.semantic ?? capabilityFor(nb.category, categoryOf(to))?.defaultRelation;
     return semantic !== undefined && nb.out.some(({ edge }) => edge.semantic === semantic);
   });
 }

@@ -1113,19 +1113,19 @@ describe('the data starters read the way the data moves', () => {
     return { nodes, edges, byText, between };
   }
 
-  it('Medallion: ingestion reads its sources, lands raw, refines through the tiers, and serving reads Gold', () => {
+  it('Medallion: every arrow follows the data — sources into ingestion, down the tiers, out of Gold', () => {
     const { between, byText, edges } = build('medallion');
-    expect(between('Ingestion', 'Operational Database')).toMatchObject({ semantic: 'reads', semanticsOrigin: 'explicit' });
-    expect(between('Ingestion', 'Files')).toMatchObject({ semantic: 'reads' });
-    expect(between('Ingestion', 'Event Stream')).toMatchObject({ semantic: 'consumes', kind: 'event' });
+    expect(between('Operational Database', 'Ingestion')).toMatchObject({ semantic: 'reads' });
+    expect(between('Files', 'Ingestion')).toMatchObject({ semantic: 'reads' });
+    expect(between('Event Stream', 'Ingestion')).toMatchObject({ semantic: 'consumes', kind: 'event' });
     expect(between('Ingestion', 'Bronze')).toMatchObject({ semantic: 'writes', label: 'lands raw' });
-    expect(between('Bronze', 'Silver')).toMatchObject({ semantic: 'transforms' });
-    expect(between('Silver', 'Gold')).toMatchObject({ semantic: 'transforms' });
-    expect(between('Analytics / BI', 'Gold')).toMatchObject({ semantic: 'reads' });
-    expect(between('Data API', 'Gold')).toMatchObject({ semantic: 'reads' });
-    // Nothing leaves a store except the pipeline's own refinement into the next tier.
-    for (const store of ['Operational Database', 'Files', 'Event Stream', 'Gold']) {
-      expect(edges.filter((edge) => edge.source === byText(store).id)).toHaveLength(0);
+    expect(between('Bronze', 'Silver')).toMatchObject({ semantic: 'transforms', cadence: 'streaming' });
+    expect(between('Silver', 'Gold')).toMatchObject({ semantic: 'transforms', cadence: 'hourly' });
+    expect(between('Gold', 'Analytics / BI')).toMatchObject({ semantic: 'reads' });
+    expect(between('Gold', 'Data API')).toMatchObject({ semantic: 'reads' });
+    // Nothing flows back toward the sources.
+    for (const consumer of ['Analytics / BI', 'Data API']) {
+      expect(edges.filter((edge) => edge.source === byText(consumer).id)).toHaveLength(0);
     }
   });
 
