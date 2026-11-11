@@ -135,6 +135,7 @@ import {
 import { inferRelationshipThroughJunctions, reinferIfEligible } from '../document/reinfer';
 import { plainShortcut } from '../lib/platform';
 import { technologyKindPatch } from '../document/technologyKind';
+import { lineageOf } from '../document/dataFlow';
 import { replicasField, splitReplicaCount } from '../document/replicas';
 import { CONVERTIBLE_TYPE_NAMES, convertNodeType, isConvertibleType, type ConvertibleType } from '../document/convert';
 import { bridgeProblems, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
@@ -519,6 +520,10 @@ export interface EditorStore {
    *  edge has none, and never touches `accent`. See `document/edgeSemantics.ts`. */
   setEdgeSemantic: (id: string, semantic: EdgeSemantic | undefined) => void;
   /** Free-text condition chip, e.g. "approved" — display only, never evaluated. */
+  /** How often a connector moves its data ("hourly"); empty clears it. */
+  setEdgeCadence: (id: string, cadence: string | undefined) => void;
+  /** Spotlights everything `nodeId`'s data comes from and everything it feeds (`lineageOf`). */
+  showLineage: (nodeId: string) => void;
   setEdgeCondition: (id: string, condition: string) => void;
   /** Free-text response chip, e.g. "200 Customer" — display only, see `DraftEdge.response`. */
   setEdgeResponse: (id: string, response: string) => void;
@@ -2202,6 +2207,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // the connector is reversed. `label` stays the user's own text, which always wins.
     const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { semantic, semanticsOrigin: 'explicit' };
     get().apply('Set connector type', (doc) => updateEdge(doc, id, patch));
+  },
+
+  setEdgeCadence(id, cadence) {
+    const value = cadence?.slice(0, LIMITS.maxCadenceLength).trim() || undefined;
+    get().apply('Set cadence', (doc) => updateEdge(doc, id, { cadence: value }), { coalesceKey: `edge-cadence:${id}` });
+  },
+
+  showLineage(nodeId) {
+    const { nodeIds, edgeIds } = lineageOf(get().document, nodeId);
+    get().enterFocus(nodeIds, edgeIds);
   },
 
   setEdgeCondition(id, condition) {

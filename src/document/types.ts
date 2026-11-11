@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 24;
+export const CURRENT_VERSION = 25;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -523,6 +523,12 @@ export interface DraftEdge {
    * evaluated — display only.
    */
   condition?: string;
+  /**
+   * How often this connector moves its data — "streaming", "hourly", "daily 02:00". Shown as a
+   * small chip under the caption, beside a condition. Free text; the connector panel offers the
+   * common answers (`CADENCE_PRESETS`). Display only.
+   */
+  cadence?: string;
   /**
    * Free-text response chip for a synchronous call, e.g. "200 Customer",
    * "404 Not Found". Distinct from `condition`: `condition` says *when* a

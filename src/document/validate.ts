@@ -706,6 +706,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
     const condition = text(candidate.condition, LIMITS.maxConditionLength)?.trim();
     if (condition) edge.condition = condition;
+    const cadence = text(candidate.cadence, LIMITS.maxCadenceLength)?.trim();
+    if (cadence) edge.cadence = cadence;
 
     const response = text(candidate.response, LIMITS.maxResponseLength)?.trim();
     if (response) edge.response = response;

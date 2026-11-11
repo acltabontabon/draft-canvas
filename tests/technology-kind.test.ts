@@ -19,6 +19,10 @@ describe('kindForTechnology', () => {
     ['queue', 'SQS', { queueKind: 'queue' }],
     ['service', 'Stripe', { serviceKind: 'external' }],
     ['service', 'Kong', { serviceKind: 'gateway' }],
+    ['database', 'Delta Lake', { databaseKind: 'table' }],
+    ['database', 'Snowflake', { databaseKind: 'table' }],
+    ['service', 'Auto Loader', { serviceKind: 'worker' }],
+    ['service', 'Apache Airflow 2', { serviceKind: 'scheduler' }],
   ] as const)('%s with %s', (type, technology, expected) => {
     expect(kindForTechnology(type, technology)).toMatchObject(expected);
   });

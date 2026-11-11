@@ -182,6 +182,12 @@ An AI agent using Draft Canvas MCP, including Nodi, can make the same associatio
   one there with a shape tool. `Orders API → Billing` with a Queue dropped on it becomes
   `Orders API → orders → Billing`, both lines dashed and captioned for what they now join. Works for
   Queues, Data Stores, Services, Components and Junctions; the label, notes and flow steps stay.
+- **Data pipelines**: draw arrows the way the data moves. A Data Store drawn into what reads it
+  reads "read by", and a Table drawn into the next Table is `transforms`. A data connector's panel
+  has **Cadence** (Streaming, Hourly, Daily, Weekly, On demand), shown as a small chip under its
+  caption.
+- **Show lineage** (right-click a shape, or `⌘K`): everything its data comes from and everything it
+  feeds stays lit, whichever way each arrow is drawn. `Esc` ends it.
 - **Take one out**: select it and press `⌥⌫` (**Delete and join connectors**). `Client → Gateway → API`
   becomes `Client → API`, keeping its flows. A shape with several ways in *and* out has no single way
   to join, so `⌥⌫` leaves it; plain `⌫` deletes it.
