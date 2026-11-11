@@ -1486,6 +1486,18 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       keywords: ['focus', 'highlight', 'dim others'],
       run: (inner) => inner.editor.enterFocus([node.id], []),
     },
+    // Where its data comes from and what it feeds: offered once a shape has a connector at all.
+    ...(node.type !== 'group' && ctx.editor.document.edges.some((e) => e.source === node.id || e.target === node.id)
+      ? [
+          {
+            id: 'show-lineage',
+            title: 'Show lineage',
+            group: 'selection' as const,
+            keywords: ['upstream', 'downstream', 'where does this come from', 'impact', 'data flow', 'trace'],
+            run: (inner: CommandContext) => inner.editor.showLineage(node.id),
+          },
+        ]
+      : []),
     {
       id: 'duplicate',
       title: 'Duplicate',

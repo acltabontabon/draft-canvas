@@ -21,6 +21,13 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   shape to connect them all.
 - The technology sets the kind: Redis makes a Data Store a Cache, Kafka a Queue a Topic, Stripe a
   Service External. A kind you picked stays.
+- **Data pipelines read as data** — The Medallion starter now runs left to right the way its data
+  moves, sources to Gold to whoever reads it. Connectors can say how often they run (Streaming,
+  Hourly, Daily…), and **Show lineage** lights up everything a shape's data comes from and feeds.
+  <!-- highlight -->
+- A Table feeding another Table is `transforms` by default. Delta Lake, Snowflake and BigQuery make
+  a Data Store a Table; Auto Loader, Spark and dbt make a Service a Worker; Airflow a Scheduler.
+  Databricks products show the Databricks logo.
 - **Instances** — Name a Service `Fulfilment ×3`, or set the count in its toolbar, and it draws as a
   stack with a small ×3. Traffic reads the instances as competing consumers.
 

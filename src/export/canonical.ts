@@ -93,6 +93,7 @@ const EDGE_KEYS = [
   'compensationProtocol',
   'compensationDescription',
   'condition',
+  'cadence',
   'response',
   'hasResponse',
   'kind',

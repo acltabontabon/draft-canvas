@@ -43,7 +43,7 @@ import { NO_CROSSINGS, crossingPlan, withoutMoving } from '../edges/crossings';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
 import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
-import { captionAnchor as captionAnchorRect, labelChipRect } from '../edges/describe';
+import { captionAnchor as captionAnchorRect, edgeMetaText, labelChipRect } from '../edges/describe';
 import { edgeMarkerCenter, type OccupiedRect } from '../openPoints/marker';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
@@ -624,7 +624,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // plain selection colour exactly as it always has.
   const strokeColor =
     selected || attachTarget || spliceTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
-  const conditionText = edge.condition ? `[${edge.condition}]` : null;
+  // Condition and cadence share one chip, worded once for the canvas and the export (`edgeMetaText`).
+  const conditionText = edgeMetaText(edge);
 
   // Where the open-point tab sits: beside the label chip or the caption this connector draws at its
   // label point, in reading direction — the same rule `edges/describe.ts` applies for the export.
@@ -1181,7 +1182,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               data-editing={editingCondition ? 'true' : undefined}
               style={{ color }}
               title={mode === 'edit' && !editingCondition ? 'Double-click to edit' : undefined}
-              onDoubleClick={() => mode === 'edit' && useUiStore.getState().readOnly === null && setEditingCondition(true)}
+              onDoubleClick={() => mode === 'edit' && useUiStore.getState().readOnly === null && edge.condition && setEditingCondition(true)}
             >
               {editingCondition ? (
                 <input

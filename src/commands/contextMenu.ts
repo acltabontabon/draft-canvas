@@ -191,7 +191,7 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
   // `flow-start-here` resolves directly only with exactly one outgoing edge — with more, its
   // `run()` returns a `CommandStage` (a picker), which the stage-command rule excludes.
   const outgoing = ctx.editor.document.edges.filter((edge) => edge.source === node.id);
-  const lastGroup = outgoing.length === 1 ? ['spotlight', 'flow-start-here'] : ['spotlight'];
+  const lastGroup = outgoing.length === 1 ? ['spotlight', 'show-lineage', 'flow-start-here'] : ['spotlight', 'show-lineage'];
   return grouped(nodeHeader(node), [
     pick(commands, ['edit-text', 'look-inside']),
     pick(commands, ['add-consumer', 'add-dead-letter-queue', 'remove-dead-letter-queue', 'add-subscriber']),

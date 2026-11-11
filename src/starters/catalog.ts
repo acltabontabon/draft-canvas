@@ -1934,19 +1934,20 @@ const medallion: ArchitectureStarter = {
       ...SERVICE,
     },
   ],
-  // Every arrow starts at whatever does the work — the one convention the whole catalog keeps.
-  // Ingestion pulls from the sources (a batch reads the database and the files; the stream is read
-  // like any stream), and the serving layer reads Gold: the store never initiates anything, so a
-  // connector leaving it would say the opposite of what happens.
+  // A data pipeline is read the way its data moves, so here — unlike the call-shaped starters,
+  // whose arrows start at whatever does the work — every arrow follows the data, left to right:
+  // sources into Ingestion ("read by"), down the tiers, out to whoever reads Gold. The relation is
+  // the same `reads` either way; drawn from the store, its caption turns passive on its own. The
+  // two refinements carry how often they run, half of what a layer means in practice.
   edges: [
-    { key: 'db-ingest', from: 'ingestion', to: 'db', sourceAnchor: TOP, targetAnchor: RIGHT, semantic: 'reads' },
-    { key: 'files-ingest', ...back('ingestion', 'files'), semantic: 'reads' },
-    { key: 'stream-ingest', from: 'ingestion', to: 'stream', sourceAnchor: BOTTOM, targetAnchor: RIGHT, semantic: 'consumes' },
+    { key: 'db-ingest', from: 'db', to: 'ingestion', sourceAnchor: RIGHT, targetAnchor: TOP, semantic: 'reads' },
+    { key: 'files-ingest', ...across('files', 'ingestion'), semantic: 'reads' },
+    { key: 'stream-ingest', from: 'stream', to: 'ingestion', sourceAnchor: RIGHT, targetAnchor: BOTTOM, semantic: 'consumes' },
     { key: 'land', ...across('ingestion', 'bronze'), semantic: 'writes', label: 'lands raw' },
-    { key: 'refine', ...across('bronze', 'silver'), semantic: 'transforms', label: 'validate + conform' },
-    { key: 'curate', ...across('silver', 'gold'), semantic: 'transforms', label: 'model + aggregate' },
-    { key: 'to-analytics', ...back('analytics', 'gold'), semantic: 'reads' },
-    { key: 'to-api', ...back('data-api', 'gold'), semantic: 'reads' },
+    { key: 'refine', ...across('bronze', 'silver'), semantic: 'transforms', label: 'validate + conform', cadence: 'streaming' },
+    { key: 'curate', ...across('silver', 'gold'), semantic: 'transforms', label: 'model + aggregate', cadence: 'hourly' },
+    { key: 'to-analytics', ...across('gold', 'analytics'), semantic: 'reads' },
+    { key: 'to-api', ...across('gold', 'data-api'), semantic: 'reads' },
   ],
   flows: [
     {

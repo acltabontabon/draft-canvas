@@ -35,6 +35,11 @@ add(DATABASE, 'object-storage', [
   'cloudflare r2', 'r2',
 ]);
 add(DATABASE, 'search-index', ['elasticsearch', 'opensearch', 'amazon opensearch', 'algolia', 'meilisearch', 'solr', 'apache solr', 'typesense']);
+// Data platforms: a lakehouse or warehouse table, the job that refines it, and what schedules it.
+add(DATABASE, 'table', [
+  'delta lake', 'delta', 'delta table', 'apache iceberg', 'iceberg', 'apache hudi', 'hudi', 'snowflake', 'bigquery',
+  'google bigquery', 'redshift', 'amazon redshift', 'azure synapse', 'synapse', 'clickhouse', 'unity catalog',
+]);
 add(QUEUE, 'topic', [
   'kafka', 'apache kafka', 'amazon msk', 'aws msk', 'confluent', 'sns', 'amazon sns', 'aws sns', 'pub/sub', 'pubsub',
   'google pub/sub', 'cloud pub/sub', 'eventbridge', 'amazon eventbridge', 'aws eventbridge', 'event grid', 'azure event grid',
@@ -42,6 +47,12 @@ add(QUEUE, 'topic', [
 add(QUEUE, 'stream', ['kinesis', 'amazon kinesis', 'aws kinesis', 'kinesis data streams', 'event hubs', 'azure event hubs', 'redis streams']);
 add(QUEUE, 'queue', ['sqs', 'amazon sqs', 'aws sqs', 'rabbitmq', 'rabbit mq', 'activemq', 'apache activemq', 'service bus', 'azure service bus']);
 add(SERVICE, 'external', ['stripe', 'twilio', 'auth0', 'okta', 'sendgrid', 'paypal', 'mailgun', 'plaid', 'adyen', 'braintree', 'postmark']);
+add(SERVICE, 'worker', [
+  'spark', 'apache spark', 'databricks', 'auto loader', 'delta live tables', 'dlt', 'lakeflow', 'dbt', 'flink', 'apache flink',
+  'aws glue', 'glue', 'dataflow', 'google dataflow', 'apache beam', 'beam',
+]);
+add(SERVICE, 'scheduler', ['airflow', 'apache airflow', 'databricks workflows', 'lakeflow jobs', 'dagster', 'prefect', 'cron']);
+add(SERVICE, 'external', ['fivetran']);
 add(SERVICE, 'gateway', [
   'kong', 'nginx', 'envoy', 'traefik', 'api gateway', 'amazon api gateway', 'aws api gateway', 'apigee', 'azure api management',
 ]);

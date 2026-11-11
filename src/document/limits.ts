@@ -59,6 +59,8 @@ export const LIMITS = {
   /** Bend points on one connector — a hand-routed line needs a handful; more is a scribble. */
   maxWaypointsPerEdge: 32,
   maxConditionLength: 120,
+  /** "daily 02:00 UTC" — a few words, not a schedule. */
+  maxCadenceLength: 32,
   maxResponseLength: 120,
   /**
    * The largest background image a `.draftcanvas` file carries inline (`BackgroundSettings.image`),

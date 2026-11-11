@@ -753,9 +753,23 @@ type Relationship = { kind?: ConnectorKind; semantic?: EdgeSemantic; async?: boo
  * not here.
  */
 export function inferRelationship(source: CategorizableNode, target: CategorizableNode): Relationship | undefined {
+  const refined = refinementBetween(source, target);
+  if (refined) return refined;
   const found = capabilityFor(categoryOf(source), categoryOf(target));
   if (!found?.defaultRelation) return undefined;
   return { semantic: found.defaultRelation, kind: found.defaultBehavior, async: found.defaultAsync };
+}
+
+/**
+ * One table feeding another is a pipeline layer refining data (Bronze → Silver → Gold), not a plain
+ * copy: `transforms`, where any other Data Store pair keeps `ingests`. Both are Tables because that
+ * is the one case where the kind says "a dataset in a pipeline"; an operational database landing in
+ * a table is still ingestion.
+ */
+export function refinementBetween(source: CategorizableNode, target: CategorizableNode): Relationship | undefined {
+  if (source.type !== 'database' || target.type !== 'database') return undefined;
+  if (source.databaseKind !== 'table' || target.databaseKind !== 'table') return undefined;
+  return { semantic: 'transforms' };
 }
 
 /**

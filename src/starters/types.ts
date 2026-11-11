@@ -186,6 +186,9 @@ export interface StarterEdgeSpec {
    * show the plain inferred relationship (`calls`, `writes`, …) in its own quietest style.
    */
   condition?: string;
+  /** How often this connector moves its data — `DraftEdge.cadence` ("streaming", "hourly"). For a
+   *  data pipeline, where the schedule is half of what a layer means. */
+  cadence?: string;
   /**
    * `'direct'` opts this connector out of Smart Routing's fan-out/fan-in bundling
    * (`edges/bundles.ts`), so it always renders as its own independent line rather than sharing a

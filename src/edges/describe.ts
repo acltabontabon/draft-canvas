@@ -614,9 +614,11 @@ export function describeEdge(
   }
 
   // The condition chip sits below the label/badge, centered on the same
-  // anchor — a small, secondary tag, never competing with the label.
-  if (edge.condition) {
-    const value = `[${edge.condition}]`;
+  // anchor — a small, secondary tag, never competing with the label. A cadence ("hourly") shares
+  // the chip, after the condition: both say when the connector carries anything.
+  const meta = edgeMetaText(edge);
+  if (meta) {
+    const value = meta;
     const layout = layoutText(value, {
       font: FONTS.presetTag,
       maxWidth: 220,
@@ -674,3 +676,10 @@ export function describeEdge(
   return { route, line, responseLine, overlay, color };
 }
 
+
+/** The secondary chip under a connector's caption: its condition in brackets, then its cadence —
+ *  one string for both renderers, so the canvas and an export can't word it differently. */
+export function edgeMetaText(edge: Pick<DraftEdge, 'condition' | 'cadence'>): string | null {
+  const parts = [edge.condition ? `[${edge.condition}]` : null, edge.cadence ?? null].filter(Boolean);
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
