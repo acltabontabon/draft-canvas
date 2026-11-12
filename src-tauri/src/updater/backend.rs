@@ -501,7 +501,11 @@ mod tests {
             () = stall => {}
             () = feed => unreachable!(),
         }
-        assert!(started.elapsed() >= Duration::from_millis(120 + 80));
+        // What "stalled" means: no byte for `idle`. Judged from the last byte, not from the start —
+        // a loaded CI runner can oversleep a 40 ms gap past 80 ms, and then the stall is right to
+        // fire before all three writes (macOS CI failed the old wall-clock bound that way).
+        assert!(lock(&last).elapsed() >= idle);
+        assert!(started.elapsed() >= idle);
     }
 
     #[test]

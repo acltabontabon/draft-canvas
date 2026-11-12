@@ -197,7 +197,8 @@ test.describe('the starters gallery, before it is loaded', () => {
   test('asks first, reads nothing until then, and then offers its starters', async ({ page }) => {
     const requests: string[] = [];
     page.on('request', (request) => {
-      if (request.url().includes('raw.githubusercontent.com')) requests.push(request.url());
+      // By host, not by substring: any request to GitHub's raw file host counts, wherever it points.
+      if (new URL(request.url()).hostname === 'raw.githubusercontent.com') requests.push(request.url());
     });
     await serveStarterGallery(page, { enabled: false });
     await openCanvas(page, 'Gallery consent');
