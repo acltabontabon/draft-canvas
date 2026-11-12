@@ -4130,8 +4130,89 @@
 
 .dc-empty-rows {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(var(--count, 5), minmax(0, 1fr));
   gap: 12px;
+}
+
+/* Before the gallery is loaded: one card that opens it. A sheet stack, the same as its consent. */
+.dc-empty-gallery {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: min(100%, 560px);
+  margin: 0 auto;
+  padding: 14px 18px 14px 14px;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--dc-surface) 76%, transparent);
+  color: var(--dc-text-muted);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: background 140ms ease, border-color 140ms ease, transform 160ms var(--dc-ease-out);
+}
+
+.dc-empty-gallery:hover,
+.dc-empty-gallery:focus-visible {
+  border-color: var(--dc-selection);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  transform: translateY(-2px);
+}
+
+.dc-empty-gallery:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 3px;
+}
+
+.dc-empty-gallery-art {
+  position: relative;
+  flex: none;
+  width: 64px;
+  height: 42px;
+}
+
+.dc-empty-gallery-art span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: 5px;
+  background:
+    linear-gradient(var(--dc-border) 0 0) 9px 12px / 14px 8px no-repeat,
+    linear-gradient(var(--dc-border) 0 0) 40px 12px / 14px 8px no-repeat,
+    linear-gradient(var(--dc-selection) 0 0) 23px 16px / 17px 1px no-repeat,
+    linear-gradient(var(--dc-border) 0 0) 25px 26px / 14px 8px no-repeat,
+    var(--dc-surface-raised);
+}
+
+.dc-empty-gallery-art span:nth-child(1) {
+  transform: rotate(-7deg) translate(-7px, 2px);
+  opacity: 0.55;
+}
+
+.dc-empty-gallery-art span:nth-child(2) {
+  transform: rotate(5deg) translate(6px, 1px);
+  opacity: 0.75;
+}
+
+.dc-empty-gallery-text {
+  display: grid;
+  flex: 1;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dc-empty-gallery-title {
+  color: var(--dc-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dc-empty-gallery-hint {
+  color: var(--dc-text-faint);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 /* A small paper sample is unmistakably a choice, while its drawing stays the catalog's own. */
@@ -4206,6 +4287,11 @@
   cursor: pointer;
   pointer-events: auto;
   transition: color 140ms ease;
+}
+
+/* The gallery card's stand-in, for a canvas too short to show the card. */
+.dc-empty-action[data-compact-only] {
+  display: none;
 }
 
 .dc-empty-action:hover {
@@ -4301,6 +4387,7 @@
 
 .dc-empty[data-leaving='true'],
 .dc-empty[data-leaving='true'] .dc-starter,
+.dc-empty[data-leaving='true'] .dc-empty-gallery,
 .dc-empty[data-leaving='true'] .dc-empty-action {
   pointer-events: none;
 }
@@ -4364,6 +4451,15 @@
   .dc-empty-crops {
   display: none;
   }
+
+  .dc-empty-gallery {
+  padding: 10px 14px 10px 10px;
+  }
+
+  .dc-empty-gallery-art,
+  .dc-empty-gallery-hint {
+  display: none;
+  }
 }
 
 @media (max-height: 599px) {
@@ -4414,8 +4510,13 @@
 
   .dc-empty-keys,
   .dc-empty-rows,
+  .dc-empty-gallery,
   .dc-empty .dc-empty-pick-label {
   display: none;
+  }
+
+  .dc-empty-action[data-compact-only] {
+  display: inline-flex;
   }
 
   .dc-empty-pick {

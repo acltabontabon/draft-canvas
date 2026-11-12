@@ -449,7 +449,7 @@ export interface DraftNode {
    * at normal weight — smaller, muted text, still zero-semantics, still no box. Absent/`false` is
    * the Label primitive's one existing look, unchanged; this never affects any other node type.
    * Superseded by `textRole` going forward (see below) but kept exactly as-is: every starter in
-   * `src/starters/catalog.ts` still sets this, not `textRole`, and must keep rendering unchanged.
+   * the starters gallery's files (exported from the old catalog) still set this, not `textRole`, and must keep rendering unchanged.
    */
   annotation?: boolean;
   /**
@@ -702,6 +702,17 @@ export interface DraftMetadata {
   /** The project this canvas belongs to, if any — see `Project`. A canvas
    *  belongs to zero or one project; absent means Unorganized. */
   projectId?: string;
+  /**
+   * The gallery starter this canvas began as, and that file's SHA-256 — so the editor can say when
+   * the starter has since been updated (`src/gallery/`). Bookkeeping only: never shared with
+   * collaborators, and nothing about the canvas depends on it.
+   */
+  origin?: DraftOrigin;
+}
+
+export interface DraftOrigin {
+  starter: string;
+  sha256: string;
 }
 
 /**

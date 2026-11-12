@@ -98,7 +98,7 @@ describe('LibraryScreen — Home', () => {
     const session = stubSession();
     render(<LibraryScreen session={session} />);
     await userEvent.click(screen.getByRole('button', { name: 'Try an example' }));
-    expect(session.newDocument).toHaveBeenCalledWith(undefined, 'order-processing');
+    expect(session.newDocument).toHaveBeenCalledWith(undefined, 'example');
   });
 
   it('shows views and search with the first draft, hides them with the last, and walks the shelf', async () => {

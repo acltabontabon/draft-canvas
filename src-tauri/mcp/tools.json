@@ -23,22 +23,9 @@
           }
         },
         "starter": {
-          "enum": [
-            "monolith",
-            "modular-monolith",
-            "microservices",
-            "event-driven",
-            "hexagonal",
-            "bff",
-            "cqrs",
-            "medallion",
-            "kappa",
-            "cdc",
-            "saga-orchestration",
-            "saga-choreography",
-            "transactional-outbox"
-          ],
-          "description": "Describe one starter: its element keys and flows."
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "description": "Describe one starter from the starters gallery the person has downloaded: its element keys and flows."
         }
       },
       "additionalProperties": false
@@ -853,24 +840,12 @@
         },
         "starter": {
           "type": "object",
-          "description": "Begin from a native Architecture Starter. Its elements get ids prefix+key (see get_capabilities starter).",
+          "description": "Begin from a starter the person has downloaded from the starters gallery. Its elements get ids prefix+key (see get_capabilities starter).",
           "properties": {
             "id": {
-              "enum": [
-                "monolith",
-                "modular-monolith",
-                "microservices",
-                "event-driven",
-                "hexagonal",
-                "bff",
-                "cqrs",
-                "medallion",
-                "kappa",
-                "cdc",
-                "saga-orchestration",
-                "saga-choreography",
-                "transactional-outbox"
-              ]
+              "type": "string",
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+              "description": "A starter from get_capabilities (topics: [\"starters\"]); only downloaded starters can be used."
             },
             "prefix": {
               "type": "string",

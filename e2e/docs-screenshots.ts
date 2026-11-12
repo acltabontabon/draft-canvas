@@ -51,23 +51,6 @@ const VIEWPORT = { width: 1200, height: 640 };
 
 const CANVAS = '.react-flow__pane';
 
-/** Every starter in the catalog, in `docs/guides/examples.md`'s order — id for the file name, name as the palette lists it. */
-const STARTERS: ReadonlyArray<readonly [string, string]> = [
-  ['monolith', 'Monolith'],
-  ['modular-monolith', 'Modular Monolith'],
-  ['microservices', 'Microservices'],
-  ['event-driven', 'Event-Driven'],
-  ['hexagonal', 'Hexagonal'],
-  ['bff', 'Backend for Frontend'],
-  ['cqrs', 'CQRS'],
-  ['medallion', 'Medallion'],
-  ['kappa', 'Kappa'],
-  ['cdc', 'Change Data Capture'],
-  ['saga-orchestration', 'Saga – Orchestration'],
-  ['saga-choreography', 'Saga – Choreography'],
-  ['transactional-outbox', 'Transactional Outbox'],
-];
-
 const log = (line: string) => process.stdout.write(`${line}\n`);
 
 async function startServer(): Promise<() => Promise<void>> {
@@ -696,33 +679,9 @@ async function main() {
     await expect(page.getByText('Order processing')).toBeVisible();
     await shot(page, 'library');
 
-    // ── Architecture examples ──────────────────────────────────────────────────────────────
-    // One picture per starter, each on its own fresh canvas, framed by "Fit to view" so the picture
-    // is the whole architecture and not wherever the camera happened to be. Names are typed into the
-    // palette exactly as `docs/guides/examples.md` lists them, so a renamed starter breaks here first.
-    log('examples');
-    for (const [id, name] of STARTERS) {
-      await page.getByRole('button', { name: 'New canvas' }).first().click();
-      await expect(page.locator('.dc-editor')).toBeVisible();
-      // The pane has to hold focus for the palette's chord, as in the keyboard section above.
-      await page.locator(CANVAS).click({ position: { x: 8, y: 8 } });
-      await palette(page, name);
-      await expect(page.locator('.dc-node').first()).toBeVisible();
-      await page.locator(CANVAS).click({ position: { x: 8, y: 8 } }); // nothing selected in the picture
-      await palette(page, 'Fit to view');
-      // A starter can select its first connector after the click above lands (Modular Monolith's
-      // pictures kept an inspector open), so clear the selection again once it has settled. A click
-      // while Fit to view's camera is still moving can miss (1.18.1: Backend for Frontend kept all 13
-      // shapes selected), so click again until it takes.
-      await expect(async () => {
-        await page.locator(CANVAS).click({ position: { x: 8, y: 8 } });
-        await expect(page.locator('.react-flow__edge.selected, .react-flow__node.selected')).toHaveCount(0, { timeout: 1000 });
-      }).toPass({ timeout: 10_000 });
-      await shot(page, `example-${id}`, await box(page.locator(CANVAS)));
-      await page.getByRole('button', { name: /Back to your diagrams/ }).click();
-      await openGallery(page);
-      await expect(page.getByRole('button', { name: 'New canvas' }).first()).toBeVisible();
-    }
+    // Architecture examples are not captured here: each starter's picture lives beside it in the
+    // starters gallery (github.com/acltabontabon/draft-canvas-starters), drawn by
+    // `scripts/starters/render.ts`, and `docs/guides/examples.md` links there.
 
     await technologyScreenshots(page);
     log('rich text');

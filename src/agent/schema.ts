@@ -11,11 +11,14 @@
  */
 
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS, OPEN_POINT_KINDS, SIDES, TEXT_ALIGNS, TEXT_BACKGROUNDS, TEXT_FONTS, TEXT_ROLES } from '../document/types';
-import { STARTER_IDS } from '../starters/types';
 import { AGENT_LIMITS, NEW_ID } from './input';
 import { SET_FIELDS } from './fields';
 import { outputFor } from './outputs';
 import { ELEMENT_TYPE_NAMES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES } from './vocabulary';
+
+/** A gallery starter's id. Starters live in the optional gallery, not the app, so this is a shape,
+ *  not a list: `get_capabilities` names the ones the person has downloaded. */
+const STARTER_ID_PATTERN = '^[a-z0-9]+(?:-[a-z0-9]+)*$';
 
 type Schema = Record<string, unknown>;
 
@@ -478,7 +481,7 @@ const TOOL_INPUTS = [
       type: 'object',
       properties: {
         topics: { type: 'array', items: { enum: ['types', 'relationships', 'c4', 'flows', 'notes', 'starters', 'limits', 'layout', 'readability'] } },
-        starter: { enum: STARTER_IDS, description: 'Describe one starter: its element keys and flows.' },
+        starter: { type: 'string', pattern: STARTER_ID_PATTERN, description: 'Describe one starter from the starters gallery the person has downloaded: its element keys and flows.' },
       },
       additionalProperties: false,
     },
@@ -601,9 +604,9 @@ const TOOL_INPUTS = [
         project: { type: 'string', description: 'Folder to create it in, when more than one is enabled.' },
         starter: {
           type: 'object',
-          description: 'Begin from a native Architecture Starter. Its elements get ids prefix+key (see get_capabilities starter).',
+          description: 'Begin from a starter the person has downloaded from the starters gallery. Its elements get ids prefix+key (see get_capabilities starter).',
           properties: {
-            id: { enum: STARTER_IDS },
+            id: { type: 'string', pattern: STARTER_ID_PATTERN, description: 'A starter from get_capabilities (topics: ["starters"]); only downloaded starters can be used.' },
             prefix: { type: 'string', maxLength: 16 },
             overrides: { type: 'object', additionalProperties: { type: 'object', properties: { label: text(AGENT_LIMITS.labelLength), description: text(AGENT_LIMITS.descriptionLength), technology: text(AGENT_LIMITS.technologyLength) }, additionalProperties: false } },
           },

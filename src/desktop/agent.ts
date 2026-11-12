@@ -36,6 +36,8 @@ import { advisoriesReceipt, gate, legibilityReceipt, qualityReceipt } from '../a
 import { AgentError, toAgentError } from '../agent/errors';
 import type { JobResult } from '../agent/jobs';
 import { runOffThread, type Progress } from '../agent/offThread';
+import type { AgentStarter } from '../agent/starter';
+import { loadGallery, starterFile } from '../gallery';
 import { STAGE_TEXT } from '../agent/progress';
 import { readAttachment, readDiagram, viewPathOf } from '../agent/read';
 import { buildImplementationContext } from '../agent/context';
@@ -159,12 +161,34 @@ function composed(result: JobResult) {
   return result.composed;
 }
 
+/**
+ * The starters the person has downloaded from the gallery, read from this device. The agent gets
+ * them as data: starters are not part of the app, so with the gallery off there are none.
+ */
+async function downloadedStarters(only?: string): Promise<AgentStarter[]> {
+  const snapshot = await loadGallery();
+  const out: AgentStarter[] = [];
+  for (const entry of snapshot?.starters ?? []) {
+    if (entry.availability !== 'ready' || (only && entry.id !== only)) continue;
+    const file = await starterFile(entry);
+    if (file) out.push({ id: entry.id, name: entry.name, category: entry.category, summary: entry.summary, file });
+  }
+  return out;
+}
+
+/** The gallery starter a `create_diagram` request names, when it is downloaded. */
+async function requestedStarter(args: Record<string, unknown>): Promise<AgentStarter | undefined> {
+  const choice = args.starter;
+  const id = typeof choice === 'object' && choice !== null && typeof (choice as { id?: unknown }).id === 'string' ? (choice as { id: string }).id : undefined;
+  return id ? (await downloadedStarters(id))[0] : undefined;
+}
+
 async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<unknown> {
   const { args, context } = event;
   validateToolInput(event.tool, event.tool !== 'create_diagram' && context.diagramId ? { diagramId: context.diagramId, ...args } : args);
   switch (event.tool) {
     case 'get_capabilities':
-      return capabilities(args);
+      return capabilities(args, await downloadedStarters());
     case 'read_attachment': {
       const snapshot = await fileFor(host, context);
       return readAttachment(snapshot.file, { ...args, expectedRevision: currentAs(snapshot, args.expectedRevision) }, snapshot.revision, context.diagramId ?? '');
@@ -189,7 +213,8 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
       agentActivity.begin({ id: event.id, tool: 'create_diagram', title: typeof args.title === 'string' ? args.title : 'New diagram', target: 'new', path: [] }, reveal);
       // Composed here (on a worker thread), written by the shell: the page never writes a file of its
       // own accord.
-      const result = composed(await runOffThread({ kind: 'compose', raw: args, diagramId: context.diagramId }, progressOf(api, event.id)));
+      const starter = await requestedStarter(args);
+      const result = composed(await runOffThread({ kind: 'compose', raw: args, diagramId: context.diagramId, ...(starter ? { starter } : {}) }, progressOf(api, event.id)));
       await passGate(api, event.id);
       // Shown as it was made, so it opens when written (the shell's `open_created`) — unless the
       // person has since opened something else, which is then theirs and stays.

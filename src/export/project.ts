@@ -23,6 +23,7 @@ export function serializeDocument(document: DraftDocument): string {
       title: document.metadata.title,
       createdAt: document.metadata.createdAt,
       updatedAt: document.metadata.updatedAt,
+      ...(document.metadata.origin ? { origin: document.metadata.origin } : {}),
     },
     nodes: canonical.nodes(document.nodes),
     edges: canonical.edges(document.edges),

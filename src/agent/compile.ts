@@ -17,7 +17,7 @@ import { captionSizer, measureContext, placeRoom, type PlacedRoom } from './plac
 import { silent, type Report } from './progress';
 import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
 import { pastDeadline, relaxLayoutAnchors, repairAnchors, withDeadline, type KeptPin } from './route';
-import { buildFromStarter } from './starter';
+import { buildFromStarter, type AgentStarter } from './starter';
 import { legibilityCost, legibilityOf, type Legibility } from './legibility';
 import { reviewFile } from './review';
 import { adviceFor } from './advice';
@@ -37,16 +37,18 @@ export interface ComposeOptions {
   deadline?: number;
   /** Told each stage, and each whole candidate arrangement as it is judged (see `progress.ts`). */
   report?: Report;
+  /** The gallery starter the request names, resolved by the page from its downloaded gallery. */
+  starter?: AgentStarter;
 }
 
 export function compose(raw: unknown, diagramId: string, options: ComposeOptions = {}): Composed {
   const deadline = options.deadline ?? Number.POSITIVE_INFINITY;
-  return withDeadline(deadline, () => composeWithin(raw, diagramId, options.report ?? silent));
+  return withDeadline(deadline, () => composeWithin(raw, diagramId, options.report ?? silent, options.starter));
 }
 
-function composeWithin(raw: unknown, diagramId: string, report: Report): Composed {
+function composeWithin(raw: unknown, diagramId: string, report: Report, starter?: AgentStarter): Composed {
   report('preparing');
-  const spec = readCreate(raw);
+  const spec = readCreate(raw, starter);
   const ctx = measureContext();
   // A brand-new diagram has nothing manual to preserve, so peer sizing defaults on unless the
   // request explicitly turned it off.
@@ -57,7 +59,7 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   const rooms = new Map<RoomSpec, PlacedRoom>();
   planInsideViews(spec, layout0, ctx, rooms);
   const { candidate, repaired, outOfTime } = chooseArrangement(spec, layout0, ctx,
-    (layout) => spec.starter ? buildFromStarter(spec, layout, ctx, rooms) : placeRoom(spec, layout, ctx, undefined, rooms), report, true, !!spec.starter);
+    (layout) => spec.starter ? buildFromStarter(spec, layout, ctx, rooms, starter) : placeRoom(spec, layout, ctx, undefined, rooms), report, true, !!spec.starter);
   const { layout: used } = candidate;
   // Release provisional layout pins for the same or a measurably simpler readable picture, so
   // generated diagrams follow moved shapes. A starter's pins are authored; kept.

@@ -1,0 +1,426 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-hexagonal",
+    "title": "Hexagonal",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "http-adapter",
+      "type": "component",
+      "x": -706,
+      "y": -108,
+      "width": 172,
+      "height": 56,
+      "z": 0,
+      "text": "HTTP Adapter",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "message-consumer",
+      "type": "component",
+      "x": -706,
+      "y": 52,
+      "width": 172,
+      "height": 56,
+      "z": 0,
+      "text": "Message Consumer",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "core",
+      "type": "group",
+      "x": -462,
+      "y": -146,
+      "width": 660,
+      "height": 292,
+      "z": -1,
+      "text": "Application Core",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary",
+      "attachments": [
+        {
+          "id": "a_hrpbarm5zv9f",
+          "type": "note",
+          "text": "Owns its ports, depends on nothing outside itself. Solid arrows are runtime calls; hollow-headed “implements” arrows are source dependencies, and every one of them points in. Fits inside a monolith or a single microservice.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "core-subtitle",
+      "type": "text",
+      "x": -450,
+      "y": -116,
+      "width": 200,
+      "height": 24,
+      "z": 0,
+      "parentId": "core",
+      "text": "Dependencies point inward",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "inbound-port",
+      "type": "component",
+      "x": -426,
+      "y": -22,
+      "width": 120,
+      "height": 44,
+      "z": 0,
+      "parentId": "core",
+      "text": "Inbound",
+      "textOrigin": "explicit",
+      "componentKind": "port"
+    },
+    {
+      "id": "use-cases",
+      "type": "component",
+      "x": -218,
+      "y": -32,
+      "width": 172,
+      "height": 64,
+      "z": 0,
+      "parentId": "core",
+      "text": "Use Cases",
+      "textOrigin": "explicit",
+      "componentKind": "generic"
+    },
+    {
+      "id": "domain",
+      "type": "component",
+      "x": -202,
+      "y": 60,
+      "width": 140,
+      "height": 50,
+      "z": 0,
+      "parentId": "core",
+      "text": "Domain Model",
+      "textOrigin": "explicit",
+      "componentKind": "generic"
+    },
+    {
+      "id": "persistence-port",
+      "type": "component",
+      "x": 42,
+      "y": -102,
+      "width": 120,
+      "height": 44,
+      "z": 0,
+      "parentId": "core",
+      "text": "Persistence",
+      "textOrigin": "explicit",
+      "componentKind": "port"
+    },
+    {
+      "id": "integration-port",
+      "type": "component",
+      "x": 42,
+      "y": 58,
+      "width": 120,
+      "height": 44,
+      "z": 0,
+      "parentId": "core",
+      "text": "Integration",
+      "textOrigin": "explicit",
+      "componentKind": "port"
+    },
+    {
+      "id": "persistence-adapter",
+      "type": "component",
+      "x": 286,
+      "y": -108,
+      "width": 172,
+      "height": 56,
+      "z": 0,
+      "text": "Persistence Adapter",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "integration-adapter",
+      "type": "component",
+      "x": 286,
+      "y": 52,
+      "width": 172,
+      "height": 56,
+      "z": 0,
+      "text": "Integration Adapter",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "database",
+      "type": "database",
+      "x": 530,
+      "y": -115,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "text": "Database",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "external",
+      "type": "service",
+      "x": 530,
+      "y": 46,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "External System",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "external"
+    }
+  ],
+  "edges": [
+    {
+      "id": "http-call",
+      "source": "http-adapter",
+      "target": "inbound-port",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "consumer-call",
+      "source": "message-consumer",
+      "target": "inbound-port",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "use-domain",
+      "source": "use-cases",
+      "target": "domain",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "use-persistence-port",
+      "source": "use-cases",
+      "target": "persistence-port",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "use-integration-port",
+      "source": "use-cases",
+      "target": "integration-port",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "write-database",
+      "source": "persistence-adapter",
+      "target": "database",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "call-external",
+      "source": "integration-adapter",
+      "target": "external",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "implement-inbound",
+      "source": "use-cases",
+      "target": "inbound-port",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "implements",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "implement-persistence",
+      "source": "persistence-adapter",
+      "target": "persistence-port",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "implements",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "implement-integration",
+      "source": "integration-adapter",
+      "target": "integration-port",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "implements",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 0.8158640226628895
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Handle an HTTP request",
+      "steps": [
+        {
+          "id": "fs_f18ln4f0vmlj",
+          "edgeId": "http-call",
+          "caption": "The adapter translates HTTP into a call on the port"
+        },
+        {
+          "id": "fs_jtdrge0e1mba",
+          "edgeId": "use-domain",
+          "caption": "The use case behind the port runs the domain model"
+        },
+        {
+          "id": "fs_j96l0uwoiy7q",
+          "edgeId": "use-persistence-port",
+          "caption": "The core asks its own port — not a database"
+        },
+        {
+          "id": "fs_zptdhkefn141",
+          "edgeId": "write-database",
+          "caption": "The adapter behind the port does the technology"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "flow2",
+      "title": "Consume a message",
+      "steps": [
+        {
+          "id": "fs_ynb5aah54229",
+          "edgeId": "consumer-call",
+          "caption": "A different technology, the same port"
+        },
+        {
+          "id": "fs_4rk5knmh1jqr",
+          "edgeId": "use-domain"
+        },
+        {
+          "id": "fs_y4k5iy3zllgy",
+          "edgeId": "use-integration-port"
+        },
+        {
+          "id": "fs_t7smel070pfo",
+          "edgeId": "call-external"
+        }
+      ],
+      "accent": "amber"
+    }
+  ]
+}

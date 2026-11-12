@@ -5,11 +5,10 @@
 
 import { CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
 import { LEVEL_HINTS } from '../depth/level';
-import { ARCHITECTURE_STARTERS } from '../starters';
 import { AgentError } from './errors';
 import { AGENT_LIMITS } from './input';
 import { READ_LIMITS } from './read';
-import { starterIds } from './starter';
+import { starterIds, type AgentStarter } from './starter';
 import { ELEMENT_TYPES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES } from './vocabulary';
 
 /**
@@ -18,6 +17,8 @@ import { ELEMENT_TYPES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIN
  * refused on create, flows keep their step ids, and `arrange` exists.
  */
 export const CONTRACT_VERSION = 3;
+
+const STARTERS_OFF = 'No starters are downloaded: they come from the optional starters gallery, which the person turns on in Draft Canvas (Starters → Load starters). Compose the diagram from elements instead.';
 
 const TOPICS = ['types', 'relationships', 'c4', 'flows', 'notes', 'starters', 'limits', 'layout', 'readability'] as const;
 
@@ -34,21 +35,26 @@ const TOPIC_INDEX: Record<(typeof TOPICS)[number], string> = {
   readability: 'How to send a request that reads clearly, and how to read the receipt.',
 };
 
-export function capabilities(args: { topics?: unknown; starter?: unknown }): Record<string, unknown> {
+/**
+ * `starters` is the gallery the person has downloaded (`src/gallery/`), resolved by the page: the
+ * starters are no longer part of the app, so an empty list means the gallery is off or never loaded.
+ */
+export function capabilities(args: { topics?: unknown; starter?: unknown }, starters: readonly AgentStarter[] = []): Record<string, unknown> {
   // A starter with topics answers both; alone it is just the starter, as it always was.
-  if (typeof args.starter === 'string' && Array.isArray(args.topics)) return { ...capabilities({ topics: args.topics }), ...capabilities({ starter: args.starter }) };
+  if (typeof args.starter === 'string' && Array.isArray(args.topics)) return { ...capabilities({ topics: args.topics }, starters), ...capabilities({ starter: args.starter }, starters) };
   if (typeof args.starter === 'string') {
-    const starter = ARCHITECTURE_STARTERS.find((s) => s.id === args.starter);
-    if (!starter) throw new AgentError('NOT_FOUND', `No starter "${args.starter}".`);
+    const starter = starters.find((s) => s.id === args.starter);
+    if (!starter) throw new AgentError('NOT_FOUND', starters.length ? `No starter "${args.starter}".` : STARTERS_OFF);
     const ids = starterIds(starter, '');
+    const { file } = starter;
     return {
       starter: {
         id: starter.id,
         name: starter.name,
-        description: starter.description,
-        elements: starter.nodes.map((n) => ({ key: n.key, type: n.type, label: n.text ?? null, ...(n.parent ? { group: n.parent } : {}) })),
-        relationships: starter.edges.map((e, i) => ({ id: ids.edges[i], from: e.from, to: e.to, ...(e.label ? { label: e.label } : {}) })),
-        flows: (starter.flows ?? []).map((f, i) => ({ id: ids.flows[i], title: f.title, steps: f.steps.length })),
+        description: starter.summary,
+        elements: file.nodes.map((n) => ({ key: n.id, type: n.type, label: n.text ?? null, ...(n.parentId ? { group: n.parentId } : {}) })),
+        relationships: file.edges.map((e, i) => ({ id: ids.edges[i], from: e.source, to: e.target, ...(e.label ? { label: e.label } : {}) })),
+        flows: file.flows.map((f, i) => ({ id: ids.flows[i], title: f.title, steps: f.steps.length })),
         note: 'Ids here are unprefixed; with starter.prefix "p-", element "api" becomes "p-api".',
       },
     };
@@ -64,7 +70,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       groupKinds: Object.keys(GROUP_KINDS),
       noteKinds: NOTE_FORM_NAMES,
       lineStyles: LINE_STYLE_NAMES,
-      starters: ARCHITECTURE_STARTERS.map((s) => s.id),
+      starters: starters.map((s) => s.id),
     };
   }
   const topics = new Set(args.topics.filter((t): t is (typeof TOPICS)[number] => (TOPICS as readonly unknown[]).includes(t)));
@@ -125,7 +131,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
     };
   }
   if (want('starters')) {
-    out.starters = ARCHITECTURE_STARTERS.map((s) => ({ id: s.id, name: s.name, category: s.category }));
+    out.starters = starters.length ? starters.map((s) => ({ id: s.id, name: s.name, category: s.category })) : STARTERS_OFF;
   }
   if (want('limits')) out.limits = { ...AGENT_LIMITS, read: READ_LIMITS };
   if (want('layout')) {

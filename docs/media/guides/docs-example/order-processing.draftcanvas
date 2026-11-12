@@ -1,18 +1,18 @@
 {
   "format": "draft-canvas",
-  "version": 23,
+  "version": 25,
   "metadata": {
-    "id": "d_0214bhttinjz",
+    "id": "starter-order-processing",
     "title": "Order processing",
-    "createdAt": 1794208191251,
-    "updatedAt": 1794208191251
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
   },
   "nodes": [
     {
-      "id": "n_9jdnayg2pmnw",
+      "id": "api",
       "type": "service",
       "x": -540,
-      "y": -57,
+      "y": -52,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -21,19 +21,19 @@
       "serviceKind": "api"
     },
     {
-      "id": "n_2miuuhmdcq9r",
+      "id": "queue",
       "type": "queue",
       "x": -220,
-      "y": -57,
+      "y": -35,
       "width": 140,
-      "height": 48,
+      "height": 72,
       "z": 0,
       "text": "orders",
       "textOrigin": "explicit",
       "queueKind": "queue",
       "attachments": [
         {
-          "id": "a_qyjtev62115q",
+          "id": "a_4wbebqz9kzdp",
           "type": "note",
           "text": "The queue holds accepted work so processing can continue independently of the API request.",
           "noteKind": "note",
@@ -43,10 +43,10 @@
       ]
     },
     {
-      "id": "n_4lku7tlwlehw",
+      "id": "worker",
       "type": "service",
       "x": 100,
-      "y": -57,
+      "y": -52,
       "width": 176,
       "height": 68,
       "z": 0,
@@ -55,7 +55,7 @@
       "serviceKind": "worker"
     },
     {
-      "id": "n_kh1ukl1a41id",
+      "id": "db",
       "type": "database",
       "x": 420,
       "y": -57,
@@ -69,9 +69,9 @@
   ],
   "edges": [
     {
-      "id": "e_18yqfpdfr8ex",
-      "source": "n_9jdnayg2pmnw",
-      "target": "n_2miuuhmdcq9r",
+      "id": "submit",
+      "source": "api",
+      "target": "queue",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "command",
@@ -80,9 +80,9 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_qhqbpaza0ha8",
-      "source": "n_2miuuhmdcq9r",
-      "target": "n_4lku7tlwlehw",
+      "id": "process",
+      "source": "queue",
+      "target": "worker",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "consumes",
@@ -91,9 +91,9 @@
       "semanticsOrigin": "inferred"
     },
     {
-      "id": "e_acde1dla5ghn",
-      "source": "n_4lku7tlwlehw",
-      "target": "n_kh1ukl1a41id",
+      "id": "save",
+      "source": "worker",
+      "target": "db",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "readsWrites",
@@ -101,9 +101,9 @@
     }
   ],
   "viewport": {
-    "x": 640,
-    "y": 410,
-    "zoom": 0.9481481481481482
+    "x": 720,
+    "y": 450,
+    "zoom": 1
   },
   "settings": {
     "showSequence": true,
@@ -117,22 +117,22 @@
   },
   "flows": [
     {
-      "id": "f_aruvy7f5abgx",
+      "id": "flow1",
       "title": "Place an order",
       "steps": [
         {
-          "id": "fs_1zwmwbdla6wa",
-          "edgeId": "e_18yqfpdfr8ex",
+          "id": "fs_4wdme81fkqul",
+          "edgeId": "submit",
           "caption": "The API accepts an order and queues the work."
         },
         {
-          "id": "fs_o9xyat7g1ffb",
-          "edgeId": "e_qhqbpaza0ha8",
+          "id": "fs_o0ajjefl8dzl",
+          "edgeId": "process",
           "caption": "The worker picks up the queued order."
         },
         {
-          "id": "fs_de0h7flada3i",
-          "edgeId": "e_acde1dla5ghn",
+          "id": "fs_0h2ygccxpqrx",
+          "edgeId": "save",
           "caption": "The worker records the processed order."
         }
       ]

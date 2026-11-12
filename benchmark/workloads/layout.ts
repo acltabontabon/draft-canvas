@@ -4,8 +4,8 @@
  * benchmark workload's tiles read as ordinary starter geometry rather than an invented layout.
  */
 
-import { GUTTER, BAND } from '../../src/starters/compose';
-import { starterById, starterSize } from '../../src/starters';
+import { GUTTER, BAND } from '../../src/agent/compose';
+import { starterById, starterSize } from '../../tests/fixtures/starters-v1';
 import { TILE_ORDER } from './index';
 
 /**

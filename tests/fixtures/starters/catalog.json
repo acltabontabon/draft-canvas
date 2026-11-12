@@ -1,0 +1,493 @@
+{
+  "$schema": "./catalog.schema.json",
+  "schema": 1,
+  "updated": "2026-11-11",
+  "starters": [
+    {
+      "id": "monolith",
+      "name": "Monolith",
+      "category": "architecture",
+      "summary": "One application, built and deployed as a unit",
+      "aliases": [
+        "monolith",
+        "monolithic",
+        "single deployment",
+        "one application",
+        "layered"
+      ],
+      "tags": [
+        "layered",
+        "web app",
+        "single deployable"
+      ],
+      "useWhen": [
+        "A new product or a small team, where one deployable keeps change cheap.",
+        "Explaining where a request goes before any of it is split out."
+      ],
+      "watchOutFor": [
+        "Every change ships the whole application.",
+        "Layers blur over time unless their boundaries are kept on purpose."
+      ],
+      "featured": true,
+      "order": 10,
+      "path": "starters/architectures/monolith/monolith.draftcanvas",
+      "sha256": "00c6d7a4ce0fcee44541d0376077f517436b508c4acf6d3d3d0deab0a852c446",
+      "bytes": 5780,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "modular-monolith",
+      "name": "Modular Monolith",
+      "category": "architecture",
+      "summary": "One deployable, explicitly encapsulated modules inside",
+      "aliases": [
+        "modular monolith",
+        "modular architecture",
+        "modules",
+        "module boundaries",
+        "majestic monolith",
+        "monolith modules"
+      ],
+      "tags": [
+        "modules",
+        "single deployable",
+        "bounded contexts"
+      ],
+      "useWhen": [
+        "You want clear ownership without the cost of distributed services.",
+        "Preparing a monolith to split later, one module at a time."
+      ],
+      "watchOutFor": [
+        "Module boundaries only hold if calls go through the public interface.",
+        "A shared database makes it easy to reach into another module's tables."
+      ],
+      "featured": false,
+      "order": 20,
+      "path": "starters/architectures/modular-monolith/modular-monolith.draftcanvas",
+      "sha256": "7d4b8c1a9fbeba97608514671bf837d0cb2717f643e180f4a2a6e29d6c7cc3b0",
+      "bytes": 8111,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "microservices",
+      "name": "Microservices",
+      "category": "architecture",
+      "summary": "Independently deployed services, each owning its data",
+      "aliases": [
+        "microservices",
+        "microservice",
+        "distributed services",
+        "independent services",
+        "api gateway"
+      ],
+      "tags": [
+        "services",
+        "api gateway",
+        "database per service"
+      ],
+      "useWhen": [
+        "Teams need to deploy and scale parts of the system independently.",
+        "Mapping which service owns which data."
+      ],
+      "watchOutFor": [
+        "Calls between services fail and are slow in ways in-process calls are not.",
+        "Queries that span services need their own design."
+      ],
+      "featured": true,
+      "order": 30,
+      "path": "starters/architectures/microservices/microservices.draftcanvas",
+      "sha256": "9538f5cf1dce344514f2df97691b4951fcaabe70fa1a18371ec855fed49c98c7",
+      "bytes": 9413,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "event-driven",
+      "name": "Event-Driven",
+      "category": "architecture",
+      "summary": "Pub/sub: a topic fanning out to per-subscriber queues",
+      "aliases": [
+        "event driven",
+        "event-driven",
+        "events",
+        "event architecture",
+        "pub sub",
+        "publish subscribe",
+        "messaging",
+        "fan out",
+        "asynchronous",
+        "eda"
+      ],
+      "tags": [
+        "pub/sub",
+        "topic",
+        "queues",
+        "dead letter"
+      ],
+      "useWhen": [
+        "Several consumers react to the same change without the producer knowing them.",
+        "Showing retries and where failed messages go."
+      ],
+      "watchOutFor": [
+        "Delivery is at least once: consumers must handle duplicates.",
+        "The flow of one request is harder to follow end to end."
+      ],
+      "featured": true,
+      "order": 40,
+      "path": "starters/architectures/event-driven/event-driven.draftcanvas",
+      "sha256": "6fa55a6504a8b468e60ca987741f206a887e5138ae4cd413d3510c0885d438ca",
+      "bytes": 9311,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "hexagonal",
+      "name": "Hexagonal",
+      "category": "architecture",
+      "summary": "Adapters around a core that owns its ports",
+      "aliases": [
+        "hexagonal",
+        "hexagonal architecture",
+        "ports and adapters",
+        "ports adapters",
+        "hex architecture",
+        "clean architecture",
+        "clean-ish architecture",
+        "onion architecture",
+        "domain core",
+        "adapters"
+      ],
+      "tags": [
+        "ports and adapters",
+        "clean architecture",
+        "domain"
+      ],
+      "useWhen": [
+        "Keeping business rules independent of frameworks, databases and transports.",
+        "Testing the core without infrastructure."
+      ],
+      "watchOutFor": [
+        "More indirection than a small service may need.",
+        "Ports drift into thin wrappers if they mirror one adapter."
+      ],
+      "featured": true,
+      "order": 50,
+      "path": "starters/architectures/hexagonal/hexagonal.draftcanvas",
+      "sha256": "3ad7e4d19354e73d3dbd13b9110526935dc4dc03296c8340848fe324a42ae317",
+      "bytes": 9616,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "bff",
+      "name": "Backend for Frontend",
+      "category": "architecture",
+      "summary": "A backend per frontend, over shared capabilities",
+      "aliases": [
+        "bff",
+        "backend for frontend",
+        "backends for frontends",
+        "client adapter",
+        "per-client api"
+      ],
+      "tags": [
+        "backend for frontend",
+        "web",
+        "mobile",
+        "api composition"
+      ],
+      "useWhen": [
+        "Web and mobile need different shapes of the same data.",
+        "Frontend teams want to change their API without coordinating every release."
+      ],
+      "watchOutFor": [
+        "Logic duplicated across BFFs instead of living in the shared services.",
+        "One more service per client to run."
+      ],
+      "featured": false,
+      "order": 60,
+      "path": "starters/architectures/bff/bff.draftcanvas",
+      "sha256": "fc5495d7507e2a11758f71edf32e3a35a7fb0a097d33aece4569df10471b5190",
+      "bytes": 9050,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "cqrs",
+      "name": "CQRS",
+      "category": "architecture",
+      "summary": "Distinct command and query paths, async read projection",
+      "aliases": [
+        "cqrs",
+        "command query",
+        "command query responsibility segregation",
+        "read model",
+        "write model",
+        "projection"
+      ],
+      "tags": [
+        "command query",
+        "read model",
+        "projection",
+        "eventual consistency"
+      ],
+      "useWhen": [
+        "Reads and writes have very different shapes or loads.",
+        "Explaining eventual consistency between the two sides."
+      ],
+      "watchOutFor": [
+        "Reads lag behind writes.",
+        "Two models to keep in step as the domain changes."
+      ],
+      "featured": true,
+      "order": 70,
+      "path": "starters/architectures/cqrs/cqrs.draftcanvas",
+      "sha256": "e049551264763f309c679553b749930a56d20757bae4e0c97afeab8846fda7b5",
+      "bytes": 11572,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "medallion",
+      "name": "Medallion",
+      "category": "data",
+      "summary": "Refine raw data into validated, business-ready datasets",
+      "aliases": [
+        "medallion",
+        "medallion architecture",
+        "bronze silver gold",
+        "lakehouse",
+        "data lake",
+        "etl",
+        "data pipeline"
+      ],
+      "tags": [
+        "lakehouse",
+        "bronze silver gold",
+        "data pipeline",
+        "analytics"
+      ],
+      "useWhen": [
+        "Building analytics on data from several operational sources.",
+        "Showing where data quality is enforced."
+      ],
+      "watchOutFor": [
+        "Each layer stores another copy of the data.",
+        "Late-arriving or corrected data needs reprocessing through every layer."
+      ],
+      "featured": false,
+      "order": 80,
+      "path": "starters/data/medallion/medallion.draftcanvas",
+      "sha256": "d574ee692474aeaebfa860a2a0e34af6275e1bbc28bac9a7ffc1d42f47218965",
+      "bytes": 9750,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "kappa",
+      "name": "Kappa",
+      "category": "data",
+      "summary": "Process live and historical data through one durable stream",
+      "aliases": [
+        "kappa",
+        "kappa architecture",
+        "durable log",
+        "log replay",
+        "materialized view",
+        "stream processing",
+        "unified log"
+      ],
+      "tags": [
+        "streaming",
+        "event log",
+        "replay",
+        "materialized view"
+      ],
+      "useWhen": [
+        "Real-time views where reprocessing history must use the same code.",
+        "Replacing a separate batch layer."
+      ],
+      "watchOutFor": [
+        "Replays of a long log take time and capacity.",
+        "The log's retention decides how far back you can rebuild."
+      ],
+      "featured": false,
+      "order": 90,
+      "path": "starters/data/kappa/kappa.draftcanvas",
+      "sha256": "acb3a51ccf445600a83efef17104a857fd458e354cf479f1e0688d9995055ef1",
+      "bytes": 7435,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "cdc",
+      "name": "Change Data Capture",
+      "category": "data",
+      "summary": "Capture committed changes once, fan out to derived views",
+      "aliases": [
+        "cdc",
+        "change data capture",
+        "cdc pipeline",
+        "change stream",
+        "log-based replication",
+        "debezium"
+      ],
+      "tags": [
+        "change data capture",
+        "replication",
+        "derived views",
+        "search index"
+      ],
+      "useWhen": [
+        "Keeping other systems in sync with a database without dual writes.",
+        "Feeding search, caches or analytics from the source of truth."
+      ],
+      "watchOutFor": [
+        "Derived views are eventually consistent.",
+        "Schema changes in the source ripple to every consumer."
+      ],
+      "featured": false,
+      "order": 100,
+      "path": "starters/data/cdc/cdc.draftcanvas",
+      "sha256": "62f3a6104b7aba98f49aed91d4dcfcb3ef00f6f53f8f48176673f42fc85e52ca",
+      "bytes": 8910,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "saga-orchestration",
+      "name": "Saga – Orchestration",
+      "category": "pattern",
+      "summary": "Local transactions and compensation, one coordinator",
+      "aliases": [
+        "saga",
+        "saga orchestration",
+        "orchestrated saga",
+        "orchestrator",
+        "distributed transaction",
+        "compensating transaction",
+        "compensation"
+      ],
+      "tags": [
+        "saga",
+        "orchestrator",
+        "compensation",
+        "distributed transaction"
+      ],
+      "useWhen": [
+        "A workflow spans several services and must undo completed steps on failure.",
+        "You want one place that knows the workflow's state."
+      ],
+      "watchOutFor": [
+        "The orchestrator can become a bottleneck or a god service.",
+        "Every step needs a compensation that really undoes it."
+      ],
+      "featured": false,
+      "order": 110,
+      "path": "starters/patterns/saga-orchestration/saga-orchestration.draftcanvas",
+      "sha256": "bfa018f453ca0424cdaf46c10c57b1471157b35f0b604ef100bd5516782387f9",
+      "bytes": 9834,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "saga-choreography",
+      "name": "Saga – Choreography",
+      "category": "pattern",
+      "summary": "Local transactions chained by events, with no coordinator",
+      "aliases": [
+        "saga choreography",
+        "choreographed saga",
+        "choreography",
+        "event-driven saga",
+        "no orchestrator",
+        "reactive saga"
+      ],
+      "tags": [
+        "saga",
+        "choreography",
+        "events",
+        "compensation"
+      ],
+      "useWhen": [
+        "Few steps, owned by different teams, that already communicate through events.",
+        "Avoiding a central workflow service."
+      ],
+      "watchOutFor": [
+        "The whole workflow is visible only by following the events.",
+        "Cyclic dependencies between services creep in as steps grow."
+      ],
+      "featured": false,
+      "order": 120,
+      "path": "starters/patterns/saga-choreography/saga-choreography.draftcanvas",
+      "sha256": "cfb1a00cac9a867bd0e0124d0a9f628ed4de7ce3acdfba347bad7cda59a9f53d",
+      "bytes": 12017,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "transactional-outbox",
+      "name": "Transactional Outbox",
+      "category": "pattern",
+      "summary": "Persist state and event intent atomically, publish after",
+      "aliases": [
+        "outbox",
+        "transactional outbox",
+        "outbox pattern",
+        "dual write",
+        "reliable publish"
+      ],
+      "tags": [
+        "outbox",
+        "reliable messaging",
+        "events",
+        "consistency"
+      ],
+      "useWhen": [
+        "A state change and its event must never disagree.",
+        "Publishing events from a service that owns a database."
+      ],
+      "watchOutFor": [
+        "Events arrive at least once and slightly late.",
+        "The outbox table needs cleaning up."
+      ],
+      "featured": false,
+      "order": 130,
+      "path": "starters/patterns/transactional-outbox/transactional-outbox.draftcanvas",
+      "sha256": "98a7c16ee25d631f7e38c2e27606d152b9025b6d46726861f5b68d313aa38e52",
+      "bytes": 6689,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    },
+    {
+      "id": "order-processing",
+      "name": "Order processing",
+      "category": "example",
+      "summary": "Follow an order from the API through a queue to storage",
+      "aliases": [
+        "order example"
+      ],
+      "tags": [
+        "example",
+        "queue",
+        "worker"
+      ],
+      "useWhen": [
+        "Learning how shapes, connectors and flows read on the canvas.",
+        "A starting point for any queue-and-worker design."
+      ],
+      "watchOutFor": [
+        "It is deliberately small: there is no failure path."
+      ],
+      "featured": false,
+      "order": 140,
+      "path": "starters/examples/order-processing/order-processing.draftcanvas",
+      "sha256": "975a67a0c7163cde2b590d5c3c0bbcc2a0ef4f822ab0571e98084590404f94ad",
+      "bytes": 2979,
+      "formatVersion": 25,
+      "updated": "2026-11-11"
+    }
+  ]
+}

@@ -1,0 +1,299 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-transactional-outbox",
+    "title": "Transactional Outbox",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "producer",
+      "type": "service",
+      "x": -672,
+      "y": -37,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Producer Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "attachments": [
+        {
+          "id": "a_otwhg8lbr64j",
+          "type": "note",
+          "text": "Never talks to the broker. If the transaction rolls back, the event was never written either.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "transaction",
+      "type": "group",
+      "x": -392,
+      "y": -171,
+      "width": 244,
+      "height": 342,
+      "z": -1,
+      "text": "One local transaction",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "transaction-subtitle",
+      "type": "text",
+      "x": -380,
+      "y": -141,
+      "width": 200,
+      "height": 24,
+      "z": 0,
+      "parentId": "transaction",
+      "text": "Committed together, or not at all",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "business",
+      "type": "database",
+      "x": -356,
+      "y": -109,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "transaction",
+      "text": "Business Data",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "table"
+    },
+    {
+      "id": "outbox",
+      "type": "database",
+      "x": -356,
+      "y": 33,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "transaction",
+      "text": "Outbox",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "table",
+      "attachments": [
+        {
+          "id": "a_9ahc3rmy5m6s",
+          "type": "note",
+          "text": "A table in the same database. Rows are marked published (or deleted) after the broker acks. Poll it, or tail the log (CDC) — same shape.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "publisher",
+      "type": "service",
+      "x": -44,
+      "y": 34,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Outbox Publisher",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "events",
+      "type": "queue",
+      "x": 244,
+      "y": 51,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Domain Events",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "consumer",
+      "type": "service",
+      "x": 496,
+      "y": 34,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Consumer Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker",
+      "attachments": [
+        {
+          "id": "a_40ejtbajatin",
+          "type": "note",
+          "text": "At-least-once: the same event can arrive twice. Dedupe on the event id.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "write-business",
+      "source": "producer",
+      "target": "business",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "write-outbox",
+      "source": "producer",
+      "target": "outbox",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "relay",
+      "source": "publisher",
+      "target": "outbox",
+      "label": "reads unpublished",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "publish",
+      "source": "publisher",
+      "target": "events",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "deliver",
+      "source": "events",
+      "target": "consumer",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "deliversTo",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 0.8571428571428571
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Service transaction",
+      "steps": [
+        {
+          "id": "fs_4283soafhsz6",
+          "edgeId": "write-business",
+          "caption": "The business change"
+        },
+        {
+          "id": "fs_zc4zjyi9siu4",
+          "edgeId": "write-outbox",
+          "caption": "And the event to publish — same transaction"
+        }
+      ],
+      "accent": "amber"
+    },
+    {
+      "id": "flow2",
+      "title": "Outbox publication",
+      "steps": [
+        {
+          "id": "fs_bfahw6hs70rr",
+          "edgeId": "relay",
+          "caption": "Later, and independently — after the commit"
+        },
+        {
+          "id": "fs_b1qi7tox4n62",
+          "edgeId": "publish",
+          "caption": "Then mark the row published"
+        }
+      ],
+      "accent": "violet"
+    },
+    {
+      "id": "flow3",
+      "title": "Event consumption",
+      "steps": [
+        {
+          "id": "fs_e5n5e36ca5vw",
+          "edgeId": "deliver",
+          "caption": "Possibly more than once — the consumer dedupes"
+        }
+      ],
+      "accent": "green"
+    }
+  ]
+}

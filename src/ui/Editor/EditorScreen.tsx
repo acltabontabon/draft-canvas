@@ -3,6 +3,8 @@
 // Flow's base styles), so its overrides keep winning.
 import '../../styles/canvas.css';
 import { ExampleBanner } from './ExampleBanner';
+import { StarterUpdateBanner } from './StarterUpdateBanner';
+import { StartersDialog } from '../Gallery/StartersDialog';
 import { FlowTraceBar } from './FlowTraceBar';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
@@ -25,7 +27,6 @@ import { contextMenuCommandsFor } from '../../commands/contextMenu';
 import { openPointTargetsOf, readSafeMenu, starterCommands } from '../../commands/registry';
 import type { Command } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
-import type { StarterId } from '../../starters';
 import { defaultSizeFor } from '../../document/factory';
 import { DEFAULTS } from '../../document/limits';
 import { pathKey } from '../../depth/tree';
@@ -499,8 +500,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   // The empty canvas's starter row runs the palette's own command rather than calling the store
   // itself, so the two entry points can never drift apart — the same discipline the right-click
   // menu follows (`commands/contextMenu.ts`).
-  const insertStarter = useCallback(
-    (id: StarterId) => {
+  const addStarter = useCallback(
+    (id: string) => {
       const command = starterCommands().find((entry) => entry.id === `starter-${id}`);
       command?.run(buildCommandContext());
     },
@@ -685,9 +686,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
             <ElementInspectorPopover buildCommandContext={buildCommandContext} />
           )}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
+          {!presenting && !tracing && <StarterUpdateBanner />}
+          <StartersDialog onAdd={addStarter} />
           <FlowTraceBar />
           <PresentationCalloutLayer />
-          <EmptyState onInsertStarter={insertStarter} />
+          <EmptyState onAddStarter={addStarter} />
           {!presenting && <ContinuationAnnouncer />}
           {!presenting && !tracing && !readingTraffic && !readOnly && <Inspector />}
           {!presenting && !tracing && <FlowPanel onPresent={onPresent} />}

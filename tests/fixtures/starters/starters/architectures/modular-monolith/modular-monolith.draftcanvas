@@ -1,0 +1,364 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-modular-monolith",
+    "title": "Modular Monolith",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "client",
+      "type": "actor",
+      "x": -60,
+      "y": -389,
+      "width": 120,
+      "height": 92,
+      "z": 0,
+      "text": "Client",
+      "textOrigin": "explicit",
+      "actorKind": "system",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "app",
+      "type": "group",
+      "x": -468,
+      "y": -193,
+      "width": 936,
+      "height": 328,
+      "z": -1,
+      "text": "Application",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment",
+      "attachments": [
+        {
+          "id": "a_9n06gnlpudn8",
+          "type": "note",
+          "text": "One artifact, one deploy — the same unit as the Monolith. Module boundaries are enforced at build time (packages, visibility, dependency rules), not by the network.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "component",
+      "x": -76,
+      "y": -137,
+      "width": 152,
+      "height": 56,
+      "z": 0,
+      "parentId": "app",
+      "text": "Application API",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "module-a",
+      "type": "component",
+      "x": -432,
+      "y": 23,
+      "width": 176,
+      "height": 76,
+      "z": 0,
+      "parentId": "app",
+      "text": "Capability A",
+      "textOrigin": "explicit",
+      "componentKind": "module"
+    },
+    {
+      "id": "module-b",
+      "type": "component",
+      "x": -88,
+      "y": 23,
+      "width": 176,
+      "height": 76,
+      "z": 0,
+      "parentId": "app",
+      "text": "Capability B",
+      "textOrigin": "explicit",
+      "componentKind": "module"
+    },
+    {
+      "id": "module-c",
+      "type": "component",
+      "x": 256,
+      "y": 23,
+      "width": 176,
+      "height": 76,
+      "z": 0,
+      "parentId": "app",
+      "text": "Capability C",
+      "textOrigin": "explicit",
+      "componentKind": "module"
+    },
+    {
+      "id": "database",
+      "type": "group",
+      "x": -494,
+      "y": 207,
+      "width": 988,
+      "height": 182,
+      "z": -1,
+      "text": "Shared Database",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary",
+      "attachments": [
+        {
+          "id": "a_ae3jpuojsnxa",
+          "type": "note",
+          "text": "One physical database, one schema per module. A module reads and writes only its own tables; anything it needs from another module goes through that module’s interface. Separate servers are not required.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "tables-a",
+      "type": "database",
+      "x": -430,
+      "y": 251,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "database",
+      "text": "Capability A Tables",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "table"
+    },
+    {
+      "id": "tables-b",
+      "type": "database",
+      "x": -86,
+      "y": 251,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "database",
+      "text": "Capability B Tables",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "table"
+    },
+    {
+      "id": "tables-c",
+      "type": "database",
+      "x": 258,
+      "y": 251,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "database",
+      "text": "Capability C Tables",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "table"
+    }
+  ],
+  "edges": [
+    {
+      "id": "call",
+      "source": "client",
+      "target": "api",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "dispatch-a",
+      "source": "api",
+      "target": "module-a",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "dispatch-b",
+      "source": "api",
+      "target": "module-b",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "dispatch-c",
+      "source": "api",
+      "target": "module-c",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "collaborate",
+      "source": "module-b",
+      "target": "module-c",
+      "label": "in-process public interface",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "persist-a",
+      "source": "module-a",
+      "target": "tables-a",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "persist-b",
+      "source": "module-b",
+      "target": "tables-b",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "persist-c",
+      "source": "module-c",
+      "target": "tables-c",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 0.9254498714652957
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Handle a request",
+      "steps": [
+        {
+          "id": "fs_tv0tn8rqg81g",
+          "edgeId": "call"
+        },
+        {
+          "id": "fs_8dak1nk4naej",
+          "edgeId": "dispatch-a"
+        },
+        {
+          "id": "fs_fwofrwfwvvz2",
+          "edgeId": "persist-a",
+          "caption": "Its own tables, nobody else’s"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "flow2",
+      "title": "Collaborate across modules",
+      "steps": [
+        {
+          "id": "fs_4evcasb5csym",
+          "edgeId": "call"
+        },
+        {
+          "id": "fs_wvbmef8xe3pf",
+          "edgeId": "dispatch-b"
+        },
+        {
+          "id": "fs_hhfnw1n03fm2",
+          "edgeId": "collaborate",
+          "caption": "Through C’s public interface — never its internals or tables"
+        },
+        {
+          "id": "fs_6dewsevqazvo",
+          "edgeId": "persist-c",
+          "caption": "C writes its own tables on B’s behalf"
+        }
+      ],
+      "accent": "amber"
+    }
+  ]
+}

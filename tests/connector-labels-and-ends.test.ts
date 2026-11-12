@@ -14,8 +14,7 @@ import {
   routeBetween,
 } from '../src/edges/routing';
 import { stepPolyline } from '../src/edges/waypoints';
-import { starterDocument } from '../src/starters/document';
-import { ORDER_PROCESSING } from '../src/starters/order-processing';
+import { exampleCanvas } from '../src/gallery/example';
 
 const far = { x: 900, y: 900, width: 10, height: 10 };
 const near = { x: -90, y: -90, width: 10, height: 10 };
@@ -93,7 +92,8 @@ describe('a line never bends right into its arrowhead', () => {
 });
 
 describe('the example diagram', () => {
-  const doc = starterDocument(ORDER_PROCESSING);
+  // The copy that ships with the app, as "Try an example" opens it.
+  const doc = exampleCanvas();
   const byId = new Map(doc.nodes.map((node) => [node.id, node]));
 
   it('lines its row up by the arrows: every connector runs straight', () => {

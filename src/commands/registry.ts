@@ -29,7 +29,7 @@ import { ALT_SYMBOL, MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
-import { fileOf, fileWithLiveViewport, lensFlow, outermostSelected, ownsData, viewLevel } from '../store/editorStore';
+import { fileOf, fileWithLiveViewport, lensFlow, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
 import { pointer, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
 import { useCollabStore } from '../store/collabStore';
@@ -57,8 +57,8 @@ import { systemTheme } from '../theme/systemTheme';
 import { copyText } from '../ui/collab/clipboard';
 import { ARRANGE_FAILED, notifyLoadFailure } from '../ui/common/notifyLoadFailure';
 import { focusBounds, focusNodes } from './search';
-import { ARCHITECTURE_STARTERS } from '../starters';
-import type { StarterCategory } from '../starters';
+import type { GalleryCategory } from '../gallery';
+import { useGalleryStore } from '../store/galleryStore';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
 import { count } from '../lib/plural';
 import { openPointsOverview, unresolvedTargetsIn } from '../openPoints/collect';
@@ -2042,41 +2042,51 @@ function selectionCommands(ctx: CommandContext): Command[] {
   return [];
 }
 
-const STARTER_CATEGORY_GROUP: Record<StarterCategory, CommandGroup> = {
+const STARTER_CATEGORY_GROUP: Record<GalleryCategory, CommandGroup> = {
   architecture: 'starter',
   data: 'data',
   pattern: 'pattern',
+  example: 'canvas',
 };
 
 /**
- * Starters — one row per composed opening diagram (`src/starters/`), under three headers:
- * *Architectures* (how the major parts of a system are organized), *Data Architectures* (how data
- * moves and is refined — Medallion, Kappa, CDC) and *Patterns* (how one recurring design problem is
- * solved — a saga, an outbox). The split is the catalog's own
- * `category`, kept purely for discoverability; a starter is one architectural idea at one scope,
- * and a real system composes several of them, so nothing here reads as a choice between them.
+ * Starters — one row per starter in the gallery this device has downloaded (`src/gallery/`), under
+ * the gallery's own headers: *Architectures*, *Data Architectures* and *Patterns*. Before the person
+ * has chosen to load the gallery there are none; "Browse starters…" (`canvasCommands`) offers it.
  *
  * These are not a template browser and deliberately not a separate surface: a starter is a name for
- * `insertStarter`, exactly as "Add Service" is a name for `addNode`. The row adds only the camera
- * move that puts the result on screen, so ⌘K → "microservices" → Enter is the whole interaction.
+ * `galleryStore.addToCanvas`, exactly as "Add Service" is a name for `addNode`. The row adds only the
+ * camera move that puts the result on screen, so ⌘K → "microservices" → Enter is the whole
+ * interaction.
  *
  * They never depend on `ctx`, so unlike the selection-driven builders this one takes no argument —
  * a starter applies to any canvas, empty or not. Exported for the same reason `nodeCommands` is:
  * the empty canvas's starter row is a second surface over these identical commands, not a second
- * implementation of them (`ui/Editor/EmptyState.tsx`). The catalog lists every architecture, then
- * every data architecture, then every pattern, which is what keeps the three headers contiguous
- * without sorting here.
+ * implementation of them (`ui/Editor/EmptyState.tsx`). The gallery lists every architecture, then
+ * every data architecture, then every pattern, which is what keeps the headers contiguous without
+ * sorting here.
  */
 export function starterCommands(): Command[] {
-  return ARCHITECTURE_STARTERS.map((starter) => ({
-    id: `starter-${starter.id}`,
-    title: starter.name,
-    group: STARTER_CATEGORY_GROUP[starter.category],
-    keywords: starter.aliases,
-    hint: starter.description,
-    // On the web a blank "Untitled canvas" takes the starter's name; elsewhere the name is the file's.
-    run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter, hostKind() === null ? starter.name : undefined))),
-  }));
+  const starters = useGalleryStore.getState().snapshot?.starters ?? [];
+  return starters
+    // The worked example has its own command ("Try an example"), which opens it as its own canvas.
+    .filter((starter) => starter.availability === 'ready' && starter.category !== 'example')
+    .map((starter) => ({
+      id: `starter-${starter.id}`,
+      title: starter.name,
+      group: STARTER_CATEGORY_GROUP[starter.category],
+      keywords: starter.aliases,
+      hint: starter.summary,
+      // On the web a blank "Untitled canvas" takes the starter's name; elsewhere the name is the file's.
+      run: (inner) =>
+        void useGalleryStore
+          .getState()
+          .addToCanvas(starter.id, { title: hostKind() === null ? starter.name : undefined })
+          .then((ids) => {
+            const added = new Set(ids);
+            focusBounds(inner, boundsOf(useEditorStore.getState().document.nodes.filter((node) => added.has(node.id))));
+          }),
+    }));
 }
 
 /**
@@ -2241,6 +2251,7 @@ function editCommands(ctx: CommandContext): Command[] {
     ...selectionCommands(ctx),
     ...ALL_PRESETS.map(createCommand),
     { id: 'try-example', title: 'Try an example', group: 'canvas', keywords: ['order', 'processing', 'learn'], run: (inner) => inner.ui.requestExample() },
+    { id: 'browse-starters', title: 'Browse starters…', group: 'canvas', keywords: ['starter', 'gallery', 'template', 'example', 'architecture', 'pattern'], hint: 'Ready-made architectures from the starters gallery', run: () => useGalleryStore.getState().openDialog() },
     ...starterCommands(),
     ...flowCommands(ctx),
     ...openPointCommands(ctx),

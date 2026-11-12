@@ -1,0 +1,426 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-microservices",
+    "title": "Microservices",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "client",
+      "type": "actor",
+      "x": -60,
+      "y": -433,
+      "width": 120,
+      "height": 92,
+      "z": 0,
+      "text": "Client",
+      "textOrigin": "explicit",
+      "actorKind": "system",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "gateway",
+      "type": "service",
+      "x": -88,
+      "y": -237,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "API Gateway",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "gateway",
+      "attachments": [
+        {
+          "id": "a_jbndqrqwug0d",
+          "type": "note",
+          "text": "Optional: one entry point for routing, auth and rate limits. Clients may also call services directly — the pattern is the independent services, not the gateway.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "owner-a",
+      "type": "group",
+      "x": -552,
+      "y": 27,
+      "width": 320,
+      "height": 406,
+      "z": -2,
+      "text": "Capability A",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "deploy-a",
+      "type": "group",
+      "x": -516,
+      "y": 71,
+      "width": 248,
+      "height": 152,
+      "z": -1,
+      "parentId": "owner-a",
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "service-a",
+      "type": "service",
+      "x": -480,
+      "y": 119,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "deploy-a",
+      "text": "Capability A Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "store-a",
+      "type": "database",
+      "x": -478,
+      "y": 295,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "owner-a",
+      "text": "Capability A Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "attachments": [
+        {
+          "id": "a_ddg6uvlwbuim",
+          "type": "note",
+          "text": "Private to Capability A: no other service reads or writes it. Ownership is logical — a separate schema on a shared instance qualifies; a separate server is not required.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "owner-b",
+      "type": "group",
+      "x": -160,
+      "y": 27,
+      "width": 320,
+      "height": 406,
+      "z": -2,
+      "text": "Capability B",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "deploy-b",
+      "type": "group",
+      "x": -124,
+      "y": 71,
+      "width": 248,
+      "height": 152,
+      "z": -1,
+      "parentId": "owner-b",
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "service-b",
+      "type": "service",
+      "x": -88,
+      "y": 119,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "deploy-b",
+      "text": "Capability B Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "store-b",
+      "type": "database",
+      "x": -86,
+      "y": 295,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "owner-b",
+      "text": "Capability B Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "owner-c",
+      "type": "group",
+      "x": 232,
+      "y": 27,
+      "width": 320,
+      "height": 406,
+      "z": -2,
+      "text": "Capability C",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "deploy-c",
+      "type": "group",
+      "x": 268,
+      "y": 71,
+      "width": 248,
+      "height": 152,
+      "z": -1,
+      "parentId": "owner-c",
+      "text": "",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "service-c",
+      "type": "service",
+      "x": 304,
+      "y": 119,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "deploy-c",
+      "text": "Capability C Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "store-c",
+      "type": "database",
+      "x": 306,
+      "y": 295,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "owner-c",
+      "text": "Capability C Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    }
+  ],
+  "edges": [
+    {
+      "id": "call",
+      "source": "client",
+      "target": "gateway",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "route-a",
+      "source": "gateway",
+      "target": "service-a",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "routes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "route-b",
+      "source": "gateway",
+      "target": "service-b",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "routes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "route-c",
+      "source": "gateway",
+      "target": "service-c",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "routes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "persist-a",
+      "source": "service-a",
+      "target": "store-a",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "persist-b",
+      "source": "service-b",
+      "target": "store-b",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "persist-c",
+      "source": "service-c",
+      "target": "store-c",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "collaborate",
+      "source": "service-b",
+      "target": "service-c",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "a_2fs9pl4onifc",
+          "type": "note",
+          "text": "Through Capability C’s API — its contract — never its store. Events are the other way to integrate; see Event-Driven.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 0.8314087759815243
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Handle a request",
+      "steps": [
+        {
+          "id": "fs_gttmcyf8z9t7",
+          "edgeId": "call"
+        },
+        {
+          "id": "fs_8ju8yj6q6ova",
+          "edgeId": "route-a"
+        },
+        {
+          "id": "fs_bp491mx7tp2j",
+          "edgeId": "persist-a",
+          "caption": "Its own store — nobody else’s"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "flow2",
+      "title": "Call another service",
+      "steps": [
+        {
+          "id": "fs_ddq2y4s3lqjf",
+          "edgeId": "call"
+        },
+        {
+          "id": "fs_gk6yenum2b2z",
+          "edgeId": "route-b"
+        },
+        {
+          "id": "fs_140xg5s9dsvb",
+          "edgeId": "collaborate",
+          "caption": "A network call to C’s contract, not a query on C’s data"
+        },
+        {
+          "id": "fs_mg3lw998l8jm",
+          "edgeId": "persist-c"
+        }
+      ],
+      "accent": "amber"
+    }
+  ]
+}

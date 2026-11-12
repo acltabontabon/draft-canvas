@@ -4,8 +4,8 @@ import { sequenceSourceFor } from '../src/export/sequence';
 import { aliasFor } from '../src/sequence/alias';
 import { toMermaid } from '../src/sequence/mermaid';
 import type { SequenceModel } from '../src/sequence/types';
-import { ARCHITECTURE_STARTERS } from '../src/starters/catalog';
-import { starterDocument } from '../src/starters/document';
+import { ARCHITECTURE_STARTERS } from './fixtures/starters-v1/catalog';
+import { starterDocument } from './fixtures/starters-v1/document';
 
 /**
  * The Mermaid export is checked against Mermaid itself, not against what we think its grammar is.

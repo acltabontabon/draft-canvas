@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { starterOf } from '../fixtures/gallery';
 import { compose } from '../../src/agent/compile';
 import { applyUpdate } from '../../src/agent/patch';
 import { measureContext } from '../../src/agent/place';
@@ -17,7 +18,7 @@ import { nearestElement } from '../../src/agent/read';
 import { readingDirectionOf } from '../../src/agent/arrange';
 
 function create(request: Record<string, unknown>, id = 'd_gallery00001'): DraftDocument {
-  const parsed = deserializeDocument(compose({ requestId: 'g', ...request }, id).text);
+  const parsed = deserializeDocument(compose({ requestId: 'g', ...request }, id, starterOf(request)).text);
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.document;
 }
@@ -112,7 +113,7 @@ describe('layout gallery', { timeout: 30_000 }, () => {
     const entry = GALLERY.find((g) => g.id === '26-shared-fan-out')! as { request: Record<string, unknown> };
     // As sent, with nothing degraded: it used to be refused (two of checkout's lines on top of each
     // other) and, accepted anyway, crossed itself 13 times.
-    const { receipt } = compose({ requestId: 'g', ...entry.request }, 'd_gallery00001');
+    const { receipt } = compose({ requestId: 'g', ...entry.request }, 'd_gallery00001', starterOf(entry.request));
     expect(receipt.degraded).toBeUndefined();
     const { doc } = galleryDocument(entry as GalleryCase);
     const inside = viewOf(doc, ['system'])!;
@@ -241,7 +242,7 @@ describe('layout gallery', { timeout: 30_000 }, () => {
     expect(nearestElement(at('n-notify'), doc.nodes)).toBe('notify');
     expect(at('n-decision').y).toBeLessThan(Math.min(...doc.nodes.filter((n) => n.parentId === 'svc' && n.type !== 'note').map((n) => n.y)));
     // And the receipt tells the agent what else would help: this domain belongs a level down.
-    const out = compose({ requestId: 'g', ...(entry as { request: Record<string, unknown> }).request }, 'd_gallery00001');
+    const out = compose({ requestId: 'g', ...(entry as { request: Record<string, unknown> }).request }, 'd_gallery00001', starterOf((entry as { request: Record<string, unknown> }).request));
     expect(out.receipt.legibility).toMatchObject({ crossings: legibility.crossings });
     expect((out.receipt.advisories as string[])[0]).toContain('"svc"');
   });

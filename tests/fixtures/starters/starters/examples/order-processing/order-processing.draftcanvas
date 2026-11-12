@@ -1,0 +1,141 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-order-processing",
+    "title": "Order processing",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "api",
+      "type": "service",
+      "x": -540,
+      "y": -52,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Orders API",
+      "textOrigin": "explicit",
+      "serviceKind": "api"
+    },
+    {
+      "id": "queue",
+      "type": "queue",
+      "x": -220,
+      "y": -35,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "orders",
+      "textOrigin": "explicit",
+      "queueKind": "queue",
+      "attachments": [
+        {
+          "id": "a_4wbebqz9kzdp",
+          "type": "note",
+          "text": "The queue holds accepted work so processing can continue independently of the API request.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "worker",
+      "type": "service",
+      "x": 100,
+      "y": -52,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Fulfilment worker",
+      "textOrigin": "explicit",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "x": 420,
+      "y": -57,
+      "width": 120,
+      "height": 114,
+      "z": 0,
+      "text": "Orders database",
+      "textOrigin": "explicit",
+      "databaseKind": "generic"
+    }
+  ],
+  "edges": [
+    {
+      "id": "submit",
+      "source": "api",
+      "target": "queue",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "command",
+      "kind": "async",
+      "async": true,
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "process",
+      "source": "queue",
+      "target": "worker",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "async",
+      "async": true,
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "save",
+      "source": "worker",
+      "target": "db",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "semanticsOrigin": "inferred"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 1
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Place an order",
+      "steps": [
+        {
+          "id": "fs_4wdme81fkqul",
+          "edgeId": "submit",
+          "caption": "The API accepts an order and queues the work."
+        },
+        {
+          "id": "fs_o0ajjefl8dzl",
+          "edgeId": "process",
+          "caption": "The worker picks up the queued order."
+        },
+        {
+          "id": "fs_0h2ygccxpqrx",
+          "edgeId": "save",
+          "caption": "The worker records the processed order."
+        }
+      ]
+    }
+  ]
+}

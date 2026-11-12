@@ -7,8 +7,8 @@ import { normalizeDocument } from '../src/document/validate';
 import type { DraftNode } from '../src/document/types';
 import { edgeMetaText } from '../src/edges/describe';
 import { serializeDocument } from '../src/export/project';
-import { buildStarter } from '../src/starters/build';
-import { starterById } from '../src/starters';
+import { buildStarter } from './fixtures/starters-v1/build';
+import { starterById } from './fixtures/starters-v1';
 
 const service = (text: string) => createNode({ type: 'service', text, x: 0, y: 0 });
 const table = (text: string) => createNode({ type: 'database', databaseKind: 'table', text, x: 0, y: 0 });

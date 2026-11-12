@@ -15,9 +15,10 @@ import { smallestArrange, type QualityReport } from './quality';
 import { withDeadline } from './route';
 import { legibilityOf, type Legibility } from './legibility';
 import { routingAdvice } from './advice';
+import type { AgentStarter } from './starter';
 
 export type Job =
-  | { kind: 'compose'; raw: unknown; diagramId: string }
+  | { kind: 'compose'; raw: unknown; diagramId: string; starter?: AgentStarter }
   | { kind: 'update'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown; scope?: unknown }
   | { kind: 'proposal'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown; scope?: unknown };
 
@@ -46,7 +47,7 @@ export type JobResult =
  * it is (see `progress.ts`). Throws `AgentError`.
  */
 export function runJob(job: Job, deadline: number, report: Report = silent): JobResult {
-  if (job.kind === 'compose') return { kind: 'compose', composed: compose(job.raw, job.diagramId, { deadline, report }) };
+  if (job.kind === 'compose') return { kind: 'compose', composed: compose(job.raw, job.diagramId, { deadline, report, ...(job.starter ? { starter: job.starter } : {}) }) };
   if (job.kind === 'proposal') {
     return withDeadline(deadline, () => {
       report('preparing');

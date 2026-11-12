@@ -204,7 +204,7 @@ export function DesktopHome() {
                   <kbd aria-hidden="true">{chord(mac, 'N')}</kbd>
                 </button>
               }
-              example={<Button variant="quiet" icon="flow" onClick={() => void controller.newQuickDraft('order-processing')}>Try an example</Button>}
+              example={<Button variant="quiet" icon="flow" onClick={() => void controller.newQuickDraft('example')}>Try an example</Button>}
               open={<Button variant="quiet" icon="upload" onPointerEnter={warmExplorer} onFocus={warmExplorer} onClick={() => void controller.openFile()}>Open file…</Button>}
               companion={
                 <Button variant="quiet" icon="agent" onClick={() => desktopStore.update({ settingsOpen: true, settingsCategory: 'agents' })}>

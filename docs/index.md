@@ -9,7 +9,7 @@ New here? Start with [Getting started](guides/getting-started.md).
 | **[Getting started](guides/getting-started.md)** | Draw, present and export a first diagram |
 | [Shapes and connectors](guides/shapes-and-connectors.md) | Shape kinds, labels, notes, boundaries |
 | [Flows and presenting](guides/flows-and-presentation.md) | Record a path and present it step by step |
-| [Architecture examples](guides/examples.md) | Ready-made starters |
+| [Architecture examples](guides/examples.md) | Ready-made starters from the starters gallery |
 | [System levels](guides/depth.md) | Look inside a shape for more detail |
 | [Open points](guides/open-points.md) | Track open questions |
 | [Traffic](guides/traffic.md) | See where modeled traffic concentrates |

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { starterOf } from '../fixtures/gallery';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
@@ -19,7 +20,7 @@ import { measure, type Quality } from '../fixtures/routing/measure';
  */
 
 const create = (request: Record<string, unknown>): DraftDocument => {
-  const parsed = deserializeDocument(compose({ requestId: 'arrows', ...request }, 'd_arrows00001').text);
+  const parsed = deserializeDocument(compose({ requestId: 'arrows', ...request }, 'd_arrows00001', starterOf(request)).text);
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.document;
 };

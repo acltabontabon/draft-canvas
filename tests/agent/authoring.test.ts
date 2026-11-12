@@ -1,4 +1,5 @@
 import Ajv from 'ajv';
+import { starterOf } from '../fixtures/gallery';
 import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { buildImplementationContext } from '../../src/agent/context';
@@ -20,7 +21,7 @@ import type { DraftDocument, DraftFlowStep } from '../../src/document/types';
  */
 
 function composed(raw: Record<string, unknown>) {
-  const result = compose({ title: 'T', ...raw }, 'd_authoring00');
+  const result = compose({ title: 'T', ...raw }, 'd_authoring00', starterOf(raw));
   const parsed = deserializeDocument(result.text);
   if (!parsed.ok) throw new Error(parsed.error);
   return { file: parsed.document, receipt: result.receipt };

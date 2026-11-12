@@ -1,0 +1,31 @@
+{
+  "id": "medallion",
+  "name": "Medallion",
+  "category": "data",
+  "summary": "Refine raw data into validated, business-ready datasets",
+  "aliases": [
+    "medallion",
+    "medallion architecture",
+    "bronze silver gold",
+    "lakehouse",
+    "data lake",
+    "etl",
+    "data pipeline"
+  ],
+  "tags": [
+    "lakehouse",
+    "bronze silver gold",
+    "data pipeline",
+    "analytics"
+  ],
+  "useWhen": [
+    "Building analytics on data from several operational sources.",
+    "Showing where data quality is enforced."
+  ],
+  "watchOutFor": [
+    "Each layer stores another copy of the data.",
+    "Late-arriving or corrected data needs reprocessing through every layer."
+  ],
+  "featured": false,
+  "order": 80
+}

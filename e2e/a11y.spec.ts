@@ -1,6 +1,7 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
 import { newCanvas } from './canvas';
+import { serveStarterGallery } from './gallery';
 
 /**
  * axe over the surfaces people spend their time in: the Library, the editor holding a real diagram,
@@ -48,7 +49,23 @@ test.describe('accessibility (axe)', () => {
     await scan(page, 'Library');
   });
 
+  test('the Starters dialog: asking, browsing and one starter up close', async ({ page }) => {
+    await serveStarterGallery(page, { enabled: false });
+    await newCanvas(page, 'axe starters');
+    await page.getByRole('button', { name: /Browse the starters gallery/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Starters', exact: true });
+    await expect(dialog.getByRole('button', { name: 'Load starters', exact: true })).toBeVisible();
+    await scan(page, 'Starters, asking');
+    await dialog.getByRole('button', { name: 'Load starters', exact: true }).click();
+    await expect(dialog.locator('.dc-starters-grid .dc-starter').first()).toBeVisible();
+    await scan(page, 'Starters, browsing');
+    await dialog.getByRole('button', { name: 'CQRS', exact: true }).click();
+    await expect(dialog.getByRole('img', { name: 'The CQRS starter' })).toBeVisible();
+    await scan(page, 'Starters, one starter');
+  });
+
   test('the editor with a starter, its export dialog, the command palette and the Outline', async ({ page }) => {
+    await serveStarterGallery(page);
     await newCanvas(page, 'axe editor');
     const starters = page.getByRole('group', { name: 'Suggested starters', exact: true });
     await expect(starters).toBeVisible();
@@ -82,6 +99,7 @@ test.describe('accessibility (axe), dark theme', () => {
   test.use({ colorScheme: 'dark' });
 
   test('the editor with a starter and the Outline', async ({ page }) => {
+    await serveStarterGallery(page);
     await newCanvas(page, 'axe editor dark');
     const starters = page.getByRole('group', { name: 'Suggested starters', exact: true });
     await starters.getByRole('button', { name: 'Start from Event-Driven', exact: true }).click();

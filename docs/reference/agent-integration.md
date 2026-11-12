@@ -39,14 +39,14 @@ reports `contract: 3`.
 
 | Tool | Kind | Purpose |
 | --- | --- | --- |
-| `get_capabilities({topics?, starter?})` | read | Vocabulary and rules. Without `topics`, an index of the topics and the common word lists; each topic in full on request: `types`, `relationships`, `c4`, `flows`, `notes`, `starters`, `limits`, `layout`, `readability`. |
+| `get_capabilities({topics?, starter?})` | read | Vocabulary and rules. Without `topics`, an index of the topics and the common word lists; each topic in full on request: `types`, `relationships`, `c4`, `flows`, `notes`, `starters`, `limits`, `layout`, `readability`. `starters` lists only what the person has downloaded from the [starters gallery](../guides/examples.md); with the gallery off there are none. |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read | Diagrams in allowed folders, plus `active` (the open one) and `thisSession` (ones this session changed). |
 | `read_diagram({diagramId, view?, focus?, include?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read | Full note or code text in 8,192-character chunks. |
 | `read_selection({diagramId})` | read | The current selection. See [Selection-aware editing](#selection-aware-editing). |
 | `get_implementation_context({diagramId, view?, focus?})` | read | Flow steps as stored, notes, decisions, code and boundaries, for implementing a design. |
 | `render_diagram({diagramId, view?, format?, scale?, theme?, previewId?, focus?})` | read | PNG (`scale` 1–3, `light`/`dark`) or SVG from the export renderer. `focus`: `{nodes}`, `{group}`, `{flow}` or `{selection: true}`, with optional `neighbors`. Max 8 MB. |
-| `create_diagram({requestId, title, nodes?, relationships?, groups?, flows?, notes?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?, fallbackType?})` | write | A new file. A title in use is `DUPLICATE_TITLE` unless `allowDuplicateTitle`. `fallbackType` draws unknown types as that type. |
+| `create_diagram({requestId, title, nodes?, relationships?, groups?, flows?, notes?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?, fallbackType?})` | write | A new file. A title in use is `DUPLICATE_TITLE` unless `allowDuplicateTitle`. `fallbackType` draws unknown types as that type. `starter` begins from a downloaded gallery starter; its elements keep the file's ids under `starter.prefix`. |
 | `update_diagram({requestId, diagramId, expectedRevision, ops?, view?, scope?, layout?, activate?, onConflict?, previewId?})` | write | Every follow-up. See [Changing a diagram](#changing-a-diagram). |
 | `preview_diagram({diagramId, expectedRevision, ops, view?, layout?, scope?})` | read | An unsaved candidate: `previewId`, diff and quality. |
 | `submit_proposal({requestId, diagramId, expectedRevision, summary, ops?, rationale?, assumptions?, openQuestions?, view?, layout?, scope?, sourceRef?, revises?})` | write | Changes for a person to review. See [Proposals](#proposals-review-before-applying). |

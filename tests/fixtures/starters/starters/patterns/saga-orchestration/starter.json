@@ -1,0 +1,31 @@
+{
+  "id": "saga-orchestration",
+  "name": "Saga \u2013 Orchestration",
+  "category": "pattern",
+  "summary": "Local transactions and compensation, one coordinator",
+  "aliases": [
+    "saga",
+    "saga orchestration",
+    "orchestrated saga",
+    "orchestrator",
+    "distributed transaction",
+    "compensating transaction",
+    "compensation"
+  ],
+  "tags": [
+    "saga",
+    "orchestrator",
+    "compensation",
+    "distributed transaction"
+  ],
+  "useWhen": [
+    "A workflow spans several services and must undo completed steps on failure.",
+    "You want one place that knows the workflow's state."
+  ],
+  "watchOutFor": [
+    "The orchestrator can become a bottleneck or a god service.",
+    "Every step needs a compensation that really undoes it."
+  ],
+  "featured": false,
+  "order": 110
+}

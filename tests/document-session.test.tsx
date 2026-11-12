@@ -1,3 +1,5 @@
+import { canvasFromStarter } from '../src/gallery/canvas';
+import { starterById, starterDocument } from './fixtures/starters-v1';
 import { act, render, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
@@ -564,7 +566,7 @@ describe('useDocumentSession — repository failures surface a toast, not an unh
 });
 
 describe('useDocumentSession — newDocument', () => {
-  it('seeds a canvas from an Architecture Starter, titled after it, with nothing to undo', async () => {
+  it('opens a canvas already holding a starter, with nothing to undo', async () => {
     const saved: DraftDocument[] = [];
     const repository = stubRepository({
       save: async (document) => {
@@ -573,13 +575,15 @@ describe('useDocumentSession — newDocument', () => {
     });
     const session = renderSession(repository);
     await waitFor(() => expect(session().ready).toBe(true));
+    const starter = canvasFromStarter({ id: 'microservices', name: 'Microservices', sha256: 'a'.repeat(64) }, starterDocument(starterById('microservices')!));
 
     await act(async () => {
-      await session().newDocument(undefined, 'microservices');
+      await session().newDocument(undefined, starter);
     });
 
     const doc = saved[0]!;
     expect(doc.metadata.title).toBe('Microservices');
+    expect(doc.metadata.origin).toEqual({ starter: 'microservices', sha256: 'a'.repeat(64) });
     expect(doc.nodes).toHaveLength(14);
     expect(doc.edges).toHaveLength(8);
     expect(doc.viewport.zoom).toBeGreaterThanOrEqual(0.1);
@@ -589,7 +593,7 @@ describe('useDocumentSession — newDocument', () => {
     expect(session().openId).toBe(doc.metadata.id);
   });
 
-  it('keeps an explicit title, and an unknown starter id just means a blank canvas', async () => {
+  it('opens the bundled example, offline, and marks it as the example', async () => {
     const saved: DraftDocument[] = [];
     const repository = stubRepository({
       save: async (document) => {
@@ -600,16 +604,16 @@ describe('useDocumentSession — newDocument', () => {
     await waitFor(() => expect(session().ready).toBe(true));
 
     await act(async () => {
-      await session().newDocument('Checkout', 'monolith');
-      await session().newDocument(undefined, 'not-a-starter' as never);
+      await session().newDocument(undefined, 'example');
       await session().newDocument();
     });
 
-    expect(saved[0]!.metadata.title).toBe('Checkout');
-    expect(saved[0]!.nodes.length).toBeGreaterThan(0);
+    expect(saved[0]!.metadata.title).toBe('Order processing');
+    expect(saved[0]!.nodes).toHaveLength(4);
+    expect(saved[0]!.flows).toHaveLength(1);
+    expect(useUiStore.getState().exampleDocumentId).toBe(saved[0]!.metadata.id);
     expect(saved[1]!.metadata.title).toBe('Untitled canvas');
     expect(saved[1]!.nodes).toHaveLength(0);
-    expect(saved[2]!.nodes).toHaveLength(0);
   });
 });
 
@@ -644,7 +648,7 @@ describe('useDocumentSession — opening viewport fit request', () => {
 
     useUiStore.setState({ openFitDocumentId: null });
     await act(async () => {
-      await session().newDocument(undefined, 'microservices');
+      await session().newDocument(undefined, 'example');
     });
     expect(useUiStore.getState().openFitDocumentId).toBeNull();
   });

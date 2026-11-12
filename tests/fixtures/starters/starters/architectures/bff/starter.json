@@ -1,0 +1,29 @@
+{
+  "id": "bff",
+  "name": "Backend for Frontend",
+  "category": "architecture",
+  "summary": "A backend per frontend, over shared capabilities",
+  "aliases": [
+    "bff",
+    "backend for frontend",
+    "backends for frontends",
+    "client adapter",
+    "per-client api"
+  ],
+  "tags": [
+    "backend for frontend",
+    "web",
+    "mobile",
+    "api composition"
+  ],
+  "useWhen": [
+    "Web and mobile need different shapes of the same data.",
+    "Frontend teams want to change their API without coordinating every release."
+  ],
+  "watchOutFor": [
+    "Logic duplicated across BFFs instead of living in the shared services.",
+    "One more service per client to run."
+  ],
+  "featured": false,
+  "order": 60
+}

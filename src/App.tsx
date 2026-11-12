@@ -79,16 +79,19 @@ function Shell() {
   const host = useHostDocument(session, currentDesktopHost()?.channel);
   // Diagrams arriving from the editor's old address, when it opened this tab to send them.
   useHandoffReceiver(session);
-  const exampleRequested = useUiStore((state) => state.exampleRequested);
+  // "Try an example" and a gallery starter's "Open as new diagram": a canvas made the way this host
+  // makes one — a Quick Draft on desktop, a Library document on the web.
+  const newCanvasRequest = useUiStore((state) => state.newCanvasRequest);
   useEffect(() => {
-    if (!exampleRequested) return;
-    useUiStore.setState({ exampleRequested: false });
+    if (!newCanvasRequest) return;
+    useUiStore.setState({ newCanvasRequest: null });
+    const starter = newCanvasRequest.kind === 'example' ? 'example' as const : newCanvasRequest.document;
     if (__DESKTOP__ && hostKind() === 'desktop') {
-      void import('./desktop/useDesktop').then(({ getDesktopController }) => getDesktopController().newQuickDraft('order-processing'));
+      void import('./desktop/useDesktop').then(({ getDesktopController }) => getDesktopController().newQuickDraft(starter));
     } else {
-      void session.closeDocument().then((closed) => { if (closed) return session.newDocument(undefined, 'order-processing'); });
+      void session.closeDocument().then((closed) => { if (closed) return session.newDocument(undefined, starter); });
     }
-  }, [exampleRequested, session]);
+  }, [newCanvasRequest, session]);
 
   // An invite link (`#join=…`): read once, taken off the address, and offered as a dialog. The web
   // app only — an invite opens in a browser, never in the desktop app's own window.

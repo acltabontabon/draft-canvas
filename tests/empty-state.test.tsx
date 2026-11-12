@@ -2,7 +2,11 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument } from '../src/document/factory';
-import { ARCHITECTURE_STARTERS, PRIMARY_STARTERS } from '../src/starters';
+import { libraryShapeOf } from '../src/document/shape';
+import type { GalleryStarter } from '../src/gallery';
+import { useGalleryStore } from '../src/store/galleryStore';
+import { useUiStore } from '../src/store/uiStore';
+import { ARCHITECTURE_STARTERS, PRIMARY_STARTERS, buildStarter } from './fixtures/starters-v1';
 import { EmptyState } from '../src/ui/Editor/EmptyState';
 import { useEditorStore } from '../src/store/editorStore';
 
@@ -13,13 +17,38 @@ import { useEditorStore } from '../src/store/editorStore';
  * from the keyboard for anyone who doesn't use a mouse.
  */
 
-beforeEach(() => {
-  useEditorStore.setState({ document: createDocument('Empty'), mode: 'edit' });
+/** The downloaded gallery, as the store holds it: every starter, five of them featured. */
+const GALLERY: GalleryStarter[] = ARCHITECTURE_STARTERS.map((starter, order) => {
+  const { nodes, edges } = buildStarter(starter, { x: 0, y: 0 });
+  return {
+    id: starter.id,
+    name: starter.name,
+    category: starter.category,
+    summary: starter.description,
+    aliases: [],
+    tags: [],
+    useWhen: [],
+    watchOutFor: [],
+    featured: PRIMARY_STARTERS.includes(starter),
+    order,
+    path: `starters/x/${starter.id}/${starter.id}.draftcanvas`,
+    sha256: String(order).padStart(64, '0'),
+    bytes: 1,
+    formatVersion: 1,
+    updated: '2026-11-12',
+    availability: 'ready',
+    shape: libraryShapeOf(nodes, edges),
+  };
 });
 
-const renderEmpty = (onInsertStarter = vi.fn()) => ({
-  onInsertStarter,
-  ...render(<EmptyState onInsertStarter={onInsertStarter} />),
+beforeEach(() => {
+  useEditorStore.setState({ document: createDocument('Empty'), mode: 'edit' });
+  useGalleryStore.setState({ enabled: true, snapshot: { starters: GALLERY, fetchedAt: Date.now() }, failure: null, status: 'idle', dialog: { open: false } });
+});
+
+const renderEmpty = (onAddStarter = vi.fn()) => ({
+  onAddStarter,
+  ...render(<EmptyState onAddStarter={onAddStarter} />),
 });
 
 const firstFeatured = PRIMARY_STARTERS[0]!;
@@ -41,17 +70,17 @@ describe('EmptyState', () => {
   });
 
   it('inserts the starter it draws', async () => {
-    const { onInsertStarter } = renderEmpty();
+    const { onAddStarter } = renderEmpty();
     await userEvent.click(screen.getByRole('button', { name: `Start from ${firstFeatured.name}` }));
-    expect(onInsertStarter).toHaveBeenCalledWith(firstFeatured.id);
+    expect(onAddStarter).toHaveBeenCalledWith(firstFeatured.id);
   });
 
   it('is reachable without a mouse, starters first', async () => {
-    const { onInsertStarter } = renderEmpty();
+    const { onAddStarter } = renderEmpty();
     await userEvent.tab();
     expect(screen.getByRole('button', { name: `Start from ${firstFeatured.name}` })).toHaveFocus();
     await userEvent.keyboard('{Enter}');
-    expect(onInsertStarter).toHaveBeenCalledWith(firstFeatured.id);
+    expect(onAddStarter).toHaveBeenCalledWith(firstFeatured.id);
   });
 
   it('vanishes as soon as the canvas has anything on it', () => {
@@ -63,7 +92,7 @@ describe('EmptyState', () => {
       act(() => {
         useEditorStore.getState().addNode({ type: 'note', x: 0, y: 0, text: 'x' });
       });
-      rerender(<EmptyState onInsertStarter={vi.fn()} />);
+      rerender(<EmptyState onAddStarter={vi.fn()} />);
       // It lingers for one fade — but stops taking clicks on the very render content appeared.
       expect(document.querySelector('.dc-empty')).toHaveAttribute('data-leaving', 'true');
       act(() => void vi.runAllTimers());
@@ -71,6 +100,23 @@ describe('EmptyState', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('before the gallery is loaded, offers it in one card and nothing else', async () => {
+    useGalleryStore.setState({ enabled: false, snapshot: null });
+    const { onAddStarter } = renderEmpty();
+    expect(screen.queryByRole('group', { name: 'Suggested starters' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Browse the starters gallery/ }));
+    expect(useGalleryStore.getState().dialog.open).toBe(true);
+    expect(onAddStarter).not.toHaveBeenCalled();
+  });
+
+  it('offers the bundled example whether or not the gallery is loaded', async () => {
+    useGalleryStore.setState({ enabled: false, snapshot: null });
+    useUiStore.setState({ newCanvasRequest: null });
+    renderEmpty();
+    await userEvent.click(screen.getByRole('button', { name: 'Try an example' }));
+    expect(useUiStore.getState().newCanvasRequest).toEqual({ kind: 'example' });
   });
 
   it('stays away during a presentation', () => {

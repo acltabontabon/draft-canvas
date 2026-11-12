@@ -1,0 +1,447 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-medallion",
+    "title": "Medallion",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "sources",
+      "type": "group",
+      "x": -900,
+      "y": -227,
+      "width": 244,
+      "height": 454,
+      "z": -1,
+      "text": "Sources",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "db",
+      "type": "database",
+      "x": -864,
+      "y": -183,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "sources",
+      "text": "Operational Database",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "files",
+      "type": "database",
+      "x": -864,
+      "y": -41,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "sources",
+      "text": "Files",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "file-system"
+    },
+    {
+      "id": "stream",
+      "type": "queue",
+      "x": -848,
+      "y": 119,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "parentId": "sources",
+      "text": "Event Stream",
+      "textOrigin": "explicit",
+      "queueKind": "stream"
+    },
+    {
+      "id": "ingestion",
+      "type": "service",
+      "x": -560,
+      "y": -40,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Ingestion",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "lake",
+      "type": "group",
+      "x": -312,
+      "y": -103,
+      "width": 892,
+      "height": 232,
+      "z": -1,
+      "text": "Lakehouse",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "lake-subtitle",
+      "type": "text",
+      "x": -300,
+      "y": -73,
+      "width": 200,
+      "height": 24,
+      "z": 0,
+      "parentId": "lake",
+      "text": "One lake, three levels of trust",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "bronze",
+      "type": "database",
+      "x": -276,
+      "y": -41,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "lake",
+      "text": "Bronze",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "table",
+      "attachments": [
+        {
+          "id": "a_flbrbucce39w",
+          "type": "note",
+          "text": "Append-only landing, kept exactly as received — so everything downstream can be rebuilt from here.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "bronze-descriptor",
+      "type": "text",
+      "x": -248,
+      "y": 69,
+      "width": 116,
+      "height": 24,
+      "z": 0,
+      "parentId": "lake",
+      "text": "Raw, source-aligned",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "silver",
+      "type": "database",
+      "x": 48,
+      "y": -41,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "lake",
+      "text": "Silver",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "table",
+      "attachments": [
+        {
+          "id": "a_josipozn9op0",
+          "type": "note",
+          "text": "Deduplicated, typed, schema-enforced — business entities start to emerge here.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "silver-descriptor",
+      "type": "text",
+      "x": 74,
+      "y": 69,
+      "width": 120,
+      "height": 24,
+      "z": 0,
+      "parentId": "lake",
+      "text": "Validated, conformed",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "gold",
+      "type": "database",
+      "x": 372,
+      "y": -41,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "lake",
+      "text": "Gold",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "table",
+      "attachments": [
+        {
+          "id": "a_exb381qg0t6x",
+          "type": "note",
+          "text": "Modelled and aggregated for the questions asked of it — optimised for reads, not for landing.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "gold-descriptor",
+      "type": "text",
+      "x": 389,
+      "y": 69,
+      "width": 138,
+      "height": 24,
+      "z": 0,
+      "parentId": "lake",
+      "text": "Curated, business-ready",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "serving",
+      "type": "group",
+      "x": 652,
+      "y": -138,
+      "width": 248,
+      "height": 256,
+      "z": -1,
+      "text": "Serving",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "analytics",
+      "type": "service",
+      "x": 688,
+      "y": -94,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "serving",
+      "text": "Analytics / BI",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "data-api",
+      "type": "service",
+      "x": 688,
+      "y": 14,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "serving",
+      "text": "Data API",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    }
+  ],
+  "edges": [
+    {
+      "id": "db-ingest",
+      "source": "db",
+      "target": "ingestion",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "files-ingest",
+      "source": "files",
+      "target": "ingestion",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "stream-ingest",
+      "source": "stream",
+      "target": "ingestion",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "land",
+      "source": "ingestion",
+      "target": "bronze",
+      "label": "lands raw",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "refine",
+      "source": "bronze",
+      "target": "silver",
+      "label": "validate + conform",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "transforms",
+      "cadence": "streaming",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "curate",
+      "source": "silver",
+      "target": "gold",
+      "label": "model + aggregate",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "transforms",
+      "cadence": "hourly",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "to-analytics",
+      "source": "gold",
+      "target": "analytics",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "to-api",
+      "source": "gold",
+      "target": "data-api",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 0.64
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Raw to insight",
+      "steps": [
+        {
+          "id": "fs_ytyl1pyixr5y",
+          "edgeId": "db-ingest",
+          "caption": "Ingestion reads the source"
+        },
+        {
+          "id": "fs_q4v01erxtxky",
+          "edgeId": "land",
+          "caption": "Landed in Bronze exactly as received"
+        },
+        {
+          "id": "fs_qqicrgtxzue9",
+          "edgeId": "refine",
+          "caption": "Validated, deduplicated, and conformed into Silver"
+        },
+        {
+          "id": "fs_cgaizqojqxmo",
+          "edgeId": "curate",
+          "caption": "Modelled and aggregated into Gold"
+        },
+        {
+          "id": "fs_epb9ncu9c4f6",
+          "edgeId": "to-analytics",
+          "caption": "Analytics reads business-ready data"
+        }
+      ],
+      "accent": "teal"
+    }
+  ]
+}

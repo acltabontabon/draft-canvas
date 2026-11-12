@@ -12,8 +12,7 @@ import { holdOpen, openAnywhere } from '../storage/openPresence';
 import { discardReloadStash, stashForReload, takeReloadStash } from '../storage/reloadStash';
 import { logDiagnostic } from '../lib/diagnostics';
 import { loadFailureNotice } from '../lib/staleChunk';
-import type { StarterId } from '../starters';
-import { loadStarters } from '../starters/load';
+import { exampleCanvas } from '../gallery/example';
 import { Autosave } from '../storage/autosave';
 import { getRepository, reconcileMetadata, type DraftRepository } from '../storage';
 import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
@@ -148,7 +147,7 @@ export interface DocumentSession {
   /** A blank canvas, or — given a `starterId` — one already holding that
    *  Architecture Starter, titled after it unless `title` says otherwise. */
   /** `projectId`: made from a project's view, the canvas belongs to that project. */
-  newDocument: (title?: string, starterId?: StarterId, projectId?: string) => Promise<void>;
+  newDocument: (title?: string, starter?: 'example' | DraftDocument, projectId?: string) => Promise<void>;
   adoptDocument: (document: DraftDocument, options?: { fresh?: boolean }) => Promise<void>;
   /**
    * Shows a diagram that arrived by share link (`src/share/`): read-only (`uiStore.readOnly`), never
@@ -758,30 +757,17 @@ export function useDocumentSession(): DocumentSession {
   }, [adoptDocument]);
 
   const newDocument = useCallback(
-    async (title?: string, starterId?: StarterId, projectId?: string) => {
+    /** A blank canvas, or one already holding the bundled example or a gallery starter's diagram. */
+    async (title?: string, starter?: 'example' | DraftDocument, projectId?: string) => {
       if (creating.current) return;
       creating.current = true;
-      const request = (navigation.current += 1);
+      // A newer navigation: anything still opening gives way to this canvas.
+      navigation.current += 1;
       try {
-        let catalog: Awaited<ReturnType<typeof loadStarters>> | undefined;
-        try {
-          catalog = starterId ? await loadStarters() : undefined;
-          // Something else was opened while the starters chunk arrived.
-          if (request !== navigation.current) return;
-        } catch (error) {
-          // The starters chunk didn't arrive (offline, or a deploy replaced it) — say so, the way
-          // `openDocument` does for the editor chunk, rather than leaving the click to do nothing.
-          logDiagnostic(error, { operation: 'load-starters' });
-          const notice = loadFailureNotice(error, 'That starter could not be loaded. Check your connection and try again.');
-          notify(notice.message, 'error', notice.action);
-          return;
-        }
-        const starter = starterId ? catalog?.starterById(starterId) : undefined;
-        const created =
-          starter && catalog ? catalog.starterDocument(starter, title) : createDocument(title ?? 'Untitled canvas');
+        const created = starter === 'example' ? exampleCanvas() : starter ?? createDocument(title ?? 'Untitled canvas');
         const document = projectId ? { ...created, metadata: { ...created.metadata, projectId } } : created;
         await adoptDocument(document, { fresh: true });
-        if (starterId === 'order-processing') {
+        if (starter === 'example') {
           const { useEditorStore } = await loadEditorStore();
           if (useEditorStore.getState().document.metadata.id !== document.metadata.id) return;
           // No flow selected: the example opens on the plain diagram like every document, as on desktop.
@@ -791,7 +777,7 @@ export function useDocumentSession(): DocumentSession {
         creating.current = false;
       }
     },
-    [adoptDocument, notify],
+    [adoptDocument],
   );
 
   const closeDocument = useCallback(async () => {

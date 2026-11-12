@@ -2539,7 +2539,7 @@ const FONTS_BY_TEXT_ROLE: Record<TextRole, FontSpec> = {
 
 /**
  * A Text node's effective semantic role: an explicit `textRole` always wins; otherwise the legacy
- * `annotation` flag (still the only thing `src/starters/catalog.ts` ever sets) maps to `'label'`,
+ * `annotation` flag (still the only thing the starters gallery's files set) maps to `'label'`,
  * its one existing look. Absent of both is `'body'`. Shared by the renderer, the inline editor's
  * own CSS (`DraftNodeView.tsx`'s `editorStyle`), and the popover's role picker, so the three can
  * never disagree about what a node currently is.

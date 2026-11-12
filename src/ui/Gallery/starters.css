@@ -1,0 +1,715 @@
+/* ---- Starters dialog ------------------------------------------------------
+ * A drawer of printed diagrams: each starter a small sheet on the canvas's own dotted paper, the
+ * headings set in the same book face as the empty canvas's "Start drawing." */
+
+.dc-starters {
+  --dc-starters-serif: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  --dc-starters-paper:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--dc-grid) 85%, transparent) 1px, transparent 1.4px) 0 0 / 14px 14px,
+    var(--dc-canvas);
+}
+
+.dc-starters .dc-modal-body {
+  min-height: 420px;
+  padding-top: 20px;
+}
+
+.dc-starters-display {
+  margin: 0;
+  color: var(--dc-text);
+  font-family: var(--dc-starters-serif);
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.15;
+}
+
+.dc-starters-display em {
+  font-style: italic;
+}
+
+/* -- the stack of sheets: consent, and the offline state -- */
+
+.dc-starters-sheets {
+  position: relative;
+  width: 150px;
+  height: 96px;
+}
+
+.dc-starters-sheets > span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: 9px;
+  background: var(--dc-starters-paper);
+  box-shadow: var(--dc-shadow);
+}
+
+.dc-starters-sheets > span:nth-child(1) {
+  transform: rotate(-8deg) translate(-20px, 6px);
+  opacity: 0.5;
+}
+
+.dc-starters-sheets > span:nth-child(2) {
+  transform: rotate(6deg) translate(18px, 3px);
+  opacity: 0.75;
+}
+
+.dc-starters-sheets svg {
+  width: 100%;
+  height: 100%;
+  fill: var(--dc-surface-raised);
+  stroke: var(--dc-text-muted);
+  stroke-width: 1.2;
+}
+
+.dc-starters-sheets path {
+  fill: none;
+  stroke: var(--dc-selection);
+  stroke-linecap: round;
+}
+
+/* -- consent -- */
+
+.dc-starters-consent {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  max-width: 500px;
+  margin: 16px auto 24px;
+  text-align: center;
+}
+
+.dc-starters-consent .dc-starters-sheets {
+  margin-bottom: 14px;
+}
+
+.dc-starters-consent .dc-starters-display {
+  font-size: 34px;
+}
+
+.dc-starters-consent-lead {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.dc-starters-promises {
+  display: grid;
+  gap: 8px;
+  margin: 6px 0 0;
+  padding: 14px 16px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-lg);
+  background: var(--dc-canvas);
+  list-style: none;
+  text-align: left;
+}
+
+.dc-starters-promises li {
+  display: grid;
+  grid-template-columns: 16px 1fr;
+  gap: 10px;
+  align-items: start;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.dc-starters-promises svg {
+  margin-top: 2px;
+  color: var(--dc-selection);
+}
+
+.dc-starters-promises strong {
+  color: var(--dc-text);
+  font-weight: 500;
+}
+
+.dc-starters-consent-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+/* -- browsing -- */
+
+.dc-starters-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 24px;
+  margin-bottom: 18px;
+}
+
+.dc-starters-sub {
+  margin: 6px 0 0;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+.dc-starters-changed {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--dc-selection);
+  font-weight: 500;
+}
+
+.dc-starters-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dc-selection);
+  box-shadow: 0 0 0 3px var(--dc-selection-soft);
+}
+
+.dc-starters-status {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--dc-text-faint);
+  font-size: 11px;
+}
+
+.dc-starters-status[data-failure='true'] {
+  color: var(--dc-caution);
+}
+
+.dc-starters-status .dc-button[data-spinning='true'] svg {
+  animation: dc-starters-spin 900ms linear infinite;
+}
+
+@keyframes dc-starters-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.dc-starters-toolbar {
+  position: sticky;
+  top: -20px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 16px;
+  margin: 0 -2px 20px;
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--dc-border);
+  background: var(--dc-surface);
+}
+
+.dc-starters-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.dc-starters-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  padding: 0 11px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: none;
+  color: var(--dc-text-muted);
+  font: 12px/1 var(--dc-font);
+  cursor: pointer;
+  transition: border-color 140ms ease, color 140ms ease, background 140ms ease;
+}
+
+.dc-starters-chip:hover {
+  border-color: var(--dc-border-strong);
+  color: var(--dc-text);
+}
+
+.dc-starters-chip[aria-checked='true'] {
+  border-color: var(--dc-text);
+  background: var(--dc-text);
+  color: var(--dc-surface);
+}
+
+.dc-starters-chip:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+.dc-starters-chip-count {
+  color: inherit;
+  font: 500 10px/1 var(--dc-mono);
+  opacity: 0.6;
+}
+
+.dc-starters-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 220px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-canvas);
+  color: var(--dc-text-faint);
+}
+
+.dc-starters-search:focus-within {
+  border-color: var(--dc-selection);
+}
+
+.dc-starters-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text);
+  font: 12px/1 var(--dc-font);
+  outline: none;
+}
+
+.dc-starters-section + .dc-starters-section {
+  margin-top: 28px;
+}
+
+.dc-starters-section-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 12px;
+  color: var(--dc-text-faint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dc-starters-section-title::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--dc-border);
+}
+
+.dc-starters-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(196px, 100%), 1fr));
+  gap: 14px;
+}
+
+/* A sheet of dotted paper with the drawing on it, name and line below. */
+.dc-starters .dc-starter {
+  position: relative;
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  width: 100%;
+  min-width: 0;
+  padding: 0 0 12px;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+  background: var(--dc-surface-raised);
+  text-align: left;
+  overflow: hidden;
+  animation: dc-starters-deal 280ms var(--dc-ease-out) both;
+  animation-delay: calc(var(--i, 0) * 30ms);
+  transition: border-color 160ms ease, transform 200ms var(--dc-ease-out), box-shadow 200ms ease;
+}
+
+@keyframes dc-starters-deal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.dc-starters .dc-starter:hover {
+  border-color: var(--dc-selection);
+  box-shadow: var(--dc-shadow);
+  transform: translateY(-3px);
+}
+
+.dc-starters .dc-starter:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+.dc-starters .dc-starter-swatch {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 112px;
+  margin: 0 0 10px;
+  border-bottom: 1px solid var(--dc-border);
+  background: var(--dc-starters-paper);
+}
+
+.dc-starters .dc-starter-glyph {
+  width: 100%;
+  max-width: 156px;
+  height: auto;
+  max-height: 84px;
+  transition: transform 260ms var(--dc-ease-out);
+}
+
+.dc-starters .dc-starter:hover .dc-starter-glyph {
+  transform: scale(1.05);
+}
+
+.dc-starters .dc-starter-swatch::before,
+.dc-starters .dc-chrome {
+  display: none;
+}
+
+.dc-starters .dc-starter[data-unavailable='true'] .dc-starter-glyph {
+  opacity: 0.35;
+}
+
+.dc-starters .dc-starter-name {
+  padding: 0 12px;
+  color: var(--dc-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dc-starters .dc-starter-description {
+  display: -webkit-box;
+  padding: 0 12px;
+  overflow: hidden;
+  opacity: 1;
+  transform: none;
+  color: var(--dc-text-faint);
+  font-size: 11.5px;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* On a sheet, the mark is a tab clipped to its corner. */
+.dc-starters .dc-starter .dc-starter-mark {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  margin: 0;
+}
+
+.dc-starters-none {
+  margin: 48px 0;
+  color: var(--dc-text-muted);
+  text-align: center;
+}
+
+.dc-starters-empty {
+  display: grid;
+  justify-items: center;
+  gap: 16px;
+  margin: 56px 0;
+  color: var(--dc-text-muted);
+  font-size: 13px;
+}
+
+.dc-starters-empty p {
+  margin: 0;
+}
+
+.dc-starters-skeleton {
+  display: grid;
+  grid-template-columns: repeat(4, 110px);
+  gap: 12px;
+}
+
+.dc-starters-skeleton span {
+  height: 96px;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+  background: var(--dc-starters-paper);
+  animation: dc-starters-breathe 1.4s ease-in-out infinite alternate;
+}
+
+@keyframes dc-starters-breathe {
+  from {
+    opacity: 0.35;
+  }
+
+  to {
+    opacity: 0.9;
+  }
+}
+
+/* -- one starter, up close -- */
+
+.dc-starters-detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(290px, 1fr);
+  gap: 28px;
+  align-items: start;
+}
+
+.dc-starters-preview {
+  position: sticky;
+  top: 0;
+  display: grid;
+  place-items: center;
+  height: clamp(260px, 54vh, 460px);
+  margin: 0;
+  padding: 16px;
+  border: 1px solid var(--dc-border);
+  border-radius: 14px;
+  background: var(--dc-starters-paper);
+  overflow: hidden;
+}
+
+.dc-starters-preview img {
+  position: absolute;
+  inset: 20px;
+  display: block;
+  width: calc(100% - 40px);
+  height: calc(100% - 40px);
+  object-fit: contain;
+  animation: dc-starters-develop 360ms var(--dc-ease-out) both;
+}
+
+@keyframes dc-starters-develop {
+  from {
+    opacity: 0;
+    transform: scale(0.985);
+  }
+}
+
+.dc-starters-preview-wait {
+  width: 46%;
+  height: 34%;
+  border: 1px dashed var(--dc-border-strong);
+  border-radius: 10px;
+  animation: dc-starters-breathe 1.2s ease-in-out infinite alternate;
+}
+
+.dc-starters-about {
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+
+.dc-starters-kicker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--dc-text-faint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.dc-starters-name {
+  margin: -6px 0 0;
+  color: var(--dc-text);
+  font-family: var(--dc-starters-serif);
+  font-size: 30px;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+
+.dc-starters-summary {
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 13.5px;
+  line-height: 1.55;
+}
+
+.dc-starters-notes h4 {
+  margin: 0 0 6px;
+  color: var(--dc-text-faint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.dc-starters-notes ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-starters-notes li {
+  position: relative;
+  padding-left: 16px;
+  color: var(--dc-text);
+  font-size: 12.5px;
+  line-height: 1.5;
+}
+
+.dc-starters-notes li::before {
+  content: '';
+  position: absolute;
+  top: 0.62em;
+  left: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dc-selection);
+}
+
+.dc-starters-notes[data-tone='watch'] li::before {
+  border-radius: 1px;
+  background: var(--dc-caution);
+  transform: rotate(45deg);
+}
+
+.dc-starters-flows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+}
+
+.dc-starters-flows span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px 3px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+}
+
+.dc-starters-flows svg {
+  color: var(--dc-selection);
+}
+
+.dc-starters-warning {
+  margin: 0;
+  color: var(--dc-caution);
+  font-size: 12px;
+}
+
+.dc-starters-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.dc-starters-guide {
+  display: grid;
+  gap: 14px;
+  padding-top: 16px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-starters-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  margin: 0;
+  color: var(--dc-text-faint);
+  font-size: 11px;
+}
+
+.dc-starters-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  cursor: pointer;
+}
+
+.dc-starters-link:hover {
+  color: var(--dc-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dc-starters-link:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.dc-starters-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  width: 100%;
+  color: var(--dc-text-faint);
+  font-size: 11px;
+}
+
+/* -- marks, shared with the empty canvas's tiles -- */
+
+.dc-starter-mark {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 7px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-selection);
+  color: var(--dc-surface);
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 15px;
+  text-transform: uppercase;
+  vertical-align: 1px;
+}
+
+.dc-starter-glyph-empty {
+  display: block;
+  width: 70%;
+  height: 60px;
+  border: 1px dashed var(--dc-border);
+  border-radius: 6px;
+}
+
+@media (max-width: 680px) {
+  .dc-starters-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .dc-starters-preview {
+    position: static;
+    height: 240px;
+  }
+
+  .dc-starters-display {
+    font-size: 24px;
+  }
+
+  .dc-starters-search {
+    flex: 1 1 100%;
+  }
+
+  .dc-starters-skeleton {
+    grid-template-columns: repeat(2, 110px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-starters .dc-starter,
+  .dc-starters .dc-starter-glyph,
+  .dc-starters-preview img,
+  .dc-starters-preview-wait,
+  .dc-starters-status .dc-button[data-spinning='true'] svg,
+  .dc-starters-skeleton span {
+    animation: none;
+    transition: none;
+  }
+}

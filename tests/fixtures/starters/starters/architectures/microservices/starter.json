@@ -1,0 +1,28 @@
+{
+  "id": "microservices",
+  "name": "Microservices",
+  "category": "architecture",
+  "summary": "Independently deployed services, each owning its data",
+  "aliases": [
+    "microservices",
+    "microservice",
+    "distributed services",
+    "independent services",
+    "api gateway"
+  ],
+  "tags": [
+    "services",
+    "api gateway",
+    "database per service"
+  ],
+  "useWhen": [
+    "Teams need to deploy and scale parts of the system independently.",
+    "Mapping which service owns which data."
+  ],
+  "watchOutFor": [
+    "Calls between services fail and are slow in ways in-process calls are not.",
+    "Queries that span services need their own design."
+  ],
+  "featured": true,
+  "order": 30
+}

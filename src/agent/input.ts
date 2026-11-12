@@ -29,9 +29,8 @@ import {
   type ViewLevel,
 } from '../document/types';
 import { LIMITS } from '../document/limits';
-import { STARTER_IDS, type StarterId } from '../starters/types';
 import { Problems } from './errors';
-import { starterFor, starterIds } from './starter';
+import { starterFor, starterIds, type AgentStarter } from './starter';
 import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
 import type { SourceEvidence } from '../document/types';
 import { CREATE_FIELDS, ROOM_FIELDS, unknownFieldHint } from './fields';
@@ -259,7 +258,7 @@ export interface LayoutSpec {
 }
 
 export interface StarterSpec {
-  id: StarterId;
+  id: string;
   prefix: string;
   overrides: Record<string, { label?: string; description?: string; technology?: string }>;
 }
@@ -919,7 +918,8 @@ function readViewport(r: Reader, value: unknown, path: string): [number, number]
 
 
 /** A whole `create_diagram` request. `taken` starts empty: a new file has no ids yet. */
-export function readCreate(raw: unknown): CreateSpec {
+/** `resolved` is the gallery starter the request names, if the page found it downloaded. */
+export function readCreate(raw: unknown, resolved?: AgentStarter): CreateSpec {
   const problems = new Problems();
   const r = new Reader(problems);
   const body = r.object(raw, '', CREATE_FIELDS.request) ?? {};
@@ -929,7 +929,8 @@ export function readCreate(raw: unknown): CreateSpec {
   if (body.starter !== undefined) {
     const s = r.object(body.starter, '/starter', ['id', 'prefix', 'overrides']);
     if (s) {
-      const id = r.oneOf(s.id, '/starter/id', STARTER_IDS);
+      const id = typeof s.id === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s.id) && s.id.length <= 64 ? s.id : undefined;
+      if (!id) problems.add('INVALID_INPUT', '/starter/id', 'must be a starter id from get_capabilities (topics: ["starters"])');
       const prefix = s.prefix === undefined ? '' : typeof s.prefix === 'string' && /^[A-Za-z][A-Za-z0-9_.-]{0,15}$|^$/.test(s.prefix) ? s.prefix : undefined;
       if (prefix === undefined) problems.add('INVALID_INPUT', '/starter/prefix', 'must be a short id prefix (a letter, then up to 15 letters, digits, "_", "." or "-")');
       const overrides: StarterSpec['overrides'] = {};
@@ -952,12 +953,13 @@ export function readCreate(raw: unknown): CreateSpec {
   // A starter's elements exist before the request's own: relationships and flows may name them.
   let existing: RoomContext['existing'];
   if (starter) {
-    const ids = starterIds(starterFor(starter.id), starter.prefix);
+    const chosen = starterFor(starter.id, resolved);
+    const ids = starterIds(chosen, starter.prefix);
     existing = {
       elements: new Set(ids.nodes.filter((n) => !n.group).map((n) => n.id)),
       groups: new Set(ids.nodes.filter((n) => n.group).map((n) => n.id)),
       relationships: new Set(ids.edges),
-      relationshipSemantics: new Map(ids.edges.map((id, index) => [id, starterFor(starter.id).edges[index]?.semantic])),
+      relationshipSemantics: new Map(ids.edges.map((id, index) => [id, chosen.file.edges[index]?.semantic])),
     };
     for (const id of [...ids.nodes.map((n) => n.id), ...ids.edges, ...ids.flows]) taken.add(id);
   }

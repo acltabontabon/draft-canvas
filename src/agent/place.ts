@@ -23,7 +23,7 @@ import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { getMeasurer } from '../render/text/measure';
 import { LIGHT } from '../render/theme/tokens';
-import { BAND, BOUNDARY_HEADER, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD, GUTTER } from '../starters/compose';
+import { BAND, BOUNDARY_HEADER, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD, GUTTER } from './compose';
 import { AgentError } from './errors';
 import type { AttachmentSpec, FlowSpec, LayoutSpec, NodeSpec, NoteSpec, RelationshipSpec, RoomSpec } from './input';
 import { drawnRoute, repairAnchors, segmentHitsBox } from './route';

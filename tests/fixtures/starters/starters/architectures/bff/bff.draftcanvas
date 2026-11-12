@@ -1,0 +1,401 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-bff",
+    "title": "Backend for Frontend",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "web-box",
+      "type": "group",
+      "x": -476,
+      "y": -244,
+      "width": 248,
+      "height": 342,
+      "z": -1,
+      "text": "Web experience",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "web-subtitle",
+      "type": "text",
+      "x": -464,
+      "y": -214,
+      "width": 224,
+      "height": 24,
+      "z": 0,
+      "parentId": "web-box",
+      "text": "Owned by the web team",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "web-client",
+      "type": "actor",
+      "x": -412,
+      "y": -182,
+      "width": 120,
+      "height": 92,
+      "z": 0,
+      "parentId": "web-box",
+      "text": "Web Client",
+      "textOrigin": "explicit",
+      "actorKind": "system",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "web-bff",
+      "type": "service",
+      "x": -440,
+      "y": -26,
+      "width": 176,
+      "height": 88,
+      "z": 0,
+      "parentId": "web-box",
+      "text": "Web BFF",
+      "description": "Composes page data",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "attachments": [
+        {
+          "id": "a_2rcn0b5im1la",
+          "type": "note",
+          "text": "Aggregates several capability calls into one page-shaped response for the browser. Not a shared gateway, and not where business rules live.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "shared",
+      "type": "group",
+      "x": -124,
+      "y": -234,
+      "width": 248,
+      "height": 478,
+      "z": -1,
+      "text": "Shared backend capabilities",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary",
+      "attachments": [
+        {
+          "id": "a_jr6fp6dibfq2",
+          "type": "note",
+          "text": "Shared capabilities with their own owners and the business rules. A BFF composes a subset of them for its client; it never owns them, and no client is required to use them all.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "shared-subtitle",
+      "type": "text",
+      "x": -112,
+      "y": -204,
+      "width": 224,
+      "height": 24,
+      "z": 0,
+      "parentId": "shared",
+      "text": "Business rules live here",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "capability-a",
+      "type": "service",
+      "x": -88,
+      "y": -172,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "shared",
+      "text": "Capability A Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "capability-b",
+      "type": "service",
+      "x": -88,
+      "y": -16,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "shared",
+      "text": "Capability B Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "capability-c",
+      "type": "service",
+      "x": -88,
+      "y": 140,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "shared",
+      "text": "Capability C Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "mobile-box",
+      "type": "group",
+      "x": 228,
+      "y": -244,
+      "width": 248,
+      "height": 342,
+      "z": -1,
+      "text": "Mobile experience",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "mobile-subtitle",
+      "type": "text",
+      "x": 240,
+      "y": -214,
+      "width": 224,
+      "height": 24,
+      "z": 0,
+      "parentId": "mobile-box",
+      "text": "Owned by the mobile team",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "mobile-client",
+      "type": "actor",
+      "x": 292,
+      "y": -182,
+      "width": 120,
+      "height": 92,
+      "z": 0,
+      "parentId": "mobile-box",
+      "text": "Mobile Client",
+      "textOrigin": "explicit",
+      "actorKind": "device",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "mobile-bff",
+      "type": "service",
+      "x": 264,
+      "y": -26,
+      "width": 176,
+      "height": 88,
+      "z": 0,
+      "parentId": "mobile-box",
+      "text": "Mobile BFF",
+      "description": "Tailors compact responses",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "attachments": [
+        {
+          "id": "a_wh4xc8vqqdhz",
+          "type": "note",
+          "text": "Fewer round trips and smaller payloads — what a phone on a slow network needs. Uses only the capabilities the mobile experience needs.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "web-call",
+      "source": "web-client",
+      "target": "web-bff",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "mobile-call",
+      "source": "mobile-client",
+      "target": "mobile-bff",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "web-a",
+      "source": "web-bff",
+      "target": "capability-a",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "web-b",
+      "source": "web-bff",
+      "target": "capability-b",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "web-c",
+      "source": "web-bff",
+      "target": "capability-c",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "mobile-a",
+      "source": "mobile-bff",
+      "target": "capability-a",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "mobile-b",
+      "source": "mobile-bff",
+      "target": "capability-b",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 1
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Web request",
+      "steps": [
+        {
+          "id": "fs_dmg4uh4ufhhr",
+          "edgeId": "web-call",
+          "caption": "One request for a whole page"
+        },
+        {
+          "id": "fs_g24cy40xg2ph",
+          "edgeId": "web-a"
+        },
+        {
+          "id": "fs_oqsuq62b9f6z",
+          "edgeId": "web-b"
+        },
+        {
+          "id": "fs_utkc1h6rjwip",
+          "edgeId": "web-c",
+          "caption": "Composed into one page-shaped response"
+        }
+      ],
+      "accent": "teal"
+    },
+    {
+      "id": "flow2",
+      "title": "Mobile request",
+      "steps": [
+        {
+          "id": "fs_a4w2krq7p50z",
+          "edgeId": "mobile-call",
+          "caption": "One compact request from the phone"
+        },
+        {
+          "id": "fs_h4k0mprviom0",
+          "edgeId": "mobile-a"
+        },
+        {
+          "id": "fs_xu74ia2hd59y",
+          "edgeId": "mobile-b",
+          "caption": "Only what the mobile experience needs, trimmed for it"
+        }
+      ],
+      "accent": "amber"
+    }
+  ]
+}
