@@ -25,11 +25,11 @@ import { crossingPlan } from '../src/edges/crossings';
 import { labelGroupPlan } from '../src/edges/labelGroups';
 import { embed, totals, viewOf } from '../src/depth/tree';
 import type { DraftDocument } from '../src/document/types';
-import { ARCHITECTURE_STARTERS } from '../src/starters';
+import { ARCHITECTURE_STARTERS } from './fixtures/starters-v1';
 import { applyChanges } from '../src/collab/apply';
 import { diffFile } from '../src/collab/diff';
 import { freeOriginFor } from '../src/document/operations';
-import { buildStarter, starterSize } from '../src/starters/build';
+import { buildStarter, starterSize } from './fixtures/starters-v1/build';
 
 /**
  * The brief asks for a document of 100 nodes and 150–200 edges to stay

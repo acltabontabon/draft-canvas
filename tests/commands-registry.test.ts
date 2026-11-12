@@ -1,9 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { commandsFor, isReadSafe, primaryCommandsFor, readSafeMenu } from '../src/commands/registry';
 import { contextMenuCommandsFor, menuItemsOf } from '../src/commands/contextMenu';
 import { isStage } from '../src/commands/types';
 import { rank } from '../src/commands/fuzzy';
-import { STARTER_IDS } from '../src/starters';
+import { STARTER_IDS } from './fixtures/starters-v1';
+import { seedGallery } from './fixtures/gallery';
+import { useGalleryStore } from '../src/store/galleryStore';
 import type { CommandContext } from '../src/commands/types';
 import { createDocument } from '../src/document/factory';
 import { LIMITS } from '../src/document/limits';
@@ -769,7 +771,10 @@ describe('primaryCommandsFor — primary popover quick actions', () => {
  * taking a word that already belongs to a shape.
  */
 describe('architecture starters', () => {
-  beforeEach(reset);
+  beforeEach(async () => {
+    reset();
+    await seedGallery();
+  });
 
   const top = (query: string) => rank(query, commandsFor(stubContext()))[0]!.entry.id;
 
@@ -885,10 +890,11 @@ describe('architecture starters', () => {
     expect(top('connect data store')).toBe('add-data-store');
   });
 
-  it('inserts the architecture and moves the camera onto it', () => {
+  it('inserts the architecture and moves the camera onto it', async () => {
     const ctx = stubContext();
     commandsFor(ctx).find((command) => command.id === 'starter-microservices')!.run(ctx);
-    expect(useEditorStore.getState().document.nodes).toHaveLength(14);
+    // The file comes from the downloaded gallery's cache, so the insert lands a moment later.
+    await vi.waitFor(() => expect(useEditorStore.getState().document.nodes).toHaveLength(14));
     expect(useEditorStore.getState().selection.nodes).toHaveLength(14);
     // The command context's `document` predates its own insert, so the camera move has to come
     // from what the store handed back — see `focusBounds`.
@@ -898,6 +904,13 @@ describe('architecture starters', () => {
   it('is not on offer while presenting', () => {
     useEditorStore.getState().setMode('present');
     expect(ids(stubContext()).some((id) => id.startsWith('starter-'))).toBe(false);
+  });
+
+  it('offers none before the gallery is loaded, but always offers to browse it', () => {
+    useGalleryStore.setState({ enabled: false, snapshot: null });
+    const offered = ids(stubContext());
+    expect(offered.some((id) => id.startsWith('starter-'))).toBe(false);
+    expect(offered).toContain('browse-starters');
   });
 });
 

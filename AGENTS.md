@@ -53,8 +53,13 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Only `src/desktop/tauri/` imports `@tauri-apps/*`. Other code uses `DesktopApi` in
   `src/desktop/api.ts`; desktop-only code stays behind `__DESKTOP__`.
 - Use `localStorage` only for tiny preferences through `src/lib/preferences.ts`. Documents use IndexedDB.
-- `src/starters/` is data. `build.ts` derives connector semantics from `connectorSemantics.ts`.
-  No hardcoded colors, fonts or personality; starters create ordinary nodes and edges.
+- Starters are `.draftcanvas` files in the public starters gallery
+  (github.com/acltabontabon/draft-canvas-starters), not app code. `src/gallery/` reads them only
+  after the person chooses **Load starters**; `src/gallery/remote.ts` is the only `fetch` in `src/`,
+  to that repository only. Every file is checked against `catalog.json`'s SHA-256 and opened with
+  `parseDocument` before it is kept. `tests/starter-files.test.ts` is the quality gate for starter
+  files; `tests/fixtures/starters/` is a vendored snapshot (`npm run starters:fixtures`) and
+  `tests/fixtures/starters-v1/` the frozen old catalog for routing and performance corpora.
 - Commands live in `src/commands/registry.ts`, with jump targets in `search.ts`. Call existing store
   actions or camera methods, never document operations directly. Add an operation and store wrapper
   before naming a new command.
@@ -138,7 +143,7 @@ and the presence hooks in `ui/collab/`. The theme and personality hooks live in 
 labels and presets in `lib/`.
 Library and editor are states of `src/App.tsx`, with no router. Keep the editor's Vite `base: './'`.
 
-`depth/`, `starters/` and `traffic/` import only `document/`; `layout/` also imports `edges/bundles`. `collab/`
+`depth/`, `gallery/` and `traffic/` import only `document/`; `layout/` also imports `edges/bundles`. `collab/`
 imports `document/`, `depth/` and `lib/`. `continuation/` also imports `render/text` and `edges/` routing
 helpers; `openPoints/` also imports `depth/` and `render/` types. None of these import UI, canvas or
 store modules. `agent/` may consume these and rendering/export helpers, never UI or store modules. `depth/c4.ts` shares C4 role and scope derivation with the editor and agent.

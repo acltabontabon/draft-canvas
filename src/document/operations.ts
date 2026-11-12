@@ -559,7 +559,7 @@ export function costOf(nodes: readonly DraftNode[]): { nodes: number; edges: num
 }
 
 /** Old id to new, for everything `reidentifyInside` renamed — what a copied open point is re-pointed by. */
-interface IdRenames {
+export interface IdRenames {
   nodes: Map<string, string>;
   edges: Map<string, string>;
 }
@@ -568,7 +568,7 @@ interface IdRenames {
 function instantiateFragment(
   fragment: Clipboard,
   offset: { x: number; y: number },
-): Clipboard {
+): Clipboard & { renamed: IdRenames } {
   const idMap = new Map<string, string>();
   for (const node of fragment.nodes) idMap.set(node.id, createId('n'));
   // Only collected when a point could need it: most fragments carry none.
@@ -641,7 +641,8 @@ function instantiateFragment(
     if (targets.length > 0) openPoints.push({ ...point, id: createId(OPEN_POINT_ID_PREFIX), targets });
   }
 
-  return openPoints.length > 0 ? { nodes, edges, openPoints } : { nodes, edges };
+  const renamed: IdRenames = { nodes: idMap, edges: edgeIdMap };
+  return openPoints.length > 0 ? { nodes, edges, openPoints, renamed } : { nodes, edges, renamed };
 }
 
 export function pasteFragment(
@@ -654,7 +655,7 @@ export function pasteFragment(
     nodes: doc.nodes.length,
     edges: doc.edges.length,
   },
-): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[]; truncated: boolean; tooDeep: boolean } {
+): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[]; truncated: boolean; tooDeep: boolean; renamed: IdRenames } {
   const instantiated = instantiateFragment(fragment, offset);
   // `LIMITS.maxNodes`/`maxEdges` are otherwise only enforced on a document taken as a whole (file
   // import, clipboard decode) — pasting/duplicating repeatedly into an already-open document has
@@ -720,12 +721,72 @@ export function pasteFragment(
     }
     if (landed.length > 0) next = { ...next, openPoints: [...next.openPoints, ...landed] };
   }
+  // What each original id became, for the shapes and connectors that landed: a caller carrying
+  // more than the fragment holds (a whole document's flows) re-points it with these.
+  const landedNodes = new Set(created.nodes.map((n) => n.id));
+  const landedEdges = new Set(created.edges.map((e) => e.id));
   return {
     doc: next,
     nodeIds: created.nodes.map((n) => n.id),
     edgeIds: created.edges.map((e) => e.id),
     truncated,
     tooDeep,
+    renamed: {
+      nodes: new Map([...instantiated.renamed.nodes].filter(([, id]) => landedNodes.has(id))),
+      edges: new Map([...instantiated.renamed.edges].filter(([, id]) => landedEdges.has(id))),
+    },
+  };
+}
+
+/**
+ * Adds all of `source` (another whole document, such as a starter) to `doc`, shifted by `offset`:
+ * a paste of every shape and connector, then its flows, re-pointed at the copies. A step whose
+ * connector didn't land (the file's caps) is dropped, a flow left with no steps is dropped, and
+ * flows stop at `LIMITS.maxFlows`.
+ */
+export function pasteDocument(
+  doc: DraftDocument,
+  source: Pick<DraftDocument, 'nodes' | 'edges' | 'flows' | 'openPoints'>,
+  offset: { x: number; y: number },
+  used?: Parameters<typeof pasteFragment>[3],
+): ReturnType<typeof pasteFragment> & { flowIds: string[] } {
+  const fragment = extractFragment(source as DraftDocument, source.nodes.map((n) => n.id));
+  const pasted = pasteFragment(doc, fragment, offset, used);
+  const { nodes, edges } = pasted.renamed;
+  const flowIds = new Map<string, string>();
+  for (const flow of source.flows) flowIds.set(flow.id, createId('f'));
+  const room = Math.max(0, LIMITS.maxFlows - (used?.flows ?? doc.flows.length));
+  const flows: DraftFlow[] = [];
+  for (const flow of source.flows) {
+    if (flows.length >= room) break;
+    const steps: DraftFlowStep[] = [];
+    for (const step of flow.steps) {
+      const edgeId = step.edgeId ? edges.get(step.edgeId) : undefined;
+      if (step.edgeId && !edgeId) continue;
+      const next: DraftFlowStep = { ...step, id: createId('fs') };
+      if (edgeId) next.edgeId = edgeId;
+      if (step.extraEdgeIds) next.extraEdgeIds = step.extraEdgeIds.flatMap((id) => edges.get(id) ?? []);
+      if (step.extraNodeIds) next.extraNodeIds = step.extraNodeIds.flatMap((id) => nodes.get(id) ?? []);
+      // A step's camera looks at the same shapes, now `offset` away.
+      if (step.viewport) next.viewport = { ...step.viewport, x: step.viewport.x - offset.x * step.viewport.zoom, y: step.viewport.y - offset.y * step.viewport.zoom };
+      steps.push(next);
+    }
+    if (steps.length === 0) continue;
+    const next: DraftFlow = { ...flow, id: flowIds.get(flow.id)!, steps };
+    if (flow.variantOf) {
+      const variantOf = flowIds.get(flow.variantOf);
+      if (variantOf) next.variantOf = variantOf;
+      else delete next.variantOf;
+    }
+    flows.push(next);
+  }
+  // A variant whose main flow was cut by the cap would name a flow that isn't there.
+  const kept = new Set(flows.map((f) => f.id));
+  for (const flow of flows) if (flow.variantOf && !kept.has(flow.variantOf)) delete flow.variantOf;
+  return {
+    ...pasted,
+    doc: flows.length > 0 ? { ...pasted.doc, flows: [...pasted.doc.flows, ...flows] } : pasted.doc,
+    flowIds: flows.map((f) => f.id),
   };
 }
 

@@ -1,0 +1,414 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-saga-orchestration",
+    "title": "Saga – Orchestration",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "order",
+      "type": "service",
+      "x": -382,
+      "y": -222,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Order Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "coordinator",
+      "type": "group",
+      "x": -102,
+      "y": -284,
+      "width": 248,
+      "height": 166,
+      "z": -1,
+      "text": "Coordinator",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "coordinator-subtitle",
+      "type": "text",
+      "x": -90,
+      "y": -254,
+      "width": 224,
+      "height": 24,
+      "z": 0,
+      "parentId": "coordinator",
+      "text": "Drives the workflow, owns its state",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "orchestrator",
+      "type": "service",
+      "x": -66,
+      "y": -222,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "coordinator",
+      "text": "Saga Orchestrator",
+      "textOrigin": "explicit",
+      "accent": "violet",
+      "serviceKind": "generic",
+      "attachments": [
+        {
+          "id": "a_6v5vi66yc16y",
+          "type": "note",
+          "text": "Owns the saga’s state and the order of steps, and moves only on a reply: \"reserved\" sends the next command, \"failed\" starts the sweep back. Each service commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "payment",
+      "type": "service",
+      "x": -338,
+      "y": 42,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Payment Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "payment-store",
+      "type": "database",
+      "x": -336,
+      "y": 182,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "text": "Payment DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "inventory",
+      "type": "service",
+      "x": -66,
+      "y": 42,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Inventory Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "inventory-store",
+      "type": "database",
+      "x": -64,
+      "y": 182,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "text": "Inventory DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "fulfillment",
+      "type": "service",
+      "x": 206,
+      "y": 42,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Fulfillment Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "fulfillment-store",
+      "type": "database",
+      "x": 208,
+      "y": 182,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "text": "Fulfillment DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    }
+  ],
+  "edges": [
+    {
+      "id": "start",
+      "source": "order",
+      "target": "orchestrator",
+      "label": "Start saga",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "command",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "reserve-payment",
+      "source": "orchestrator",
+      "target": "payment",
+      "label": "Reserve payment",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "command",
+      "response": "reserved / failed",
+      "hasResponse": true,
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "reserve-inventory",
+      "source": "orchestrator",
+      "target": "inventory",
+      "label": "Reserve inventory",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "command",
+      "response": "reserved / failed",
+      "hasResponse": true,
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "schedule-fulfillment",
+      "source": "orchestrator",
+      "target": "fulfillment",
+      "label": "Schedule fulfillment",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "command",
+      "response": "scheduled / failed",
+      "hasResponse": true,
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "commit-payment",
+      "source": "payment",
+      "target": "payment-store",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "commit-inventory",
+      "source": "inventory",
+      "target": "inventory-store",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "commit-fulfillment",
+      "source": "fulfillment",
+      "target": "fulfillment-store",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "release-inventory",
+      "source": "orchestrator",
+      "target": "inventory",
+      "label": "Release inventory",
+      "directed": true,
+      "routing": "smoothstep",
+      "accent": "rose",
+      "semantic": "compensates",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.75
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.25
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "release-payment",
+      "source": "orchestrator",
+      "target": "payment",
+      "label": "Release payment",
+      "directed": true,
+      "routing": "smoothstep",
+      "accent": "rose",
+      "semantic": "compensates",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.75
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.25
+      },
+      "semanticsOrigin": "explicit"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 1
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Happy path",
+      "steps": [
+        {
+          "id": "fs_wz1rpr3juudy",
+          "edgeId": "start"
+        },
+        {
+          "id": "fs_04e4z4oesyyc",
+          "edgeId": "reserve-payment"
+        },
+        {
+          "id": "fs_5433e6zt4vup",
+          "edgeId": "commit-payment",
+          "caption": "Local transaction commits — and the reply says \"reserved\""
+        },
+        {
+          "id": "fs_qso4f8csehjm",
+          "edgeId": "reserve-inventory",
+          "caption": "Only on that reply does the next step go out"
+        },
+        {
+          "id": "fs_e0pw3ydzcj3o",
+          "edgeId": "commit-inventory",
+          "caption": "Local transaction commits, reply \"reserved\""
+        },
+        {
+          "id": "fs_vcxzkhta1dj7",
+          "edgeId": "schedule-fulfillment"
+        },
+        {
+          "id": "fs_e5lnawwt9fra",
+          "edgeId": "commit-fulfillment",
+          "caption": "Local transaction commits, reply \"scheduled\" — saga complete"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "flow2",
+      "title": "Compensation",
+      "steps": [
+        {
+          "id": "fs_63q2hfx9b5cj",
+          "edgeId": "reserve-payment",
+          "caption": "Reply: reserved"
+        },
+        {
+          "id": "fs_wd26dc3kotyd",
+          "edgeId": "commit-payment",
+          "caption": "Committed locally — nothing outside can roll it back"
+        },
+        {
+          "id": "fs_wditsizwh18u",
+          "edgeId": "reserve-inventory",
+          "caption": "Reply: reserved, and committed locally too"
+        },
+        {
+          "id": "fs_qjzg3kljk73c",
+          "edgeId": "schedule-fulfillment",
+          "caption": "Reply: failed — the orchestrator now runs the sweep"
+        },
+        {
+          "id": "fs_okkd6elf0ydo",
+          "edgeId": "release-inventory",
+          "caption": "Undo the last committed step first — a new local transaction"
+        },
+        {
+          "id": "fs_j48zn44n5bcv",
+          "edgeId": "release-payment",
+          "caption": "Then the one before it"
+        }
+      ],
+      "accent": "rose"
+    }
+  ]
+}

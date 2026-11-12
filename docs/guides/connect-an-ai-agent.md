@@ -110,7 +110,8 @@ layout's reading direction can put several nodes in the same layer. Nodi can pla
 exactly for a specific arrangement. Short replies such as **yes** or
 **okay** continue the agent's conversation, including when it asks you to confirm a change.
 To insert a starter directly, name it or use its alias (for example, **start Change Data Capture** or
-**start CDC**); a generic follow-up such as **do it, change it** goes to the agent.
+**start CDC**); a generic follow-up such as **do it, change it** goes to the agent. Starters come from
+the [starters gallery](examples.md), so agents can use them only once you've loaded it.
 
 Nodi and external MCP agents use the canvas's smart connector routing. Newly drawn connectors
 attach automatically when that keeps the same picture or makes the complete view measurably simpler

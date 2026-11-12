@@ -14,7 +14,8 @@ import { walkGraphs, viewOf } from '../../../src/depth/tree';
 import { deserializeDocument } from '../../../src/export/project';
 import { compose } from '../../../src/agent/compile';
 import { applyUpdate } from '../../../src/agent/patch';
-import { ARCHITECTURE_STARTERS, starterDocument } from '../../../src/starters';
+import { ARCHITECTURE_STARTERS, starterDocument } from '../starters-v1';
+import { starterOf } from '../gallery';
 import { GALLERY, type GalleryCase } from '../agent/gallery';
 
 export interface RoutingFixture {
@@ -177,7 +178,7 @@ function withFixedIds<T>(seed: number, fn: () => T): T {
 
 function galleryDoc(entry: GalleryCase): DraftDocument {
   const create = (request: Record<string, unknown>) => {
-    const parsed = deserializeDocument(compose({ requestId: 'g', ...request }, 'd_gallery00001').text);
+    const parsed = deserializeDocument(compose({ requestId: 'g', ...request }, 'd_gallery00001', starterOf(request)).text);
     if (!parsed.ok) throw new Error(parsed.error);
     return parsed.document;
   };

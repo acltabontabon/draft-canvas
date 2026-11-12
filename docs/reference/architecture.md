@@ -25,7 +25,7 @@ Dependencies point toward `src/document/`, which is plain data with no React or 
 | Module | Imports only |
 | --- | --- |
 | `document/` | `lib/` |
-| `depth/`, `starters/` | `document/` |
+| `depth/`, `gallery/` | `document/` |
 | `layout/` | `document/`, `edges/bundles` |
 | `collab/` | `document/`, `depth/`, `lib/`, its own `transport/` |
 | `continuation/` | `document/`, `edges/routing`, `edges/clearance`, `edges/compensationMarker`, `render/text` |
@@ -121,8 +121,12 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
 
 ## Derived capabilities
 
-- **Starters** create ordinary nodes, edges and flows. `commands/` names a store action, the store
-  composes `document/` operations, and `starters/` is data.
+- **Starters** are `.draftcanvas` files in the public starters gallery
+  ([draft-canvas-starters](https://github.com/acltabontabon/draft-canvas-starters)), not part of the
+  app. `gallery/` reads them on request: `remote.ts` is the app's one `fetch`, to that repository
+  only, and every file is hashed against `catalog.json` and opened through `parseDocument` before it
+  is kept in its own IndexedDB database. Adding one is a paste of the whole file (`pasteDocument`),
+  flows included, as one undo step. The Order processing example ships in `gallery/example/`.
 - **Continuation** ranks next shapes from the selection's neighborhood; only high confidence shows unprompted.
 - **Open points** attach to element ids; they never affect geometry, routing or semantics.
 - **View levels** change how rooms are shown, not the tree.

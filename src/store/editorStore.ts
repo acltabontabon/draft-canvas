@@ -50,6 +50,7 @@ import {
   freeOriginFor,
   hasAttachmentRoom,
   moveNodes,
+  pasteDocument,
   pasteFragment,
   placeNear,
   enclosingParentId,
@@ -83,8 +84,6 @@ import {
   type Clipboard,
   type ReplaceOptions,
 } from '../document/operations';
-import { buildStarter, starterSize } from '../starters/build';
-import type { ArchitectureStarter } from '../starters/types';
 import {
   addFlow,
   appendFlowTrace,
@@ -148,6 +147,7 @@ import type {
   DraftFlow,
   DraftMetadata,
   DraftNode,
+  DraftOrigin,
   DraftPoint,
   EdgeAnchor,
   ConnectorKind,
@@ -410,18 +410,18 @@ export interface EditorStore {
    *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. False
    *  (and nothing added) when the result would pass the document limits. */
   addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string, flows?: DraftFlow[], title?: string) => boolean;
-  /**
-   * Inserts a Starter — a composed opening diagram — as one undoable action, clear of
-   * whatever is already on the canvas, and leaves it selected. Returns the nodes it created, the
-   * way `addNode` returns the one it created: a caller that wants to move the camera onto them
-   * cannot find them in its own `CommandContext`, whose document predates this call. See
-   * `src/starters/`.
-   */
-  insertStarter: (starter: ArchitectureStarter, title?: string) => DraftNode[];
   /** Adds a laid-out document's shapes and connectors to this room, at the free origin, as one
    *  undo step with the new shapes selected — how an imported flowchart lands in an open diagram.
    *  Ids are reissued, so the same document can be inserted twice. Returns the new node ids. */
   insertComposed: (composed: DraftDocument, label: string, title?: string) => string[];
+  /**
+   * Adds a whole starter document — shapes, connectors and its flows — clear of whatever is already
+   * on the canvas, as one undo step, with fresh ids and the new shapes selected. Returns the new
+   * node ids: a caller that wants to move the camera onto them cannot find them in its own
+   * `CommandContext`, whose document predates this call. `origin` records the starter on the file
+   * (`metadata.origin`) in the same step. See `src/gallery/`.
+   */
+  insertStarterDocument: (starter: DraftDocument, name: string, options?: { title?: string; origin?: DraftOrigin }) => string[];
   /**
    * Accepts an Intent Continuation offer (see `src/continuation/`): the previewed nodes and
    * connectors become real in one undoable step, the node the fragment ends on is selected (so the
@@ -1668,16 +1668,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
   },
 
-  insertStarter(starter, title) {
-    const state = get();
-    // Everything a starter needs is decided before a single node exists: where it can land
-    // (`freeOriginFor`, one pass over the document) and what it contains (`buildStarter`, pure).
-    // The insert itself is then the plainest bulk add there is, which is what makes one ⌘Z undo
-    // the whole architecture and one ⌘⇧Z bring it back.
-    const { nodes, edges, flows } = buildStarter(starter, freeOriginFor(state.document, starterSize(starter)));
-    return state.addNodesWithEdges(nodes, edges, `Insert ${starter.name}`, flows, namingBlank(state, title)) ? nodes : [];
-  },
-
   insertComposed(composed, label, title) {
     const state = get();
     const bounds = boundsOf(composed.nodes);
@@ -1699,6 +1689,33 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const named = namingBlank(state, title);
     state.apply(label, () => (named ? setTitle(result.doc, named) : result.doc), { selection: { nodes: result.nodeIds, edges: result.edgeIds } });
     if (result.truncated) useUiStore.getState().notify('Imported the first part — the rest would make this diagram too large.');
+    return result.nodeIds;
+  },
+
+  insertStarterDocument(starter, name, options = {}) {
+    const state = get();
+    const bounds = boundsOf(starter.nodes);
+    if (!bounds) return [];
+    // A paste of the whole file (`pasteDocument`), flows included, onto the free space beside what
+    // is drawn — the same spot `insertComposed` lands at.
+    const origin = freeOriginFor(state.document, { width: bounds.width, height: bounds.height });
+    const offset = { x: origin.x - bounds.x, y: origin.y - bounds.y };
+    const result = pasteDocument(state.document, starter, offset, { ...totals(fileOf(state)), depth: state.path.length });
+    // A starter is all or nothing: half an architecture, cut off by the file's caps, is a broken one.
+    if (result.nodeIds.length === 0 || result.truncated) {
+      notifyNothingAdded(result.tooDeep);
+      return [];
+    }
+    const named = namingBlank(state, options.title);
+    const startedAs = options.origin;
+    state.apply(
+      `Insert ${name}`,
+      () => {
+        const titled = named ? setTitle(result.doc, named) : result.doc;
+        return startedAs ? { ...titled, metadata: { ...titled.metadata, origin: startedAs } } : titled;
+      },
+      { selection: { nodes: result.nodeIds, edges: [] } },
+    );
     return result.nodeIds;
   },
 

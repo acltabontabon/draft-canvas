@@ -20,8 +20,8 @@ import {
 import { capabilityFor, categoryOf, inferRelationship } from '../src/document/connectorSemantics';
 import { createDocument, createEdge, createNode, defaultSizeFor } from '../src/document/factory';
 import { addFlow, createFlow } from '../src/document/flow';
-import { starterById } from '../src/starters';
-import { buildStarter } from '../src/starters/build';
+import { starterById } from './fixtures/starters-v1';
+import { buildStarter } from './fixtures/starters-v1/build';
 import { addEdges, addNodes, placeNear } from '../src/document/operations';
 import { flattenPath, rectOf, routeBetween, routeEdge } from '../src/edges/routing';
 import { connectorClearance } from '../src/edges/clearance';

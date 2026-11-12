@@ -1,0 +1,402 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-cdc",
+    "title": "Change Data Capture",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "operational",
+      "type": "group",
+      "x": -768,
+      "y": -196,
+      "width": 248,
+      "height": 354,
+      "z": -1,
+      "text": "Operational system",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "application",
+      "type": "service",
+      "x": -732,
+      "y": -152,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "operational",
+      "text": "Application",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "database",
+      "type": "database",
+      "x": -730,
+      "y": -12,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "operational",
+      "text": "Operational Database",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "truth",
+      "type": "text",
+      "x": -682,
+      "y": 98,
+      "width": 76,
+      "height": 24,
+      "z": 0,
+      "parentId": "operational",
+      "text": "Source of truth",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "pipeline",
+      "type": "group",
+      "x": -352,
+      "y": -73,
+      "width": 500,
+      "height": 188,
+      "z": -1,
+      "text": "CDC pipeline",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "pipeline-subtitle",
+      "type": "text",
+      "x": -340,
+      "y": -43,
+      "width": 200,
+      "height": 24,
+      "z": 0,
+      "parentId": "pipeline",
+      "text": "Captured once, after commit",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "connector",
+      "type": "service",
+      "x": -316,
+      "y": -11,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "pipeline",
+      "text": "CDC Connector",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker",
+      "attachments": [
+        {
+          "id": "a_1fs92gbtwxtx",
+          "type": "note",
+          "text": "Reads the database's own change log — never the tables, never on a poll interval.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "stream",
+      "type": "queue",
+      "x": -28,
+      "y": 6,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "parentId": "pipeline",
+      "text": "Change Stream",
+      "textOrigin": "explicit",
+      "queueKind": "stream",
+      "attachments": [
+        {
+          "id": "a_ln56v6mu4e1g",
+          "type": "note",
+          "text": "Ordered and retained — a new view can replay it from the start to build itself.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "views",
+      "type": "group",
+      "x": 276,
+      "y": -145,
+      "width": 492,
+      "height": 342,
+      "z": -1,
+      "text": "Derived views",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "views-subtitle",
+      "type": "text",
+      "x": 288,
+      "y": -115,
+      "width": 200,
+      "height": 24,
+      "z": 0,
+      "parentId": "views",
+      "text": "Eventually consistent",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "search-indexer",
+      "type": "service",
+      "x": 312,
+      "y": -82,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "views",
+      "text": "Search Indexer",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "search-index",
+      "type": "database",
+      "x": 560,
+      "y": -83,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "views",
+      "text": "Search Index",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "search-index"
+    },
+    {
+      "id": "warehouse-loader",
+      "type": "service",
+      "x": 312,
+      "y": 60,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "views",
+      "text": "Warehouse Loader",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "warehouse",
+      "type": "database",
+      "x": 560,
+      "y": 59,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "views",
+      "text": "Data Warehouse",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    }
+  ],
+  "edges": [
+    {
+      "id": "write",
+      "source": "application",
+      "target": "database",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "capture",
+      "source": "database",
+      "target": "connector",
+      "label": "captures changes",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "cdc",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "publish",
+      "source": "connector",
+      "target": "stream",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "consume-search",
+      "source": "stream",
+      "target": "search-indexer",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "consume-warehouse",
+      "source": "stream",
+      "target": "warehouse-loader",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "index",
+      "source": "search-indexer",
+      "target": "search-index",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "indexes",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "project",
+      "source": "warehouse-loader",
+      "target": "warehouse",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 0.75
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Capture and fan out",
+      "steps": [
+        {
+          "id": "fs_0bnp6op30jyg",
+          "edgeId": "write",
+          "caption": "One write, to its own database only"
+        },
+        {
+          "id": "fs_pc9q29zbw70p",
+          "edgeId": "capture",
+          "caption": "Captured from the log once committed"
+        },
+        {
+          "id": "fs_7wu3w7fg6btj",
+          "edgeId": "publish",
+          "caption": "Published once, as a change event"
+        },
+        {
+          "id": "fs_3rubuizexxob",
+          "edgeId": "consume-search",
+          "caption": "The search indexer reads it at its own pace"
+        },
+        {
+          "id": "fs_z27y25e4zwt8",
+          "edgeId": "index",
+          "caption": "…and updates the index"
+        },
+        {
+          "id": "fs_i9zls6w30j5w",
+          "edgeId": "consume-warehouse",
+          "caption": "The same change, read independently"
+        },
+        {
+          "id": "fs_ffexopkyx0a2",
+          "edgeId": "project",
+          "caption": "…and loads it for analytics"
+        }
+      ],
+      "accent": "teal"
+    }
+  ]
+}

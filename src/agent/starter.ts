@@ -1,51 +1,81 @@
 /**
- * A diagram that begins as one of the native Architecture Starters: built by the starter's own
- * factory (`buildStarter`, authored geometry, matrix-derived semantics and its predefined flows), with
- * ids the agent can predict (`prefix` + the starter's own keys), then the agent's overrides and
- * extra elements on top. Nothing is copied out of the catalog and nothing marks the result as a
- * starter — as when a person inserts one from ⌘K.
+ * A diagram that begins as a starter from the gallery the person has downloaded (`src/gallery/`):
+ * the starter's own file — its geometry, connectors, semantics and flows — with ids the agent can
+ * predict (`prefix` + the file's own readable ids), then the agent's overrides and extra elements on
+ * top. Nothing marks the result as a starter, as when a person adds one from ⌘K.
+ *
+ * The starter arrives as data (`AgentStarter`), resolved by the page from its cache: this module
+ * reads no storage and no network, so it runs on the worker like the rest of a compose.
  */
 
-import { buildStarter, starterById } from '../starters';
-import type { ArchitectureStarter } from '../starters/types';
 import { createDocument } from '../document/factory';
-import type { DraftEdge, DraftNode } from '../document/types';
+import { boundsOf } from '../document/geometry';
+import type { DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../document/types';
 import { assignAnchors } from '../layout/anchors';
 import type { DescribeContext } from '../nodes/describe';
-import { GUTTER } from '../starters/compose';
+import { GUTTER } from './compose';
 import { AgentError } from './errors';
 import type { CreateSpec, LayoutSpec, RoomSpec } from './input';
 import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, flowFromSpec, lineOf, linkVariants, placeBlock, placeRoom, sizeToFit, type PlacedRoom } from './place';
 import { repairAnchors } from './route';
 
-export function starterFor(id: string): ArchitectureStarter {
-  const starter = starterById(id as Parameters<typeof starterById>[0]);
-  if (!starter) throw new AgentError('NOT_FOUND', `No starter "${id}".`);
+/** A gallery starter as the agent sees it: what it is, and its diagram. */
+export interface AgentStarter {
+  id: string;
+  name: string;
+  category: string;
+  summary: string;
+  file: DraftDocument;
+}
+
+export function starterFor(id: string, starter: AgentStarter | undefined): AgentStarter {
+  if (!starter || starter.id !== id) {
+    throw new AgentError('NOT_FOUND', `No starter "${id}" is downloaded in Draft Canvas. Compose the diagram from elements instead, or ask the person to load starters (Starters → Load starters) and try again.`);
+  }
   return starter;
 }
 
 /** The ids a starter's elements and connectors get under `prefix` — what an agent refers to them by. */
-export function starterIds(starter: ArchitectureStarter, prefix: string) {
-  const nodes = starter.nodes.map((n) => ({ id: `${prefix}${n.key}`, key: n.key, group: n.type === 'group' }));
-  const edges = starter.edges.map((e, i) => `${prefix}${e.key ?? `e${i + 1}`}`);
-  const flows = (starter.flows ?? []).map((_, i) => `${prefix}flow${i + 1}`);
+export function starterIds(starter: AgentStarter, prefix: string) {
+  const nodes = starter.file.nodes.map((n) => ({ id: `${prefix}${n.id}`, key: n.id, group: n.type === 'group' }));
+  const edges = starter.file.edges.map((e) => `${prefix}${e.id}`);
+  const flows = starter.file.flows.map((f) => `${prefix}${f.id}`);
   return { nodes, edges, flows };
 }
 
-export function buildFromStarter(spec: CreateSpec, layout: LayoutSpec, ctx: DescribeContext, insideRooms?: ReadonlyMap<RoomSpec, PlacedRoom>): PlacedRoom {
+/** The starter's diagram with every id under `prefix`, its top-left corner at the origin. */
+function prefixed(file: DraftDocument, prefix: string): { nodes: DraftNode[]; edges: DraftEdge[]; flows: DraftFlow[] } {
+  const bounds = boundsOf(file.nodes);
+  const dx = bounds ? -bounds.x : 0;
+  const dy = bounds ? -bounds.y : 0;
+  const id = (value: string) => `${prefix}${value}`;
+  const nodes = file.nodes.map((node) => ({ ...node, id: id(node.id), x: node.x + dx, y: node.y + dy, ...(node.parentId ? { parentId: id(node.parentId) } : {}) }));
+  const edges = file.edges.map((edge) => {
+    const next: DraftEdge = { ...edge, id: id(edge.id), source: id(edge.source), target: id(edge.target) };
+    if (edge.compensationFor) next.compensationFor = id(edge.compensationFor);
+    if (edge.waypoints) next.waypoints = edge.waypoints.map((p) => ({ x: p.x + dx, y: p.y + dy }));
+    return next;
+  });
+  const flows = file.flows.map((flow) => ({
+    ...flow,
+    id: id(flow.id),
+    ...(flow.variantOf ? { variantOf: id(flow.variantOf) } : {}),
+    steps: flow.steps.map((step) => ({
+      ...step,
+      id: id(step.id),
+      ...(step.edgeId ? { edgeId: id(step.edgeId) } : {}),
+      ...(step.extraEdgeIds ? { extraEdgeIds: step.extraEdgeIds.map(id) } : {}),
+      ...(step.extraNodeIds ? { extraNodeIds: step.extraNodeIds.map(id) } : {}),
+    })),
+  }));
+  return { nodes, edges, flows };
+}
+
+export function buildFromStarter(spec: CreateSpec, layout: LayoutSpec, ctx: DescribeContext, insideRooms?: ReadonlyMap<RoomSpec, PlacedRoom>, resolved?: AgentStarter): PlacedRoom {
   const choice = spec.starter;
   if (!choice) throw new AgentError('INTERNAL', 'No starter requested.');
-  const starter = starterFor(choice.id);
-  const ids = starterIds(starter, choice.prefix);
-  const built = buildStarter(
-    starter,
-    { x: 0, y: 0 },
-    {
-      node: (key) => `${choice.prefix}${key}`,
-      edge: (_edge, index) => ids.edges[index] as string,
-      flow: (index) => ids.flows[index] as string,
-    },
-  );
+  const starter = starterFor(choice.id, resolved);
+  const built = prefixed(starter.file, choice.prefix);
   const advisories: string[] = [];
   // Overrides: the agent's own names and C4 text on the starter's shapes. A shape grows (never
   // shrinks) to show them in full; the quality check refuses the result if that crowds a neighbour.
@@ -63,11 +93,11 @@ export function buildFromStarter(spec: CreateSpec, layout: LayoutSpec, ctx: Desc
     const sized = sizeToFit(next, ctx);
     return { ...sized, width: Math.max(sized.width, node.width), height: Math.max(sized.height, node.height) };
   });
-  const unknown = Object.keys(choice.overrides).filter((key) => !starter.nodes.some((n) => n.key === key));
+  const unknown = Object.keys(choice.overrides).filter((key) => !starter.file.nodes.some((n) => n.id === key));
   if (unknown.length) {
     throw new AgentError('INVALID_REFERENCE', `No element "${unknown[0]}" in the ${starter.name} starter.`, {
       path: `/starter/overrides/${unknown[0]}`,
-      details: { keys: starter.nodes.map((n) => n.key) },
+      details: { keys: starter.file.nodes.map((n) => n.id) },
     });
   }
   const edges: DraftEdge[] = [...built.edges];

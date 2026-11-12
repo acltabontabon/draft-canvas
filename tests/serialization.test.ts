@@ -4,8 +4,8 @@ import { addEdges, addNodes, extractFragment, pasteFragment } from '../src/docum
 import { addFlow, createFlow } from '../src/document/flow';
 import { deserializeDocument, serializeDocument, fileNameFor } from '../src/export/project';
 import { CURRENT_VERSION } from '../src/document/types';
-import { ARCHITECTURE_STARTERS } from '../src/starters';
-import { buildStarter } from '../src/starters/build';
+import { ARCHITECTURE_STARTERS } from './fixtures/starters-v1';
+import { buildStarter } from './fixtures/starters-v1/build';
 
 function richDocument() {
   const service = createNode({

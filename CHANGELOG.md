@@ -30,6 +30,20 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   Databricks products show the Databricks logo.
 - **Instances** — Name a Service `Fulfilment ×3`, or set the count in its toolbar, and it draws as a
   stack with a small ×3. Traffic reads the instances as competing consumers.
+- **Starters gallery** — Starters now live in a public repository,
+  [draft-canvas-starters](https://github.com/acltabontabon/draft-canvas-starters), so they get better
+  between releases. Load them once from **Browse the starters gallery** on a blank canvas or
+  **Browse starters…** in `⌘K`; preview any starter with when to use it and what to watch out for,
+  then add it or open it as a new diagram. Nothing about your diagrams is sent. <!-- highlight -->
+- Starters that are new or have changed are marked **New** or **Updated**, and a diagram made from a
+  starter offers its newer version as a new diagram. Yours is never changed.
+
+#### Changed
+
+- Starters are no longer part of the app: until you load the gallery, a blank canvas offers it in
+  one card instead of five tiles. **Try an example** still works offline.
+- The starters were redrawn: captions such as "publishes to" no longer get cut short, and named
+  queues use their full size.
 
 ## [1.19.0] - 2026-11-11
 

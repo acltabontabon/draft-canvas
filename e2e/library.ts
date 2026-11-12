@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { serveStarterGallery } from './gallery';
 
 /** The gallery is now reached through Home's complete-library link, just like on desktop. */
 export async function openGallery(page: Page) {
@@ -12,8 +13,13 @@ export async function openGallery(page: Page) {
   }
 }
 
-/** Starters remain in the blank editor after their previews were removed from Home. */
+/**
+ * A featured starter from the blank editor, the way someone who loaded the starters gallery adds
+ * one. The gallery is served from the vendored snapshot and switched on, which takes a reload.
+ */
 export async function openStarter(page: Page, name: string) {
+  await serveStarterGallery(page);
+  await page.reload();
   await page.getByRole('button', { name: 'New canvas', exact: true }).click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   await page.getByRole('group', { name: 'Suggested starters', exact: true }).getByRole('button', { name: `Start from ${name}`, exact: true }).click();

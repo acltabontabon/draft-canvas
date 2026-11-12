@@ -164,7 +164,8 @@ test('long diagram and project names stay readable in narrow layouts', async ({ 
     if (width === 375) expect(titleWidth).toBeLessThan(wideTitleWidth);
   }
   await page.setViewportSize({ width: 375, height: 450 });
-  await expect(page.getByRole('button', { name: 'View all starters', exact: true })).toBeVisible();
+  // Before the starters gallery is loaded, one card offers it — folded to a link on a short canvas.
+  await expect(page.getByRole('button', { name: /^Browse (the )?starters/ })).toBeVisible();
   await expect.poll(() => page.locator('.dc-empty-stage').evaluate((element) => {
     const stage = element.getBoundingClientRect();
     const canvas = document.querySelector('.dc-canvas')!.getBoundingClientRect();

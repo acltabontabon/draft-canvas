@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
-import { cameraAtRest, newCanvas, reopenAfterReload } from './canvas';
+import { cameraAtRest, newCanvas as openCanvas, reopenAfterReload } from './canvas';
+import { serveStarterGallery } from './gallery';
+
+/** A new canvas once the starters gallery has arrived: its tiles, and its ⌘K rows, are there. */
+async function newCanvas(page: Page, title: string) {
+  await openCanvas(page, title);
+  await expect(page.getByRole('group', { name: 'Suggested starters', exact: true })).toBeVisible();
+}
 
 /**
  * Architecture Starters, driven the way they are meant to be used: ⌘K, a few letters, Enter, and a
@@ -30,6 +37,11 @@ async function clickEdgeBetween(page: Page, edgeIndex: number) {
 }
 
 test.describe('architecture starters', () => {
+  // The gallery as GitHub would serve it, loaded as though the person chose "Load starters".
+  test.beforeEach(async ({ page }) => {
+    await serveStarterGallery(page);
+  });
+
   test('⌘K, "microservices", Enter — and the whole thing undoes in one step', async ({ page }) => {
     await newCanvas(page, 'Starter keyboard');
 
@@ -117,9 +129,9 @@ test.describe('architecture starters', () => {
     const browse = page.getByRole('button', { name: 'View all starters', exact: true });
     await browse.focus();
     await page.keyboard.press('Enter');
-    const collection = page.getByRole('dialog', { name: 'All starters', exact: true });
+    const collection = page.getByRole('dialog', { name: 'Starters', exact: true });
     await expect(collection).toBeVisible();
-    await expect(collection.getByRole('button', { name: /^Start from / })).toHaveCount(13);
+    await expect(collection.locator('.dc-starters-grid .dc-starter')).toHaveCount(14);
     await page.keyboard.press('Escape');
     await expect(browse).toBeFocused();
     await expect(starters).toBeVisible();
@@ -133,11 +145,16 @@ test.describe('architecture starters', () => {
     await expect(starters).toBeHidden();
   });
 
-  test('the full collection inserts a nonfeatured starter and undoes in one step', async ({ page }) => {
+  test('the full collection previews a nonfeatured starter, adds it, and undoes in one step', async ({ page }) => {
     await newCanvas(page, 'Browse all starters');
     await page.getByRole('button', { name: 'View all starters', exact: true }).click();
-    const collection = page.getByRole('dialog', { name: 'All starters', exact: true });
-    await collection.getByRole('button', { name: 'Start from Transactional Outbox', exact: true }).click();
+    const collection = page.getByRole('dialog', { name: 'Starters', exact: true });
+    await collection.getByRole('radio', { name: /^Patterns/ }).click();
+    await collection.getByRole('button', { name: 'Transactional Outbox', exact: true }).click();
+    // A preview first, with what it's for, then a choice.
+    await expect(collection.getByRole('heading', { name: 'Transactional Outbox' })).toBeVisible();
+    await expect(collection.getByText('Use it when')).toBeVisible();
+    await collection.getByRole('button', { name: 'Add to canvas', exact: true }).click();
     await expect(collection).toBeHidden();
     await expect(page.locator('.dc-node').first()).toBeVisible();
     await expect(page.getByRole('group', { name: 'Suggested starters', exact: true })).toBeHidden();
@@ -173,5 +190,29 @@ test.describe('architecture starters', () => {
     await reopenAfterReload(page, 'Starter twice');
     await expect(page.locator('.dc-editor')).toBeVisible();
     await expect(page.locator('.dc-node')).toHaveCount(28);
+  });
+});
+
+test.describe('the starters gallery, before it is loaded', () => {
+  test('asks first, reads nothing until then, and then offers its starters', async ({ page }) => {
+    const requests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('raw.githubusercontent.com')) requests.push(request.url());
+    });
+    await serveStarterGallery(page, { enabled: false });
+    await openCanvas(page, 'Gallery consent');
+    await expect(page.getByRole('group', { name: 'Suggested starters', exact: true })).toHaveCount(0);
+
+    await page.getByRole('button', { name: /Browse the starters gallery/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Starters', exact: true });
+    await expect(dialog.getByText(/Nothing about your diagrams is sent/)).toBeVisible();
+    expect(requests).toEqual([]);
+
+    await dialog.getByRole('button', { name: 'Load starters', exact: true }).click();
+    await expect(dialog.locator('.dc-starters-grid .dc-starter')).toHaveCount(14);
+    expect(requests.every((url) => url.startsWith('https://raw.githubusercontent.com/acltabontabon/draft-canvas-starters/main/'))).toBe(true);
+
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('group', { name: 'Suggested starters', exact: true })).toBeVisible();
   });
 });

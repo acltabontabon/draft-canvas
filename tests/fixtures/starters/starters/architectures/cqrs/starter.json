@@ -1,0 +1,30 @@
+{
+  "id": "cqrs",
+  "name": "CQRS",
+  "category": "architecture",
+  "summary": "Distinct command and query paths, async read projection",
+  "aliases": [
+    "cqrs",
+    "command query",
+    "command query responsibility segregation",
+    "read model",
+    "write model",
+    "projection"
+  ],
+  "tags": [
+    "command query",
+    "read model",
+    "projection",
+    "eventual consistency"
+  ],
+  "useWhen": [
+    "Reads and writes have very different shapes or loads.",
+    "Explaining eventual consistency between the two sides."
+  ],
+  "watchOutFor": [
+    "Reads lag behind writes.",
+    "Two models to keep in step as the domain changes."
+  ],
+  "featured": true,
+  "order": 70
+}

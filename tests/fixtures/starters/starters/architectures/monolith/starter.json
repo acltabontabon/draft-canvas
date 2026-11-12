@@ -1,0 +1,28 @@
+{
+  "id": "monolith",
+  "name": "Monolith",
+  "category": "architecture",
+  "summary": "One application, built and deployed as a unit",
+  "aliases": [
+    "monolith",
+    "monolithic",
+    "single deployment",
+    "one application",
+    "layered"
+  ],
+  "tags": [
+    "layered",
+    "web app",
+    "single deployable"
+  ],
+  "useWhen": [
+    "A new product or a small team, where one deployable keeps change cheap.",
+    "Explaining where a request goes before any of it is split out."
+  ],
+  "watchOutFor": [
+    "Every change ships the whole application.",
+    "Layers blur over time unless their boundaries are kept on purpose."
+  ],
+  "featured": true,
+  "order": 10
+}

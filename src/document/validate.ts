@@ -80,6 +80,7 @@ import {
   type OpenPointTarget,
   OPEN_POINT_KINDS,
   type ViewLevel,
+  type DraftOrigin,
 } from './types';
 import { clamp, isFiniteNumber } from '../lib/math';
 import { isRecord } from '../lib/isRecord';
@@ -203,6 +204,15 @@ function parseEmbeddedBackground(value: unknown): EmbeddedBackgroundImage | unde
   const height = positiveIntOptional(value.height, 1, LIMITS.maxNodeSize);
   if (width === undefined || height === undefined) return undefined;
   return { dataUri: value.dataUri, width, height };
+}
+
+/** A starter id and a SHA-256, or nothing: anything else in `metadata.origin` is dropped. */
+function originOf(value: unknown): DraftOrigin | null {
+  if (!isRecord(value)) return null;
+  const { starter, sha256 } = value;
+  if (typeof starter !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(starter) || starter.length > 64) return null;
+  if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) return null;
+  return { starter, sha256 };
 }
 
 function safeId(value: unknown): string | null {
@@ -1022,6 +1032,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       createdAt,
       updatedAt: Math.max(createdAt, finite(meta.updatedAt, now)),
       ...(safeId(meta.projectId) ? { projectId: safeId(meta.projectId)! } : {}),
+      ...(originOf(meta.origin) ? { origin: originOf(meta.origin)! } : {}),
     },
     nodes,
     edges,

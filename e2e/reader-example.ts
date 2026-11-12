@@ -1,7 +1,7 @@
 import { createDocument, createNode } from '../src/document/factory';
 import { createOpenPoint } from '../src/document/openPoints';
-import { buildStarter } from '../src/starters/build';
-import { ORDER_PROCESSING } from '../src/starters/order-processing';
+import { buildStarter } from '../tests/fixtures/starters-v1/build';
+import { ORDER_PROCESSING } from '../tests/fixtures/starters-v1/order-processing';
 
 /** A real document for exercising reading context with and without a walkthrough. */
 export function createReaderExample(withFlow = false) {

@@ -1,0 +1,483 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-cqrs",
+    "title": "CQRS",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "client",
+      "type": "actor",
+      "x": -60,
+      "y": -332,
+      "width": 120,
+      "height": 92,
+      "z": 0,
+      "text": "Client",
+      "textOrigin": "explicit",
+      "actorKind": "system",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "command-box",
+      "type": "group",
+      "x": -702,
+      "y": -136,
+      "width": 512,
+      "height": 468,
+      "z": -1,
+      "text": "Command side",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary",
+      "attachments": [
+        {
+          "id": "a_2h3q1zgbotbc",
+          "type": "note",
+          "text": "A logical side, not a deployment: the two sides can be one process and one database. CQRS requires neither messaging, event sourcing nor separate services — this starter adds an asynchronous projection as one common variant. Its topic carries facts about what changed and is not an event store: nothing replays it. A direct in-process update or a database change feed would feed the projection just as well.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "command-subtitle",
+      "type": "text",
+      "x": -690,
+      "y": -106,
+      "width": 200,
+      "height": 24,
+      "z": 0,
+      "parentId": "command-box",
+      "text": "Validates intent, changes state",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "command-api",
+      "type": "service",
+      "x": -666,
+      "y": -74,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "command-box",
+      "text": "Command API",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api",
+      "attachments": [
+        {
+          "id": "a_drngg579jhqr",
+          "type": "code",
+          "text": "Example command",
+          "language": "json",
+          "code": "{\n  \"type\": \"ChangeStatus\",\n  \"entityId\": \"ent_4821\",\n  \"status\": \"active\"\n}",
+          "width": 380,
+          "height": 180
+        }
+      ]
+    },
+    {
+      "id": "command-handler",
+      "type": "component",
+      "x": -654,
+      "y": 66,
+      "width": 152,
+      "height": 56,
+      "z": 0,
+      "parentId": "command-box",
+      "text": "Command Handler",
+      "textOrigin": "explicit",
+      "componentKind": "generic"
+    },
+    {
+      "id": "write-store",
+      "type": "database",
+      "x": -664,
+      "y": 194,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "command-box",
+      "text": "Write Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "relay",
+      "type": "service",
+      "x": -402,
+      "y": 195,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "command-box",
+      "text": "Outbox Relay",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "events",
+      "type": "queue",
+      "x": -70,
+      "y": 212,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Domain Events",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "consistency",
+      "type": "text",
+      "x": -110,
+      "y": 304,
+      "width": 220,
+      "height": 24,
+      "z": 0,
+      "text": "Eventually consistent read projection",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "query-box",
+      "type": "group",
+      "x": 190,
+      "y": -136,
+      "width": 512,
+      "height": 468,
+      "z": -1,
+      "text": "Query side",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary",
+      "attachments": [
+        {
+          "id": "a_jv5iiiiadk8w",
+          "type": "note",
+          "text": "Reads are answered from a model shaped for the questions asked. Only the projection writes here; the Query API never does.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "query-subtitle",
+      "type": "text",
+      "x": 202,
+      "y": -106,
+      "width": 200,
+      "height": 24,
+      "z": 0,
+      "parentId": "query-box",
+      "text": "Answers questions, changes nothing",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "query-api",
+      "type": "service",
+      "x": 490,
+      "y": -74,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "query-box",
+      "text": "Query API",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "projector",
+      "type": "service",
+      "x": 226,
+      "y": 195,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "query-box",
+      "text": "Projection Worker",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "read-store",
+      "type": "database",
+      "x": 492,
+      "y": 194,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "query-box",
+      "text": "Read Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "attachments": [
+        {
+          "id": "a_gbompiwdw9yr",
+          "type": "note",
+          "text": "Shaped for the questions asked of it — a projection, not the write model. It may be a second schema in the same database: CQRS separates models, not necessarily databases.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    }
+  ],
+  "edges": [
+    {
+      "id": "submit",
+      "source": "client",
+      "target": "command-api",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "command",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "handle",
+      "source": "command-api",
+      "target": "command-handler",
+      "label": "executes",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "command",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "persist",
+      "source": "command-handler",
+      "target": "write-store",
+      "label": "writes state + outbox record",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "relay-read",
+      "source": "relay",
+      "target": "write-store",
+      "label": "reads outbox",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "publish",
+      "source": "relay",
+      "target": "events",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "a_1he5wh4i8i2s",
+          "type": "note",
+          "text": "Published only after the commit: the new state and its outbox record were written in one transaction, or not at all, and nothing left it from inside. Delivery is at-least-once, so the projection dedupes on the record id.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "deliver",
+      "source": "events",
+      "target": "projector",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "deliversTo",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "materialize",
+      "source": "projector",
+      "target": "read-store",
+      "label": "updates projection",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "query",
+      "source": "client",
+      "target": "query-api",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "query",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "read",
+      "source": "query-api",
+      "target": "read-store",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 0.8205128205128205
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Submit command",
+      "steps": [
+        {
+          "id": "fs_2ardwr8aps6i",
+          "edgeId": "submit",
+          "caption": "The client states what it wants"
+        },
+        {
+          "id": "fs_8s3wi9afnwp0",
+          "edgeId": "handle",
+          "caption": "Validated against the rules — it may be rejected"
+        },
+        {
+          "id": "fs_impcfrvwkxmz",
+          "edgeId": "persist",
+          "caption": "State and outbox record, one transaction"
+        },
+        {
+          "id": "fs_59vn283fgahg",
+          "edgeId": "relay-read",
+          "caption": "After the commit, the relay picks up the record"
+        },
+        {
+          "id": "fs_brbvjf07qib2",
+          "edgeId": "publish",
+          "caption": "A fact leaves the command side"
+        },
+        {
+          "id": "fs_rhagjuxbbcvl",
+          "edgeId": "deliver"
+        },
+        {
+          "id": "fs_tsyosjjpix27",
+          "edgeId": "materialize",
+          "caption": "The read model catches up — eventually"
+        }
+      ],
+      "accent": "amber"
+    },
+    {
+      "id": "flow2",
+      "title": "Read projection",
+      "steps": [
+        {
+          "id": "fs_praj8do13y9j",
+          "edgeId": "query",
+          "caption": "The client asks a question"
+        },
+        {
+          "id": "fs_rlrk5ua1inqr",
+          "edgeId": "read",
+          "caption": "Answered from the read model — nothing changes"
+        }
+      ],
+      "accent": "green"
+    }
+  ]
+}

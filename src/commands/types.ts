@@ -4,7 +4,7 @@ import type { DraftNode } from '../document/types';
 import type { FlowPlaybackController } from '../presentation/useFlowPlayback';
 import type { EditorStore } from '../store/editorStore';
 import type { UiStore } from '../store/uiStore';
-import { STARTER_CATEGORIES } from '../starters/types';
+import { GALLERY_CATEGORIES } from '../gallery/catalog';
 
 /**
  * The command surface's vocabulary. A command is a *thin* front-end onto an operation
@@ -29,19 +29,19 @@ export type CommandGroup =
   | 'view'
   | 'canvas';
 
-/** A `StarterCategory` id's own label from `STARTER_CATEGORIES`, looked up by id rather than by
+/** A gallery category's own label from `GALLERY_CATEGORIES`, looked up by id rather than by
  *  position — `starterCommands()` maps `architecture → starter` group-for-group, so this can't
  *  just index the array positionally without silently mislabelling a group the moment a category
  *  is inserted between two existing ones (as `data` now is). */
-const starterCategoryLabel = (id: (typeof STARTER_CATEGORIES)[number]['id']) =>
-  STARTER_CATEGORIES.find((category) => category.id === id)!.label;
+const starterCategoryLabel = (id: (typeof GALLERY_CATEGORIES)[number]['id']) =>
+  GALLERY_CATEGORIES.find((category) => category.id === id)!.label;
 
 export const GROUP_LABELS: Record<CommandGroup, string> = {
   recent: 'Recent',
   selection: 'Selection',
   connector: 'Connector',
   create: 'Create',
-  // All three are Starters (`src/starters/`); each header is one `StarterCategory` bucket, so the
+  // All three are Starters (`src/gallery/`); each header is one gallery category, so the
   // list reads as short groups rather than one long one. See that type for what each one means.
   starter: starterCategoryLabel('architecture'),
   data: starterCategoryLabel('data'),

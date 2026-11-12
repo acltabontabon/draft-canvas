@@ -1,0 +1,31 @@
+{
+  "id": "kappa",
+  "name": "Kappa",
+  "category": "data",
+  "summary": "Process live and historical data through one durable stream",
+  "aliases": [
+    "kappa",
+    "kappa architecture",
+    "durable log",
+    "log replay",
+    "materialized view",
+    "stream processing",
+    "unified log"
+  ],
+  "tags": [
+    "streaming",
+    "event log",
+    "replay",
+    "materialized view"
+  ],
+  "useWhen": [
+    "Real-time views where reprocessing history must use the same code.",
+    "Replacing a separate batch layer."
+  ],
+  "watchOutFor": [
+    "Replays of a long log take time and capacity.",
+    "The log's retention decides how far back you can rebuild."
+  ],
+  "featured": false,
+  "order": 90
+}

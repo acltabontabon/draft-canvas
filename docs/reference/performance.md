@@ -68,8 +68,9 @@ Both build, serve and measure in headless Chromium, print a summary, and overwri
 `benchmark/results/latest.json`. With two or more workloads they also write
 `benchmark/memory-chart.svg`.
 
-Workloads are tiled from five real starters (microservices, event-driven, CQRS, hexagonal, saga) in
-`benchmark/workloads/fixtures/`. Regenerate them with `npm run perf:regen-fixtures` when starters
+Workloads are tiled from five real starters (microservices, event-driven, CQRS, hexagonal, saga),
+frozen as they were when starters moved to the gallery (`tests/fixtures/starters-v1/`), in
+`benchmark/workloads/fixtures/`. Regenerate them with `npm run perf:regen-fixtures` when those
 change.
 
 | Workload | Nodes / edges |

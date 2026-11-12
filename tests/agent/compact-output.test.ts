@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { agentStarters } from '../fixtures/gallery';
 import { capabilities } from '../../src/agent/capabilities';
 import { compose } from '../../src/agent/compile';
 import { readDiagram } from '../../src/agent/read';
@@ -45,7 +46,7 @@ describe('compact agent output', () => {
   });
 
   it('answers a starter and topics asked for together', () => {
-    const both = capabilities({ topics: ['limits'], starter: 'monolith' });
+    const both = capabilities({ topics: ['limits'], starter: 'monolith' }, agentStarters());
     expect(both.starter).toMatchObject({ id: 'monolith' });
     expect(both.limits).toBeDefined();
   });

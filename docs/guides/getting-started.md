@@ -16,11 +16,11 @@ shortcuts.
 The back arrow beside the diagram title returns to your diagrams. In the web app, each recent
 diagram on Home has **Rename**, **Duplicate** and **Delete** buttons.
 
-On a blank canvas, double-click anywhere to choose your first shape, or pick one of the five
-architecture sketches for a starting point.
-**View all starters** opens the full collection; `⌘K` searches for a starter or command by name.
+On a blank canvas, double-click anywhere to choose your first shape. For a starting point,
+**Browse the starters gallery** offers ready-made architectures; once you load it, the blank canvas
+shows five of them. See [architecture examples](examples.md). `⌘K` searches for a command by name.
 
-![The blank canvas with drawing hints and five architecture starting points.](../media/guides/empty-canvas.png)
+![The blank canvas with drawing hints and the starters gallery.](../media/guides/empty-canvas.png)
 
 ## Draw Service → Queue → Worker
 

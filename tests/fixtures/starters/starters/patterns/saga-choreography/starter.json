@@ -1,0 +1,30 @@
+{
+  "id": "saga-choreography",
+  "name": "Saga \u2013 Choreography",
+  "category": "pattern",
+  "summary": "Local transactions chained by events, with no coordinator",
+  "aliases": [
+    "saga choreography",
+    "choreographed saga",
+    "choreography",
+    "event-driven saga",
+    "no orchestrator",
+    "reactive saga"
+  ],
+  "tags": [
+    "saga",
+    "choreography",
+    "events",
+    "compensation"
+  ],
+  "useWhen": [
+    "Few steps, owned by different teams, that already communicate through events.",
+    "Avoiding a central workflow service."
+  ],
+  "watchOutFor": [
+    "The whole workflow is visible only by following the events.",
+    "Cyclic dependencies between services creep in as steps grow."
+  ],
+  "featured": false,
+  "order": 120
+}

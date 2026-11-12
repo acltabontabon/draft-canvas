@@ -1,7 +1,8 @@
 # Privacy
 
 No account, telemetry or diagram backend. Diagrams leave your device only when you export, share,
-collaborate or connect a coding agent.
+collaborate or connect a coding agent. The optional starters gallery downloads public diagrams;
+it never uploads yours.
 
 ## What is stored, and where
 
@@ -13,6 +14,7 @@ Web diagrams stay in this browser profile and do not sync.
 | --- | --- |
 | IndexedDB `draft-canvas` | Stores `bodies`, `documents` (titles, thumbnails), `projects` (folders), `backgroundImages` |
 | IndexedDB `draft-canvas-keys` | Key for legacy encrypted records, read-only |
+| IndexedDB `draft-canvas-starters` | Downloaded starters gallery, when you load it; never your diagrams |
 | Cache Storage | Offline app files, never diagrams |
 | localStorage | Short preferences, such as theme, export choices and live-session name |
 | sessionStorage | Unsaved edits held across a reload, removed once restored |
@@ -36,6 +38,11 @@ No analytics, error reporting or webfonts. The Content-Security-Policy blocks ot
 - **Web app:** the service worker fetches app updates from the same address, never diagrams.
 - **Desktop updates:** checks go to GitHub with no diagram data; downloads only when you ask. See
   [Desktop updates](desktop-updates.md).
+- **Starters gallery (optional):** off until you choose **Load starters**. Then Draft Canvas reads
+  public files from `raw.githubusercontent.com/acltabontabon/draft-canvas-starters`: when the
+  Starters dialog is opened and the copy is a day old, or when you refresh it. Requests carry no
+  cookies, credentials, referrer or diagram data. **Stop loading starters** ends them and forgets
+  the downloaded copy. See [Architecture examples](../guides/examples.md).
 
 ## Exports and imports
 

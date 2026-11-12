@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import type { Preset } from '../lib/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
-import type { DraftEdge, DraftNode, OpenPointTarget } from '../document/types';
+import type { DraftDocument, DraftEdge, DraftNode, OpenPointTarget } from '../document/types';
 import type { CaptionCorner } from '../presentation/framing';
 import type { ExportMode } from '../export/exportTypes';
 import type { PresentationReveal } from '../presentation/presentationAttachments';
@@ -11,6 +11,8 @@ import { PRODUCT } from '../product';
 import { markLastSeenRelease, readLastSeenRelease } from '../releases/seen';
 
 /** A toast's one optional button — e.g. "Undo" for something that was just removed. */
+export type NewCanvasRequest = { kind: 'example' } | { kind: 'canvas'; document: DraftDocument };
+
 export interface FlowTrace {
   documentId: string;
   path: string[];
@@ -233,8 +235,11 @@ export interface UiStore {
   openExportAt: (mode: ExportMode) => void;
   exampleDocumentId: string | null;
   setExampleDocumentId: (id: string | null) => void;
-  exampleRequested: boolean;
+  /** A new canvas to open, once: the bundled example, or a gallery starter's diagram. Handled by
+   *  the shell (`App.tsx`), which knows how this host makes a canvas. */
+  newCanvasRequest: NewCanvasRequest | null;
   requestExample: () => void;
+  requestCanvas: (document: DraftDocument) => void;
   flowTrace: FlowTrace | null;
   setFlowTrace: (trace: FlowTrace | null) => void;
 
@@ -667,8 +672,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   requestShareFromHere: () => set({ shareFromHere: true, exportOpen: true, exportSelectionRequested: false }),
   exampleDocumentId: null,
   setExampleDocumentId: (exampleDocumentId) => set({ exampleDocumentId }),
-  exampleRequested: false,
-  requestExample: () => set({ exampleRequested: true }),
+  newCanvasRequest: null,
+  requestExample: () => set({ newCanvasRequest: { kind: 'example' } }),
+  requestCanvas: (document) => set({ newCanvasRequest: { kind: 'canvas', document } }),
   flowTrace: null,
   setFlowTrace: (flowTrace) => set({ flowTrace }),
   armed: null,

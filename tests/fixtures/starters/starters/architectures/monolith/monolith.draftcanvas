@@ -1,0 +1,269 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-monolith",
+    "title": "Monolith",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "client",
+      "type": "actor",
+      "x": -184,
+      "y": -367,
+      "width": 120,
+      "height": 92,
+      "z": 0,
+      "text": "Client",
+      "textOrigin": "explicit",
+      "actorKind": "system",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "app",
+      "type": "group",
+      "x": -348,
+      "y": -171,
+      "width": 448,
+      "height": 364,
+      "z": -1,
+      "text": "Application",
+      "textOrigin": "explicit",
+      "boundaryPreset": "deployment",
+      "attachments": [
+        {
+          "id": "a_jrm5c3aqqkx8",
+          "type": "note",
+          "text": "Built, tested, versioned and deployed as one unit — that is the whole definition. Layers are one common way to organise the inside, not a requirement; nor is one database or one running copy.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "api",
+      "type": "component",
+      "x": -312,
+      "y": -115,
+      "width": 376,
+      "height": 56,
+      "z": 0,
+      "parentId": "app",
+      "text": "API",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "logic",
+      "type": "component",
+      "x": -312,
+      "y": -7,
+      "width": 376,
+      "height": 56,
+      "z": 0,
+      "parentId": "app",
+      "text": "Application Logic",
+      "textOrigin": "explicit",
+      "componentKind": "generic"
+    },
+    {
+      "id": "data",
+      "type": "component",
+      "x": -312,
+      "y": 101,
+      "width": 376,
+      "height": 56,
+      "z": 0,
+      "parentId": "app",
+      "text": "Data Access",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "database",
+      "type": "database",
+      "x": -212,
+      "y": 265,
+      "width": 176,
+      "height": 102,
+      "z": 0,
+      "text": "Application Database",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic",
+      "attachments": [
+        {
+          "id": "a_0ih3v4xi9and",
+          "type": "note",
+          "text": "A separate runtime resource, not part of the deployed artifact. One database is typical, not required.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "external",
+      "type": "service",
+      "x": 172,
+      "y": -13,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "External System",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "external"
+    }
+  ],
+  "edges": [
+    {
+      "id": "call",
+      "source": "client",
+      "target": "api",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "dispatch",
+      "source": "api",
+      "target": "logic",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "access",
+      "source": "logic",
+      "target": "data",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "persist",
+      "source": "data",
+      "target": "database",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "reach",
+      "source": "logic",
+      "target": "external",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 0.9809264305177112
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Handle a request",
+      "steps": [
+        {
+          "id": "fs_8s5giddaxzyf",
+          "edgeId": "call"
+        },
+        {
+          "id": "fs_92pbl8kwfcmu",
+          "edgeId": "dispatch",
+          "caption": "In-process — no network between layers"
+        },
+        {
+          "id": "fs_j2qkr1302neb",
+          "edgeId": "access"
+        },
+        {
+          "id": "fs_w038xdbibc39",
+          "edgeId": "persist"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "flow2",
+      "title": "Call an external dependency",
+      "steps": [
+        {
+          "id": "fs_bs58mbs9mmfh",
+          "edgeId": "call"
+        },
+        {
+          "id": "fs_9jo7czizs4r7",
+          "edgeId": "dispatch"
+        },
+        {
+          "id": "fs_3co39l3cnzzs",
+          "edgeId": "reach"
+        }
+      ],
+      "accent": "amber"
+    }
+  ]
+}
