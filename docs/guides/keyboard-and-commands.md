@@ -69,8 +69,9 @@ Press `⌘K`, type part of a command or name, then `Enter`.
 ![The command palette finding Add Queue.](../media/guides/command-palette.png)
 
 It runs editor actions, inserts [starters](examples.md) once the starters gallery is loaded (**Browse starters…** opens it), jumps to named shapes, connectors and flows
-in any room, and tidies up (**Straighten connectors**, **Arrange diagram**, **Tidy connectors**,
-**Auto attach all connectors**, **Fit shapes to text**). With shapes selected it also aligns,
+in any room, and tidies up. **Tidy up** previews a gentle cleanup before applying it; **Straighten
+connectors**, **Arrange diagram**, **Tidy connectors**, **Auto attach all connectors** and **Fit
+shapes to text** each do one thing. With shapes selected it also aligns,
 distributes and matches sizes (**Same width**, **Same height**).
 
 ## Presenting

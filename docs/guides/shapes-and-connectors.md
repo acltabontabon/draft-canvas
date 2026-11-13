@@ -60,10 +60,20 @@ For more, select shapes and use the bar at the bottom: **Align**, **Distribute**
 and **Same width** / **Same height**, which give every selected shape the largest size among them.
 A boundary selected with shapes keeps its size; select only boundaries to match them.
 
-**Straighten connectors** in `⌘K` nudges shapes a few pixels so every connector that is nearly
-straight becomes straight, without rearranging anything else. With a selection, only the selected
-shapes move. **Arrange diagram** is the bigger tool: it lays the whole view out again. Each is one
-undo step.
+**Tidy up** is the one to reach for first. Run it from `⌘K` or by right-clicking the canvas. It
+keeps every shape where you put it and fixes only what looks untidy: a connector that just misses
+running level is straightened by nudging a shape a few pixels, and a connector drawn through a
+shape is re-attached so it goes round. Before anything changes you see the result laid over the
+diagram, with a faint outline where each nudged shape stands now. **Apply** (`Enter`) makes it one
+undo step; **Cancel** (`Esc`) leaves the diagram as it was.
+
+With shapes selected, **Tidy up selection** touches only those shapes and their connectors. After
+adding a service or two, select them and tidy that corner; the rest of the diagram stays exactly
+as it is.
+
+The tools it draws on are still in `⌘K` for when you want one of them alone. **Straighten
+connectors** does only the nudging. **Arrange diagram** is the bigger tool: it lays the whole view
+out again from scratch, so expect shapes to move. Each is one undo step.
 
 ## Connect shapes
 

@@ -76,7 +76,7 @@ import {
 } from './projection';
 import { computeSnap, sameGuides, type Guide, type SnapLink } from './snapping';
 import { minResizeSizeFor, snapResize } from './resizeSnap';
-import { AgentPreviewLayer, ProposalPreviewLayer } from './AgentPreviewLayer';
+import { AgentPreviewLayer, ProposalPreviewLayer, TidyPreviewLayer } from './AgentPreviewLayer';
 import { ContinuationGhost } from './ContinuationGhost';
 import { RecoveryConnectGhost } from './RecoveryConnectGhost';
 import { RoomFrame } from './RoomFrame';
@@ -2408,6 +2408,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
           {/* A pending proposal's reviewed result (desktop only), while `ProposalPanel` shows it. */}
           <ProposalPreviewLayer />
+
+          {/* What Tidy up would change, while the person decides (`TidyBar`). Never in the document. */}
+          <TidyPreviewLayer />
 
           {/* Other people in a live session: their pointers and what they hold. Never exported. */}
           <PresenceLayer />

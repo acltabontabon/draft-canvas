@@ -10,6 +10,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Tidy up, with a preview** — One cleanup to reach for first, in `⌘K` and on right-click. It
+  keeps every shape where you put it, straightens connectors that just miss level and re-attaches
+  ones drawn through a shape, and shows the result over the diagram before anything changes.
+  **Apply** is one undo step. With shapes selected it tidies only that corner. <!-- highlight -->
 - **Put a shape in between** — Drop a Queue (or a Data Store, Service, Component or Junction) onto a
   connector and it goes in the middle: `Orders API → orders → Billing`, with both lines dashed and
   captioned on their own. Placing one there with a shape tool works too. <!-- highlight -->
@@ -53,6 +57,17 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - A blank canvas is quieter: a smaller invitation to draw, then one line of text for the starters
   gallery, an example and search, with no card or ruled divider. Loaded starters rest as faint
   sketches until you point at one.
+- **Quieter shapes, one family** — A Service's top band now takes its outline's colour, and the
+  card behind a Worker or a replicated Service is drawn lighter, so services no longer outweigh
+  queues and data stores.
+- **Marks in one row** — A shape's technology logo, attachments and open points now sit in one row
+  above its top-right corner, in one style, instead of crowding the corner and the labels of
+  connectors leaving it. Attachments show as a paperclip tab. <!-- highlight -->
+- Connector labels keep clear of the shapes they join: a label beside an upright run moves to the
+  side with room, and a relationship caption its line has no room for is left out instead of
+  running under a shape.
+- On right-click, Arrange is now **Rearrange layout** and **Rearrange selection**, next to the new
+  **Tidy up**.
 
 ## [1.19.0] - 2026-11-11
 

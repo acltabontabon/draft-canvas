@@ -96,6 +96,9 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   size or connector semantics. Their shared glyph is `openPoints/marker.ts`; use it in both canvas
   and export. Delete elements through `removeElements`, or prune attachments in the same operation
   with `pruneOpenPoints`.
+- The marks above a shape's top-right corner (technology mark, attachment tab, open-point tab) are
+  placed only by `document/markerRail.ts`, in one row. Never position one on its own, and draw each
+  from its shared describe function (`describeAttachmentTab`, `describeMarker`) in canvas and export.
 - Connector visuals have two renderers: `canvas/DraftEdgeView.tsx` and `edges/describe.ts`.
   Update both for badges, dashes, chips or other visual changes. Continuation and agent previews
   are not exported and reuse the shared ghost routing, dash and marker helpers.
@@ -105,6 +108,13 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Camera movement decisions belong in pure `presentation/framing.ts`. While a move is in flight,
   `useFlowPlayback` judges against the requested camera. A presenter's pan sets `framing: 'manual'`;
   guided framing stays off until requested again.
+
+### Tidy up
+
+- Tidy up is the gentle cleanup (`agent/tidy.ts`): it never lays a view out again and never moves a
+  shape outside its scope. Layout from scratch stays in Arrange.
+- Its preview lives in `uiStore.tidyPreview`, never the document, history or autosave. Only
+  `editorStore.commitTidy` applies it, as one undo step, and only to the room it was worked out from.
 
 ### Live collaboration
 

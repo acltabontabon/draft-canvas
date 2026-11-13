@@ -1,5 +1,6 @@
 import type { SimpleIcon } from 'simple-icons';
 import { dataStoreGlyphBounds } from '../document/dataStoreGeometry';
+import { RAIL_SIZE, markerRail } from '../document/markerRail';
 import { C4_TEXT_TYPES, type DraftNode } from '../document/types';
 import catalog from './technologyCatalog/index.json';
 import { TECHNOLOGY_PATH_LOADERS } from './technologyCatalog/loaders';
@@ -207,14 +208,18 @@ export function nodeTechnologyIcon(node: DraftNode, snapshot: TechnologyIconSnap
   return (C4_TEXT_TYPES as readonly string[]).includes(node.type) ? technologyIcon(node.technology, snapshot) : undefined;
 }
 
-export const TECHNOLOGY_MARK_SIZE = 16;
+export const TECHNOLOGY_MARK_SIZE = RAIL_SIZE;
 
 /** Node-local visual extent only. The mark never changes sizing, handles or routing obstacles.
- * Data stores attach to their compact glyph; other architecture shapes use their box's corner. */
+ * Data stores attach to their compact glyph; every other architecture shape carries it at the
+ * corner end of its marker rail, above the top-right corner (`document/markerRail.ts`). It used to
+ * sit beside the right edge, on top of the label of any connector leaving that side. */
 export function technologyMarkBounds(node: DraftNode, snapshot: TechnologyIconSnapshot = bySlug): { x: number; y: number; width: number; height: number } | undefined {
   if (!nodeTechnologyIcon(node, snapshot)) return undefined;
-  const glyph = node.type === 'database'
-    ? dataStoreGlyphBounds({ ...node, x: 0, y: 0 })
-    : { right: node.width, top: 0 };
-  return { x: glyph.right + 9, y: glyph.top + 2, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
+  if (node.type === 'database') {
+    const glyph = dataStoreGlyphBounds({ ...node, x: 0, y: 0 });
+    return { x: glyph.right + 9, y: glyph.top + 2, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
+  }
+  const at = markerRail(node, { technology: true }).technology!;
+  return { x: at.x, y: at.y, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
 }

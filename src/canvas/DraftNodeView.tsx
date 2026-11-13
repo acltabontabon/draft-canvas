@@ -45,7 +45,8 @@ import { pathsLabel } from './trafficLabels';
 import { trafficNodeOf, trafficNodeReading, trafficScenarioOf } from '../store/traffic';
 import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
-import { nodeMarkerOrigin } from '../openPoints/marker';
+import { attachmentTabWidth, markerRail, RAIL_SIZE } from '../document/markerRail';
+import { describeAttachmentTab } from '../edges/attachmentChips';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { count } from '../lib/plural';
 import { TechnologyDetails } from './TechnologyDetails';
@@ -443,6 +444,15 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const max = maxSizeFor(node.type);
   const attachmentCount = node.attachments?.length ?? 0;
   const insideCount = node.inside?.nodes.length ?? 0;
+  // One row for every mark the shape carries above its corner, so none lands on another.
+  const rail = markerRail(
+    { type: node.type, width: effectiveWidth },
+    {
+      technology: Boolean(liveNode && nodeTechnologyIcon(liveNode)),
+      attachments: attachmentCount,
+      openPoints: openPoints.length > 0,
+    },
+  );
 
   return (
     <div
@@ -570,6 +580,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         <button
           type="button"
           className="dc-attachment-badge"
+          style={rail.attachments && { left: rail.attachments.x, top: rail.attachments.y, width: rail.attachments.width }}
           data-open={popoverOpen ? 'true' : undefined}
           title={count(attachmentCount, 'attachment')}
           aria-label={count(attachmentCount, 'attachment')}
@@ -592,12 +603,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
             useUiStore.getState().setOpenAttachmentDetail(popoverOpen ? null : { hostKind: 'node', hostId: node.id, attachmentId: null });
           }}
         >
-          {'<>'} {attachmentCount}
+          <AttachmentTab count={attachmentCount} id={node.id} />
         </button>
       )}
 
-      {openPoints.length > 0 && !capsule && (() => {
-        const origin = nodeMarkerOrigin({ type: node.type, width: effectiveWidth, height: effectiveHeight });
+      {rail.openPoint && !capsule && (() => {
+        const origin = rail.openPoint;
         return (
           <OpenPointMarker
             targetKind="node"
@@ -765,6 +776,20 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
 
 /** React Flow owns placement on its wrapper. Only these props change this component's chrome;
  *  store subscriptions still deliver content, mode and preview changes independently. */
+/** The attachment tab's picture: the exporter's own shapes, so the two can never drift apart. */
+const AttachmentTab = memo(function AttachmentTab({ count, id }: { count: number; id: string }) {
+  const theme = useThemeValue();
+  const shapes = useMemo(() => {
+    beginClipScope(`attachment-tab-${id}`);
+    return emitDisplayList({ width: attachmentTabWidth(count), height: RAIL_SIZE, shapes: describeAttachmentTab(count, { theme }) });
+  }, [count, id, theme]);
+  return (
+    <SvgSurface width={attachmentTabWidth(count)} height={RAIL_SIZE}>
+      {shapes}
+    </SvgSurface>
+  );
+});
+
 function sameNodeViewProps(before: NodeProps, after: NodeProps): boolean {
   return (
     before.id === after.id &&

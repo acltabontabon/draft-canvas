@@ -81,6 +81,25 @@ export function layoutConnectorCaption(text: string, measurer?: TextMeasurer, ro
   });
 }
 
+/** How far past its room a caption may reach before it is left out: a couple of pixels into the
+ *  arrowhead's own clearance at each end, which no eye reads as touching. */
+const CAPTION_OVERHANG = 8;
+
+/**
+ * The caption both renderers draw, or `null` when its line has no room for it.
+ *
+ * A caption is fitted to the room its run leaves before a shape or the arrowhead, but never
+ * narrower than `MIN_FIT_WIDTH`. On a run shorter than that the fitted caption still reached into
+ * the shapes at both ends, and since shapes paint over connectors it showed as a few clipped
+ * letters under each one. A caption that cannot be read is left out: the line's own style and its
+ * inspector still say what the relationship is, and the caption returns as soon as the two shapes
+ * are far enough apart to hold it.
+ */
+export function fittedConnectorCaption(text: string, measurer?: TextMeasurer, room?: number): TextLayout | null {
+  const layout = layoutConnectorCaption(text, measurer, room);
+  return room !== undefined && layout.width > room + CAPTION_OVERHANG ? null : layout;
+}
+
 /** Measured chip bounds, including the same padding used by both renderers. */
 export function edgeLabelSize(text: string): { width: number; height: number } {
   const layout = layoutEdgeLabel(text);
