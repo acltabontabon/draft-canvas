@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { reconnectProblem } from '../document/reconnect';
 import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // UI feedback for document limits and rejected reconnects stays outside document operations.
-import { PRESENTATION_AT_REST, useUiStore } from './uiStore';
+import { PRESENTATION_AT_REST, useUiStore, type TidyPreview } from './uiStore';
 import { edgeIndex, nodeIndex } from './selectors';
 import {
   createAttachment,
@@ -553,6 +553,20 @@ export interface EditorStore {
    */
   arrangeRoom: (preset?: ArrangePreset) => Promise<boolean>;
   arrangeSelection: () => Promise<boolean>;
+  /**
+   * Works out what Tidy up would do and applies none of it: the gentle cleanup of `agent/tidy.ts`
+   * (straighten near-level connectors, re-attach ones drawn through a shape) on the room on screen,
+   * or on the selection's neighbourhood when shapes are selected. Resolves the preview to show, or
+   * `null` when the room is already tidy or cannot be edited right now. The engine is loaded on
+   * demand, as `arrangeRoom`'s is.
+   */
+  planTidy: () => Promise<TidyPreview | null>;
+  /**
+   * Applies a preview from `planTidy` as one undo step labelled "Tidy up". False, and nothing
+   * applied, when the room has changed since it was worked out: the preview describes a room that
+   * no longer exists.
+   */
+  commitTidy: (preview: TidyPreview) => boolean;
   /**
    * Replaces `find` with `replace` in every label of every room of the file (shape names, connector
    * labels, attachment text, flow titles) as one undo step, staying in the room on screen. Returns
@@ -2341,6 +2355,36 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     current.apply('Arrange selection', () => arranged.view);
     return get().document !== current.document;
+  },
+
+  async planTidy() {
+    const before = get();
+    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    const [{ tidyView }, { measureContext }, { withDeadline }] = await Promise.all([
+      import('../agent/tidy'), import('../agent/place'), import('../agent/route'),
+    ]);
+    const current = get();
+    // The room, or what is selected in it, changed while the engine loaded: what was asked for is
+    // no longer what is on screen, so nothing is offered rather than a cleanup of something else.
+    if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) return null;
+    const scope = current.selection.nodes.length > 0 ? new Set(current.selection.nodes) : undefined;
+    const tidied = withDeadline(performance.now() + ARRANGE_BUDGET_MS, () => tidyView(current.document, scope, measureContext()));
+    if (tidied.view === current.document) return null;
+    return {
+      path: current.path,
+      base: current.document,
+      view: tidied.view,
+      moved: tidied.moved.length,
+      reattached: tidied.reattached.length,
+      scoped: Boolean(scope),
+    };
+  },
+
+  commitTidy(preview) {
+    const state = get();
+    if (interaction || state.document !== preview.base || state.path !== preview.path) return false;
+    state.apply('Tidy up', () => preview.view);
+    return get().document !== preview.base;
   },
 
   async arrangeRoom(preset = {}) {

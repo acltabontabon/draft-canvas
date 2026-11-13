@@ -57,6 +57,7 @@ import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
 import { SharedReader } from './SharedReader';
 import { FocusIndicator } from './FocusIndicator';
+import { TidyBar } from './TidyBar';
 import { FlowLensIndicator } from './FlowLensIndicator';
 import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
 import { CanvasSettingsDialog } from './CanvasSettingsDialog';
@@ -707,6 +708,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           )}
           <FlowBar playback={playback} />
           <FocusIndicator />
+          <TidyBar />
           {!presenting && !tracing && <FlowLensIndicator />}
           <DepthStack />
           <DepthAnnouncer />

@@ -127,7 +127,11 @@ export function renderedBoundsOf(nodes: readonly DraftNode[], edges: readonly Dr
     grow(node.x, node.y);
     grow(node.x + node.width, node.y + node.height);
     const mark = technologyMarkBounds(node);
-    if (mark) grow(node.x + mark.x + mark.width, node.y + mark.y + mark.height);
+    if (mark) {
+      // Both corners: the mark sits above a shape's top edge in its marker rail, beside a data store's glyph.
+      grow(node.x + mark.x, node.y + mark.y);
+      grow(node.x + mark.x + mark.width, node.y + mark.y + mark.height);
+    }
   }
   const caption = captionSizer(nodes, ctx);
   const byId = new Map(nodes.map((n) => [n.id, n]));

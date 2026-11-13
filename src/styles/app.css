@@ -2022,6 +2022,71 @@ kbd {
  * Top-centre, deliberately: Focus Mode must work in edit mode too, where the
  * Inspector already docks bottom-centre whenever something is selected.
  */
+/* Tidy up's Apply/Cancel, while its preview is on the canvas (`TidyBar`). Above the status bar and
+   centred, where a decision about the whole canvas belongs, clear of the toolbar and of the shapes
+   being judged. What it changes sits right beside its name; the two actions sit together after it. */
+.dc-tidy-bar {
+  position: absolute;
+  bottom: 18px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--dc-z-bar);
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  max-width: calc(100% - 32px);
+  padding: 6px 6px 6px 16px;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  box-shadow: var(--dc-shadow-panel);
+  font-size: 12.5px;
+  animation: dc-tidy-bar-in 160ms ease-out;
+}
+
+.dc-tidy-bar-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.dc-tidy-bar-text strong {
+  font-weight: 600;
+}
+
+.dc-tidy-bar-summary {
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  text-overflow: ellipsis;
+}
+
+.dc-tidy-bar-actions {
+  display: flex;
+  flex: none;
+  gap: 4px;
+}
+
+.dc-tidy-bar .dc-button {
+  height: 28px;
+  padding: 0 12px;
+  border-radius: var(--dc-radius-pill);
+}
+
+@keyframes dc-tidy-bar-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-tidy-bar {
+    animation: none;
+  }
+}
+
 .dc-focus-indicator {
   position: absolute;
   top: 14px;

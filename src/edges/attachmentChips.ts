@@ -1,6 +1,6 @@
 /**
  * Attachments as a picture shows them: a connector's chip row at its label point, and a shape's
- * "<> 2" badge above its top-right corner — the resting state of what `AttachmentPresentation.tsx`
+ * attachment tab in the marker rail above its top-right corner — the resting state of what `AttachmentPresentation.tsx`
  * and `DraftNodeView` draw on the canvas. Exports used to leave both out, so a note attached to a
  * connector simply wasn't in the PNG or SVG, with nothing to say it was ever there.
  *
@@ -15,6 +15,7 @@ import type { TextMeasurer } from '../render/text/measure';
 import type { Theme } from '../render/theme/tokens';
 import { attachmentLookFor } from '../nodes/attachmentLook';
 import type { Rect } from './routing';
+import { RAIL_SIZE, attachmentTabWidth, markerRail } from '../document/markerRail';
 
 /** How far a connector's attachment chip row floats off its label point, in flow units. */
 export const ATTACHMENT_ROW_GAP = 12;
@@ -100,20 +101,66 @@ export function describeAttachmentChips(attachments: readonly Attachment[], x: n
   return shapes;
 }
 
-// `.dc-attachment-badge`: 22px above the shape's top, 6px in from its right; 10.5px/600, padding 2px 7px.
-const BADGE_FONT: FontSpec = { stack: 'sans', size: 10.5, weight: 600 };
-const BADGE_HEIGHT = 19;
+/** The count numeral beside the clip, when a shape carries several. The open-point tab's own numeral. */
+const TAB_COUNT_FONT: FontSpec = { stack: 'sans', size: 9, weight: 700 };
 
-/** A shape's attachment badge, in the shape's own coordinates (the badge sits above its top edge). */
-export function describeAttachmentBadge(node: DraftNode, ctx: ChipContext): Shape[] {
-  const count = node.attachments?.length ?? 0;
-  if (count === 0) return [];
-  const text = layoutText(`<> ${count}`, { font: BADGE_FONT, maxWidth: 200, lineHeight: BADGE_HEIGHT, maxLines: 1, measurer: ctx.measurer });
-  const width = text.width + 14;
-  const x = node.width - 6 - width;
-  const y = -22;
-  return [
-    { t: 'rect', x, y, w: width, h: BADGE_HEIGHT, r: BADGE_HEIGHT / 2, fill: ctx.theme.surface, stroke: { color: ctx.theme.border, width: 1 }, shadow: true },
-    { t: 'text', x: x + 7, y, layout: text, font: BADGE_FONT, fill: ctx.theme.textMuted, align: 'start' },
+/**
+ * A shape's attachment tab, drawn in a box at the origin: a paperclip, and the count when there is
+ * more than one. The same plate as an open-point tab (`openPoints/marker.ts`) in the canvas's
+ * neutral ink, so the marks along a shape's rail read as one set and an open point's violet is the
+ * only colour among them. It was a shadowed pill reading "<> 2", a second shape language next to
+ * the square tab beside it. One function for the canvas and the exporter.
+ */
+export function describeAttachmentTab(count: number, ctx: { theme: Theme; measurer?: TextMeasurer }): Shape[] {
+  const width = attachmentTabWidth(count);
+  const ink = ctx.theme.textMuted;
+  const several = count > 1;
+  const shapes: Shape[] = [
+    { t: 'rect', x: 0.5, y: 0.5, w: width - 1, h: RAIL_SIZE - 1, r: 4, fill: ctx.theme.edgeLabelBg, stroke: { color: ctx.theme.borderStrong, width: 1 } },
+    {
+      // One wire: down the outside, round the bottom, up and over, and down the inside. Three
+      // strands, not a real clip's four: at this size a fourth closes the gaps and reads as a blob.
+      t: 'group',
+      translate: { x: several ? -1.5 : 0, y: 0 },
+      children: [
+        {
+          t: 'path',
+          d: 'M10.4 6.8 V10.6 a2.4 2.4 0 0 1 -4.8 0 V5.4 a1.4 1.4 0 0 1 2.8 0 V10.2',
+          fill: 'none',
+          stroke: { color: ink, width: 1.2, linecap: 'round' },
+        },
+      ],
+    },
   ];
+  if (several) {
+    const layout = layoutText(String(count), {
+      font: TAB_COUNT_FONT,
+      maxWidth: width,
+      lineHeight: TAB_COUNT_FONT.size * 1.35,
+      maxLines: 1,
+      measurer: ctx.measurer,
+    });
+    shapes.push({
+      t: 'text',
+      // Centred in what the clip leaves free.
+      x: (11 + width - 3) / 2,
+      y: RAIL_SIZE / 2 - layout.height / 2,
+      layout,
+      font: TAB_COUNT_FONT,
+      fill: ink,
+      align: 'middle',
+    });
+  }
+  return shapes;
+}
+
+/**
+ * A shape's attachment tab where the shape wears it: in its marker rail, in the shape's own
+ * coordinates. `technology` says whether a technology mark sits at the corner ahead of it.
+ */
+export function describeAttachmentBadge(node: DraftNode, ctx: ChipContext, technology = false): Shape[] {
+  const count = node.attachments?.length ?? 0;
+  const at = markerRail(node, { technology, attachments: count }).attachments;
+  if (!at) return [];
+  return [{ t: 'group', translate: { x: at.x, y: at.y }, children: describeAttachmentTab(count, ctx) }];
 }

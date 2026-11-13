@@ -369,8 +369,8 @@ export function buildScene(
     const technologyMark = technologyMarkBounds(node);
     if (technologyMark) overlayRects.push({ ...technologyMark, x: node.x + technologyMark.x, y: node.y + technologyMark.y });
 
-    // The "<> 2" badge a shape with attachments carries above its corner on the canvas.
-    const badge = describeAttachmentBadge(node, { theme: nodeCtx.theme, measurer: nodeCtx.measurer });
+    // The attachment tab a shape carries in its marker rail on the canvas, after its technology mark.
+    const badge = describeAttachmentBadge(node, { theme: nodeCtx.theme, measurer: nodeCtx.measurer }, Boolean(technologyMark));
     if (badge.length) {
       markerEls.push(el('g', { transform: `translate(${n(node.x)} ${n(node.y)})`, ...decorateGroupAttrs(decoration) }, badge.flatMap(emitShape)));
       shapeRects(badge, node.x, node.y, overlayRects);
@@ -379,7 +379,7 @@ export function buildScene(
     // The same tab, at the same place, `DraftNodeView` puts it — from the same two functions.
     const nodePoints = points.length ? unresolvedOpenPointsFor(points, { kind: 'node', id: node.id }) : [];
     if (nodePoints.length) {
-      const origin = nodeMarkerOrigin(node);
+      const origin = nodeMarkerOrigin(node, { technology: Boolean(technologyMark), attachments: node.attachments?.length });
       const x = node.x + origin.x;
       const y = node.y + origin.y;
       markerEls.push(

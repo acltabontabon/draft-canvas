@@ -26,6 +26,7 @@ import { deserializeDocument, serializeDocument } from '../src/export/project';
 import { embed, viewOf } from '../src/depth/tree';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { describeMarker, describeMarkerKey, edgeMarkerCenter, nodeMarkerOrigin } from '../src/openPoints/marker';
+import { markerRail } from '../src/document/markerRail';
 import { openPointsOverview, unresolvedTargetsIn } from '../src/openPoints/collect';
 import { DARK } from '../src/render/theme/tokens';
 import { __resetClipboardSync, __resetInteraction, useEditorStore } from '../src/store/editorStore';
@@ -399,11 +400,15 @@ describe('the marker', () => {
     expect(text && text.t === 'text' ? text.layout.lines[0]!.text : '').toBe('2');
   });
 
-  it('sits off a shape\'s shoulder, inside a boundary\'s corner, and beside a connector\'s words', () => {
-    // Off the shoulder: outside the box on the right, mostly above its top edge.
-    const shoulder = nodeMarkerOrigin({ type: 'service', width: 176, height: 68 });
-    expect(shoulder.x).toBeGreaterThan(176);
-    expect(shoulder.y).toBeLessThan(0);
+  it('sits in a shape\'s marker rail, inside a boundary\'s corner, and beside a connector\'s words', () => {
+    // In the rail: wholly above the top edge, ending flush with the right one.
+    const rail = nodeMarkerOrigin({ type: 'service', width: 176, height: 68 });
+    expect(rail.x + 16).toBe(176);
+    expect(rail.y + 16).toBeLessThan(0);
+    // After whatever else the shape carries there, never on top of it.
+    const crowded = nodeMarkerOrigin({ type: 'service', width: 176, height: 68 }, { technology: true, attachments: 2 });
+    expect(crowded.y).toBe(rail.y);
+    expect(crowded.x + 16).toBeLessThan(markerRail({ type: 'service', width: 176 }, { technology: true, attachments: 2 }).attachments!.x);
     // Inside a boundary's own empty corner.
     const inside = nodeMarkerOrigin({ type: 'group', width: 420, height: 300 });
     expect(inside.x + 16).toBeLessThan(420);

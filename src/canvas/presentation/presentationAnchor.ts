@@ -3,6 +3,7 @@
  * connector's chip row, a node's attachment badge), the thing it's about, and what it must keep
  * clear of. Screen conversion and placement happen later, per frame, in `PresentationCallout`.
  */
+import { RAIL_LIFT, RAIL_SIZE } from '../../document/markerRail';
 import type { DraftEdge, DraftNode } from '../../document/types';
 import type { Rect } from '../../edges/routing';
 import type { Box } from '../../presentation/calloutPlacement';
@@ -32,9 +33,9 @@ export interface FlowAnchor {
 
 /** Rendered chip row / badge size when it can't be measured (not mounted yet, or culled). */
 const FALLBACK_MARKER = { width: 44, height: 20 };
-/** `.dc-attachment-badge` in `canvas.css`: `top: -22px; right: 6px`. */
-const BADGE_TOP = -22;
-const BADGE_RIGHT = 6;
+/** An attachment tab that can't be measured: one rail mark at the shape's corner (`document/markerRail.ts`). */
+const FALLBACK_TAB = { width: RAIL_SIZE, height: RAIL_SIZE };
+const TAB_TOP = -(RAIL_SIZE + RAIL_LIFT);
 
 /** Layout size in flow units — `offset*` ignores the viewport's scale transform, which is the point. */
 function measured(element: HTMLElement | null | undefined): { width: number; height: number; measured: boolean } {
@@ -87,7 +88,7 @@ export function nodeAnchor(node: InternalNode | undefined): FlowAnchor | null {
       const { width, height, measured: found } = measured(badge);
       return found
         ? { box: { x: rect.x + badge!.offsetLeft, y: rect.y + badge!.offsetTop, width, height }, measured: true }
-        : { box: { x: rect.x + rect.width - BADGE_RIGHT - width, y: rect.y + BADGE_TOP, width, height }, measured: false };
+        : { box: { x: rect.x + rect.width - FALLBACK_TAB.width, y: rect.y + TAB_TOP, ...FALLBACK_TAB }, measured: false };
     },
     host,
     avoid: [host],

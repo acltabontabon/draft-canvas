@@ -116,6 +116,26 @@ export interface AgentPreview {
 }
 
 /**
+ * What Tidy up would do to the room on screen, worked out and not yet applied: shown on the canvas
+ * as a tracing sheet (`canvas/AgentPreviewLayer.tsx`) with Apply and Cancel beside it
+ * (`ui/Editor/TidyBar.tsx`). Transient like every preview here: never saved, undone or exported, and
+ * dropped the moment the room it was worked out from changes.
+ */
+export interface TidyPreview {
+  /** The room it was worked out for, and that room exactly as it was then: applying is refused,
+   *  and the preview dropped, once either differs from what is on screen. */
+  path: readonly string[];
+  base: DraftDocument;
+  /** That room after tidying. */
+  view: DraftDocument;
+  /** How many shapes it nudges and how many connectors it re-attaches, for the bar's summary. */
+  moved: number;
+  reattached: number;
+  /** Whether only the selection was tidied. */
+  scoped: boolean;
+}
+
+/**
  * A pending MCP proposal's reviewed result, shown as a ghost on the canvas alongside
  * `ProposalPanel`'s text diff (see `UiState.proposalPreview`). Keyed by `proposalId` rather than
  * `agentPreview`'s `opId`/`seq` — a proposal under review and an agent mid live-write are two
@@ -470,6 +490,8 @@ export interface UiStore {
    * and on closing the panel.
    */
   proposalPreview: ProposalPreview | null;
+  /** What Tidy up would change, while the person decides: see `TidyPreview`. */
+  tidyPreview: TidyPreview | null;
   /**
    * Offers the user has waved away this session, pinned to the exact neighborhood they were made
    * in (`dismissalKey`): Escape on a ghost keeps it away for that node until something about that
@@ -631,6 +653,7 @@ export interface UiStore {
   setAgentPreview: (preview: AgentPreview | null) => void;
   /** Replaces the whole proposal ghost — a proposalId change never merges onto the previous one. */
   setProposalPreview: (preview: ProposalPreview | null) => void;
+  setTidyPreview: (preview: TidyPreview | null) => void;
   /** Flips the review panel's "Show on canvas" toggle without recomputing or dropping the ghost data. */
   setProposalPreviewVisible: (visible: boolean) => void;
   /**
@@ -747,6 +770,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   continuation: null,
   agentPreview: null,
   proposalPreview: null,
+  tidyPreview: null,
   continuationDismissals: new Set<DismissalKey>(),
   continuationsEnabled: initialContinuationsEnabled(),
   continuationCycle: null,
@@ -919,6 +943,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (state.openFitDocumentId === documentId ? { openFitDocumentId: null } : state)),
   setAgentPreview: (agentPreview) => set({ agentPreview }),
   setProposalPreview: (proposalPreview) => set({ proposalPreview }),
+  setTidyPreview: (tidyPreview) => set({ tidyPreview }),
   setProposalPreviewVisible: (visible) =>
     set((state) => (state.proposalPreview ? { proposalPreview: { ...state.proposalPreview, visible } } : state)),
   setContinuation: (next) =>

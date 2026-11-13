@@ -30,7 +30,7 @@ import {
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { compensationActionCaption, compensationLabelParts } from '../edges/compensationMarker';
 import { compensationDisplayLabel } from '../document/compensation';
@@ -611,7 +611,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         return captionIsUnusual ? `▲ ${text}` : text;
       })()
     : null;
-  const captionLayout = captionText ? layoutConnectorCaption(captionText, undefined, captionCollapsed ? undefined : route.labelRoom) : null;
+  const captionLayout = captionText ? fittedConnectorCaption(captionText, undefined, captionCollapsed ? route.trunkLabelRoom : route.labelRoom) : null;
   // Being a numbered step must never cost a connector its words — only the step badge physically
   // landing on them may, which is a question about two points and nothing else (`badgeCrowds`).
   // The glyphs below sit at the midpoint whatever the bundle does; only the caption follows the

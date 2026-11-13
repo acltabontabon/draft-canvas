@@ -72,8 +72,10 @@ const MENU_LABELS: Record<string, string> = {
   'add-subscriber': 'Add subscriber',
   'add-data-store': 'Connect data store',
   'add-routed-service': 'Route to service',
-  'arrange-selection': 'Tidy up selection',
-  arrange: 'Tidy up layout',
+  // "Tidy up" is the gentle, previewed cleanup (`tidy`); Arrange lays things out again from scratch,
+  // and says so, now that the two sit side by side.
+  'arrange-selection': 'Rearrange selection',
+  arrange: 'Rearrange layout',
   delete: 'Delete',
 };
 
@@ -141,7 +143,7 @@ function paneMenu(ctx: CommandContext, flowPosition: { x: number; y: number }): 
   return grouped(null, [
     [pasteAtCommand(flowPosition), ...pick(canvas, ['undo'])],
     { type: 'grid', label: 'Add here', items: shapes },
-    [...pick(canvas, ['select-all']), ...pick(viewCommands(ctx), ['fit', 'traffic-show', 'traffic-hide']), ...pick(canvas, ['arrange'])],
+    [...pick(canvas, ['select-all']), ...pick(viewCommands(ctx), ['fit', 'traffic-show', 'traffic-hide']), ...pick(canvas, ['tidy', 'arrange'])],
     // What acts on the whole diagram lives with the diagram, now that the header has no ⋯ for it.
     pick(canvas, ['find-replace', 'settings']),
   ]);
@@ -276,7 +278,7 @@ function selectionMenu(ctx: CommandContext, commands: Command[]): ContextMenuEnt
   const align = pick(commands, ALIGN_IDS).map((command) => ({ ...itemOf(command), icon: command.id as AlignIcon }));
   return grouped({ type: 'header', title: count(nodes.length + edges.length, 'element') }, [
     // One shared point for everything selected — the header already says how many.
-    pick(commands, ['group', 'ungroup', 'arrange-selection', 'open-point-add']),
+    pick(commands, ['group', 'ungroup', 'tidy', 'arrange-selection', 'open-point-add']),
     { type: 'icons', label: 'Align and distribute', items: align },
     pick(commands, COPY_AND_ORDER),
     pick(commands, ['spotlight']),
@@ -305,7 +307,10 @@ export function contextMenuCommandsFor(
     case 'selection': {
       const { nodes, edges } = ctx.editor.selection;
       if (nodes.length + edges.length < 2) return []; // no longer a multi-selection — see the effect that closes the menu when this happens
-      return selectionMenu(ctx, [...arrangeSelectionCommands(ctx), ...multiCommands(ctx), ...pick(openPointCommands(ctx), ['open-point-add'])]);
+      return selectionMenu(ctx, [
+        // Only with shapes among what is selected: for connectors alone it would tidy the whole view.
+        ...(ctx.editor.selection.nodes.length > 0 ? pick(canvasCommands(ctx), ['tidy']) : []),
+        ...arrangeSelectionCommands(ctx), ...multiCommands(ctx), ...pick(openPointCommands(ctx), ['open-point-add'])]);
     }
     default:
       return [];

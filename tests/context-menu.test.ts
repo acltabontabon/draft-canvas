@@ -65,11 +65,16 @@ describe('contextMenuCommandsFor — empty canvas', () => {
     expect(grid.items.map((item) => item.label).slice(0, 3)).toEqual(['Service', 'Data Store', 'Queue']);
   });
 
-  it('offers Undo and Tidy up layout once there is something to undo and arrange', () => {
+  it('offers Undo, Tidy up and Rearrange layout once there is something to undo and arrange', () => {
     useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0 });
+    // A new shape arrives selected; with nothing selected the menu speaks of the whole view.
+    useEditorStore.getState().setSelection({ nodes: [], edges: [] });
     const entries = pane(stubContext());
-    expect(idsOf(entries)).toEqual(expect.arrayContaining(['undo', 'select-all', 'fit', 'arrange']));
-    expect(itemFor(entries, 'arrange').label).toBe('Tidy up layout');
+    expect(idsOf(entries)).toEqual(expect.arrayContaining(['undo', 'select-all', 'fit', 'tidy', 'arrange']));
+    // The gentle, previewed cleanup comes first; laying everything out again says that it does.
+    expect(idsOf(entries).indexOf('tidy')).toBeLessThan(idsOf(entries).indexOf('arrange'));
+    expect(itemFor(entries, 'tidy').label).toBe('Tidy up');
+    expect(itemFor(entries, 'arrange').label).toBe('Rearrange layout');
   });
 
   it('still offers Paste when the in-app clipboard is empty, since the OS clipboard may hold something', () => {

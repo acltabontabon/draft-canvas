@@ -39,7 +39,7 @@ import type { EdgeTracks } from './separation';
 import type { Crossing } from './crossings';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, layoutConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
 import { compensationActionCaption, compensationLabelParts } from './compensationMarker';
 import { compensationDisplayLabel } from '../document/compensation';
 
@@ -443,10 +443,11 @@ export function describeEdge(
       const captionAt = collapsed ? route.trunkLabel! : { x: labelX, y: labelY };
       // A collapsed caption sits on the shared trunk, well clear of any member's own badge, so it
       // is measured where it actually lands rather than at this connector's midpoint.
-      if (!(badgeAt !== null && badgeCrowds(badgeAt, captionAt))) {
-        // On the trunk the caption is clear of every member's ends; at its own point it fits the room
-        // its line leaves before a shape or the arrowhead (`layoutConnectorCaption`).
-        const captionLayout = layoutConnectorCaption(text, ctx.measurer, collapsed ? undefined : route.labelRoom);
+      // On the trunk the caption is clear of every member's ends; at its own point it fits the room
+      // its line leaves before a shape or the arrowhead, and is left out of a line with no room for
+      // it at all (`fittedConnectorCaption`), exactly as the canvas leaves it out.
+      const captionLayout = fittedConnectorCaption(text, ctx.measurer, collapsed ? route.trunkLabelRoom : route.labelRoom);
+      if (captionLayout && !(badgeAt !== null && badgeCrowds(badgeAt, captionAt))) {
         const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
         const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout, collapsed ? responseAway : captionAwayForLane(ctx.lane ?? 0, responseAway));
         overlay.push({

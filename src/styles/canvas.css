@@ -1602,31 +1602,40 @@
   /* Clickable even while presenting, when React Flow stops nodes receiving the pointer — the badge
   is how a presenter asks a node to speak (same as a connector's chips). */
   pointer-events: all;
-  /* Sits fully above the node's top edge rather than straddling the
-  top-right corner, which is exactly where the resize handle grabs —
-  a badge there would sit on top of it and block that corner. */
-  top: -22px;
-  right: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-pill);
-  background: var(--dc-surface);
+  /* Placed by `document/markerRail.ts` (inline `left`/`top`/`width`): one row above the shape's
+  top-right corner that the technology mark and the open-point tab share, wholly above the top
+  edge so it never sits on the corner the resize handle grabs. The picture is the exporter's own
+  (`describeAttachmentTab`); this is only the button around it. */
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
   color: var(--dc-text-muted);
-  font-size: 10.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.4;
   cursor: pointer;
-  box-shadow: var(--dc-shadow-panel);
+}
+
+.dc-attachment-badge > svg {
+  display: block;
+  overflow: visible;
+}
+
+/* A 28px target around a 16px tab, as the open-point marker has. */
+.dc-attachment-badge::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
 }
 
 .dc-attachment-badge:hover,
 .dc-attachment-badge[data-open='true'] {
-  color: var(--dc-text);
-  border-color: var(--dc-selection);
+  outline: 1.5px solid var(--dc-selection);
+  outline-offset: 0;
+}
+
+.dc-attachment-badge:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
 }
 
 /* The depth glyph (`DepthGlyph`): a tiny stack of three flat layers. Colour is `currentColor`; a

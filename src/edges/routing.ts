@@ -265,6 +265,9 @@ export interface RoutedEdge {
    * a few pixels off, as a faint double image.
    */
   trunkLabelSide?: Side;
+  /** How wide `trunkLabel`'s caption may be before it leaves its stem: the stem's length. Set only
+   *  for a level stem; a caption beside an upright one spreads away from the line. */
+  trunkLabelRoom?: number;
   /**
    * The whole polyline of a connector drawn through hand-placed bends (`DraftEdge.waypoints`), ends
    * included — for a stepped one, with the elbows routing added. Absent for a routed line. What the
@@ -1118,6 +1121,7 @@ function buildSpinePath(
   branchStart?: { x: number; y: number };
   trunkLabel: { x: number; y: number };
   trunkLabelSide: Side;
+  trunkLabelRoom?: number;
 } {
   // A hub side of left/right puts the trunk on a vertical line at x = `trunk`;
   // top/bottom puts it on a horizontal one at y = `trunk`.
@@ -1159,6 +1163,10 @@ function buildSpinePath(
     // beside. Same defaults `labelSideFor` picks for those orientations, just
     // decided once for the whole bundle.
     trunkLabelSide: verticalTrunk ? 'top' : 'right',
+    // A caption centred on a level stem has the stem's own length to itself, less what keeps it off
+    // the far end: the trunk's corner out of a fan-out's hub, the arrowhead into a fan-in's. Beside an upright stem it
+    // spreads sideways, away from the line, and has no such limit.
+    ...(verticalTrunk ? { trunkLabelRoom: Math.max(0, Math.abs(stemTo.x - stemFrom.x) - (fanOut ? LABEL_BEND_CLEARANCE : LABEL_ARROW_CLEARANCE)) } : {}),
   };
 }
 
@@ -1205,6 +1213,13 @@ export const LABEL_BEND_CLEARANCE = 14;
 /** A straight stretch shorter than this is a kink, not somewhere to read a caption: the label moves
  *  to the connector's longest straight stretch instead. */
 export const LABEL_MIN_RUN = 48;
+/** The width a label beside an upright run is checked for on each side: the narrowest any label or
+ *  caption is laid out to (`MIN_FIT_WIDTH` in `labelLayout.ts`). */
+const LABEL_SIDE_REACH = 56;
+/** The tallest jog a short hop may have and still carry its words over its middle as one line. */
+const LABEL_HOP_JOG = 28;
+/** Half the height of the band beside an upright run that a shape must stand in to be in a label's way. */
+const LABEL_SIDE_BAND = 10;
 
 /** The arrowhead's own length, kept clear at the target end of a run on top of the bend clearance,
  *  so a caption never sits over the head. */
@@ -1361,6 +1376,7 @@ export function placeLabel(
   sourceRect: Rect,
   targetRect: Rect,
   fallback: Side,
+  chip = false,
 ): { x: number; y: number; side: Side; room?: number } {
   const vertices = flattenPath(d);
   if (vertices.length < 2) return { ...point, side: fallback };
@@ -1402,6 +1418,28 @@ export function placeLabel(
   const kinked = !own || own.length < LABEL_MIN_RUN;
   const moveTo = kinked ? longestOf(runs.filter(level)) ?? (own ? undefined : longestOf(runs)) : undefined;
 
+  // A short hop between two shapes a little off level: out, a small jog, in. Neither level half is
+  // long enough to carry words, so they used to stay beside the jog, where the next shape is one
+  // short half away and everything past the first letters ran under it. This is what a Queue and
+  // the Worker suggested beside it draw, since a queue's tube sits above its box's middle. The hop
+  // as a whole has the room: the words go over its middle, clear of both halves, a chip above the
+  // upper one and a caption (which hangs below its line) under the lower one.
+  if (kinked && !moveTo) {
+    const start = vertices[0]!;
+    const end = vertices[last]!;
+    const out = runs.find((candidate) => candidate.from === 0);
+    const back = runs.find((candidate) => candidate.to === last);
+    const span = Math.abs(end.x - start.x) - LABEL_ARROW_CLEARANCE;
+    if (out && back && out !== back && level(out) && level(back) && span >= LABEL_MIN_RUN && Math.abs(end.y - start.y) <= LABEL_HOP_JOG) {
+      return {
+        x: start.x + (Math.sign(end.x - start.x) * span) / 2,
+        y: chip ? Math.min(start.y, end.y) : Math.max(start.y, end.y),
+        side: chip ? 'top' : 'bottom',
+        room: span,
+      };
+    }
+  }
+
   // The stretch the label sits on: the one it moves to, else its own segment (sliding within the
   // segment, not the whole stretch, is what keeps neighbouring captions where they were planned).
   const run = moveTo ?? own;
@@ -1441,9 +1479,27 @@ export function placeLabel(
     const collides = insideRect(sourceRect, above.x, above.y) || insideRect(targetRect, above.x, above.y);
     return { x, y, side: collides ? 'bottom' : 'top', ...(room !== undefined ? { room } : {}) };
   }
-  const beside = { x: x + LABEL_LINE_GAP, y };
-  const collides = insideRect(sourceRect, beside.x, beside.y) || insideRect(targetRect, beside.x, beside.y);
-  return { x, y, side: collides ? 'left' : 'right' };
+  // Beside an upright run the words spread sideways, toward whichever of the line's own two shapes
+  // stands level with them. A single point eight pixels out only noticed a shape the label began
+  // inside: one a little further over was run into by everything after the first letters. So each
+  // side is measured for the clear width it offers. The right is kept when it has room, the left
+  // taken when only it does, and when neither has, the roomier side is used and the width it
+  // leaves is reported as `room`, which lays the text out to fit or leaves a caption out.
+  const clearBeside = (direction: 1 | -1): number => {
+    const from = x + direction * LABEL_LINE_GAP;
+    let clear = Infinity;
+    for (const rect of [sourceRect, targetRect]) {
+      if (rect.y >= y + LABEL_SIDE_BAND || rect.y + rect.height <= y - LABEL_SIDE_BAND) continue;
+      if (direction > 0 ? rect.x + rect.width <= from : rect.x >= from) continue;
+      clear = Math.min(clear, Math.max(0, direction > 0 ? rect.x - from : from - (rect.x + rect.width)));
+    }
+    return clear;
+  };
+  const right = clearBeside(1);
+  if (right >= LABEL_SIDE_REACH) return { x, y, side: 'right' };
+  const left = clearBeside(-1);
+  if (left >= LABEL_SIDE_REACH) return { x, y, side: 'left' };
+  return { x, y, side: right >= left ? 'right' : 'left', room: Math.max(right, left) };
 }
 
 /** How wide a caption centred at `at` on a level stretch may be before it reaches the line's own
@@ -1553,6 +1609,7 @@ function clearLabel(
   lane: number,
   sourceSide: Side,
   targetSide: Side,
+  fitted: boolean,
 ): { x: number; y: number; side: Side } {
   const nudge = labelLaneOffset(sourceSide, targetSide, lane);
   const occupied = [sourceRect, targetRect, ...obstacles];
@@ -1564,8 +1621,13 @@ function clearLabel(
     const top = side === 'bottom' ? y + LABEL_LINE_GAP - LABEL_PADDING_Y : side === 'top' ? y - LABEL_LINE_GAP + LABEL_PADDING_Y - size.height : y - size.height / 2;
     return nodes.every((o) => left + size.width + 2 <= o.x || left - 2 >= o.x + o.width || top + size.height + 2 <= o.y || top - 2 >= o.y + o.height);
   };
-  // Keep established endpoint placement unless an unrelated shape actually covers the label.
-  if (clear(initial, obstacles)) return initial;
+  // Keep established endpoint placement unless a shape actually covers the label. The line's own two
+  // shapes count only where the chip is drawn at the size measured here: beside an upright run, or
+  // along an interior one. A chip on a level run that reaches a shape is laid out to that run's room
+  // (`labelRoom`) and wraps to fit, so `size`, its unfitted width, would call a label that fits a
+  // collision. Leaving the two shapes out everywhere let a label beside the last upright run of a
+  // branch lie across the corner of the shape the branch turns into.
+  if (clear(initial, fitted ? obstacles : occupied)) return initial;
   const opposite: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
   const flipped = { ...initial, side: opposite[initial.side] };
   if (clear(flipped)) return flipped;
@@ -1587,7 +1649,17 @@ function clearLabel(
       candidates.push(point, { ...point, side: opposite[side] });
     }
   }
+  // A short hop with a jog in it has no stretch long enough to sample, yet a chip often fits over
+  // the hop as a whole: above or below a mostly level one, beside a mostly upright one.
+  if (vertices.length >= 2) {
+    const first = vertices[0]!;
+    const last = vertices[vertices.length - 1]!;
+    const side: Side = Math.abs(last.x - first.x) >= Math.abs(last.y - first.y) ? 'top' : 'right';
+    const middle = { ...polylineMidpoint(vertices), side };
+    candidates.push(middle, { ...middle, side: opposite[side] });
+  }
   candidates.sort((a, b) => Math.hypot(a.x - initial.x, a.y - initial.y) - Math.hypot(b.x - initial.x, b.y - initial.y));
+  // Nowhere on the line is clear of everything: stay put, as a label over its own shape always has.
   return candidates.find((point) => clear(point)) ?? initial;
 }
 
@@ -1609,7 +1681,7 @@ export function routeBetween(
   const route = clearAutomaticEntry(initial, sourceRect, targetRect, routing, options);
   if (!options?.label) return route;
   const label = clearLabel(route.d, { x: route.labelX, y: route.labelY, side: route.labelSide }, options.label,
-    sourceRect, targetRect, options.obstacles ?? [], options.lane ?? 0, route.source.side, route.target.side);
+    sourceRect, targetRect, options.obstacles ?? [], options.lane ?? 0, route.source.side, route.target.side, route.labelRoom !== undefined);
   if (label.x === route.labelX && label.y === route.labelY) return { ...route, labelSide: label.side };
   // Moved clear of a shape: the room measured at the old point no longer applies.
   const { labelRoom: _stale, ...moved } = route;
@@ -1914,6 +1986,7 @@ function drawBetween(
   let branchStart: { x: number; y: number } | undefined;
   let trunkLabel: { x: number; y: number } | undefined;
   let trunkLabelSide: Side | undefined;
+  let trunkLabelRoom: number | undefined;
   let status: RouteStatus = 'unchecked';
   let work = 0;
 
@@ -1953,6 +2026,7 @@ function drawBetween(
         branchStart = built.branchStart;
         trunkLabel = built.trunkLabel;
         trunkLabelSide = built.trunkLabelSide;
+        trunkLabelRoom = built.trunkLabelRoom;
         // The planner chose the trunk clear of shapes; a member is checked, never rerouted off it.
         if (options?.mode !== 'gesture') {
           status = polylineClear(flattenPath(path), [...(options?.obstacles ?? []), glyphOf(sourceRect), glyphOf(targetRect)]) ? 'clear' : 'blocked';
@@ -2028,6 +2102,7 @@ function drawBetween(
     sourceRect,
     targetRect,
     labelSideFor(sourceRect, targetRect, sourceSide, targetSide, { x: labelX, y: labelY }),
+    Boolean(options?.label),
   );
 
   return {
@@ -2041,6 +2116,7 @@ function drawBetween(
     branchStart,
     trunkLabel,
     trunkLabelSide,
+    ...(trunkLabelRoom !== undefined ? { trunkLabelRoom } : {}),
     status,
     work,
   };

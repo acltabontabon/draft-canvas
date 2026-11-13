@@ -49,7 +49,29 @@ export const ProposalPreviewLayer = memo(function ProposalPreviewLayer() {
   return <PreviewBody preview={preview} source="proposal" label="Proposal’s previewed change" />;
 });
 
-function PreviewBody({ preview, source, label }: { preview: PreviewSource; source: 'live' | 'proposal'; label: string }) {
+/**
+ * What Tidy up would do, before it is applied (`uiStore.tidyPreview`, set by the Tidy up command and
+ * cleared by `TidyBar`). Always the tracing sheet, even when no shape moves: a cleanup that only
+ * re-attaches connectors drawn as ghosts over the live ones would show every changed line twice,
+ * and the question being asked is "is this the picture I want", which the whole result answers.
+ */
+export const TidyPreviewLayer = memo(function TidyPreviewLayer() {
+  const preview = useUiStore((state) => state.tidyPreview);
+  const path = useEditorStore((state) => state.path);
+  // Only over the very room it was worked out from: `TidyBar` drops a stale preview a render later,
+  // and for that render the sheet must not show a cleanup of a diagram that has since changed.
+  const current = useEditorStore((state) => preview !== null && state.document === preview.base);
+  const source = useMemo(
+    () => preview && { path: preview.path, nodes: preview.view.nodes, edges: preview.view.edges, base: { nodes: preview.base.nodes, edges: preview.base.edges } },
+    [preview],
+  );
+  if (!source || !current || pathKey(source.path as string[]) !== pathKey(path)) return null;
+  return <PreviewBody preview={source} source="tidy" label="Tidy up preview" sheet />;
+});
+
+type PreviewOrigin = 'live' | 'proposal' | 'tidy';
+
+function PreviewBody({ preview, source, label, sheet = false }: { preview: PreviewSource; source: PreviewOrigin; label: string; sheet?: boolean }) {
   const theme = useThemeValue();
   const { preset } = usePersonality();
   const liveNodes = useEditorStore((state) => state.document.nodes);
@@ -75,7 +97,7 @@ function PreviewBody({ preview, source, label }: { preview: PreviewSource; sourc
   const moved = useMemo(() => movedShapes({ nodes, edges }, { nodes: preview.nodes, edges: preview.edges }), [nodes, edges, preview]);
   const base = useMemo(() => ({ nodes, edges }), [nodes, edges]);
 
-  if (moved.length > 0) {
+  if (sheet || moved.length > 0) {
     return <TracingSheet preview={preview} source={source} base={base} diff={diff} moved={moved} after={after} before={before} />;
   }
 
@@ -148,7 +170,7 @@ function TracingSheet({
   before,
 }: {
   preview: PreviewSource;
-  source: 'live' | 'proposal';
+  source: PreviewOrigin;
   base: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] };
   diff: AgentGhostDiff;
   moved: MovedShape[];

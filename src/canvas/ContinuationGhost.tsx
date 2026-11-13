@@ -5,7 +5,9 @@ import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { edgeRoutes } from '../edges/edgeRoutes';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge } from '../edges/kindStyle';
-import { captionAnchor, labelLaneOffset, responseAwayAt } from '../edges/routing';
+import { LABEL_LINE_GAP, captionAnchor, labelChipSide, labelLaneOffset, responseAwayAt, type Side } from '../edges/routing';
+import { fittedConnectorCaption, layoutEdgeLabel } from '../edges/labelLayout';
+import { baselineOf, type TextLayout } from '../render/text/layout';
 import { describeContext, describeNode } from '../nodes/describe';
 import { markerRef } from '../render/svg/markers';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
@@ -215,10 +217,22 @@ export const GhostEdge = memo(function GhostEdge({
         target: categoryOf(target),
       })
     : undefined;
-  // Placed the way both renderers place it: nudged off its parallel siblings, and on the side away
-  // from its reply line.
+  // Placed the way both renderers place it: nudged off its parallel siblings, on the side away
+  // from its reply line, and laid out by the same functions. A label wraps to the room its line
+  // leaves and sits where its chip would; a caption shared by a fan is drawn once, on the stem,
+  // and one its line has no room for is left out. Drawn by simpler rules, a preview showed words
+  // running under shapes that the diagram it previews would never draw there.
   const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
-  const at = captionAnchor(route.labelSide, route.labelX + nudge.x, route.labelY + nudge.y, responseAwayAt(route, routes.response, lane));
+  const away = responseAwayAt(route, routes.response, lane);
+  const onStem = !edge.label && Boolean(route.trunkLabel);
+  const point = onStem ? route.trunkLabel! : { x: route.labelX + nudge.x, y: route.labelY + nudge.y };
+  const words = !caption
+    ? null
+    : edge.label
+    ? layoutEdgeLabel(edge.label, undefined, route.labelRoom)
+    : fittedConnectorCaption(caption, undefined, onStem ? route.trunkLabelRoom : route.labelRoom);
+  const at = captionAnchor(onStem ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide, point.x, point.y, away);
+  const chip = edge.label && words ? ghostLabelLines(words, labelChipSide(route.labelSide, away), point) : null;
   const response = routes.response;
   // Always a literal colour from `theme`, on both branches: `Markers` mints every arrowhead once,
   // as static SVG markup keyed by exact colour string (`Markers.tsx`'s `colors` Set) — a CSS custom
@@ -253,7 +267,15 @@ export const GhostEdge = memo(function GhostEdge({
           markerEnd={edge.directed ? markerRef(color, 'open') : undefined}
         />
       )}
-      {caption && (
+      {chip ? (
+        <text textAnchor={chip.textAnchor} fill={color} style={{ font: cssFont(FONTS.edgeLabel), textDecoration: removed ? 'line-through' : undefined }}>
+          {chip.lines.map((line) => (
+            <tspan key={line.y} x={chip.x} y={line.y}>
+              {line.text}
+            </tspan>
+          ))}
+        </text>
+      ) : words && (
         <text
           x={at.x}
           y={at.y}
@@ -262,12 +284,27 @@ export const GhostEdge = memo(function GhostEdge({
           fill={color}
           style={{ font: cssFont(FONTS.connectorCaption), textDecoration: removed ? 'line-through' : undefined }}
         >
-          {caption}
+          {words.lines[0]?.text ?? caption}
         </text>
       )}
     </g>
   );
 }, sameGhostEdge);
+
+/**
+ * A label's lines where its chip puts them (`labelChipTransform` in `DraftEdgeView`): the block of
+ * text `LABEL_LINE_GAP` off the line on `side`, centred along a level run and beside an upright one.
+ * A ghost has no chip to draw, only the words.
+ */
+function ghostLabelLines(layout: TextLayout, side: Side, point: { x: number; y: number }): { x: number; textAnchor: 'start' | 'middle' | 'end'; lines: { y: number; text: string }[] } {
+  const top = side === 'top' ? point.y - LABEL_LINE_GAP - layout.height : side === 'bottom' ? point.y + LABEL_LINE_GAP : point.y - layout.height / 2;
+  const x = side === 'right' ? point.x + LABEL_LINE_GAP : side === 'left' ? point.x - LABEL_LINE_GAP : point.x;
+  return {
+    x,
+    textAnchor: side === 'right' ? 'start' : side === 'left' ? 'end' : 'middle',
+    lines: layout.lines.map((line, index) => ({ y: top + baselineOf(layout, index), text: line.text })),
+  };
+}
 
 /** Every prop by identity, except the obstacle list: rebuilt with each graph, but of rects that keep
  *  their identity while their node does (`obstaclesForEdge`) — so compared element by element. */

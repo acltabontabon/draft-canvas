@@ -680,6 +680,32 @@ export function canvasCommands(ctx: CommandContext): Command[] {
   }
   // Tidy, Arrange and Find and replace edit the document, which a shared (read-only) diagram
   // refuses — offering them only produced a misleading error.
+  const arrangeable = ctx.editor.document.nodes.some((node) => node.type !== 'group' && node.type !== 'note' && node.type !== 'text' && node.type !== 'code');
+  // The one cleanup to reach for first. It keeps every shape where it was put, shows what it would
+  // change before changing anything, and with shapes selected tidies only their neighbourhood. The
+  // specialised commands below stay for someone who wants exactly one of them.
+  if (!ctx.ui.readOnly && arrangeable) {
+    const scoped = ctx.editor.selection.nodes.length > 0;
+    commands.push({
+      id: 'tidy',
+      title: scoped ? 'Tidy up selection' : 'Tidy up',
+      group: 'canvas',
+      keywords: ['tidy', 'clean up', 'cleanup', 'neaten', 'fix layout', 'straighten', 'untangle', 'preview', 'polish'],
+      hint: scoped
+        ? 'Preview a gentle cleanup of the selected shapes — nothing else moves'
+        : 'Preview a gentle cleanup — shapes stay where you put them',
+      run: (inner) => {
+        void inner.editor.planTidy()
+          .then((preview) => {
+            if (preview) inner.ui.setTidyPreview(preview);
+            // Said, so the command doesn't look like it did nothing; and the stronger tool is one
+            // click away for a diagram that is tidy as drawn but wants laying out again.
+            else if (!inner.ui.readOnly) inner.ui.notify('Already tidy.', 'info', { label: 'Rearrange', run: () => rearrange(inner) });
+          })
+          .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
+      },
+    });
+  }
   if (!ctx.ui.readOnly && ctx.editor.document.edges.some((edge) => edge.routeMode || edge.waypoints)) {
     commands.push({
       id: 'tidy-connections',
@@ -716,23 +742,14 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       },
     });
   }
-  if (!ctx.ui.readOnly && ctx.editor.document.nodes.some((node) => node.type !== 'group' && node.type !== 'note' && node.type !== 'text' && node.type !== 'code')) {
+  if (!ctx.ui.readOnly && arrangeable) {
     commands.push({
       id: 'arrange',
       title: 'Arrange diagram',
       group: 'canvas',
       keywords: ['layout', 'auto layout', 'tidy', 'clean up', 'organize', 'rearrange', 'align'],
-      hint: 'Lay this view out again — one undo step',
-      run: (inner) => {
-        // The camera follows only once the engine has moved things: fitting first would frame the
-        // old positions, and the engine loads on demand.
-        void inner.editor.arrangeRoom()
-          .then((moved) => {
-            if (moved) void inner.camera.fitView({ padding: 0.2, duration: 320 });
-            else if (!inner.ui.readOnly) inner.ui.notify('Already tidy.');
-          })
-          .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
-      },
+      hint: 'Lay this view out again from scratch — one undo step',
+      run: rearrange,
     });
   }
   if (!ctx.ui.readOnly && ctx.editor.selection.nodes.some((id) => {
@@ -2014,6 +2031,19 @@ export function multiCommands(ctx: CommandContext): Command[] {
 }
 
 /** The selection-dependent part of the list — empty when nothing is selected. */
+/** Arrange diagram: lays the view out again from scratch. Also what Tidy up offers when it finds
+ *  nothing to do. */
+function rearrange(inner: CommandContext): void {
+  // The camera follows only once the engine has moved things: fitting first would frame the
+  // old positions, and the engine loads on demand.
+  void inner.editor.arrangeRoom()
+    .then((moved) => {
+      if (moved) void inner.camera.fitView({ padding: 0.2, duration: 320 });
+      else if (!inner.ui.readOnly) inner.ui.notify('Already tidy.');
+    })
+    .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
+}
+
 export function arrangeSelectionCommands(ctx: CommandContext): Command[] {
   if (ctx.ui.readOnly || !ctx.editor.selection.nodes.some((id) => {
     const node = ctx.editor.document.nodes.find((item) => item.id === id);

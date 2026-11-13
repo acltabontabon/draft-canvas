@@ -24,11 +24,11 @@ import { FONTS, LINE_HEIGHTS, type FontSpec } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
 import type { Theme } from '../render/theme/tokens';
+import { RAIL_SIZE, markerRail, type RailContents } from '../document/markerRail';
 
-/** The tab is 16 units square on the canvas and in exports — the size of a connector's step badge. */
-export const MARKER_SIZE = 16;
-/** How far an inset tab sits from a card's top and right edges. */
-export const MARKER_INSET = 6;
+/** The tab is 16 units square on the canvas and in exports — the size of a connector's step badge,
+ *  and of every other mark in a shape's marker rail. */
+export const MARKER_SIZE = RAIL_SIZE;
 /** Gap between a connector's label chip (or caption) and the tab beside it. */
 export const MARKER_GAP = 4;
 
@@ -48,18 +48,21 @@ export function markerPalette(theme: Theme): { fill: string; line: string } {
 /**
  * Where a node's tab sits, in the node's own coordinates.
  *
- * Off the top-right shoulder, just outside the shape — the one place every silhouette leaves free.
+ * In the marker rail above the shape's top-right corner (`document/markerRail.ts`), after whatever
+ * else the shape carries there, so it never lands on the technology mark or the attachment tab.
  * Inside the corner would read as a tab folded onto the page, but the cards already use their
  * corners: a service's window-chrome dots sit top-right, a note's kind tag top-left, a code card's
- * header holds its language and its Copy button. Outside, the tab touches the corner without
- * covering anything, and stays clear of the resize handle selection puts on it.
+ * header holds its language and its Copy button. It used to hang off the shoulder, beside the right
+ * edge, which is where a connector leaving that side puts its label.
  *
  * A boundary is the exception: its corner is empty (the caption sits top-left) and a tab inside it
  * says "this area" more plainly than one floating beside a dashed line would.
  */
-export function nodeMarkerOrigin(node: { type: string; width: number; height: number }): { x: number; y: number } {
-  if (node.type === 'group') return { x: node.width - MARKER_SIZE - MARKER_INSET - 2, y: MARKER_INSET + 2 };
-  return { x: node.width + 3, y: -MARKER_SIZE + 5 };
+export function nodeMarkerOrigin(
+  node: { type: string; width: number; height: number },
+  beside: Pick<RailContents, 'technology' | 'attachments'> = {},
+): { x: number; y: number } {
+  return markerRail(node, { ...beside, openPoints: true }).openPoint!;
 }
 
 /** A rectangle something already draws beside a connector's label point, in flow units. */

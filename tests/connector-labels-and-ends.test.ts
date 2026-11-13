@@ -3,7 +3,7 @@ import { createEdge, createNode } from '../src/document/factory';
 import { categoryOf } from '../src/document/connectorSemantics';
 import { relationshipCaptionLabel } from '../src/document/edgeSemantics';
 import { connectorRoutes } from '../src/edges/connectorRoutes';
-import { layoutConnectorCaption, layoutEdgeLabel } from '../src/edges/labelLayout';
+import { fittedConnectorCaption, layoutConnectorCaption, layoutEdgeLabel } from '../src/edges/labelLayout';
 import {
   LABEL_ARROW_CLEARANCE,
   LABEL_BEND_CLEARANCE,
@@ -36,6 +36,53 @@ describe('captions sit on the longest straight stretch, clear of the arrowhead',
     });
     // The two level stretches are at y 30 and 48; the label is on one of them, not between.
     expect([30, 48]).toContain(route.labelY);
+  });
+
+  it('puts the words over the middle of a short hop with a jog in it, not beside the jog', () => {
+    // A Queue and the Worker suggested beside it: the tube sits above the box's middle, so the line
+    // goes out, drops 17, and comes in. Neither half is long enough to carry "consumed by".
+    const queue = { x: 300, y: 200, width: 140, height: 72 };
+    const worker = { x: 530, y: 200, width: 176, height: 68 };
+    const d = 'M 440,216.75 L 485,216.75 L 485,234 L 530,234';
+    const caption = placeLabel(d, { x: 485, y: 225 }, queue, worker, 'top');
+    // Under the lower half, centred in what the arrowhead leaves, with the whole hop as its room.
+    expect(caption).toEqual({ x: 440 + (90 - LABEL_ARROW_CLEARANCE) / 2, y: 234, side: 'bottom', room: 90 - LABEL_ARROW_CLEARANCE });
+    expect(fittedConnectorCaption('consumed by', undefined, caption.room)).not.toBeNull();
+    // A label's chip sits above its line, so it takes the upper half instead.
+    expect(placeLabel(d, { x: 485, y: 225 }, queue, worker, 'top', true)).toMatchObject({ y: 216.75, side: 'top' });
+    // A hop too short for any words keeps the old point: nothing over the middle would fit either.
+    expect(placeLabel('M 0,0 L 20,0 L 20,10 L 40,10', { x: 20, y: 5 }, near, far, 'top').room).toBeUndefined();
+  });
+
+  it('measures both sides of an upright run for the room a shape leaves beside it', () => {
+    const d = 'M 0,0 L 0,200';
+    // Nothing level with the label on either side: the right, as always.
+    expect(placeLabel(d, { x: 0, y: 100 }, near, far, 'right')).toEqual({ x: 0, y: 100, side: 'right' });
+    // A shape a short way to the right, level with the label: only the left has room.
+    const beside = { x: 30, y: 60, width: 120, height: 80 };
+    expect(placeLabel(d, { x: 0, y: 100 }, beside, far, 'right')).toEqual({ x: 0, y: 100, side: 'left' });
+    // Shapes close on both sides: the roomier side, and how wide the words may be there.
+    const left = { x: -160, y: 60, width: 120, height: 80 };
+    const squeezed = placeLabel(d, { x: 0, y: 100 }, beside, left, 'right');
+    expect(squeezed.side).toBe('left');
+    expect(squeezed.room).toBe(40 - 8);
+  });
+
+  it('leaves a caption out of a line with no room for it, rather than running it under a shape', () => {
+    expect(fittedConnectorCaption('consumed by')).not.toBeNull();
+    expect(fittedConnectorCaption('consumed by', undefined, 80)).not.toBeNull();
+    // Fitted to the narrowest it may be laid out, it would still be wider than the line allows.
+    expect(fittedConnectorCaption('consumed by', undefined, 20)).toBeNull();
+    // A short word fits a short line.
+    expect(fittedConnectorCaption('calls', undefined, 30)).not.toBeNull();
+  });
+
+  it('gives a fan\'s shared caption the length of its stem, less the trunk\'s corner', () => {
+    const hub = { x: 0, y: 100, width: 120, height: 60 };
+    const spine = { hub: 'source' as const, hubSide: 'right' as const, trunkGap: 40, corridor: 80, id: 's', count: 2 };
+    const route = routeBetween(hub, { x: 200, y: 0, width: 120, height: 60 }, 'smoothstep', { spine });
+    expect(route.trunkLabel).toBeDefined();
+    expect(route.trunkLabelRoom).toBe(Math.abs(route.trunkLabel!.x - route.source.x) * 2 - LABEL_BEND_CLEARANCE);
   });
 
   it('keeps the arrowhead\'s length clear at the target end of a stretch', () => {
