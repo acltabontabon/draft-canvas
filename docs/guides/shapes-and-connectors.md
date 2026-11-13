@@ -111,6 +111,14 @@ side and point. When facing sides overlap enough, automatic ends line up across 
 for a short, straight connection. If another shape blocks the approach, an automatic end can slide
 to a nearby clear point on the same side. Pins, hand-placed bends and shared attachment slots stay fixed.
 
+An automatic end also picks a better side when the facing one makes a mess. A connector that would
+cross another connector, cut through a shape or take a long way round one tries the other sides of
+its two shapes and takes the cleanest line: an elbow out of the bottom instead of a step across
+three arrows, or a loop round the outside instead of a path through the middle. It happens as you
+draw and each time you drop a shape; while you drag, the lines of the shape in your hand follow it
+the plain way and settle when you let go. A connector with nothing wrong is never moved. To keep an
+end where it is whatever happens around it, pin it.
+
 | Draw it | The end is |
 | --- | --- |
 | Drawn from any dot | Automatic |

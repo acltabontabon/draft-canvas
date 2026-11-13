@@ -16,6 +16,7 @@ import { compose } from '../../../src/agent/compile';
 import { applyUpdate } from '../../../src/agent/patch';
 import { ARCHITECTURE_STARTERS, starterDocument } from '../starters-v1';
 import { starterOf } from '../gallery';
+import { scatter } from './scatter';
 import { GALLERY, type GalleryCase } from '../agent/gallery';
 
 export interface RoutingFixture {
@@ -23,7 +24,7 @@ export interface RoutingFixture {
   nodes: readonly DraftNode[];
   edges: readonly DraftEdge[];
   /** Where the fixture came from: hand-made cases isolate one problem, the rest are real diagrams. */
-  source: 'case' | 'starter' | 'gallery' | 'workload' | 'agent';
+  source: 'case' | 'starter' | 'gallery' | 'workload' | 'agent' | 'scatter';
 }
 
 const box = (id: string, x: number, y: number, width = 160, height = 80): DraftNode =>
@@ -215,9 +216,17 @@ function workload(name: string): DraftDocument {
   return parsed.document;
 }
 
+/** Hand-drawn-style diagrams (`scatter.ts`): six small, four mid-sized, two busy. */
+const SCATTERS: readonly [seed: number, count: number][] = [[3, 6], [8, 6], [14, 9], [23, 9], [25, 9], [37, 9], [47, 9], [52, 9], [5, 14], [45, 14]];
+
+function scatters(): RoutingFixture[] {
+  return SCATTERS.map(([seed, count]) => ({ id: `scatter/${count}-shapes-${seed}`, ...scatter(seed, count), source: 'scatter' as const }));
+}
+
 export function routingCorpus(): RoutingFixture[] {
   return [
     ...cases(),
+    ...scatters(),
     ...ARCHITECTURE_STARTERS.flatMap((starter, i) => views(`starter/${starter.id}`, withFixedIds(i + 1, () => starterDocument(starter)), 'starter')),
     ...GALLERY.flatMap((entry) => views(`gallery/${entry.id}`, frozenGallery(entry.id), 'gallery')),
     ...['typical', 'stress'].flatMap((name) => views(`workload/${name}`, workload(name), 'workload')),

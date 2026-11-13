@@ -29,7 +29,7 @@
 import type { DraftEdge, DraftNode } from '../document/types';
 import { routingPlan } from './bundles';
 import { edgeRoutes, rawRouteInputs, type EdgeRouteInputs } from './edgeRoutes';
-import { labelLook } from './endpoints';
+import { labelLook } from './labelLook';
 import { polylineClear, type Box, type Point } from './pathfinder';
 import { flattenPath, roundedStepPath, shiftRuns, type Track } from './routing';
 import { sameNodeGeometry, type PlanScope } from './sameGeometry';

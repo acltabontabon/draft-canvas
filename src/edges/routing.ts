@@ -1005,7 +1005,9 @@ function stepCorner(
   const bendSize = Math.min(Math.hypot(a.x - b.x, a.y - b.y) / 2, Math.hypot(b.x - c.x, b.y - c.y) / 2, size);
   const { x, y } = b;
   if ((a.x === x && x === c.x) || (a.y === y && y === c.y)) return `L${x} ${y}`;
-  if (a.y === y) {
+  // Level by its longer reach, not by exact equality: a run a fraction of a pixel aslant is still a
+  // level run, and read as a plumb one it drew a corner-sized spike.
+  if (Math.abs(a.y - y) < Math.abs(a.x - x)) {
     const xDir = a.x < c.x ? -1 : 1;
     const yDir = a.y < c.y ? 1 : -1;
     return `L${x + bendSize * xDir} ${y}Q${x} ${y} ${x} ${y + bendSize * yDir}`;

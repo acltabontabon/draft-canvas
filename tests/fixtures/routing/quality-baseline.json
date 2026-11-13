@@ -140,7 +140,7 @@
       "blocked": 0,
       "budget": 0,
       "crowded": 0,
-      "skipped": 4
+      "skipped": 0
     }
   },
   "case/impossible": {
@@ -183,7 +183,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 944,
+    "cost": 740,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -235,9 +235,9 @@
   },
   "case/nearby-fixed-ends": {
     "obstruction": 1,
-    "overlap": 205,
-    "crossings": 2,
-    "cost": 1316,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 1600,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -290,8 +290,8 @@
   "case/shared-corridor": {
     "obstruction": 0,
     "overlap": 0,
-    "crossings": 4,
-    "cost": 5323,
+    "crossings": 0,
+    "cost": 5197,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -561,7 +561,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1377,
+    "cost": 1284,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -917,6 +917,186 @@
       "skipped": 0
     }
   },
+  "scatter/14-shapes-45": {
+    "obstruction": 1,
+    "overlap": 0,
+    "crossings": 5,
+    "cost": 7436,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "scatter/14-shapes-5": {
+    "obstruction": 1,
+    "overlap": 0,
+    "crossings": 0,
+    "cost": 5388,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "scatter/6-shapes-3": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 1,
+    "cost": 2979,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "scatter/6-shapes-8": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 3,
+    "cost": 2883,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "scatter/9-shapes-14": {
+    "obstruction": 0,
+    "overlap": 196,
+    "crossings": 8,
+    "cost": 7176,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 1,
+      "skipped": 1
+    }
+  },
+  "scatter/9-shapes-23": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 4,
+    "cost": 5185,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "scatter/9-shapes-25": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 2,
+    "cost": 6603,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "scatter/9-shapes-37": {
+    "obstruction": 1,
+    "overlap": 0,
+    "crossings": 14,
+    "cost": 8644,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "scatter/9-shapes-47": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 6,
+    "cost": 7464,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
+  "scatter/9-shapes-52": {
+    "obstruction": 0,
+    "overlap": 0,
+    "crossings": 14,
+    "cost": 8248,
+    "violations": {
+      "endpoint": 0,
+      "continuity": 0,
+      "bends": 0,
+      "pins": 0
+    },
+    "unresolved": {
+      "blocked": 0,
+      "budget": 0,
+      "crowded": 0,
+      "skipped": 0
+    }
+  },
   "starter/bff": {
     "obstruction": 0,
     "overlap": 0,
@@ -1130,7 +1310,7 @@
       "blocked": 0,
       "budget": 0,
       "crowded": 0,
-      "skipped": 2
+      "skipped": 3
     }
   },
   "starter/transactional-outbox": {
@@ -1154,8 +1334,8 @@
   "workload/stress": {
     "obstruction": 8,
     "overlap": 0,
-    "crossings": 71,
-    "cost": 208744,
+    "crossings": 69,
+    "cost": 208397,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1166,14 +1346,14 @@
       "blocked": 0,
       "budget": 0,
       "crowded": 0,
-      "skipped": 12
+      "skipped": 19
     }
   },
   "workload/typical": {
     "obstruction": 1,
     "overlap": 0,
     "crossings": 9,
-    "cost": 36345,
+    "cost": 36203,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1184,7 +1364,7 @@
       "blocked": 0,
       "budget": 0,
       "crowded": 0,
-      "skipped": 2
+      "skipped": 3
     }
   }
 }

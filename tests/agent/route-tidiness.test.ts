@@ -46,7 +46,12 @@ describe('conservative routing repair', () => {
       createNode({ id: 'c', type: 'service', x: 480, y: 260, width: 100, height: 70 }),
       createNode({ id: 'd', type: 'service', x: 800, y: 260, width: 100, height: 70 }),
     ];
-    const edges = [createEdge({ id: 'ab', source: 'a', target: 'b' }), createEdge({ id: 'cd', source: 'c', target: 'd' })];
+    // Pinned where an earlier layout put them: the editor moves an automatic end off a crossing by
+    // itself (`edges/sides.ts`), but never a pin — that is the repair's to rewrite.
+    const edges = [
+      createEdge({ id: 'ab', source: 'a', target: 'b', sourceAnchor: { side: 'top', offset: 0.5 }, targetAnchor: { side: 'bottom', offset: 0.5 } }),
+      createEdge({ id: 'cd', source: 'c', target: 'd' }),
+    ];
     const before = structuredClone({ nodes, other: edges[1] });
     const quality = measure(nodes, edges).tiers;
     expect(legibilityOf(nodes, edges).crossings).toBe(1);

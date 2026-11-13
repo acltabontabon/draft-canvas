@@ -116,7 +116,13 @@ test('a new connector follows its shapes even when drawn between off-centre dots
   await page.mouse.move(c.x + c.width / 2 - 700, c.y + c.height / 2, { steps: 12 });
   await page.mouse.up();
   await cameraAtRest(page);
-  expect((await start(page, edgeId)).x).toBeCloseTo((await boxOf(page, 'b')).x, 0);
+  // C is now down to the left, past A. Straight out of B's left side would run along A's own line
+  // and through A, so the automatic end keeps the bottom and turns once into C (`edges/sides.ts`):
+  // still chosen by where the shapes are, never by the dot it was drawn from.
+  const moved = await boxOf(page, 'b');
+  const from = await start(page, edgeId);
+  expect(from.y).toBeCloseTo(moved.y + moved.height, 0);
+  expect(from.x).toBeCloseTo(moved.x + moved.width / 2, 0);
   await expectRouteParity(page, edgeId);
 });
 

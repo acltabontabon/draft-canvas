@@ -83,12 +83,21 @@ pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semanti
   browser check compares the settled canvas path with the accessor's path. The passes run in one
   order with no cycles: sides and trunk membership, then where automatic ends sit
   on a side (`edges/endpoints.ts` spreads ends sharing a side, and pins sharing one point within
-  their band), then the raw routes (`edges/edgeRoutes.ts`), then parallel tracks for runs sharing a
+  their band), then which side a troubled line should have used instead (`edges/sides.ts`, below)
+  and those ends placed again, then the raw routes (`edges/edgeRoutes.ts`), then parallel tracks for runs sharing a
   corridor (`edges/separation.ts`, each shift checked and kept only if it clears shapes and adds no
   crossing), then labels, label groups and line jumps on the final lines. A stepped
   line is checked against the shapes; when it is blocked, `edges/pathfinder.ts` searches for a clear
   one within the area its shapes were collected from, and a line it cannot clear says `blocked` or
   `budget` rather than passing as clear. Gesture frames are never searched.
+- **Sides are a repair, not a restyle.** Two shapes alone choose the facing sides across their wider
+  gap. `edges/sides.ts` revisits only a line with something wrong — it crosses another connector,
+  runs through a shape, or had to be searched for — and tries its automatic ends on the other
+  sides, drawn the quick way and kept only when clear. One scale decides: length, a bend, a crossing,
+  a run shared with another line. A clean line is never touched, so a laid-out diagram draws as it
+  did; pins, bends, trunks, parallel pairs and shared labels are only routed around. Lines settle in
+  id order within a fixed budget, so canvas, export and agent checks agree. A gesture's frames
+  draw a moving shape's lines the quick way and the drop settles them.
 - Agent repair screens candidates locally, then checks the complete view before accepting one: a
   shared corridor can move lines that share no endpoint. After selecting the layout, a bounded
   polish pass removes avoidable crossings and detours only if it preserves readable neighbours,
