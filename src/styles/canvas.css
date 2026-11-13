@@ -127,7 +127,8 @@
   content: '';
   position: absolute;
   inset: -4px;
-  border: 1.5px solid var(--dc-selection);
+  /* A full 2px: at 1.5 the ring was barely heavier than the outline of the shape it surrounds. */
+  border: 2px solid var(--dc-selection);
   border-radius: calc(var(--dc-radius) + 3px);
   pointer-events: none;
 }
@@ -144,10 +145,11 @@
 /* A keyboard-navigated selection reads as a plain selection plus a soft outer glow, shown only
  * while `.dc-canvas` itself has real *keyboard* focus (`:focus-visible` already tells a Tab-driven
  * focus apart from a mouse click on this plain, non-form `tabIndex` element — no extra JS state
- * needed). One visual state (selection) carries the meaning; this is a subtle addition to it, not
- * a second, competing "focused but not selected" look. */
+ * needed). One visual state (selection) carries the meaning; this is an addition to it, not a
+ * second, competing "focused but not selected" look — but a plain one: wide and strong enough
+ * that "the arrow keys act on this" can be told from "this is selected" at a glance. */
 .dc-canvas:focus-visible .dc-node[data-selected='true']::after {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dc-selection) 35%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 45%, transparent);
 }
 
 .dc-node[data-type='text'] {
@@ -1472,7 +1474,8 @@
   content: '';
   position: absolute;
   inset: -4px;
-  border: 1.5px solid var(--dc-selection);
+  /* A full 2px: at 1.5 the ring was barely heavier than the outline of the shape it surrounds. */
+  border: 2px solid var(--dc-selection);
   border-radius: calc(var(--dc-radius) + 3px);
   pointer-events: none;
 }
@@ -3855,6 +3858,112 @@
   }
 }
 
+/* Every shape, by name (`ShapePicker`): a search field over rows of picture, name, one plain line
+   and the shape's key. */
+.dc-shape-picker {
+  width: 328px;
+  max-width: calc(100vw - 16px);
+  max-height: min(680px, calc(100dvh - 72px));
+  padding: 6px;
+  overflow: hidden;
+}
+
+.dc-shape-picker-search {
+  flex: none;
+  height: 34px;
+  margin: 0 0 2px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 1px solid var(--dc-border);
+  border-radius: 0;
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.dc-shape-picker-search::placeholder {
+  color: var(--dc-text-faint);
+}
+
+/* The field holds focus for as long as the panel is open; its rule says so, and the highlighted
+   row says where Enter will land. */
+.dc-shape-picker-search:focus-visible {
+  border-bottom-color: var(--dc-selection);
+}
+
+.dc-shape-picker-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dc-shape-picker-list > [role='group'] {
+  display: flex;
+  flex-direction: column;
+}
+
+.dc-shape-picker-heading {
+  padding: 9px 10px 4px;
+  color: var(--dc-text-faint);
+  font-family: var(--dc-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dc-shape-option {
+  gap: 10px;
+  padding: 5px 8px;
+}
+
+.dc-shape-option-glyph {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dc-text) 6%, transparent);
+  color: var(--dc-text-muted);
+}
+
+.dc-shape-option[data-highlighted='true'] .dc-shape-option-glyph {
+  background: none;
+  color: var(--dc-selection);
+}
+
+.dc-shape-option .dc-context-menu-title {
+  font-weight: 550;
+}
+
+.dc-shape-option[data-armed='true'] .dc-context-menu-title {
+  color: var(--dc-selection);
+}
+
+.dc-shape-picker-empty {
+  margin: 0;
+  padding: 14px 10px 12px;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.dc-shape-picker-foot {
+  flex: none;
+  margin: 4px 0 0;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--dc-border);
+  color: var(--dc-text-faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 .dc-toolbar-menu-item .dc-new-dot[data-inline='true'],
 .dc-toolbar-menu-item .dc-update-dot[data-inline='true'] {
   position: static;
@@ -5427,6 +5536,17 @@
 .dc-hand-link:focus-visible {
   outline: 2px dashed var(--dc-sketch-ink);
   outline-offset: 3px;
+}
+
+/* More notes than handwriting can carry (`HANDWRITTEN_NOTES`): the same notes in the plain face. */
+.dc-traffic-note[data-plain] {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.dc-traffic-note[data-plain][data-tone='unknown'] {
+  font-weight: 500;
 }
 
 .dc-traffic-note[data-tone='unknown'] {
@@ -7006,9 +7126,12 @@
   margin-top: 8px;
   color: var(--dc-caution);
 }
+/* In the card, the hand is kept for the one number it leads with; what opens further detail is set
+   like the rest of the card's type. */
 .dc-traffic-work summary {
   cursor: pointer;
-  font-size: 17px;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 28px;
   text-decoration: underline;
   text-decoration-style: wavy;
@@ -7125,9 +7248,9 @@
 .dc-traffic-shared-work h3 {
   margin: 0 0 4px;
   color: var(--dc-caution);
-  font-size: 16px;
+  font-size: 13px;
   line-height: 21px;
-  font-weight: 400;
+  font-weight: 600;
 }
 .dc-traffic-shared-work p {
   margin: 0;
@@ -7137,7 +7260,7 @@
 }
 
 .dc-traffic-crossings { margin: 12px 0; }
-.dc-traffic-crossings h3 { margin: 0 0 8px; color: var(--dc-caution); font-size: 16px; font-weight: 400; }
+.dc-traffic-crossings h3 { margin: 0 0 8px; color: var(--dc-caution); font-size: 13px; line-height: 19px; font-weight: 600; }
 .dc-traffic-crossing { margin-top: 10px; padding-left: 10px; border-left: 1px dashed var(--dc-border); }
 .dc-traffic-crossing strong { font-size: 12px; line-height: 18px; }
 .dc-traffic-crossings p { margin: 3px 0; font-size: 11px; line-height: 16px; color: var(--dc-text-muted); }

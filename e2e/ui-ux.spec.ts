@@ -279,3 +279,24 @@ test('long presentation details remain scrollable within the camera footprint', 
   await nextFlowButton.click();
   await expect(page.locator('.dc-explain-flow-title')).toHaveText(nextTitle);
 });
+
+test('a technology typed into Shapes places the shape it is', async ({ page }) => {
+  await newCanvas(page, 'Shapes by technology');
+  await page.getByRole('button', { name: 'All shapes' }).click();
+  await page.getByRole('combobox', { name: 'Search shapes' }).fill('kafka');
+  await expect(page.getByRole('option', { selected: true })).toContainText('Apache Kafka');
+  await page.keyboard.press('Enter');
+  // No button of its own on the rail: the Shapes slot shows what is in hand.
+  await expect(page.getByRole('button', { name: 'Apache Kafka — all shapes' })).toHaveAttribute('aria-pressed', 'true');
+
+  const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+  await page.mouse.click(pane.x + 420, pane.y + 420);
+  await page.keyboard.press('Escape');
+  const node = page.locator('.dc-node[data-type="queue"]');
+  await expect(node).toHaveCount(1);
+  // It arrives as what Kafka is — a topic — with the technology on it.
+  const inspector = page.locator('.dc-element-inspector');
+  await expect(inspector).toContainText('Topic');
+  await expect(inspector).toContainText('Apache Kafka');
+  await expect(page.getByRole('button', { name: 'All shapes' })).toBeVisible();
+});

@@ -16,6 +16,12 @@ export interface Preset {
   noteKind?: NoteKind;
   language?: CodeLanguage;
   text?: string;
+  /**
+   * A shape offered *as* a technology (the shape picker's "kafka" → a Queue that is Apache Kafka):
+   * the new shape starts with this technology and the kind it implies. The eleven built-in presets
+   * never carry one.
+   */
+  technology?: string;
 }
 
 /** The toolbar tooltip's content shape — also covers Select, which isn't a `Preset` (it's
@@ -166,6 +172,55 @@ export const DEV_PRESETS: Preset[] = [
 ];
 
 export const ALL_PRESETS = [...PRESETS, ...DEV_PRESETS];
+
+/** The built-in preset a preset draws as: itself, or the shape a technology preset is made of. */
+export function basePresetFor(preset: Preset): Preset {
+  return ALL_PRESETS.find((entry) => entry.type === preset.type) ?? preset;
+}
+
+/**
+ * Other words people reach for when they mean one of these — what ⌘K's "Add …" commands and the
+ * toolbar's shape picker both search, so "cache" finds a Data Store in either place.
+ */
+export const PRESET_KEYWORDS: Record<string, string[]> = {
+  text: ['label', 'caption', 'heading', 'annotation'],
+  note: ['remark', 'question', 'warning', 'decision', 'sticky'],
+  code: ['snippet', 'json', 'yaml', 'sql', 'log', 'config'],
+  boundary: ['container', 'system', 'domain', 'network', 'deployment'],
+  service: ['api', 'app', 'worker', 'microservice'],
+  database: ['db', 'database', 'sql', 'store', 'cache', 'table'],
+  queue: ['topic', 'stream', 'kafka', 'event bus', 'message'],
+  actor: ['user', 'person', 'client', 'device', 'agent', 'bot'],
+  ellipse: ['junction', 'branch', 'merge', 'circle'],
+  // Deliberately no 'module'/'adapter' typed alone here — 'module' would compete with
+  // Architecture Starters' own "Modular Monolith" alias ('modules') for the same query, and
+  // "typing 'adapter' creates a Component *already set to* kind Adapter" would need `createAt`/
+  // `createAtPointer` to thread a starting sub-kind through node creation, which nothing in the
+  // app does today for any kind-bearing type (Service included) — out of scope for adding one new
+  // node type. A user reaches Module/Adapter by adding a Component, then picking its kind in the
+  // inspector, same as every other kind-bearing shape.
+  component: ['building block', 'internal', 'logical component'],
+};
+
+/**
+ * The shapes a search for `query` means, best first: a name that starts with it, then a name that
+ * contains it, then anything else said about the shape (its other names, what it is for). Every
+ * word of the query has to be found; an empty query is the whole vocabulary, in its own order.
+ */
+export function searchPresets(query: string): Preset[] {
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return ALL_PRESETS;
+  const ranked: { preset: Preset; rank: number; order: number }[] = [];
+  ALL_PRESETS.forEach((preset, order) => {
+    const name = preset.label.toLowerCase();
+    const rest = [preset.hint, preset.description, preset.usageHint ?? '', ...(PRESET_KEYWORDS[preset.id] ?? [])].join(' ').toLowerCase();
+    if (!words.every((word) => name.includes(word) || rest.includes(word))) return;
+    const first = words[0]!;
+    const rank = name.startsWith(first) ? 0 : name.includes(first) ? 1 : (PRESET_KEYWORDS[preset.id] ?? []).some((keyword) => keyword.startsWith(first)) ? 2 : 3;
+    ranked.push({ preset, rank, order });
+  });
+  return ranked.sort((a, b) => a.rank - b.rank || a.order - b.order).map((entry) => entry.preset);
+}
 
 /**
  * The Quick Connect creation menu's option list — plain data, not JSX, so a

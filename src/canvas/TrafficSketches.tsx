@@ -39,6 +39,14 @@ import { placeCallout } from '../traffic/calloutLayout';
 /** A glance, not a report: past this many notes the canvas would be written over. */
 const MAX_SKETCHES = 7;
 const LINE_HEIGHT = 21;
+/**
+ * Handwriting is the accent, so it is rationed. Up to this many notes are written by hand beside
+ * what they circle; past it the canvas would be more marker than drawing, and the notes are set in
+ * the plain face instead — smaller, quieter, and quicker to read seven of. The headline stays
+ * handwritten either way: one line of it is what says "this was written on the diagram".
+ */
+const HANDWRITTEN_NOTES = 3;
+const PLAIN_LINE_HEIGHT = 18;
 /** The traffic wave has spread by then (`.dc-traffic-flow`'s per-hop delay). */
 const FIRST_STROKE_MS = 1100;
 const STROKE_STAGGER_MS = 520;
@@ -285,6 +293,7 @@ export function TrafficSketches() {
               type="button"
               className="dc-traffic-note dc-hand nodrag nopan nowheel"
               data-tone={note.insight.severity}
+              data-plain={drawn.plain || undefined}
               // In the lower half of what is written, the rest of the thought goes up, not off the board.
               data-up={note.y > (drawn.extent.minY + drawn.extent.maxY) / 2 || undefined}
               aria-expanded={unfolded}
@@ -293,6 +302,8 @@ export function TrafficSketches() {
                   transform: `translate(${note.x}px, ${note.y}px) rotate(${note.tilt.toFixed(2)}deg)`,
                   '--dc-sketch-delay': `${note.delay + 380}ms`,
                   '--dc-note-height': `${note.label.height}px`,
+                  // The face the words were measured in (`layout`): set here, not inherited.
+                  fontFamily: drawn.plain ? familyOf('sans') : undefined,
                 } as CSSProperties
               }
               onPointerDown={hold}
@@ -344,7 +355,7 @@ export function TrafficSketches() {
             {callout.summary && <p className="dc-traffic-callout-summary">{callout.summary.lines.map((line, index) => <span key={index} className="dc-traffic-callout-line">{line}</span>)}</p>}
             {sharedWork && (
               <section className="dc-traffic-shared-work" aria-label="Shared workload">
-                <h3 style={{ fontFamily: familyOf('hand') }}>Shared workload</h3>
+                <h3>Shared workload</h3>
                 <p>{sharedWork.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line.text}{' '}</span>)}</p>
               </section>
             )}
@@ -361,7 +372,7 @@ export function TrafficSketches() {
             )}
             {callout.crossingNote && (
               <section className="dc-traffic-crossings" aria-label="Boundary crossings">
-                <h3 style={{ fontFamily: familyOf('hand') }}>Across boundaries</h3>
+                <h3>Across boundaries</h3>
                 {callout.crossingNote.rows.length === 0 && <p>No boundary crossing drawn.</p>}
                 {callout.crossingNote.rows.map((row, index) => (
                   <div className="dc-traffic-crossing" key={index}>
@@ -375,7 +386,7 @@ export function TrafficSketches() {
             )}
             {callout.technology && (
               <section className="dc-traffic-crossings dc-traffic-technology" aria-label="Technology note">
-                <h3 style={{ fontFamily: familyOf('hand') }}>{callout.technology.name}</h3>
+                <h3>{callout.technology.name}</h3>
                 <div className="dc-traffic-crossing">
                   <p>{callout.technology.detail.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}{' '}</span>)}</p>
                 </div>
@@ -383,7 +394,7 @@ export function TrafficSketches() {
             )}
             {callout.databaseNote && (
               <details className="dc-traffic-work dc-traffic-database" key={`database:${selectedId}`}>
-                <summary style={{ fontFamily: familyOf('hand') }}>Database work</summary>
+                <summary>Database work</summary>
                 <div className="dc-traffic-work-paper">
                   <ul aria-label="Database work">
                     {callout.databaseNote.items.map((item, index) => <li key={index}>{item.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}</span>)}</li>)}
@@ -394,7 +405,7 @@ export function TrafficSketches() {
             )}
             {callout.work && (
               <details className="dc-traffic-work" key={selectedId}>
-                <summary style={{ fontFamily: familyOf('hand') }}>{callout.work.heading}</summary>
+                <summary>{callout.work.heading}</summary>
                 <div className="dc-traffic-work-paper">
                   <ul aria-label="Work per arrival">
                     {callout.work.items.map((item, index) => <li key={index}>{item.lines.map((line, index) => <span className="dc-traffic-callout-line" key={index}>{line}</span>)}</li>)}
@@ -434,11 +445,14 @@ function layout(analysis: TrafficAnalysis, nodes: readonly DraftNode[], title: s
 
   const chosen = analysis.insights.filter((insight) => insight.note && insight.focus?.some((id) => rects.has(id))).slice(0, MAX_SKETCHES);
   const requests: SketchRequest[] = [];
+  const plain = chosen.length > HANDWRITTEN_NOTES;
   const labelFor = (insight: TrafficInsight) => {
     const text = layoutText(insight.note!, {
-      font: { stack: 'hand', size: 17, weight: insight.severity === 'unknown' ? 600 : 700 },
+      font: plain
+        ? { stack: 'sans', size: 13, weight: insight.severity === 'unknown' ? 500 : 600 }
+        : { stack: 'hand', size: 17, weight: insight.severity === 'unknown' ? 600 : 700 },
       maxWidth: 244,
-      lineHeight: LINE_HEIGHT,
+      lineHeight: plain ? PLAIN_LINE_HEIGHT : LINE_HEIGHT,
       maxLines: 3,
     });
     return { width: Math.ceil(text.width) + 8, height: text.height + 2, lines: text.lines.map((line) => line.text) };
@@ -521,7 +535,7 @@ function layout(analysis: TrafficAnalysis, nodes: readonly DraftNode[], title: s
     extent.maxX = Math.max(extent.maxX, note.x + note.label.width);
     extent.maxY = Math.max(extent.maxY, note.y + note.label.height);
   }
-  return { notes, marks, headline, extent, obstacles: [headlineRect, ...notes.map((note) => note.label)] };
+  return { notes, marks, headline, extent, plain, obstacles: [headlineRect, ...notes.map((note) => note.label)] };
 }
 
 function listOf(names: string[]): string {

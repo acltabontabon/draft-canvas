@@ -1,46 +1,58 @@
 import { Icon, type IconName } from '../common/Icon';
 import type { ExportMode } from '../../export/exportTypes';
 
-const MODE_ORDER: ExportMode[] = ['share', 'document', 'image', 'docs', 'sequence'];
+// What people come here to do, most common first — then the formats that only mean something to
+// someone who already knows they want one. The keyboard walks them in this order.
+const EVERYDAY: ExportMode[] = ['share', 'document', 'image', 'docs'];
+const ADVANCED: ExportMode[] = ['sequence'];
 
-// The label is the only thing rendered — `hint` exists purely to give screen-reader users the
-// same "what formats live here" context a sighted user gets from the panel a click away, without
-// printing it as a second, visually-duplicated subtitle under every card.
+/**
+ * Named for the intention, not for the thing the code calls it. "Document", "Docs" and "Source" were
+ * three words for distinctions only the implementation makes, and a newcomer had to open each tab
+ * to find out which one saves the file they can reopen. The line under each name says what you end
+ * up holding; the mode ids (and `data-mode`) are unchanged.
+ */
 const MODE_META: Record<ExportMode, { label: string; hint: string; icon: IconName }> = {
-  share: { label: 'Share', hint: 'read-only link, with optional passphrase', icon: 'link' },
-  document: { label: 'Document', hint: 'editable or encrypted', icon: 'file' },
-  image: { label: 'Image', hint: 'PNG or SVG', icon: 'image' },
-  docs: { label: 'Docs', hint: 'a Markdown-ready picture that stays linked to its editable source', icon: 'docs' },
-  sequence: { label: 'Source', hint: 'Mermaid, PlantUML, C4, Structurizr or draw.io text', icon: 'code' },
+  share: { label: 'Share a link', hint: 'Read-only, in any browser', icon: 'link' },
+  document: { label: 'Save an editable file', hint: 'Reopen, back up or send', icon: 'file' },
+  image: { label: 'Save an image', hint: 'PNG or SVG, or copy it', icon: 'image' },
+  docs: { label: 'Use in a README', hint: 'A picture plus its Markdown', icon: 'docs' },
+  sequence: { label: 'Other formats', hint: 'Mermaid, PlantUML, draw.io…', icon: 'code' },
 };
 
 /**
- * What am I exporting — compact navigation with enough personality to stay recognizable at a
- * glance, not a row of feature cards. Every card stays selectable even when its export is
- * currently empty (no Flow yet, for Source): hiding a whole mode would make the
- * capability undiscoverable, so the unavailable case is explained inside its panel instead (see
- * `ExportSequencePanel`).
+ * What do you want to do — a short list read top to bottom, each choice with the one line that
+ * tells it from its neighbours, and the specialised formats set apart underneath. Every choice
+ * stays selectable even when its export is currently empty (no Flow yet, for a sequence diagram):
+ * hiding it would make the capability undiscoverable, so the unavailable case is explained inside
+ * its panel instead (see `ExportSequencePanel`).
  */
 export function ExportModePicker({ mode, onChange }: { mode: ExportMode; onChange: (mode: ExportMode) => void }) {
+  const choice = (m: ExportMode) => {
+    const meta = MODE_META[m];
+    return (
+      <label key={m} className="dc-export-mode" data-mode={m}>
+        <input
+          type="radio"
+          name="export-mode"
+          className="dc-sr-only"
+          checked={mode === m}
+          onChange={() => onChange(m)}
+          aria-label={`${meta.label} — ${meta.hint}`}
+        />
+        <Icon name={meta.icon} size={15} />
+        <span className="dc-export-mode-text" aria-hidden="true">
+          <span className="dc-export-mode-label">{meta.label}</span>
+          <span className="dc-export-mode-hint">{meta.hint}</span>
+        </span>
+      </label>
+    );
+  };
   return (
-    <div className="dc-export-modes" role="radiogroup" aria-label="Export type">
-      {MODE_ORDER.map((m) => {
-        const meta = MODE_META[m];
-        return (
-          <label key={m} className="dc-export-mode" data-mode={m}>
-            <input
-              type="radio"
-              name="export-mode"
-              className="dc-sr-only"
-              checked={mode === m}
-              onChange={() => onChange(m)}
-              aria-label={`${meta.label} — ${meta.hint}`}
-            />
-            <Icon name={meta.icon} size={14} />
-            {meta.label}
-          </label>
-        );
-      })}
+    <div className="dc-export-modes" role="radiogroup" aria-label="What to export">
+      {EVERYDAY.map(choice)}
+      <span className="dc-export-modes-rule" aria-hidden="true" />
+      {ADVANCED.map(choice)}
     </div>
   );
 }

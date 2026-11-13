@@ -152,9 +152,6 @@
 .dc-modal-export .dc-modal-body { padding: 18px 24px 24px; }
 .dc-modal-export .dc-modal-footer { padding: 12px 24px; }
 .dc-modal-export .dc-export-footer-actions { margin-left: auto; }
-.dc-modal-export .dc-export-modes { gap: 4px; padding: 5px; border-radius: 10px; background: color-mix(in srgb, var(--dc-text) 4%, var(--dc-surface)); margin-bottom: 22px; }
-.dc-modal-export .dc-export-mode { height: 36px; border-color: transparent; }
-.dc-modal-export .dc-export-mode:has(input:checked) { background: var(--dc-surface); border-color: var(--dc-border); box-shadow: 0 1px 4px color-mix(in srgb, var(--dc-text) 7%, transparent); }
 .dc-export-artifact-column { min-width: 0; }
 .dc-export-body[data-share='true'] { grid-template-columns: minmax(0, 1fr) 216px; }
 .dc-export-body[data-share='true'] .dc-export-config { padding-top: 0; }
@@ -228,16 +225,12 @@
   .dc-modal-export .dc-modal-body { padding: 14px 14px 18px; }
   .dc-modal-export .dc-modal-footer { padding: 12px 14px; }
   .dc-export-body[data-share='true'] { grid-template-columns: minmax(0, 1fr); }
-  .dc-modal-export .dc-export-modes { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   /* Two actions (Copy Markdown and Download for docs) can outgrow a phone's width: wrap, never spill. */
   .dc-modal-export .dc-export-footer-actions { flex-wrap: wrap; justify-content: flex-end; }
-  .dc-modal-export .dc-export-mode { padding: 4px; font-size: 11px; gap: 4px; }
-  .dc-modal-export .dc-export-mode > svg { width: 12px; }
   .dc-export-body:has(.dc-share-panel, .dc-share-result, .dc-share-progress) .dc-export-artifact-column { display: none; }
 }
 
 @media (max-width: 380px) {
-  .dc-modal-export .dc-export-mode { flex-direction: column; height: 48px; }
   .dc-reader-header .dc-reader-toggle { font-size: 11px; padding-inline: 6px; }
   .dc-reader-header .dc-button { gap: 4px; }
 }

@@ -23,8 +23,9 @@ out of a shape, presenting or turning on a spotlight also ends it.
   traffic starts, the streams begin at entry points and spread hop by hop.
 - Where paths meet, the shape is lit along its outline with illustrative rates beside runtime shapes, such as **~3,000 calls/min**. A range
   keeps unknown branch shares explicit; its upper bounds need not occur together.
-- Up to seven findings appear as handwritten notes beside the shapes they describe: a marker loop,
-  a short note and sometimes an arrow between shapes. Tap or click a note, or Tab to it and press
+- Up to seven findings appear as notes beside the shapes they describe: a marker loop, a short note
+  and sometimes an arrow between shapes. Up to three are handwritten; with more, the notes are set
+  in plain type so the diagram stays easy to read. Tap or click a note, or Tab to it and press
   `Enter`, to unfold the explanation in place. Activate it again or press `Esc` to fold it.
   Notes sit above connector labels and arrows, with the canvas colour behind their text so dense
   drawings stay readable. A selected shape's explanation also avoids nearby findings.
@@ -96,7 +97,7 @@ separately, so a topic with two subscribers reads as one publication and two del
 branches stay ranges; reachable loops or analysis limits withhold the total. Retries and failure
 paths remain outside the baseline.
 
-![The handwritten per-request note unfolded beneath incoming rates.](../media/guides/traffic-work.png)
+![The per-request note unfolded beneath incoming rates.](../media/guides/traffic-work.png)
 
 Loops and their downstream work show **Rate unknown**, as do capped counts or incomplete analysis.
 Retries, failure paths and background work remain outside this baseline. The example does not predict

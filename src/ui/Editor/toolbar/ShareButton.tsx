@@ -52,7 +52,7 @@ export function ShareButton({ onExport }: { onExport: () => void }) {
       id: 'export',
       icon: 'export' as const,
       label: 'Export',
-      detail: 'An image, an editable file, or architecture source',
+      detail: 'An image, an editable file, a picture for your README, or another format',
       onSelect: choose(onExport),
     },
     {

@@ -1,6 +1,6 @@
 import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, nextFrames, reopenAfterReload } from './canvas';
+import { armTool, newCanvas, nextFrames, reopenAfterReload } from './canvas';
 import { readFileSync, existsSync } from 'node:fs';
 
 /**
@@ -14,7 +14,7 @@ const CANVAS = '.react-flow__pane';
 
 /** Creates a node by arming a tool and clicking the canvas. */
 async function createNode(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
+  await armTool(page, tool);
   // Off the button first, as a hand would be: its tooltip can sit on the point clicked below.
   const canvas = (await page.locator(CANVAS).boundingBox())!;
   await page.mouse.move(canvas.x + at.x, canvas.y + at.y);

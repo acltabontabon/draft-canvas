@@ -38,6 +38,6 @@ down. It appears once any room exists.
 ## Present and export
 
 - `⌘↓` and `⌘↑` work while presenting.
-- Inside a room, **Image** and **Source** exports offer the room or **The whole canvas**.
+- Inside a room, image and **Other formats** exports offer the room or **The whole canvas**.
 - A `.draftcanvas` file holds every room; copying or deleting a shape includes its room.
   [Limits](../reference/schema.md) count across all rooms.

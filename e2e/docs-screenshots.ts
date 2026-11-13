@@ -604,12 +604,12 @@ async function main() {
     await page.setViewportSize({ ...VIEWPORT, height: 900 });
     await page.keyboard.press('Control+Shift+e');
     await expect(page.getByRole('dialog')).toBeVisible();
-    await page.getByRole('dialog').getByText('Document', { exact: true }).click();
+    await page.getByRole('dialog').locator('[data-mode="document"]').click();
     await shotDialog(page, 'export-document');
-    await page.getByRole('dialog').getByText('Docs', { exact: true }).click();
+    await page.getByRole('dialog').locator('[data-mode="docs"]').click();
     await expect(page.getByRole('dialog').getByLabel('Markdown for this picture')).toBeVisible();
     await shotDialog(page, 'export-docs');
-    await page.getByRole('dialog').getByText('Share', { exact: true }).click();
+    await page.getByRole('dialog').locator('[data-mode="share"]').click();
     await shotDialog(page, 'export-share');
     await page.keyboard.press('Escape');
     await page.setViewportSize(VIEWPORT);

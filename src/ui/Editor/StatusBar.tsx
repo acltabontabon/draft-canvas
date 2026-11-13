@@ -26,6 +26,10 @@ import { toggleTraffic } from './trafficToggle';
  * "Saved locally" while an edit is still queued would be a small lie, and the
  * whole point of the indicator is that the user can stop thinking about saving.
  * Unsaved work is named as such, briefly, until the write lands.
+ *
+ * And once it is true, it is said quietly (`.dc-save` in app.css): the saved state is the faintest
+ * line in the bar, so the reassurance is there to be read without asking to be. Only what needs
+ * something from the user — nothing being stored, a save that failed — is given weight.
  */
 function saveLabel(save: { status: string; message?: string }, durable: boolean) {
   if (!durable) return 'In memory only';
@@ -140,7 +144,7 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
         <DesktopStatus />
       ) : (
         <div className="dc-status-left">
-          <span className="dc-save" data-status={save.status}>
+          <span className="dc-save" data-status={save.status} data-durable={durable ? undefined : 'false'}>
             {saveLabel(save, durable)}
           </span>
           {save.conflict && onResolveConflict && <ConflictChoice conflict={save.conflict} onResolveConflict={onResolveConflict} />}

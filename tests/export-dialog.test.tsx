@@ -134,7 +134,7 @@ describe('ExportDialog — protected sharing', () => {
     useEditorStore.setState({ document: withFlow(), path: [], outer: null, selection: { nodes: [], edges: [] }, selectedFlowId: null });
     useUiStore.setState({ shareFromHere: true });
     renderDialog();
-    expect(screen.getByRole('radio', { name: /Share —/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Share a link/ })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: /Require a passphrase/ })).toBeChecked();
     const copy = screen.getByRole('button', { name: 'Copy protected link' });
     expect(copy).toBeDisabled();
@@ -169,8 +169,8 @@ describe('ExportDialog — mode picker', () => {
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
 
-    expect(screen.getByRole('radiogroup', { name: 'Export type' })).toBeInTheDocument();
-    expect(screen.getByRole('radio', { name: /Image/ })).toBeChecked();
+    expect(screen.getByRole('radiogroup', { name: 'What to export' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Save an image/ })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'PNG' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Export PNG' })).toBeEnabled();
   });
@@ -180,10 +180,10 @@ describe('ExportDialog — mode picker', () => {
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
 
-    await switchMode(user, /Document/);
+    await switchMode(user, /Save an editable file/);
     expect(screen.getByRole('button', { name: 'Export document' })).toBeInTheDocument();
 
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
     expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeInTheDocument();
   });
 });
@@ -193,7 +193,7 @@ describe('ExportDialog — Document panel', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Document/);
+    await switchMode(user, /Save an editable file/);
 
     expect(screen.getByRole('button', { name: 'Export document' })).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'Encrypted' }));
@@ -204,7 +204,7 @@ describe('ExportDialog — Document panel', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Document/);
+    await switchMode(user, /Save an editable file/);
     await user.click(screen.getByRole('radio', { name: 'Encrypted' }));
     await user.click(screen.getByRole('button', { name: 'Export securely…' }));
 
@@ -217,7 +217,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withoutFlows(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
 
     expect(screen.getByText('Add a Flow to export its sequence diagram.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Export (Mermaid|PlantUML)/ })).toBeDisabled();
@@ -227,7 +227,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
 
     expect(screen.queryByText('Add a Flow to export its sequence diagram.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeEnabled();
@@ -237,7 +237,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
     await user.click(screen.getByRole('radio', { name: 'PlantUML' }));
 
     expect(screen.getByRole('button', { name: 'Export PlantUML' })).toBeInTheDocument();
@@ -247,7 +247,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
 
     const dialog = screen.getByRole('dialog');
     const preview = within(dialog).getByTestId('export-source-preview');
@@ -263,7 +263,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withoutFlows(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     const { unmount } = renderDialog();
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
     expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeDisabled();
 
     await user.click(screen.getByRole('radio', { name: 'Architecture' }));
@@ -292,7 +292,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     useEditorStore.setState({ document: { ...createDocument('Big'), nodes }, selection: { nodes: [], edges: [] }, selectedFlowId: null });
     prefs.set('sequence-export-format', 'mermaid-flowchart');
     renderDialog();
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
     const preview = screen.getByTestId('export-source-preview');
     expect(preview.querySelector('pre')!.textContent!.split('\n')).toHaveLength(200);
     expect(preview.textContent).toMatch(/… \d+ more lines/);
@@ -304,7 +304,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
     await user.click(screen.getByRole('button', { name: 'Copy' }));
     expect(writeText).toHaveBeenCalledOnce();
     expect(writeText.mock.calls[0]![0]).toContain('sequenceDiagram');
@@ -352,12 +352,12 @@ describe('ExportDialog — output artifact', () => {
     await user.click(screen.getByRole('radio', { name: 'SVG' }));
     expect(screen.getByTitle('my-diagram.svg')).toBeInTheDocument();
 
-    await switchMode(user, /Document/);
+    await switchMode(user, /Save an editable file/);
     expect(screen.getByTitle('my-diagram.draftcanvas')).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'Encrypted' }));
     expect(screen.getByTitle('my-diagram.dcenc')).toBeInTheDocument();
 
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
     expect(screen.getByTitle('my-diagram.mmd')).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'PlantUML' }));
     expect(screen.getByTitle('my-diagram.puml')).toBeInTheDocument();
@@ -404,12 +404,12 @@ describe('ExportDialog — persistence', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     const { unmount } = renderDialog();
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
     await user.click(screen.getByRole('radio', { name: 'PlantUML' }));
     unmount();
 
     renderDialog();
-    expect(screen.getByRole('radio', { name: /Source/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Other formats/ })).toBeChecked();
     expect(screen.getByRole('radio', { name: 'PlantUML' })).toBeChecked();
     expect(screen.getByRole('button', { name: 'Export PlantUML' })).toBeInTheDocument();
   });
@@ -425,7 +425,7 @@ describe('ExportDialog — "Export selection…"', () => {
     useUiStore.setState({ exportOpen: true, exportSelectionRequested: true });
     renderDialog();
 
-    expect(screen.getByRole('radio', { name: /Image/ })).toBeChecked();
+    expect(screen.getByRole('radio', { name: /Save an image/ })).toBeChecked();
     expect(screen.getByRole('checkbox', { name: /Selection only/ })).toBeChecked();
   });
 });
@@ -448,7 +448,7 @@ describe('ExportDialog — keyboard navigation', () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
 
     screen.getByRole('radio', { name: 'Mermaid' }).focus();
     expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Mermaid' }));
@@ -508,7 +508,7 @@ describe('ExportDialog — which canvas', () => {
     const user = userEvent.setup();
     insideAShape();
     renderDialog();
-    await switchMode(user, /Document/);
+    await switchMode(user, /Save an editable file/);
     expect(screen.queryByText('The whole canvas')).toBeNull();
   });
 });
@@ -563,7 +563,7 @@ describe('ExportDialog — every level', () => {
     const withInnerFlow = { ...doc, nodes: [{ ...doc.nodes[0]!, inside: { ...inner, nodes: [...inner.nodes, other], edges: [edge], flows: [flow] } }] };
     useEditorStore.setState({ document: withInnerFlow, selection: { nodes: [], edges: [] }, selectedFlowId: null });
     renderDialog();
-    await switchMode(user, /Source/);
+    await switchMode(user, /Other formats/);
 
     expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeEnabled();
     expect(screen.getByText('1 Flow · plain text')).toBeInTheDocument();

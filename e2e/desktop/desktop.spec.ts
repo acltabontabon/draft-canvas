@@ -90,7 +90,7 @@ test('desktop sharing creates a protected public editor link and supports manual
   await page.getByRole('button', { name: 'Share', exact: true }).click();
   await page.getByRole('menuitem', { name: /^Share read-only link/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Export & share' });
-  await dialog.getByText('Share', { exact: true }).click();
+  await dialog.locator('[data-mode="share"]').click();
   await expect(dialog.getByRole('checkbox', { name: /Require a passphrase/ })).toBeChecked();
   await dialog.getByLabel('Passphrase', { exact: true }).fill('copper river orbit lantern');
   await dialog.getByLabel('Confirm passphrase').fill('copper river orbit lantern');

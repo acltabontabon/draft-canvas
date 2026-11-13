@@ -44,6 +44,21 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Changed
 
+- **Export by what you want to do** — The export dialog now asks in plain words: **Share a link**,
+  **Save an editable file**, **Save an image**, **Use in a README**, with Mermaid, PlantUML, C4 and
+  draw.io under **Other formats**. Each choice says what you get. <!-- highlight -->
+- **A shorter toolbar** — The toolbar keeps the shapes most diagrams use. **Shapes** at its end
+  lists every one by name, with what it is for and its key, and finds a shape by any name you'd use
+  (`cache`, `user`, `topic`). Every key still works over the canvas.
+- **Search by technology** — Type `kafka`, `redis`, `postgres` or `s3` in **Shapes** and pick the
+  shape that technology is: a Kafka topic, a Redis cache, with the kind set and the logo on it.
+  `spring`, `rust` or `node` gives a Service built with it.
+  <!-- highlight -->
+- A calmer look: buttons and toggles no longer stack an outline on a tint, the selection ring and
+  keyboard focus are heavier, and **Saved locally** stays in the background unless something needs
+  you.
+- Traffic uses handwriting more sparingly: with more than three findings the notes are set in plain
+  type, and the detail card keeps handwriting for its headline number.
 - Starters are no longer part of the app: until you load the gallery, a blank canvas offers it in
   one card instead of five tiles. **Try an example** still works offline.
 - The starters were redrawn: captions such as "publishes to" no longer get cut short, and named

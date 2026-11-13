@@ -65,6 +65,6 @@ Pan and zoom freely; `R` hands the camera back. For a long step, choose **Read f
 
 ## Export a flow
 
-**Share → Export → Source → Flows** (`⌘⇧E`) turns each flow into a **Mermaid** or **PlantUML**
-sequence diagram, nested levels included. With a flow selected, an **Image** export numbers its
+**Share → Export → Other formats → Flows** (`⌘⇧E`) turns each flow into a **Mermaid** or **PlantUML**
+sequence diagram, nested levels included. With a flow selected, an image export numbers its
 connectors. See [Saving and sharing](saving-and-sharing.md).

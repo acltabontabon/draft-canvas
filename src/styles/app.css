@@ -51,15 +51,16 @@ input[type='range'] {
   cursor: default;
 }
 
+/* On is a tint and the accent ink — one treatment. It used to be outlined as well, which put a
+   box inside the box of every bar and trough a toggle sits in. */
 .dc-button[data-active='true'] {
   background: var(--dc-selection-soft);
-  border-color: color-mix(in srgb, var(--dc-selection) 55%, transparent);
   color: var(--dc-selection);
   font-weight: 600;
 }
 
 /* Without this, `:hover` (higher specificity) wins the `background`/`color` tug-of-war against
-   `[data-active='true']` and reverts the active tool to the plain hover grey while its border
+   `[data-active='true']` and reverts the active tool to the plain hover grey while its ink
    stays teal — a mismatched half-active, half-hover look. This keeps hover reading as "active,
    and now also hovered" instead. */
 .dc-button[data-active='true']:hover:not(:disabled) {
@@ -1602,10 +1603,8 @@ kbd {
    would have read clearly in one theme and mushily in the other. */
 .dc-create-rail .dc-button[data-active='true'] {
   background: var(--dc-selection-soft);
-  border-color: color-mix(in srgb, var(--dc-selection) 45%, transparent);
   color: var(--dc-selection);
   font-weight: 600;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dc-selection) 9%, transparent);
 }
 
 .dc-create-rail .dc-button[data-active='true']:hover:not(:disabled) {
@@ -1620,10 +1619,11 @@ kbd {
    itself in and the tool writes its name beside it in the annotation (mono) face. Each tool's key
    is an annotation too, shown only while a hand (or keyboard focus) is in the rail. */
 
+/* A hairline is the rail's whole edge. It also wore a drop shadow, and the tool in hand an outline
+   and a shadow of its own inside that: four edges stacked on a 30px control. */
 .dc-create-rail {
   border-radius: 10px;
   background: var(--dc-surface);
-  box-shadow: var(--dc-island-shadow);
 }
 
 .dc-create-rail .dc-tool {
@@ -1661,10 +1661,8 @@ kbd {
 }
 
 .dc-create-rail .dc-tool[data-active='true'] {
-  border-color: color-mix(in srgb, var(--dc-selection) 40%, transparent);
-  background: color-mix(in srgb, var(--dc-canvas) 70%, var(--dc-selection-soft));
+  background: var(--dc-selection-soft);
   color: var(--dc-selection);
-  box-shadow: 0 1px 0 color-mix(in srgb, var(--dc-selection) 22%, transparent);
 }
 
 .dc-tool[data-active='true'] .dc-tool-name {
@@ -1683,6 +1681,12 @@ kbd {
 
 @keyframes dc-tool-ink {
   to { stroke-dashoffset: 0; }
+}
+
+/* The rail scrolls, so it clips what is drawn outside its buttons — including the focus ring, which
+   showed as a sliver along one edge. Inside the button, it is whole at either end of the rail. */
+.dc-create-rail .dc-button:focus-visible {
+  outline-offset: -2px;
 }
 
 /* The key, as an annotation in the corner — only while a hand or keyboard focus is in the rail. */
@@ -1707,6 +1711,42 @@ kbd {
 
 .dc-tool[data-active='true'] .dc-tool-key {
   opacity: 0;
+}
+
+/* The rail's last tool is a word, not a picture: it opens every shape by name (`ShapePicker`). While
+   a shape without a button of its own is in hand, this slot shows that shape instead. */
+.dc-create-rail .dc-tool-shapes {
+  padding: 0 7px 0 9px;
+}
+
+.dc-tool-shapes-word {
+  font-family: var(--dc-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dc-tool-caret {
+  flex: none;
+  margin-left: 5px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.7;
+  transition: transform 160ms var(--dc-ease-out);
+}
+
+.dc-create-rail .dc-tool-shapes[data-open]:not([data-active='true']) {
+  background: color-mix(in srgb, var(--dc-text) 7%, transparent);
+  color: var(--dc-text);
+}
+
+.dc-tool-shapes[data-open] .dc-tool-caret {
+  transform: rotate(180deg);
 }
 
 /* A short hairline separates tool groups without looking like one of the diagram's connectors. */
@@ -1750,7 +1790,6 @@ kbd {
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-pill);
   background: var(--dc-surface);
-  box-shadow: var(--dc-island-shadow);
 }
 
 .dc-toolbar-modes,
@@ -1781,7 +1820,7 @@ kbd {
 .dc-button.dc-share-button[data-active='true']:hover:not(:disabled) {
   background: var(--dc-selection);
   color: var(--dc-canvas);
-  box-shadow: 0 0 0 3px var(--dc-selection-soft);
+  filter: brightness(0.92);
 }
 
 /* --- capabilities --- */
@@ -1814,7 +1853,6 @@ kbd {
    active language across the whole bar. Present is momentary and deliberately has none. */
 .dc-toolbar-mode[data-active='true'] {
   background: var(--dc-selection-soft);
-  border-color: color-mix(in srgb, var(--dc-selection) 45%, transparent);
   color: var(--dc-selection);
   font-weight: 600;
 }
@@ -1966,16 +2004,27 @@ kbd {
   align-items: center;
   gap: 5px;
   color: var(--dc-text-muted);
-  font-weight: 550;
+  font-weight: 500;
   white-space: nowrap;
 }
 
-.dc-save[data-status='saved'] {
-  color: var(--dc-selection);
+/* Healthy is the quiet state. "Saved" used to be the one line of accent ink in the bar — the
+   loudest thing down here on the one occasion there is nothing to do about it. It recedes to the
+   faintest text that still reads; the accent is left to mean "selected", and weight and colour are
+   kept for the states that ask for something: work that isn't stored, a save that failed. */
+/* `idle` is the same promise before the first edit: nothing has needed saving yet. */
+.dc-save:is([data-status='saved'], [data-status='idle']) {
+  color: var(--dc-text-faint);
+}
+
+.dc-save[data-durable='false'] {
+  color: var(--dc-caution);
+  font-weight: 600;
 }
 
 .dc-save[data-status='error'] {
   color: var(--dc-danger);
+  font-weight: 600;
 }
 
 .dc-save-conflict {
@@ -4474,51 +4523,72 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   color: var(--dc-danger);
 }
 
-/* ---- mode cards ---------------------------------------------------------
-   Compact icon cards: enough personality to stay recognizable at a glance, small enough to read
-   as navigation rather than content. Each is a native radio hidden via `.dc-sr-only` (not
-   `display:none`), so the set keeps normal Tab/arrow-key radio-group behavior for free. */
-.dc-export-modes {
+/* ---- what you want to do ------------------------------------------------
+   A short list down the left, read top to bottom: the name of the intention and one line telling
+   it from its neighbours. Rows, not boxes — the chosen one is a tint and nothing else, so five
+   outlined cards no longer sit above the outlined controls they lead to. Each is a native radio
+   hidden via `.dc-sr-only` (not `display:none`), so the set keeps normal Tab/arrow-key radio-group
+   behavior for free. */
+.dc-export-layout {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
-  margin-bottom: 16px;
+  grid-template-columns: 228px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.dc-export-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  align-self: stretch;
+  padding-right: 14px;
+  border-right: 1px solid var(--dc-border);
 }
 
 .dc-export-mode {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  height: 34px;
-  padding: 0 10px;
-  border: 1px solid var(--dc-border);
+  align-items: flex-start;
+  gap: 10px;
+  padding: 7px 10px 8px;
   border-radius: var(--dc-radius);
-  background: transparent;
   color: var(--dc-text-muted);
-  font-size: 12.5px;
-  font-weight: 500;
-  white-space: nowrap;
   cursor: pointer;
   -webkit-user-select: none;
   user-select: none;
   transition:
-  border-color 120ms ease,
   background-color 120ms ease,
-  color 120ms ease,
-  box-shadow 160ms ease;
+  color 120ms ease;
 }
 
 .dc-export-mode svg {
   flex-shrink: 0;
+  margin-top: 2px;
   color: var(--dc-text-faint);
   transition: color 120ms ease;
 }
 
-.dc-export-mode:hover {
-  border-color: var(--dc-border-strong);
-  background: var(--dc-surface-hover);
+.dc-export-mode-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dc-export-mode-label {
   color: var(--dc-text);
+  font-size: 13px;
+  font-weight: 550;
+  line-height: 18px;
+}
+
+.dc-export-mode-hint {
+  color: var(--dc-text-faint);
+  font-size: 11.5px;
+  line-height: 15px;
+}
+
+.dc-export-mode:hover {
+  background: var(--dc-surface-hover);
 }
 
 .dc-export-mode:hover svg {
@@ -4526,20 +4596,64 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 }
 
 .dc-export-mode:has(input:checked) {
-  border-color: color-mix(in srgb, var(--dc-selection) 70%, transparent);
   background: var(--dc-selection-soft);
-  color: var(--dc-selection);
-  font-weight: 600;
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dc-selection) 9%, transparent);
 }
 
-.dc-export-mode:has(input:checked) svg {
+.dc-export-mode:has(input:checked) :is(svg, .dc-export-mode-label) {
   color: var(--dc-selection);
+}
+
+.dc-export-mode:has(input:checked) .dc-export-mode-label {
+  font-weight: 650;
+}
+
+.dc-export-mode:has(input:checked) .dc-export-mode-hint {
+  color: var(--dc-text-muted);
 }
 
 .dc-export-mode:has(input:focus-visible) {
   outline: 2px solid var(--dc-selection);
-  outline-offset: 3px;
+  outline-offset: 2px;
+}
+
+/* Everyday intentions above, the formats you have to already want below. */
+.dc-export-modes-rule {
+  height: 1px;
+  margin: 6px 10px;
+  background: var(--dc-border);
+}
+
+/* No room for a column of its own: the same choices as a row of names, the lines under them left
+   out. */
+@media (max-width: 760px) {
+  .dc-export-layout {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  }
+
+  .dc-export-modes {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 0 12px;
+  border-right: 0;
+  border-bottom: 1px solid var(--dc-border);
+  }
+
+  .dc-export-mode {
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  }
+
+  .dc-export-mode svg {
+  margin-top: 0;
+  }
+
+  .dc-export-mode-hint,
+  .dc-export-modes-rule {
+  display: none;
+  }
 }
 
 /* ---- body: how (left) · what you'll get (right) ------------------------- */
@@ -5222,12 +5336,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   }
 }
 
-@media (max-width: 460px) {
-  .dc-export-modes {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
 /* ---- segmented control --------------------------------------------------
    A generic 2-3 option pill group — `SegmentedControl`, shared with anything that needs a small
    mutually-exclusive choice, not export-specific. Kept here since export is its only caller today.
@@ -5276,11 +5384,11 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   cursor: default;
 }
 
+/* The trough already draws the edge: the chosen pill is a tint in it, not a second outline. */
 .dc-segmented-option:has(input:checked) {
   background: var(--dc-selection-soft);
   color: var(--dc-selection);
   font-weight: 600;
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dc-selection) 45%, transparent);
 }
 
 .dc-segmented-option:has(input:focus-visible) {
@@ -5338,13 +5446,6 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
   height: 32px;
   padding: 0 14px 0 12px;
   border-radius: var(--dc-radius-sm);
-  box-shadow:
-  inset 0 1px 0 color-mix(in srgb, #fff 18%, transparent),
-    0 6px 16px -8px color-mix(in srgb, var(--dc-selection) 80%, transparent);
-}
-
-.dc-export-footer .dc-button-solid:disabled {
-  box-shadow: none;
 }
 
 /* ------------------------------------------------------------ shortcuts -- */

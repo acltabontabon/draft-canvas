@@ -28,6 +28,7 @@ import { openPointTargetsOf, readSafeMenu, starterCommands } from '../../command
 import type { Command } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
 import { defaultSizeFor } from '../../document/factory';
+import { technologyStart } from '../../document/technologyKind';
 import { DEFAULTS } from '../../document/limits';
 import { pathKey } from '../../depth/tree';
 import { boundsOf, placeNear } from '../../document/operations';
@@ -255,6 +256,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         noteKind: preset.noteKind,
         language: preset.language,
         code,
+        // Picked as a technology ("kafka" in the shape picker): it arrives as that technology, with
+        // the kind it implies.
+        ...(preset.technology ? technologyStart(preset.type, preset.technology) : {}),
       });
       if (spliceEdgeId) {
         editor.spliceIntoEdge(node.id, spliceEdgeId);
