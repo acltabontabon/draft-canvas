@@ -619,8 +619,13 @@ export interface EdgeSpine {
 
 export interface RouteOptions {
   anchors?: RouteAnchors;
-  /** A custom label's real chip bounds. Geometry-only callers leave this out. */
-  label?: { width: number; height: number; away?: number };
+  /**
+   * The words the connector carries at its label point: a custom label's real chip bounds, or — with
+   * `caption` — a relationship caption's, measured as a chip would be (its text plus the chip's
+   * padding). Placement keeps them clear of shapes, bends and the arrowhead. Geometry-only callers
+   * leave this out.
+   */
+  label?: { width: number; height: number; away?: number; caption?: boolean };
   /**
    * The shared trunk this edge travels along, when `edges/bundles.ts` grouped
    * it into one. Absent — by far the common case — routes exactly as it always
@@ -1226,6 +1231,11 @@ const LABEL_SIDE_BAND = 10;
 /** The arrowhead's own length, kept clear at the target end of a run on top of the bend clearance,
  *  so a caption never sits over the head. */
 export const LABEL_ARROW_CLEARANCE = 14;
+/** Half the arrowhead's width across its line — `CONNECTOR_STYLE.arrowWidth` (10) halved, restated
+ *  here because the style module imports this one. */
+export const LABEL_ARROW_HALF_WIDTH = 5;
+/** How close a connector's words may come to one of its own bends, or to a line leaving there. */
+export const LABEL_CORNER_GAP = 4;
 
 /** A maximal straight stretch of a flattened path: consecutive corner-to-corner segments running the
  *  same way. `from`/`to` are vertex indices. */
@@ -1601,6 +1611,115 @@ export function responseLabelAnchor(
   return { x: at.x, y: at.y, side };
 }
 
+/** The box a connector's words occupy at `point`: a chip on its chosen side, its text
+ *  `LABEL_LINE_GAP` from the line (`labelChipRect` in `describe.ts`), or a caption on the side
+ *  `labelSideAwayFromResponse` gives it, measured the same way. */
+function wordsBox(point: { x: number; y: number; side: Side }, width: number, height: number, away: number, caption: boolean): Rect {
+  const side = caption ? labelSideAwayFromResponse(point.side, away) : labelChipSide(point.side, away);
+  const { x, y } = point;
+  const left = side === 'right' ? x + LABEL_LINE_GAP - LABEL_PADDING_X : side === 'left' ? x - LABEL_LINE_GAP + LABEL_PADDING_X - width : x - width / 2;
+  const top = side === 'bottom' ? y + LABEL_LINE_GAP - LABEL_PADDING_Y : side === 'top' ? y - LABEL_LINE_GAP + LABEL_PADDING_Y - height : y - height / 2;
+  return { x: left, y: top, width, height };
+}
+
+/** The box a line's arrowhead covers at its last vertex: its length back along the last stretch,
+ *  its width across. */
+function arrowheadBox(vertices: readonly PathVertex[]): Rect | null {
+  const tip = vertices[vertices.length - 1];
+  if (!tip) return null;
+  for (let i = vertices.length - 2; i >= 0; i -= 1) {
+    const from = vertices[i]!;
+    const length = Math.hypot(tip.x - from.x, tip.y - from.y);
+    if (length < 1e-6) continue;
+    const ux = (tip.x - from.x) / length;
+    const uy = (tip.y - from.y) / length;
+    const bx = tip.x - ux * LABEL_ARROW_CLEARANCE;
+    const by = tip.y - uy * LABEL_ARROW_CLEARANCE;
+    const px = Math.abs(uy) * LABEL_ARROW_HALF_WIDTH;
+    const py = Math.abs(ux) * LABEL_ARROW_HALF_WIDTH;
+    const left = Math.min(tip.x, bx) - px;
+    const top = Math.min(tip.y, by) - py;
+    return { x: left, y: top, width: Math.max(tip.x, bx) + px - left, height: Math.max(tip.y, by) + py - top };
+  }
+  return null;
+}
+
+/** Does segment `a`→`b` pass through the inside of `box`? (Liang–Barsky.) */
+function segmentCrossesBox(a: { x: number; y: number }, b: { x: number; y: number }, box: Rect): boolean {
+  if (box.width <= 0 || box.height <= 0) return false;
+  let t0 = 0;
+  let t1 = 1;
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const clip = (p: number, q: number) => {
+    if (p === 0) return q > 0;
+    const t = q / p;
+    if (p < 0) {
+      if (t > t1) return false;
+      if (t > t0) t0 = t;
+    } else {
+      if (t < t0) return false;
+      if (t < t1) t1 = t;
+    }
+    return true;
+  };
+  return clip(-dx, a.x - box.x) && clip(dx, box.x + box.width - a.x) && clip(-dy, a.y - box.y) && clip(dy, box.y + box.height - a.y) && t1 - t0 > 1e-6;
+}
+
+/**
+ * Whether words in `box`, at a point on `vertices`' segment `own`, stay off their own line: clear of
+ * its arrowhead, and not reached by the line anywhere but the stretch they sit beside — a corner that
+ * turns toward them, or the run after it, would strike through the text.
+ */
+function wordsClearOfLine(box: Rect, vertices: readonly PathVertex[], own: number, head: Rect | null): boolean {
+  if (head && box.x < head.x + head.width && head.x < box.x + box.width && box.y < head.y + head.height && head.y < box.y + box.height) return false;
+  const near = { x: box.x - LABEL_CORNER_GAP, y: box.y - LABEL_CORNER_GAP, width: box.width + LABEL_CORNER_GAP * 2, height: box.height + LABEL_CORNER_GAP * 2 };
+  // The stretch the words sit beside, however many vertices it was drawn with.
+  const a0 = vertices[own]!;
+  const a1 = vertices[own + 1]!;
+  const collinear = (k: number) => {
+    const p = vertices[k]!;
+    const q = vertices[k + 1]!;
+    return Math.abs((a1.x - a0.x) * (q.y - p.y) - (a1.y - a0.y) * (q.x - p.x)) < 0.01
+      && Math.abs((a1.x - a0.x) * (p.y - a0.y) - (a1.y - a0.y) * (p.x - a0.x)) < 0.01;
+  };
+  for (let k = 0; k < vertices.length - 1; k += 1) {
+    if (k === own || collinear(k)) continue;
+    if (segmentCrossesBox(vertices[k]!, vertices[k + 1]!, near)) return false;
+  }
+  return true;
+}
+
+/** The segment of `vertices` nearest `point`. */
+function segmentAt(vertices: readonly PathVertex[], point: { x: number; y: number }): number {
+  let best = 0;
+  let bestDistance = Infinity;
+  for (let i = 0; i < vertices.length - 1; i += 1) {
+    const a = vertices[i]!;
+    const b = vertices[i + 1]!;
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const lengthSq = dx * dx + dy * dy;
+    const t = lengthSq === 0 ? 0 : clamp(((point.x - a.x) * dx + (point.y - a.y) * dy) / lengthSq, 0, 1);
+    const distance = (point.x - (a.x + dx * t)) ** 2 + (point.y - (a.y + dy * t)) ** 2;
+    if (distance < bestDistance - 1e-6) {
+      bestDistance = distance;
+      best = i;
+    }
+  }
+  return best;
+}
+
+/** Whether the line, after the stretch ending at vertex `end`, next heads left. */
+function turnsLeft(vertices: readonly PathVertex[], end: number): boolean {
+  const from = vertices[end]!;
+  for (let k = end + 1; k < vertices.length; k += 1) {
+    const dx = vertices[k]!.x - from.x;
+    if (Math.abs(dx) > 0.5) return dx < 0;
+  }
+  return false;
+}
+
 function clearLabel(
   d: string,
   initial: { x: number; y: number; side: Side },
@@ -1611,29 +1730,41 @@ function clearLabel(
   lane: number,
   sourceSide: Side,
   targetSide: Side,
-  fitted: boolean,
+  room: number | undefined,
+  others: readonly (readonly PathVertex[])[] = [],
 ): { x: number; y: number; side: Side } {
   const nudge = labelLaneOffset(sourceSide, targetSide, lane);
   const occupied = [sourceRect, targetRect, ...obstacles];
+  const vertices = flattenPath(d);
+  const head = arrowheadBox(vertices);
+  const away = size.away ?? 0;
+  const caption = size.caption === true;
+  const boxAt = (point: { x: number; y: number; side: Side }, width = size.width) =>
+    wordsBox({ x: point.x + nudge.x, y: point.y + nudge.y, side: point.side }, width, size.height, away, caption);
+  const clearOfShapes = (box: Rect, nodes: readonly Rect[]) =>
+    nodes.every((o) => box.x + box.width + 2 <= o.x || box.x - 2 >= o.x + o.width || box.y + box.height + 2 <= o.y || box.y - 2 >= o.y + o.height);
+  // Off its own line too: the line's bends and arrowhead are measured from the point the words sit
+  // at, on the segment they sit beside — not the lane-nudged one, which moves the words, not the line.
+  const clearOfLine = (point: { x: number; y: number; side: Side }, box: Rect) =>
+    (vertices.length < 2 || wordsClearOfLine(box, vertices, segmentAt(vertices, point), head))
+    && others.every((line) => line.every((p, k) => k === 0 || !segmentCrossesBox(line[k - 1]!, p, box)));
   const clear = (point: { x: number; y: number; side: Side }, nodes: readonly Rect[] = occupied) => {
-    const side = labelChipSide(point.side, size.away ?? 0);
-    const x = point.x + nudge.x;
-    const y = point.y + nudge.y;
-    const left = side === 'right' ? x + LABEL_LINE_GAP - LABEL_PADDING_X : side === 'left' ? x - LABEL_LINE_GAP + LABEL_PADDING_X - size.width : x - size.width / 2;
-    const top = side === 'bottom' ? y + LABEL_LINE_GAP - LABEL_PADDING_Y : side === 'top' ? y - LABEL_LINE_GAP + LABEL_PADDING_Y - size.height : y - size.height / 2;
-    return nodes.every((o) => left + size.width + 2 <= o.x || left - 2 >= o.x + o.width || top + size.height + 2 <= o.y || top - 2 >= o.y + o.height);
+    const box = boxAt(point);
+    return clearOfShapes(box, nodes) && clearOfLine(point, box);
   };
   // Keep established endpoint placement unless a shape actually covers the label. The line's own two
   // shapes count only where the chip is drawn at the size measured here: beside an upright run, or
   // along an interior one. A chip on a level run that reaches a shape is laid out to that run's room
   // (`labelRoom`) and wraps to fit, so `size`, its unfitted width, would call a label that fits a
   // collision. Leaving the two shapes out everywhere let a label beside the last upright run of a
-  // branch lie across the corner of the shape the branch turns into.
-  if (clear(initial, fitted ? obstacles : occupied)) return initial;
+  // branch lie across the corner of the shape the branch turns into. Its own line is judged at the
+  // width it is laid out to for the same reason.
+  const fittedWidth = room === undefined ? size.width : Math.min(size.width, Math.max(room, 0) + (caption ? 0 : LABEL_PADDING_X * 2));
+  const initialClearOfShapes = clearOfShapes(boxAt(initial), room === undefined ? occupied : obstacles);
+  if (initialClearOfShapes && clearOfLine(initial, boxAt(initial, fittedWidth))) return initial;
   const opposite: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
   const flipped = { ...initial, side: opposite[initial.side] };
   if (clear(flipped)) return flipped;
-  const vertices = flattenPath(d);
   const candidates: { x: number; y: number; side: Side }[] = [];
   for (let i = 1; i < vertices.length; i += 1) {
     const a = vertices[i - 1]!;
@@ -1643,7 +1774,10 @@ function clearLabel(
     const length = Math.hypot(dx, dy);
     if (length < LABEL_BEND_CLEARANCE * 2) continue;
     const horizontal = Math.abs(dx) >= Math.abs(dy);
-    const side: Side = horizontal ? 'top' : 'right';
+    // Beside an upright run, the side the line turns toward next comes first: the words sit in the
+    // crook of its elbow, and two connectors fanning out of one shape the opposite ways put theirs on
+    // opposite sides instead of both on the right, into each other.
+    const side: Side = horizontal ? 'top' : turnsLeft(vertices, i) ? 'left' : 'right';
     // Bounded samples keep crowded diagrams predictable; never place the anchor on a bend.
     for (const fraction of [0.5, 0.25, 0.75, 0.125, 0.875]) {
       const t = clamp(fraction, LABEL_BEND_CLEARANCE / length, 1 - LABEL_BEND_CLEARANCE / length);
@@ -1661,8 +1795,14 @@ function clearLabel(
     candidates.push(middle, { ...middle, side: opposite[side] });
   }
   candidates.sort((a, b) => Math.hypot(a.x - initial.x, a.y - initial.y) - Math.hypot(b.x - initial.x, b.y - initial.y));
-  // Nowhere on the line is clear of everything: stay put, as a label over its own shape always has.
-  return candidates.find((point) => clear(point)) ?? initial;
+  const anywhere = candidates.find((point) => clear(point));
+  if (anywhere) return anywhere;
+  // Nowhere is clear of both shapes and its own line. A place clear of shapes alone still beats a
+  // shape over the words (the rule this kept before it knew the line); and nowhere clear of
+  // anything: stay put, as a label over its own shape always has.
+  if (initialClearOfShapes) return initial;
+  if (clearOfShapes(boxAt(flipped), occupied)) return flipped;
+  return candidates.find((point) => clearOfShapes(boxAt(point), occupied)) ?? initial;
 }
 
 /**
@@ -1681,13 +1821,36 @@ export function routeBetween(
 ): RoutedEdge {
   const initial = withTracks(drawBetween(sourceRect, targetRect, routing, resolveEnds(sourceRect, targetRect, routing, options), options), routing, options);
   const route = clearAutomaticEntry(initial, sourceRect, targetRect, routing, options);
+  return placedClear(route, sourceRect, targetRect, options);
+}
+
+/** `route` with its words moved clear of shapes, its own line and any of `others` (lines that must
+ *  not run through them), when they are not already. */
+function placedClear(route: RoutedEdge, sourceRect: Rect, targetRect: Rect, options: RouteOptions | undefined, others: readonly string[] = []): RoutedEdge {
   if (!options?.label) return route;
   const label = clearLabel(route.d, { x: route.labelX, y: route.labelY, side: route.labelSide }, options.label,
-    sourceRect, targetRect, options.obstacles ?? [], options.lane ?? 0, route.source.side, route.target.side, route.labelRoom !== undefined);
+    sourceRect, targetRect, options.obstacles ?? [], options.lane ?? 0, route.source.side, route.target.side, route.labelRoom,
+    others.map(flattenPath));
   if (label.x === route.labelX && label.y === route.labelY) return { ...route, labelSide: label.side };
   // Moved clear of a shape: the room measured at the old point no longer applies.
   const { labelRoom: _stale, ...moved } = route;
   return { ...moved, labelX: label.x, labelY: label.y, labelSide: label.side };
+}
+
+/**
+ * A request's words, kept off its own reply line. The request is placed before its reply is routed,
+ * and a reply that turns back across the request's last run (out of the target, round, and home)
+ * drew its leg straight through the request's words. Placed again with the reply in view; a request
+ * the reply leaves clear is returned as it was.
+ */
+export function clearOfReply(request: RoutedEdge, reply: RoutedEdge, sourceRect: Rect, targetRect: Rect, options: RouteOptions | undefined): RoutedEdge {
+  if (!options?.label) return request;
+  // Which side the reply actually runs on, now that it is routed — what both renderers place the
+  // words away from (`responseAwayAt`), not the guess made before it existed.
+  const lane = options.lane ?? 0;
+  const responseAway = responseAwayAt(request, reply, lane);
+  const away = options.label.caption ? captionAwayForLane(lane, responseAway) : responseAway;
+  return placedClear(request, sourceRect, targetRect, { ...options, label: { ...options.label, away } }, [reply.d]);
 }
 
 /** A shape immediately beside an automatic end can block its approach stub even though another

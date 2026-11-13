@@ -9,8 +9,6 @@ import type { Rect } from '../../edges/routing';
 import type { Box } from '../../presentation/calloutPlacement';
 import {
   ATTACHMENT_ROW_GAP,
-  attachmentRowBelowsSourceOrTarget,
-  captionSideOf,
   edgeLabelPoint,
   rectOfInternal,
   type InternalNode,
@@ -21,7 +19,7 @@ export interface FlowAnchor {
   /** The marker's flow-space box, its rendered size measured from the DOM under `root` — or, while
    *  that element isn't there to measure, a fallback size (`measured: false`, so a caller caching
    *  the box knows to look again). */
-  marker: (root: HTMLElement | null) => { box: Box; measured: boolean };
+  marker: (root: HTMLElement | null) => { box: Box; measured: boolean; below?: boolean };
   host: Box | null;
   /** Nodes the callout must never cover. */
   avoid: Box[];
@@ -55,16 +53,26 @@ export function edgeAnchor(
   const sourceRect = rectOfInternal(source, types.get(edge.source));
   const targetRect = rectOfInternal(target, types.get(edge.target));
   if (!sourceRect || !targetRect) return null;
-  // The chip row hangs from the connector's own label point, shared label or not.
+  // The chip row sits beyond the connector's words (`edges/connectorMarks.ts`): under them beside an
+  // upright run, under a caption (which hangs below its line), over a label above a level one. The
+  // drawn row says exactly where, once it is mounted.
   const labelPoint = edgeLabelPoint(document, edge, sourceRect, targetRect, { own: true });
-  const preferBelow = attachmentRowBelowsSourceOrTarget(labelPoint.x, labelPoint.y, sourceRect, targetRect, captionSideOf(edge, labelPoint.side));
+  const upright = labelPoint.side === 'left' || labelPoint.side === 'right';
+  const preferBelow = upright || (edge.label ? labelPoint.side === 'bottom' : Boolean(edge.semantic));
   const box = (rect: Rect): Box => ({ x: rect.x, y: rect.y, width: rect.width, height: rect.height });
   return {
     kind: 'edge',
-    // Mirrors `attachmentRowTransform` in `DraftEdgeView`: centred on the label point, one gap off it.
     marker: (root) => {
       const row = root?.querySelector<HTMLElement>(`.dc-attachment-chip-row[data-host-id="${CSS.escape(edge.id)}"]`);
       const { width, height, measured: found } = measured(row);
+      // Where `DraftEdgeView` pinned it (`attachmentRowTransform`), named on the row.
+      const anchorX = Number(row?.dataset.anchorX);
+      const anchorY = Number(row?.dataset.anchorY);
+      if (row && Number.isFinite(anchorX) && Number.isFinite(anchorY)) {
+        const align = row.dataset.anchor;
+        const x = align === 'start' ? anchorX : align === 'end' ? anchorX - width : anchorX - width / 2;
+        return { box: { x, y: anchorY, width, height }, measured: found, below: row.dataset.flip === 'below' };
+      }
       const y = preferBelow ? labelPoint.y + ATTACHMENT_ROW_GAP : labelPoint.y - ATTACHMENT_ROW_GAP - height;
       return { box: { x: labelPoint.x - width / 2, y, width, height }, measured: found };
     },

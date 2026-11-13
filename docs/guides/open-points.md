@@ -16,7 +16,9 @@ An **open point** is a marker for an unresolved question on a shape, connector o
 
 ![Choosing an open-point kind beside a service.](../media/guides/open-point-raise.png)
 
-Click a marker to change its kind, edit context, **Resolve** or delete it. On a shared point,
+On a shape the marker sits in the row above its top-right corner; on a connector it ends the row of
+attachments past the connector's words. Click a marker to change its kind, edit context, **Resolve**
+or delete it. On a shared point,
 **Not this one** detaches just that element.
 
 ## Review them

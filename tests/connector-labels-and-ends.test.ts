@@ -3,11 +3,13 @@ import { createEdge, createNode } from '../src/document/factory';
 import { categoryOf } from '../src/document/connectorSemantics';
 import { relationshipCaptionLabel } from '../src/document/edgeSemantics';
 import { connectorRoutes } from '../src/edges/connectorRoutes';
-import { fittedConnectorCaption, layoutConnectorCaption, layoutEdgeLabel } from '../src/edges/labelLayout';
+import { labelChipBox } from '../src/edges/labelGroups';
+import { LABEL_PADDING_X, LABEL_PADDING_Y, edgeLabelSize, fittedConnectorCaption, layoutConnectorCaption, layoutEdgeLabel } from '../src/edges/labelLayout';
 import {
   LABEL_ARROW_CLEARANCE,
   LABEL_BEND_CLEARANCE,
   MIN_END_RUN,
+  labelChipSide,
   placeLabel,
   rectOf,
   relaxEndJogs,
@@ -164,4 +166,37 @@ describe('the example diagram', () => {
       expect(route.labelX + layout.width / 2).toBeLessThan(route.target.x - LABEL_ARROW_CLEARANCE);
     }
   });
+});
+
+describe('words kept off their own lines', () => {
+  const crosses = (a: { x: number; y: number }, b: { x: number; y: number }, box: { x: number; y: number; width: number; height: number }) => {
+    // Axis-aligned segments only: every line here is stepped.
+    const [x0, x1] = [Math.min(a.x, b.x), Math.max(a.x, b.x)];
+    const [y0, y1] = [Math.min(a.y, b.y), Math.max(a.y, b.y)];
+    return x0 < box.x + box.width && x1 > box.x && y0 < box.y + box.height && y1 > box.y;
+  };
+  const chipOf = (route: ReturnType<typeof routeBetween>, text: string, away = 0) => {
+    const layout = layoutEdgeLabel(text);
+    return labelChipBox(labelChipSide(route.labelSide, away), route.labelX, route.labelY, layout.width + LABEL_PADDING_X * 2, layout.height + LABEL_PADDING_Y * 2);
+  };
+
+  it('moves a label off a jog too short for it, where the legs at both ends run through it', () => {
+    // Down, a short step left, down again: the step is long enough for a caption by length alone,
+    // but each leg turns up into the words sitting above it.
+    const source = { x: 100, y: 184, width: 156, height: 80 };
+    const target = { x: 48, y: 395, width: 156, height: 80 };
+    const text = 'Prices each line';
+    const route = routeBetween(source, target, 'smoothstep', {
+      anchors: { source: { side: 'bottom', offset: 0.5 }, target: { side: 'top', offset: 0.5 } },
+      label: { ...edgeLabelSize(text) },
+    });
+    const box = chipOf(route, text);
+    const corners = stepPolyline(route.d);
+    for (let i = 1; i < corners.length; i += 1) {
+      const [a, b] = [corners[i - 1]!, corners[i]!];
+      const along = Math.abs(a.y - b.y) < 0.5 ? Math.abs(a.y - route.labelY) < 0.5 : Math.abs(a.x - route.labelX) < 0.5;
+      if (!along) expect(crosses(a, b, box), `leg ${i} through the words`).toBe(false);
+    }
+  });
+
 });

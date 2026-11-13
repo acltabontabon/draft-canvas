@@ -232,6 +232,7 @@ function linesOf(
         JSON.stringify([edge.sourceAnchor, edge.targetAnchor, spine, edge.waypoints]),
         edge.routing,
         edge.label,
+        inputs.caption ?? '',
         lane,
         edge.hasResponse ? 1 : 0,
         edge.kind,

@@ -95,8 +95,8 @@ export interface AttachmentActions {
 /**
  * The row of small chips floating beside its host — one chip per attachment, each independently
  * clickable, so several attachments sit side by side rather than competing for one card. Host-
- * agnostic: an edge positions this row itself (via `style`, anchored to its label point) and picks
- * `cardSide` from `attachmentRowBelowsSourceOrTarget`; a node's attachment popover instead lets the
+ * agnostic: an edge positions this row itself (via `style`, where `connectorMarkRow` puts it beyond
+ * its words) and picks `cardSide` from that row's side; a node's attachment popover instead lets the
  * row flow inside its own already-positioned panel (no `style` needed) and picks `cardSide` from
  * whichever side the panel itself resolved to.
  */
@@ -110,6 +110,7 @@ export function AttachmentChipRow({
   dimmed,
   explainTier,
   revealed,
+  anchor,
   style,
 }: {
   hostKind: 'node' | 'edge';
@@ -124,6 +125,9 @@ export function AttachmentChipRow({
   /** Whether the host is being reached for (hovered or selected). Only meaningful for a connector
    *  carrying several attachments, where the row rests as dots and names itself on approach. */
   revealed?: boolean;
+  /** Where an edge's row is pinned (`connectorMarkRow`), named on the element so Presentation Mode's
+   *  callout can find the row's box without working the layout out again. */
+  anchor?: { anchor: 'start' | 'middle' | 'end'; anchorX: number; box: { y: number } };
   style?: CSSProperties;
 }) {
   if (!attachments.length) return null;
@@ -142,6 +146,12 @@ export function AttachmentChipRow({
       // chips live inside their own popover panel, which has the room, so they never compact.
       data-compact={hostKind === 'edge' && attachments.length > 1 ? 'true' : undefined}
       data-revealed={revealed ? 'true' : undefined}
+      data-anchor={anchor?.anchor}
+      data-anchor-x={anchor?.anchorX}
+      data-anchor-y={anchor?.box.y}
+      // A connector's chips are one set of things attached to it, named as such for a screen reader;
+      // each chip still names itself ("View attached note").
+      {...(hostKind === 'edge' ? { role: 'group', 'aria-label': 'Attachments' } : {})}
       style={style}
     >
       {attachments.map((attachment, index) => (

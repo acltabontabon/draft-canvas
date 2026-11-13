@@ -7,33 +7,31 @@
  * Connectors are the one place with two renderers (see AGENTS.md): the geometry below is the
  * canvas's, restated from `canvas.css` — a change to the chip's look belongs in both.
  */
-import type { Attachment, DraftEdge, DraftNode, Side } from '../document/types';
+import type { Attachment, DraftNode } from '../document/types';
 import type { Shape } from '../render/displayList';
 import type { FontSpec } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
-import type { Theme } from '../render/theme/tokens';
+import { LIGHT, type Theme } from '../render/theme/tokens';
 import { attachmentLookFor } from '../nodes/attachmentLook';
 import type { Rect } from './routing';
 import { RAIL_SIZE, attachmentTabWidth, markerRail } from '../document/markerRail';
 
-/** How far a connector's attachment chip row floats off its label point, in flow units. */
+/** How far a floating element sits off a connector's label point, in flow units — the inspector's
+ *  probe below, and Presentation Mode's fallback before a chip row is mounted to measure. */
 export const ATTACHMENT_ROW_GAP = 12;
 
 /**
  * Whether a UI element floating above `(x, y)` at roughly `NOMINAL_REACH`
  * pixels tall would land inside the connector's own source or target node — the
- * short-connector failure mode both a connector's attachment chip row and `EdgeInspectorPopover`
- * avoid by flipping to sit below the connector instead. A single-point check, not a real
+ * short-connector failure mode `EdgeInspectorPopover` avoids by flipping to sit below the
+ * connector instead. (A connector's own chip row is placed by `connectorMarks.ts`.) A single-point check, not a real
  * box-overlap test: the row's own width is unknown until rendered, and its anchor point is what
  * decides which side reads as belonging to the connector.
  */
 const NOMINAL_REACH = 150;
 
-export function attachmentRowBelowsSourceOrTarget(x: number, y: number, sourceRect: Rect, targetRect: Rect, captionSide?: Side): boolean {
-  // Words already above the line own that side: the row hangs below the line instead of on top of
-  // them (a caption placed above a horizontal line was covered by its own connector's chip row).
-  if (captionSide === 'top') return true;
+export function attachmentRowBelowsSourceOrTarget(x: number, y: number, sourceRect: Rect, targetRect: Rect): boolean {
   const bottom = y - ATTACHMENT_ROW_GAP;
   const top = bottom - NOMINAL_REACH;
   const overlapsRect = (rect: Rect) =>
@@ -41,10 +39,6 @@ export function attachmentRowBelowsSourceOrTarget(x: number, y: number, sourceRe
   return overlapsRect(sourceRect) || overlapsRect(targetRect);
 }
 
-/** A label side, when the connector has a label that claims it — see `attachmentRowBelowsSourceOrTarget`. */
-export function captionSideOf(edge: DraftEdge, labelSide: Side): Side | undefined {
-  return edge.label ? labelSide : undefined;
-}
 
 interface ChipContext {
   theme: Theme;
@@ -55,35 +49,54 @@ interface ChipContext {
 // and between chips; `.dc-attachment-chip[data-kind='note'] .dc-attachment-chip-icon` is a 6px dot.
 const CHIP_FONT: FontSpec = { stack: 'sans', size: 10, weight: 700 };
 const ICON_FONT: FontSpec = { stack: 'mono', size: 10, weight: 400 };
-const CHIP_HEIGHT = 19;
+// 23 tall on screen: 3px padding above and below a 10px line at the inherited line height, and the
+// 1px border. It was restated as 19, so the exported pill was shorter than the canvas's.
+const CHIP_HEIGHT = 23;
+/** A connector's attachment chip is this tall, on the canvas and in exports. */
+export const ATTACHMENT_CHIP_HEIGHT = CHIP_HEIGHT;
 const CHIP_GAP = 5;
 const DOT = 6;
 
+/** `.dc-attachment-chip`'s 1px border, on each side: a chip on screen is this much wider than its
+ *  padding and contents, and a row placed beside a line from a width without it reached toward it. */
+const CHIP_BORDER = 1;
+
 function chipWidth(attachment: Attachment, label: string, compact: boolean, measurer: TextMeasurer): number {
   const icon = attachment.type === 'code' ? measurer.width('{ }', ICON_FONT) : DOT;
-  if (compact) return 5 + icon + 5;
-  return 7 + icon + CHIP_GAP + measurer.width(label, CHIP_FONT) + 9;
+  if (compact) return CHIP_BORDER + 5 + icon + 5 + CHIP_BORDER;
+  return CHIP_BORDER + 7 + icon + CHIP_GAP + measurer.width(label, CHIP_FONT) + 9 + CHIP_BORDER;
+}
+
+function chipLooks(attachments: readonly Attachment[], theme: Theme, measurer: TextMeasurer) {
+  const compact = attachments.length > 1;
+  return attachments.map((attachment) => {
+    const look = attachmentLookFor(theme, attachment);
+    const label = look.label.toUpperCase();
+    return { attachment, look, label, width: chipWidth(attachment, label, compact, measurer) };
+  });
+}
+
+/** How wide a connector's chip row rests: one named chip, or several compact ones (icons only). */
+export function attachmentRowWidth(attachments: readonly Attachment[], measurer: TextMeasurer): number {
+  if (attachments.length === 0) return 0;
+  // A chip's name is its kind, the same in every theme: only widths are read here.
+  const widths = chipLooks(attachments, LIGHT, measurer).map((chip) => chip.width);
+  return widths.reduce((sum, width) => sum + width, 0) + CHIP_GAP * (widths.length - 1);
 }
 
 /**
- * A connector's chip row, centred on `(x, y)` — its label point — and hung above it, or below when
- * `below`. More than one attachment rests compact (icons only), as the canvas does until reached for.
+ * A connector's chip row, drawn from `left` at `top` — where `connectorMarkRow` (`connectorMarks.ts`)
+ * puts it. More than one attachment rests compact (icons only), as the canvas does until reached for.
  */
-export function describeAttachmentChips(attachments: readonly Attachment[], x: number, y: number, below: boolean, ctx: ChipContext): Shape[] {
+export function describeAttachmentChips(attachments: readonly Attachment[], rowLeft: number, top: number, ctx: ChipContext): Shape[] {
   if (attachments.length === 0) return [];
   const compact = attachments.length > 1;
-  const looks = attachments.map((attachment) => {
-    const look = attachmentLookFor(ctx.theme, attachment);
-    const label = look.label.toUpperCase();
-    return { attachment, look, label, width: chipWidth(attachment, label, compact, ctx.measurer) };
-  });
-  const total = looks.reduce((sum, chip) => sum + chip.width, 0) + CHIP_GAP * (looks.length - 1);
-  const top = below ? y + ATTACHMENT_ROW_GAP : y - ATTACHMENT_ROW_GAP - CHIP_HEIGHT;
+  const looks = chipLooks(attachments, ctx.theme, ctx.measurer);
   const shapes: Shape[] = [];
-  let left = x - total / 2;
+  let left = rowLeft;
   for (const { attachment, look, label, width } of looks) {
     shapes.push({ t: 'rect', x: left, y: top, w: width, h: CHIP_HEIGHT, r: CHIP_HEIGHT / 2, fill: look.fill, stroke: { color: look.border, width: 1 } });
-    const iconLeft = left + (compact ? 5 : 7);
+    const iconLeft = left + CHIP_BORDER + (compact ? 5 : 7);
     let iconWidth = DOT;
     if (attachment.type === 'code') {
       const icon = layoutText('{ }', { font: ICON_FONT, maxWidth: 40, lineHeight: CHIP_HEIGHT, measurer: ctx.measurer });

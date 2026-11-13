@@ -14,17 +14,21 @@
  * the canvas already worked out but never files its own routes, which would push out the ones on
  * screen.
  */
-import { visibleEdges } from '../document/compensation';
+import { compensationDisplayLabel, visibleEdges } from '../document/compensation';
+import { categoryOf } from '../document/connectorSemantics';
+import { connectorCaptionText } from './captionText';
 import { LIMITS } from '../document/limits';
 import type { DraftEdge, DraftNode, DraftPoint, EdgeAnchor, EdgeRouting } from '../document/types';
 import { Lru } from '../lib/lru';
 import { routingPlan } from './bundles';
 import { endpointPlan, type EdgeSpread } from './endpoints';
-import { edgeLabelSize } from './labelLayout';
+import { connectorCaptionSize, edgeLabelSize } from './labelLayout';
 import { obstaclesForEdge } from './obstacles';
 import { MAX_POPS } from './pathfinder';
 import { stepPolyline } from './waypoints';
 import {
+  captionAwayForLane,
+  clearOfReply,
   laneIndex,
   rectOf,
   responseAwayFor,
@@ -46,6 +50,8 @@ export interface EdgeRouteInputs {
   target: Rect;
   routing: EdgeRouting;
   label: string | undefined;
+  /** The relationship caption it shows instead, when it has no label (`routedCaption`). */
+  caption?: string;
   sourceAnchor: EdgeAnchor | undefined;
   targetAnchor: EdgeAnchor | undefined;
   hasResponse: boolean | undefined;
@@ -79,6 +85,7 @@ function keyOf(inputs: EdgeRouteInputs): string {
     inputs.target,
     inputs.routing,
     inputs.label,
+    inputs.caption ?? '',
     inputs.sourceAnchor,
     inputs.targetAnchor,
     inputs.hasResponse,
@@ -93,24 +100,45 @@ function keyOf(inputs: EdgeRouteInputs): string {
   ]);
 }
 
+/**
+ * The caption a connector's words are placed for, when it shows one: its relationship caption, unless
+ * it shows a label instead. The canvas passes the same, from the categories it already has.
+ */
+export function routedCaption(
+  edge: DraftEdge,
+  source: Parameters<typeof connectorCaptionText>[1],
+  target: Parameters<typeof connectorCaptionText>[2],
+): string | undefined {
+  if (compensationDisplayLabel(edge)) return undefined;
+  return connectorCaptionText(edge, source, target)?.text;
+}
+
+/** The caption key only when there is one, so inputs without stay byte-identical. */
+const withCaption = (caption: string | undefined) => (caption ? { caption } : {});
+
 /** Routes a connector from scratch, exactly as both renderers draw it. Uncached: for a gesture's
  *  frames, whose inputs no later frame repeats. */
 export function computeEdgeRoutes(inputs: EdgeRouteInputs): EdgeRoutes {
   const { source, target, routing, lane, spine, obstacles, mode, fallback } = inputs;
   const waypoints = inputs.waypoints as DraftPoint[] | undefined;
-  const request = routeBetween(source, target, routing, {
+  const requestOptions = {
     anchors: { source: inputs.sourceAnchor, target: inputs.targetAnchor },
     waypoints,
     lane,
-    label: inputs.label ? { ...edgeLabelSize(inputs.label), away: responseAwayFor(inputs.hasResponse, lane) } : undefined,
+    label: inputs.label
+      ? { ...edgeLabelSize(inputs.label), away: responseAwayFor(inputs.hasResponse, lane) }
+      : inputs.caption
+        ? { ...connectorCaptionSize(inputs.caption), away: captionAwayForLane(lane, responseAwayFor(inputs.hasResponse, lane)), caption: true }
+        : undefined,
     obstacles,
     spine,
     mode,
     fallback,
     spread: inputs.spread,
     tracks: inputs.tracks?.request,
-  });
-  if (!inputs.hasResponse) return { request, response: null, responseLabel: null };
+  };
+  const placed = routeBetween(source, target, routing, requestOptions);
+  if (!inputs.hasResponse) return { request: placed, response: null, responseLabel: null };
   // The reply runs target → source with the anchors swapped, a lane further out — see
   // `responseLaneFor` in `routing.ts`. Searched for on its own when blocked, kept apart from the
   // request line it runs beside.
@@ -123,10 +151,11 @@ export function computeEdgeRoutes(inputs: EdgeRouteInputs): EdgeRoutes {
     spine: responseSpineFor(spine),
     mode,
     fallback,
-    avoid: routing === 'smoothstep' ? stepPolyline(request.d) : undefined,
+    avoid: routing === 'smoothstep' ? stepPolyline(placed.d) : undefined,
     spread: inputs.spread ? { source: inputs.spread.target, target: inputs.spread.source } : undefined,
     tracks: inputs.tracks?.response,
   });
+  const request = clearOfReply(placed, response, source, target, requestOptions);
   return { request, response, responseLabel: responseLabelAnchor(request, response, source, target, lane) };
 }
 
@@ -188,6 +217,7 @@ function connectorInputsWithin(
     target: overrides.target ?? rectOf(target),
     routing: edge.routing,
     label: edge.label,
+    ...withCaption(routedCaption(edge, categoryOf(source), categoryOf(target))),
     sourceAnchor: edge.sourceAnchor,
     targetAnchor: edge.targetAnchor,
     hasResponse: edge.hasResponse,

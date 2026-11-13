@@ -25,7 +25,7 @@ import { parseDocument } from '../src/document/validate';
 import { deserializeDocument, serializeDocument } from '../src/export/project';
 import { embed, viewOf } from '../src/depth/tree';
 import { renderDocumentSvg } from '../src/render/svg/document';
-import { describeMarker, describeMarkerKey, edgeMarkerCenter, nodeMarkerOrigin } from '../src/openPoints/marker';
+import { describeMarker, describeMarkerKey, nodeMarkerOrigin } from '../src/openPoints/marker';
 import { markerRail } from '../src/document/markerRail';
 import { openPointsOverview, unresolvedTargetsIn } from '../src/openPoints/collect';
 import { DARK } from '../src/render/theme/tokens';
@@ -413,11 +413,7 @@ describe('the marker', () => {
     const inside = nodeMarkerOrigin({ type: 'group', width: 420, height: 300 });
     expect(inside.x + 16).toBeLessThan(420);
     expect(inside.y).toBeGreaterThan(0);
-    const beside = edgeMarkerCenter({ x: 100, y: 100 }, 'top', { left: 80, top: 80, width: 40, height: 14 });
-    expect(beside).toEqual({ x: 80 + 40 + 4 + 8, y: 87 });
-    const leftward = edgeMarkerCenter({ x: 100, y: 100 }, 'left', { left: 40, top: 93, width: 50, height: 14 });
-    expect(leftward.x).toBeLessThan(40);
-    expect(edgeMarkerCenter({ x: 100, y: 100 }, 'top')).toEqual({ x: 100, y: 84 });
+    // A connector's tab is placed with its attachment chips, in one row (`connector-marks.test.ts`).
   });
 
   it('names only the kinds present in the key', () => {
