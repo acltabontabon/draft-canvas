@@ -66,6 +66,11 @@
   --dc-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   /* Accelerate, then settle — for something that travels, not something arriving. */
   --dc-ease-in-out: cubic-bezier(0.45, 0.05, 0.2, 1);
+  /* How long the chrome takes to arrive, by size of surface: a menu or toast is quick, a dialog a
+     touch slower, so the same kind of thing always moves at the same pace. */
+  --dc-dur-fast: 120ms;
+  --dc-dur: 160ms;
+  --dc-dur-slow: 220ms;
 
   color-scheme: dark;
 }

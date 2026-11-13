@@ -354,6 +354,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const compensating = Boolean(edge?.compensationFor);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
+  // Just connected (or undone back, or added by someone else): drawn on once, source to target.
+  // An undo or redo that changed this connector in place pulses it instead. See `useChangeFeedback.ts`.
+  const arriving = useUiStore((state) => state.arrivingIds.has(id));
+  const changed = useUiStore((state) => state.changedIds.has(id));
 
   // Tracked in JS, not left to a pure `.dc-edge:hover` CSS rule: the response label and the
   // attachment chip row both live in React Flow's `EdgeLabels` portal, a sibling overlay div
@@ -733,6 +737,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-lens-member={lensMember ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
+      data-arriving={arriving ? 'true' : undefined}
+      data-changed={changed ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
       data-traffic={trafficReading ?? undefined}
       data-lens-pulse={lensPulsing ? 'true' : undefined}
@@ -834,6 +840,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )}
       {arrowPath && (
         <path
+          className="dc-edge-arrow"
           d={arrowPath}
           pointerEvents="none"
           fill={markerVariantForEdge(edge) === 'closed' ? strokeColor : 'none'}
@@ -865,6 +872,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )}
       {responseArrowPath && (
         <path
+          className="dc-edge-arrow"
           d={responseArrowPath}
           pointerEvents="none"
           fill="none"
@@ -873,6 +881,21 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           strokeLinecap="round"
           strokeLinejoin="round"
           opacity={0.8}
+        />
+      )}
+      {/* The pen that draws a new connector: one solid stroke in the line's own colour, source to
+          target, that the real line (dashed or not, arrowhead and all) resolves out of as it fades.
+          Mounted only while the arrival marker lasts; CSS opts in only when motion is welcome. */}
+      {arriving && (
+        <path
+          className="dc-edge-ink"
+          d={drawnPath}
+          pathLength={1}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={CONNECTOR_STYLE.lineWidth + 0.4}
+          strokeLinecap="round"
+          pointerEvents="none"
         />
       )}
       {/* One short directional cue per hover. CSS opts in only when motion is welcome; the paths
@@ -1072,6 +1095,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-editing={editing ? 'true' : undefined}
             // Named for `edgePick.ts`: a click on a label several connectors share steps through them.
             data-label-group={drawsSharedLabel ? sharedLabel!.members.join(' ') : undefined}
+            data-arriving={arriving ? 'true' : undefined}
             data-dimmed={dimmed ? 'true' : undefined}
             data-focus-dimmed={focusDimmed ? 'true' : undefined}
             data-shown={isShownStep ? 'true' : undefined}

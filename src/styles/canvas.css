@@ -4044,8 +4044,13 @@
   text-align: center;
 }
 
+/*
+ * Everything here is a margin note on the sheet, not a page about it: the invitation in a quiet
+ * serif, the first keystrokes beneath it, and one line of ways to begin otherwise. Nothing in the
+ * middle of a blank canvas should be louder than the first shape someone is about to draw.
+ */
 .dc-empty-start {
-  max-width: 480px;
+  max-width: 440px;
 }
 
 .dc-empty-title {
@@ -4058,10 +4063,11 @@
 }
 
 .dc-empty-start .dc-empty-title {
+  color: color-mix(in srgb, var(--dc-text) 72%, transparent);
   font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
-  font-size: clamp(34px, 4vw, 48px);
+  font-size: clamp(26px, 2.6vw, 32px);
   font-weight: 400;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
   line-height: 1.15;
 }
 
@@ -4073,8 +4079,9 @@
 }
 
 .dc-empty-start .dc-empty-hint {
-  margin-top: 16px;
-  font-size: 13px;
+  margin-top: 12px;
+  color: var(--dc-text-faint);
+  font-size: 12.5px;
 }
 
 /* Three small annotations teach the first keystroke without resembling another toolbar. */
@@ -4082,11 +4089,12 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 5px 18px;
-  margin: 14px 0 0;
+  gap: 4px 16px;
+  margin: 8px 0 0;
   color: var(--dc-text-faint);
   font-size: 11px;
-  line-height: 20px;
+  line-height: 18px;
+  opacity: 0.85;
 }
 
 .dc-empty-key {
@@ -4105,133 +4113,55 @@
 
 .dc-empty-pick {
   width: 100%;
-  margin-top: 32px;
+  margin-top: 36px;
 }
 
+/* Only above the starter drawings, once they are loaded: a few lowercase words, no rule across the
+   canvas — a ruled line is a section break, and a blank sheet has no sections yet. */
 .dc-empty .dc-empty-pick-label {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin: 0 0 16px;
+  margin: 0 0 10px;
   color: var(--dc-text-faint);
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.dc-empty-pick-label::before,
-.dc-empty-pick-label::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--dc-border);
+  font-size: 11px;
+  font-style: italic;
+  font-variant-caps: normal;
+  letter-spacing: 0;
 }
 
 .dc-empty-rows {
   display: grid;
   grid-template-columns: repeat(var(--count, 5), minmax(0, 1fr));
-  gap: 12px;
+  gap: 8px;
 }
 
-/* Before the gallery is loaded: one card that opens it. A sheet stack, the same as its consent. */
-.dc-empty-gallery {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  width: min(100%, 560px);
-  margin: 0 auto;
-  padding: 14px 18px 14px 14px;
-  border: 1px solid var(--dc-border);
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--dc-surface) 76%, transparent);
-  color: var(--dc-text-muted);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  pointer-events: auto;
-  transition: background 140ms ease, border-color 140ms ease, transform 160ms var(--dc-ease-out);
-}
-
-.dc-empty-gallery:hover,
-.dc-empty-gallery:focus-visible {
-  border-color: var(--dc-selection);
-  background: var(--dc-surface);
-  color: var(--dc-text);
-  transform: translateY(-2px);
-}
-
-.dc-empty-gallery:focus-visible {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: 3px;
-}
-
-.dc-empty-gallery-art {
-  position: relative;
-  flex: none;
-  width: 64px;
-  height: 42px;
-}
-
-.dc-empty-gallery-art span {
-  position: absolute;
-  inset: 0;
-  border: 1px solid var(--dc-border-strong);
-  border-radius: 5px;
-  background:
-    linear-gradient(var(--dc-border) 0 0) 9px 12px / 14px 8px no-repeat,
-    linear-gradient(var(--dc-border) 0 0) 40px 12px / 14px 8px no-repeat,
-    linear-gradient(var(--dc-selection) 0 0) 23px 16px / 17px 1px no-repeat,
-    linear-gradient(var(--dc-border) 0 0) 25px 26px / 14px 8px no-repeat,
-    var(--dc-surface-raised);
-}
-
-.dc-empty-gallery-art span:nth-child(1) {
-  transform: rotate(-7deg) translate(-7px, 2px);
-  opacity: 0.55;
-}
-
-.dc-empty-gallery-art span:nth-child(2) {
-  transform: rotate(5deg) translate(6px, 1px);
-  opacity: 0.75;
-}
-
-.dc-empty-gallery-text {
-  display: grid;
-  flex: 1;
-  gap: 3px;
-  min-width: 0;
-}
-
-.dc-empty-gallery-title {
-  color: var(--dc-text);
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.dc-empty-gallery-hint {
-  color: var(--dc-text-faint);
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-/* A small paper sample is unmistakably a choice, while its drawing stays the catalog's own. */
+/* The starter drawings rest as faint pencil on the sheet — no paper card around them — and become a
+   choice only when pointed at: the paper's edge appears and the drawing comes to full strength. */
 .dc-empty .dc-starter {
   width: 100%;
   min-width: 0;
-  padding: 10px 6px;
-  border: 1px solid var(--dc-border);
+  padding: 8px 6px;
+  border: 1px solid transparent;
   border-radius: 9px;
-  background: color-mix(in srgb, var(--dc-surface) 76%, transparent);
+  background: transparent;
   pointer-events: auto;
-  transition: background 140ms ease, border-color 140ms ease, transform 160ms var(--dc-ease-out);
+  transition: background 160ms ease, border-color 160ms ease, transform 200ms var(--dc-ease-out);
+}
+
+.dc-empty .dc-starter-swatch,
+.dc-empty .dc-starter-name {
+  opacity: 0.62;
+  transition: opacity 160ms ease;
 }
 
 .dc-empty .dc-starter:hover,
 .dc-empty .dc-starter:focus-visible {
-  border-color: var(--dc-selection);
-  background: var(--dc-surface);
-  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--dc-border) 80%, transparent);
+  background: color-mix(in srgb, var(--dc-surface) 70%, transparent);
+  transform: translateY(-2px);
+}
+
+.dc-empty .dc-starter:hover :is(.dc-starter-swatch, .dc-starter-name),
+.dc-empty .dc-starter:focus-visible :is(.dc-starter-swatch, .dc-starter-name) {
+  opacity: 1;
 }
 
 .dc-empty .dc-starter:focus-visible {
@@ -4241,18 +4171,18 @@
 
 .dc-empty .dc-starter-swatch {
   width: 100%;
-  height: 80px;
+  height: 72px;
 }
 
 .dc-empty .dc-starter-glyph {
   width: 100%;
-  max-width: 144px;
+  max-width: 132px;
   height: auto;
-  max-height: 76px;
+  max-height: 68px;
 }
 
 .dc-empty .dc-starter-name {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
 }
 
@@ -4262,13 +4192,26 @@
   display: none;
 }
 
+/* One line of text links, separated by small dots rather than spread into a toolbar. */
 .dc-empty-footer {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px 10px;
-  margin-top: 14px;
+  gap: 4px 8px;
+  margin-top: 0;
+}
+
+.dc-empty-rows + .dc-empty-footer {
+  margin-top: 10px;
+}
+
+.dc-empty-dot {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--dc-text-faint);
+  opacity: 0.6;
 }
 
 .dc-empty-action {
@@ -4280,30 +4223,66 @@
   margin: 0;
   padding: 4px 6px;
   border: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: none;
   color: var(--dc-text-faint);
-  font: 11px/20px var(--dc-font);
+  font: 11.5px/20px var(--dc-font);
   cursor: pointer;
   pointer-events: auto;
   transition: color 140ms ease;
 }
 
-/* The gallery card's stand-in, for a canvas too short to show the card. */
-.dc-empty-action[data-compact-only] {
-  display: none;
-}
-
 .dc-empty-action:hover {
   color: var(--dc-text);
   text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 3px;
+}
+
+.dc-empty-action:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+/* Before the gallery is loaded, its link carries a pair of tiny sheets — the same stack its consent
+   shows — that fan a little when pointed at. */
+.dc-empty-gallery-art {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 11px;
+}
+
+.dc-empty-gallery-art span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  background: var(--dc-canvas);
+  transition: transform 220ms var(--dc-ease-out);
+}
+
+.dc-empty-gallery-art span:nth-child(1) {
+  opacity: 0.55;
+  transform: rotate(-9deg) translate(-2px, 0);
+}
+
+.dc-empty-gallery:hover .dc-empty-gallery-art span:nth-child(1),
+.dc-empty-gallery:focus-visible .dc-empty-gallery-art span:nth-child(1) {
+  transform: rotate(-16deg) translate(-3px, 1px);
+}
+
+.dc-empty-gallery:hover .dc-empty-gallery-art span:nth-child(2),
+.dc-empty-gallery:focus-visible .dc-empty-gallery-art span:nth-child(2) {
+  transform: rotate(4deg) translateY(-1px);
 }
 
 .dc-empty-shortcut {
   margin: 0;
+  padding: 0 6px;
   color: var(--dc-text-faint);
-  font-size: 10px;
+  font-size: 11.5px;
+  line-height: 20px;
 }
 
 .dc-empty-shortcut kbd {
@@ -4312,7 +4291,7 @@
   background: none;
   box-shadow: none;
   color: var(--dc-text-faint);
-  font: 500 10px/1.4 var(--dc-mono);
+  font: 500 10.5px/1.4 var(--dc-mono);
 }
 
 .dc-starter-picker-section + .dc-starter-picker-section {
@@ -4451,15 +4430,6 @@
   .dc-empty-crops {
   display: none;
   }
-
-  .dc-empty-gallery {
-  padding: 10px 14px 10px 10px;
-  }
-
-  .dc-empty-gallery-art,
-  .dc-empty-gallery-hint {
-  display: none;
-  }
 }
 
 @media (max-height: 599px) {
@@ -4468,7 +4438,7 @@
   }
 
   .dc-empty-start .dc-empty-title {
-  font-size: 30px;
+  font-size: 24px;
   }
 
   .dc-empty-start .dc-empty-hint {
@@ -4481,7 +4451,7 @@
   }
 
   .dc-empty .dc-empty-pick-label {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   }
 
   .dc-empty .dc-starter {
@@ -4496,8 +4466,8 @@
   max-height: 44px;
   }
 
-  .dc-empty-footer {
-  margin-top: 12px;
+  .dc-empty-rows + .dc-empty-footer {
+  margin-top: 8px;
   }
 }
 
@@ -4510,13 +4480,8 @@
 
   .dc-empty-keys,
   .dc-empty-rows,
-  .dc-empty-gallery,
   .dc-empty .dc-empty-pick-label {
   display: none;
-  }
-
-  .dc-empty-action[data-compact-only] {
-  display: inline-flex;
   }
 
   .dc-empty-pick {
@@ -7141,3 +7106,127 @@
 .dc-traffic-crossing { margin-top: 10px; padding-left: 10px; border-left: 1px dashed var(--dc-border); }
 .dc-traffic-crossing strong { font-size: 12px; line-height: 18px; }
 .dc-traffic-crossings p { margin: 3px 0; font-size: 11px; line-height: 16px; color: var(--dc-text-muted); }
+
+/* ── What a change did ──────────────────────────────────────────────────────────────────────────
+   `canvas/useChangeFeedback.ts`: a new shape settles in where it was put, a new connector is drawn
+   from source to target, an undo or redo pulses what it changed in place, and a deleted element
+   fades where it stood (`.dc-departures`, filled by `canvas/changeMotion.ts`). The markers are
+   short-lived and set only when motion is welcome; these rules say the same again, so a marker that
+   outlives a switch to reduced motion still shows nothing. Interactive chrome, never exported. */
+.dc-departures {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.dc-departing-shape,
+.dc-departing-connector {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.dc-edge-ink {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Arrives and settles — a little small and see-through, then itself. No overshoot. The shape
+     fades; only its drawing scales, so the shape's own box (what a resize, a snap guide or a test
+     measures) is exact from the first frame. */
+  .dc-node[data-arriving='true'] {
+  animation: dc-node-arrive 240ms var(--dc-ease-out) both;
+  }
+
+  .dc-node[data-arriving='true'] > .dc-node-surface {
+  animation: dc-node-arrive-surface 240ms var(--dc-ease-out) both;
+  }
+
+  .dc-edge-ink {
+  display: initial;
+  stroke-dasharray: 1 1;
+  animation: dc-edge-ink 440ms cubic-bezier(0.3, 0.6, 0.2, 1) both;
+  }
+
+  .dc-edge[data-arriving='true'] .dc-edge-line,
+  .dc-edge[data-arriving='true'] .dc-edge-response-line,
+  .dc-edge[data-arriving='true'] .dc-edge-arrow,
+  .dc-edge[data-arriving='true'] .dc-edge-async-marker,
+  .dc-edge[data-arriving='true'] .dc-edge-caption,
+  .dc-edge-label[data-arriving='true'] {
+  animation: dc-edge-resolve 440ms ease-out both;
+  }
+
+  /* Changed in place by an undo or redo. A drop shadow follows the drawing's own silhouette — a
+     cylinder glows as a cylinder — where a ring would draw a box around it. */
+  .dc-node[data-changed='true'] > .dc-node-surface {
+  animation: dc-node-changed 620ms ease-out 1;
+  }
+
+  .dc-edge[data-changed='true'] .dc-edge-line {
+  animation: dc-edge-changed 620ms ease-out 1;
+  }
+}
+
+@keyframes dc-node-arrive {
+  from {
+  opacity: 0;
+  }
+}
+
+@keyframes dc-node-arrive-surface {
+  from {
+  scale: 0.92;
+  }
+}
+
+@keyframes dc-edge-ink {
+  0% {
+  stroke-dashoffset: 1;
+  opacity: 1;
+  }
+  68% {
+  stroke-dashoffset: 0;
+  opacity: 1;
+  }
+  100% {
+  stroke-dashoffset: 0;
+  opacity: 0;
+  }
+}
+
+@keyframes dc-edge-resolve {
+  0%,
+  42% {
+  opacity: 0;
+  }
+  100% {
+  opacity: 1;
+  }
+}
+
+@keyframes dc-node-changed {
+  0% {
+  filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
+  }
+  30% {
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--dc-selection) 75%, transparent));
+  }
+  100% {
+  filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
+  }
+}
+
+@keyframes dc-edge-changed {
+  0% {
+  filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
+  }
+  30% {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dc-selection) 90%, transparent));
+  }
+  100% {
+  filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
+  }
+}

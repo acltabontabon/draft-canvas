@@ -11,7 +11,6 @@ import { InkedWords } from '../Library/InkedWords';
 import { prefersReducedMotion } from '../../lib/motion';
 import { useShallow } from 'zustand/react/shallow';
 import { useGalleryStore } from '../../store/galleryStore';
-import { Icon } from '../common/Icon';
 import '../Gallery/starters.css';
 
 /** How long the layer lingers after the canvas stops being empty, matching `canvas.css`. */
@@ -155,31 +154,31 @@ function EmptyCanvas({ onAddStarter, leaving }: EmptyStateProps & { leaving: boo
         </div>
 
         <div className="dc-empty-pick">
-          <p className="dc-empty-pick-label" aria-hidden="true">Or borrow a starting point</p>
-          {featured.length > 0 ? (
-            <div className="dc-empty-rows" role="group" aria-label="Suggested starters" style={{ '--count': featured.length } as CSSProperties}>
-              {featured.map((starter, index) => (
-                <StarterTile key={starter.id} starter={starter} index={index} verb="Start from" onStart={onAddStarter} />
-              ))}
-            </div>
-          ) : (
-            <button type="button" className="dc-empty-gallery" onClick={browse}>
-              <span className="dc-empty-gallery-art" aria-hidden="true"><span /><span /><span /></span>
-              <span className="dc-empty-gallery-text">
-                <span className="dc-empty-gallery-title">{enabled ? 'Browse starters' : 'Browse the starters gallery'}</span>
-                <span className="dc-empty-gallery-hint">Monolith, Microservices, Event-Driven, CQRS and more — ready-made and yours to change</span>
-              </span>
-              <Icon name="forward" size={14} />
-            </button>
+          {featured.length > 0 && (
+            <>
+              <p className="dc-empty-pick-label" aria-hidden="true">or start from</p>
+              <div className="dc-empty-rows" role="group" aria-label="Suggested starters" style={{ '--count': featured.length } as CSSProperties}>
+                {featured.map((starter, index) => (
+                  <StarterTile key={starter.id} starter={starter} index={index} verb="Start from" onStart={onAddStarter} />
+                ))}
+              </div>
+            </>
           )}
+          {/* Everything else is one line of quiet text: the canvas is the subject here, and these
+              are the margin notes beside it. */}
           <div className="dc-empty-footer">
             {featured.length > 0 ? (
               <button type="button" className="dc-empty-action" onClick={browse}>View all starters</button>
             ) : (
-              <button type="button" className="dc-empty-action" data-compact-only onClick={browse}>Browse starters</button>
+              <button type="button" className="dc-empty-action dc-empty-gallery" onClick={browse}>
+                <span className="dc-empty-gallery-art" aria-hidden="true"><span /><span /></span>
+                {enabled ? 'Browse starters' : 'Browse the starters gallery'}
+              </button>
             )}
+            <span className="dc-empty-dot" aria-hidden="true" />
             <button type="button" className="dc-empty-action" onClick={() => useUiStore.getState().requestExample()}>Try an example</button>
-            <p className="dc-empty-shortcut" aria-hidden="true">or <kbd>{plainShortcut(`${MOD_SYMBOL} K`)}</kbd> to search</p>
+            <span className="dc-empty-dot" aria-hidden="true" />
+            <p className="dc-empty-shortcut" aria-hidden="true"><kbd>{plainShortcut(`${MOD_SYMBOL} K`)}</kbd> to search</p>
           </div>
         </div>
       </div>
