@@ -443,23 +443,32 @@
   }
 }
 
-/* -- one starter, up close -- */
+/* -- one starter, up close --
+ * A plate and its label, the same height side by side. The title card's heading meets the top of the
+ * drawing and its buttons meet the bottom, with the flows it can present between, so neither side
+ * leaves the other a field of empty space. The guide runs below in columns, each with its own mark
+ * (a dot to use, a diamond to watch, a play glyph to present). */
 
 .dc-starters-detail {
   display: grid;
-  grid-template-columns: minmax(0, 1.55fr) minmax(290px, 1fr);
-  gap: 28px;
-  align-items: start;
+  gap: 32px;
+  container-type: inline-size;
+  container-name: dc-starters-detail;
+}
+
+.dc-starters-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr);
+  gap: 40px;
+  align-items: stretch;
 }
 
 .dc-starters-preview {
-  position: sticky;
-  top: 0;
+  position: relative;
   display: grid;
   place-items: center;
-  height: clamp(260px, 54vh, 460px);
-  margin: 0;
-  padding: 16px;
+  min-width: 0;
+  height: clamp(300px, 48vh, 400px);
   border: 1px solid var(--dc-border);
   border-radius: 14px;
   background: var(--dc-starters-paper);
@@ -468,10 +477,10 @@
 
 .dc-starters-preview img {
   position: absolute;
-  inset: 20px;
+  inset: 22px;
   display: block;
-  width: calc(100% - 40px);
-  height: calc(100% - 40px);
+  width: calc(100% - 44px);
+  height: calc(100% - 44px);
   object-fit: contain;
   animation: dc-starters-develop 360ms var(--dc-ease-out) both;
 }
@@ -491,17 +500,131 @@
   animation: dc-starters-breathe 1.2s ease-in-out infinite alternate;
 }
 
-.dc-starters-about {
+/* Heading at the top, flows in the middle, buttons and particulars at the foot. */
+.dc-starters-title {
   display: grid;
-  gap: 14px;
-  align-content: start;
+  grid-template-rows: auto 1fr auto auto;
+  min-width: 0;
 }
 
 .dc-starters-kicker {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  margin: 0 0 14px;
+  color: var(--dc-text-faint);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* A short rule before the kind, the way a plate's section is set. */
+.dc-starters-kicker::before {
+  content: '';
+  width: 18px;
+  height: 1px;
+  background: var(--dc-border-strong);
+}
+
+.dc-starters-kicker .dc-starter-mark {
+  margin-left: 0;
+}
+
+.dc-starters-name {
   margin: 0;
+  color: var(--dc-text);
+  font-family: var(--dc-starters-serif);
+  font-size: 40px;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  text-wrap: balance;
+}
+
+.dc-starters-summary {
+  margin: 12px 0 0;
+  color: var(--dc-text-muted);
+  font-family: var(--dc-starters-serif);
+  font-size: 16.5px;
+  font-style: italic;
+  line-height: 1.45;
+  text-wrap: pretty;
+}
+
+.dc-starters-heading .dc-starters-warning {
+  margin-top: 14px;
+}
+
+/* The flows sit in the middle of the card, between its heading and its buttons. */
+.dc-starters-card-middle {
+  align-self: center;
+  padding: 24px 0;
+}
+
+/* Two equal buttons the width of the card. Side by side they wrap whenever the column narrows; the
+ * secondary keeps a hairline so the two read as a pair. */
+.dc-starters-actions {
+  display: grid;
+  gap: 8px;
+}
+
+.dc-starters-actions .dc-button {
+  justify-content: center;
+  height: 38px;
+  padding: 0 16px;
+}
+
+.dc-starters-actions .dc-button-ghost {
+  border-color: var(--dc-border-strong);
+}
+
+/* Where it comes from, under the buttons: the date on the left, the source on the right. */
+.dc-starters-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  margin: 12px 0 0;
+  color: var(--dc-text-faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* -- the guide: columns divided by hairlines, never boxes --
+ * Two parallel lists in two equal columns; on the hero's uneven split the wide one ran to short
+ * lines and empty space. The hairline is drawn in the middle of the gap. */
+
+.dc-starters-guide {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 48px;
+  padding-top: 26px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-starters-guide > :only-child {
+  grid-column: 1 / -1;
+}
+
+.dc-starters-notes {
+  position: relative;
+  min-width: 0;
+}
+
+.dc-starters-guide > .dc-starters-notes + .dc-starters-notes::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -24px;
+  width: 1px;
+  background: var(--dc-border);
+}
+
+.dc-starters-notes h4 {
+  margin: 0 0 12px;
   color: var(--dc-text-faint);
   font-size: 10px;
   font-weight: 500;
@@ -509,35 +632,9 @@
   text-transform: uppercase;
 }
 
-.dc-starters-name {
-  margin: -6px 0 0;
-  color: var(--dc-text);
-  font-family: var(--dc-starters-serif);
-  font-size: 30px;
-  font-weight: 400;
-  letter-spacing: -0.03em;
-  line-height: 1.1;
-}
-
-.dc-starters-summary {
-  margin: 0;
-  color: var(--dc-text-muted);
-  font-size: 13.5px;
-  line-height: 1.55;
-}
-
-.dc-starters-notes h4 {
-  margin: 0 0 6px;
-  color: var(--dc-text-faint);
-  font-size: 10px;
-  font-weight: 500;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-}
-
 .dc-starters-notes ul {
   display: grid;
-  gap: 5px;
+  gap: 10px;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -545,16 +642,17 @@
 
 .dc-starters-notes li {
   position: relative;
-  padding-left: 16px;
+  padding-left: 18px;
   color: var(--dc-text);
   font-size: 12.5px;
-  line-height: 1.5;
+  line-height: 1.55;
+  text-wrap: pretty;
 }
 
 .dc-starters-notes li::before {
   content: '';
   position: absolute;
-  top: 0.62em;
+  top: 0.6em;
   left: 2px;
   width: 6px;
   height: 6px;
@@ -568,25 +666,19 @@
   transform: rotate(45deg);
 }
 
-.dc-starters-flows {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 0;
-}
-
-.dc-starters-flows span {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 10px 3px 8px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-pill);
+/* Flows carry their own play glyph in place of the dot. */
+.dc-starters-notes[data-tone='flow'] li {
   color: var(--dc-text-muted);
-  font-size: 11.5px;
 }
 
-.dc-starters-flows svg {
+.dc-starters-notes[data-tone='flow'] li::before {
+  content: none;
+}
+
+.dc-starters-notes[data-tone='flow'] li svg {
+  position: absolute;
+  top: 0.42em;
+  left: 0;
   color: var(--dc-selection);
 }
 
@@ -596,27 +688,47 @@
   font-size: 12px;
 }
 
-.dc-starters-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
+/* Too narrow for the plate beside its label, or the guide beside itself: one column, the guide's
+ * sections divided by hairlines across instead of down. */
+@container dc-starters-detail (max-width: 640px) {
+  .dc-starters-hero {
+    grid-template-columns: 1fr;
+    gap: 22px;
+  }
 
-.dc-starters-guide {
-  display: grid;
-  gap: 14px;
-  padding-top: 16px;
-  border-top: 1px solid var(--dc-border);
-}
+  .dc-starters-title {
+    grid-template-rows: none;
+  }
 
-.dc-starters-meta {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px 14px;
-  margin: 0;
-  color: var(--dc-text-faint);
-  font-size: 11px;
+  .dc-starters-name {
+    font-size: 32px;
+  }
+
+  .dc-starters-card-middle {
+    padding: 22px 0;
+  }
+
+  .dc-starters-card-middle:empty {
+    display: none;
+  }
+
+  .dc-starters-card-middle:empty + .dc-starters-actions {
+    margin-top: 22px;
+  }
+
+  .dc-starters-guide {
+    grid-template-columns: none;
+    gap: 20px;
+  }
+
+  .dc-starters-guide > .dc-starters-notes + .dc-starters-notes {
+    padding-top: 20px;
+    border-top: 1px solid var(--dc-border);
+  }
+
+  .dc-starters-guide > .dc-starters-notes + .dc-starters-notes::before {
+    content: none;
+  }
 }
 
 .dc-starters-link {
@@ -680,13 +792,8 @@
 }
 
 @media (max-width: 680px) {
-  .dc-starters-detail {
-    grid-template-columns: 1fr;
-  }
-
   .dc-starters-preview {
-    position: static;
-    height: 240px;
+    height: 230px;
   }
 
   .dc-starters-display {

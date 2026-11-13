@@ -44,6 +44,15 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   one card instead of five tiles. **Try an example** still works offline.
 - The starters were redrawn: captions such as "publishes to" no longer get cut short, and named
   queues use their full size.
+- **The canvas shows what changed** — A new shape settles in, a new connector draws itself from
+  start to end, and a deleted one fades where it was. Undo and redo glide moved shapes back and
+  briefly light what they changed. <!-- highlight -->
+- Dialogs, menus, toasts and panels ease in instead of appearing at once, buttons give a little
+  when pressed, and a slow editor load shows a small diagram drawing itself instead of a blank
+  screen. All of it follows your system's Reduce motion setting.
+- A blank canvas is quieter: a smaller invitation to draw, then one line of text for the starters
+  gallery, an example and search, with no card or ruled divider. Loaded starters rest as faint
+  sketches until you point at one.
 
 ## [1.19.0] - 2026-11-11
 

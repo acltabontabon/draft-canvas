@@ -59,6 +59,7 @@ import { endsBendDrag } from './bendDrag';
 import { DraftEdgeView } from './DraftEdgeView';
 import { EdgeLabelRoot } from './EdgeLabels';
 import { ViewportLayer } from './ViewportLayer';
+import { useChangeFeedback } from './useChangeFeedback';
 import { FanInPreview } from './FanInPreview';
 import { DEPTH_MOVE_MS, depthEase, fitCamera } from './depthCamera';
 import { DraftNodeView } from './DraftNodeView';
@@ -703,6 +704,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   useContinuation(editable);
 
   useZoomVariable();
+  useChangeFeedback();
 
   const [guides, setGuides] = useState<Guide[]>([]);
   const attachArmedTarget = useUiStore((state) => state.attachArmedTarget);
@@ -2389,6 +2391,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
                 {guide.label !== undefined && <span className="dc-guide-label">{guide.label}</span>}
               </div>
             ))}
+
+          {/* Where deleted shapes and connectors fade (`changeMotion.ts` fills it, imperatively and
+              briefly). React renders it empty and never touches what is put inside. */}
+          <div className="dc-departures" aria-hidden="true" />
 
           {/* Not gated on `interactive`: which room you are standing in is as true in a
               walkthrough as it is while drawing, and the frame is inert either way. */}

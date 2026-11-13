@@ -4,6 +4,7 @@ import { useHostDocument } from './host/useHostDocument';
 import { useDocumentSession } from './store/useDocumentSession';
 import { LibraryScreen } from './ui/Library/LibraryScreen';
 import { useHandoffReceiver } from './ui/Library/useHandoffReceiver';
+import { DrawingLoader } from './ui/common/DrawingLoader';
 import { ErrorBoundary } from './ui/common/ErrorBoundary';
 import { PanelBoundary } from './ui/common/PanelBoundary';
 import { retryableLazy } from './ui/common/retryableLazy';
@@ -143,11 +144,11 @@ function Shell() {
         {session.sharedLink?.locked ? (
           <SharedUnlockScreen link={session.sharedLink} ready={session.ready} />
         ) : session.openId ? (
-          <Suspense fallback={<div className="dc-editor-loading" aria-busy="true" />}>
+          <Suspense fallback={<DrawingLoader />}>
             <EditorChunk.Component session={session} />
           </Suspense>
         ) : hostKind() === 'desktop' && DesktopHomeChunk ? (
-          <Suspense fallback={<div className="dc-editor-loading" aria-busy="true" />}>
+          <Suspense fallback={<DrawingLoader />}>
             <DesktopHomeChunk.Component />
           </Suspense>
         ) : (

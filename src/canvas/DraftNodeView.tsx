@@ -114,6 +114,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
   const settling = useSettle(id);
+  // Just placed, pasted, undone back or added by someone else: settles in once. Changed in place by
+  // an undo or redo: a brief pulse says what the step touched. See `useChangeFeedback.ts`.
+  const arriving = useUiStore((state) => state.arrivingIds.has(id));
+  const changed = useUiStore((state) => state.changedIds.has(id));
   // One subscription for all of this shape's handles (see `DraftHandle.tsx`).
   const connecting = useConnectingHandles(id);
   const popoverOpen = useUiStore(
@@ -465,6 +469,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
       data-settle={settling ? 'true' : undefined}
+      data-arriving={arriving && !settling ? 'true' : undefined}
+      data-changed={changed ? 'true' : undefined}
       data-plate-focus={plateFocused ? 'true' : undefined}
       style={
         {

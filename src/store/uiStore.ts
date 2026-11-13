@@ -162,6 +162,10 @@ const RECENT_LIMIT = 12;
 /** How long accepted nodes keep their one-shot settle marker — just past the 180 ms animation. */
 const SETTLE_MS = 240;
 let settleTimer: ReturnType<typeof setTimeout> | undefined;
+/** Long enough for the slowest change animation in `canvas.css` (a connector drawing itself, ~420 ms). */
+const CHANGE_MARK_MS = 560;
+let changeTimer: ReturnType<typeof setTimeout> | undefined;
+const NO_IDS: ReadonlySet<string> = new Set();
 
 const CONTINUATION_PREFERENCE = 'continuation';
 const NO_MOVING_NODES: ReadonlySet<string> = new Set();
@@ -488,6 +492,14 @@ export interface UiStore {
    */
   settleNodeIds: readonly string[];
   /**
+   * Shapes and connectors that just appeared on the canvas — placed, pasted, connected, undone back,
+   * or added by a collaborator or an agent — so their views can settle in or draw themselves once
+   * (`canvas/useChangeFeedback.ts`). Sets, for an O(1) per-element selector. Expires on its own.
+   */
+  arrivingIds: ReadonlySet<string>;
+  /** Elements an undo or redo changed in place, so they can show it with a brief pulse. Expires on its own. */
+  changedIds: ReadonlySet<string>;
+  /**
    * The one-shot "the shape opened into a room" (or closed back into a shape) animation: which way
    * it goes, the shape it belongs to, and the screen rectangle it starts from — the room in the
    * shape's depth glyph going in, the room's frame coming out (null: the room had no frame, so the
@@ -641,6 +653,8 @@ export interface UiStore {
   setDepthTransition: (transition: UiStore['depthTransition']) => void;
   /** Marks freshly accepted nodes for their settle animation; the marker expires on its own. */
   setSettleNodeIds: (ids: readonly string[]) => void;
+  /** Marks the elements a change brought in, and those an undo or redo changed; both expire together. */
+  markCanvasChange: (arriving: readonly string[], changed: readonly string[]) => void;
   setLibrarySearchQuery: (query: string) => void;
   setLibraryBrowsing: (browsing: boolean) => void;
   setLibrarySort: (sort: UiStore['librarySort']) => void;
@@ -738,6 +752,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   continuationCycle: null,
   continuationRecent: [],
   settleNodeIds: [],
+  arrivingIds: NO_IDS,
+  changedIds: NO_IDS,
   depthTransition: null,
   depthPlateFocusId: null,
   depthShapeHoverId: null,
@@ -970,6 +986,23 @@ export const useUiStore = create<UiStore>((set, get) => ({
     settleTimer = setTimeout(() => {
       if (get().settleNodeIds === settleNodeIds) set({ settleNodeIds: [] });
     }, SETTLE_MS);
+  },
+  markCanvasChange: (arriving, changed) => {
+    clearTimeout(changeTimer);
+    // Joined with what is still in flight: a quick second change (two pastes in a row) must not
+    // strip the first one's marker and cut its animation short.
+    const { arrivingIds: arrivingNow, changedIds: changedNow } = get();
+    const arrivingIds = arriving.length > 0 ? new Set([...arrivingNow, ...arriving]) : arrivingNow;
+    const changedIds = changed.length > 0 ? new Set([...changedNow, ...changed]) : changedNow;
+    set((state) =>
+      arrivingIds === state.arrivingIds && changedIds === state.changedIds ? state : { arrivingIds, changedIds },
+    );
+    if (arrivingIds === NO_IDS && changedIds === NO_IDS) return;
+    // Owned here, not by each view, for the reason `setSettleNodeIds` gives: an element undone
+    // mid-animation unmounts without clearing itself, and would replay when redone.
+    changeTimer = setTimeout(() => {
+      if (get().arrivingIds === arrivingIds && get().changedIds === changedIds) set({ arrivingIds: NO_IDS, changedIds: NO_IDS });
+    }, CHANGE_MARK_MS);
   },
   setLibrarySearchQuery: (librarySearchQuery) => set({ librarySearchQuery }),
   setLibraryBrowsing: (libraryBrowsing) => set({ libraryBrowsing }),

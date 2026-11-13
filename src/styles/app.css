@@ -24,7 +24,17 @@ input[type='range'] {
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 90ms ease, color 90ms ease, border-color 90ms ease;
+  transition: background 90ms ease, color 90ms ease, border-color 90ms ease, transform 140ms var(--dc-ease-out);
+}
+
+/* Pressed, it gives a little under the finger — down, never back up past where it rests — and lets
+   go a touch slower than it went in, so a click reads as one deliberate motion. Half a pixel and 2%:
+   enough to feel, too little to shift a label or wobble a row of buttons. */
+@media (prefers-reduced-motion: no-preference) {
+  .dc-button:active:not(:disabled) {
+  transform: translateY(0.5px) scale(0.98);
+  transition-duration: 90ms, 90ms, 90ms, 60ms;
+  }
 }
 
 .dc-button[data-icon-only='true'] {
@@ -1571,7 +1581,14 @@ kbd {
   background-color 120ms var(--dc-ease-out),
   border-color 120ms var(--dc-ease-out),
   color 120ms var(--dc-ease-out),
-  box-shadow 120ms var(--dc-ease-out);
+  box-shadow 120ms var(--dc-ease-out),
+  transform 140ms var(--dc-ease-out);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-create-rail .dc-button:active:not(:disabled) {
+  transition-duration: 120ms, 120ms, 120ms, 120ms, 60ms;
+  }
 }
 
 .dc-create-rail .dc-button:hover:not(:disabled) {
@@ -6629,4 +6646,199 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
 
 .dc-title-input[readonly] {
   cursor: default;
+}
+
+/* ----------------------------------------------------------- arrivals -- */
+
+/* How the chrome's floating surfaces arrive. One vocabulary, so a menu, a toast and a dialog all
+   come in the same way at a pace set by their size (`--dc-dur-*`): a few pixels of drift from where
+   they came from, and a fade. Nothing overshoots.
+
+   Individual `translate`/`scale`, never `transform`: most of these surfaces are centred or placed
+   with an inline or authored `transform`, which an animated `transform` would replace for its whole
+   run. And `backwards` rather than `both`: once a surface has arrived there is nothing to hold, so
+   no finished animation is left filling on it. */
+@keyframes dc-arrive-down {
+  from {
+  opacity: 0;
+  translate: 0 -4px;
+  }
+}
+
+@keyframes dc-arrive-up {
+  from {
+  opacity: 0;
+  translate: 0 4px;
+  }
+}
+
+@keyframes dc-arrive-left {
+  from {
+  opacity: 0;
+  translate: 6px 0;
+  }
+}
+
+@keyframes dc-arrive-dialog {
+  from {
+  opacity: 0;
+  translate: 0 8px;
+  scale: 0.985;
+  }
+}
+
+@keyframes dc-arrive-fade {
+  from {
+  opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Dialogs: the scrim settles first, the sheet rises into it. */
+  .dc-modal-backdrop,
+  .dc-palette-backdrop {
+  animation: dc-arrive-fade var(--dc-dur) ease-out backwards;
+  }
+
+  .dc-modal {
+  animation: dc-arrive-dialog var(--dc-dur-slow) var(--dc-ease-out) backwards;
+  }
+
+  /* Menus open out of the button or point that asked for them. */
+  .dc-context-menu,
+  .dc-move-menu {
+  animation: dc-arrive-down var(--dc-dur-fast) var(--dc-ease-out) backwards;
+  }
+
+  .dc-toolbar-menu[data-placement='above'] {
+  animation-name: dc-arrive-up;
+  }
+
+  /* Toasts drop in under the toolbar; the clipboard card rises from the foot of the window. */
+  .dc-toast {
+  animation: dc-arrive-down var(--dc-dur) var(--dc-ease-out) backwards;
+  }
+
+  .dc-clipboard-permission {
+  animation: dc-arrive-up var(--dc-dur) var(--dc-ease-out) backwards;
+  }
+
+  /* Bars that come and go with what you are doing: the selection strip and the flow bar rise from
+     the bottom edge they sit on, the focus pill and banners drop from the top. */
+  .dc-inspector,
+  .dc-explain {
+  animation: dc-arrive-up var(--dc-dur) var(--dc-ease-out) backwards;
+  }
+
+  .dc-focus-indicator,
+  .dc-read-only-banner {
+  animation: dc-arrive-down var(--dc-dur) var(--dc-ease-out) backwards;
+  }
+
+  /* Side panels slide a few pixels in from the edge they are docked to. */
+  .dc-flow-panel,
+  .dc-proposal-panel,
+  .dc-outline {
+  animation: dc-arrive-left var(--dc-dur) var(--dc-ease-out) backwards;
+  }
+
+  /* Coming back to Home from a diagram settles in the way the editor does arriving (`dc-screen-in`),
+     instead of cutting. */
+  .dc-library {
+  animation: dc-screen-in var(--dc-dur) var(--dc-ease-out) backwards;
+  }
+}
+
+/* The editor's chunk still on its way (`ui/common/DrawingLoader.tsx`): a tiny diagram that draws
+   itself — a card, another card, the wire between them — rests a moment, fades and draws again.
+   Nothing shows for the first 300ms; a sign that flashes for a fast load is worse than none. */
+.dc-editor-loading {
+  display: grid;
+  place-items: center;
+}
+
+.dc-drawing-loader {
+  overflow: visible;
+  opacity: 0;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dc-drawing-loader-card {
+  stroke: var(--dc-text-faint);
+  stroke-width: 1.25;
+}
+
+.dc-drawing-loader-wire,
+.dc-drawing-loader-head {
+  stroke: var(--dc-selection);
+  stroke-width: 1.5;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-drawing-loader {
+  animation: dc-loading-shown 240ms ease-out 300ms forwards;
+  }
+
+  .dc-drawing-loader > * {
+  stroke-dasharray: 1 1;
+  stroke-dashoffset: 1;
+  animation: 1800ms var(--dc-ease-in-out) 300ms infinite;
+  }
+
+  .dc-drawing-loader-card:nth-of-type(1) {
+  animation-name: dc-loading-card-a;
+  }
+
+  .dc-drawing-loader-card:nth-of-type(2) {
+  animation-name: dc-loading-card-b;
+  }
+
+  .dc-drawing-loader-wire {
+  animation-name: dc-loading-wire;
+  }
+
+  .dc-drawing-loader-head {
+  animation-name: dc-loading-head;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-drawing-loader {
+  animation: dc-loading-shown 1ms linear 300ms forwards;
+  }
+}
+
+@keyframes dc-loading-shown {
+  to {
+  opacity: 1;
+  }
+}
+
+/* One timeline per stroke on the same 1.8s loop: each draws in its turn, all hold, all fade
+   together, and the empty beat before the loop restarts reads as turning the page. A stroke waiting
+   its turn is transparent too — a round cap on an undrawn dash would still leave a dot. */
+@keyframes dc-loading-card-a {
+  0% { stroke-dashoffset: 1; opacity: 0; }
+  24%, 78% { stroke-dashoffset: 0; opacity: 1; }
+  92%, 100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+@keyframes dc-loading-card-b {
+  0%, 16% { stroke-dashoffset: 1; opacity: 0; }
+  40%, 78% { stroke-dashoffset: 0; opacity: 1; }
+  92%, 100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+@keyframes dc-loading-wire {
+  0%, 40% { stroke-dashoffset: 1; opacity: 0; }
+  58%, 78% { stroke-dashoffset: 0; opacity: 1; }
+  92%, 100% { stroke-dashoffset: 0; opacity: 0; }
+}
+
+@keyframes dc-loading-head {
+  0%, 56% { stroke-dashoffset: 1; opacity: 0; }
+  64%, 78% { stroke-dashoffset: 0; opacity: 1; }
+  92%, 100% { stroke-dashoffset: 0; opacity: 0; }
 }
