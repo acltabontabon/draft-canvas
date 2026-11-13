@@ -275,9 +275,9 @@ function Preview({ file, name }: { file: DraftDocument | null | undefined; name:
     };
   }, [file, theme]);
   return (
-    <figure className="dc-starters-preview" data-ready={url ? 'true' : undefined}>
+    <div className="dc-starters-preview" data-ready={url ? 'true' : undefined}>
       {url ? <img src={url} alt={`The ${name} starter`} /> : <span className="dc-starters-preview-wait" aria-hidden="true" />}
-    </figure>
+    </div>
   );
 }
 
@@ -315,37 +315,63 @@ function Detail({ starter, onAdd, onDone }: { starter: GalleryStarter; onAdd: (i
     if (await useGalleryStore.getState().openAsCanvas(starter.id)) onDone();
   };
 
+  const flows = file?.flows ?? [];
+  const hasGuide = starter.useWhen.length > 0 || starter.watchOutFor.length > 0;
+
+  // A plate and its label, the same height side by side: the title card's heading meets the top of
+  // the drawing and its buttons meet the bottom, with the flows it can present between. The guide
+  // below keeps the same split, so one vertical line runs through the whole page.
   return (
     <article className="dc-starters-detail">
-      <Preview file={file} name={starter.name} />
-      <div className="dc-starters-about">
-        <p className="dc-starters-kicker">
-          {category}
-          {mark && <span className="dc-starter-mark" data-mark={mark}>{mark === 'new' ? 'New' : 'Updated'}</span>}
-        </p>
-        <h3 className="dc-starters-name">{starter.name}</h3>
-        <p className="dc-starters-summary">{starter.summary}</p>
+      <div className="dc-starters-hero">
+        <Preview file={file} name={starter.name} />
 
-        {starter.availability === 'needs-update' && <p className="dc-starters-warning">This starter needs a newer version of Draft Canvas.</p>}
-        {starter.availability === 'missing' && <p className="dc-starters-warning">This starter didn’t download. Check for new starters to try again.</p>}
+        <div className="dc-starters-title">
+          <div className="dc-starters-heading">
+            <p className="dc-starters-kicker">
+              <span>{category}</span>
+              {mark && <span className="dc-starter-mark" data-mark={mark}>{mark === 'new' ? 'New' : 'Updated'}</span>}
+            </p>
+            <h3 className="dc-starters-name">{starter.name}</h3>
+            <p className="dc-starters-summary">{starter.summary}</p>
+            {starter.availability === 'needs-update' && <p className="dc-starters-warning">This starter needs a newer version of Draft Canvas.</p>}
+            {starter.availability === 'missing' && <p className="dc-starters-warning">This starter didn’t download. Check for new starters to try again.</p>}
+          </div>
 
-        <div className="dc-starters-actions">
-          {!readOnly && (
-            <Button variant={addFirst ? 'solid' : 'ghost'} icon="plus" disabled={!ready} onClick={add}>
-              Add to canvas
+          {/* Always present, so the buttons keep to the foot of the card when there are no flows. */}
+          <div className="dc-starters-card-middle">
+            {flows.length > 0 && (
+              <section className="dc-starters-notes" data-tone="flow">
+                <h4>Flows to present</h4>
+                <ul>
+                  {flows.map((flow) => (
+                    <li key={flow.id}><Icon name="play" size={10} />{flow.title}</li>
+                  ))}
+                </ul>
+              </section>
+            )}
+          </div>
+
+          <div className="dc-starters-actions">
+            {!readOnly && (
+              <Button variant={addFirst ? 'solid' : 'ghost'} icon="plus" disabled={!ready} onClick={add}>
+                Add to canvas
+              </Button>
+            )}
+            <Button variant={addFirst ? 'ghost' : 'solid'} icon="file" disabled={!ready} onClick={() => void open()}>
+              Open as new diagram
             </Button>
-          )}
-          <Button variant={addFirst ? 'ghost' : 'solid'} icon="file" disabled={!ready} onClick={() => void open()}>
-            Open as new diagram
-          </Button>
+          </div>
+          <p className="dc-starters-meta">
+            {updated && <span>Updated {updated}</span>}
+            <button type="button" className="dc-starters-link" onClick={() => openLink(`${GALLERY_PAGE}/tree/main/${starter.path.replace(/\/[^/]+$/, '')}`)}>
+              Source <Icon name="external" size={11} />
+            </button>
+          </p>
         </div>
-        <p className="dc-starters-meta">
-          {file && <span>{file.nodes.length} shapes · {file.edges.length} connectors</span>}
-          {updated && <span>Updated {updated}</span>}
-          <button type="button" className="dc-starters-link" onClick={() => openLink(`${GALLERY_PAGE}/tree/main/${starter.path.replace(/\/[^/]+$/, '')}`)}>
-            Source <Icon name="external" size={11} />
-          </button>
-        </p>
+      </div>
+
+      {hasGuide && (
         <div className="dc-starters-guide">
           {starter.useWhen.length > 0 && (
             <section className="dc-starters-notes" data-tone="use">
@@ -359,18 +385,8 @@ function Detail({ starter, onAdd, onDone }: { starter: GalleryStarter; onAdd: (i
               <ul>{starter.watchOutFor.map((line) => <li key={line}>{line}</li>)}</ul>
             </section>
           )}
-          {file && file.flows.length > 0 && (
-            <section className="dc-starters-notes">
-              <h4>Flows to present</h4>
-              <p className="dc-starters-flows">
-                {file.flows.map((flow) => (
-                  <span key={flow.id}><Icon name="play" size={10} />{flow.title}</span>
-                ))}
-              </p>
-            </section>
-          )}
         </div>
-      </div>
+      )}
     </article>
   );
 }
