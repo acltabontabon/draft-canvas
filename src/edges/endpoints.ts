@@ -16,6 +16,9 @@
  *   and straightened onto a line it obviously meant (`routing.ts`'s `levelOnto`).
  * - Straightening a spread end happens here, where its neighbours are known: only while it keeps its
  *   order and `MIN_SPACING` from them.
+ * - An automatic end whose line has something wrong with it — it crosses another, or runs into a
+ *   shape — may be better off on another side altogether. `sides.ts` decides that from the ends as
+ *   first placed here, and the ends it moves are placed again on their new sides.
  *
  * Presentation, like trunks and line jumps: nothing here is saved, and a pin is never moved (the pin
  * contract in `routing.ts`). Built once per document change, memoized like `routingPlan`.
@@ -23,10 +26,12 @@
 
 import type { DraftEdge, DraftNode, EdgeAnchor, Side } from '../document/types';
 import { routingPlan } from './bundles';
+import { labelLook } from './labelLook';
 import { obstaclesForEdge } from './obstacles';
 import { anchorPoint, flattenPath, laneIndex, rectOf, resolveSides, responseLaneFor, routeBetween, sideSpan, type Rect } from './routing';
 import { stepPolyline } from './waypoints';
 import { sameNodeGeometry, type PlanScope } from './sameGeometry';
+import { chooseEdgeSides, type EdgeSides } from './sides';
 
 /** Where a connector's automatic ends are drawn when the plan spread them; an end it left alone is absent. */
 export interface EdgeSpread {
@@ -120,14 +125,28 @@ function intern(edgeId: string, spread: EdgeSpread, scope: PlanScope): EdgeSprea
   return spread;
 }
 
-/** Everything that has to match for connectors leaving one shape to share one label — `labelGroups.ts`'s rule. */
-export function labelLook(edge: DraftEdge): string | null {
-  if (!edge.label?.trim() || edge.condition || edge.cadence || edge.hasResponse || edge.response || edge.attachments?.length) return null;
-  return JSON.stringify([edge.label.trim(), edge.kind ?? null, Boolean(edge.async), edge.semantic ?? null, edge.directed, edge.routing, edge.accent ?? null]);
-}
-
 function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope: PlanScope): EndpointPlan {
   if (edges.length < 2) return EMPTY;
+  // Twice at most: first on the sides the shapes alone give every end, which is the picture the side
+  // plan judges; then, only if it moved any end to another side, again with those.
+  const first = place(nodes, edges, scope, NO_SIDES);
+  const chosen = chooseEdgeSides(nodes, edges, scope, (edgeId) => first.spreads.get(edgeId));
+  const { spreads, crowded } = chosen.size ? place(nodes, edges, scope, chosen) : first;
+  if (spreads.size === 0 && crowded.length === 0) return EMPTY;
+  const handed = new Map<string, EdgeSpread>();
+  for (const [id, spread] of spreads) handed.set(id, intern(id, spread, scope));
+  return planOf(handed, crowded);
+}
+
+const NO_SIDES: ReadonlyMap<string, EdgeSides> = new Map();
+
+/** Every end placed on its side: `chosenSides` moves an automatic end off the side its shapes give it. */
+function place(
+  nodes: readonly DraftNode[],
+  edges: readonly DraftEdge[],
+  scope: PlanScope,
+  chosenSides: ReadonlyMap<string, EdgeSides>,
+): { spreads: Map<string, EdgeSpread>; crowded: string[] } {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const spines = routingPlan(nodes, edges, scope);
   const lanes = laneIndex(edges);
@@ -147,13 +166,17 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
     const sourceRect = rectOf(source);
     const targetRect = rectOf(target);
     const resolved = resolveSides(sourceRect, targetRect, { source: edge.sourceAnchor, target: edge.targetAnchor });
+    // An automatic end the side plan moved to clear a crossing or a shape: placed on that side like
+    // an end handed over from a full one — `home` is still where the shapes alone would put it.
+    const chosen = chosenSides.get(edge.id);
     const spine = spines.spineFor(edge.id);
     const look = labelLook(edge);
     const obstaclesOf = () => obstaclesForEdge(nodes, edge.source, edge.target, scope);
     for (const role of ['source', 'target'] as const) {
-      const [rect, otherRect, side, anchor, nodeId] = role === 'source'
+      const [rect, otherRect, home, anchor, nodeId] = role === 'source'
         ? [sourceRect, targetRect, resolved.source, edge.sourceAnchor, edge.source]
         : [targetRect, sourceRect, resolved.target, edge.targetAnchor, edge.target];
+      const side = (anchor ? undefined : chosen?.[role]) ?? home;
       const axis = along(side);
       const farCentre = { x: otherRect.x + otherRect.width / 2, y: otherRect.y + otherRect.height / 2 };
 
@@ -165,7 +188,7 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
         nodeId,
         rect,
         side,
-        home: side,
+        home,
         far: farCentre[axis],
         // A trunk's automatic stem moves like any automatic end — all its connectors with it, as one.
         fixed: anchor ? anchorPoint(rect, side, anchor.offset)[axis] : undefined,
@@ -250,10 +273,7 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
     spread[end.role] = { side, offset: Math.min(1, Math.max(0, offset)) };
     spreads.set(end.edge.id, spread);
   }
-  if (spreads.size === 0 && crowded.length === 0) return EMPTY;
-  const handed = new Map<string, EdgeSpread>();
-  for (const [id, spread] of spreads) handed.set(id, intern(id, spread, scope));
-  return planOf(handed, crowded);
+  return { spreads, crowded };
 }
 
 /** Built outside `compute`, so the plan keeps the answers and none of the working state. */

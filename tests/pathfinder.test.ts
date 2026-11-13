@@ -57,6 +57,22 @@ describe('orthogonalRoute', () => {
     }
   });
 
+  it('runs square out of an end that sits off the half-pixel grid', () => {
+    // A queue's tube is anchored on a quarter pixel. The search works on half pixels, and its first
+    // corner used to come back at 40 against an end at 39.75: a run a quarter pixel aslant.
+    const request = { ...blockedElbow(), from: { x: 160, y: 39.75 }, to: { x: 560.25, y: 320 } };
+    const found = orthogonalRoute(request);
+    expect(found.status).toBe('clear');
+    expect(found.points![0]).toEqual(request.from);
+    expect(found.points![found.points!.length - 1]).toEqual(request.to);
+    expect(found.points![1]!.y).toBe(39.75);
+    expect(found.points![found.points!.length - 2]!.x).toBe(560.25);
+    for (let i = 1; i < found.points!.length; i += 1) {
+      const [p, q] = [found.points![i - 1]!, found.points![i]!];
+      expect(p.x === q.x || p.y === q.y).toBe(true);
+    }
+  });
+
   it('goes round the back of a shape it has to leave the wrong way from', () => {
     // B sits to A's left, and A's line must leave from A's right side.
     const a = box(400, 0);
@@ -143,6 +159,20 @@ describe('the router checks every stepped line', () => {
     expect(route.status).toBe('clear');
     expect(polylineClear(flattenPath(route.d), [wall])).toBe(true);
     expect(route.work).toBeGreaterThan(0);
+  });
+
+  it('draws a searched line from a quarter-pixel end as a stub, not a spike', () => {
+    // The tube of a queue at y 0: its right end is anchored at 39.75.
+    const tube: Rect = { ...a, anchorBand: { top: 19.75, bottom: 59.75 } };
+    const route = routeBetween(tube, b, 'smoothstep', { anchors, obstacles: [wall] });
+    expect(route.status).toBe('clear');
+    expect(route.work).toBeGreaterThan(0);
+    expect(route.source.y).toBe(39.75);
+    // Every piece of the drawn path before its first corner stays on the end's own level.
+    const start = route.d.slice(0, route.d.indexOf('Q'));
+    const ys = [...start.matchAll(/[ML]\s*(-?[\d.]+)[ ,](-?[\d.]+)/g)].map((match) => Number(match[2]));
+    expect(ys.length).toBeGreaterThan(1);
+    for (const y of ys) expect(y).toBe(39.75);
   });
 
   it('marks a clear quick line clear without searching', () => {

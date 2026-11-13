@@ -59,6 +59,11 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   you.
 - Traffic uses handwriting more sparingly: with more than three findings the notes are set in plain
   type, and the detail card keeps handwriting for its headline number.
+- **Connectors that pick a better side** — A connector that would cross another, cut through a shape
+  or take a long way round a shape now tries the other sides of its two shapes and takes the
+  cleanest line. Add an arrow to a busy diagram and it finds its own way in; the arrows around it
+  step aside. Connectors that are already clean stay exactly where they are, and so do pinned ends
+  and bends you placed by hand. <!-- highlight -->
 - Starters are no longer part of the app: until you load the gallery, a blank canvas offers it in
   one card instead of five tiles. **Try an example** still works offline.
 - The starters were redrawn: captions such as "publishes to" no longer get cut short, and named
@@ -83,6 +88,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   running under a shape.
 - On right-click, Arrange is now **Rearrange layout** and **Rearrange selection**, next to the new
   **Tidy up**.
+
+#### Fixed
+
+- A connector routed round a shape from a Queue no longer starts with a small spike at the tube.
 
 ## [1.19.0] - 2026-11-11
 
