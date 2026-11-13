@@ -136,6 +136,32 @@ export interface TidyPreview {
 }
 
 /**
+ * What Arrange would do to the room on screen: the room laid out again from scratch, reading each
+ * way the person can choose between, shown like Tidy up's preview (a tracing sheet with a bar beside
+ * it, `ui/Editor/ArrangeBar.tsx`) and applied only on Apply, as one undo step. Transient like every
+ * preview here: never saved, undone or exported, and dropped the moment the room changes.
+ */
+export interface ArrangePreview {
+  /** The room it was worked out for, and that room exactly as it was then (see `TidyPreview`). */
+  path: readonly string[];
+  base: DraftDocument;
+  /** That room arranged, by the reading direction it was laid out in. A selection, which has to
+   *  read the way the rest of the view does, has only that one. */
+  options: Partial<Record<ArrangeDirection, DraftDocument>>;
+  /** The direction shown, and the one Apply applies: the suggested one until the person picks. */
+  direction: ArrangeDirection;
+  /** What the layout recommends: the way the room reads now, unless the other reads clearly better
+   *  or fits a screen clearly better (`agent/arrange.ts`). */
+  suggested: ArrangeDirection;
+  /** The way the room reads now. */
+  current: ArrangeDirection;
+  /** Whether only the selection was arranged. */
+  scoped: boolean;
+}
+
+export type ArrangeDirection = 'right' | 'down';
+
+/**
  * A pending MCP proposal's reviewed result, shown as a ghost on the canvas alongside
  * `ProposalPanel`'s text diff (see `UiState.proposalPreview`). Keyed by `proposalId` rather than
  * `agentPreview`'s `opId`/`seq` — a proposal under review and an agent mid live-write are two
@@ -492,6 +518,8 @@ export interface UiStore {
   proposalPreview: ProposalPreview | null;
   /** What Tidy up would change, while the person decides: see `TidyPreview`. */
   tidyPreview: TidyPreview | null;
+  /** What Arrange would change, while the person decides: see `ArrangePreview`. */
+  arrangePreview: ArrangePreview | null;
   /**
    * Offers the user has waved away this session, pinned to the exact neighborhood they were made
    * in (`dismissalKey`): Escape on a ghost keeps it away for that node until something about that
@@ -654,6 +682,7 @@ export interface UiStore {
   /** Replaces the whole proposal ghost — a proposalId change never merges onto the previous one. */
   setProposalPreview: (preview: ProposalPreview | null) => void;
   setTidyPreview: (preview: TidyPreview | null) => void;
+  setArrangePreview: (preview: ArrangePreview | null) => void;
   /** Flips the review panel's "Show on canvas" toggle without recomputing or dropping the ghost data. */
   setProposalPreviewVisible: (visible: boolean) => void;
   /**
@@ -771,6 +800,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   agentPreview: null,
   proposalPreview: null,
   tidyPreview: null,
+  arrangePreview: null,
   continuationDismissals: new Set<DismissalKey>(),
   continuationsEnabled: initialContinuationsEnabled(),
   continuationCycle: null,
@@ -943,7 +973,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (state.openFitDocumentId === documentId ? { openFitDocumentId: null } : state)),
   setAgentPreview: (agentPreview) => set({ agentPreview }),
   setProposalPreview: (proposalPreview) => set({ proposalPreview }),
-  setTidyPreview: (tidyPreview) => set({ tidyPreview }),
+  // One cleanup decided at a time: opening either preview closes the other.
+  setTidyPreview: (tidyPreview) => set(tidyPreview ? { tidyPreview, arrangePreview: null } : { tidyPreview }),
+  setArrangePreview: (arrangePreview) => set(arrangePreview ? { arrangePreview, tidyPreview: null } : { arrangePreview }),
   setProposalPreviewVisible: (visible) =>
     set((state) => (state.proposalPreview ? { proposalPreview: { ...state.proposalPreview, visible } } : state)),
   setContinuation: (next) =>

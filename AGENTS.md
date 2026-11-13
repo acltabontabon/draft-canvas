@@ -115,6 +115,9 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   shape outside its scope. Layout from scratch stays in Arrange.
 - Its preview lives in `uiStore.tidyPreview`, never the document, history or autosave. Only
   `editorStore.commitTidy` applies it, as one undo step, and only to the room it was worked out from.
+- Arrange's proportion rules (wider boxes for long names, gaps sized to their captions, a reading
+  direction weighed by how it fits a screen) belong to Arrange and new layouts, never Tidy up. Its
+  preview lives in `uiStore.arrangePreview`; only `editorStore.commitArrange` applies it.
 
 ### Live collaboration
 

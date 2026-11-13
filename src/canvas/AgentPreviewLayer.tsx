@@ -69,6 +69,24 @@ export const TidyPreviewLayer = memo(function TidyPreviewLayer() {
   return <PreviewBody preview={source} source="tidy" label="Tidy up preview" sheet />;
 });
 
+/**
+ * What Arrange would do, before it is applied (`uiStore.arrangePreview`, set by the Arrange commands
+ * and cleared by `ArrangeBar`): the arrangement for the reading direction shown, on the same tracing
+ * sheet Tidy up's preview uses — the whole result is the question, more so for a room laid out again.
+ */
+export const ArrangePreviewLayer = memo(function ArrangePreviewLayer() {
+  const preview = useUiStore((state) => state.arrangePreview);
+  const path = useEditorStore((state) => state.path);
+  const current = useEditorStore((state) => preview !== null && state.document === preview.base);
+  const view = preview?.options[preview.direction];
+  const source = useMemo(
+    () => preview && view && { path: preview.path, nodes: view.nodes, edges: view.edges, base: { nodes: preview.base.nodes, edges: preview.base.edges } },
+    [preview, view],
+  );
+  if (!source || !current || pathKey(source.path as string[]) !== pathKey(path)) return null;
+  return <PreviewBody preview={source} source="tidy" label="Arrange preview" sheet />;
+});
+
 type PreviewOrigin = 'live' | 'proposal' | 'tidy';
 
 function PreviewBody({ preview, source, label, sheet = false }: { preview: PreviewSource; source: PreviewOrigin; label: string; sheet?: boolean }) {

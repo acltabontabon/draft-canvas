@@ -3054,6 +3054,24 @@ export function naturalBoundaryWidth(node: DraftNode, ctx: DescribeContext): num
   return Math.ceil(boundaryTitleX(node) + title.width + rightInset);
 }
 
+/** The words in a boundary's header row (its title and kind caption), relative to its box — what a
+ *  connector's caption must keep off. `undefined` when the header shows no text. */
+export function boundaryHeaderTextBox(node: DraftNode, ctx: DescribeContext): { x: number; y: number; width: number; height: number } | undefined {
+  const style = BOUNDARY_STYLES[node.boundaryPreset ?? 'boundary'];
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const shape of boundaryHeader(node, ctx, style, accentOf(ctx.theme, node.accent))) {
+    if (shape.t !== 'text') continue;
+    left = Math.min(left, shape.x);
+    top = Math.min(top, shape.y);
+    right = Math.max(right, shape.x + shape.layout.width);
+    bottom = Math.max(bottom, shape.y + shape.layout.height);
+  }
+  return right > left ? { x: left, y: top, width: right - left, height: bottom - top } : undefined;
+}
+
 function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundaryStyle, palette: AccentPalette): Shape[] {
   const shapes: Shape[] = [];
   const bottom = 1 + BOUNDARY_HEADER_HEIGHT;
@@ -3408,6 +3426,18 @@ export function naturalArchitectureSize(
     if (width >= bounds.maxWidth) break;
   }
   return best ? { ...best, fits: true } : { width: bounds.maxWidth, height: bounds.maxHeight, fits: false };
+}
+
+/** How many lines a shape's name is set in at its current size — what tells a long name typed into a
+ *  default-width box (grown taller line by line) from one that reads as a name. */
+export function nameLineCount(node: DraftNode, ctx: DescribeContext): number {
+  let lines = 0;
+  const visit = (shape: Shape) => {
+    if (shape.t === 'group') shape.children.forEach(visit);
+    else if (shape.t === 'text' && shape.role === 'label') lines = Math.max(lines, shape.layout.lines.length);
+  };
+  describeNode(node, ctx).shapes.forEach(visit);
+  return lines;
 }
 
 /** Whether every text in a shape's display list shows in full — the C4 detail drawn at all, not just

@@ -78,8 +78,16 @@ adding a service or two, select them and tidy that corner; the rest of the diagr
 as it is.
 
 The tools it draws on are still in `⌘K` for when you want one of them alone. **Straighten
-connectors** does only the nudging. **Arrange diagram** is the bigger tool: it lays the whole view
-out again from scratch, so expect shapes to move. Each is one undo step.
+connectors** does only the nudging. **Arrange diagram** (**Rearrange layout** on right-click) is the
+bigger tool: it lays the whole view out again from scratch, so expect shapes to move.
+
+Arrange shows its result first too, with the reading direction to choose: **Across →** or
+**Down ↓**. It starts on the suggested one, the way the diagram reads now unless the other way reads
+clearly better or, for a big diagram, fits a wide screen clearly better. Boundaries keep what they
+hold and notes stay beside their shapes. A long name gets a wider box so it reads in two lines, and
+the gap between two rows is only as long as its captions need. **Apply** makes it one undo step;
+**Cancel** keeps your own layout. With shapes selected, **Rearrange selection** lays out only those,
+in the direction the rest of the diagram reads.
 
 ## Connect shapes
 

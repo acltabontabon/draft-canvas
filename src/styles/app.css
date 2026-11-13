@@ -2123,6 +2123,20 @@ kbd {
   border-radius: var(--dc-radius-pill);
 }
 
+/* Arrange's bar is Tidy up's, with the reading direction to choose between the name and the
+   actions: the choice and what it means sit together, as one group. */
+.dc-arrange-bar-direction {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+}
+
+/* As wide as its longest word, so Apply stays under the pointer while the direction changes. */
+.dc-arrange-bar-direction .dc-tidy-bar-summary {
+  min-width: 7.5em;
+}
+
 @keyframes dc-tidy-bar-in {
   from {
     opacity: 0;
