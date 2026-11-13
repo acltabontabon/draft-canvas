@@ -16,6 +16,20 @@ export async function newCanvas(page: Page, title: string) {
 }
 
 /**
+ * Takes a tool in hand. The toolbar keeps a button for the shapes most diagrams use; the rest
+ * (Code, Junction, Component) are picked by name from **Shapes** at its end.
+ */
+export async function armTool(page: Page, tool: string) {
+  const button = page.getByRole('toolbar', { name: 'Create' }).getByRole('button', { name: tool, exact: true });
+  if (await button.count()) {
+    await button.click();
+    return;
+  }
+  await page.getByRole('button', { name: /^All shapes$| — all shapes$/ }).click();
+  await page.getByRole('dialog', { name: 'All shapes' }).getByRole('option', { name: new RegExp(`^${tool}\\b`) }).click();
+}
+
+/**
  * Arms a toolbar tool and places one shape. A new shape opens ready to name; Escape keeps the
  * default name and leaves it selected, so the rest of a test sees the same plain, selected node it
  * always did — and the next keystroke is a shortcut again, not a letter in the name. A Note opens
@@ -56,7 +70,7 @@ export async function create(page: Page, tool: string, at: { x: number; y: numbe
     await page.keyboard.press('Escape');
     await expect(page.locator('.dc-element-inspector, .dc-edge-inspector')).toHaveCount(0);
   }
-  await page.getByRole('button', { name: tool, exact: true }).click();
+  await armTool(page, tool);
   // Off the button before clicking, as a hand would be — and clear of its tooltip first, which hangs
   // below the tool and stays open while the pointer is over it: a point under the dock would land in
   // the tooltip, not on the canvas.

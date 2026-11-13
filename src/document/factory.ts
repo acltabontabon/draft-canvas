@@ -254,6 +254,8 @@ export interface CreateNodeInput {
   /** Architecture shapes only (`C4_TEXT_TYPES`) — ignored on anything else. */
   description?: string;
   technology?: string;
+  /** With a kind the technology implied (`technologyStart`), so a later technology may move it. */
+  kindOrigin?: 'technology';
 }
 
 export function createNode(input: CreateNodeInput): DraftNode {
@@ -299,6 +301,7 @@ export function createNode(input: CreateNodeInput): DraftNode {
   if ((C4_TEXT_TYPES as readonly DraftNodeType[]).includes(input.type)) {
     if (input.description?.trim()) node.description = input.description.trim();
     if (input.technology?.trim()) node.technology = input.technology.trim();
+    if (node.technology && input.kindOrigin) node.kindOrigin = input.kindOrigin;
   }
   if (input.type === 'text' && input.annotation) node.annotation = true;
   if (input.type === 'text') {

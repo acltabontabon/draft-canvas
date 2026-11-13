@@ -1,6 +1,6 @@
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
-import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../lib/presets';
+import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
 import { bridgeProblems } from '../document/splice';
 import { CONVERTIBLE_TYPES, CONVERTIBLE_TYPE_NAMES, isConvertibleType } from '../document/convert';
 import { reconnectProblem } from '../document/reconnect';
@@ -72,26 +72,6 @@ import type { OpenPointTarget } from '../document/types';
  *
  * Every `run` is one call into an existing store action or hook — see `types.ts`.
  */
-
-const PRESET_KEYWORDS: Record<string, string[]> = {
-  text: ['label', 'caption', 'heading', 'annotation'],
-  note: ['remark', 'question', 'warning', 'decision', 'sticky'],
-  code: ['snippet', 'json', 'yaml', 'sql', 'log', 'config'],
-  boundary: ['container', 'system', 'domain', 'network', 'deployment'],
-  service: ['api', 'app', 'worker', 'microservice'],
-  database: ['db', 'database', 'sql', 'store', 'cache', 'table'],
-  queue: ['topic', 'stream', 'kafka', 'event bus', 'message'],
-  actor: ['user', 'person', 'client', 'device', 'agent', 'bot'],
-  ellipse: ['junction', 'branch', 'merge', 'circle'],
-  // Deliberately no 'module'/'adapter' typed alone here — 'module' would compete with
-  // Architecture Starters' own "Modular Monolith" alias ('modules') for the same query, and
-  // "typing 'adapter' creates a Component *already set to* kind Adapter" would need `createAt`/
-  // `createAtPointer` to thread a starting sub-kind through node creation, which nothing in the
-  // app does today for any kind-bearing type (Service included) — out of scope for adding one new
-  // node type. A user reaches Module/Adapter by adding a Component, then picking its kind in the
-  // inspector, same as every other kind-bearing shape.
-  component: ['building block', 'internal', 'logical component'],
-};
 
 function createCommand(preset: Preset): Command {
   return {

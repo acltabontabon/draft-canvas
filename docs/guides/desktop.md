@@ -64,7 +64,7 @@ background image. If that project already has a diagram with the same name, Draf
 
 ![A diagram dragged onto the Fulfilment project in Find a diagram.](../media/guides/desktop-move-drag.png)
 
-To bring a browser diagram here, use **Export → Document → Editable** and open the file. Encrypted
+To bring a browser diagram here, use **Export → Save an editable file → Editable** and open the file. Encrypted
 `.dcenc` files open only in the web app.
 
 ## Menu bar and system tray

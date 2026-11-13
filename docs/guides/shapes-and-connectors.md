@@ -4,7 +4,13 @@ Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘` and `Alt` for
 
 ## Shapes and kinds
 
-Press a key to add a shape. Select it to choose a kind in its toolbar.
+Press a key to add a shape, or pick one from the toolbar. The toolbar keeps the shapes most diagrams
+use; **Shapes** at its end lists every one by name, with what it is for and its key, and finds a
+shape by any name you'd use for it (`cache`, `user`, `topic`). Type a technology and it offers the
+shape that technology is: `kafka` gives a Queue that arrives as an Apache Kafka topic, `redis` a
+Data Store that is a cache, `s3` object storage, each with its logo where there is one. A language
+or framework (`spring`, `rust`, `node`) gives a Service built with it. Select a shape to choose a
+kind in its toolbar.
 
 | Shape | Key | Kinds |
 | --- | --- | --- |

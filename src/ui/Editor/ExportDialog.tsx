@@ -105,8 +105,8 @@ function describeCopy(what: string, result: CopyResult): string {
 }
 
 /**
- * Export is choose → configure → export: one mode picker, one contextual panel for whatever's
- * selected, one dominant CTA, and — beside it — the artifact you're about to get. The dialog
+ * Export is choose → configure → export: what you want to do down the left, one contextual panel
+ * for whatever's selected, one dominant CTA, and — beside it — the artifact you're about to get. The dialog
  * remembers the last mode/format used (`readPreference`/`writePreference`, the same mechanism
  * `sequenceFormat` already used) so reopening lands where the user left off.
  */
@@ -546,7 +546,7 @@ export function ExportDialog() {
   return (
     <Modal
       title="Export & share"
-      width={700}
+      width={880}
       className="dc-modal-export"
       onClose={busy || docs?.busy ? () => {} : close}
       footer={
@@ -575,6 +575,8 @@ export function ExportDialog() {
         </div>
       }
     >
+      {/* What you want (left), then how and what you'll get (right). */}
+      <div className="dc-export-layout">
       <ExportModePicker mode={effectiveMode} onChange={(next) => { if (busy || docs?.busy) return; useUiStore.setState({ shareFromHere: false }); setMode(next); }} />
 
       <div className="dc-export-body" data-share={effectiveMode === 'share' ? 'true' : undefined} data-docs={effectiveMode === 'docs' ? 'true' : undefined}>
@@ -635,6 +637,7 @@ export function ExportDialog() {
           {effectiveMode === 'share' && <span className="dc-share-preview-label">Recipient view</span>}
           {effectiveMode === 'docs' && docs ? <DocsPreview docs={docs} /> : <ExportArtifact fileName={artifact.fileName} visual={artifact.visual} empty={artifact.empty} />}
         </div>
+      </div>
       </div>
 
       {securePromptOpen && (

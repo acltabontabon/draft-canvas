@@ -29,14 +29,15 @@ Open **Share → Export** (`⌘⇧E`).
 
 | Choose | You get |
 | --- | --- |
-| **Document → Editable** | A `.draftcanvas` file to reopen, share or keep in version control |
-| **Document → Encrypted** | A passphrase-protected `.dcenc` file |
-| **Image** | PNG or SVG |
-| **Docs** | An SVG for a README or other Markdown page, linked to its `.draftcanvas`; see [Diagrams in your docs](diagrams-in-docs.md) |
-| **Source → Flows** | Mermaid or PlantUML sequence diagrams of your flows |
-| **Source → Architecture** | Mermaid flowchart, C4-PlantUML, Structurizr DSL or draw.io |
+| **Share a link** | A read-only link; see [Share a diagram](#share-a-diagram) |
+| **Save an editable file → Editable** | A `.draftcanvas` file to reopen, share or keep in version control |
+| **Save an editable file → Encrypted** | A passphrase-protected `.dcenc` file |
+| **Save an image** | PNG or SVG |
+| **Use in a README** | An SVG for a README or other Markdown page, linked to its `.draftcanvas`; see [Diagrams in your docs](diagrams-in-docs.md) |
+| **Other formats → Flows** | Mermaid or PlantUML sequence diagrams of your flows |
+| **Other formats → Architecture** | Mermaid flowchart, C4-PlantUML, Structurizr DSL or draw.io |
 
-![Export with Document selected.](../media/guides/export-document.png)
+![Export with Save an editable file selected.](../media/guides/export-document.png)
 
 - Exports are snapshots, made on your device. Documents include every room, and a background
   image up to 2 MB.
@@ -92,7 +93,7 @@ Desktop links open in the browser at `app.draftcanvas.dev`. The completed link s
 copying is unavailable; **Copy link** retries, and **Open Guided reader** opens the recipient view.
 Turn protection off to create a link anyone can open.
 
-![Share tab with passphrase protection and an actual diagram preview.](../media/guides/export-share.png)
+![Share a link, with passphrase protection and an actual diagram preview.](../media/guides/export-share.png)
 
 Preparation compresses the snapshot locally, using a background worker for larger diagrams.
 A progress bar names the current stage; **Cancel** stops preparation. Protected links are encrypted
@@ -135,7 +136,7 @@ resolution notes. Browsing never changes the snapshot.
 
 [Focus view in dark mode](../media/guides/share-focus-view-dark.png).
 
-Run **Share read-only link…** in `⌘K`, or use **Start at** in **Share → Export → Share**.
+Run **Share read-only link…** in `⌘K`, or use **Start at** in **Share → Export → Share a link**.
 It defaults to the selected playable Flow, then the current level, then the overview.
 A Flow link starts at its introduction; the reader chooses when to advance.
 

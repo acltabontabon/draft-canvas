@@ -58,9 +58,11 @@ Open **Share → Export** (`⌘⇧E`):
 
 | Choose | For |
 | --- | --- |
-| **Image** | PNG or SVG for a slide or chat |
-| **Document → Editable** | A `.draftcanvas` file to reopen or send |
-| **Source** | Mermaid or PlantUML from your flows, or architecture source |
+| **Share a link** | A read-only link anyone can open in a browser |
+| **Save an editable file** | A `.draftcanvas` file to reopen or send |
+| **Save an image** | PNG or SVG for a slide or chat |
+| **Use in a README** | A picture for a Markdown page, with its editable file beside it |
+| **Other formats** | Mermaid or PlantUML from your flows, or architecture source |
 
 ## Make it yours
 

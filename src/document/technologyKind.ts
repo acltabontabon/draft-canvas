@@ -78,7 +78,28 @@ export function kindForTechnology(type: DraftNode['type'], technology: string | 
   return null;
 }
 
+/**
+ * The shape a technology is, where this table knows it on its own: Kafka is a Queue (a topic), Redis
+ * a Data Store (a cache), Stripe a Service (external). `null` for a technology that is what shapes
+ * are built with rather than a shape itself (Go, Spring Boot), or one the table has never heard of.
+ */
+export function shapeForTechnology(technology: string | undefined): KindPatch | null {
+  return kindForTechnology('database', technology) ?? kindForTechnology('queue', technology) ?? kindForTechnology('service', technology);
+}
+
 const DEFAULT_KIND = { service: 'generic', database: 'generic', queue: 'queue' } as const;
+
+/**
+ * What a new shape of `type` made *as* a technology starts with: the technology, and the kind it
+ * implies — marked as following the technology, exactly as if the shape had been drawn first and
+ * the technology typed onto it, so changing the technology later still moves the kind.
+ */
+export function technologyStart(
+  type: DraftNode['type'],
+  technology: string,
+): { technology: string } & Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind' | 'queueKind' | 'kindOrigin'>> {
+  return { technology, ...technologyKindPatch({ type } as DraftNode, technology) };
+}
 
 /**
  * The kind fields a technology change should write, or `null` to leave the kind alone. A kind is

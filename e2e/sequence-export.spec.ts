@@ -252,13 +252,13 @@ test.describe('Sequence Diagram export', () => {
     // groups, so arrow-key navigation is native browser behavior a headless keyDown reliably
     // drives — unlike an OS-native <select> dropdown, which is why this exercises arrow keys
     // directly instead of `.selectOption()`.
-    await dialog.getByRole('radio', { name: /Image/ }).focus(); // the default mode
-    await page.keyboard.press('ArrowRight'); // Image -> Docs
-    await expect(dialog.getByRole('radio', { name: /^Docs/ })).toBeChecked();
-    await page.keyboard.press('ArrowRight'); // Docs -> Source
-    await expect(dialog.getByRole('radio', { name: /Source/ })).toBeChecked();
+    await dialog.getByRole('radio', { name: /Save an image/ }).focus(); // the default mode
+    await page.keyboard.press('ArrowRight'); // Save an image -> Use in a README
+    await expect(dialog.getByRole('radio', { name: /Use in a README/ })).toBeChecked();
+    await page.keyboard.press('ArrowRight'); // Use in a README -> Other formats
+    await expect(dialog.getByRole('radio', { name: /Other formats/ })).toBeChecked();
 
-    // `exact` matters: a substring match would also hit the "Source — Mermaid or PlantUML…" card.
+    // `exact` matters: a substring match would also hit the "Other formats — Mermaid, PlantUML…" choice.
     await dialog.getByRole('radio', { name: 'Mermaid', exact: true }).focus();
     await page.keyboard.press('ArrowRight'); // Mermaid -> PlantUML
     await expect(dialog.getByRole('radio', { name: 'PlantUML', exact: true })).toBeChecked();
@@ -286,15 +286,15 @@ test.describe('Sequence Diagram export', () => {
     await openExport(page);
     const dialog = page.getByRole('dialog', { name: 'Export & share' });
 
-    await dialog.getByRole('radio', { name: /Document/ }).focus();
+    await dialog.getByRole('radio', { name: /Save an editable file/ }).focus();
     await page.keyboard.press('ArrowRight');
-    await expect(dialog.getByRole('radio', { name: /Image/ })).toBeFocused();
-    await expect(dialog.getByRole('radio', { name: /Image/ })).toBeChecked();
+    await expect(dialog.getByRole('radio', { name: /Save an image/ })).toBeFocused();
+    await expect(dialog.getByRole('radio', { name: /Save an image/ })).toBeChecked();
     await page.keyboard.press('ArrowRight');
-    await expect(dialog.getByRole('radio', { name: /^Docs/ })).toBeFocused();
-    await expect(dialog.getByRole('radio', { name: /^Docs/ })).toBeChecked();
+    await expect(dialog.getByRole('radio', { name: /Use in a README/ })).toBeFocused();
+    await expect(dialog.getByRole('radio', { name: /Use in a README/ })).toBeChecked();
     await page.keyboard.press('ArrowRight');
-    await expect(dialog.getByRole('radio', { name: /Source/ })).toBeFocused();
-    await expect(dialog.getByRole('radio', { name: /Source/ })).toBeChecked();
+    await expect(dialog.getByRole('radio', { name: /Other formats/ })).toBeFocused();
+    await expect(dialog.getByRole('radio', { name: /Other formats/ })).toBeChecked();
   });
 });

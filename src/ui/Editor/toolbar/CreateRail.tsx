@@ -1,10 +1,28 @@
 import { useEffect, useRef, useState } from 'react';
 import { useUiStore } from '../../../store/uiStore';
-import { DEV_PRESETS, PRESETS, SELECT_TOOLTIP, tooltipContentFor, type Preset } from '../../../lib/presets';
+import { basePresetFor, DEV_PRESETS, PRESETS, SELECT_TOOLTIP, tooltipContentFor, type Preset, type PrimitiveTooltipContent } from '../../../lib/presets';
 import { prefersReducedMotion } from '../../../lib/motion';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
+import { ShapePicker } from './ShapePicker';
 import { ToolGlyph } from './ToolGlyph';
+
+/**
+ * The tools with a place of their own on the rail: what nearly every diagram reaches for. The rest
+ * of the vocabulary (Code, Junction, Component) is one click further, by name, in the shape picker
+ * at the rail's end — and still one key away over the canvas, like every shape.
+ *
+ * Eleven permanent pictures asked a newcomer to learn eleven glyphs before drawing a box; the ones
+ * that went are the three a diagram needs least often, not three that were hard to draw.
+ */
+const ON_RAIL = new Set(['text', 'note', 'boundary', 'service', 'database', 'queue', 'actor']);
+const onRail = (preset: Preset) => ON_RAIL.has(preset.id);
+
+const SHAPES_TOOLTIP: PrimitiveTooltipContent = {
+  title: 'All shapes',
+  description: 'Every shape by name, with what it is for and its key.',
+  usageHint: 'Search by any name you’d use — “cache”, “user” — or by technology: “kafka”, “redis”.',
+};
 
 /**
  * What you can put on the canvas — the toolbar's centre of gravity, since drawing architecture is
@@ -27,12 +45,24 @@ import { ToolGlyph } from './ToolGlyph';
  * writes its name in the mono face a drawing's annotations use. The three families — interaction,
  * annotation, architecture — are separated by quiet hairlines, so the group boundaries cannot be
  * mistaken for another drawing tool.
+ *
+ * The rail ends in the one tool that is a word: Shapes, which opens the whole vocabulary by name
+ * (`ShapePicker`). A shape picked there that has no place of its own on the rail is shown in that
+ * slot while it is in hand, so the rail never has a tool in hand it isn't showing.
  */
 export function CreateRail() {
   const armed = useUiStore((state) => state.armed);
   const arm = useUiStore((state) => state.arm);
   const railRef = useRef<HTMLDivElement>(null);
+  const shapesRef = useRef<HTMLButtonElement>(null);
   const [more, setMore] = useState({ start: false, end: false });
+  const [picker, setPicker] = useState<{ rect: DOMRect; trigger: HTMLElement } | null>(null);
+  // In hand, but with no button of its own on the rail: the Shapes slot shows it.
+  const tucked = armed && !ON_RAIL.has(armed.id) ? armed : null;
+  const closePicker = () => {
+    setPicker(null);
+    shapesRef.current?.focus();
+  };
 
   // On a window too narrow for every tool the rail scrolls, with its scrollbar hidden — so each end
   // that has more tools past it fades out, and a plain mouse wheel scrolls it sideways.
@@ -93,6 +123,15 @@ export function CreateRail() {
     for (const [index, button] of items.entries()) button.tabIndex = index === home ? 0 : -1;
   }, [armed]);
 
+  // A rail scrolled sideways would leave the picker hanging off a button that is no longer there.
+  useEffect(() => {
+    if (!picker) return;
+    const rail = railRef.current;
+    const close = () => setPicker(null);
+    rail?.addEventListener('scroll', close, { passive: true });
+    return () => rail?.removeEventListener('scroll', close);
+  }, [picker]);
+
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
     if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
     const items = segments();
@@ -135,47 +174,94 @@ export function CreateRail() {
   );
 
   return (
-    <div
-      ref={railRef}
-      className="dc-create-rail"
-      role="toolbar"
-      aria-label="Create"
-      onKeyDown={onKeyDown}
-      onWheel={onWheel}
-    >
-      <div className="dc-create-family">
-        <Tooltip content={SELECT_TOOLTIP}>
-          {(tip) => (
-            <Button
-              variant="ghost"
-              className="dc-tool"
-              active={armed === null}
-              aria-pressed={armed === null}
-              aria-label="Select"
-              onClick={() => arm(null)}
-              {...tip}
-            >
-              {/* No letter: Select's key is Esc, which its tooltip shows. */}
-              <ToolContent id="select" label="Select" />
-            </Button>
-          )}
-        </Tooltip>
+    <>
+      <div
+        ref={railRef}
+        className="dc-create-rail"
+        role="toolbar"
+        aria-label="Create"
+        onKeyDown={onKeyDown}
+        onWheel={onWheel}
+      >
+        <div className="dc-create-family">
+          <Tooltip content={SELECT_TOOLTIP}>
+            {(tip) => (
+              <Button
+                variant="ghost"
+                className="dc-tool"
+                active={armed === null}
+                aria-pressed={armed === null}
+                aria-label="Select"
+                onClick={() => arm(null)}
+                {...tip}
+              >
+                {/* No letter: Select's key is Esc, which its tooltip shows. */}
+                <ToolContent id="select" label="Select" />
+              </Button>
+            )}
+          </Tooltip>
+        </div>
+        <span className="dc-rail-separator" aria-hidden="true" />
+        <div className="dc-create-family">{PRESETS.filter(onRail).map(toolButton)}</div>
+        <span className="dc-rail-separator" aria-hidden="true" />
+        <div className="dc-create-family">{DEV_PRESETS.filter(onRail).map(toolButton)}</div>
+        <span className="dc-rail-separator" aria-hidden="true" />
+        <div className="dc-create-family">
+          <Tooltip content={tucked ? tooltipContentFor(tucked) : SHAPES_TOOLTIP}>
+            {(tip) => (
+              <Button
+                ref={shapesRef}
+                variant="ghost"
+                className="dc-tool dc-tool-shapes"
+                active={tucked !== null}
+                aria-pressed={tucked ? true : undefined}
+                aria-haspopup="dialog"
+                aria-expanded={picker !== null}
+                aria-label={tucked ? `${tucked.label} — all shapes` : 'All shapes'}
+                data-open={picker !== null || undefined}
+                {...tip}
+                onClick={(event) => {
+                  const trigger = event.currentTarget;
+                  setPicker((open) => (open ? null : { rect: trigger.getBoundingClientRect(), trigger }));
+                }}
+              >
+                {tucked ? (
+                  // A shape picked as a technology draws as the shape it is, under the technology's name.
+                  <ToolContent id={basePresetFor(tucked).id} label={tucked.label} />
+                ) : (
+                  <span className="dc-tool-shapes-word">Shapes</span>
+                )}
+                <svg className="dc-tool-caret" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true" focusable="false">
+                  <path d="M1.5 3 4 5.5 6.5 3" />
+                </svg>
+              </Button>
+            )}
+          </Tooltip>
+        </div>
+        {more.start && (
+          <button type="button" className="dc-create-rail-more" data-side="start" tabIndex={-1} aria-label="Show earlier tools" onClick={() => page(-1)}>
+            ‹
+          </button>
+        )}
+        {more.end && (
+          <button type="button" className="dc-create-rail-more" data-side="end" tabIndex={-1} aria-label="Show more tools" onClick={() => page(1)}>
+            ›
+          </button>
+        )}
       </div>
-      <span className="dc-rail-separator" aria-hidden="true" />
-      <div className="dc-create-family">{PRESETS.map(toolButton)}</div>
-      <span className="dc-rail-separator" aria-hidden="true" />
-      <div className="dc-create-family">{DEV_PRESETS.map(toolButton)}</div>
-      {more.start && (
-        <button type="button" className="dc-create-rail-more" data-side="start" tabIndex={-1} aria-label="Show earlier tools" onClick={() => page(-1)}>
-          ‹
-        </button>
+      {picker && (
+        <ShapePicker
+          anchorRect={picker.rect}
+          trigger={picker.trigger}
+          armedId={armed?.id ?? null}
+          onPick={(preset) => {
+            closePicker();
+            arm(preset);
+          }}
+          onDismiss={closePicker}
+        />
       )}
-      {more.end && (
-        <button type="button" className="dc-create-rail-more" data-side="end" tabIndex={-1} aria-label="Show more tools" onClick={() => page(1)}>
-          ›
-        </button>
-      )}
-    </div>
+    </>
   );
 }
 
