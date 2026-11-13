@@ -172,13 +172,18 @@ function EmptyCanvas({ onAddStarter, leaving }: EmptyStateProps & { leaving: boo
             ) : (
               <button type="button" className="dc-empty-action dc-empty-gallery" onClick={browse}>
                 <span className="dc-empty-gallery-art" aria-hidden="true"><span /><span /></span>
-                {enabled ? 'Browse starters' : 'Browse the starters gallery'}
+                {/* A canvas too short for the whole line gets the short name (`canvas.css`); the
+                    hidden one is `display: none`, so it is out of the accessible name too. */}
+                <span className="dc-empty-gallery-long">{enabled ? 'Browse starters' : 'Browse the starters gallery'}</span>
+                <span className="dc-empty-gallery-short">Browse starters</span>
               </button>
             )}
             <span className="dc-empty-dot" aria-hidden="true" />
             <button type="button" className="dc-empty-action" onClick={() => useUiStore.getState().requestExample()}>Try an example</button>
-            <span className="dc-empty-dot" aria-hidden="true" />
-            <p className="dc-empty-shortcut" aria-hidden="true"><kbd>{plainShortcut(`${MOD_SYMBOL} K`)}</kbd> to search</p>
+            <span className="dc-empty-search" aria-hidden="true">
+              <span className="dc-empty-dot" />
+              <span className="dc-empty-shortcut"><kbd>{plainShortcut(`${MOD_SYMBOL} K`)}</kbd> to search</span>
+            </span>
           </div>
         </div>
       </div>

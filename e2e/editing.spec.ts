@@ -828,9 +828,12 @@ test.describe('editing', () => {
     await page.keyboard.press('Meta+z');
     await expect(page.locator('.dc-node[data-type="group"]')).toHaveCount(1);
     await page.keyboard.press('Meta+z');
-    const restored = (await node('m1').boundingBox())!;
-    const restoredFrame = (await boundary.boundingBox())!;
-    expect(restored.y + restored.height).toBeLessThan(restoredFrame.y + restoredFrame.height);
+    // Undo glides the members back rather than jumping them, so read where they come to rest.
+    await expect.poll(async () => {
+      const restored = (await node('m1').boundingBox())!;
+      const restoredFrame = (await boundary.boundingBox())!;
+      return restored.y + restored.height < restoredFrame.y + restoredFrame.height;
+    }).toBe(true);
     await boundary.click({ position: { x: 8, y: 8 } });
     await page.keyboard.press('Backspace');
     await expect(page.locator('.dc-node')).toHaveCount(1); // only `far`: its members went with it
@@ -1159,8 +1162,8 @@ test.describe('editing', () => {
     expect(afterBurst.x).toBeGreaterThan(afterShift.x);
 
     await page.keyboard.press('Meta+z');
-    const afterUndo = (await node.boundingBox())!;
-    expect(Math.abs(afterUndo.x - afterShift.x)).toBeLessThan(1.5);
+    // Undo glides the shape back, so read where it comes to rest.
+    await expect.poll(async () => Math.abs((await node.boundingBox())!.x - afterShift.x)).toBeLessThan(1.5);
   });
 
   test('Enter edits a single selected node, boundary or edge, and is a no-op otherwise', async ({ page }) => {

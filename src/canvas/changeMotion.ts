@@ -177,16 +177,31 @@ export function readPositions(nodeIds: readonly string[]): Map<string, FlowPoint
 
 const frame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
+/** Whether any of the shapes has left the place it was read at — React Flow has laid the change out. */
+function laidOut(root: HTMLElement, before: ReadonlyMap<string, FlowPoint>): boolean {
+  for (const [id, was] of before) {
+    const wrapper = nodeWrapper(root, id);
+    const now = wrapper ? flowPosition(wrapper) : null;
+    if (now && (Math.abs(now.x - was.x) >= 0.5 || Math.abs(now.y - was.y) >= 0.5)) return true;
+  }
+  return false;
+}
+
 /**
  * Plays shapes moving from `before` to wherever React Flow puts them once the change has committed,
  * and fades the connectors in `edgeIds` back in over the same time.
  */
 export async function playGlide(before: ReadonlyMap<string, FlowPoint>, edgeIds: readonly string[]): Promise<void> {
   if (before.size === 0) return;
-  // React commits the new positions, then React Flow lays its nodes out.
-  await frame();
-  await frame();
-  const root = canvasRoot();
+  // React commits the new positions, then React Flow lays its nodes out — usually before the next
+  // frame paints. Start in the first frame the new positions are there: waiting a fixed extra
+  // frame painted the shape at its destination once before jumping it back to glide.
+  let root: HTMLElement | null = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await frame();
+    root = canvasRoot();
+    if (root && laidOut(root, before)) break;
+  }
   if (!root) return;
   for (const [id, was] of before) {
     const wrapper = nodeWrapper(root, id);

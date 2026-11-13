@@ -4277,6 +4277,16 @@
   transform: rotate(4deg) translateY(-1px);
 }
 
+.dc-empty-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-empty-gallery-short {
+  display: none;
+}
+
 .dc-empty-shortcut {
   margin: 0;
   padding: 0 6px;
@@ -4430,6 +4440,11 @@
   .dc-empty-crops {
   display: none;
   }
+
+  /* A phone has no keyboard to search with. */
+  .dc-empty-search {
+  display: none;
+  }
 }
 
 @media (max-height: 599px) {
@@ -4476,6 +4491,17 @@
 @container (max-height: 280px) {
   .dc-empty-stage {
   margin-bottom: 0;
+  }
+
+  /* Short enough that the line must stay one line: the gallery's short name, no sheets, no search. */
+  .dc-empty-gallery-long,
+  .dc-empty-gallery-art,
+  .dc-empty-search {
+  display: none;
+  }
+
+  .dc-empty-gallery-short {
+  display: inline;
   }
 
   .dc-empty-keys,
