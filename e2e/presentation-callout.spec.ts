@@ -164,7 +164,10 @@ test.describe('Presentation callouts', () => {
     expect(await settledBoxes(locators)).toEqual(resting);
   });
 
-  test('a node introduces itself when the flow first reaches it, and code reads as code', async ({ page }) => {
+  // Quarantined by the flaky-test tracker: on WebKit, settledBoxes() sometimes never sees the camera
+  // and callout boxes come to rest within 10s (failed, then passed on retry, at fbf73c2:
+  // https://github.com/acltabontabon/draft-canvas/actions/runs/40624515398). Not reproduced locally.
+  test.fixme('a node introduces itself when the flow first reaches it, and code reads as code', async ({ page }) => {
     await presentSubmitCommand(page);
 
     const callout = page.locator('.dc-callout');
