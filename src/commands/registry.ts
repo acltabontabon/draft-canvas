@@ -1,7 +1,7 @@
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
 import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
-import { sequenceCommands, sequenceQuickCommands } from './sequence';
+import { sequenceCommands, sequenceFromSelectionCommands, sequenceQuickCommands } from './sequence';
 import { bridgeProblems } from '../document/splice';
 import { CONVERTIBLE_TYPES, CONVERTIBLE_TYPE_NAMES, isConvertibleType } from '../document/convert';
 import { reconnectProblem } from '../document/reconnect';
@@ -2119,13 +2119,13 @@ function selectionCommands(ctx: CommandContext): Command[] {
   const { document } = ctx.editor;
   if (nodes.length === 1 && edges.length === 0) {
     const node = document.nodes.find((entry) => entry.id === nodes[0]);
-    return node ? nodeCommands(ctx, node) : [];
+    return node ? [...nodeCommands(ctx, node), ...sequenceFromSelectionCommands(ctx)] : [];
   }
   if (edges.length === 1 && nodes.length === 0) {
     const edge = document.edges.find((entry) => entry.id === edges[0]);
     return edge ? edgeCommands(ctx, edge) : [];
   }
-  if (nodes.length + edges.length >= 2) return multiCommands(ctx);
+  if (nodes.length + edges.length >= 2) return [...multiCommands(ctx), ...sequenceFromSelectionCommands(ctx)];
   return [];
 }
 

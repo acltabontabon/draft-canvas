@@ -84,13 +84,14 @@ describe('what is offered', () => {
     expect(suggestedKind(chosen, messagesOf(chosen)[0]!)).toBeNull();
   });
 
-  it('offers the words already written on a connector between the linked shapes, then the plain relation', () => {
+  it('offers only words somebody already wrote: a connector between the linked shapes, what was said before', () => {
     const linked: DraftSequence = { ...messaging, participants: [who('orders', { ref: 'n_orders' }), who('events', { type: 'queue', queueKind: 'topic', ref: 'n_events' }), who('billing')] };
     const edge = createEdge({ source: 'n_orders', target: 'n_events', label: 'OrderPlaced' });
-    const offered = labelSuggestions(linked, { from: 'orders', to: 'events' }, [edge]);
-    expect(offered[0]).toBe('OrderPlaced');
-    expect(offered.length).toBeGreaterThan(1);
-    expect(labelSuggestions(messaging, { from: 'orders', to: 'events' }, [edge])).not.toContain('OrderPlaced');
+    expect(labelSuggestions(linked, { from: 'orders', to: 'events' }, [edge])).toEqual(['OrderPlaced', 'publish']);
+    // Not linked to shapes: the connector says nothing about these two.
+    expect(labelSuggestions(messaging, { from: 'orders', to: 'events' }, [edge])).toEqual(['publish']);
+    // Nothing written down between them, nothing offered.
+    expect(labelSuggestions(messaging, { from: 'billing', to: 'events' }, [edge])).toEqual([]);
   });
 
   it('after a call: the reply first between two services, the onward call first from a person', () => {

@@ -5,6 +5,7 @@ import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { cssFont, FONTS, LINE_HEIGHTS, type FontSpec } from '../../render/text/fonts';
 import type { SequenceEditTarget } from '../../sequence/focus';
 import { participantGapX, type SequenceLayout } from '../../sequence/layout';
+import { labelSuggestions } from '../../sequence/suggest';
 import { useEditorStore } from '../../store/editorStore';
 import { sequenceActions } from '../../store/sequenceActions';
 import { participantOptions, type ParticipantOption } from './participantOptions';
@@ -72,6 +73,71 @@ function Field({ style, font, value, ariaLabel, placeholder, multiline, align = 
     },
   };
   return multiline ? <textarea {...shared} rows={2} /> : <input {...shared} />;
+}
+
+/** A message's words, with what could be said listed under the field while it is still empty. */
+function MessageLabel({
+  style,
+  align,
+  value,
+  suggestions,
+  onCommit,
+  onCancel,
+}: {
+  style: CSSProperties;
+  align: 'left' | 'center';
+  value: string;
+  suggestions: string[];
+  onCommit: (value: string) => void;
+  onCancel: () => void;
+}) {
+  const [typed, setTyped] = useState(value);
+  const [picked, setPicked] = useState<number | null>(null);
+  const shown = suggestions.filter((suggestion) => suggestion.toLowerCase().startsWith(typed.trim().toLowerCase()) && suggestion !== typed);
+  const { left, top, width, height } = style as { left: number; top: number; width: number; height: number };
+  return (
+    <div className="dc-seq-new nodrag nopan nowheel" style={{ left, top, width }} onPointerDown={(event) => event.stopPropagation()}>
+      <Field
+        style={{ width, height }}
+        font={FONTS.sequenceMessage}
+        align={align}
+        value={value}
+        ariaLabel="Message"
+        placeholder="What is said"
+        onChange={(next) => {
+          setTyped(next);
+          setPicked(null);
+        }}
+        onCommit={(text, how) => onCommit(how === 'enter' && picked !== null && shown[picked] ? shown[picked] : text)}
+        onCancel={onCancel}
+        onKey={(event) => {
+          if (shown.length === 0 || (event.key !== 'ArrowDown' && event.key !== 'ArrowUp')) return false;
+          event.preventDefault();
+          const step = event.key === 'ArrowDown' ? 1 : -1;
+          setPicked(picked === null ? (step === 1 ? 0 : shown.length - 1) : (picked + step + shown.length) % shown.length);
+          return true;
+        }}
+      />
+      {shown.length > 0 && (
+        <ul className="dc-seq-options" role="listbox" aria-label="Words to start from">
+          {shown.map((suggestion, index) => (
+            <li
+              key={suggestion}
+              role="option"
+              aria-selected={index === picked}
+              data-active={index === picked ? 'true' : undefined}
+              onMouseDown={(event) => {
+                event.preventDefault();
+                onCommit(suggestion);
+              }}
+            >
+              <span className="dc-seq-option-label">{suggestion}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 }
 
 /** Naming a new participant: a field in the gap it will stand in, with what the name could mean listed under it. */
@@ -197,13 +263,13 @@ export function SequenceEditors({ node, layout, target }: { node: DraftNode; lay
           return { left: (drawn.x1 + drawn.x2) / 2 - width / 2, top: drawn.y - 4 - height, width, height };
         })();
     return (
-      <Field
+      <MessageLabel
         style={style}
-        font={FONTS.sequenceMessage}
         align={drawn.self ? 'left' : 'center'}
         value={found.item.label}
-        ariaLabel="Message"
-        placeholder="What is said"
+        // Words already written down for these two: a connector between the shapes they stand
+        // for, or how two such shapes usually relate. Offered under an empty field, never filled in.
+        suggestions={found.item.label ? [] : labelSuggestions(sequence, found.item, useEditorStore.getState().document.edges)}
         onCommit={(value) => {
           sequenceActions.setLabel(node.id, target.id, value);
           close();

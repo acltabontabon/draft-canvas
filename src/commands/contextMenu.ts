@@ -308,6 +308,7 @@ function selectionMenu(ctx: CommandContext, commands: Command[]): ContextMenuEnt
   return grouped({ type: 'header', title: count(nodes.length + edges.length, 'element') }, [
     // One shared point for everything selected — the header already says how many.
     pick(commands, ['group', 'ungroup', 'tidy', 'arrange-selection', 'open-point-add']),
+    pick(commands, ['sequence-from-selection']),
     { type: 'icons', label: 'Align and distribute', items: align },
     pick(commands, COPY_AND_ORDER),
     pick(commands, ['spotlight']),

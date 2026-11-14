@@ -11,11 +11,14 @@ import {
   type SeqParticipant,
   type SeqParticipantType,
 } from '../../document/types';
+import { displayNameFor } from '../../document/factory';
+import { hasDrifted, isLinkable } from '../../document/sequenceLinks';
 import { technologyKindPatch } from '../../document/technologyKind';
 import { headNode } from '../../nodes/sequence';
 import { findingsFor } from '../../sequence/check';
 import type { SequenceFocus } from '../../sequence/focus';
 import { suggestedKind } from '../../sequence/suggest';
+import { useEditorStore } from '../../store/editorStore';
 import { sequenceActions } from '../../store/sequenceActions';
 import { Button } from '../../ui/common/Button';
 import { Tooltip, TooltipGroup } from '../../ui/common/Tooltip';
@@ -113,6 +116,7 @@ function ParticipantRow({ node, sequence, focus, menuDirection, getMenuAvoidRect
   const chosen = sequence.participants.filter((participant) => focus.ids.includes(participant.id));
   const [first] = chosen;
   const [detail, setDetail] = useState(false);
+  const nodes = useEditorStore((state) => state.document.nodes);
   if (!first) return null;
   const group = sequence.groups?.find((entry) => entry.participantIds.includes(first.id));
 
@@ -130,6 +134,16 @@ function ParticipantRow({ node, sequence, focus, menuDirection, getMenuAvoidRect
   }
 
   const kind = KIND_OPTIONS[first.type];
+  // The shape this participant stands for, and the shapes it could: read once per render of a row
+  // that only exists while one participant is selected.
+  const shape = first.ref ? nodes.find((candidate) => candidate.id === first.ref) : undefined;
+  const taken = new Set(sequence.participants.map((participant) => participant.ref).filter(Boolean));
+  const linkable: InspectorSelectOption[] = shape
+    ? []
+    : nodes
+        .filter((candidate) => isLinkable(candidate) && !taken.has(candidate.id))
+        .slice(0, 40)
+        .map((candidate) => ({ value: candidate.id, label: displayNameFor(candidate).replace(/\s+/g, ' ').trim() || 'Unnamed shape' }));
   return (
     <>
       <div className="dc-popover-row dc-popover-config dc-element-identity-row">
@@ -163,9 +177,36 @@ function ParticipantRow({ node, sequence, focus, menuDirection, getMenuAvoidRect
           <Direct icon="trash" danger label="Delete" description="Remove this participant and its messages." onClick={() => sequenceActions.removeParticipants(node.id, [first.id])} />
         </TooltipGroup>
       </div>
-      {group && (
+      {(group || shape || linkable.length > 0) && (
         <div className="dc-element-action-row">
-          <Action label={`Take out of “${group.name || 'group'}”`} onClick={() => sequenceActions.leaveGroup(node.id, first.id)} />
+          <TooltipGroup>
+            {shape && (
+              <>
+                <Action
+                  label={`Go to “${displayNameFor(shape).replace(/\s+/g, ' ').trim() || 'shape'}”`}
+                  description="This participant stands for that shape on the canvas: renaming or retyping either changes both."
+                  onClick={() => useEditorStore.getState().setSelection({ nodes: [shape.id], edges: [] })}
+                />
+                {hasDrifted(first, shape) && (
+                  <Action label="Update from shape" description="The shape was changed elsewhere. Take its name, kind and technology." onClick={() => sequenceActions.linkTo(node.id, first.id, shape.id)} />
+                )}
+                <Action label="Unlink" description="Keep the participant as it is; from now on the two are changed separately." onClick={() => sequenceActions.unlink(node.id, first.id)} />
+              </>
+            )}
+            {!shape && linkable.length > 0 && (
+              <InspectorSelect
+                ariaLabel="Link to a shape"
+                value=""
+                options={[{ value: '', label: 'Stands for a shape…' }, ...linkable]}
+                onChange={(value) => {
+                  if (value) sequenceActions.linkTo(node.id, first.id, value);
+                }}
+                preferredDirection={menuDirection}
+                getAvoidRect={getMenuAvoidRect}
+              />
+            )}
+            {group && <Action label={`Take out of “${group.name || 'group'}”`} onClick={() => sequenceActions.leaveGroup(node.id, first.id)} />}
+          </TooltipGroup>
         </div>
       )}
       {detail && (

@@ -46,6 +46,7 @@ import {
   updateSequence,
   wrapItems,
 } from '../document/sequenceOps';
+import { isLinkable, participantFromNode } from '../document/sequenceLinks';
 import type { DraftSequence, SeqMessage, SeqMessageKind, SeqOperator, SeqParticipant } from '../document/types';
 import type { SequenceFinding } from '../sequence/check';
 import { executionsOf } from '../sequence/executions';
@@ -149,6 +150,51 @@ export const sequenceActions = {
     }
     selectMade(nodeId, 'participant', id);
     return id;
+  },
+
+  /** Adds the participant that stands for a shape on the canvas, linked to it. */
+  addParticipantFromShape(nodeId: string, shapeId: string, index?: number): string | null {
+    const shape = nodeIndex(useEditorStore.getState().document.nodes).get(shapeId);
+    if (!shape || !isLinkable(shape)) return null;
+    const { id: _blank, ...participant } = participantFromNode(shape, '');
+    return sequenceActions.addParticipant(nodeId, participant, index);
+  },
+
+  /**
+   * A new sequence beside the given shapes, with each of them standing in it, left to right as they
+   * stand on the canvas. One undo step. Answers the sequence's id.
+   */
+  createFromShapes(shapeIds: readonly string[]): string | null {
+    const editor = useEditorStore.getState();
+    const byId = nodeIndex(editor.document.nodes);
+    const shapes = shapeIds
+      .map((id) => byId.get(id))
+      .filter((node): node is NonNullable<typeof node> => !!node && isLinkable(node))
+      .sort((a, b) => a.x + a.width / 2 - (b.x + b.width / 2) || a.y - b.y);
+    if (shapes.length === 0) return null;
+    // To the right of everything on the canvas, level with the top of the chosen shapes: clear of
+    // whatever the architecture already is.
+    const right = Math.max(...editor.document.nodes.map((node) => node.x + node.width));
+    const top = Math.min(...shapes.map((node) => node.y));
+    editor.beginInteraction('Sequence from selection');
+    const created = useEditorStore.getState().addNode({ type: 'sequence', x: Math.round(right + 120), y: Math.round(top) });
+    for (const shape of shapes) sequenceActions.addParticipantFromShape(created.id, shape.id);
+    useEditorStore.getState().endInteraction('Sequence from selection');
+    select(created.id, 'participant', []);
+    return created.id;
+  },
+
+  /** Stops a participant standing for a shape: from then on the two are changed separately. */
+  unlink(nodeId: string, participantId: string): void {
+    run(nodeId, 'Unlink from shape', (sequence) => updateParticipant(sequence, participantId, { ref: undefined }));
+  },
+
+  /** Makes a participant stand for a shape on the canvas: it takes the shape's name, kind and technology. */
+  linkTo(nodeId: string, participantId: string, shapeId: string): void {
+    const shape = nodeIndex(useEditorStore.getState().document.nodes).get(shapeId);
+    if (!shape || !isLinkable(shape)) return;
+    const { id: _blank, ...identity } = participantFromNode(shape, '');
+    run(nodeId, 'Link to shape', (sequence) => updateParticipant(sequence, participantId, identity));
   },
 
   updateParticipant(nodeId: string, id: string, patch: Partial<Omit<SeqParticipant, 'id'>>, label = 'Edit participant'): void {

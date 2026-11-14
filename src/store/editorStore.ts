@@ -32,6 +32,7 @@ import { getMeasurer } from '../render/text/measure';
 import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight } from '../nodes/describe';
 import { fitSequences } from '../nodes/sequenceFit';
 import { liveSequenceFocus, sequenceEditStillThere } from '../sequence/focus';
+import { syncLinks } from '../document/sequenceLinks';
 import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
@@ -951,6 +952,13 @@ function closeStaleAttachmentDetail(doc: DraftDocument): void {
   if (!alive) useUiStore.getState().setOpenAttachmentDetail(null);
 }
 
+/** `after` with every link between a participant and its shape brought back into step. */
+function linksInStep(before: DraftDocument, after: DraftDocument): DraftDocument {
+  const synced = syncLinks(before, after);
+  // A shape renamed from inside a sequence may need more room for its new name, as if it had been renamed where it stands.
+  return synced.shapes.reduce((doc, id) => growArchitectureToFit(doc, id), synced.doc);
+}
+
 /** After an edit, an undo or someone else's change: what was selected inside a sequence may be gone. */
 function closeStaleSequenceFocus(doc: DraftDocument): void {
   const ui = useUiStore.getState();
@@ -1493,7 +1501,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const before = state.document;
     // A sequence is sized by what it holds, whichever edit changed that — typing a message, a paste,
     // a renamed title — so it is done here, once, rather than remembered by every action.
-    const next = touch(fitSequences(before, recipe(before), () => describeContext(LIGHT)));
+    // And a participant that stands for a shape is that shape: renaming either renames both, here,
+    // in the same step (`sequenceLinks.ts`).
+    const next = touch(fitSequences(before, linksInStep(before, recipe(before)), () => describeContext(LIGHT)));
     // Structural sharing means an operation that changed nothing returns the
     // same object, so no-op commands never create a dead undo step.
     if (next === before || shallowEqualDocument(next, before)) return;

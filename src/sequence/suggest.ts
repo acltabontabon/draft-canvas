@@ -8,8 +8,7 @@
  * never second-guessed again. Nothing here names an endpoint, an event or a response: those are
  * only ever what a person typed.
  */
-import { capabilityFor, categoryOf, defaultsToResponse, inferRelationship, type NodeCategory } from '../document/connectorSemantics';
-import { relationLabel } from '../document/edgeSemantics';
+import { categoryOf, defaultsToResponse, inferRelationship, type NodeCategory } from '../document/connectorSemantics';
 import { messagesOf, slotOf, type SeqSlot } from '../document/sequenceModel';
 import type { DraftEdge, DraftSequence, SeqMessage, SeqMessageKind, SeqParticipant } from '../document/types';
 import { executionsOf } from './executions';
@@ -49,13 +48,15 @@ export function suggestedKind(sequence: DraftSequence, message: SeqMessage): { k
 }
 
 /**
- * Words a message between these two could start from, taken from what is already written down:
- * the labels of connectors drawn between the shapes they stand for, then the plain words for how
- * two shapes of these kinds relate ("publishes", "reads"). Never an invented endpoint or event name.
+ * Words a message between these two could start from — only ever words somebody already wrote:
+ * the labels of connectors drawn between the shapes the two stand for (and, the other way round, a
+ * connector's reply), then what has already been said between them in this sequence. Nothing is
+ * made up: no endpoint, no event name, not even a generic verb. With nothing written down, nothing
+ * is offered.
  */
 export function labelSuggestions(
   sequence: DraftSequence,
-  message: Pick<SeqMessage, 'from' | 'to'>,
+  message: Pick<SeqMessage, 'from' | 'to'> & Partial<Pick<SeqMessage, 'id'>>,
   edges: readonly Pick<DraftEdge, 'source' | 'target' | 'label' | 'response'>[],
 ): string[] {
   const from = participantOf(sequence, message.from);
@@ -73,9 +74,9 @@ export function labelSuggestions(
       if (edge.source === to.ref && edge.target === from.ref) add(edge.response);
     }
   }
-  const source = categoryOf(from);
-  const target = categoryOf(to);
-  for (const relation of capabilityFor(source, target)?.relations ?? []) add(relationLabel(relation, source, target));
+  for (const other of messagesOf(sequence)) {
+    if (other.id !== message.id && other.from === message.from && other.to === message.to) add(other.label);
+  }
   return out.slice(0, 5);
 }
 

@@ -15,6 +15,8 @@ import {
   type SlotLayout,
 } from '../../sequence/layout';
 import { nextFor } from '../../sequence/suggest';
+import { useEditorStore } from '../../store/editorStore';
+import { nodeIndex } from '../../store/selectors';
 import { sequenceActions } from '../../store/sequenceActions';
 import { useUiStore } from '../../store/uiStore';
 import { SequenceEditors } from './SequenceEditors';
@@ -381,6 +383,19 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           {...gestures({ what: 'participant', id: column.id })}
         />
       ))}
+
+      {/* A participant that stands for a shape on the canvas says so. */}
+      {layout.columns.map((column) => {
+        const ref = sequence.participants.find((participant) => participant.id === column.id)?.ref;
+        if (!ref || !nodeIndex(useEditorStore.getState().document.nodes).has(ref)) return null;
+        return (
+          <span key={column.id} className="dc-seq-link" style={{ left: column.head.x - 5, top: column.head.y - 5 }} title="Stands for a shape on the canvas: renaming either renames both" aria-hidden="true">
+            <svg viewBox="0 0 12 12" width="10" height="10">
+              <path d="M5 7.2 7 5.2M4.4 5.4 3.2 6.6a1.7 1.7 0 0 0 2.4 2.4l1.2-1.2M7.6 6.6l1.2-1.2a1.7 1.7 0 0 0-2.4-2.4L5.2 4.2" />
+            </svg>
+          </span>
+        );
+      })}
 
       {/* A place to add a participant: between any two, and at either end. */}
       {!readOnly && !quiet && layout.columns.length > 0 &&

@@ -6,6 +6,7 @@
  */
 import { findItem, findOperand, isBranching, sequenceOf } from '../document/sequenceModel';
 import type { DraftNode, SeqOperator } from '../document/types';
+import { isLinkable } from '../document/sequenceLinks';
 import { liveSequenceFocus } from '../sequence/focus';
 import { sequenceActions } from '../store/sequenceActions';
 import type { Command, CommandContext } from './types';
@@ -110,6 +111,27 @@ export function sequenceCommands(ctx: CommandContext, node: DraftNode): Command[
     run: () => sequenceActions.removeItems(node.id, held.ids),
   });
   return commands;
+}
+
+/**
+ * "Sequence from these": the selected architecture shapes become the participants of a new sequence
+ * beside them, each still standing for its shape. No messages are drawn — which shapes are
+ * connected says nothing about who calls whom first.
+ */
+export function sequenceFromSelectionCommands(ctx: CommandContext): Command[] {
+  const chosen = new Set(ctx.editor.selection.nodes);
+  const shapes = ctx.editor.document.nodes.filter((node) => chosen.has(node.id) && isLinkable(node));
+  if (shapes.length === 0) return [];
+  return [
+    {
+      id: 'sequence-from-selection',
+      title: shapes.length === 1 ? 'Start a sequence with this' : 'Sequence from these',
+      group: 'selection',
+      keywords: ['sequence diagram', 'participants', 'lifelines', 'interaction'],
+      hint: shapes.length === 1 ? 'A sequence beside it, with it as the first participant' : `A sequence beside them, with these ${shapes.length} as its participants`,
+      run: () => void sequenceActions.createFromShapes(shapes.map((shape) => shape.id)),
+    },
+  ];
 }
 
 export const SEQUENCE_WRAP_IDS = WRAPS.map((wrap) => `seq-wrap-${wrap.operator}`);

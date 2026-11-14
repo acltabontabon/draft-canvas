@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, reopenAfterReload } from './canvas';
+import { create, newCanvas, reopenAfterReload } from './canvas';
 
 /**
  * A sequence on the canvas, driven the way a person drives it: named participants, messages drawn
@@ -170,6 +170,58 @@ test.describe('Sequence', () => {
     await page.keyboard.press('Escape');
     await expect(page.locator('.dc-seq-overlay [data-focused="true"]')).toHaveCount(0);
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(1);
+  });
+
+  test('a shape dropped in stands in the sequence, stays in the architecture, and the two are renamed together', async ({ page }) => {
+    await newCanvas(page, 'Linked');
+    await create(page, 'Service', { x: 220, y: 520 });
+    const shape = page.locator('.dc-node[data-type="service"]');
+    await shape.dblclick();
+    await page.keyboard.type('Checkout API');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    await newSequence(page, ['Shopper', 'Orders'], { x: 620, y: 200 });
+
+    // Carry the shape over the sequence, between its two participants, and rest there.
+    const home = (await shape.boundingBox())!;
+    const first = (await page.locator(HEAD).nth(0).boundingBox())!;
+    const second = (await page.locator(HEAD).nth(1).boundingBox())!;
+    const over = { x: (first.x + first.width + second.x) / 2, y: first.y + first.height + 30 };
+    await page.mouse.move(home.x + home.width / 2, home.y + home.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(over.x, over.y, { steps: 12 });
+    await expect(page.locator('.dc-seq-stand[data-drop="true"]')).toContainText('Add as participant');
+    await page.mouse.up();
+
+    // It stands between the two, and the shape is back exactly where it was.
+    await expect(page.locator(HEAD)).toHaveCount(3);
+    expect(await page.locator(HEAD).evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))).toEqual([
+      'Participant Shopper',
+      'Participant Checkout API',
+      'Participant Orders',
+    ]);
+    const back = (await shape.boundingBox())!;
+    expect(Math.abs(back.x - home.x)).toBeLessThan(1);
+    expect(Math.abs(back.y - home.y)).toBeLessThan(1);
+    await expect(page.locator('.dc-seq-link')).toHaveCount(1);
+
+    // Renamed on the canvas, it is renamed in the sequence.
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await shape.dblclick();
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type('Checkout');
+    await page.keyboard.press('Enter');
+    await page.locator(SEQUENCE).hover();
+    await expect(page.locator(HEAD).nth(1)).toHaveAttribute('aria-label', 'Participant Checkout');
+
+    // One step back for the rename, one for the drop — and no stray move in between.
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('ControlOrMeta+z');
+    await page.keyboard.press('ControlOrMeta+z');
+    await page.locator(SEQUENCE).hover();
+    await expect(page.locator(HEAD)).toHaveCount(2);
+    await expect(shape).toHaveCount(1);
   });
 
   test('is still there, and still editable, after a reload', async ({ page }) => {
