@@ -49,7 +49,8 @@ async function publisherAndTopic(page: Page) {
   await page.locator('.dc-node').nth(1).click();
 }
 
-const captions = (page: Page) => page.locator('.dc-edge text');
+// Captions are drawn in the label layer above every line, not inside the connector's SVG.
+const captions = (page: Page) => page.locator('.dc-edge-caption');
 
 test.describe('Intent Continuation', () => {
   test('a Topic with a publisher offers a Queue; Tab adds it, then a Worker; undo takes one step back', async ({ page }) => {
