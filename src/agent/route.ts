@@ -590,8 +590,10 @@ export function repairAnchors(
       for (const source of SIDES) {
         for (const target of SIDES) {
           if (performance.now() > deadline) break offsets;
-          const sourceAnchor = { side: source, offset: sourceOffset };
-          const targetAnchor = { side: target, offset: targetOffset };
+          if (original.sourceAnchor?.participantId && (source !== original.sourceAnchor.side || sourceOffset !== 0.5)) continue;
+          if (original.targetAnchor?.participantId && (target !== original.targetAnchor.side || targetOffset !== 0.5)) continue;
+          const sourceAnchor = original.sourceAnchor?.participantId ? original.sourceAnchor : { side: source, offset: sourceOffset };
+          const targetAnchor = original.targetAnchor?.participantId ? original.targetAnchor : { side: target, offset: targetOffset };
           const cost = roughCost({ ...edge, sourceAnchor, targetAnchor }, nodes, byId);
           if (cost === undefined) continue;
           const offCentre = (sourceOffset === 0.5 ? 0 : OFF_CENTRE_COST) + (targetOffset === 0.5 ? 0 : OFF_CENTRE_COST);
@@ -771,8 +773,8 @@ export function relaxLayoutAnchors(
   const relaxed = new Map<string, { source: boolean; target: boolean }>();
   for (const edge of mine) {
     if (edge.waypoints?.length) continue;
-    const source = Boolean(edge.sourceAnchor) && !requested.has(`${edge.id}:source`);
-    const target = Boolean(edge.targetAnchor) && !requested.has(`${edge.id}:target`);
+    const source = Boolean(edge.sourceAnchor) && !edge.sourceAnchor?.participantId && !requested.has(`${edge.id}:source`);
+    const target = Boolean(edge.targetAnchor) && !edge.targetAnchor?.participantId && !requested.has(`${edge.id}:target`);
     if (source || target) relaxed.set(edge.id, { source, target });
   }
   const apply = () => all.map((e) => {

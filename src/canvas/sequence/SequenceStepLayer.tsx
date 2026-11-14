@@ -1,11 +1,15 @@
-import { memo, useMemo } from 'react';
+import { memo, useEffect, useMemo } from 'react';
 import { sequenceFlow } from '../../document/sequenceFlow';
 import type { DraftNode } from '../../document/types';
 import { describeContext, describeSequenceMessages, sequenceLayoutFor } from '../../nodes/describe';
-import { sequenceLifelines } from '../../nodes/sequence';
+import { sequenceAttachmentTab, sequenceLifelines } from '../../nodes/sequence';
 import { beginClipScope, emitDisplayList } from '../../render/svg/emit';
 import type { Theme } from '../../render/theme/tokens';
 import type { PersonalityPreset } from '../../theme/usePersonality';
+import { selectSequenceMessage } from '../../store/selectors';
+import { useEditorStore } from '../../store/editorStore';
+import { sequenceActions } from '../../store/sequenceActions';
+import { useUiStore } from '../../store/uiStore';
 import { SvgSurface } from '../SvgSurface';
 
 /**
@@ -33,11 +37,22 @@ export const SequenceStepLayer = memo(function SequenceStepLayer({
   theme: Theme;
   preset: PersonalityPreset;
 }) {
+  const messageId = sequenceFlow(node).steps[step - 1]?.id;
+  const message = useEditorStore((state) => messageId ? selectSequenceMessage(state.document, node.id, messageId) : undefined);
+  const count = message?.attachments?.length ?? 0;
+  const layout = sequenceLayoutFor(node, describeContext(theme, preset));
+  const row = count ? layout.messages.find((entry) => entry.id === messageId) : undefined;
+  const tab = row ? sequenceAttachmentTab(row, count) : undefined;
+  useEffect(() => () => {
+    const ui = useUiStore.getState();
+    const open = ui.openAttachmentDetail;
+    if (open?.hostKind === 'message' && open.hostId === node.id && open.messageId === messageId) ui.setOpenAttachmentDetail(null);
+  }, [node.id, messageId]);
   const lifelines = useMemo(() => emitDisplayList({
     width: node.width,
     height: node.height,
-    shapes: sequenceLifelines(sequenceLayoutFor(node, describeContext(theme, preset)), theme),
-  }), [node, theme, preset]);
+    shapes: sequenceLifelines(layout, theme),
+  }), [node.width, node.height, layout, theme]);
   const layers = useMemo(() => {
     const ids = sequenceFlow(node).steps.map((entry) => entry.id);
     const now = ids[step - 1];
@@ -61,6 +76,13 @@ export const SequenceStepLayer = memo(function SequenceStepLayer({
           {layers.told}
         </SvgSurface>
       )}
+      {tab && messageId && <button
+        type="button"
+        className="dc-seq-attachment-hit nodrag nopan"
+        style={{ left: tab.x, top: tab.y, width: tab.w, height: tab.h }}
+        aria-label="View current message attachments"
+        onClick={(event) => { event.stopPropagation(); sequenceActions.showAttachments(node.id, messageId); }}
+      />}
       {layers.now && (
         // Remounted for each step, so its arrival plays once per message and never again.
         <SvgSurface key={step} className="dc-seq-now" width={node.width} height={node.height}>

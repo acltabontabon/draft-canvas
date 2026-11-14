@@ -182,7 +182,8 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   // Something inside a sequence that was selected by being made a moment ago: see `SequenceFocus.quiet`.
   const justMade = useUiStore((state) => state.sequenceFocus?.quiet === true && state.sequenceFocus.nodeId === selectedNodeId);
   const sequenceEditing = useUiStore((state) => state.sequenceEdit?.nodeId === selectedNodeId);
-  const open = selectedNodeId !== null && measured && !moving && !justMade && !sequenceEditing;
+  const attachmentOpen = useUiStore((state) => state.openAttachmentDetail?.hostKind === 'message' && state.openAttachmentDetail.hostId === selectedNodeId);
+  const open = selectedNodeId !== null && measured && !moving && !justMade && !sequenceEditing && !attachmentOpen;
   const { mounted, closing } = usePopoverPresence(open, POPOVER_EXIT_MS);
   // The element it was showing, kept for the fade-out after selection has already moved on.
   const shownNodeId = useLastPresent(open ? selectedNodeId : null);
@@ -197,7 +198,7 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
       : 'whole',
   );
   // Clear the typing area immediately, including when the inspector would still be fading out.
-  if (sequenceEditing || !mounted || !shownNodeId) return null;
+  if (sequenceEditing || attachmentOpen || !mounted || !shownNodeId) return null;
   return <ElementInspectorBody key={`${shownNodeId}:${inside}`} nodeId={shownNodeId} closing={closing} beside={inside === 'row'} buildCommandContext={buildCommandContext} />;
 }
 

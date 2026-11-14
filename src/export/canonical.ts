@@ -111,6 +111,7 @@ const SEQ_ITEM_KEYS = [
   'kind',
   'label',
   'replyTo',
+  'attachments',
   'activate',
   'deactivate',
   'kindOrigin',
@@ -225,6 +226,7 @@ const openPoint = orderedIfObject(OPEN_POINT_KEYS, { targets: list(orderedIfObje
 // An item may be a fragment, whose branches hold items.
 function sequenceItem(value: unknown): unknown {
   return orderedIfObject(SEQ_ITEM_KEYS, {
+    attachments,
     operands: list(orderedIfObject(SEQ_OPERAND_KEYS, { items: list(sequenceItem) })),
   })(value);
 }

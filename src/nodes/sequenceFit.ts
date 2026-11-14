@@ -15,7 +15,7 @@ import { naturalSequenceSizeFor, type DescribeContext } from './describe';
 /** Within this of what was needed counts as "exactly what was needed": measuring is not exact to the pixel. */
 const SNUG = 1;
 
-const clamp = (value: number): number => Math.min(LIMITS.maxNodeSize, Math.max(LIMITS.minNodeSize, Math.round(value)));
+const clamp = (value: number): number => Math.min(LIMITS.maxSequenceNodeSize, Math.max(LIMITS.minNodeSize, Math.round(value)));
 
 /**
  * `after` at the size its sequence now needs, given what `before` was (absent for a node that has
@@ -56,4 +56,11 @@ export function fitSequences(before: DraftDocument, after: DraftDocument, ctx: (
     nodes[index] = fitted;
   }
   return nodes ? { ...after, nodes } : after;
+}
+
+
+/** Sequences written before the larger size limit can have content beyond their saved frame. */
+export function recoverCappedSequence(node: DraftNode, ctx: DescribeContext): DraftNode {
+  if (node.type !== 'sequence' || (node.width !== LIMITS.maxNodeSize && node.height !== LIMITS.maxNodeSize)) return node;
+  return fitSequenceNode(undefined, node, ctx);
 }

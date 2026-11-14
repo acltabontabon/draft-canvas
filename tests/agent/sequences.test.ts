@@ -1,3 +1,5 @@
+import { createAttachment, createEdge } from '../../src/document/factory';
+
 import Ajv from 'ajv';
 import { describe, expect, it } from 'vitest';
 import { capabilities } from '../../src/agent/capabilities';
@@ -207,5 +209,50 @@ describe('a sequence, read and changed', () => {
 
     const removed = update(added.file, [{ op: 'remove', ids: ['place-order'] }]).file;
     expect(removed.nodes.map((entry) => entry.id).sort()).toEqual(['orders-api', 'orders-db', 'shopper']);
+  });
+});
+
+describe('scoped edits and participant-anchored connectors', () => {
+  it.each([
+    { op: 'update', id: 'orders-api', set: { label: 'Renamed API' } },
+    { op: 'remove', ids: ['orders-api'] },
+  ])('rejects a linked identity change outside the scope ($op)', (op) => {
+    const { file } = withSequence();
+    const error = refusal(() => applyUpdate(file, [], [op], undefined, {
+      nodes: ['orders-api'], edges: ['places', 'stores'],
+    }));
+    expect(error.code).toBe('OUT_OF_SCOPE');
+    expect(error.message).toContain('place-order');
+  });
+
+  it('keeps participant anchors on agent edits and route-only Arrange', () => {
+    const { file } = withSequence();
+    const first = sequenceIn(file);
+    const second = { ...first, id: 'fulfilment', x: first.x + first.width + 240 };
+    const participant = sequenceOf(first).participants[0]!;
+    const sourceAnchor = { side: 'right' as const, offset: 0.5, participantId: participant.id };
+    const targetAnchor = { side: 'left' as const, offset: 0.5, participantId: participant.id };
+    const cross = createEdge({ id: 'cross', source: first.id, target: second.id, sourceAnchor, targetAnchor });
+    const original = { ...file, nodes: [...file.nodes, second], edges: [...file.edges, cross] };
+    const [reported] = read(original).sequences as { mermaid: string }[];
+    const edited = update(original, [{ op: 'update', id: first.id, set: { mermaid: reported!.mermaid.replace('POST /orders', 'Submit the order') } }]).file;
+    expect(sequenceOf(sequenceIn(edited)).participants[0]?.id).toBe(participant.id);
+    expect(edited.edges.find((edge) => edge.id === cross.id)).toMatchObject({ sourceAnchor, targetAnchor });
+    const arranged = update(edited, [{ op: 'arrange', move: false, connectors: 'keep' }]).file;
+    expect(arranged.edges.find((edge) => edge.id === cross.id)).toMatchObject({ sourceAnchor, targetAnchor });
+    const removed = update(edited, [{ op: 'update', id: first.id, set: { mermaid: 'sequenceDiagram\n  participant Replacement' } }]).file;
+    expect(removed.edges.some((edge) => edge.id === cross.id)).toBe(false);
+  });
+
+  it('keeps attached details when an agent changes the only message between two participants', () => {
+    const { file } = composed({ sequences: [{ id: 'place-order', mermaid: 'sequenceDiagram\nA->>B: Before' }] });
+    const host = sequenceIn(file);
+    const attachment = createAttachment({ type: 'code', language: 'json', code: '{"order":1}' });
+    const message = messagesOf(sequenceOf(host))[0]!;
+    const decorated = { ...host, sequence: { ...sequenceOf(host), items: [{ ...message, attachments: [attachment] }] } };
+    const attached = { ...file, nodes: [decorated] };
+    const [reported] = read(attached).sequences as { mermaid: string }[];
+    const edited = update(attached, [{ op: 'update', id: host.id, set: { mermaid: reported!.mermaid.replace('Before', 'After') } }]).file;
+    expect(messagesOf(sequenceOf(sequenceIn(edited)))[0]).toMatchObject({ label: 'After', attachments: [attachment] });
   });
 });

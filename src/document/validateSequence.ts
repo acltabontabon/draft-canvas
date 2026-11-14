@@ -4,6 +4,7 @@
  * that is not there is dropped, a fragment nested too deep is opened out and its messages kept —
  * and it never reads more than `LIMITS` allows, whatever it is handed.
  */
+import { parseAttachments } from './validateAttachments';
 import { createId } from './ids';
 import { LIMITS } from './limits';
 import { cleanText } from './sanitize';
@@ -125,6 +126,11 @@ function readMessage(raw: Record<string, unknown>, reading: Reading): SeqMessage
     kind,
     label: words(raw.label, LIMITS.maxLabelLength),
   };
+  if (Array.isArray(raw.attachments)) {
+    const { attachments, dropped, truncated } = parseAttachments(raw.attachments, LIMITS.maxAttachmentsPerEdge);
+    if (attachments.length) message.attachments = attachments;
+    reading.dropped += dropped + truncated;
+  }
   // Checked against the finished list afterwards: the call may come later in the file than its reply.
   if (kind === 'reply' && typeof raw.replyTo === 'string') message.replyTo = raw.replyTo;
   if (raw.activate === true) message.activate = true;

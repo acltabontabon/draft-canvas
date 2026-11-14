@@ -8,7 +8,7 @@
  * here; none of them touches a sequence's data on its own.
  */
 import { createId } from '../document/ids';
-import { createEdge } from '../document/factory';
+import { createAttachment, createEdge, createNode } from '../document/factory';
 import { categoryOf, inferRelationship } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
 import {
@@ -21,6 +21,8 @@ import {
 import {
   addOperand,
   addParticipant,
+  editMessageAttachments,
+  updateMessageAttachment,
   createFragment,
   createMessage,
   createNote,
@@ -49,9 +51,9 @@ import {
   updateSequence,
   wrapItems,
 } from '../document/sequenceOps';
-import { addEdges, removeElements } from '../document/operations';
+import { addEdges, addNodes, removeElements, removeParticipantEdges } from '../document/operations';
 import { isLinkable, participantFromNode } from '../document/sequenceLinks';
-import type { DraftNode, DraftSequence, SeqMessage, SeqMessageKind, SeqOperator, SeqParticipant } from '../document/types';
+import type { Attachment, DraftNode, DraftSequence, SeqMessage, SeqMessageKind, SeqOperator, SeqParticipant } from '../document/types';
 import { describeContext, sequenceLayoutFor } from '../nodes/describe';
 import { LIGHT } from '../render/theme/tokens';
 import { participantIndexAt } from '../sequence/layout';
@@ -213,6 +215,53 @@ export const sequenceActions = {
     useUiStore.getState().setQuietEdge(edge.id);
   },
 
+  showAttachments(nodeId: string, messageId: string): void {
+    useUiStore.getState().setOpenAttachmentDetail({ hostKind: 'message', hostId: nodeId, messageId, attachmentId: null });
+  },
+
+  detachAttachment(nodeId: string, messageId: string, attachmentId: string): void {
+    if (!roomFor(1, 0)) return;
+    const editor = useEditorStore.getState();
+    const host = nodeIndex(editor.document.nodes).get(nodeId);
+    const item = host?.sequence && findItem(host.sequence, messageId)?.item;
+    const attachment = item?.t === 'message' ? item.attachments?.find((entry) => entry.id === attachmentId) : undefined;
+    if (!host || !attachment) return;
+    const { id: _id, ...content } = attachment;
+    const detached = { ...createNode({ ...content, x: host.x + host.width + 24, y: host.y }), ...content };
+    editor.apply('Detach attachment', (doc) => addNodes(updateSequence(doc, nodeId, (sequence) =>
+      editMessageAttachments(sequence, messageId, (list) => list.filter((entry) => entry.id !== attachmentId)),
+    ), [detached]), { selection: { nodes: [detached.id], edges: [] } });
+  },
+
+  addAttachment(nodeId: string, messageId: string, type: 'note' | 'code'): void {
+    const attachment = createAttachment({ type });
+    const added = run(nodeId, type === 'note' ? 'Attach note' : 'Attach code', (sequence) =>
+      editMessageAttachments(sequence, messageId, (list) => [...list, attachment]),
+    );
+    if (added) useUiStore.getState().setOpenAttachmentDetail({ hostKind: 'message', hostId: nodeId, messageId, attachmentId: attachment.id });
+  },
+
+  updateAttachment(nodeId: string, messageId: string, attachmentId: string, patch: Partial<Omit<Attachment, 'id'>>): void {
+    run(nodeId, 'Edit attachment', (sequence) => updateMessageAttachment(sequence, messageId, attachmentId, patch));
+  },
+
+  removeAttachment(nodeId: string, messageId: string, attachmentId: string): void {
+    run(nodeId, 'Remove attachment', (sequence) =>
+      editMessageAttachments(sequence, messageId, (list) => list.filter((attachment) => attachment.id !== attachmentId)),
+    );
+  },
+
+  reorderAttachment(nodeId: string, messageId: string, attachmentId: string, direction: -1 | 1): void {
+    run(nodeId, 'Reorder attachment', (sequence) => editMessageAttachments(sequence, messageId, (list) => {
+      const from = list.findIndex((attachment) => attachment.id === attachmentId);
+      const to = from + direction;
+      if (from < 0 || to < 0 || to >= list.length) return list;
+      const next = [...list];
+      [next[from], next[to]] = [next[to]!, next[from]!];
+      return next;
+    }));
+  },
+
   /* ------------------------------------------------------------- participants -- */
 
   /** Adds a participant and answers its id, or null when the sequence is full. */
@@ -341,11 +390,7 @@ export const sequenceActions = {
     useEditorStore.getState().apply(ids.length > 1 ? 'Delete participants' : 'Delete participant', (doc) => {
       const next = updateSequence(doc, nodeId, (sequence) => ids.reduce(removeParticipant, sequence));
       if (next === doc) return doc;
-      const edges = doc.edges.filter((edge) =>
-        (edge.source === nodeId && edge.sourceAnchor?.participantId && removing.has(edge.sourceAnchor.participantId)) ||
-        (edge.target === nodeId && edge.targetAnchor?.participantId && removing.has(edge.targetAnchor.participantId)),
-      );
-      return removeElements(next, [], edges.map((edge) => edge.id));
+      return removeParticipantEdges(next, nodeId, removing);
     }, { selection: { nodes: [nodeId], edges: [] } });
   },
 

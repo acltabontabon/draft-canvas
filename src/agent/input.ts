@@ -971,7 +971,7 @@ export function readCreate(raw: unknown, resolved?: AgentStarter): CreateSpec {
   }
   const room = readRoom(r, body, '', { taken, depth: 0, fallbackType, ...(existing ? { existing } : {}) });
   const layout = readLayout(r, body.layout, '/layout', new Set(room.flows.map((f) => f.id)));
-  if (!starter && room.nodes.length === 0) problems.add('INVALID_INPUT', '/nodes', 'a diagram needs at least one element (or a starter)');
+  if (!starter && room.nodes.length === 0 && room.sequences.length === 0) problems.add('INVALID_INPUT', '/nodes', 'a diagram needs at least one element (or a starter)');
   problems.throwIfAny();
   return { ...room, title, ...(starter ? { starter } : {}), layout };
 }

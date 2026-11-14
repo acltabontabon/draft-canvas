@@ -14,6 +14,7 @@
  * presentation frames it — all from this one answer.
  */
 import { heightOf, participantsIn } from '../document/sequenceModel';
+import { RAIL_SIZE } from '../document/markerRail';
 import type {
   DraftSequence,
   SeqFragment,
@@ -446,6 +447,7 @@ function solve(
     const from = xOf(item.from);
     const to = xOf(item.to);
     const top = cursor;
+    const rowAfter = item.attachments?.length ? ROW_AFTER + RAIL_SIZE : ROW_AFTER;
     if (item.from === item.to) {
       const layout = item.label.trim() ? words(item.label, FONTS.sequenceMessage, SELF_LABEL_MAX) : null;
       const labelHeight = layout?.height ?? 0;
@@ -473,7 +475,7 @@ function solve(
       messages.push(message);
       messageById.set(item.id, message);
       if (item.kind === 'destroy') destroyedAt.set(item.to, yEnd);
-      cursor = bottom + ROW_AFTER;
+      cursor = bottom + rowAfter;
       return { min: from - FRAME_SIDE, max: right + FRAME_NEST };
     }
 
@@ -483,11 +485,11 @@ function solve(
     const layout = item.label.trim() ? words(item.label, FONTS.sequenceMessage, Math.min(LABEL_MAX_WIDTH, span - LABEL_SIDE * 2 - (creates ? head.width / 2 : 0))) : null;
     const labelHeight = layout?.height ?? 0;
     let y = top + Math.max(labelHeight + LABEL_GAP, ROW_MIN_ABOVE);
-    let after = ROW_AFTER;
+    let after = rowAfter;
     if (creates) {
       // The new participant's head sits on the message that makes it.
       y = Math.max(y, top + head.height / 2);
-      after = Math.max(ROW_AFTER, head.height / 2 + 8);
+      after = Math.max(rowAfter, head.height / 2 + 8);
       createdAt.set(item.to, y);
     }
     if (item.kind === 'destroy') destroyedAt.set(item.to, y);

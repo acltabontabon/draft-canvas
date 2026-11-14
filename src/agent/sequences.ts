@@ -56,11 +56,13 @@ export function readSequenceSource(
   item: Json,
   at: string,
   elementIds: ReadonlySet<string>,
-  kept: ReadonlyMap<string, string> = new Map(),
+  current?: DraftSequence,
 ): Omit<SequenceSpec, 'id' | 'title'> & { title: string | undefined } | undefined {
   const source = r.text(item.mermaid, `${at}/mermaid`, SEQUENCE_LIMITS.sequenceSourceLength, { required: true, code: true });
   if (source === undefined) return undefined;
-  const parsed = parseMermaidSequence(source);
+  const kept = current ? linksOf(current) : undefined;
+  const ids = current ? new Map([...aliasesOf(current)].map(([id, alias]) => [alias, id])) : undefined;
+  const parsed = parseMermaidSequence(source, ids);
   if (!parsed.ok) {
     r.problems.add('INVALID_INPUT', `${at}/mermaid`, `${parsed.error} Send a Mermaid sequenceDiagram: participants, then messages such as "client->>api: GET /orders".`);
     return undefined;
@@ -97,7 +99,7 @@ export function readSequenceSource(
   // one that was linked before and is still written under the same id.
   for (const name of byWritten.keys()) {
     if (elementIds.has(name)) link(name, name);
-    const before = kept.get(name);
+    const before = kept?.get(name);
     if (before) link(name, before);
   }
   return { title: parsed.title === UNTITLED_SEQUENCE ? undefined : parsed.title, sequence: parsed.sequence, links, unsupported: parsed.unsupported };

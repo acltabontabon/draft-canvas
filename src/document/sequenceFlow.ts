@@ -11,7 +11,6 @@
  * under, and — inside a `par` — that its branch runs alongside the others, so stepping through
  * them one after another is never read as "this, then that".
  */
-import { findFlow } from './flow';
 import { sequenceOf } from './sequenceModel';
 import type { DraftDocument, DraftFlow, DraftFlowStep, DraftNode, SeqItem, SeqMessage } from './types';
 
@@ -19,14 +18,6 @@ const PREFIX = 'seq:';
 
 /** The id playback knows a sequence's own telling by. */
 export const sequenceFlowId = (nodeId: string): string => `${PREFIX}${nodeId}`;
-
-/** Whether a flow id is `nodeId`'s own telling. Asked by every node on every update while a flow plays, so it builds no string. */
-export const isSequenceFlowOf = (flowId: string | null | undefined, nodeId: string): boolean =>
-  typeof flowId === 'string' && flowId.length === nodeId.length + PREFIX.length && flowId.startsWith(PREFIX) && flowId.endsWith(nodeId);
-
-/** The sequence node a flow id stands for, or null for an ordinary flow's id. */
-export const sequenceOfFlowId = (flowId: string | null | undefined): string | null =>
-  flowId?.startsWith(PREFIX) ? flowId.slice(PREFIX.length) : null;
 
 const KIND_WORDS: Record<SeqMessage['kind'], string> = { sync: 'Call', async: 'Message', reply: 'Reply', create: 'Create', destroy: 'Destroy' };
 
@@ -73,13 +64,25 @@ export function sequenceFlow(node: DraftNode): DraftFlow {
  * itself. What every reader of `flowPlayback.flowId` uses — never the editing operations, which
  * only ever touch the flows a file really holds.
  */
-export function playbackFlowOf(document: Pick<DraftDocument, 'flows' | 'nodes'>, flowId: string | null | undefined): DraftFlow | undefined {
+export function playbackFlowOf(
+  document: Pick<DraftDocument, 'flows' | 'nodes'>,
+  flowId: string | null | undefined,
+  sequenceNodeId?: string,
+): DraftFlow | undefined {
+  if (sequenceNodeId !== undefined) {
+    const node = sequencesIn(document.nodes).get(sequenceNodeId);
+    return node ? sequenceFlow(node) : undefined;
+  }
   if (!flowId) return undefined;
-  const nodeId = sequenceOfFlowId(flowId);
-  if (nodeId === null) return findFlow(document as DraftDocument, flowId);
-  const node = sequencesIn(document.nodes).get(nodeId);
-  return node ? sequenceFlow(node) : undefined;
+  let byId = savedFlows.get(document.flows);
+  if (!byId) {
+    byId = new Map(document.flows.map((flow) => [flow.id, flow]));
+    savedFlows.set(document.flows, byId);
+  }
+  return byId.get(flowId);
 }
+
+const savedFlows = new WeakMap<readonly DraftFlow[], Map<string, DraftFlow>>();
 
 /** The message a playback step is about, when the step is one of a sequence's own. */
 export function messageOfStep(host: DraftNode | undefined, stepId: string): SeqMessage | undefined {

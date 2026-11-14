@@ -11,6 +11,7 @@ import {
   type SeqParticipant,
   type SeqParticipantType,
 } from '../../document/types';
+import { hasAttachmentRoom } from '../../document/operations';
 import { displayNameFor } from '../../document/factory';
 import { hasDrifted, isLinkable } from '../../document/sequenceLinks';
 import { technologyKindPatch } from '../../document/technologyKind';
@@ -21,6 +22,7 @@ import { suggestedKind } from '../../sequence/suggest';
 import { useEditorStore } from '../../store/editorStore';
 import { sequenceActions } from '../../store/sequenceActions';
 import { Button } from '../../ui/common/Button';
+import type { IconName } from '../../ui/common/Icon';
 import { Tooltip, TooltipGroup } from '../../ui/common/Tooltip';
 import { ACTOR_ICON_OPTIONS } from '../actorOptions';
 import { COMPONENT_ICON_OPTIONS } from '../componentOptions';
@@ -92,6 +94,25 @@ function Action({ label, description, onClick, shortcut }: { label: string; desc
     <Tooltip content={{ title: label, ...(description ? { description } : {}), ...(shortcut ? { shortcut } : {}) }}>
       {(tip) => (
         <Button variant="quiet" className="dc-popover-action dc-element-action-tile" {...tip} onClick={onClick}>
+          {label}
+        </Button>
+      )}
+    </Tooltip>
+  );
+}
+
+function MessageAction({ icon, label, description, onClick, expanded }: {
+  icon: IconName;
+  label: string;
+  description: string;
+  onClick: () => void;
+  expanded?: boolean;
+}) {
+  return (
+    <Tooltip content={{ title: label, description }}>
+      {(tip) => (
+        <Button icon={icon} variant="quiet" className="dc-seq-message-action" {...tip}
+          aria-expanded={expanded} active={expanded} onClick={onClick}>
           {label}
         </Button>
       )}
@@ -437,6 +458,7 @@ function MessageRow({
   }));
   const slot = slotOf(sequence, message.id);
   const answered = message.kind !== 'reply' && message.from !== message.to;
+  const [attaching, setAttaching] = useState(false);
   const starts = message.kind !== 'reply' && message.kind !== 'destroy';
 
   return (
@@ -484,16 +506,34 @@ function MessageRow({
           </Button>
         </div>
       )}
-      <div className="dc-element-action-row">
+      <div className="dc-seq-message-actions dc-seq-primary-actions" role="group" aria-label="Message actions">
         <TooltipGroup>
-          {answered && <Action label="Add reply" description="What comes back, below whatever this call sets going." onClick={() => sequenceActions.addReply(node.id, message.id)} />}
-          {message.from !== message.to && <Action label="Reverse" description="Swap who sends and who receives." onClick={() => sequenceActions.reverse(node.id, message.id)} />}
-          {slot && <Action label="Add note" description="A note beside this message." onClick={() => sequenceActions.addNote(node.id, [...participantsIn(message)].slice(0, 2), { operandId: slot.operandId, index: slot.index + 1 })} />}
-          <Button variant="quiet" className="dc-popover-action dc-element-action-tile" active={wrapping} aria-expanded={wrapping} onClick={() => setWrapping(!wrapping)}>
-            Wrap in…
-          </Button>
+          {answered && <MessageAction icon="reply" label="Reply" description="Add the return message after this call’s work." onClick={() => sequenceActions.addReply(node.id, message.id)} />}
+          {message.from !== message.to && <MessageAction icon="swap" label="Reverse" description="Swap the sender and receiver." onClick={() => sequenceActions.reverse(node.id, message.id)} />}
+          {slot && <MessageAction icon="file" label="Timeline note" description="Add a visible note beneath this arrow." onClick={() => sequenceActions.addNote(node.id, [...participantsIn(message)].slice(0, 2), { operandId: slot.operandId, index: slot.index + 1 })} />}
+          <MessageAction icon="overview" label="Wrap" description="Put the message in a condition, loop, or other fragment." expanded={wrapping} onClick={() => {
+            setAttaching(false);
+            setWrapping(!wrapping);
+          }} />
+          {(hasAttachmentRoom(message, 'edge') || Boolean(message.attachments?.length)) && (
+            <MessageAction icon="clip" label="Attach" description="Add or open supporting notes and code." expanded={attaching} onClick={() => {
+              setWrapping(false);
+              setAttaching(!attaching);
+            }} />
+          )}
         </TooltipGroup>
       </div>
+      {attaching && (
+        <div className="dc-seq-message-actions dc-seq-attachment-actions" role="group" aria-label="Attachment actions">
+          <TooltipGroup>
+            {Boolean(message.attachments?.length) && <MessageAction icon="clip" label="View attachments" description="Open the cards on this message." onClick={() => sequenceActions.showAttachments(node.id, message.id)} />}
+            {hasAttachmentRoom(message, 'edge') && <>
+              <MessageAction icon="file" label="Attach note" description="Add a note that stays with the arrow." onClick={() => sequenceActions.addAttachment(node.id, message.id, 'note')} />
+              <MessageAction icon="code" label="Attach code" description="Add an example payload or code snippet." onClick={() => sequenceActions.addAttachment(node.id, message.id, 'code')} />
+            </>}
+          </TooltipGroup>
+        </div>
+      )}
       {wrapPanel}
       {problems}
     </>

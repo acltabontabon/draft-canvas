@@ -21,6 +21,7 @@ export type FindingKind =
   | 'creates-itself'
   | 'after-destroy'
   | 'destroyed-twice'
+  | 'reply-without-call'
   | 'reply-before-call'
   | 'reply-wrong-way'
   | 'answered-twice'
@@ -126,10 +127,12 @@ export function checkSequence(sequence: DraftSequence): SequenceFinding[] {
   // Replies.
   const answered = new Map<string, Placed[]>();
   for (const reply of placed) {
-    const callId = reply.message.replyTo;
-    if (reply.message.kind !== 'reply' || !callId) continue;
-    const call = byId.get(callId);
-    if (!call) continue;
+    if (reply.message.kind !== 'reply') continue;
+    const call = reply.message.replyTo ? byId.get(reply.message.replyTo) : undefined;
+    if (!call) {
+      found.push({ kind: 'reply-without-call', itemIds: [reply.message.id], message: 'This reply has no matching call.' });
+      continue;
+    }
     if (call.order > reply.order) {
       found.push({
         kind: 'reply-before-call',
@@ -149,7 +152,7 @@ export function checkSequence(sequence: DraftSequence): SequenceFinding[] {
         },
       });
     }
-    const earlier = answered.get(callId) ?? [];
+    const earlier = answered.get(call.message.id) ?? [];
     if (earlier.some((other) => !apart(other, reply))) {
       found.push({
         kind: 'answered-twice',
@@ -158,7 +161,7 @@ export function checkSequence(sequence: DraftSequence): SequenceFinding[] {
         fix: { label: 'Make this a reply to nothing in particular', apply: (current) => updateMessage(current, reply.message.id, { replyTo: undefined }) },
       });
     }
-    answered.set(callId, [...earlier, reply]);
+    answered.set(call.message.id, [...earlier, reply]);
   }
 
   // Work ended that was not running.

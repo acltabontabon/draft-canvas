@@ -1,9 +1,13 @@
+import { describeContext, sequenceLayoutFor } from '../nodes/describe';
+import { sequenceAttachmentTab } from '../nodes/sequence';
+import { LIGHT } from '../render/theme/tokens';
+import { sequenceActions } from '../store/sequenceActions';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useStore } from '@xyflow/react';
 import { useEditorStore } from '../store/editorStore';
-import { selectNode } from '../store/selectors';
-import { useUiStore } from '../store/uiStore';
+import { selectNode, selectSequenceMessage } from '../store/selectors';
+import { useUiStore, type AttachmentDetail } from '../store/uiStore';
 import { rectOfInternal } from './edgeGeometry';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
 import {
@@ -46,10 +50,15 @@ export function AttachmentPopover() {
   // `hostId`, so it simply goes false the same way it would on an outside click.
   const openDetail = useUiStore((state) => state.openAttachmentDetail);
   const presenting = useEditorStore((state) => state.mode === 'present');
-  const hostId = !presenting && openDetail?.hostKind === 'node' ? openDetail.hostId : null;
-  const hasAttachments = useEditorStore((state) =>
-    hostId ? Boolean(selectNode(state.document, hostId)?.attachments?.length) : false,
-  );
+  const detail = (!presenting || openDetail?.hostKind === 'message') && (openDetail?.hostKind === 'node' || openDetail?.hostKind === 'message') ? openDetail : null;
+  const hostId = detail?.hostId ?? null;
+  const hasAttachments = useEditorStore((state) => {
+    if (!detail) return false;
+    const host = detail.hostKind === 'message'
+      ? selectSequenceMessage(state.document, detail.hostId, detail.messageId)
+      : selectNode(state.document, detail.hostId);
+    return Boolean(host?.attachments?.length);
+  });
   const measured = useStore((state) => (hostId ? state.nodeLookup.has(hostId) : false));
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
 
@@ -64,18 +73,21 @@ export function AttachmentPopover() {
 
   const open = Boolean(hostId && hasAttachments && measured);
   const { mounted, closing } = usePopoverPresence(open, POPOVER_EXIT_MS);
-  const shownHostId = useLastPresent(open ? hostId : null);
-  if (!mounted || !shownHostId) return null;
-  return <AttachmentPopoverBody hostId={shownHostId} closing={closing} listening={hostId !== null} />;
+  const shown = useLastPresent(open ? detail : null);
+  if (!mounted || !shown) return null;
+  return <AttachmentPopoverBody detail={shown} closing={closing} listening={hostId !== null} editable={!presenting} />;
 }
 
-function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string; closing: boolean; listening: boolean }) {
+function AttachmentPopoverBody({ detail, closing, listening, editable }: { detail: AttachmentDetail; closing: boolean; listening: boolean; editable: boolean }) {
+  const { hostId } = detail;
+  const messageId = detail.hostKind === 'message' ? detail.messageId : undefined;
   const flowPanelOpen = useUiStore((state) => state.flowPanelOpen);
   const interactionActive = useUiStore((state) => state.interactionActive);
   // A view-only collaborator reads attachments; the store would refuse any edit.
   const viewOnly = useUiStore((state) => state.readOnly !== null);
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
   const liveHost = useEditorStore((state) => selectNode(state.document, hostId));
+  const liveMessage = useEditorStore((state) => messageId ? selectSequenceMessage(state.document, hostId, messageId) : undefined);
   const liveInternal = useInternalNode(hostId);
   const updateAttachment = useEditorStore((state) => state.updateAttachment);
   const removeAttachment = useEditorStore((state) => state.removeAttachment);
@@ -92,7 +104,8 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
   // The last live host and its position, kept for the panel to keep rendering *something*
   // coherent while it fades out, instead of going blank a frame early.
   const shown = useLastPresent(
-    liveHost?.attachments?.length && liveInternal ? { host: liveHost, internal: liveInternal } : null,
+    liveHost && liveInternal && (messageId ? liveMessage?.attachments?.length : liveHost.attachments?.length)
+      ? { host: liveHost, internal: liveInternal, message: liveMessage } : null,
   );
 
   // Closes the whole popover (row and any pinned card together) on Escape or a click genuinely
@@ -122,8 +135,15 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
   }, [listening, setOpenAttachmentDetail]);
 
   const displayHost = shown?.host;
-  const attachments = displayHost?.attachments ?? [];
-  const rect = shown ? rectOfInternal(shown.internal) : null;
+  const attachments = (messageId ? shown?.message?.attachments : displayHost?.attachments) ?? [];
+  let rect = shown ? rectOfInternal(shown.internal) : null;
+  if (rect && messageId && displayHost) {
+    const drawn = sequenceLayoutFor(displayHost, describeContext(LIGHT)).messages.find((message) => message.id === messageId);
+    if (drawn) {
+      const tab = sequenceAttachmentTab(drawn, attachments.length);
+      rect = { x: rect.x + tab.x, y: rect.y + tab.y, width: tab.w, height: tab.h };
+    }
+  }
 
   // Measured, not a constant: the toolbar wraps to two rows on narrow viewports.
   const toolbarHeight = useToolbarHeight(true);
@@ -156,7 +176,12 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
 
   if (!displayHost || !attachments.length || !anchors || !target) return null;
 
-  const attachmentActions: AttachmentActions = {
+  const attachmentActions: AttachmentActions = messageId ? {
+    update: (attachmentId, patch) => sequenceActions.updateAttachment(hostId, messageId, attachmentId, patch),
+    remove: (attachmentId) => sequenceActions.removeAttachment(hostId, messageId, attachmentId),
+    reorder: (attachmentId, direction) => sequenceActions.reorderAttachment(hostId, messageId, attachmentId, direction),
+    detach: (attachmentId) => sequenceActions.detachAttachment(hostId, messageId, attachmentId),
+  } : {
     update: (attachmentId, patch) => updateAttachment(displayHost.id, attachmentId, patch),
     remove: (attachmentId) => removeAttachment(displayHost.id, attachmentId),
     detach: (attachmentId) => detachAttachment(displayHost.id, attachmentId),
@@ -173,7 +198,7 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
         ref={panelRef}
         className="dc-attachment-popover"
         role="toolbar"
-        aria-label={`Attachments for ${displayHost.text || 'this node'}`}
+        aria-label={messageId ? 'Message attachments' : `Attachments for ${displayHost.text || 'this node'}`}
         data-closing={closing ? 'true' : undefined}
         data-placement={placement}
         onPointerDown={(event) => event.stopPropagation()}
@@ -183,11 +208,12 @@ function AttachmentPopoverBody({ hostId, closing, listening }: { hostId: string;
             scale here would otherwise clobber the outer div's own positioning translate. */}
         <div className="dc-attachment-popover-inner">
           <AttachmentChipRow
-            hostKind="node"
+            hostKind={messageId ? "message" : "node"}
+            messageId={messageId}
             hostId={displayHost.id}
             attachments={attachments}
             cardSide={cardSide}
-            editable={!viewOnly}
+            editable={editable && !viewOnly}
             actions={attachmentActions}
           />
         </div>

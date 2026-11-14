@@ -125,7 +125,7 @@ test.describe('Sequence', () => {
 
     await page.locator(MESSAGE).nth(0).click();
     await expect(page.locator(`${MESSAGE}[data-focused="true"]`)).toHaveCount(1);
-    await expect(page.locator(INSPECTOR)).toContainText('Add reply');
+    await expect(page.locator(INSPECTOR).getByRole('button', { name: 'Reply', exact: true })).toBeVisible();
 
     // Shift extends the range and never lets go of the sequence itself.
     await page.locator(MESSAGE).nth(1).click({ modifiers: ['Shift'] });
@@ -190,7 +190,7 @@ test.describe('Sequence', () => {
 
     for (const [index, label] of [[1, 'rows'], [0, '200 OK']] as const) {
       await page.locator(MESSAGE).nth(index).click();
-      await page.locator(INSPECTOR).getByRole('button', { name: 'Add reply' }).click();
+      await page.locator(INSPECTOR).getByRole('button', { name: 'Reply' }).click();
       await expect(page.locator(LABEL)).toBeFocused();
       await page.keyboard.type(label);
       await page.keyboard.press('Enter');
@@ -505,4 +505,97 @@ test.describe('Sequence', () => {
     await page.keyboard.press('ControlOrMeta+z');
     await expect(edge).toHaveCount(1);
   });
+});
+
+test('drops only on a valid target, keeps participant ranges, and scopes clipboard shortcuts', async ({ page }) => {
+  await newCanvas(page, 'Sequence input edges');
+  await newSequence(page, ['Client', 'API', 'Database']);
+  await page.locator(SEQUENCE).hover({ position: { x: 30, y: 12 } });
+  const lifeline = (await page.locator(LIFELINE).first().boundingBox())!;
+  const x = lifeline.x + lifeline.width / 2;
+  const y = lifeline.y + lifeline.height * 0.6;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 180, y, { steps: 8 });
+  await page.mouse.up();
+  await expect(page.locator(MESSAGE)).toHaveCount(0);
+
+  await page.locator(HEAD).first().click();
+  await page.keyboard.press('Alt+Shift+ArrowRight');
+  await expect(page.locator(`${HEAD}[data-focused="true"]`)).toHaveCount(2);
+  await page.keyboard.press('Alt+Shift+ArrowLeft');
+  await expect(page.locator(`${HEAD}[data-focused="true"]`)).toHaveCount(1);
+  await draw(page, 0, 1, 'Request');
+  await draw(page, 1, 2, 'Read');
+  await page.locator(MESSAGE).first().click();
+  await expect(page.locator('.dc-seq-ghost-hint')).toHaveCount(0);
+  await page.keyboard.press('Tab');
+  await expect(page.locator(MESSAGE)).toHaveCount(2);
+  await expect(page.locator(LABEL)).toHaveCount(0);
+
+  await page.locator(MESSAGE).first().click();
+  await page.keyboard.press('ControlOrMeta+x');
+  await expect(page.locator(SEQUENCE)).toHaveCount(1);
+  await expect(page.locator(MESSAGE)).toHaveCount(2);
+  await page.evaluate(() => window.dispatchEvent(new Event('cut', { cancelable: true, bubbles: true })));
+  await expect(page.locator(MESSAGE)).toHaveCount(2);
+
+  const last = (await page.locator(LIFELINE).last().boundingBox())!;
+  const frame = (await page.locator(SEQUENCE).boundingBox())!;
+  const rowY = last.y + last.height - 8;
+  await page.mouse.move(last.x + last.width / 2, rowY);
+  await page.mouse.down();
+  await page.mouse.move(frame.x + frame.width + 40, rowY, { steps: 10 });
+  await expect(page.locator('.dc-seq-add-target')).toHaveText('Add participant');
+  await page.mouse.up();
+  await expect(page.locator(LABEL)).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator(HEAD)).toHaveCount(4);
+
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('ControlOrMeta+x');
+  await expect(page.locator(SEQUENCE)).toHaveCount(0);
+});
+
+test('attaches note and code to a message, saves them, and reads them during presentation', async ({ page }) => {
+  await newCanvas(page, 'Message attachments');
+  await newSequence(page, ['Client', 'API']);
+  await draw(page, 0, 1, 'GET /orders');
+  await draw(page, 1, 0, 'Results');
+  await page.locator(MESSAGE).first().click();
+  const inspector = page.locator(INSPECTOR);
+  const popover = page.getByRole('toolbar', { name: 'Message attachments' });
+  await inspector.getByRole('button', { name: 'Attach', exact: true }).click();
+  await inspector.getByRole('button', { name: 'Attach note' }).click();
+  await popover.getByRole('button', { name: 'Edit attached detail' }).click();
+  await popover.getByRole('textbox', { name: 'Attached note' }).fill('Only paid orders');
+  await page.locator(CANVAS).click({ position: { x: 30, y: 70 } });
+  await page.locator(SEQUENCE).hover({ position: { x: 30, y: 12 } });
+  await page.locator(MESSAGE).first().click();
+  await inspector.getByRole('button', { name: 'Attach', exact: true }).click();
+  await inspector.getByRole('button', { name: 'Attach code' }).click();
+  await popover.getByRole('button', { name: 'Edit attached detail' }).click();
+  await popover.getByRole('textbox', { name: 'Attached code' }).fill('return paidOrders;');
+  await popover.getByRole('combobox', { name: 'Code language' }).selectOption('javascript');
+  await page.locator(CANVAS).click({ position: { x: 30, y: 70 } });
+  await expect(page.getByText('Saved locally')).toBeVisible();
+  await reopenAfterReload(page, 'Message attachments');
+
+  await page.locator(SEQUENCE).hover({ position: { x: 30, y: 12 } });
+  await page.locator(MESSAGE).first().click();
+  await page.getByRole('button', { name: 'Attachments for message 1' }).click();
+  await popover.getByRole('button', { name: 'View attached note' }).click();
+  await expect(popover.getByText('Only paid orders')).toBeVisible();
+  await popover.getByRole('button', { name: 'View attached code' }).click();
+  await expect(popover.locator('pre')).toHaveText('return paidOrders;');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await inspector.getByRole('button', { name: 'Present this sequence' }).click();
+  await page.keyboard.press('ArrowRight');
+  await page.getByRole('button', { name: 'View current message attachments' }).click();
+  await popover.getByRole('button', { name: 'View attached note' }).click();
+  await expect(popover.getByText('Only paid orders')).toBeVisible();
+  await expect(popover.getByRole('button', { name: 'Edit attached detail' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Step 2: API to Client' }).click();
+  await expect(popover).toHaveCount(0);
 });

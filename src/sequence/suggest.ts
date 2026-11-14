@@ -6,7 +6,7 @@
  */
 import { categoryOf, defaultsToResponse, inferRelationship, type NodeCategory } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
-import { messagesOf, slotOf, type SeqSlot } from '../document/sequenceModel';
+import { itemsAt, messagesOf, slotOf, type SeqSlot } from '../document/sequenceModel';
 import type { DraftEdge, DraftSequence, SeqMessage, SeqMessageKind, SeqParticipant } from '../document/types';
 import { executionsOf } from './executions';
 
@@ -121,7 +121,10 @@ export function nextFromParticipant(sequence: DraftSequence, participantId: stri
 export function nextFor(sequence: DraftSequence, focus: { kind: string; ids: readonly string[] }): NextMessage[] {
   if (focus.ids.length !== 1) return [];
   if (focus.kind === 'participant') return nextFromParticipant(sequence, focus.ids[0]!);
-  if (focus.kind === 'item') return nextMessages(sequence, focus.ids[0]!);
+  if (focus.kind === 'item') {
+    const at = slotOf(sequence, focus.ids[0]!);
+    return at && (itemsAt(sequence, at.operandId)?.length ?? 0) === at.index + 1 ? nextMessages(sequence, focus.ids[0]!) : [];
+  }
   return [];
 }
 

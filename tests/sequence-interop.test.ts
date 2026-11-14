@@ -302,3 +302,20 @@ describe('a Flow drawn as a sequence', () => {
     expect(sequenceFromFlow(doc, 'nothing')).toBeNull();
   });
 });
+
+it('reports a sender-destroy directive without ending the receiver’s lifeline', () => {
+  const result = parseMermaidSequence('sequenceDiagram\nparticipant A\nparticipant B\ndestroy A\nA->>B: Goodbye\nB->>B: Continue');
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.unsupported.join(' ')).toContain('destroys its sender');
+  expect(messagesOf(result.sequence).map((message) => message.kind)).toEqual(['sync', 'sync']);
+});
+
+it('keeps a configured Mermaid participant under the same ID as its messages', () => {
+  const result = parseMermaidSequence('sequenceDiagram\nparticipant A@{ "type": "database" }\nA->>B: Hello');
+  expect(result.ok).toBe(true);
+  if (!result.ok) return;
+  expect(result.sequence.participants.map((participant) => participant.name)).toEqual(['A', 'B']);
+  expect(result.unsupported.join(' ')).toContain('participant configuration');
+  expect(messagesOf(result.sequence)[0]?.from).toBe(result.sequence.participants[0]?.id);
+});

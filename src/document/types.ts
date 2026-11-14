@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 26;
+export const CURRENT_VERSION = 27;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -564,6 +564,8 @@ export interface SeqMessage {
   to: string;
   kind: SeqMessageKind;
   label: string;
+  /** Supporting note and code cards attached to this arrow. */
+  attachments?: Attachment[];
   /** A reply's call, by id. Absent on a reply that answers nothing in particular. */
   replyTo?: string;
   /**

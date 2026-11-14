@@ -125,7 +125,12 @@ function travel(nodeId: string, sequence: DraftSequence, focus: SequenceFocus, k
   if (focus.kind === 'participant') {
     if (!vertical) {
       const next = neighbourParticipant(sequence, id, step);
-      if (next) sequenceActions.select(nodeId, 'participant', [next]);
+      if (next) {
+        const ids = extend
+          ? focus.ids.includes(next) ? focus.ids.slice(0, -1) : [...focus.ids, next]
+          : [next];
+        sequenceActions.select(nodeId, 'participant', ids);
+      }
     } else if (step === 1) {
       const first = messagesOf(sequence).find((message) => message.from === id || message.to === id) ?? messagesOf(sequence)[0];
       if (first) sequenceActions.select(nodeId, 'item', [first.id]);

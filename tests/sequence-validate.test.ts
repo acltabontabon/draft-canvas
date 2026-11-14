@@ -74,7 +74,7 @@ describe('reading a sequence', () => {
     const result = parseDocument(JSON.stringify(raw));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.document.version).toBe(26);
+    expect(result.document.version).toBe(CURRENT_VERSION);
     expect(result.document.nodes[0]!.sequence).toBeUndefined();
   });
 
@@ -174,4 +174,24 @@ describe('copying a sequence', () => {
     const lone = alone.doc.nodes.find((node) => node.id === alone.nodeIds[0])!;
     expect(lone.sequence!.participants.find((participant) => participant.id === 'b')!.ref).toBe(shape.id);
   });
+});
+
+it('preserves bounded message attachments through validation, canonical save and clipboard', () => {
+  const sequence = sample();
+  const first = messagesOf(sequence)[0]!;
+  const note = { id: 'note', type: 'note' as const, text: 'Paid orders only' };
+  const code = { id: 'code', type: 'code' as const, language: 'json' as const, code: '{"status":"paid"}' };
+  const attached = [note, code, { ...note, id: 'third' }, { ...code, id: 'fourth' }, { ...note, id: 'overflow' }];
+  const node = { ...createNode({ id: 'host', type: 'sequence', x: 0, y: 0 }), sequence: {
+    ...sequence, items: [{ ...first, attachments: attached }],
+  } };
+  const doc = addNodes(createDocument(), [node]);
+  const parsed = parseDocument(JSON.parse(serializeDocument(doc)));
+  expect(parsed.ok).toBe(true);
+  if (!parsed.ok) return;
+  const kept = messagesOf(parsed.document.nodes[0]!.sequence!)[0]!.attachments;
+  expect(kept?.map((attachment) => attachment.id)).toEqual(['note', 'code', 'third', 'fourth']);
+  const selection = extractFragment(parsed.document, [node.id]);
+  const loaded = decodeClipboard(encodeClipboard(selection));
+  expect(loaded?.nodes[0]?.sequence && messagesOf(loaded.nodes[0].sequence)[0]?.attachments).toEqual(kept);
 });

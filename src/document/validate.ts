@@ -1,3 +1,5 @@
+import { finite, oneOf, oneOfOptional, safeId, text } from './validationValues';
+import { parseAttachments, validateAttachableFields } from './validateAttachments';
 import { parseEvidence } from './evidence';
 /**
  * The untrusted-input boundary.
@@ -10,7 +12,6 @@ import { parseEvidence } from './evidence';
  */
 import { createId } from './ids';
 import { LIMITS } from './limits';
-import { cleanText } from './sanitize';
 import { repairCompensationLinks } from './compensation';
 import { migrateToCurrent, UnsupportedVersionError } from './migrate';
 import { defaultSizeFor } from './factory';
@@ -18,7 +19,6 @@ import {
   ACCENTS,
   ACTOR_KINDS,
   ACTOR_FRAMES,
-  ATTACHABLE_TYPES,
   BACKGROUND_FITS,
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
@@ -32,7 +32,6 @@ import {
   GRID_MODES,
   NODE_TYPES,
   C4_TEXT_TYPES,
-  NOTE_KINDS,
   EDGE_SEMANTICS,
   QUEUE_KINDS,
   ROUTE_MODES,
@@ -46,8 +45,6 @@ import {
   type Accent,
   type ActorKind,
   type ActorFrame,
-  type AttachableType,
-  type Attachment,
   type BackgroundFit,
   type BoundaryPreset,
   type CodeLanguage,
@@ -67,7 +64,6 @@ import {
   type EdgeSemantic,
   type EmbeddedBackgroundImage,
   type GridMode,
-  type NoteKind,
   type QueueKind,
   type RouteMode,
   type ServiceKind,
@@ -82,7 +78,7 @@ import {
   type ViewLevel,
   type DraftOrigin,
 } from './types';
-import { clamp, isFiniteNumber } from '../lib/math';
+import { clamp } from '../lib/math';
 import { isRecord } from '../lib/isRecord';
 import { normalizeOpenPointText, normalizeTargets, OPEN_POINT_ID_PREFIX } from './openPoints';
 import { normalizeSequence } from './validateSequence';
@@ -90,8 +86,6 @@ import { normalizeSequence } from './validateSequence';
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
   | { ok: false; error: string };
-
-const finite = (value: unknown, fallback: number): number => (isFiniteNumber(value) ? value : fallback);
 
 /**
  * Whether `node`'s chain of boundaries ends within `LIMITS.maxGroupDepth` steps. Walked no further
@@ -106,24 +100,11 @@ export function withinGroupDepth(node: { parentId?: string }, byId: ReadonlyMap<
   return true;
 }
 
-function text(value: unknown, max: number): string | undefined {
-  return typeof value === 'string' ? cleanText(value, max) : undefined;
-}
 
-function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
-  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
-    ? (value as T)
-    : fallback;
-}
 
 /** Like `oneOf`, but an absent or invalid value stays absent rather than being
  *  coerced to a fallback — used for fields that are optional conveniences
  *  rather than always-present classifications (e.g. an edge's `semantic`). */
-function oneOfOptional<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
-  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
-    ? (value as T)
-    : undefined;
-}
 
 /**
  * Like `oneOfOptional`, but for a number: absent or non-finite stays absent (never a fabricated
@@ -135,26 +116,6 @@ function oneOfOptional<T extends string>(value: unknown, allowed: readonly T[]):
 function positiveIntOptional(value: unknown, min: number, max: number): number | undefined {
   if (typeof value !== 'number' || !Number.isFinite(value)) return undefined;
   return clamp(Math.round(value), min, max);
-}
-
-/**
- * The `note`/`code` field pairs shared by a top-level node and an attachment —
- * both are "a Note or a Code card's content," so this is the one place that
- * knows how to read them out of an untrusted candidate object.
- */
-function validateAttachableFields(
-  candidate: Record<string, unknown>,
-  type: DraftNodeType | AttachableType,
-): Pick<DraftNode, 'noteKind' | 'language' | 'code'> {
-  const fields: Pick<DraftNode, 'noteKind' | 'language' | 'code'> = {};
-  if (type === 'note') {
-    fields.noteKind = oneOf<NoteKind>(candidate.noteKind, NOTE_KINDS, 'note');
-  }
-  if (type === 'code') {
-    fields.language = oneOf<CodeLanguage>(candidate.language, CODE_LANGUAGES, 'plaintext');
-    fields.code = text(candidate.code, LIMITS.maxCodeLength) ?? '';
-  }
-  return fields;
 }
 
 /** An edge's `sourceAnchor`/`targetAnchor`: a closed-enum side plus a clamped
@@ -217,12 +178,6 @@ function originOf(value: unknown): DraftOrigin | null {
   return { starter, sha256 };
 }
 
-function safeId(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.length > LIMITS.maxIdLength) return null;
-  return trimmed;
-}
 
 /**
  * A node id, which unlike every other id is also a path segment: `depth/tree.ts` joins them with a
@@ -238,52 +193,6 @@ function safeNodeId(value: unknown): string | null {
     if (code <= 0x1f || code === 0x7f) return null;
   }
   return id;
-}
-
-/**
- * A host's attachment list — shared by nodes and connectors, which carry the identical shape. Keeps
- * at most `max`, gives missing or duplicate ids fresh ones, and keeps a card's size (detaching
- * restores it at the size it had, not a default). Counts what it dropped and cut so the caller can
- * report it.
- */
-function parseAttachments(
-  value: unknown,
-  max: number,
-): { attachments: Attachment[]; dropped: number; truncated: number } {
-  const raw = Array.isArray(value) ? value : [];
-  const attachments: Attachment[] = [];
-  const seenIds = new Set<string>();
-  let dropped = 0;
-  for (const rawAttachment of raw.slice(0, max)) {
-    if (!isRecord(rawAttachment)) {
-      dropped += 1;
-      continue;
-    }
-    let id = safeId(rawAttachment.id);
-    if (!id || seenIds.has(id)) id = createId('a');
-    seenIds.add(id);
-
-    const type = oneOf<AttachableType>(rawAttachment.type, ATTACHABLE_TYPES, 'note');
-    const attachment: Attachment = { id, type };
-
-    const label = text(rawAttachment.text, LIMITS.maxTextLength);
-    if (label !== undefined) attachment.text = label;
-
-    const accent = oneOfOptional<Accent>(rawAttachment.accent, ACCENTS);
-    if (accent !== undefined) attachment.accent = accent;
-
-    Object.assign(attachment, validateAttachableFields(rawAttachment, type));
-
-    const width = finite(rawAttachment.width, Number.NaN);
-    const height = finite(rawAttachment.height, Number.NaN);
-    if (Number.isFinite(width) && Number.isFinite(height)) {
-      attachment.width = clamp(width, LIMITS.minNodeSize, LIMITS.maxNodeSize);
-      attachment.height = clamp(height, LIMITS.minNodeSize, LIMITS.maxNodeSize);
-    }
-
-    attachments.push(attachment);
-  }
-  return { attachments, dropped, truncated: Math.max(0, raw.length - max) };
 }
 
 /** Node types that may own a room. Narrower than what the app offers "Look inside" on: a Service
@@ -505,6 +414,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
     const type = oneOf<DraftNodeType>(candidate.type, NODE_TYPES, 'note');
     const fallbackSize = defaultSizeFor(type);
+    const maxSize = type === 'sequence' ? LIMITS.maxSequenceNodeSize : LIMITS.maxNodeSize;
 
     const node: DraftNode = {
       id,
@@ -514,10 +424,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       // Whole pixels, like every size the editor writes (`clampSize`): the canvas renders rounded sizes,
       // and a fractional one would never match them — a fresh node object on every render.
       width: Math.round(
-        clamp(finite(candidate.width, fallbackSize.width), LIMITS.minNodeSize, LIMITS.maxNodeSize),
+        clamp(finite(candidate.width, fallbackSize.width), LIMITS.minNodeSize, maxSize),
       ),
       height: Math.round(
-        clamp(finite(candidate.height, fallbackSize.height), LIMITS.minNodeSize, LIMITS.maxNodeSize),
+        clamp(finite(candidate.height, fallbackSize.height), LIMITS.minNodeSize, maxSize),
       ),
       z: Math.round(clamp(finite(candidate.z, 0), -10_000, 10_000)),
     };

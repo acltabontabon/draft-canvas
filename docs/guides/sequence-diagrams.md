@@ -31,7 +31,8 @@ By default, arrows are numbered in reading order. The numbers update when messag
 moved, or deleted. Click the sequence title or frame, then toggle **Message numbers** in the
 inspector. Each sequence saves its own setting.
 
-- Drag past the last lifeline to add a participant with a default name and write the message.
+- Drag past the last participant until **Add participant** appears, then release to add a participant
+  with a default name and write the message.
 - Drag away and back onto the same lifeline for a message to itself.
 - Hover between two participants and click **+** to add one there. The others make room.
 
@@ -40,7 +41,7 @@ browse other suggestions, such as a reply, a call onward, or a call to itself.
 
 ![The next message offered after a call.](../media/guides/sequence-next.png)
 
-A call starts work on its receiver, drawn as a bar on the lifeline. **Add reply** puts the reply
+A call starts work on its receiver, drawn as a bar on the lifeline. **Reply** puts the reply
 below whatever that call set going, and ends the bar. Nothing is added that you did not ask for:
 a reply is never inserted on its own.
 
@@ -58,12 +59,14 @@ What you can do appears beside it and nowhere else.
 | Selected | You can |
 | --- | --- |
 | Participant | Rename, change its colour, shape, kind or technology, link or unlink a shape, group, delete |
-| Message | Edit, make it a **Call**, **Asynchronous**, **Reply**, **Create** or **Destroy**, reverse it, turn its work bar on or off, add a reply or a note, duplicate, delete |
+| Message | Edit, make it a **Call**, **Asynchronous**, **Reply**, **Create** or **Destroy**, reverse it, turn its work bar on or off, add a reply, add a timeline note, attach a note or code, duplicate, delete |
 | Several messages | **Wrap in…** a condition, optional part, loop, parallel branches, break or critical section |
 | Frame or branch | Change its kind, edit the condition, add, move or remove a branch, unwrap, delete |
 | The sequence | Rename it, add a participant or a reference, present it |
 
-The right-click menu and `⌘K` offer the same commands.
+The right-click menu and `⌘K` also offer message commands.
+
+![The compact message toolbar with reply, reverse, timeline note, wrap, and attach.](../media/guides/sequence-message-actions.png)
 
 - **Reorder** by dragging a message or frame up or down, or a participant sideways. A move that
   cannot be right (a reply above its call, a message to something not yet created) is refused, and
@@ -99,7 +102,15 @@ both.
 
 ### Notes and groups
 
-**Add note** puts a note beside the selected message, over one or two participants.
+**Timeline note** draws a note over one or two participants on its own row.
+
+To keep supporting details on the arrow, select a message and choose **Attach** → **Attach note**
+or **Attach code**. Use the pencil to edit the card. The paperclip on the arrow or **Attach** → **View attachments** reopens it. Cards stay with the message as you move it, and can be reordered,
+deleted or detached onto the canvas. During a presentation, the current message’s paperclip opens
+its cards for reading.
+
+![A code card attached to a checkout message.](../media/guides/sequence-attachment.png)
+
 `Shift`-click several neighbouring participants and choose **Group** to draw them under one name
 (a subsystem, a team). A group says only that they belong together.
 
@@ -154,6 +165,7 @@ The lifelines stay visible throughout.
   frames.
 - **Share → Export → Other formats → Sequences** writes each sequence, and each flow, as
   standalone **Mermaid** or **PlantUML**, with its conditions, loops, work bars and groups.
+  Attached cards stay in the editable Draft Canvas file. The image exports show their paperclips.
 - Paste or import a Mermaid `sequenceDiagram` to get an editable sequence. Anything it uses that
   is not drawn is listed. See the [Mermaid import reference](../reference/mermaid-import.md#sequence-diagrams).
 - An [AI agent](connect-an-ai-agent.md) can add, read and change sequences when asked.

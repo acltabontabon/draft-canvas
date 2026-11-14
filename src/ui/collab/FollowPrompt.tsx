@@ -34,8 +34,9 @@ function FollowPromptBody({ following }: { following: boolean }) {
   const [folded, setFolded] = useState(false);
   const presenter = useCollabStore((state) => presenterOf(state.peers));
   const flowId = useCollabStore((state) => state.presenter?.flowId ?? null);
+  const sequenceNodeId = useCollabStore((state) => state.presenter?.sequenceNodeId);
   const step = useCollabStore((state) => state.presenter?.step ?? null);
-  const flowTitle = useEditorStore((state) => (flowId ? playbackFlowOf(state.document, flowId)?.title.trim() || null : null));
+  const flowTitle = useEditorStore((state) => (playbackFlowOf(state.document, flowId, sequenceNodeId)?.title.trim() || null));
 
   const name = presenter?.name || 'The owner';
   const color = presenter ? presenter.color % 8 : 0;

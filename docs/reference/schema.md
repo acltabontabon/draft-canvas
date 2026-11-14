@@ -10,7 +10,7 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | Field | Contents |
 | --- | --- |
 | `format` | Always `"draft-canvas"` |
-| `version` | Format version, currently **26** (`CURRENT_VERSION`) |
+| `version` | Format version, currently **27** (`CURRENT_VERSION`) |
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
 | `settings` | Canvas settings, including the background |
@@ -26,7 +26,8 @@ operands hold items in turn. Set `numberMessages` to `false` to hide the sequenc
 Ids inside it are local to the node. A participant has the identity
 fields of a shape (`type`, kind, `technology`, `accent`) and an optional `ref`, the id of the shape
 in the same view it stands for. A message has `from`, `to`, a `kind` (`sync`, `async`, `reply`,
-`create`, `destroy`), a `label`, optional `replyTo`, and `activate` / `deactivate` flags. Nothing in
+`create`, `destroy`), a `label`, optional `replyTo`, and `activate` / `deactivate` flags. A message can also contain an `attachments` array with the same note and code payloads
+as a canvas connector. Nothing in
 the payload is a coordinate: layout, work bars and the node's size are derived. A canvas connector
 can attach to a participant through `sourceAnchor.participantId` or `targetAnchor.participantId`.
 Its anchor offset is then measured along the participant's lifeline.
@@ -77,6 +78,7 @@ Rules for a new version:
 | v23 → v24 | identity | No-op (optional `replicas` on Services and `kindOrigin` on Services, Data Stores and Queues) |
 | v24 → v25 | identity | No-op (optional connector `cadence`) |
 | v25 → v26 | identity | No-op (the `sequence` node type and its payload) |
+| v26 → v27 | identity | Message attachments and larger sequence frames |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.

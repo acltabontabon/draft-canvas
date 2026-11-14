@@ -39,6 +39,7 @@ export const LIMITS = {
   maxCoordinate: 1_000_000,
   minNodeSize: 24,
   maxNodeSize: 20_000,
+  maxSequenceNodeSize: 200_000,
   minZoom: 0.1,
   maxZoom: 4,
   maxAttachmentsPerNode: 12,

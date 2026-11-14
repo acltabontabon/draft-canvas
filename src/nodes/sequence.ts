@@ -12,8 +12,10 @@
  * dashed line with an open one; a created participant's head sits on the message that creates it,
  * and a destroyed one's lifeline ends in a cross.
  */
+import { attachmentTabWidth, RAIL_SIZE } from '../document/markerRail';
+import { describeAttachmentTab } from '../edges/attachmentChips';
 import { minSizeFor } from '../document/factory';
-import { sequenceOf } from '../document/sequenceModel';
+import { messagesOf, sequenceOf } from '../document/sequenceModel';
 import type { DraftNode, DraftSequence, SeqParticipant } from '../document/types';
 import type { DisplayList, Shape, Stroke } from '../render/displayList';
 import { connectorHead, connectorStrokePath } from '../render/connectorStyle';
@@ -293,6 +295,12 @@ export function sequenceLifelines(layout: SequenceLayout, theme: Theme): Shape[]
   }));
 }
 
+export function sequenceAttachmentTab(message: MessageLayout, count: number): Rect {
+  const w = attachmentTabWidth(count);
+  const center = message.self ? message.x1 + message.reach + 12 : (message.x1 + message.x2) / 2;
+  return { x: center - w / 2, y: message.yEnd + 5, w, h: RAIL_SIZE };
+}
+
 export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: SequenceKit, options: DescribeSequenceOptions = {}): Shape[] {
   const sequence = sequenceOf(node);
   const layout = sequenceLayoutOf(node, ctx, kit);
@@ -369,6 +377,7 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
 
   const findings = only ? [] : checkSequence(sequence);
   const flagged = new Set(findings.map((finding) => finding.itemIds[0]));
+  const attachments = new Map(messagesOf(sequence).filter((message) => message.attachments?.length).map((message) => [message.id, message.attachments!.length]));
   const lit = new Set<string>();
   for (const message of layout.messages) {
     if (only && !only.has(message.id)) continue;
@@ -380,6 +389,11 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
     if (message.kind === 'destroy') {
       const x = layout.columns.find((column) => column.id === message.to)?.x ?? message.x2;
       shapes.push({ t: 'path', d: crossAt(x, message.yEnd), fill: 'none', stroke: { color, width: LINE_WIDTH + 0.4, linecap: 'round' } });
+    }
+    const count = attachments.get(message.id);
+    if (count) {
+      const tab = sequenceAttachmentTab(message, count);
+      shapes.push({ t: 'group', translate: { x: tab.x, y: tab.y }, children: describeAttachmentTab(count, ctx) });
     }
     const label = message.label;
     if (label) shapes.push(...(only ? [text(label, theme.edgeText)] : patched(label, theme.edgeText)));

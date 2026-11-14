@@ -4,7 +4,7 @@ import { reconnectProblem } from '../document/reconnect';
 import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // UI feedback for document limits and rejected reconnects stays outside document operations.
 import { PRESENTATION_AT_REST, useUiStore, type ArrangePreview, type TidyPreview } from './uiStore';
-import { edgeIndex, nodeIndex } from './selectors';
+import { edgeIndex, nodeIndex, selectSequenceMessage } from './selectors';
 import {
   createAttachment,
   createDocument,
@@ -31,7 +31,7 @@ import {
 } from '../depth/tree';
 import { getMeasurer } from '../render/text/measure';
 import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight } from '../nodes/describe';
-import { fitSequences } from '../nodes/sequenceFit';
+import { fitSequences, recoverCappedSequence } from '../nodes/sequenceFit';
 import { liveSequenceFocus, sequenceEditStillThere } from '../sequence/focus';
 import { syncLinks } from '../document/sequenceLinks';
 import { LIGHT } from '../render/theme/tokens';
@@ -205,6 +205,7 @@ export type EditorMode = 'edit' | 'present';
 export interface FlowPlaybackState {
   active: boolean;
   flowId: string | null;
+  sequenceNodeId?: string;
   step: number;
   /**
    * Which half of the current step's exchange is animating — irrelevant (and never read) unless
@@ -952,7 +953,9 @@ function closeStaleAttachmentDetail(doc: DraftDocument): void {
   const host =
     detail.hostKind === 'node'
       ? nodeIndex(doc.nodes).get(detail.hostId)
-      : edgeIndex(doc.edges).get(detail.hostId);
+      : detail.hostKind === 'edge'
+        ? edgeIndex(doc.edges).get(detail.hostId)
+        : selectSequenceMessage(doc, detail.hostId, detail.messageId);
   const attachments = host?.attachments ?? [];
   const alive =
     attachments.length > 0 &&
@@ -1190,7 +1193,7 @@ export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefin
   const flow =
     lensFlow(state) ??
     (state.flowPlayback.active && state.flowPlayback.flowId
-      ? playbackFlowOf(state.document, state.flowPlayback.flowId)
+      ? playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)
       : undefined);
   if (!flow) return undefined;
   const ids = flowMemberNodeIds(state.document, flow);
@@ -1471,6 +1474,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   liveViewport: null,
 
   setDocument(document, options) {
+    const context = describeContext(LIGHT);
+    document = mapRooms(document, (graph) => {
+      const nodes = graph.nodes.map((node) => recoverCappedSequence(node, context));
+      return nodes.some((node, index) => node !== graph.nodes[index]) ? { ...graph, nodes } : graph;
+    });
     documentLoads.all += 1;
     if (!options?.keepPath) documentLoads.openings += 1;
     interaction = null;

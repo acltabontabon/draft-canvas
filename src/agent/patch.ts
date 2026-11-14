@@ -39,6 +39,7 @@ import {
   removeAttachment,
   removeEdgeAttachment,
   removeElements,
+  removeParticipantEdges,
   updateAttachment,
   updateEdge,
   updateEdgeAttachment,
@@ -47,12 +48,13 @@ import {
 import { reinferIfEligible } from '../document/reinfer';
 import { freeOriginFor } from '../document/geometry';
 import { syncLinks } from '../document/sequenceLinks';
-import { sequenceOf } from '../document/sequenceModel';
+import { messagesOf, sequenceOf } from '../document/sequenceModel';
+import { editMessageAttachments } from '../document/sequenceOps';
 import { fitSequenceNode, fitSequences } from '../nodes/sequenceFit';
 import { aliasesOf } from '../sequence/native/shared';
-import { linked, linksOf, readSequenceSource, sequenceNode, unsupportedAdvice } from './sequences';
+import { linked, readSequenceSource, sequenceNode, unsupportedAdvice } from './sequences';
 import { DEFAULTS, LIMITS } from '../document/limits';
-import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode } from '../document/types';
+import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode, DraftSequence } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
 import { embed, totals, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
 import { effectiveLevel, inheritedLevel } from '../depth/level';
@@ -204,6 +206,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   let base = file;
   let view = viewOf(file, path);
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
+  const originalView = view;
   const scope = readScope(r, rawScope, '/scope', view);
   problems.throwIfAny();
   const touched = new Set<string>();
@@ -519,8 +522,25 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   const started = viewOf(file, path);
   if (started && started !== view) {
     const synced = fitSequences(started, syncLinks(started, view).doc, () => ctx);
-    for (const node of synced.nodes) if (node.type === 'sequence' && !view.nodes.includes(node)) touched.add(node.id);
+    const beforeSync = new Map(view.nodes.map((node) => [node.id, node]));
+    const syncedIds = synced.nodes.filter((node) => beforeSync.get(node.id) !== node).map((node) => node.id);
+    refuseOutOfScope(r, '/scope', outOfScope(scope, syncedIds.filter((id) => originalView.nodes.some((node) => node.id === id)), 'nodes'));
+    for (const id of syncedIds) touched.add(id);
     view = synced;
+  }
+  if (scope) {
+    // A sequence replacement may delete incident connectors, and link sync or unlink can
+    // change identities on either side. Arrange still owns its existing incident-route policy.
+    const nodes = new Map(view.nodes.map((node) => [node.id, node]));
+    const edges = new Set(view.edges.map((edge) => edge.id));
+    refuseOutOfScope(r, '/scope', [
+      ...outOfScope(scope, originalView.nodes.filter((node) => {
+        const next = nodes.get(node.id);
+        return node.type === 'sequence' && next && next.sequence !== node.sequence;
+      }).map((node) => node.id), 'nodes'),
+      ...outOfScope(scope, originalView.edges.filter((edge) => !edges.has(edge.id)).map((edge) => edge.id), 'edges'),
+    ]);
+    problems.throwIfAny();
   }
 
   const nextFile = path.length ? embed(base, path, view) : view;
@@ -684,6 +704,38 @@ function labelStylePatch(r: Reader, value: unknown, at: string): Partial<DraftNo
   return patch;
 }
 
+/** Mermaid has no cards. Keep them on identifiable messages when a user or agent edits its source. */
+function keepMessageAttachments(before: DraftSequence, after: DraftSequence, id: string, advisories: string[]): DraftSequence {
+  const old = messagesOf(before);
+  if (!old.some((message) => message.attachments?.length)) return after;
+  const next = messagesOf(after);
+  const taken = new Set<string>();
+  const matches = new Map<string, string>();
+  const sameRoute = (a: (typeof old)[number], b: (typeof next)[number]) => a.from === b.from && a.to === b.to && a.kind === b.kind;
+  for (const message of old) {
+    const found = next.find((candidate) => !taken.has(candidate.id) && sameRoute(message, candidate) && message.label === candidate.label);
+    if (!found) continue;
+    matches.set(message.id, found.id);
+    taken.add(found.id);
+  }
+  for (const message of old) {
+    const attachments = message.attachments;
+    if (!attachments?.length) continue;
+    let target = matches.get(message.id);
+    if (!target) {
+      const alternatives = next.filter((candidate) => !taken.has(candidate.id) && sameRoute(message, candidate));
+      const remaining = old.filter((candidate) => !matches.has(candidate.id) && sameRoute(message, candidate));
+      if (alternatives.length === 1 && remaining.length === 1) {
+        target = alternatives[0]!.id;
+        taken.add(target);
+      }
+    }
+    if (target) after = editMessageAttachments(after, target, () => attachments);
+    else advisories.push(`Sequence "${id}": attachments on "${message.label || 'Message'}" could not be matched to a message in the new source.`);
+  }
+  return after;
+}
+
 /**
  * A sequence changed in place, keeping its id and where it stands. `mermaid` replaces what it holds;
  * a participant that stood for a shape still does when it is written under the id the read gave it,
@@ -702,10 +754,11 @@ function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Js
   }
   let sequence = current;
   if (set.mermaid !== undefined) {
-    const read = readSequenceSource(r, set, at, elementIds, linksOf(current));
+    const read = readSequenceSource(r, set, at, elementIds, current);
     if (!read) return undefined;
     advisories.push(...unsupportedAdvice(node.id, read.unsupported));
     sequence = linked(read.sequence, read.links, shapes, node.id, advisories);
+    sequence = keepMessageAttachments(current, sequence, node.id, advisories);
     if (current.numberMessages === false) sequence = { ...sequence, numberMessages: false };
     if (set.title === undefined && read.title) title = read.title;
   } else if (set.links !== undefined) {
@@ -729,7 +782,9 @@ function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Js
   }
   if (!r.problems.empty) return undefined;
   const changed = fitSequenceNode(node, { ...node, text: title, sequence }, ctx);
-  return { ...view, nodes: view.nodes.map((n) => (n.id === node.id ? changed : n)) };
+  const kept = new Set(sequence.participants.map((participant) => participant.id));
+  const removed = new Set(current.participants.filter((participant) => !kept.has(participant.id)).map((participant) => participant.id));
+  return removeParticipantEdges({ ...view, nodes: view.nodes.map((n) => (n.id === node.id ? changed : n)) }, node.id, removed);
 }
 
 /** Which `SET_FIELDS` a node of each type takes: a card's own fields, or an element's. */
@@ -755,6 +810,10 @@ function updateOne(
     if (!r.problems.empty) return undefined;
     const next = updateSequence(r, view, node, set, at, ctx, advisories);
     if (!next) return undefined;
+    if (scope && next.flows !== view.flows && next.flows.some((flow, index) => flow !== view.flows[index])) {
+      r.problems.add('OUT_OF_SCOPE', at, 'replacing these participants would change a flow, which a captured selection never covers');
+      return undefined;
+    }
     touched.add(id);
     return { view: next };
   }

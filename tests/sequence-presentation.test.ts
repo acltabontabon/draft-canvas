@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
 import { flowIsPlayable, nodeTierInPlayback } from '../src/document/flow';
 import { addNodes } from '../src/document/operations';
-import { isSequenceFlowOf, playbackFlowOf, sequenceFlow, sequenceFlowId, sequenceOfFlowId } from '../src/document/sequenceFlow';
+import { playbackFlowOf, sequenceFlow, sequenceFlowId } from '../src/document/sequenceFlow';
 import { addOperand, createMessage, createReply, insertItem, moveItem, wrapItems } from '../src/document/sequenceOps';
 import type { DraftDocument, DraftNode, DraftSequence, SeqMessage, SeqParticipant } from '../src/document/types';
 import { describeContext, describeSequenceFrame, describeSequenceMessages, naturalSequenceSizeFor } from '../src/nodes/describe';
@@ -57,22 +57,22 @@ describe('a sequence told as a flow', () => {
 
   it('is found by its id and is never one of the document’s own flows', () => {
     const { doc, node } = docWith(checkout());
-    expect(playbackFlowOf(doc, sequenceFlowId('n_seq'))).toBe(sequenceFlow(node));
+    expect(playbackFlowOf(doc, sequenceFlowId('n_seq'), 'n_seq')).toBe(sequenceFlow(node));
     expect(doc.flows).toEqual([]);
-    expect(playbackFlowOf(doc, sequenceFlowId('n_other'))).toBeUndefined();
+    expect(playbackFlowOf(doc, sequenceFlowId('n_other'), 'n_other')).toBeUndefined();
     expect(playbackFlowOf(doc, 'seq:nobody')).toBeUndefined();
     expect(playbackFlowOf(doc, null)).toBeUndefined();
     expect(flowIsPlayable(doc, sequenceFlow(node))).toBe(true);
     expect(flowIsPlayable(doc, sequenceFlow({ ...node, sequence: { participants: [], items: [] } }))).toBe(false);
   });
 
-  it('knows whose telling a flow id is without building a string', () => {
-    expect(sequenceOfFlowId('seq:n_seq')).toBe('n_seq');
-    expect(sequenceOfFlowId('f_abc')).toBeNull();
-    expect(isSequenceFlowOf('seq:n_seq', 'n_seq')).toBe(true);
-    expect(isSequenceFlowOf('seq:n_seq2', 'n_seq')).toBe(false);
-    expect(isSequenceFlowOf('f_n_seq', 'n_seq')).toBe(false);
-    expect(isSequenceFlowOf(null, 'n_seq')).toBe(false);
+  it('plays a saved flow whose id collides with the sequence, according to the requested target', () => {
+    const { doc, node } = docWith(checkout());
+    const saved = { id: 'seq:n_seq', title: 'Saved walkthrough', steps: [{ id: 'saved-step', extraNodeIds: ['n_other'] }] };
+    const file = { ...doc, flows: [saved] };
+    expect(playbackFlowOf(file, saved.id)).toBe(saved);
+    expect(playbackFlowOf(file, saved.id, node.id)).toBe(sequenceFlow(node));
+    expect(stepContextOf({ document: file, flowPlayback: { active: true, flowId: saved.id, step: 1 } })?.transitionKey).toBe('seq:n_seq:1:request');
   });
 });
 
@@ -103,7 +103,7 @@ describe('stepping through it', () => {
 
   it('lights the sequence and dims everything else on the canvas', () => {
     const flow = sequenceFlow(node);
-    const moment = { active: true, flowId: flow.id, step: 3 };
+    const moment = { active: true, flowId: flow.id, sequenceNodeId: node.id, step: 3 };
     expect(nodeTierInPlayback(flow, doc.edges, 'n_seq', moment)).toBe('active');
     expect(nodeTierInPlayback(flow, doc.edges, 'n_other', moment)).toBe('hidden');
     expect(stepContextOf({ document: doc, flowPlayback: moment })?.transitionKey).toBe('seq:n_seq:3:request');

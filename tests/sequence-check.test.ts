@@ -78,10 +78,11 @@ describe('activations', () => {
   it('ending work that is not running is found, with a fix that keeps the message', () => {
     const stray: SeqMessage = { ...createMessage({ id: 'x', from: 'b', to: 'a', kind: 'reply' }) };
     const subject = sequence([stray]);
-    const [finding] = checkSequence(subject);
-    expect(finding).toMatchObject({ kind: 'nothing-to-end', itemIds: ['x'] });
-    const fixed = finding!.fix!.apply(subject);
-    expect(checkSequence(fixed)).toEqual([]);
+    const findings = checkSequence(subject);
+    expect(findings).toEqual(expect.arrayContaining([expect.objectContaining({ kind: 'reply-without-call', itemIds: ['x'] })]));
+    const ending = findings.find((finding) => finding.kind === 'nothing-to-end');
+    const fixed = ending!.fix!.apply(subject);
+    expect(checkSequence(fixed).map((finding) => finding.kind)).toEqual(['reply-without-call']);
     expect(fixed.items).toHaveLength(1);
   });
 });

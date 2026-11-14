@@ -768,3 +768,21 @@ describe('collaboration on a thousand-shape document', () => {
     expect(timings[Math.floor(timings.length / 2)]!).toBeLessThan(4);
   });
 });
+
+it('reuses plans after a sequence display edit and replans when a participant anchor moves', () => {
+  const doc = largeDocument();
+  const a = { id: 'a', name: 'API', type: 'service' as const };
+  const b = { id: 'b', name: 'Worker', type: 'service' as const };
+  const node = { ...createNode({ type: 'sequence', x: 5000, y: 4000 }), width: 600, height: 280,
+    sequence: { participants: [a, b], items: [] } as DraftSequence };
+  const original = [...doc.nodes, node];
+  const toggled = [...doc.nodes, { ...node, sequence: { ...node.sequence, numberMessages: false } }];
+  const first = crossingPlan(original, doc.edges);
+  expect(crossingPlan(toggled, doc.edges)).toBe(first);
+  const anchor = createEdge({ source: node.id, target: doc.nodes[0]!.id, sourceAnchor: { side: 'left', offset: 0.5, participantId: a.id } });
+  const anchored = [...doc.edges, anchor];
+  const plan = crossingPlan(original, anchored);
+  expect(crossingPlan(toggled, anchored)).toBe(plan);
+  const reordered = [...doc.nodes, { ...node, sequence: { ...node.sequence, participants: [b, a] } }];
+  expect(crossingPlan(reordered, anchored)).not.toBe(plan);
+});

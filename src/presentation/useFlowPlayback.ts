@@ -1,4 +1,4 @@
-import { messageOfStep, playbackFlowOf, sequenceOfFlowId } from '../document/sequenceFlow';
+import { messageOfStep, playbackFlowOf } from '../document/sequenceFlow';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useReactFlow, useStore, useStoreApi } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
@@ -117,7 +117,7 @@ export interface FlowPlaybackController {
   atEnd: boolean;
   canStart: boolean;
   start: () => void;
-  pickFlow: (flowId: string) => void;
+  pickFlow: (flowId: string, sequenceNodeId?: string) => void;
   stop: () => void;
   /** Forward through the story: opening → step 1 … last step → closing → the next flow's opening. */
   next: () => void;
@@ -194,6 +194,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
     useShallow((state) => ({
       active: state.flowPlayback.active,
       flowId: state.flowPlayback.flowId,
+      sequenceNodeId: state.flowPlayback.sequenceNodeId,
       step: state.flowPlayback.step,
       stage: state.flowPlayback.stage,
     })),
@@ -203,7 +204,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
   // whole-document subscription re-rendered the entire editor on every commit. Edges and nodes are
   // only watched while a flow is actually being presented; everything else reads `getState()`.
   const flow = useEditorStore((state) =>
-    flowPlayback.flowId ? (playbackFlowOf(state.document, flowPlayback.flowId) ?? null) : null,
+    flowPlayback.flowId ? (playbackFlowOf(state.document, flowPlayback.flowId, flowPlayback.sequenceNodeId) ?? null) : null,
   );
   const edges = useEditorStore((state) => (flow ? state.document.edges : NO_EDGES));
   const nodes = useEditorStore((state) => (flow ? state.document.nodes : NO_NODES));
@@ -349,23 +350,23 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
   );
 
   const pickFlow = useCallback(
-    (flowId: string) => {
+    (flowId: string, sequenceNodeId?: string) => {
       const { document } = useEditorStore.getState();
-      const chosen = playbackFlowOf(document, flowId);
+      const chosen = playbackFlowOf(document, flowId, sequenceNodeId);
       if (!chosen || !flowIsPlayable(document, chosen)) return;
       // Switching to or from a named variant (e.g. a failure path) lands on the step sharing the
       // connector being left, rather than always resetting to the first step — matched by the two
       // flows actually sharing a connector, never by index: nothing says step 3 of one flow is the
       // same moment as step 3 of another. Any other switch (including between two unrelated flows)
       // opens the destination: its title over the whole path, with the story a keypress away.
-      const isVariantSwitch = flow !== null && (chosen.variantOf === flow.id || flow.variantOf === chosen.id);
+      const isVariantSwitch = sequenceNodeId === undefined && flowPlayback.sequenceNodeId === undefined && flow !== null && (chosen.variantOf === flow.id || flow.variantOf === chosen.id);
       const leavingEdgeId = current?.edge?.id;
       const matchedIndex = isVariantSwitch && leavingEdgeId ? chosen.steps.findIndex((entry) => entry.edgeId === leavingEdgeId) : -1;
       // Canvas step badges follow whichever flow is being presented — a flow the file holds, that is:
       // a sequence telling itself is not one of them, and the lens has nothing to show for it.
-      if (sequenceOfFlowId(flowId) === null) useEditorStore.getState().setSelectedFlowId(flowId);
+      if (sequenceNodeId === undefined) useEditorStore.getState().setSelectedFlowId(flowId);
       if (matchedIndex < 0) {
-        setFlowPlayback({ active: true, flowId, step: 0, stage: 'opening' });
+        setFlowPlayback({ active: true, flowId, sequenceNodeId, step: 0, stage: 'opening' });
         frameFlow(chosen, 'guided');
         return;
       }
@@ -385,14 +386,14 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
         }
       }
       if (!landed) {
-        setFlowPlayback({ active: true, flowId, step: 0, stage: 'opening' });
+        setFlowPlayback({ active: true, flowId, sequenceNodeId, step: 0, stage: 'opening' });
         frameFlow(chosen, 'guided');
         return;
       }
-      setFlowPlayback({ active: true, flowId, step: landed.step, stage: undefined });
+      setFlowPlayback({ active: true, flowId, sequenceNodeId, step: landed.step, stage: undefined });
       frameStepFor(landed);
     },
-    [current, flow, frameFlow, frameStepFor, setFlowPlayback],
+    [current, flow, flowPlayback.sequenceNodeId, frameFlow, frameStepFor, setFlowPlayback],
   );
 
   const start = useCallback(() => {
@@ -405,16 +406,16 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       pickFlow(preferred.id);
       return;
     }
-    setFlowPlayback({ active: true, flowId: null, step: 0, stage: undefined });
+    setFlowPlayback({ active: true, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined });
   }, [playableFlows, pickFlow, setFlowPlayback]);
 
   const stop = useCallback(() => {
     intended.current = null;
     useUiStore.getState().resetPresentation();
-    setFlowPlayback({ active: false, flowId: null, step: 0, stage: undefined });
+    setFlowPlayback({ active: false, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined });
   }, [setFlowPlayback]);
 
-  const flowIndex = flow ? playableFlows.findIndex((candidate) => candidate.id === flow.id) : -1;
+  const flowIndex = flow && flowPlayback.sequenceNodeId === undefined ? playableFlows.findIndex((candidate) => candidate.id === flow.id) : -1;
   const upcoming = flowIndex >= 0 ? playableFlows[flowIndex + 1] : undefined;
 
   // Moving between flows is `pickFlow` and nothing else: the destination opens with its own
@@ -490,8 +491,8 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       // own first line steps over, so there is no second pass.)
       setFlowPlayback(
         playableFlows.length > 0
-          ? { active: true, flowId: null, step: 0, stage: undefined }
-          : { active: false, flowId: null, step: 0, stage: undefined },
+          ? { active: true, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined }
+          : { active: false, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined },
       );
       return;
     }
@@ -511,7 +512,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
     const timer = window.setTimeout(() => setFlowPlayback({ phase: 'response' }), RESPONSE_PHASE_DELAY_MS);
     return () => window.clearTimeout(timer);
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- current intentionally excluded, see comment above.
-  }, [flowPlayback.step, flowPlayback.flowId, flowPlayback.active, flowPlayback.stage, setFlowPlayback]);
+  }, [flowPlayback.step, flowPlayback.flowId, flowPlayback.sequenceNodeId, flowPlayback.active, flowPlayback.stage, setFlowPlayback]);
 
   // The view changed size under a guided camera — the editor chrome leaving as presenting starts,
   // a window resized — so the same moment is framed again for the new size. A camera the presenter

@@ -1,3 +1,7 @@
+import { sequenceLayoutFor } from '../src/nodes/describe';
+import { deserializeDocument, serializeDocument } from '../src/export/project';
+import { renderDocumentSvg } from '../src/render/svg/document';
+
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
@@ -132,4 +136,20 @@ describe('in the editor', () => {
     expect([copies[1]!.width, copies[1]!.height]).toEqual([800, 600]);
     expect(copies[1]!.sequence).toEqual(copies[0]!.sequence);
   });
+});
+
+it('fits all 600 rows within the editable frame and the SVG viewport, including previously capped files', () => {
+  const sequence = { ...twoWay, items: Array.from({ length: 600 }, (_, index) =>
+    createMessage({ id: `m-${index}`, from: 'client', to: 'api', label: `Request ${index + 1}` }),
+  ) };
+  const capped = sequenceNode(sequence, { width: 350, height: 20_000 });
+  const node = fitSequenceNode(undefined, capped, ctx());
+  const row = sequenceLayoutFor(node, ctx()).messages.at(-1)!;
+  expect(row.yEnd).toBeGreaterThan(20_000);
+  expect(node.height).toBeGreaterThan(row.yEnd);
+  const doc = addNodes(createDocument(), [node]);
+  const saved = deserializeDocument(serializeDocument(doc));
+  expect(saved.ok && saved.document.nodes[0]?.height).toBe(node.height);
+  expect(renderDocumentSvg(doc).height).toBeGreaterThan(row.yEnd);
+  expect(renderDocumentSvg({ ...doc, nodes: [capped] }).height).toBeGreaterThan(row.yEnd);
 });

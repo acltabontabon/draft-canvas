@@ -51,9 +51,9 @@ export function isCanvasEmpty(doc: Pick<DraftDocument, 'nodes'>): boolean {
   return doc.nodes.length === 0;
 }
 
-const clampSize = (n: number) =>
+const clampSize = (n: number, maxSize: number = LIMITS.maxNodeSize) =>
   Number.isFinite(n)
-    ? clamp(Math.round(n), LIMITS.minNodeSize, LIMITS.maxNodeSize)
+    ? clamp(Math.round(n), LIMITS.minNodeSize, maxSize)
     : LIMITS.minNodeSize;
 
 /** `attachment.width`/`height` should always be set by `createAttachment` — this is a safety
@@ -124,8 +124,9 @@ export function updateNode(
     const next: DraftNode = applyPatch<DraftNode>(node, patch);
     if (patch.x !== undefined) next.x = clampCoord(patch.x);
     if (patch.y !== undefined) next.y = clampCoord(patch.y);
-    if (patch.width !== undefined) next.width = clampSize(patch.width);
-    if (patch.height !== undefined) next.height = clampSize(patch.height);
+    const maxSize = next.type === 'sequence' ? LIMITS.maxSequenceNodeSize : LIMITS.maxNodeSize;
+    if (patch.width !== undefined) next.width = clampSize(patch.width, maxSize);
+    if (patch.height !== undefined) next.height = clampSize(patch.height, maxSize);
     if (sameFields(node, next)) return node;
     changed = true;
     return next;
@@ -349,6 +350,15 @@ function carryWaypoints(doc: DraftDocument, moved: ReadonlyMap<string, { dx: num
 
 function translatePoints(points: readonly DraftPoint[], dx: number, dy: number): DraftPoint[] {
   return points.map((point) => ({ x: clampCoord(point.x + dx), y: clampCoord(point.y + dy) }));
+}
+
+export function removeParticipantEdges(doc: DraftDocument, nodeId: string, removed: ReadonlySet<string>): DraftDocument {
+  if (removed.size === 0) return doc;
+  const edges = doc.edges.filter((edge) =>
+    (edge.source === nodeId && edge.sourceAnchor?.participantId && removed.has(edge.sourceAnchor.participantId)) ||
+    (edge.target === nodeId && edge.targetAnchor?.participantId && removed.has(edge.targetAnchor.participantId)),
+  );
+  return removeElements(doc, [], edges.map((edge) => edge.id));
 }
 
 /**

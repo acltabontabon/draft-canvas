@@ -1,8 +1,8 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react';
 import { useReactFlow } from '@xyflow/react';
-import { findItem, itemsAt, sequenceOf, type SeqSlot } from '../../document/sequenceModel';
+import { findItem, messagesOf, sequenceOf, type SeqSlot } from '../../document/sequenceModel';
 import type { DraftNode, SeqItem } from '../../document/types';
-import { sequenceArrowShapes } from '../../nodes/sequence';
+import { sequenceArrowShapes, sequenceAttachmentTab } from '../../nodes/sequence';
 import { describeContext, sequenceLayoutFor } from '../../nodes/describe';
 import { emitDisplayList } from '../../render/svg/emit';
 import { LIGHT } from '../../render/theme/tokens';
@@ -64,8 +64,17 @@ type Gesture =
   | { kind: 'participant'; id: string; index: number; x: number };
 
 const DRAG_THRESHOLD_PX = 4;
-/** Past the last head by this much, a message is being drawn to someone new. */
-const NEW_PARTICIPANT_REACH = 44;
+const DROP_REACH = 20;
+const NEW_PARTICIPANT_REACH = 180;
+
+function participantAt(layout: SequenceLayout, { x, y }: Point) {
+  const head = layout.columns.find((column) =>
+    x >= column.head.x && x <= column.head.x + column.head.w && y >= column.head.y && y <= column.head.y + column.head.h,
+  );
+  if (head) return head;
+  const column = columnNear(layout, x, DROP_REACH);
+  return column && y >= column.lifeTop - DROP_REACH && y <= column.lifeBottom + DROP_REACH ? column : null;
+}
 
 const box = (rect: Rect, grow = 0): CSSProperties => ({ left: rect.x - grow, top: rect.y - grow, width: rect.w + grow * 2, height: rect.h + grow * 2 });
 
@@ -166,8 +175,8 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
     }
     const point = local(event.clientX, event.clientY);
     if (start.what === 'lifeline') {
-      const hoveredNode = document.elementFromPoint(event.clientX, event.clientY)
-        ?.closest<HTMLElement>('.react-flow__node')?.dataset.id;
+      const hovered = document.elementFromPoint(event.clientX, event.clientY);
+      const hoveredNode = hovered?.closest<HTMLElement>('.react-flow__node')?.dataset.id;
       const otherNode = hoveredNode && hoveredNode !== nodeId ? nodeIndex(useEditorStore.getState().document.nodes).get(hoveredNode) : undefined;
       let other: ParticipantDrop | null = null;
       if (otherNode?.type === 'sequence') {
@@ -175,32 +184,28 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
         const x = flow.x - otherNode.x;
         const y = flow.y - otherNode.y;
         const targetLayout = sequenceLayoutFor(otherNode, describeContext(LIGHT));
-        const hit = hitSequence(targetLayout, x, y);
-        const column = hit.kind === 'participant'
-          ? targetLayout.columns.find((entry) => entry.id === hit.id)
-          : columnNear(targetLayout, x, 20);
-        if (column && (hit.kind === 'participant' || (y >= column.lifeTop && y <= column.lifeBottom))) {
+        const column = participantAt(targetLayout, { x, y });
+        if (column) {
           other = { nodeId: otherNode.id, participantId: column.id, offset: offsetOnLifeline(column, y) };
         }
       }
       useUiStore.getState().setSequenceLinkTarget(other);
       const last = layout.columns[layout.columns.length - 1];
-      const beyond = !!last && point.x > last.head.x + last.head.w + NEW_PARTICIPANT_REACH;
+      const column = hoveredNode && hoveredNode !== nodeId ? null : participantAt(layout, point);
+      const beyond = !column && (hoveredNode === nodeId || (!hoveredNode && hovered?.classList.contains('react-flow__pane'))) && !!last && point.x > last.head.x + last.head.w
+        && point.x <= layout.width + NEW_PARTICIPANT_REACH
+        && point.y >= layout.bodyTop - DROP_REACH && point.y <= layout.bodyBottom + DROP_REACH;
       setGesture({
         kind: 'draw',
         from: start.id,
-        to: beyond ? null : (columnNear(layout, point.x)?.id ?? start.id),
-        slot: otherNode?.type === 'sequence' ? null : slotAt(layout, point.x, point.y),
+        to: column?.id ?? null,
+        slot: column || beyond ? slotAt(layout, point.x, point.y) : null,
         originY: start.origin.y,
         pointer: point,
         other,
       });
     } else if (start.what === 'endpoint') {
-      const head = layout.columns.find(({ head }) =>
-        point.x >= head.x && point.x <= head.x + head.w && point.y >= head.y && point.y <= head.y + head.h,
-      );
-      const column = head ?? columnNear(layout, point.x, 20);
-      const participant = column && point.y >= column.head.y && point.y <= layout.bodyBottom ? column.id : null;
+      const participant = participantAt(layout, point)?.id ?? null;
       setGesture({ kind: 'endpoint', id: start.id, end: start.end, participant, pointer: point });
     } else if (start.what === 'item') {
       let slot = slotAt(layout, point.x, point.y);
@@ -222,6 +227,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   };
 
   const release = (event: PointerEvent<HTMLElement>) => {
+    if (gestureRef.current) track(event);
     if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
     const done = gestureRef.current;
     if (!done) {
@@ -324,7 +330,8 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   const ghostsOn = useUiStore((state) => state.continuationsEnabled);
   const offers = !readOnly && ghostsOn && focus && !gesture && !editing ? nextFor(sequence, focus) : [];
   const offer = offers.length > 0 ? offers[ghostIndex % offers.length]! : null;
-  const offerSlot = offer && (itemsAt(sequence, offer.slot.operandId)?.length ?? -1) === offer.slot.index ? slotFor(layout, offer.slot.operandId, offer.slot.index) : null;
+  const offerSlot = offer ? slotFor(layout, offer.slot.operandId, offer.slot.index) : null;
+  const attachments = new Map(messagesOf(sequence).filter((message) => message.attachments?.length).map((message) => [message.id, message.attachments!.length]));
   const heads = layout.columns.filter((column) => !column.created);
   const headRowMiddle = heads.length > 0 ? Math.max(...heads.map((column) => column.head.y + column.head.h)) - 22 : layout.bodyTop;
   const quiet = gesture !== null || editing !== null;
@@ -598,6 +605,11 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           height={node.height}
         />
       )}
+      {gesture?.kind === 'draw' && gesture.slot && !gesture.to && (
+        <div className="dc-seq-add-target" style={{ left: gesture.pointer.x, top: gesture.slot.y }}>
+          Add participant
+        </div>
+      )}
       {reordering && gesture?.kind === 'item' && (
         <SvgSurface className="dc-seq-selected-arrows" width={node.width} height={node.height} style={{ transform: `translate(${gesture.offset.x}px, ${gesture.offset.y}px)` }}>
           {emitDisplayList({
@@ -621,6 +633,22 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
         </div>
       )}
 
+      {!editing && layout.messages.map((message) => {
+        const count = attachments.get(message.id);
+        if (!count) return null;
+        return <button
+          key={message.id}
+          type="button"
+          className="dc-seq-attachment-hit nodrag nopan"
+          style={box(sequenceAttachmentTab(message, count))}
+          aria-label={`Attachments for message ${message.number}`}
+          tabIndex={focus?.kind === 'item' && focus.ids.includes(message.id) ? 0 : -1}
+          onClick={(event) => {
+            event.stopPropagation();
+            sequenceActions.showAttachments(nodeId, message.id);
+          }}
+        />;
+      })}
       {editing && <SequenceEditors node={node} layout={layout} target={editing} />}
     </div>
   );

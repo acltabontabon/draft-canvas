@@ -442,7 +442,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   // With a `flowId`, that flow; without one, whatever `start()` decides (the active flow, the one
   // playable flow, else the picker).
   const onPresent = useCallback(
-    (requested?: string) => {
+    (requested?: string, sequenceNodeId?: string) => {
       // Every consumer types this as `() => void`, so nothing stops a `onClick={onPresent}` from
       // handing it a click event as the flow id — truthy, and the presentation would then start on
       // a flow that doesn't exist and silently do nothing. Cheap to make impossible.
@@ -450,7 +450,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // The camera has to be read before the fit below moves it. React Flow owns it, not the
       // store, which is why it is handed over rather than picked up there.
       setMode('present', getViewport());
-      if (flowId) playback.pickFlow(flowId);
+      if (flowId) playback.pickFlow(flowId, sequenceNodeId);
       else if (playback.canStart) playback.start();
       // A flow that started has framed its own opening (`useFlowPlayback`'s directed camera). Only
       // with none chosen — the picker, or nothing to present — is the whole diagram fitted, with
@@ -707,7 +707,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               onDismiss={dismissContextMenu}
             />
           )}
-          {!presenting && !tracing && <AttachmentPopover />}
+          {!tracing && <AttachmentPopover />}
           {/* In every mode: while presenting it opens read-only, so a presenter can show what is still
               open here without any editing surface appearing over the story. */}
           <OpenPointPopover />
@@ -1024,6 +1024,12 @@ export function useKeyboard({
       if (ui.commandPaletteOpen || ui.contextMenu || ui.interactionActive || modalIsOpen()) return;
       const state = useEditorStore.getState();
       if (event.type === 'cut' && state.mode === 'present') return;
+      if (ui.sequenceFocus && state.selection.nodes.includes(ui.sequenceFocus.nodeId)) {
+        keyedClipboardText = null;
+        event.preventDefault();
+        ui.notify('Select the sequence frame to copy or cut it.');
+        return;
+      }
       // The ⌘C/⌘X keydown already copied (or cut) and left its text here: write that, don't repeat
       // the gesture — a second cut would find nothing left to cut.
       const keyed = keyedClipboardText;
@@ -1134,6 +1140,12 @@ export function useKeyboard({
             return;
           case 'c':
           case 'x': {
+            const focus = useUiStore.getState().sequenceFocus;
+            if (focus && state.selection.nodes.includes(focus.nodeId)) {
+              event.preventDefault();
+              useUiStore.getState().notify('Select the sequence frame to copy or cut it.');
+              return;
+            }
             // Not `preventDefault`: the browser's own copy event still follows, and `onCopyOrCut`
             // writes this text through `clipboardData` — the one path that reaches the system
             // clipboard where `navigator.clipboard` is refused (a self-hosted copy over plain HTTP,

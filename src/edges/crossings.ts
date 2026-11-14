@@ -14,7 +14,7 @@
  */
 import type { DraftEdge, DraftNode } from '../document/types';
 import { dashForEdge } from './kindStyle';
-import { sameNodeGeometry, type PlanScope } from './sameGeometry';
+import { sameRouteGeometry, type PlanScope } from './sameGeometry';
 import { BRIDGE_RADIUS } from './bridge';
 import { connectorRouteInputs } from './connectorRoutes';
 import { edgeRoutes } from './edgeRoutes';
@@ -709,7 +709,7 @@ export function crossingPlan(
   // by identity, a new plan, for an answer that cannot have changed. Crossings are where connectors
   // are, and where they are depends only on the shapes' places, so the plan already built stands.
   const previous = lastBuilt;
-  const reusable = previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes) ? previous.plan : null;
+  const reusable = previous && previous.edges === edges && sameRouteGeometry(previous.nodes, nodes, edges) ? previous.plan : null;
   if (scope === 'transient') {
     if (reusable) return reusable;
     const byTransient = transientCache.get(nodes);

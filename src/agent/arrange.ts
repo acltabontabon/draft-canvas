@@ -378,7 +378,7 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   const crossing = view.edges.filter((e) => !innerById.has(e.id) && (elements.has(e.source) || elements.has(e.target))).map((e) => restyled(e, request.connectors));
   const rects = new Map(next.nodes.map((n) => [n.id, anchorRectOf(n)]));
   const anchors = assignAnchors(crossing, rects, layout.direction, undefined, undefined, { titles: titlesOf(next.nodes, ctx), ...(layout.fans ? { fans: layout.fans } : {}) });
-  for (const e of crossing) Object.assign(e, anchors.get(e.id) ?? {});
+  for (const e of crossing) applyLayoutAnchors(e, anchors.get(e.id));
   const changed = new Map([...inner, ...crossing].map((e) => [e.id, e]));
   next = { ...next, edges: next.edges.map((e) => changed.get(e.id) ?? e) };
   const touchedEdges = next.edges.filter((e) => changed.has(e.id));
@@ -438,7 +438,7 @@ function routeOnly(view: DraftDocument, inScope: ReadonlySet<string>, request: A
   const rects = new Map(view.nodes.map((n) => [n.id, anchorRectOf(n)]));
   const pinned = new Map<string, Anchors>(neighbours.map((e) => [e.id, { sourceAnchor: e.sourceAnchor as NonNullable<DraftEdge['sourceAnchor']>, targetAnchor: e.targetAnchor as NonNullable<DraftEdge['targetAnchor']> }]));
   const anchors = assignAnchors([...touched, ...neighbours], rects, request.layout.direction, pinned, undefined, { titles: titlesOf(view.nodes, ctx) });
-  for (const e of touched) Object.assign(e, anchors.get(e.id) ?? {});
+  for (const e of touched) applyLayoutAnchors(e, anchors.get(e.id));
   const changed = new Map(touched.map((e) => [e.id, e]));
   const next: DraftDocument = { ...view, edges: view.edges.map((e) => changed.get(e.id) ?? e) };
   repairAnchors(touched, next.nodes, captionSizer(next.nodes, ctx), next.edges);
@@ -448,6 +448,12 @@ function routeOnly(view: DraftDocument, inScope: ReadonlySet<string>, request: A
 /** A shape big enough for its text, and a long name given a wider box (`arrangedSize`). */
 function grown(node: DraftNode, ctx: DescribeContext): DraftNode {
   return { ...node, ...arrangedSize(node, ctx) };
+}
+
+function applyLayoutAnchors(edge: DraftEdge, anchors: Anchors | undefined): void {
+  if (!anchors) return;
+  if (!edge.sourceAnchor?.participantId) edge.sourceAnchor = anchors.sourceAnchor;
+  if (!edge.targetAnchor?.participantId) edge.targetAnchor = anchors.targetAnchor;
 }
 
 function restyled(edge: DraftEdge, connectors: ArrangeRequest['connectors']): DraftEdge {

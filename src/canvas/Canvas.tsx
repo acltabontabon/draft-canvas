@@ -578,7 +578,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // colour — handed to every arrival ring, boundary outline and caption through a single variable.
   const explainAccent = useEditorStore((state) => {
     if (!state.flowPlayback.active || !state.flowPlayback.flowId) return undefined;
-    return playbackFlowOf(state.document, state.flowPlayback.flowId)?.accent;
+    return playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)?.accent;
   });
   const focusActive = useEditorStore((state) => state.focus.active);
   // A flow merely selected (not presented) acts as a gentler lens — see

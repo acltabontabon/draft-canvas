@@ -11,7 +11,7 @@
  */
 import { createId } from './ids';
 import { LIMITS } from './limits';
-import { cleanText } from './sanitize';
+import { cleanText, cleanTextFields } from './sanitize';
 import {
   countItems,
   findItem,
@@ -23,6 +23,7 @@ import {
 } from './sequenceModel';
 import type {
   Accent,
+  Attachment,
   DraftDocument,
   DraftNode,
   DraftSequence,
@@ -520,6 +521,30 @@ export function updateMessage(sequence: DraftSequence, id: string, patch: Messag
   });
 }
 
+/** Updates one message's attachment list, keeping untouched items and cards by identity. */
+export function editMessageAttachments(
+  sequence: DraftSequence,
+  id: string,
+  change: (attachments: readonly Attachment[]) => readonly Attachment[],
+): DraftSequence {
+  return rewrite(sequence, (item) => {
+    if (item.id !== id || item.t !== 'message') return undefined;
+    const before = item.attachments ?? [];
+    const after = change(before);
+    if (after.length > LIMITS.maxAttachmentsPerEdge || (after.length === before.length && after.every((entry, index) => entry === before[index]))) return item;
+    return patched<SeqMessage>(item, { attachments: after.length ? [...after] : undefined });
+  });
+}
+
+export function updateMessageAttachment(
+  sequence: DraftSequence, messageId: string, attachmentId: string, patch: Partial<Omit<Attachment, 'id'>>,
+): DraftSequence {
+  const { patch: clean } = cleanTextFields(patch);
+  return editMessageAttachments(sequence, messageId, (list) =>
+    list.map((attachment) => attachment.id === attachmentId ? patched<Attachment>(attachment, clean) : attachment),
+  );
+}
+
 /**
  * Makes a message a different kind, by someone's choice. It takes that kind's own starting
  * settings: a call starts work, a reply ends it, and anything that is not a reply answers nothing.
@@ -748,7 +773,7 @@ function cloneItem(item: SeqItem, ids: Map<string, string>): SeqItem {
   if (item.t === 'message') {
     const id = createId('sm');
     ids.set(item.id, id);
-    return { ...item, id };
+    return { ...item, id, ...(item.attachments ? { attachments: item.attachments.map((attachment) => ({ ...attachment, id: createId('a') })) } : {}) };
   }
   if (item.t === 'note') return { ...item, id: createId('sn'), over: [...item.over] };
   return {

@@ -295,6 +295,12 @@ export interface OpenPointPopoverState {
   pointId?: string;
 }
 
+export type AttachmentDetail = (
+  | { hostKind: 'node'; hostId: string }
+  | { hostKind: 'edge'; hostId: string }
+  | { hostKind: 'message'; hostId: string; messageId: string }
+) & { attachmentId: string | null };
+
 export interface UiStore {
   sharedFlowIntroduction: { documentId: string; flowId: string } | null;
   shareFromHere: boolean;
@@ -403,7 +409,7 @@ export interface UiStore {
    * yet"; non-null means a specific chip is additionally pinned open — a node's badge click and an
    * edge's chip click both write here, just at different granularity.
    */
-  openAttachmentDetail: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null;
+  openAttachmentDetail: AttachmentDetail | null;
   /**
    * What is selected *inside* a sequence: a participant, one or more messages, a branch, a group.
    * The editor's selection holds only whole shapes and connectors, and a sequence is one shape — so
@@ -661,7 +667,7 @@ export interface UiStore {
   setHoveredEdge: (id: string | null) => void;
   setHoveredRecoveryParent: (id: string | null) => void;
   setOpenAttachmentDetail: (
-    target: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null,
+    target: AttachmentDetail | null,
   ) => void;
   setPresentationReveal: (target: PresentationReveal | null) => void;
   /** Patches presentation state — a no-op (same object, no re-render) when nothing changes. */

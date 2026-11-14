@@ -68,7 +68,7 @@ interface Block {
 const OPERATORS: Record<string, SeqOperator> = { alt: 'alt', opt: 'opt', loop: 'loop', par: 'par', critical: 'critical', break: 'break' };
 const NEXT_BRANCH: Record<string, SeqOperator> = { else: 'alt', and: 'par', option: 'critical' };
 
-export function parseMermaidSequence(text: string): MermaidSequenceParse {
+export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<string, string>): MermaidSequenceParse {
   if (typeof text !== 'string') return { ok: false, error: 'That is not text.' };
   if (text.length > MERMAID_TEXT_LIMIT) return { ok: false, error: `That text is ${(text.length / 1024).toFixed(0)} KB, which is more than a sequence diagram anyone wrote by hand.` };
   const unsupported = new Set<string>();
@@ -110,9 +110,10 @@ export function parseMermaidSequence(text: string): MermaidSequenceParse {
       if (actor) Object.assign(known, { type: 'actor', actorKind: 'human' });
       return known;
     }
+    const id = participantIds?.get(key) ?? createId('sp');
     const made: SeqParticipant = actor
-      ? { id: createId('sp'), name: label ?? decode(key), type: 'actor', actorKind: 'human' }
-      : { id: createId('sp'), name: label ?? decode(key), type: 'service', serviceKind: 'generic' };
+      ? { id, name: label ?? decode(key), type: 'actor', actorKind: 'human' }
+      : { id, name: label ?? decode(key), type: 'service', serviceKind: 'generic' };
     byName.set(key, made);
     participants.push(made);
     box()?.participantIds.push(made.id);
@@ -136,9 +137,12 @@ export function parseMermaidSequence(text: string): MermaidSequenceParse {
       continue;
     }
 
-    const declares = /^(create\s+)?(participant|actor)\s+(.+?)(?:\s+as\s+(.+))?$/i.exec(line);
+    const configured = /^(create\s+)?(participant|actor)\s+(.+?)\s*@\{(.*)\}(?:\s+as\s+(.+))?$/i.exec(line);
+    const declares = configured ?? /^(create\s+)?(participant|actor)\s+(.+?)(?:\s+as\s+(.+))?$/i.exec(line);
     if (declares) {
-      const made = participant(declares[3]!, declares[4] ? decode(declares[4]) : undefined, declares[2]!.toLowerCase() === 'actor');
+      const label = declares[configured ? 5 : 4];
+      const made = participant(declares[3]!, label ? decode(label) : undefined, declares[2]!.toLowerCase() === 'actor');
+      if (configured) unsupported.add('participant configuration (type or alias): the participant is kept');
       if (declares[1]) toCreate.add(made.id);
       continue;
     }
@@ -225,7 +229,8 @@ export function parseMermaidSequence(text: string): MermaidSequenceParse {
       let kind: SeqMessageKind = arrow === '-)' || arrow === '--)' ? 'async' : arrow.startsWith('--') || arrow === '<<-->>' ? 'reply' : 'sync';
       const message: SeqMessage = { id: createId('sm'), t: 'message', from: from.id, to: to.id, kind, label: decode(said[5] ?? '') };
       if (toCreate.delete(to.id)) kind = 'create';
-      else if (toDestroy.delete(to.id) || toDestroy.delete(from.id)) kind = 'destroy';
+      else if (toDestroy.delete(to.id)) kind = 'destroy';
+      else if (toDestroy.delete(from.id)) unsupported.add('a message that destroys its sender: the message is kept');
       message.kind = kind;
       if (kind === 'reply') {
         // The latest call between these two, the other way, that nothing has answered yet.

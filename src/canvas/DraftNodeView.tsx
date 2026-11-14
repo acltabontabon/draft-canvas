@@ -1,4 +1,4 @@
-import { isSequenceFlowOf, playbackFlowOf, sequenceOfFlowId } from '../document/sequenceFlow';
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { displayNameFor, maxSizeFor } from '../document/factory';
@@ -170,7 +170,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // Which of its messages is being told, while this sequence is the one being presented: a number
   // (counted from 1), 0 for the opening and closing looks at the whole of it, null otherwise.
   const sequenceStep = useEditorStore((state) =>
-    state.flowPlayback.active && isSequenceFlowOf(state.flowPlayback.flowId, id) ? (state.flowPlayback.stage ? 0 : state.flowPlayback.step) : null,
+    state.flowPlayback.active && state.flowPlayback.sequenceNodeId === id ? (state.flowPlayback.stage ? 0 : state.flowPlayback.step) : null,
   );
   const copiedTimeout = useRef<number | null>(null);
   useEffect(
@@ -991,9 +991,7 @@ function explainTierFor(state: EditorStore, id: string): ExplainTier {
   // not by walking the parent chain in every node selector.
   if (stepContextOf(state)?.containing.has(id)) return 'active';
   if (!state.flowPlayback.active || !state.flowPlayback.flowId) return 'hidden';
-  // A sequence telling itself is found by id like any flow, without the scan: the node it names is this one or it is not.
-  const told = sequenceOfFlowId(state.flowPlayback.flowId);
-  const flow = told === null ? state.document.flows.find((f) => f.id === state.flowPlayback.flowId) : playbackFlowOf(state.document, state.flowPlayback.flowId);
+  const flow = playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId);
   return nodeTierInPlayback(flow, state.document.edges, id, state.flowPlayback);
 }
 
