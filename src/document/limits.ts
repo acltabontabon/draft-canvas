@@ -59,6 +59,16 @@ export const LIMITS = {
   maxOpenPointTargets: 40,
   /** Bend points on one connector — a hand-routed line needs a handful; more is a scribble. */
   maxWaypointsPerEdge: 32,
+  /**
+   * Handwritten strokes across the whole file. A review covered in notes is a few hundred; this is
+   * room for a long workshop while keeping a file, and every collaborator's copy of it, small.
+   */
+  maxInkStrokes: 4000,
+  /** Points in one stroke once simplified (`ink/capture.ts` thins a stroke before it is kept). */
+  maxInkPoints: 2000,
+  /** A stroke's nominal width, in room units: a hairline pen to a broad highlighter. */
+  minInkSize: 0.5,
+  maxInkSize: 120,
   maxConditionLength: 120,
   /** "daily 02:00 UTC" — a few words, not a schedule. */
   maxCadenceLength: 32,

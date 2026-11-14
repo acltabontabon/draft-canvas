@@ -40,6 +40,9 @@ import { SOURCE_FORMAT_INFO, SOURCE_FORMATS } from '../export/source/formats';
 import type { CopyResult } from '../export/clipboard';
 // Type-only: `contextMenu.ts` builds its menus from this module, so a value import would be a cycle.
 import type { ContextMenuEntry } from './contextMenu';
+import { inkOf } from '../document/ink';
+import { cancelSmartInk, convertStrokes } from '../canvas/inkSession';
+import type { PencilTool } from '../store/uiStore';
 
 // The exporters (rasterizer, Structurizr, draw.io, sequence engine) load when a copy command runs, not with the editor.
 const clipboard = () => import('../export/clipboard');
@@ -2361,8 +2364,10 @@ export function commandsFor(ctx: CommandContext): Command[] {
 
 function editCommands(ctx: CommandContext): Command[] {
   return [
+    ...inkCommands(ctx),
     ...selectionCommands(ctx),
     ...ALL_PRESETS.map(createCommand),
+    ...pencilCommands(ctx),
     { id: 'try-example', title: 'Try an example', group: 'canvas', keywords: ['order', 'processing', 'learn'], run: (inner) => inner.ui.requestExample() },
     { id: 'browse-starters', title: 'Browse starters…', group: 'canvas', keywords: ['starter', 'gallery', 'template', 'example', 'architecture', 'pattern'], hint: 'Ready-made architectures from the starters gallery', run: () => useGalleryStore.getState().openDialog() },
     ...starterCommands(),
@@ -2374,6 +2379,74 @@ function editCommands(ctx: CommandContext): Command[] {
     // The companion runs the person's own coding agent, which only the desktop app can start.
     ...(__DESKTOP__ && hostKind() === 'desktop' ? [companionCommand(ctx)] : []),
   ];
+}
+
+/**
+ * The Pencil and the sketches it leaves: picking up each of its tools, and what can be done with
+ * chosen strokes. Each is the same store action the toolbar, a key or the right-click menu uses.
+ */
+export function inkCommands(ctx: CommandContext): Command[] {
+  if (ctx.ui.readOnly) return [];
+  const commands: Command[] = [];
+  // `?? []`: the shortcut sheet builds its catalogue from a stand-in context that predates sketches.
+  const chosen = ctx.ui.inkSelection ?? [];
+  if (chosen.length > 0) {
+    commands.push({
+      id: 'ink-convert',
+      title: 'Convert to shape',
+      group: 'selection',
+      keywords: ['smart ink', 'recognise', 'recognize', 'sketch', 'drawing', 'shape', 'connector', 'clean up'],
+      hint: 'Turn the chosen sketch into a shape or connector',
+      run: (inner) => {
+        const zoom = inner.editor.liveViewport?.zoom ?? inner.editor.document.viewport.zoom;
+        void convertStrokes(inner.ui.inkSelection, zoom);
+      },
+    });
+    commands.push({
+      id: 'ink-delete',
+      title: chosen.length === 1 ? 'Erase stroke' : 'Erase strokes',
+      group: 'selection',
+      keywords: ['delete', 'remove', 'sketch', 'ink'],
+      // Backspace and Delete erase chosen strokes through `delete`'s own key; one key, one command.
+      run: (inner) => inner.editor.deleteSelection(),
+    });
+  }
+  const strokes = inkOf(ctx.editor.document);
+  if (strokes.length > 0) {
+    commands.push({
+      id: 'ink-select-all',
+      title: 'Select all sketches',
+      group: 'selection',
+      keywords: ['ink', 'strokes', 'drawings', 'annotations'],
+      run: (inner) => {
+        inner.editor.setSelection({ nodes: [], edges: [] });
+        inner.ui.setPencil(null);
+        inner.ui.setInkSelection(inkOf(inner.editor.document).map((stroke) => stroke.id));
+      },
+    });
+  }
+  return commands;
+}
+
+
+/** Picking up each of the Pencil's tools — the toolbar's Pencil and tray, by name. */
+export function pencilCommands(ctx: CommandContext): Command[] {
+  if (ctx.ui.readOnly) return [];
+  const commands: Command[] = [];
+  const pick = (tool: PencilTool, smart?: boolean) => (inner: CommandContext) => {
+    if (smart !== undefined && smart !== inner.ui.inkPrefs?.smart) {
+      if (!smart) cancelSmartInk();
+      inner.ui.setInkPrefs({ smart });
+    }
+    inner.ui.setPencil(tool);
+  };
+  commands.push(
+    { id: 'pencil-sketch', title: 'Sketch', group: 'create', keywords: ['pencil', 'pen', 'draw', 'freehand', 'annotate', 'ink', 'handwriting'], hint: 'Draw freehand over the diagram', shortcut: 'P', run: pick('pen', false) },
+    { id: 'pencil-smart', title: 'Smart Ink', group: 'create', keywords: ['pencil', 'pen', 'draw', 'recognise', 'recognize', 'shapes', 'sketch to diagram'], hint: 'Draw rough shapes and arrows; they become real ones', run: pick('pen', true) },
+    { id: 'pencil-highlighter', title: 'Highlighter', group: 'create', keywords: ['pencil', 'marker', 'highlight', 'emphasis', 'annotate'], shortcut: 'H', run: pick('highlighter') },
+    { id: 'pencil-eraser', title: 'Eraser', group: 'create', keywords: ['pencil', 'erase', 'rubber', 'remove sketch'], shortcut: 'E', run: pick('eraser') },
+  );
+  return commands;
 }
 
 /** Opens Nodi, the agent companion, or puts it back to rest. Desktop only (see `editCommands`). */

@@ -24,6 +24,7 @@ import type {
   DraftDocument,
   DraftEdge,
   DraftFlow,
+  DraftInk,
   DraftInside,
   DraftNode,
   DraftViewport,
@@ -106,16 +107,18 @@ export function walkGraphs(file: DraftDocument, visit: (graph: Graph, path: Dept
 }
 
 /** Counts across every room — what the document limits are spent against. */
-export function totals(file: DraftDocument): { nodes: number; edges: number; flows: number } {
+export function totals(file: DraftDocument): { nodes: number; edges: number; flows: number; ink: number } {
   let nodes = 0;
   let edges = 0;
   let flows = 0;
+  let ink = 0;
   walkGraphs(file, (graph) => {
     nodes += graph.nodes.length;
     edges += graph.edges.length;
     flows += graph.flows.length;
+    ink += graph.ink?.length ?? 0;
   });
-  return { nodes, edges, flows };
+  return { nodes, edges, flows, ink };
 }
 
 /** The graph shape a room and a document have in common. */
@@ -123,6 +126,8 @@ export interface Graph {
   nodes: DraftNode[];
   edges: DraftEdge[];
   flows: DraftFlow[];
+  /** Handwritten annotation; absent when there is none (`document/ink.ts`). */
+  ink?: DraftInk[];
   viewport: DraftViewport;
 }
 
@@ -202,11 +207,14 @@ export function viewOf(file: DraftDocument, path: DepthPath): DraftDocument | un
     edges: inside?.edges ?? EMPTY_EDGES,
     flows: inside?.flows ?? EMPTY_FLOWS,
     viewport: inside?.viewport ?? EMPTY_ROOM_VIEWPORT,
+    // The room's own sketches. Spread from the file above, so the root's must never leak in.
+    ...(inside?.ink === undefined ? {} : { ink: inside.ink }),
     // The room's *own* level, if it was given one — never the one it inherits, which is worked
     // out where it is needed (`depth/level.ts`) rather than written into the file.
     ...(inside?.level === undefined ? {} : { level: inside.level }),
   };
   if (inside?.level === undefined) delete view.level;
+  if (inside?.ink === undefined) delete view.ink;
   rememberView(file, path, view);
   return view;
 }
@@ -297,6 +305,7 @@ export function roomOf(graph: Graph & { level?: ViewLevel }): DraftInside | unde
     flows: graph.flows,
     viewport: graph.viewport,
   };
+  if (graph.ink !== undefined && graph.ink.length > 0) inside.ink = graph.ink;
   if (graph.level !== undefined) inside.level = graph.level;
   return inside;
 }
@@ -309,6 +318,7 @@ function insideFor(current: DraftInside | undefined, view: DraftDocument): Draft
     current.nodes === view.nodes &&
     current.edges === view.edges &&
     current.flows === view.flows &&
+    current.ink === view.ink &&
     current.viewport === view.viewport &&
     current.level === view.level
   ) {
@@ -323,6 +333,8 @@ function insideFor(current: DraftInside | undefined, view: DraftDocument): Draft
   };
   if (view.level === undefined) delete inside.level;
   else inside.level = view.level;
+  if (view.ink === undefined || view.ink.length === 0) delete inside.ink;
+  else inside.ink = view.ink;
   return inside;
 }
 

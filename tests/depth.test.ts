@@ -56,7 +56,7 @@ describe('the tree', () => {
     const inner = createNode({ type: 'component', x: 0, y: 0 });
     const owner = { ...createNode({ type: 'service', x: 0, y: 0 }), inside: { nodes: [inner], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } };
     const document = { ...createDocument('Nested'), nodes: [owner] };
-    expect(totals(document)).toEqual({ nodes: 2, edges: 0, flows: 0 });
+    expect(totals(document)).toEqual({ nodes: 2, edges: 0, flows: 0, ink: 0 });
   });
 
   /**

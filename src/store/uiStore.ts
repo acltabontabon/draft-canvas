@@ -4,7 +4,9 @@ import type { ArrangeFix } from '../lib/arrangeFixes';
 import type { Preset } from '../lib/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
-import type { DraftDocument, DraftEdge, DraftNode, OpenPointTarget } from '../document/types';
+import type { DraftDocument, DraftEdge, DraftInk, DraftNode, InkColor, OpenPointTarget } from '../document/types';
+import type { InkShapeChoice } from '../ink/choices';
+import type { Box } from '../ink/geometry';
 import type { CaptionCorner } from '../presentation/framing';
 import type { ExportMode } from '../export/exportTypes';
 import type { PresentationReveal } from '../presentation/presentationAttachments';
@@ -78,7 +80,9 @@ export type ContextMenuTarget =
   | { kind: 'pane' }
   | { kind: 'node'; id: string }
   | { kind: 'edge'; id: string }
-  | { kind: 'selection' };
+  | { kind: 'selection' }
+  /** Chosen sketch strokes (`inkSelection`). */
+  | { kind: 'ink' };
 
 /**
  * Drives the right-click context menu — mirrors `QuickConnectState`'s shape and reasoning exactly.
@@ -300,6 +304,45 @@ export type AttachmentDetail = (
   | { hostKind: 'edge'; hostId: string }
   | { hostKind: 'message'; hostId: string; messageId: string; startEditing?: boolean }
 ) & { attachmentId: string | null };
+/** What the Pencil draws with: a pen, a highlighter, or the eraser that takes whole strokes away. */
+export type PencilTool = 'pen' | 'highlighter' | 'eraser';
+export type InkSizeName = 's' | 'm' | 'l';
+
+/** The Pencil's settings — a device preference, like the theme, never document data. */
+export interface InkPrefs {
+  /** Smart Ink: the pen offers to turn what it draws into shapes and connectors. */
+  smart: boolean;
+  penColor: InkColor;
+  highlighterColor: InkColor;
+  penSize: InkSizeName;
+  highlighterSize: InkSizeName;
+}
+
+export const DEFAULT_INK_PREFS: InkPrefs = { smart: false, penColor: 'graphite', highlighterColor: 'yellow', penSize: 'm', highlighterSize: 'm' };
+
+/**
+ * Smart Ink's offer for one drawing, shown in a small popover beside it (`InkSuggestionPopover`).
+ * `converted`: the drawing already became `nodeId`, and the choices re-type it. `offer`: the reading
+ * was too uncertain to act on, so the strokes are still ink and a choice converts them.
+ */
+export interface InkSuggestion {
+  token: number;
+  mode: 'converted' | 'offer';
+  nodeId?: string;
+  strokeIds: string[];
+  /** The strokes as drawn, so "Keep as sketch" can put them back even after other edits. */
+  strokes: DraftInk[];
+  /** Where the drawing was, in room coordinates. */
+  drawn: Box;
+  /** Recommended first. */
+  choices: InkShapeChoice[];
+  /** The choice applied (`converted`), or -1. */
+  chosen: number;
+  /** Shapes inside the drawing — what a Boundary made from it holds. */
+  encloses: string[];
+  /** The room it belongs to (`pathKey`). */
+  room: string;
+}
 
 export interface UiStore {
   sharedFlowIntroduction: { documentId: string; flowId: string } | null;
@@ -320,6 +363,19 @@ export interface UiStore {
 
   /** The preset a canvas click will place, or null for plain selection. */
   armed: Preset | null;
+  /** The Pencil in hand, or null. Exclusive with `armed`: picking up one puts the other down. */
+  pencil: PencilTool | null;
+  setPencil: (tool: PencilTool | null) => void;
+  inkPrefs: InkPrefs;
+  setInkPrefs: (patch: Partial<InkPrefs>) => void;
+  /** Selected sketch strokes, by id — apart from `editorStore.selection`, which holds shapes and connectors. */
+  inkSelection: readonly string[];
+  setInkSelection: (ids: readonly string[]) => void;
+  inkSuggestion: InkSuggestion | null;
+  setInkSuggestion: (suggestion: InkSuggestion | null) => void;
+  /** Strokes fading out as a drawing resolves into a shape. Transient; drawn, never saved. */
+  inkResolving: { token: number; strokes: DraftInk[] } | null;
+  setInkResolving: (resolving: { token: number; strokes: DraftInk[] } | null) => void;
   shortcutsOpen: boolean;
   /** The Find and replace dialog (⌘H, or the palette's "Find and replace…"). */
   findReplaceOpen: boolean;
@@ -781,6 +837,37 @@ let toastsPaused = false;
  *  it's a function reference, not something a component should re-render on. */
 let activateFn: (() => void) | null = null;
 
+/* -------------------------------------------------------- Pencil prefs -- */
+
+const INK_PREFS_KEY = 'ink';
+const INK_COLOR_SET = new Set<string>(['graphite', 'red', 'blue', 'green', 'yellow']);
+const INK_SIZE_SET = new Set<string>(['s', 'm', 'l']);
+
+/** `smart|penColor|highlighterColor|penSize|highlighterSize` — a few short words, well inside a preference's cap. */
+function encodeInkPrefs(prefs: InkPrefs): string {
+  return [prefs.smart ? '1' : '0', prefs.penColor, prefs.highlighterColor, prefs.penSize, prefs.highlighterSize].join('|');
+}
+
+/** Read once at startup. As with `initialContinuationsEnabled`, a preference store not usable at
+ *  that moment (blocked storage, a test harness still wiring up) means the defaults. */
+function readInkPrefs(): InkPrefs {
+  let raw: string | null;
+  try {
+    raw = readPreference(INK_PREFS_KEY);
+  } catch {
+    return DEFAULT_INK_PREFS;
+  }
+  if (!raw) return DEFAULT_INK_PREFS;
+  const [smart, penColor, highlighterColor, penSize, highlighterSize] = raw.split('|');
+  return {
+    smart: smart === '1',
+    penColor: INK_COLOR_SET.has(penColor ?? '') ? (penColor as InkColor) : DEFAULT_INK_PREFS.penColor,
+    highlighterColor: INK_COLOR_SET.has(highlighterColor ?? '') ? (highlighterColor as InkColor) : DEFAULT_INK_PREFS.highlighterColor,
+    penSize: INK_SIZE_SET.has(penSize ?? '') ? (penSize as InkSizeName) : DEFAULT_INK_PREFS.penSize,
+    highlighterSize: INK_SIZE_SET.has(highlighterSize ?? '') ? (highlighterSize as InkSizeName) : DEFAULT_INK_PREFS.highlighterSize,
+  };
+}
+
 export const useUiStore = create<UiStore>((set, get) => ({
   sharedFlowIntroduction: null,
   shareFromHere: false,
@@ -795,6 +882,21 @@ export const useUiStore = create<UiStore>((set, get) => ({
   flowTrace: null,
   setFlowTrace: (flowTrace) => set({ flowTrace }),
   armed: null,
+  pencil: null,
+  setPencil: (pencil) => set((state) => ({ pencil, armed: pencil ? null : state.armed, spliceArmedEdgeTarget: pencil ? null : state.spliceArmedEdgeTarget })),
+  inkPrefs: readInkPrefs(),
+  setInkPrefs: (patch) =>
+    set((state) => {
+      const inkPrefs = { ...state.inkPrefs, ...patch };
+      writePreference(INK_PREFS_KEY, encodeInkPrefs(inkPrefs));
+      return { inkPrefs };
+    }),
+  inkSelection: [],
+  setInkSelection: (ids) => set((state) => (ids.length === 0 && state.inkSelection.length === 0 ? state : { inkSelection: ids })),
+  inkSuggestion: null,
+  setInkSuggestion: (inkSuggestion) => set({ inkSuggestion }),
+  inkResolving: null,
+  setInkResolving: (inkResolving) => set({ inkResolving }),
   shortcutsOpen: false,
   findReplaceOpen: false,
   fitRequestId: 0,
@@ -877,7 +979,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
   clipboardPermissionRequest: null,
 
   // A connector a placed shape would have gone into is not one any more once the tool changes.
-  arm: (armed) => set({ armed, spliceArmedEdgeTarget: null }),
+  // Picking up a shape tool puts the Pencil down; putting a shape tool down (`null`) leaves it be.
+  arm: (armed) => set((state) => ({ armed, spliceArmedEdgeTarget: null, pencil: armed ? null : state.pencil })),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setFindReplaceOpen: (findReplaceOpen) => set({ findReplaceOpen }),
   requestFit: () => set((state) => ({ fitRequestId: state.fitRequestId + 1 })),

@@ -119,6 +119,16 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   direction weighed by how it fits a screen) belong to Arrange and new layouts, never Tidy up. Its
   preview lives in `uiStore.arrangePreview`; only `editorStore.commitArrange` applies it.
 
+### Sketches and Smart Ink
+
+- Sketches (`DraftInk`) are per-room annotation in `ink`, absent when empty. They never take part in
+  routing, layout, Arrange, Tidy up, semantics, Traffic or agent reads, and nothing turns one into a
+  shape except an explicit Smart Ink conversion through `editorStore.inkToShape`/`inkToConnector`.
+- `src/ink/` imports `document/` only and stays free of React, the store and the DOM. Geometry
+  (`recognize.ts`) and meaning (`interpret.ts`) stay apart; Smart Ink offers only existing shape kinds.
+- Draw ink with `render/ink.ts` in both canvas and export. A stroke in progress is written to the DOM
+  directly (`canvas/liveInk.ts`), never through React state, and kept as one stroke at pen-up.
+
 ### Live collaboration
 
 - `src/collab/` is React-free and store-free: it imports `document/`, `depth/` and `lib/` only (and its own

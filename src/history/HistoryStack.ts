@@ -46,6 +46,13 @@ export interface HistoryEntry {
    * typing a node's name is a single undo rather than one per keystroke.
    */
   coalesceKey?: string;
+  /**
+   * Entries sharing an amend key replace one another however far apart in time — a later one
+   * *revises* the earlier rather than adding to it. Smart Ink uses it so that picking Service
+   * instead of the Component a drawing first became is still the one step undo takes back to the
+   * drawing, not a second step on top of it.
+   */
+  amendKey?: string;
   /** See `FlowSessionSnapshot`. Only ever set by `deleteFlow`. */
   flowSessionBefore?: FlowSessionSnapshot;
   flowSessionAfter?: FlowSessionSnapshot;
@@ -99,8 +106,14 @@ export function pushEntry(
     // of you touched (a nudge, their rename, another nudge) would put theirs back out too.
     !top.crossed &&
     entry.at - top.at < COALESCE_WINDOW_MS;
+  const canAmend =
+    top !== undefined &&
+    entry.amendKey !== undefined &&
+    top.amendKey === entry.amendKey &&
+    samePath(top.path, entry.path) &&
+    !top.crossed;
 
-  if (canCoalesce) {
+  if (canCoalesce || canAmend) {
     // Typed and then erased, or a slider dragged away and back, inside one burst: the burst as a
     // whole changed nothing, so it shouldn't leave an undo step that does nothing.
     if (sameContent(top.before, entry.after, entry.path)) {
@@ -146,6 +159,7 @@ function sameContent(a: DraftDocument, b: DraftDocument, path: readonly string[]
     sameNodes(viewA.nodes, viewB.nodes) &&
     equivalent(viewA.edges, viewB.edges, 4) &&
     equivalent(viewA.flows, viewB.flows, 4) &&
+    equivalent(viewA.ink, viewB.ink, 3) &&
     equivalent(a.settings, b.settings, 4) &&
     // Read off the file, not the view, because open points are root-only — and compared for the same
     // reason the rest of this is: a point's context typed and erased again within the coalesce

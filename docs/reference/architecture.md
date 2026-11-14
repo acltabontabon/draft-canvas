@@ -30,6 +30,7 @@ Dependencies point toward `src/document/`, which is plain data with no React or 
 | `collab/` | `document/`, `depth/`, `lib/`, its own `transport/` |
 | `continuation/` | `document/`, `edges/routing`, `edges/clearance`, `edges/compensationMarker`, `render/text` |
 | `openPoints/` | `document/`, `depth/`, `render/` |
+| `ink/` | `document/` |
 | `agent/` | the above plus rendering and export; never UI or store |
 
 Library and editor are two states of `src/App.tsx` with no router, so the build works from any path.
@@ -159,6 +160,15 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
   flows included, as one undo step. The Order processing example ships in `gallery/example/`.
 - **Continuation** ranks next shapes from the selection's neighborhood; only high confidence shows unprompted.
 - **Open points** attach to element ids; they never affect geometry, routing or semantics.
+- **Sketches** (`DraftInk`) are per-room annotation over the shapes: compact relative points, one
+  SVG layer in the viewport, one paint description (`render/ink.ts`) shared with export. They are
+  never obstacles, members or semantics, and the drawing being made never renders React — samples
+  go straight to one live path, and the document gets one stroke at pen-up.
+- **Smart Ink** separates geometry from meaning. `ink/recognize.ts` scores a drawing as a
+  rectangle, ellipse, cylinder, tube, stick figure, line or arrow in screen pixels; `ink/interpret.ts`
+  reads that against the canvas (containment, endpoints) and offers only existing shape kinds.
+  Strokes are kept as ink first, so a conversion is one undo step that undo reverses to them; a
+  later choice amends that step (`HistoryEntry.amendKey`). Recognition loads on first use.
 - **View levels** change how rooms are shown, not the tree.
 
 ## Persistence and the storage boundary

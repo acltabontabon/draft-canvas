@@ -3,6 +3,8 @@
 // Flow's base styles), so its overrides keep winning.
 import '../../styles/canvas.css';
 import { ExampleBanner } from './ExampleBanner';
+import { InkSuggestionPopover } from './ink/InkSuggestionPopover';
+import { cancelSmartInk, flushSmartInk } from '../../canvas/inkSession';
 import { StarterUpdateBanner } from './StarterUpdateBanner';
 import { StartersDialog } from '../Gallery/StartersDialog';
 import { FlowTraceBar } from './FlowTraceBar';
@@ -720,6 +722,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
             <ElementInspectorPopover buildCommandContext={buildCommandContext} />
           )}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
+          {!presenting && !tracing && <InkSuggestionPopover />}
           {!presenting && !tracing && <StarterUpdateBanner />}
           <StartersDialog onAdd={addStarter} />
           <FlowTraceBar />
@@ -1330,6 +1333,17 @@ export function useKeyboard({
           // Mid endpoint drag, Escape cancels that drag (the handle's own listener) — and only that.
           if (useUiStore.getState().reconnectDragActive) return;
           arm(null);
+          // The Pencil goes down first: Escape is how you get back to selecting.
+          if (useUiStore.getState().pencil) {
+            flushSmartInk();
+            useUiStore.getState().setPencil(null);
+            return;
+          }
+          // Chosen sketch strokes are put down before anything else is.
+          if (useUiStore.getState().inkSelection.length > 0) {
+            useUiStore.getState().setInkSelection([]);
+            return;
+          }
           // The Open points panel is a surface you opened, so it closes before anything you were
           // doing on the canvas does. (The open-point popover has its own capture-phase Escape, like
           // every popover.) Only when it is actually on screen: presentation hides the panel without
@@ -1483,6 +1497,13 @@ export function useKeyboard({
             return;
           }
 
+          const inkChosen = useUiStore.getState().inkSelection;
+          if (state.selection.nodes.length === 0 && inkChosen.length > 0) {
+            event.preventDefault();
+            const step = event.shiftKey ? 10 : 1;
+            state.moveInk(inkChosen, direction === 'left' ? -step : direction === 'right' ? step : 0, direction === 'up' ? -step : direction === 'down' ? step : 0);
+            return;
+          }
           if (state.selection.nodes.length === 0) return;
           event.preventDefault();
           const magnitude = event.shiftKey ? 10 : 1;
@@ -1548,6 +1569,27 @@ export function useKeyboard({
       }
 
       if (event.shiftKey || event.altKey) return;
+      // The Pencil: P picks it up (and, in hand, switches Sketch ↔ Smart Ink), H highlights, E erases.
+      // Read-only canvases and presentations returned above; a view-only collaborator draws nothing.
+      if (['p', 'h', 'e'].includes(event.key.toLowerCase()) && !(!focusIsOnCanvas() && keyboardFocusIsOnControl())) {
+        if (useUiStore.getState().readOnly) return;
+        event.preventDefault();
+        if (event.repeat) return;
+        const ui = useUiStore.getState();
+        const key = event.key.toLowerCase();
+        if (key === 'p') {
+          if (ui.pencil === 'pen') {
+            const smart = !ui.inkPrefs.smart;
+            if (!smart) cancelSmartInk();
+            ui.setInkPrefs({ smart });
+            ui.notify(smart ? 'Smart Ink — rough shapes and arrows become real ones.' : 'Sketch — ink stays as drawn.');
+          } else ui.setPencil('pen');
+        } else {
+          flushSmartInk();
+          ui.setPencil(key === 'h' ? 'highlighter' : 'eraser');
+        }
+        return;
+      }
       // Not while someone is working a control from the keyboard — Tabbed onto a toolbar, panel or
       // popover button, a letter is them moving through it, and dropping a shape at the pointer
       // behind their back is the last thing it means. A button that merely kept focus after a click

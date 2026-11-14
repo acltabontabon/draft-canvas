@@ -28,6 +28,8 @@ import { markerDefs } from './markers';
 import { PERSONALITY_PROFILES } from '../roughness/presets';
 import type { PersonalityPreset } from '../../theme/usePersonality';
 import type { Shape } from '../displayList';
+import { inkOf, inkPaintBounds } from '../../document/ink';
+import { inkPaint } from '../ink';
 
 const BACKGROUND_BLUR_FILTER_ID = 'dc-bg-blur';
 
@@ -71,6 +73,38 @@ export interface ExportOptions {
   openPoints?: boolean;
   /** The exported legend is unnecessary when drawing a transient camera-sized room picture. */
   openPointKey?: boolean;
+  /**
+   * Whether the picture keeps the room's handwritten sketches, drawn over everything as on the
+   * canvas. Defaults to `true`. A selection-only export (`only`) leaves them out: a sketch belongs
+   * to the view, not to any one shape.
+   */
+  ink?: boolean;
+}
+
+/**
+ * A room's sketches as SVG, in room coordinates — the same paint the canvas draws
+ * (`render/ink.ts`). Kept to plain paths so a vector editor opens them as editable lines.
+ */
+export function inkSvgEls(document: Pick<DraftDocument, 'ink'>, theme: ThemeName): SvgEl[] {
+  return inkOf(document).map((stroke) => {
+    const paint = inkPaint(stroke, theme);
+    const attrs: Record<string, string | number> = {
+      d: paint.d,
+      transform: `translate(${n(stroke.x)} ${n(stroke.y)})`,
+    };
+    if (paint.mode === 'fill') {
+      attrs.fill = paint.color;
+    } else {
+      attrs.fill = 'none';
+      attrs.stroke = paint.color;
+      attrs['stroke-width'] = n(paint.width);
+      attrs['stroke-linecap'] = 'round';
+      attrs['stroke-linejoin'] = 'round';
+    }
+    if (paint.opacity < 1) attrs.opacity = paint.opacity;
+    if (paint.blend) attrs.style = `mix-blend-mode:${paint.blend}`;
+    return el('path', attrs);
+  });
 }
 
 /**
@@ -432,8 +466,11 @@ export function renderDocumentSvg(
 
   const openPoints = options.openPoints === false ? [] : unresolvedOpenPoints(document);
   const scene = buildScene(document, nodeCtx, edgeCtx, { only: options.only, selectedFlow, openPoints });
+  const withInk = options.ink !== false && !options.only;
+  const inkEls = withInk ? inkSvgEls(document, theme.name) : [];
+  const inkRects = withInk ? inkOf(document).map(inkPaintBounds) : [];
 
-  const bounds = boundsOf([...scene.nodes, ...scene.overlayRects]) ?? { x: 0, y: 0, width: 320, height: 160 };
+  const bounds = boundsOf([...scene.nodes, ...scene.overlayRects, ...inkRects]) ?? { x: 0, y: 0, width: 320, height: 160 };
   // Only the kinds actually in the picture — a "selection only" export of an unmarked corner needs
   // no key at all. Below the architecture, inside the margin, so it never reads as part of it.
   const shown = scene.markerEls.length || scene.edgeEntries.some((entry) => unresolvedOpenPointsFor(openPoints, { kind: 'edge', id: entry.edge.id }).length);
@@ -480,6 +517,8 @@ export function renderDocumentSvg(
       ...scene.nodeEls,
       ...scene.edgeOverlays,
       ...scene.markerEls,
+      // Over everything, as on the canvas: a circle drawn round a shape is drawn on top of it.
+      ...inkEls,
     ]),
   );
   if (key) {

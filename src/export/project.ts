@@ -30,6 +30,8 @@ export function serializeDocument(document: DraftDocument): string {
     viewport: canonical.viewport(document.viewport),
     settings: canonical.settings(document.settings),
     flows: canonical.flows(document.flows),
+    // Sketches only when there are some: a canvas nobody drew on writes exactly the bytes it did.
+    ...((document.ink?.length ?? 0) === 0 ? {} : { ink: canonical.ink(document.ink!) }),
     // Same rule as `level` below, and for the same reason: most canvases never raise a point, and an
     // empty array written into every one of them would change the bytes of every file in every
     // repository the moment this shipped. Absent is what `normalizeDocument` reads as none.

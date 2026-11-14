@@ -82,6 +82,9 @@ function buildFixtureContext(selection: { nodes: string[]; edges: string[] }): C
     continuationsEnabled: false,
     continuation: null,
     continuationDismissals: new Set(),
+    // A chosen stroke, so the sketch commands and their keys are in the catalogue too.
+    inkSelection: ['shortcut-fixture-ink'],
+    inkPrefs: { smart: false },
   };
   return {
     editor,

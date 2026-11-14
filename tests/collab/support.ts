@@ -10,6 +10,7 @@ import { addEdges, addNodes, insideHeight, removeElements, setParent, setSetting
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import { LIMITS } from '../../src/document/limits';
 import { addParticipant, createMessage, insertItem, updateSequence, wrapItems } from '../../src/document/sequenceOps';
+import { addInk, inkOf, removeInk, translateInk, withInk } from '../../src/document/ink';
 import type { DraftDocument, DraftInside, DraftNode, DraftSequence, ViewLevel } from '../../src/document/types';
 import { canHoldInside } from '../../src/collab/apply';
 import type { CollabTransport, TransportState } from '../../src/collab/transport/types';
@@ -77,7 +78,20 @@ export function randomEdit(file: DraftDocument, rng: Rng): DraftDocument {
   const flow = pick(rng, room.flows);
   counter += 1;
 
-  switch (Math.floor(rng() * 18)) {
+  const stroke = pick(rng, inkOf(room));
+  switch (Math.floor(rng() * 21)) {
+    // Sketches: drawn, moved, erased and restacked, in whichever room the edit lands in. A room with
+    // no shapes holds no sketches (it does not exist), so nothing is drawn there.
+    case 18: {
+      if (path.length > 0 && room.nodes.length === 0) return file;
+      const drawn = { id: `k_${counter}_${Math.floor(rng() * 1e6)}`, tool: 'pen' as const, color: 'red' as const, size: 3, x: Math.round(rng() * 800), y: Math.round(rng() * 600), points: [0, 0, 10, 4, 22, 9] };
+      return inRoom(file, path, (view) => addInk(view, [drawn]));
+    }
+    case 19:
+      if (!stroke) return file;
+      return rng() < 0.5 ? inRoom(file, path, (view) => translateInk(view, [stroke.id], 12, -7)) : inRoom(file, path, (view) => removeInk(view, [stroke.id]));
+    case 20:
+      return inkOf(room).length > 1 ? inRoom(file, path, (view) => withInk(view, [...inkOf(view)].reverse())) : file;
     case 16:
     case 17:
       if (!node || !other) return file;
