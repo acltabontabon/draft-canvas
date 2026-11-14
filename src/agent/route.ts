@@ -443,6 +443,22 @@ function skewed(edge: Pick<DraftEdge, 'sourceAnchor' | 'targetAnchor'>, points: 
   return false;
 }
 
+/** Under this, a skewed connector's ends are meant to be level: the step reads as a slip, not a turn. */
+const NEAR_MISS = 10;
+
+/** Whether a connector's facing ends miss each other by a few pixels — the sideways step the quality
+ *  check reports as a jog. A repair may not end on one: a 39px step turned into a 3px one is no
+ *  easier to read, only harder to notice. It used to slip through when the near miss also left a
+ *  caption over a shape and was passed over for that; once captions clear their shapes, only this
+ *  keeps it from being the cheapest fix. */
+function nearMiss(edge: Pick<DraftEdge, 'sourceAnchor' | 'targetAnchor'>, points: readonly Point[]): boolean {
+  if (!skewed(edge, points)) return false;
+  const start = points[0]!;
+  const end = points[points.length - 1]!;
+  const horizontal = edge.sourceAnchor?.side === 'left' || edge.sourceAnchor?.side === 'right';
+  return Math.abs(horizontal ? start.y - end.y : start.x - end.x) < NEAR_MISS;
+}
+
 interface RouteAssessment {
   problems: Map<string, RouteProblem>;
   unresolved: Set<string>;
@@ -613,6 +629,11 @@ export function repairAnchors(
       const local = next.filter((e) => hood.has(e.source) || hood.has(e.target));
       const fresh = new Map(othersOf(nodes, local, caption, undefined, byId).filter((o) => neighbours.has(o.id)).map((o) => [o.id, o]));
       const others = [...drawn.values()].map((o) => fresh.get(o.id) ?? o);
+      // Whatever the move is for, it may not leave its own line slipping a few pixels sideways — a
+      // jog — unless it already did; another side or offset that clears the problem reads better.
+      const moved = fresh.get(mover.id);
+      const was = drawn.get(mover.id);
+      if (moved && nearMiss(mover, moved.points) && !(was && nearMiss(original, was.points))) continue;
       if (why === 'tidiness' && clean.some((e) => {
         const before = drawn.get(e.id);
         const after = fresh.get(e.id);
