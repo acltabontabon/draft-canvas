@@ -601,7 +601,8 @@ async function main() {
     const handle = await box(service.locator('.dc-handle').nth(1));
     await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
     await page.mouse.down();
-    await page.mouse.move(480, 260, { steps: 12 });
+    // Far enough out for the connector's caption ("sends command to") to be read whole.
+    await page.mouse.move(540, 260, { steps: 12 });
     await page.mouse.up();
     await page.getByRole('menuitem', { name: /Queue/ }).first().click();
     // A shape made from the drop menu opens ready to name, like any other new shape.
@@ -622,7 +623,9 @@ async function main() {
     await page.keyboard.press('Escape');
     await levelWith(page, 1, 2);
     await page.mouse.click(700, 560);
-    await expect(page.locator('.dc-edge text')).toContainText(['sends command to', 'consumed by']);
+    // Captions are drawn above the lines (`.dc-edge-caption`), shortened only when there is no room:
+    // the picture must show both whole.
+    await expect(page.locator('.dc-edge-caption')).toHaveText(['sends command to', 'consumed by']);
     await shot(page, 'service-queue-worker');
 
     // A note, docked on the queue.
@@ -662,7 +665,7 @@ async function main() {
     await page.keyboard.type('Place an order');
     await page.keyboard.press('Enter');
     await page.keyboard.press('Escape');
-    await page.locator('.dc-edge text', { hasText: 'consumed by' }).click({ force: true });
+    await page.locator('.dc-edge-caption', { hasText: 'consumed by' }).click({ force: true });
     await inspector.getByRole('button', { name: 'Add to Place an order' }).click();
     await page.mouse.click(700, 560); // empty canvas: deselect, leaving the Flows panel open
     await shot(page, 'flows-panel');
