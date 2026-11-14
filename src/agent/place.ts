@@ -8,7 +8,7 @@
 
 import { capabilityFor, categoryOf, inferRelationship, isSyncPairing } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
-import { createAttachment, createDocument, createEdge, createNode } from '../document/factory';
+import { createAttachment, createDocument, createEdge, createNode, defaultSizeFor } from '../document/factory';
 import { createFlow, setFlowVariantOf } from '../document/flow';
 import { DEFAULTS } from '../document/limits';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode, DraftNodeType, Side, ViewLevel } from '../document/types';
@@ -18,12 +18,12 @@ import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
 import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect } from '../layout/anchors';
 import { compatibilityKey } from '../edges/bundles';
-import { describeContext, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext } from '../nodes/describe';
+import { describeContext, nameLineCount, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext } from '../nodes/describe';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { getMeasurer } from '../render/text/measure';
 import { LIGHT } from '../render/theme/tokens';
-import { BAND, BOUNDARY_HEADER, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD, GUTTER } from './compose';
+import { BAND, BOUNDARY_HEADER, INNER_BAND, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD, GUTTER } from './compose';
 import { AgentError } from './errors';
 import type { AttachmentSpec, FlowSpec, LayoutSpec, NodeSpec, NoteSpec, RelationshipSpec, RoomSpec } from './input';
 import { drawnRoute, repairAnchors, segmentHitsBox } from './route';
@@ -53,6 +53,7 @@ export function spacingOf(layout: Pick<LayoutSpec, 'spacing'>) {
   const f = SPACING_FACTOR[layout.spacing];
   return {
     layer: Math.round(BAND * f),
+    tight: Math.round(INNER_BAND * f),
     sibling: Math.round(GUTTER * 0.75 * f),
     pad: BOUNDARY_PAD,
     component: Math.round(GUTTER * 1.5 * f),
@@ -206,14 +207,69 @@ export function sizeToFit(node: DraftNode, ctx: DescribeContext): DraftNode {
     const height = Math.max(node.height, naturalNoteHeight(node, node.text ?? '', { measurer: ctx.measurer }));
     return { ...node, height };
   }
-  const natural = naturalArchitectureSize(node, ctx);
-  if (!natural.fits) {
+  const natural = balancedSize(node, ctx);
+  if (!natural) {
     throw new AgentError('LIMIT_EXCEEDED', `"${node.text}" is too long to show in full on one shape.`, {
       hint: 'Shorten the label or description; keep long explanations in a note.',
       details: { id: node.id },
     });
   }
   return { ...node, width: natural.width, height: natural.height };
+}
+
+/** The usual widest box for a name in two lines… */
+const NAME_WIDTH = 280;
+/** …and how much wider a long name may make it before it takes a third line. */
+const LONG_NAME_WIDTH = 360;
+const NAME_HEIGHT = 320;
+
+/**
+ * The box a shape's text reads best in, grown from its current size: the usual one when the name
+ * fits two lines in `NAME_WIDTH`; for a longer name, a wider box first, and a third line only when
+ * even that is not enough. A long name set as a narrow column (five lines in a default-width box)
+ * reads as a paragraph and makes its layer as deep as three of its neighbours; set wider, it reads
+ * as a name. `undefined` when nothing in reach shows everything.
+ */
+export function balancedSize(node: DraftNode, ctx: DescribeContext): { width: number; height: number } | undefined {
+  for (const bounds of [
+    { maxWidth: NAME_WIDTH, maxHeight: NAME_HEIGHT },
+    { maxWidth: LONG_NAME_WIDTH, maxHeight: NAME_HEIGHT },
+    { maxWidth: LONG_NAME_WIDTH, maxHeight: NAME_HEIGHT, maxNameLines: 3 },
+  ]) {
+    const natural = naturalArchitectureSize(node, ctx, bounds);
+    if (natural.fits) return { width: natural.width, height: natural.height };
+  }
+  return undefined;
+}
+
+/**
+ * A shape as Arrange gives it: at least as big as it was and big enough for its text — except that a
+ * name wrapped onto more lines than a balanced box needs is re-proportioned. Typing a long name grows
+ * a default-width box taller line by line; laying the view out again from scratch is the moment to
+ * give it the wider, shorter box its name reads best in (`balancedSize`). A box that is tall for any
+ * other reason (a description, a hand-set size) keeps its height.
+ */
+export function arrangedSize(node: DraftNode, ctx: DescribeContext): { width: number; height: number } {
+  const own = { width: node.width, height: node.height };
+  if (node.type === 'ellipse' || node.type === 'group' || node.type === 'text' || node.type === 'code' || node.type === 'note') {
+    try {
+      const sized = sizeToFit(node, ctx);
+      return { width: Math.max(node.width, sized.width), height: Math.max(node.height, sized.height) };
+    } catch {
+      return own;
+    }
+  }
+  const lines = node.text?.trim() ? nameLineCount(node, ctx) : 0;
+  if (lines > 2) {
+    // From the type's own height, so the search can find a shorter box than the column it was.
+    const floor = Math.min(node.height, defaultSizeFor(node.type).height);
+    const balanced = balancedSize({ ...node, height: floor }, ctx);
+    if (balanced && nameLineCount({ ...node, ...balanced }, ctx) < lines) {
+      return { width: Math.max(node.width, balanced.width), height: balanced.height };
+    }
+  }
+  const sized = balancedSize(node, ctx);
+  return sized ? { width: Math.max(node.width, sized.width), height: Math.max(node.height, sized.height) } : own;
 }
 
 /** A native connector for a spec: the matrix's semantics unless the request named ones it offers. */

@@ -23,14 +23,15 @@
  */
 
 import { updateNode } from '../document/operations';
+import { connectorRoutes } from '../edges/connectorRoutes';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { assignAnchors, type Anchors } from '../layout/anchors';
 import { hasPeerCalls } from '../layout/layered';
 import type { DescribeContext } from '../nodes/describe';
 import type { Problems } from './errors';
 import type { LayoutSpec, Reader } from './input';
-import { anchorRectOf, arrangeParts, captionSizer, placeBlock, sizeToFit } from './place';
-import { clearlyBetterDirection, hasLabelledTrunk, hasSharedSideTrunk, JOG_COST } from './compile';
+import { anchorRectOf, arrangedSize, arrangeParts, captionSizer, placeBlock } from './place';
+import { clearlyBetterDirection, fitsClearlyBetter, hasLabelledTrunk, hasSharedSideTrunk, JOG_COST, type Proportioned } from './compile';
 import { legibilityCost, legibilityOf } from './legibility';
 import { checkFit, checkQuality, isBetterCandidate, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityReport } from './quality';
 import { drawnRoute, overlaps, pastDeadline, relaxLayoutAnchors, repairAnchors, segmentHitsBox } from './route';
@@ -46,6 +47,9 @@ export interface ArrangeRequest {
    *  shape — a cheaper "just clean up the arrows" pass. Default `true` (the full placement pass). */
   move: boolean;
   layout: LayoutSpec;
+  /** A whole-view arrange also hands back its best arrangement reading the other way
+   *  (`Arranged.alternative`), so a person can choose the reading direction before anything moves. */
+  bothDirections?: boolean;
 }
 
 const SPACINGS: LayoutSpec['spacing'][] = ['comfortable', 'spacious'];
@@ -96,18 +100,29 @@ export function readArrange(r: Reader, op: Json, at: string, view: DraftDocument
   };
 }
 
-/** Which way a view already reads: the way most of its connectors run. A cleanup keeps it. */
+/**
+ * Which way a view already reads: the way most of its connectors run. A cleanup keeps it. First by
+ * the sides they are drawn between — bottom to top reads down, side to side reads across, however
+ * far apart a fan spreads its shapes — and by how far they run only when that doesn't decide it.
+ */
 export function readingDirectionOf(view: DraftDocument): 'right' | 'down' {
   const byId = new Map(view.nodes.map((n) => [n.id, n]));
   let across = 0;
   let down = 0;
+  let sidesAcross = 0;
+  let sidesDown = 0;
   for (const edge of view.edges) {
     const s = byId.get(edge.source);
     const t = byId.get(edge.target);
-    if (!s || !t) continue;
+    if (!s || !t || s === t) continue;
     across += Math.abs(t.x + t.width / 2 - (s.x + s.width / 2));
     down += Math.abs(t.y + t.height / 2 - (s.y + s.height / 2));
+    const drawn = connectorRoutes(edge, view, 'transient', byId)?.request;
+    const sides = `${drawn?.source.side}>${drawn?.target.side}`;
+    if (sides === 'bottom>top' || sides === 'top>bottom') sidesDown += 1;
+    else if (sides === 'right>left' || sides === 'left>right') sidesAcross += 1;
   }
+  if (sidesDown !== sidesAcross) return sidesDown > sidesAcross ? 'down' : 'right';
   return down > across * 1.2 ? 'down' : 'right';
 }
 
@@ -135,6 +150,10 @@ export interface Arranged {
   touched: Set<string>;
   /** What the arrangement found that the request could change (see `arrangeView`). */
   advisories?: string[];
+  /** The way it reads: what a moving arrangement was laid out in. */
+  direction?: LayoutSpec['direction'];
+  /** With `ArrangeRequest.bothDirections`: the best arrangement reading the other way. */
+  alternative?: Arranged;
 }
 
 /** One candidate arrangement with what was found wrong with it, and the layout that made it. */
@@ -212,9 +231,15 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
   // when it reads clearly better, never over a few pixels — the diagram a person is looking at
   // doesn't turn on its side for nothing. A scoped arrange keeps the view's direction: the part it
   // moves has to read the way the rest still does.
+  // Or when it reads as well and fits a screen clearly better: a tall diagram on a wide screen is
+  // drawn small with most of the view empty, and turning it is what makes it readable at a glance.
+  let alternative: Judged | undefined;
   if (best && !request.scope && request.move !== false && !request.layout.directionChosen && !pastDeadline()) {
     const other = otherDirection(best, judge, peers);
-    if (other && (betterByErrors(other, best) || (tied(other, best) && clearlyBetterDirection(cost(other), cost(best), crossingsOf(other) < crossingsOf(best))))) best = other;
+    if (other && (betterByErrors(other, best) || (tied(other, best) && (clearlyBetterDirection(cost(other), cost(best), crossingsOf(other) < crossingsOf(best)) || fitsClearlyBetter(measure(other), measure(best)))))) {
+      alternative = best;
+      best = other;
+    } else alternative = other;
   }
   // A direction the request chose is kept, but measured against the other: an agent that asked for
   // "down" and got five crossings otherwise tries spacings, captions and hand placement in turn
@@ -231,20 +256,40 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
     problems.add('LAYOUT_CONSTRAINED', at, 'the arranged part would run into shapes outside the scope, and there is no free space beside it; arrange the whole view instead ({op:"arrange"})');
     return undefined;
   }
-  if (best && !pastDeadline()) {
-    const edges = best.arranged.view.edges.map((e) => ({ ...e }));
-    const targets = edges.filter((e) => best!.arranged.touched.has(e.id));
-    repairAnchors(targets, best.arranged.view.nodes, captionSizer(best.arranged.view.nodes, ctx), edges, undefined, true);
-    const arranged = { ...best.arranged, view: { ...best.arranged.view, edges } };
-    const polished: Judged = {
-      ...best,
-      arranged,
-      report: checkQuality(arranged.view.nodes, edges, ctx, arranged.touched),
-      fit: best.layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, edges, ctx), smallestFontPresent(arranged.view.nodes, edges), best.layout.viewport) : undefined,
-    };
-    if (betterByErrors(polished, best) || (tied(polished, best) && cost(polished) < cost(best))) best = polished;
-  }
-  return best && relaxArranged(view, best.arranged);
+  if (!best) return undefined;
+  const polish = (chosen: Judged): Arranged => {
+    let kept = chosen;
+    if (!pastDeadline()) {
+      const edges = chosen.arranged.view.edges.map((e) => ({ ...e }));
+      const targets = edges.filter((e) => chosen.arranged.touched.has(e.id));
+      repairAnchors(targets, chosen.arranged.view.nodes, captionSizer(chosen.arranged.view.nodes, ctx), edges, undefined, true);
+      const arranged = { ...chosen.arranged, view: { ...chosen.arranged.view, edges } };
+      const polished: Judged = {
+        ...chosen,
+        arranged,
+        report: checkQuality(arranged.view.nodes, edges, ctx, arranged.touched),
+        fit: chosen.layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, edges, ctx), smallestFontPresent(arranged.view.nodes, edges), chosen.layout.viewport) : undefined,
+      };
+      if (betterByErrors(polished, chosen) || (tied(polished, chosen) && cost(polished) < cost(chosen))) kept = polished;
+    }
+    return { ...relaxArranged(view, kept.arranged), ...(request.move !== false ? { direction: kept.layout.direction } : {}) };
+  };
+  const chosen = polish(best);
+  if (!request.bothDirections || request.scope || request.move === false) return chosen;
+  // The other way too, for a person choosing; laid out now if the engine never got to it.
+  const other = alternative ?? (!pastDeadline() ? otherDirection(best, judge, peers) : undefined);
+  return other ? { ...chosen, alternative: polish(other) } : chosen;
+}
+
+/** What `fitsClearlyBetter` weighs of a candidate. */
+function measure(c: Judged): Proportioned {
+  return { ...boundsOfView(c.arranged.view.nodes), cost: cost(c), crossings: crossingsOf(c), viewport: c.layout.viewport };
+}
+
+function boundsOfView(nodes: readonly DraftNode[]): { width: number; height: number } {
+  if (!nodes.length) return { width: 1, height: 1 };
+  const box = boxOf(nodes);
+  return { width: Math.max(1, box.width), height: Math.max(1, box.height) };
 }
 
 /**
@@ -398,14 +443,9 @@ function routeOnly(view: DraftDocument, inScope: ReadonlySet<string>, request: A
   return { view: next, touched: new Set(changed.keys()) };
 }
 
-/** A shape at least as big as it was, and big enough for its text. */
+/** A shape big enough for its text, and a long name given a wider box (`arrangedSize`). */
 function grown(node: DraftNode, ctx: DescribeContext): DraftNode {
-  try {
-    const sized = sizeToFit(node, ctx);
-    return { ...node, width: Math.max(node.width, sized.width), height: Math.max(node.height, sized.height) };
-  } catch {
-    return { ...node };
-  }
+  return { ...node, ...arrangedSize(node, ctx) };
 }
 
 function restyled(edge: DraftEdge, connectors: ArrangeRequest['connectors']): DraftEdge {

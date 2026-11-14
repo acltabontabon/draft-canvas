@@ -76,7 +76,7 @@ import {
 } from './projection';
 import { computeSnap, sameGuides, type Guide, type SnapLink } from './snapping';
 import { minResizeSizeFor, snapResize } from './resizeSnap';
-import { AgentPreviewLayer, ProposalPreviewLayer, TidyPreviewLayer } from './AgentPreviewLayer';
+import { AgentPreviewLayer, ArrangePreviewLayer, ProposalPreviewLayer, TidyPreviewLayer } from './AgentPreviewLayer';
 import { ContinuationGhost } from './ContinuationGhost';
 import { RecoveryConnectGhost } from './RecoveryConnectGhost';
 import { RoomFrame } from './RoomFrame';
@@ -2411,6 +2411,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
           {/* What Tidy up would change, while the person decides (`TidyBar`). Never in the document. */}
           <TidyPreviewLayer />
+          {/* What Arrange would change, in the direction chosen (`ArrangeBar`). Never in the document. */}
+          <ArrangePreviewLayer />
 
           {/* Other people in a live session: their pointers and what they hold. Never exported. */}
           <PresenceLayer />

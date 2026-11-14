@@ -728,8 +728,8 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       title: 'Arrange diagram',
       group: 'canvas',
       keywords: ['layout', 'auto layout', 'tidy', 'clean up', 'organize', 'rearrange', 'align'],
-      hint: 'Lay this view out again from scratch — one undo step',
-      run: rearrange,
+      hint: 'Preview this view laid out again from scratch, and choose which way it reads',
+      run: (inner) => rearrange(inner),
     });
   }
   if (!ctx.ui.readOnly && ctx.editor.selection.nodes.some((id) => {
@@ -2010,16 +2010,18 @@ export function multiCommands(ctx: CommandContext): Command[] {
   return commands;
 }
 
-/** The selection-dependent part of the list — empty when nothing is selected. */
-/** Arrange diagram: lays the view out again from scratch. Also what Tidy up offers when it finds
- *  nothing to do. */
-function rearrange(inner: CommandContext): void {
-  // The camera follows only once the engine has moved things: fitting first would frame the
-  // old positions, and the engine loads on demand.
-  void inner.editor.arrangeRoom()
-    .then((moved) => {
-      if (moved) void inner.camera.fitView({ padding: 0.2, duration: 320 });
-      else if (!inner.ui.readOnly) inner.ui.notify('Already tidy.');
+/**
+ * Arrange diagram (and, with `selection`, Arrange selection): the view laid out again from scratch,
+ * shown first as a preview with its reading direction to choose (`ArrangeBar`), applied only on
+ * Apply. Also what Tidy up offers when it finds nothing to do.
+ */
+function rearrange(inner: CommandContext, selection = false): void {
+  void inner.editor.planArrange(selection)
+    .then((plan) => {
+      if (plan === null) return;
+      if (plan === 'no-room') inner.ui.notify('There is not enough room. Arrange a larger selection or the whole diagram.');
+      else if (plan === 'unchanged') inner.ui.notify('Already arranged.');
+      else inner.ui.setArrangePreview(plan);
     })
     .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
 }
@@ -2033,8 +2035,7 @@ export function arrangeSelectionCommands(ctx: CommandContext): Command[] {
     });
     return node && !['note', 'text', 'code'].includes(node.type);
   })) return [];
-  return [{ id: 'arrange-selection', title: 'Arrange selection', group: 'selection', keywords: ['layout', 'tidy'],
-    run: (inner) => { void inner.editor.arrangeSelection().catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED)); } }];
+  return [{ id: 'arrange-selection', title: 'Arrange selection', group: 'selection', keywords: ['layout', 'tidy'], run: (inner) => rearrange(inner, true) }];
 }
 
 function selectionCommands(ctx: CommandContext): Command[] {

@@ -1,7 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
 import { create, newCanvas } from './canvas';
 
-/** "Arrange diagram": three shapes stacked on one spot come apart, and one ⌘Z puts them back. */
+/** "Arrange diagram": a preview with the reading direction to choose, then three shapes stacked on
+ *  one spot come apart on Apply, and one ⌘Z puts them back. */
 
 type Box = { x: number; y: number; width: number; height: number };
 
@@ -44,6 +45,14 @@ test('arranges three overlapping shapes apart from the palette, and ⌘Z restore
   await expect(page.getByRole('option', { selected: true })).toContainText('Arrange diagram');
   await page.keyboard.press('Enter');
   await expect(page.getByRole('dialog', { name: 'Commands' })).toBeHidden();
+
+  // A preview first, with the reading direction to choose: nothing has moved until Apply.
+  const bar = page.getByRole('region', { name: 'Arrange preview' });
+  await expect(bar).toBeVisible();
+  await expect(bar.getByRole('radiogroup', { name: 'Reading direction' })).toBeVisible();
+  expect(await positions(page)).toEqual(stacked);
+  await bar.getByRole('button', { name: 'Apply' }).click();
+  await expect(bar).toBeHidden();
 
   await expect.poll(async () => new Set(Object.values(await positions(page)).map((p) => `${p.x},${p.y}`)).size).toBe(3);
   const boxes = await nodeBoxes(page);

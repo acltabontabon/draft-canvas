@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { reconnectProblem } from '../document/reconnect';
 import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // UI feedback for document limits and rejected reconnects stays outside document operations.
-import { PRESENTATION_AT_REST, useUiStore, type TidyPreview } from './uiStore';
+import { PRESENTATION_AT_REST, useUiStore, type ArrangePreview, type TidyPreview } from './uiStore';
 import { edgeIndex, nodeIndex } from './selectors';
 import {
   createAttachment,
@@ -553,6 +553,19 @@ export interface EditorStore {
    */
   arrangeRoom: (preset?: ArrangePreset) => Promise<boolean>;
   arrangeSelection: () => Promise<boolean>;
+  /**
+   * Works out what Arrange would do and applies none of it: the room on screen laid out again from
+   * scratch (or, with `selection`, the selected shapes), reading each way the person may choose
+   * between, for `ArrangeBar` to show. Resolves the preview, `'unchanged'` when arranging moves
+   * nothing, `'no-room'` when a selection can't be put back without running into its surroundings,
+   * or `null` when the room changed while the engine loaded or can't be edited right now.
+   */
+  planArrange: (selection?: boolean) => Promise<ArrangePreview | 'unchanged' | 'no-room' | null>;
+  /**
+   * Applies the direction a preview from `planArrange` shows, as one undo step labelled "Arrange".
+   * False, and nothing applied, when the room has changed since it was worked out.
+   */
+  commitArrange: (preview: ArrangePreview) => boolean;
   /**
    * Works out what Tidy up would do and applies none of it: the gentle cleanup of `agent/tidy.ts`
    * (straighten near-level connectors, re-attach ones drawn through a shape) on the room on screen,
@@ -2380,6 +2393,52 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     };
   },
 
+  async planArrange(selection = false) {
+    const before = get();
+    if (selection && before.selection.nodes.length === 0) return null;
+    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }, { withDeadline }] = await Promise.all([
+      import('../agent/arrange'), import('../agent/place'), import('../agent/errors'), import('../agent/route'),
+    ]);
+    const current = get();
+    // As `planTidy`: what was asked about is no longer what is on screen.
+    if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) return null;
+    if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    const scoped = selection;
+    const reads = readingDirectionOf(current.document);
+    const layout = { direction: reads, spacing: 'comfortable' as const, allowDegraded: false, normalizePeerSizes: false };
+    // The same defaults the agent's `{op:"arrange"}` resolves to when it names nothing, both ways
+    // round for the whole room. A selection keeps the view's direction: it has to read the way the
+    // rest of the view still does.
+    const arranged = withDeadline(performance.now() + ARRANGE_BUDGET_MS, () => arrangeView(
+      current.document,
+      scoped
+        ? { scope: { nodes: [...current.selection.nodes] }, keepOutsideFixed: true, connectors: 'tidy', move: true, layout: { ...layout, directionChosen: true } }
+        : { connectors: 'tidy', move: true, bothDirections: true, layout },
+      measureContext(),
+      new Problems(),
+      '/arrange',
+    ));
+    if (!arranged) return 'no-room';
+    const options: ArrangePreview['options'] = {};
+    for (const each of [arranged, arranged.alternative]) {
+      if (each && each.touched.size > 0 && !sameLayout(each.view, current.document)) options[each.direction ?? reads] = each.view;
+    }
+    const suggested = arranged.direction ?? reads;
+    // Already arranged the suggested way: nothing to show, even if the other way would differ —
+    // offering only a turn the layout recommends against isn't a cleanup.
+    if (!options[suggested]) return 'unchanged';
+    return { path: current.path, base: current.document, options, direction: suggested, suggested, current: reads, scoped };
+  },
+
+  commitArrange(preview) {
+    const state = get();
+    const view = preview.options[preview.direction];
+    if (interaction || !view || state.document !== preview.base || state.path !== preview.path) return false;
+    state.apply(preview.scoped ? 'Arrange selection' : 'Arrange', () => view);
+    return get().document !== preview.base;
+  },
+
   commitTidy(preview) {
     const state = get();
     if (interaction || state.document !== preview.base || state.path !== preview.path) return false;
@@ -3597,6 +3656,22 @@ export function __resetInteraction(): void {
 export function __resetClipboardSync(): void {
   lastSystemClipboardText = null;
   lastPasteTarget = null;
+}
+
+/** Whether two versions of a room put every shape and connector end in the same place: what an
+ *  arrangement that changes nothing looks like, whatever it touched to find that out. */
+function sameLayout(a: DraftDocument, b: DraftDocument): boolean {
+  if (a.nodes.length !== b.nodes.length || a.edges.length !== b.edges.length) return false;
+  const nodes = new Map(b.nodes.map((n) => [n.id, n]));
+  const edges = new Map(b.edges.map((e) => [e.id, e]));
+  const anchor = (x?: DraftEdge['sourceAnchor']) => (x ? `${x.side}:${x.offset}` : '');
+  return a.nodes.every((n) => {
+    const o = nodes.get(n.id);
+    return o && o.x === n.x && o.y === n.y && o.width === n.width && o.height === n.height && o.parentId === n.parentId;
+  }) && a.edges.every((e) => {
+    const o = edges.get(e.id);
+    return o && anchor(o.sourceAnchor) === anchor(e.sourceAnchor) && anchor(o.targetAnchor) === anchor(e.targetAnchor) && o.routeMode === e.routeMode && o.waypoints === e.waypoints;
+  });
 }
 
 /**

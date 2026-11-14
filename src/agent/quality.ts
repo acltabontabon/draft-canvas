@@ -15,7 +15,7 @@
  */
 
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
-import { naturalArchitectureSize, type DescribeContext } from '../nodes/describe';
+import { boundaryHeaderTextBox, naturalArchitectureSize, type DescribeContext } from '../nodes/describe';
 import { nodeTechnologyIcon, technologyMarkBounds } from '../nodes/technology';
 import { isC4Element } from '../depth/c4';
 import { TEXT_SIZES } from '../render/text/fonts';
@@ -255,6 +255,17 @@ export function checkQuality(
   }
   const drawn = othersOf(nodes, edges, caption, undefined, byId);
   const drawnById = new Map(drawn.map((o) => [o.id, o]));
+  // A caption in a boundary's header row reads as part of the header — beside the title, it names
+  // the boundary twice; over it, neither reads. (The row the boundary's own shapes keep clear of.)
+  const titles = groups.flatMap((group) => {
+    const box = boundaryHeaderTextBox(group, ctx);
+    return box ? [{ id: group.id, box: { x: group.x, y: group.y + box.y - 2, width: group.width, height: box.height + 4 } }] : [];
+  });
+  for (const route of drawn) {
+    if (!route.chip || !judged(route.id)) continue;
+    const covered = titles.find((title) => overlaps(route.chip!, title.box));
+    if (covered) errors.push({ kind: 'label-over-node', ids: [route.id, covered.id], message: `the caption of ${route.id} sits in the header of ${covered.id}.` });
+  }
   // A connector between two facing sides that still steps sideways on its way reads as skewed. Only
   // one of several connectors leaving (or reaching) the same side can be straight — the rest of a
   // fan must step — so only a connector alone on both its sides counts.

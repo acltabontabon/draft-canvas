@@ -327,6 +327,56 @@ export function clearlyBetterDirection(other: number, same: number, uncrosses = 
   return other < same * CLEARLY_BETTER && (uncrosses || same - other > MIN_GAIN);
 }
 
+/** A laptop screen's canvas, what a diagram is judged against when no viewport is given. */
+const SCREEN: readonly [number, number] = [1440, 900];
+/** Proportion counts only for a diagram this big against the view (its larger share of either side):
+ *  a small one is shown at full size whichever way it reads, and two shapes read across, not down. */
+const FILL_MATTERS = 0.75;
+/** The other reading direction wins on proportion alone only when it fills that much more of the view… */
+const FILL_GAIN = 1.3;
+/** …the preferred one leaves at least this much of it empty — a diagram that already fits
+ *  comfortably isn't turned over to fill a little more… */
+const FILL_ENOUGH = 0.7;
+/** …and turned, it fills at least this much: a chain is a strip either way, and reads along. */
+const FILL_TURNED = 0.5;
+
+/** What `fitsClearlyBetter` weighs: a diagram's extent and how it reads. */
+export interface Proportioned {
+  width: number;
+  height: number;
+  /** `legibilityCost` plus jogs, as `clearlyBetterDirection` takes it. */
+  cost: number;
+  crossings: number;
+  /** The view it will be shown in, `[width, height]` (`LayoutSpec.viewport`). */
+  viewport?: readonly [number, number];
+}
+
+/** How much of a view a diagram fills when fitted to it: 1 when their proportions match. */
+export function fillOf(width: number, height: number, viewport?: readonly [number, number]): number {
+  const [w, h] = viewOf(viewport);
+  const aspect = w / h;
+  const ratio = width / Math.max(1, height);
+  return ratio < aspect ? ratio / aspect : aspect / ratio;
+}
+
+function viewOf(viewport?: readonly [number, number]): readonly [number, number] {
+  return viewport && viewport[0] > 0 && viewport[1] > 0 ? viewport : SCREEN;
+}
+
+/**
+ * Whether the other reading direction is worth it for its proportions: a diagram five layers deep
+ * reading down is a tall strip on a wide screen, fitted small with most of the view empty, where
+ * reading across it fills the view. Only with no more crossings and no clearly worse legibility —
+ * proportion never buys a line that is harder to follow.
+ */
+export function fitsClearlyBetter(other: Proportioned, same: Proportioned): boolean {
+  const otherFill = fillOf(other.width, other.height, other.viewport);
+  const sameFill = fillOf(same.width, same.height, same.viewport);
+  const [w, h] = viewOf(same.viewport);
+  if (Math.max(same.width / w, same.height / h) < FILL_MATTERS) return false;
+  return sameFill < FILL_ENOUGH && otherFill >= Math.max(FILL_TURNED, sameFill * FILL_GAIN) && other.crossings <= same.crossings && other.cost <= same.cost + MIN_GAIN;
+}
+
 /**
  * Whether `a` should be kept over `b`. Hidden content and fit decide first, exactly as
  * `isBetterCandidate` has them; only between equally readable arrangements does legibility (with
@@ -340,9 +390,17 @@ function isBetterArrangement(a: Candidate, b: Candidate, preferred?: LayoutSpec[
   const cost = (c: Candidate) => legibilityCost(c.legibility) + c.found.warnings.length * JOG_COST;
   const [ca, cb] = [cost(a), cost(b)];
   if (preferred === undefined || a.layout.direction === b.layout.direction) return ca < cb;
+  const proportioned = (c: Candidate, cost: number): Proportioned => ({ ...extentOf(c.placed.nodes), cost, crossings: c.legibility.crossings, viewport: c.layout.viewport });
   return a.layout.direction === preferred
-    ? !clearlyBetterDirection(cb, ca, b.legibility.crossings < a.legibility.crossings)
-    : clearlyBetterDirection(ca, cb, a.legibility.crossings < b.legibility.crossings);
+    ? !clearlyBetterDirection(cb, ca, b.legibility.crossings < a.legibility.crossings) && !fitsClearlyBetter(proportioned(b, cb), proportioned(a, ca))
+    : clearlyBetterDirection(ca, cb, a.legibility.crossings < b.legibility.crossings) || fitsClearlyBetter(proportioned(a, ca), proportioned(b, cb));
+}
+
+function extentOf(nodes: readonly DraftNode[]): { width: number; height: number } {
+  if (!nodes.length) return { width: 1, height: 1 };
+  const left = Math.min(...nodes.map((n) => n.x));
+  const top = Math.min(...nodes.map((n) => n.y));
+  return { width: Math.max(1, Math.max(...nodes.map((n) => n.x + n.width)) - left), height: Math.max(1, Math.max(...nodes.map((n) => n.y + n.height)) - top) };
 }
 
 /** Whether any labelled connector shares a Smart Routing trunk here (see `assignAnchors`'s labelled fan). */
