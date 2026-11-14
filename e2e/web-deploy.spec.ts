@@ -716,16 +716,20 @@ test('the exhibits link back to the feature overview', async ({ page }) => {
   await page.getByRole('link', { name: 'Overview' }).click();
   await expect(page).toHaveURL(SITE + '#features');
   const features = page.locator('#features');
+  await expect(features).toBeFocused();
   await expect(features).toBeInViewport({ ratio: 0.99 });
   await expect(features.getByRole('heading', { name: 'Collaborate live' })).toBeInViewport();
   await expect(features.getByRole('heading', { name: 'Present flows step by step' })).toBeInViewport();
   await expect(features.getByRole('heading', { name: 'Bring your own agent' })).toBeInViewport();
   await expect(features.getByRole('heading', { name: 'Keep your files on your device' })).toBeInViewport();
+});
 
-  // The page has no iframes. Run the same rules in one pass because Firefox can crash in
-  // axe's partial scan after the gallery-to-overview navigation.
-  const audit = await new AxeBuilder({ page }).setLegacyMode().include('#features')
-    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+test('the feature overview passes the accessibility scan at desktop width', async ({ page }) => {
+  await page.setViewportSize({ width: 1366, height: 768 });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`${SITE}#features`);
+  // Audit the settled overview independently from the animated return from the gallery.
+  const audit = await new AxeBuilder({ page }).include('#features').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   expect(audit.violations).toEqual([]);
 });
 
