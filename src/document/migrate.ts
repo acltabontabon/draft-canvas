@@ -634,6 +634,10 @@ const MIGRATIONS: Record<number, Migration> = {
   25: (document) => document,
   // Message attachments and larger sequence frames would be stripped or capped by v26 readers.
   26: (document) => document,
+  // Optional `ink` (handwritten sketches) on every room; a diagram without it means the same. The
+  // version still moves so an older build refuses a file with sketches by name rather than opening
+  // it and silently dropping them on the next save.
+  27: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

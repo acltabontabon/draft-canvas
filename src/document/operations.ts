@@ -7,6 +7,7 @@
 import { reconnectProblem } from './reconnect';
 import { repairCompensationLinks } from './compensation';
 import { createId } from './ids';
+import { INK_ID_PREFIX } from './ink';
 import { OPEN_POINT_ID_PREFIX, pruneOpenPoints } from './openPoints';
 import { defaultSizeFor, maxSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
@@ -16,6 +17,7 @@ import { dropParticipantLinks, mapSequenceText, repointParticipantLinks } from '
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
 import type {
+  DraftInk,
   Attachment,
   DraftDocument,
   DraftEdge,
@@ -431,6 +433,8 @@ export interface Clipboard {
    * the original keeps every target it had. Absent on a fragment made before this existed.
    */
   openPoints?: OpenPoint[];
+  /** Sketch strokes copied with (or instead of) the shapes. Absent when none were. */
+  ink?: DraftInk[];
 }
 
 /**
@@ -528,6 +532,8 @@ function reidentifyInside(inside: DraftInside, renamed?: IdRenames): DraftInside
   });
 
   const next: DraftInside = { nodes, edges, flows, viewport: inside.viewport };
+  // Sketches over the room travel with it, each under a new id: ids are unique across the file.
+  if (inside.ink && inside.ink.length > 0) next.ink = inside.ink.map((stroke) => ({ ...stroke, id: createId(INK_ID_PREFIX) }));
   // What the room says it shows is part of the room, not part of its identity: a copy that lost it
   // would start deriving a level from whatever it was pasted under, and a room deliberately marked
   // as just a drawing would quietly stop being one.

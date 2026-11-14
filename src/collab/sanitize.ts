@@ -15,11 +15,12 @@ import { LIMITS } from '../document/limits';
 import { cleanText } from '../document/sanitize';
 import { CURRENT_VERSION, DRAFT_FORMAT, VIEW_LEVELS, type DraftEdge, type DraftFlow, type DraftSettings, type OpenPoint, type ViewLevel } from '../document/types';
 import { normalizeDocument } from '../document/validate';
+import { parseInkStroke } from '../document/ink';
 import { isRecord } from '../lib/isRecord';
 import { ROOT_ROOM, type Change, type Collection, type NodeValue } from './changes';
 
 /** More changes than this in one patch is not an edit anybody made by hand or by command. */
-export const MAX_CHANGES_PER_PATCH = LIMITS.maxNodes + LIMITS.maxEdges + LIMITS.maxOpenPoints + LIMITS.maxFlows + 64;
+export const MAX_CHANGES_PER_PATCH = LIMITS.maxNodes + LIMITS.maxEdges + LIMITS.maxOpenPoints + LIMITS.maxFlows + LIMITS.maxInkStrokes + 64;
 
 export type SanitizeResult = { ok: true; changes: Change[] } | { ok: false; reason: string };
 
@@ -33,7 +34,7 @@ export function sanitizeChanges(raw: unknown): SanitizeResult {
   for (const candidate of raw) {
     const change = sanitizeChange(candidate);
     if (typeof change === 'string') return refuse(change);
-    if (change.kind === 'node' || change.kind === 'edge' || change.kind === 'flow' || change.kind === 'point' || change.kind === 'move') {
+    if (change.kind === 'node' || change.kind === 'edge' || change.kind === 'flow' || change.kind === 'ink' || change.kind === 'point' || change.kind === 'move') {
       const key = change.kind === 'move' ? `move:${change.target}:${change.id}` : `${change.kind}:${change.id}`;
       if (named.has(key)) return refuse('the same element twice');
       named.add(key);
@@ -90,6 +91,15 @@ function sanitizeChange(candidate: unknown): Change | string {
       const value = sanitizeFlow(candidate.value, id);
       return value ? { kind: 'flow', id, room, value } : `unreadable flow ${id}`;
     }
+    case 'ink': {
+      const id = safeId(candidate.id);
+      const room = roomOf(candidate.room);
+      if (!id || room === null) return 'unreadable sketch change';
+      if (candidate.value === null) return { kind: 'ink', id, room, value: null };
+      // The same repair a stroke in a file gets; a stroke is self-contained, so nothing to settle later.
+      const value = parseInkStroke(candidate.value, id);
+      return value ? { kind: 'ink', id, room, value } : `unreadable sketch ${id}`;
+    }
     case 'point': {
       const id = safeId(candidate.id);
       if (!id) return 'unreadable open point change';
@@ -99,7 +109,7 @@ function sanitizeChange(candidate: unknown): Change | string {
     }
     case 'move': {
       const target = candidate.target;
-      if (target !== 'node' && target !== 'edge' && target !== 'flow') return 'unreadable move';
+      if (target !== 'node' && target !== 'edge' && target !== 'flow' && target !== 'ink') return 'unreadable move';
       const id = safeId(candidate.id, target === 'node');
       const room = roomOf(candidate.room);
       if (!id || room === null) return 'unreadable move';
@@ -143,11 +153,12 @@ const ORDER_LIMITS: Record<Collection, number> = {
   nodes: LIMITS.maxNodes,
   edges: LIMITS.maxEdges,
   flows: LIMITS.maxFlows,
+  ink: LIMITS.maxInkStrokes,
   points: LIMITS.maxOpenPoints,
 };
 
 function isCollection(value: unknown): value is Collection {
-  return value === 'nodes' || value === 'edges' || value === 'flows' || value === 'points';
+  return value === 'nodes' || value === 'edges' || value === 'flows' || value === 'ink' || value === 'points';
 }
 
 /* --------------------------------------------- one-element documents -- */

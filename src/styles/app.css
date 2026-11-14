@@ -7136,3 +7136,233 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
   64%, 78% { stroke-dashoffset: 0; opacity: 1; }
   92%, 100% { stroke-dashoffset: 0; opacity: 0; }
 }
+
+/* ── The Pencil's tray ───────────────────────────────────────────────────────────────────────────
+   `ui/Editor/ink/InkBar.tsx`: under the toolbar while the Pencil is in hand, in the place the
+   example's banner uses — one island, the canvas's own paper, the same pill. */
+.dc-ink-bar {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  max-width: calc(100% - 24px);
+  padding: 3px;
+  border: 1px solid var(--dc-border);
+  border-radius: 12px;
+  background: var(--dc-surface);
+  box-shadow: var(--dc-island-shadow);
+  transform: translateX(-50%);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-ink-bar {
+    animation: dc-ink-bar-in 180ms var(--dc-ease-out) both;
+  }
+}
+
+@keyframes dc-ink-bar-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -4px);
+  }
+}
+
+.dc-editor-canvas:has(.dc-ink-bar) .dc-flow-lens-indicator {
+  top: 52px;
+}
+
+.dc-ink-modes {
+  display: flex;
+  gap: 1px;
+}
+
+.dc-ink-mode,
+.dc-ink-choice {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 9px 0 7px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: color-mix(in srgb, var(--dc-text) 62%, transparent);
+  font: inherit;
+  font-size: 12px;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms var(--dc-ease-out), color 120ms var(--dc-ease-out);
+}
+
+.dc-ink-mode:hover,
+.dc-ink-choice:hover {
+  background: color-mix(in srgb, var(--dc-text) 7%, transparent);
+  color: var(--dc-text);
+}
+
+.dc-ink-mode[data-active='true'],
+.dc-ink-choice[data-active='true'] {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+  font-weight: 600;
+}
+
+.dc-ink-mode:focus-visible,
+.dc-ink-choice:focus-visible,
+.dc-ink-swatch:focus-visible,
+.dc-ink-size:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
+}
+
+.dc-ink-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  background: var(--dc-border);
+}
+
+.dc-ink-swatches,
+.dc-ink-sizes {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dc-ink-swatch,
+.dc-ink-size {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 26px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.dc-ink-swatch::before {
+  content: '';
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--dc-ink-swatch);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dc-text) 18%, transparent);
+  transition: transform 120ms var(--dc-ease-out);
+}
+
+.dc-ink-swatch:hover::before {
+  transform: scale(1.12);
+}
+
+/* The ink in hand: a ring of the canvas's own paper, then the selection colour, round the dot. */
+.dc-ink-swatch[data-active='true']::before {
+  box-shadow: 0 0 0 2px var(--dc-surface), 0 0 0 3.5px var(--dc-selection);
+}
+
+.dc-ink-size > span {
+  display: block;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--dc-text) 55%, transparent);
+}
+
+.dc-ink-size:hover > span {
+  background: var(--dc-text);
+}
+
+.dc-ink-size[data-active='true'] {
+  background: var(--dc-selection-soft);
+}
+
+.dc-ink-size[data-active='true'] > span {
+  background: var(--dc-selection);
+}
+
+.dc-ink-hint {
+  padding: 0 10px 0 4px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ── Smart Ink's offer ───────────────────────────────────────────────────────────────────────────
+   `ui/Editor/ink/InkSuggestionPopover.tsx`: a strip beside the drawing — what it became and what
+   else it could be. Screen space, like every canvas popover, so it keeps its size at any zoom. */
+.dc-ink-suggestion {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: var(--dc-z-popover);
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  padding: 3px;
+  border: 1px solid var(--dc-border);
+  border-radius: 12px;
+  background: var(--dc-surface);
+  box-shadow: var(--dc-shadow-panel);
+  pointer-events: all;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-ink-suggestion {
+    animation: dc-ink-suggestion-in 200ms var(--dc-ease-out) 120ms both;
+  }
+}
+
+@keyframes dc-ink-suggestion-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.dc-ink-suggestion .dc-ink-choice {
+  height: 26px;
+  font-size: 11.5px;
+}
+
+.dc-ink-suggestion .dc-tool-glyph {
+  width: 15px;
+  height: 15px;
+}
+
+/* The suggested choice, while nothing is chosen yet: a quiet dot beside its name. */
+.dc-ink-suggestion[data-mode='offer'] .dc-ink-choice[data-recommended='true']::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--dc-selection);
+}
+
+.dc-ink-suggestion-lead {
+  padding: 0 6px 0 8px;
+  color: var(--dc-text-faint);
+  font-family: var(--dc-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.dc-ink-choice-count {
+  min-width: 15px;
+  padding: 0 4px;
+  border-radius: var(--dc-radius-pill);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  font-size: 10px;
+  line-height: 15px;
+  text-align: center;
+}
+
+.dc-ink-keep {
+  color: var(--dc-text-faint);
+}

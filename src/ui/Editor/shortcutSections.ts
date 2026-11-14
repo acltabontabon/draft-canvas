@@ -135,6 +135,19 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
+    title: 'Pencil',
+    rows: [
+      { commandId: 'pencil-sketch', label: 'Pencil — press again to switch between Sketch and Smart Ink' },
+      { commandId: 'pencil-highlighter', label: 'Highlighter' },
+      { commandId: 'pencil-eraser', label: 'Eraser — a stylus’s eraser end erases too' },
+      { keys: ['Esc'], label: 'Put the Pencil down; mid-stroke, take back that stroke' },
+      { keys: ['←', '→'], label: 'Smart Ink: change what a drawing became' },
+      { keys: ['Enter'], label: 'Smart Ink: keep it and name it' },
+      { keys: ['Esc'], label: 'Smart Ink: keep the drawing as a sketch instead' },
+      { gesture: 'Wheel, pinch or middle-drag', label: 'Pan and zoom while drawing' },
+    ],
+  },
+  {
     title: 'Open points',
     rows: [{ commandId: 'open-point-add', label: 'Raise an open point about the selection — the list of what is still open is in the status bar' }],
   },

@@ -13,7 +13,7 @@
 import type { DraftDocument, DraftNode, DraftSettings } from '../document/types';
 import { ROOT_ROOM, type Change, type NodeValue, type RoomId } from './changes';
 import { sameExcept, sameValue } from './equal';
-import { indexOf, type FileIndex, type Located } from './fileIndex';
+import { elementsOf, indexOf, itemsOf, type ElementKind, type FileIndex, type Located } from './fileIndex';
 
 /** A node's own fields — what a change carries for it. */
 export function nodeValue(node: DraftNode): NodeValue {
@@ -57,15 +57,14 @@ export function diffFile(prev: DraftDocument, next: DraftDocument, options: Diff
   diffElements(before, after, 'node', out, implied);
   diffElements(before, after, 'edge', out, implied);
   diffElements(before, after, 'flow', out, implied);
+  diffElements(before, after, 'ink', out, implied);
   diffRooms(before, after, out);
   diffPoints(prev, next, out);
   return out;
 }
 
-type ElementKind = 'node' | 'edge' | 'flow';
-
 function locationsOf(index: FileIndex, kind: ElementKind): Map<string, Located<{ id: string }>> {
-  return kind === 'node' ? index.nodes : kind === 'edge' ? index.edges : index.flows;
+  return elementsOf(index, kind);
 }
 
 function sameElement(kind: ElementKind, a: { id: string }, b: { id: string }): boolean {
@@ -102,17 +101,17 @@ function changeOf(kind: ElementKind, id: string, room: RoomId, value: { id: stri
   return { kind, id, room, value } as Change;
 }
 
-const ROOM_COLLECTIONS = ['nodes', 'edges', 'flows'] as const;
+const ROOM_COLLECTIONS = ['nodes', 'edges', 'flows', 'ink'] as const;
 
 function diffRooms(before: FileIndex, after: FileIndex, out: Change[]): void {
   for (const [room, { graph }] of after.rooms) {
     const old = before.rooms.get(room)?.graph;
     if ((old?.level ?? null) !== (graph.level ?? null)) out.push({ kind: 'level', room, value: graph.level ?? null });
     for (const collection of ROOM_COLLECTIONS) {
-      const ids = graph[collection];
-      if (old && old[collection] === ids) continue;
-      const located = collection === 'nodes' ? before.nodes : collection === 'edges' ? before.edges : before.flows;
-      const expected = expectedOrder(old?.[collection] ?? [], ids, room, located, collection === 'nodes');
+      const ids = itemsOf(graph, collection);
+      if (old && itemsOf(old, collection) === ids) continue;
+      const located = collection === 'nodes' ? before.nodes : collection === 'edges' ? before.edges : collection === 'flows' ? before.flows : before.ink;
+      const expected = expectedOrder(old ? itemsOf(old, collection) : [], ids, room, located, collection === 'nodes');
       if (!sameIds(expected, ids)) out.push({ kind: 'order', room, collection, ids: ids.map((item) => item.id) });
     }
   }

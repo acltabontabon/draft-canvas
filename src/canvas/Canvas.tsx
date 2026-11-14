@@ -92,6 +92,8 @@ import { FollowPrompt } from '../ui/collab/FollowPrompt';
 import { stopFollowingOnGesture } from '../ui/collab/presence/useFollowPresenter';
 import { useLivePresence } from '../ui/collab/presence/useLivePresence';
 import { useContinuation } from './useContinuation';
+import { InkLayer } from './InkLayer';
+import { useInkInput } from './useInkInput';
 
 /**
  * These must be module-scope constants. An object literal defined during render
@@ -710,6 +712,12 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     }
   }, [editable, finishRecoveryConnect, onCreateAt, screenToFlowPosition, sharedReadOnly]);
   useContinuation(editable);
+
+  // The Pencil: drawing claims the pointer only while it is in hand on an editable canvas.
+  const pencil = useUiStore((state) => state.pencil);
+  const armedShape = useUiStore((state) => state.armed !== null);
+  const drawing = editable && pencil !== null && !trafficActive;
+  useInkInput(paneRef, drawing);
 
   useZoomVariable();
   useChangeFeedback();
@@ -2081,6 +2089,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   /** A toolbar button arms a tool; the next click on empty canvas places it. */
   const onPaneClick = useCallback(
     (event: React.MouseEvent) => {
+      // A click on empty canvas puts chosen sketch strokes down, as it does shapes.
+      useUiStore.getState().setInkSelection([]);
       if (!editable || !useUiStore.getState().armed) return;
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) });
@@ -2352,6 +2362,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       data-lens={lensActive ? 'on' : undefined}
       data-traffic={trafficActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}
+      data-pencil={drawing ? pencil : undefined}
       data-recovery-connecting={recoveryConnect ? 'true' : undefined}
       style={
         explainActive
@@ -2449,7 +2460,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         nodesFocusable={false}
         edgesFocusable={false}
         panOnScroll
-        selectionOnDrag={interactive}
+        // Off while the Pencil is in hand: React Flow starts its marquee from a React capture handler,
+        // ahead of the Pencil's own listener, and a stroke drawn as a suggestion strip closed went on
+        // to drag a selection rectangle across the canvas.
+        selectionOnDrag={interactive && !drawing}
         // Button 1 (middle-mouse-drag) still pans; button 2 (right) is freed for the context menu —
         // see `onPaneContextMenu`'s own comment for why React Flow's `Pane` would otherwise swallow
         // the native `contextmenu` event before it ever reaches that handler.
@@ -2539,6 +2553,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
           {/* Other people in a live session: their pointers and what they hold. Never exported. */}
           <PresenceLayer />
+
+          {/* Handwritten sketches sit over everything else drawn in the room, as on a whiteboard. */}
+          <InkLayer theme={theme.name} selectable={editable && !drawing && !armedShape && !trafficActive} />
 
           {/* Traffic's findings, written over the diagram like a whiteboard review. Never exported. */}
           {trafficActive && <TrafficSketches />}

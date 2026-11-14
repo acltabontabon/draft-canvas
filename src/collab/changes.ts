@@ -16,7 +16,7 @@
  * a copy of every room under it, and two people editing different rooms of the same shape into a
  * conflict.
  */
-import type { DraftEdge, DraftFlow, DraftNode, DraftSettings, OpenPoint, ViewLevel } from '../document/types';
+import type { DraftEdge, DraftFlow, DraftInk, DraftNode, DraftSettings, OpenPoint, ViewLevel } from '../document/types';
 
 /** The id of the node that owns a room, or `''` for the document itself. */
 export type RoomId = string;
@@ -27,13 +27,15 @@ export const ROOT_ROOM: RoomId = '';
 export type NodeValue = Omit<DraftNode, 'inside'>;
 
 /** The ordered collections a room has, plus the file's own list of open points. */
-export type Collection = 'nodes' | 'edges' | 'flows' | 'points';
+export type Collection = 'nodes' | 'edges' | 'flows' | 'ink' | 'points';
 
 export type Change =
   /** Adds the node to `room` when it does not exist yet; otherwise replaces it where it already is. `null` removes it, with everything inside it. */
   | { kind: 'node'; id: string; room: RoomId; value: NodeValue | null }
   | { kind: 'edge'; id: string; room: RoomId; value: DraftEdge | null }
   | { kind: 'flow'; id: string; room: RoomId; value: DraftFlow | null }
+  /** A handwritten stroke. Whole strokes travel, once each — never the samples of one being drawn. */
+  | { kind: 'ink'; id: string; room: RoomId; value: DraftInk | null }
   /** Open points are the file's, never a room's. */
   | { kind: 'point'; id: string; value: OpenPoint | null }
   /**
@@ -41,7 +43,7 @@ export type Change =
    * level up or down (`moveInside`/`moveOutside`) takes its rooms along, which an add and a remove
    * would have lost.
    */
-  | { kind: 'move'; target: 'node' | 'edge' | 'flow'; id: string; room: RoomId }
+  | { kind: 'move'; target: 'node' | 'edge' | 'flow' | 'ink'; id: string; room: RoomId }
   | { kind: 'title'; value: string }
   | { kind: 'settings'; value: DraftSettings }
   | { kind: 'level'; room: RoomId; value: ViewLevel | null }
@@ -63,6 +65,7 @@ export function keyOf(change: Change): string {
     case 'node':
     case 'edge':
     case 'flow':
+    case 'ink':
       return `${change.kind}:${change.id}`;
     case 'point':
       return `point:${change.id}`;

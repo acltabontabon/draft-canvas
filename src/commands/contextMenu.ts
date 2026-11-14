@@ -9,6 +9,7 @@ import {
   arrangeSelectionCommands,
   createCommandAt,
   edgeCommands,
+  inkCommands,
   multiCommands,
   nodeCommands,
   openPointCommands,
@@ -336,6 +337,12 @@ export function contextMenuCommandsFor(
       return edge
         ? edgeMenu(ctx, edge, [...edgeCommands(ctx, edge), ...pick(openPointCommands(ctx), ['open-point-add'])])
         : [];
+    }
+    case 'ink': {
+      const strokes = ctx.ui.inkSelection.length;
+      if (strokes === 0) return [];
+      const commands = inkCommands(ctx);
+      return grouped({ type: 'header', title: strokes === 1 ? 'Sketch' : count(strokes, 'stroke') }, [pick(commands, ['ink-convert']), pick(commands, ['ink-delete'])]);
     }
     case 'selection': {
       const { nodes, edges } = ctx.editor.selection;

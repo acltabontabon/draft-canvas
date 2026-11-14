@@ -82,6 +82,7 @@ import { clamp } from '../lib/math';
 import { isRecord } from '../lib/isRecord';
 import { normalizeOpenPointText, normalizeTargets, OPEN_POINT_ID_PREFIX } from './openPoints';
 import { normalizeSequence } from './validateSequence';
+import { INK_ID_PREFIX, parseInkStroke } from './ink';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
@@ -219,7 +220,8 @@ interface FileContext {
   nodeIds: Set<string>;
   edgeIds: Set<string>;
   flowIds: Set<string>;
-  budget: { nodes: number; edges: number; flows: number };
+  inkIds: Set<string>;
+  budget: { nodes: number; edges: number; flows: number; ink: number };
   pending: PendingInside[];
   dropped: { deep: number; unreadable: number; overBudget: number };
 }
@@ -231,6 +233,7 @@ function childContext(ctx: FileContext, depth: number): FileContext {
     nodeIds: ctx.nodeIds,
     edgeIds: ctx.edgeIds,
     flowIds: ctx.flowIds,
+    inkIds: ctx.inkIds,
     budget: ctx.budget,
     pending: ctx.pending,
     dropped: ctx.dropped,
@@ -243,7 +246,8 @@ function rootContext(): FileContext {
     nodeIds: new Set(),
     edgeIds: new Set(),
     flowIds: new Set(),
-    budget: { nodes: LIMITS.maxNodes, edges: LIMITS.maxEdges, flows: LIMITS.maxFlows },
+    inkIds: new Set(),
+    budget: { nodes: LIMITS.maxNodes, edges: LIMITS.maxEdges, flows: LIMITS.maxFlows, ink: LIMITS.maxInkStrokes },
     pending: [],
     dropped: { deep: 0, unreadable: 0, overBudget: 0 },
   };
@@ -280,8 +284,8 @@ function drainInsides(ctx: FileContext, repairs: string[]): void {
         ctx.dropped.unreadable += 1;
         continue;
       }
-      const { nodes, edges, flows, viewport, level } = result.document;
-      node.inside = { nodes, edges, flows, viewport, ...(level === undefined ? {} : { level }) };
+      const { nodes, edges, flows, ink, viewport, level } = result.document;
+      node.inside = { nodes, edges, flows, ...(ink === undefined ? {} : { ink }), viewport, ...(level === undefined ? {} : { level }) };
     }
   }
 
@@ -892,6 +896,35 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     repairs.push(`${truncatedFlowSteps} flow(s) had too many steps; kept the first ${LIMITS.maxStepsPerFlow} of each.`);
   }
 
+  /* ----------------------------------------------------------------- ink -- */
+
+  /*
+   * Handwritten strokes, per room like flows. Repaired stroke by stroke (`parseInkStroke`); one that
+   * cannot be read is dropped and reported, never the room. Ids are unique across the file, as for
+   * every other element, so a collaborator's change can name a stroke without saying where it is.
+   */
+  const ink: NonNullable<DraftDocument['ink']> = [];
+  {
+    const rawInk = Array.isArray(raw.ink) ? raw.ink : [];
+    const allowance = Math.max(0, ctx.budget.ink);
+    if (rawInk.length > allowance) {
+      repairs.push(`${here} had more sketch strokes than a canvas holds; kept the first ${allowance}.`);
+    }
+    let droppedInk = 0;
+    for (const candidate of rawInk.slice(0, allowance)) {
+      let id = isRecord(candidate) ? safeId(candidate.id) : null;
+      if (!id || ctx.inkIds.has(id)) id = createId(INK_ID_PREFIX);
+      const stroke = parseInkStroke(candidate, id);
+      if (!stroke) {
+        droppedInk += 1;
+        continue;
+      }
+      ctx.inkIds.add(stroke.id);
+      ink.push(stroke);
+    }
+    if (droppedInk > 0) repairs.push(`Dropped ${droppedInk} unreadable sketch stroke(s).`);
+  }
+
   /* --------------------------------------------------------- open points -- */
 
   /*
@@ -988,6 +1021,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       },
     },
     flows,
+    ...(ink.length > 0 ? { ink } : {}),
     openPoints,
     // Absent stays absent: a view with no level behaves exactly as every canvas did before
     // levels existed, and nothing here ever invents one.
@@ -1001,6 +1035,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   ctx.budget.nodes -= nodes.length;
   ctx.budget.edges -= edges.length;
   ctx.budget.flows -= flows.length;
+  ctx.budget.ink -= ink.length;
   if (isRoot) {
     drainInsides(ctx, repairs);
     // Only now does `ctx` know every id in the file, rooms included, so only now can a target be told

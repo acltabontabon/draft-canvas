@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 27;
+export const CURRENT_VERSION = 28;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -353,6 +353,8 @@ export interface DraftInside {
   nodes: DraftNode[];
   edges: DraftEdge[];
   flows: DraftFlow[];
+  /** Handwritten annotation over this room's shapes — see `DraftInk`. Absent when there is none. */
+  ink?: DraftInk[];
   viewport: DraftViewport;
   /** Only ever what someone actually chose, or what a starter declared — never a guess, and never
    *  the value a room simply inherits from the one outside it. See `depth/level.ts`. */
@@ -634,6 +636,48 @@ export interface EdgeDetails {
 export interface DraftPoint {
   x: number;
   y: number;
+}
+
+/**
+ * What drew a stroke. A pen line is the annotation itself; a highlighter is a wide, translucent mark
+ * laid over what it emphasises. Both are ink, never architecture.
+ */
+export const INK_TOOLS = ['pen', 'highlighter'] as const;
+export type InkTool = (typeof INK_TOOLS)[number];
+
+/**
+ * The few inks a stroke can be drawn in — markers on a whiteboard, not a colour picker. `graphite`
+ * is the drawing's own ink (light on a dark canvas, dark on a light one); the rest are the usual
+ * red/blue/green pens and a yellow for highlighting. Each theme maps them (`render/ink.ts`).
+ */
+export const INK_COLORS = ['graphite', 'red', 'blue', 'green', 'yellow'] as const;
+export type InkColor = (typeof INK_COLORS)[number];
+
+/**
+ * One handwritten stroke, laid over a room's shapes: a circled service, an underline, a margin
+ * scribble during a review. Annotation only — a stroke has no meaning to routing, layout,
+ * semantics, Arrange, Tidy up or agents, and nothing ever turns one into a shape by itself. Smart
+ * Ink (`src/ink/`) only *offers* that, and a conversion is an ordinary edit that undo reverses.
+ *
+ * Stored compactly and in room coordinates: `x`/`y` place the stroke, and `points` are the
+ * flattened `[dx0, dy0, dx1, dy1, …]` offsets from there, rounded to a tenth of a unit — so moving
+ * a stroke rewrites two numbers, not its every point, and a collaborator's change carries the same.
+ */
+export interface DraftInk {
+  id: string;
+  tool: InkTool;
+  color: InkColor;
+  /** Nominal line width in room units — the pen's width at full pressure. */
+  size: number;
+  x: number;
+  y: number;
+  /** Flattened offset pairs from `x`/`y`. At least one pair; a single pair is a dot. */
+  points: number[];
+  /**
+   * Pen pressure at each point, 0–100 — only when the device reported real pressure (a stylus).
+   * Absent draws an even line, which is what a mouse or a finger produces anyway.
+   */
+  pressure?: number[];
 }
 
 export interface DraftEdge {
@@ -982,6 +1026,12 @@ export interface DraftDocument {
   viewport: DraftViewport;
   settings: DraftSettings;
   flows: DraftFlow[];
+  /**
+   * Handwritten annotation over this graph's shapes (`DraftInk`), per room like `flows`: a sketch
+   * belongs to the view it was drawn on. Absent — never an empty array — when there is none, which
+   * is every file written before v28.
+   */
+  ink?: DraftInk[];
   /**
    * Root-only, like `settings` and unlike `flows`: a room is a room, but the meeting is the file.
    * `DraftInside` deliberately has no counterpart, so `depth/tree.ts`'s `embed` has to carry this back

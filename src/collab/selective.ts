@@ -13,7 +13,7 @@ import { applyChanges } from './apply';
 import { keyOf, ROOT_ROOM, type Change, type Collection, type RoomId } from './changes';
 import { diffFile, nodeValue, wireSettings } from './diff';
 import { sameExcept, sameValue } from './equal';
-import { indexOf } from './fileIndex';
+import { COLLECTION_OF, elementsOf, indexOf, itemsOf } from './fileIndex';
 import { repairReferences } from './repair';
 
 /** Everything an edit from `before` to `after` touched, nested contents of what it removed included. */
@@ -106,7 +106,6 @@ interface Arrival {
   found: DraftDocument;
 }
 
-const COLLECTION_OF = { node: 'nodes', edge: 'edges', flow: 'flows' } as const;
 
 function arrivalOf(current: DraftDocument, found: DraftDocument, key: string): Arrival | null {
   const colon = key.indexOf(':');
@@ -116,16 +115,17 @@ function arrivalOf(current: DraftDocument, found: DraftDocument, key: string): A
     const back = found.openPoints.some((point) => point.id === id) && !current.openPoints.some((point) => point.id === id);
     return back ? { id, room: ROOT_ROOM, collection: 'points', found } : null;
   }
-  if (kind !== 'node' && kind !== 'edge' && kind !== 'flow') return null;
+  if (kind !== 'node' && kind !== 'edge' && kind !== 'flow' && kind !== 'ink') return null;
   const collection = COLLECTION_OF[kind];
-  const was = indexOf(found)[collection].get(id);
-  if (!was || indexOf(current)[collection].get(id)?.room === was.room) return null;
+  const was = elementsOf(indexOf(found), kind).get(id);
+  if (!was || elementsOf(indexOf(current), kind).get(id)?.room === was.room) return null;
   return { id, room: was.room, collection, found };
 }
 
 function idsIn(file: DraftDocument, room: RoomId, collection: Collection): string[] | null {
   if (collection === 'points') return room === ROOT_ROOM ? file.openPoints.map((point) => point.id) : null;
-  return indexOf(file).rooms.get(room)?.graph[collection].map((item) => item.id) ?? null;
+  const graph = indexOf(file).rooms.get(room)?.graph;
+  return graph ? itemsOf(graph, collection).map((item) => item.id) : null;
 }
 
 /**
@@ -188,9 +188,10 @@ export function sameAt(current: DraftDocument, left: DraftDocument, key: string)
       return x.room === y.room && sameExcept(nodeValue(x.value) as unknown as Record<string, unknown>, nodeValue(y.value) as unknown as Record<string, unknown>, 'inside');
     }
     case 'edge':
-    case 'flow': {
-      const x = (kind === 'edge' ? a.edges : a.flows).get(rest);
-      const y = (kind === 'edge' ? b.edges : b.flows).get(rest);
+    case 'flow':
+    case 'ink': {
+      const x = elementsOf(a, kind).get(rest);
+      const y = elementsOf(b, kind).get(rest);
       if (!x || !y) return !x && !y;
       return x.room === y.room && sameValue(x.value, y.value);
     }
@@ -209,7 +210,7 @@ export function sameAt(current: DraftDocument, left: DraftDocument, key: string)
       const ids = (file: DraftDocument, index: typeof a) => {
         if (collection === 'points') return room === ROOT_ROOM ? file.openPoints.map((p) => p.id) : [];
         const graph = index.rooms.get(room)?.graph;
-        return graph ? (graph[collection as 'nodes' | 'edges' | 'flows'] as { id: string }[]).map((item) => item.id) : [];
+        return graph ? itemsOf(graph, collection as 'nodes' | 'edges' | 'flows' | 'ink').map((item) => item.id) : [];
       };
       return sameValue(ids(current, a), ids(left, b));
     }

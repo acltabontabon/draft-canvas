@@ -7439,3 +7439,98 @@
   filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
   }
 }
+
+/* ── Sketches: the Pencil ────────────────────────────────────────────────────────────────────────
+   `canvas/InkLayer.tsx` draws a room's strokes over its shapes, from the same paint the exports use
+   (`render/ink.ts`); `canvas/useInkInput.ts` owns the pointer while a Pencil tool is in hand. */
+.dc-ink-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Over shapes and connectors, as ink on a whiteboard is over what it marks — above a selected
+     (elevated) shape too, never above the connection line being dragged. */
+  z-index: 1000;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dc-ink-hit {
+  pointer-events: none;
+}
+
+.dc-ink-layer[data-selectable='true'] .dc-ink-hit {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.dc-ink-layer[data-selectable='true'] g[data-selected='true'] .dc-ink-hit {
+  cursor: move;
+}
+
+/* A chosen stroke wears a soft halo in the selection colour, under the ink. */
+.dc-ink-halo {
+  stroke: var(--dc-selection);
+  opacity: 0.32;
+}
+
+/* What the eraser has passed over, until it lets go. */
+g[data-ink-erasing='true'] .dc-ink-stroke {
+  opacity: 0.22;
+  transition: opacity 80ms linear;
+}
+
+.dc-ink-live {
+  fill: none;
+  pointer-events: none;
+}
+
+/* A drawing resolving into the shape it became: the ink lets go as the shape arrives. */
+.dc-ink-resolving {
+  pointer-events: none;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-ink-resolving {
+    animation: dc-ink-resolve 260ms var(--dc-ease-out) both;
+  }
+}
+
+@keyframes dc-ink-resolve {
+  from {
+    opacity: 0.85;
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    filter: blur(1.5px);
+  }
+}
+
+/* With the Pencil in hand, the canvas is paper: a fine crosshair to draw with, a ring to erase with,
+   and no browser gesture (scroll, text selection) stealing a stroke. Panning stays on the wheel,
+   the middle button and a pinch. */
+.dc-canvas[data-pencil] .react-flow__pane,
+.dc-canvas[data-pencil] .react-flow__node,
+.dc-canvas[data-pencil] .react-flow__edge,
+.dc-canvas[data-pencil] .dc-ink-layer {
+  cursor: crosshair;
+}
+
+.dc-canvas[data-pencil] {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.dc-canvas[data-pencil='eraser'] .react-flow__pane,
+.dc-canvas[data-pencil='eraser'] .react-flow__node,
+.dc-canvas[data-pencil='eraser'] .react-flow__edge {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='11' cy='11' r='8.5' fill='rgba(255,255,255,0.35)' stroke='%23596170' stroke-width='1.5'/%3E%3C/svg%3E") 11 11, cell;
+}
+
+/* Hover chrome — handles, connector traces — would only flicker under a pen. */
+.dc-canvas[data-pencil] .react-flow__handle,
+.dc-canvas[data-pencil] .dc-ghost {
+  visibility: hidden;
+}

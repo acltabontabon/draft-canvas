@@ -8,6 +8,7 @@ New here? Start with [Getting started](guides/getting-started.md).
 | --- | --- |
 | **[Getting started](guides/getting-started.md)** | Draw, present and export a first diagram |
 | [Shapes and connectors](guides/shapes-and-connectors.md) | Shape kinds, labels, notes, boundaries |
+| [Sketch and Smart Ink](guides/sketching.md) | Draw over a diagram; turn rough drawings into shapes |
 | [Flows and presenting](guides/flows-and-presentation.md) | Record a path and present it step by step |
 | [Sequence diagrams](guides/sequence-diagrams.md) | Who says what to whom, in order, beside your architecture |
 | [Architecture examples](guides/examples.md) | Ready-made starters from the starters gallery |

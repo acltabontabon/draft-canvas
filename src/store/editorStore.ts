@@ -149,6 +149,7 @@ import type {
   DraftDocument,
   DraftEdge,
   DraftFlow,
+  DraftInk,
   DraftMetadata,
   DraftNode,
   DraftOrigin,
@@ -168,6 +169,10 @@ import type {
   ViewLevel,
 } from '../document/types';
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
+import { addInk, INK_ID_PREFIX, inkOf, inkUnionBounds, removeInk, translateInk } from '../document/ink';
+import { createId } from '../document/ids';
+import { boxForChoice, INK_CHOICE_LABEL, INK_CHOICE_TYPE, type InkShapeChoice } from '../ink/choices';
+import type { Box } from '../ink/geometry';
 import { routingPlan } from '../edges/bundles';
 import { anchorOnSide, anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
 import { connectorRoutes } from '../edges/connectorRoutes';
@@ -418,6 +423,23 @@ export interface EditorStore {
 
   /* Editing commands */
   addNode: (input: CreateNodeInput) => DraftNode;
+
+  /* Sketches (`DraftInk`) and Smart Ink */
+  /** Keeps a finished stroke. False when it could not be kept (the canvas is full, or the room is empty). */
+  drawInk: (stroke: DraftInk) => boolean;
+  eraseInk: (ids: readonly string[]) => void;
+  moveInk: (ids: readonly string[], dx: number, dy: number) => void;
+  /**
+   * Turns strokes into a shape, as one undo step that undo reverses back to the strokes. Returns
+   * the shape's id, or null when nothing was made.
+   */
+  inkToShape: (strokeIds: readonly string[], choice: InkShapeChoice, drawn: Box, encloses: readonly string[]) => string | null;
+  /** The shape a drawing just became, made as another choice instead — revising that same step. */
+  retypeInkShape: (nodeId: string, strokes: readonly DraftInk[], choice: InkShapeChoice, drawn: Box, encloses: readonly string[]) => void;
+  /** The shape a drawing became, back to the drawing. */
+  revertInkShape: (nodeId: string, strokes: readonly DraftInk[]) => void;
+  /** Turns strokes into a connector between two shapes, as one undo step. Returns its id, or null. */
+  inkToConnector: (strokeIds: readonly string[], source: string, target: string, directed: boolean) => string | null;
   /** One undoable bulk add. `flows` (a starter's predefined walkthroughs) join the same entry, so
    *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. False
    *  (and nothing added) when the result would pass the document limits. */
@@ -784,6 +806,8 @@ export interface EditorStore {
 export interface ApplyOptions {
   /** Entries with the same key merge, so text editing is one undo step. */
   coalesceKey?: string;
+  /** Replaces the last entry if it carries the same key, at any distance in time (`HistoryEntry.amendKey`). */
+  amendKey?: string;
   selection?: Selection;
   /** See `FlowSessionSnapshot` in `history/HistoryStack.ts`. Only `deleteFlow` sets these. */
   flowSessionBefore?: FlowSessionSnapshot;
@@ -1137,6 +1161,10 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     depthPlateFocusId: null,
     // Anchored to an element of the canvas being left.
     openPointPopover: null,
+    // Strokes and a drawing's offer belong to the room being left.
+    inkSelection: [],
+    inkSuggestion: null,
+    inkResolving: null,
   });
   return {
     selection: EMPTY_SELECTION,
@@ -1417,6 +1445,7 @@ function restoreSnapshot(
     ...(restored.flowSession ?? {}),
   }));
   closeStaleAttachmentDetail(get().document);
+  pruneInkSelection(get().document);
 }
 
 /** `file` with the room at `path` showing `viewport` — unchanged when the room isn't in it. */
@@ -1556,6 +1585,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         selectionAfter,
         at: Date.now(),
         coalesceKey: options?.coalesceKey,
+        amendKey: options?.amendKey,
         flowSessionBefore: options?.flowSessionBefore,
         flowSessionAfter: options?.flowSessionAfter,
         ...keys,
@@ -1707,6 +1737,116 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: { nodes: [node.id], edges: [] },
     });
     return node;
+  },
+
+  drawInk(stroke) {
+    const state = get();
+    // A room exists only while it holds a shape (`depth/tree.ts`); a sketch alone in an empty one
+    // would vanish on the way out. Say so instead of keeping a stroke that would be lost.
+    if (state.path.length > 0 && state.document.nodes.length === 0) {
+      useUiStore.getState().notify('Sketches sit over a view’s shapes — add a shape here first.');
+      return false;
+    }
+    if (totals(fileOf(state)).ink >= LIMITS.maxInkStrokes) {
+      useUiStore.getState().notify('This canvas holds as many sketch strokes as it can. Erase some to draw more.', 'error');
+      return false;
+    }
+    state.apply('Sketch', (doc) => addInk(doc, [stroke]), { selection: state.selection });
+    return inkOf(get().document).some((existing) => existing.id === stroke.id);
+  },
+
+  eraseInk(ids) {
+    if (ids.length === 0) return;
+    get().apply(ids.length === 1 ? 'Erase stroke' : 'Erase strokes', (doc) => removeInk(doc, ids));
+    pruneInkSelection(get().document);
+  },
+
+  moveInk(ids, dx, dy) {
+    if (ids.length === 0) return;
+    get().apply('Move sketch', (doc) => translateInk(doc, ids, dx, dy));
+  },
+
+  inkToShape(strokeIds, choice, drawn, encloses) {
+    const state = get();
+    if (!roomFor(1, 0)) return null;
+    const node = inkShapeNode(state.document, choice, drawn, encloses);
+    const before = state.document;
+    state.apply(`Draw ${INK_CHOICE_LABEL[choice]}`, (doc) => placeInkShape(removeInk(doc, strokeIds), node, choice, encloses), {
+      selection: EMPTY_SELECTION,
+      amendKey: inkAmendKey(node.id),
+    });
+    return get().document !== before && get().document.nodes.some((n) => n.id === node.id) ? node.id : null;
+  },
+
+  retypeInkShape(nodeId, strokes, choice, drawn, encloses) {
+    const state = get();
+    const current = state.document.nodes.find((n) => n.id === nodeId);
+    if (!current) return;
+    const label = `Draw ${INK_CHOICE_LABEL[choice]}`;
+    const top = state.history.past[state.history.past.length - 1];
+    if (top?.amendKey === inkAmendKey(nodeId) && samePath(top.path, state.path)) {
+      // The drawing's own step is still the last one: make the drawing into the new choice from
+      // scratch, revising that step — undo still takes it straight back to the strokes.
+      const base = viewOf(top.before, state.path);
+      if (!base) return;
+      const strokeIds = strokes.map((stroke) => stroke.id);
+      const node = { ...inkShapeNode(base, choice, drawn, encloses), id: nodeId };
+      state.apply(label, () => placeInkShape(removeInk(base, strokeIds), node, choice, encloses), {
+        selection: EMPTY_SELECTION,
+        amendKey: inkAmendKey(nodeId),
+      });
+      return;
+    }
+    // Something else happened since: change the shape where it stands, keeping its id, name and
+    // connectors, as a step of its own.
+    const fresh = inkShapeNode(state.document, choice, { x: current.x, y: current.y, width: current.width, height: current.height }, encloses);
+    const explicitText = current.textOrigin !== 'auto' && current.text ? { text: current.text, textOrigin: current.textOrigin } : {};
+    const next: DraftNode = { ...fresh, ...explicitText, id: nodeId, ...(current.parentId ? { parentId: current.parentId } : {}) };
+    state.apply(label, (doc) => {
+      const released = current.type === 'group' && choice !== 'boundary' ? setParent(doc, doc.nodes.filter((n) => n.parentId === nodeId).map((n) => n.id), current.parentId) : doc;
+      const nodes = released.nodes.map((n) => (n.id === nodeId ? next : n));
+      const replaced = { ...released, nodes };
+      return choice === 'boundary' ? reconcileMembershipOp(replaced, [nodeId, ...encloses]) : replaced;
+    }, { selection: EMPTY_SELECTION });
+  },
+
+  revertInkShape(nodeId, strokes) {
+    const state = get();
+    const top = state.history.past[state.history.past.length - 1];
+    if (top?.amendKey === inkAmendKey(nodeId) && samePath(top.path, state.path)) {
+      // Back exactly to before the drawing became a shape — and redo can still make it one again.
+      state.undo();
+      return;
+    }
+    if (!state.document.nodes.some((n) => n.id === nodeId)) return;
+    state.apply('Back to sketch', (doc) => addInk(removeElements(doc, [nodeId], []), strokes), { selection: EMPTY_SELECTION });
+  },
+
+  inkToConnector(strokeIds, source, target, directed) {
+    const state = get();
+    const sourceNode = state.document.nodes.find((n) => n.id === source);
+    const targetNode = state.document.nodes.find((n) => n.id === target);
+    if (!sourceNode || !targetNode || source === target) return null;
+    const joined = state.document.edges.some((e) => (e.source === source && e.target === target) || (e.source === target && e.target === source));
+    if (joined) {
+      useUiStore.getState().notify('Those two are already connected — your line stays a sketch.');
+      return null;
+    }
+    if (!roomFor(0, 1)) return null;
+    // An arrow says which way; what it carries is inferred exactly as a dragged connector's is. A
+    // plain line says only that the two are related, so it stays a plain association.
+    const relationship = directed ? inferRelationshipThroughJunctions(state.document, sourceNode, targetNode) : undefined;
+    const edge = createEdge({
+      source,
+      target,
+      directed,
+      kind: relationship?.kind,
+      semantic: relationship?.semantic,
+      async: relationship?.async,
+      semanticsOrigin: relationship ? 'inferred' : undefined,
+    });
+    state.apply(directed ? 'Draw connector' : 'Draw line', (doc) => addEdges(removeInk(doc, strokeIds), [edge]), { selection: EMPTY_SELECTION });
+    return get().document.edges.some((e) => e.id === edge.id) ? edge.id : null;
   },
 
   addNodesWithEdges(nodes, edges, label, flows = [], title) {
@@ -2787,10 +2927,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   deleteSelection() {
     const { selection, apply } = get();
-    if (selection.nodes.length === 0 && selection.edges.length === 0) return;
-    apply('Delete', (doc) => removeElements(doc, selection.nodes, selection.edges), {
+    const ink = useUiStore.getState().inkSelection;
+    if (selection.nodes.length === 0 && selection.edges.length === 0 && ink.length === 0) return;
+    const onlyInk = selection.nodes.length === 0 && selection.edges.length === 0;
+    apply(onlyInk ? (ink.length === 1 ? 'Erase stroke' : 'Erase strokes') : 'Delete', (doc) => removeInk(removeElements(doc, selection.nodes, selection.edges), ink), {
       selection: EMPTY_SELECTION,
     });
+    if (ink.length > 0) useUiStore.getState().setInkSelection([]);
   },
 
   convertSelection(type) {
@@ -2829,7 +2972,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   duplicateSelection() {
     const state = get();
-    if (state.selection.nodes.length === 0) return;
+    if (state.selection.nodes.length === 0) {
+      // Chosen sketch strokes duplicate beside themselves, like shapes do.
+      const strokes = chosenInk(state.document);
+      if (strokes.length === 0) return;
+      const copies = reissueInk(strokes, 24, 24);
+      if (totals(fileOf(state)).ink + copies.length > LIMITS.maxInkStrokes) return;
+      state.apply('Duplicate sketch', (doc) => addInk(doc, copies), { selection: EMPTY_SELECTION });
+      useUiStore.getState().setInkSelection(copies.map((stroke) => stroke.id));
+      return;
+    }
     const fragment = extractFragment(state.document, state.selection.nodes);
     const result = pasteFragment(state.document, fragment, { x: 24, y: 24 }, { ...totals(fileOf(state)), depth: state.path.length });
     if (result.nodeIds.length === 0) {
@@ -2848,13 +3000,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   copySelection() {
     const state = get();
+    const strokes = chosenInk(state.document);
+    if (state.selection.nodes.length === 0 && strokes.length > 0) {
+      const fragment = { nodes: [], edges: [], ink: strokes };
+      const text = encodeClipboard(fragment);
+      lastSystemClipboardText = text;
+      set({ clipboard: fragment, pasteRepeat: 0 });
+      void writeSystemClipboard(text);
+      return text;
+    }
     if (state.selection.nodes.length === 0) {
       // A connector can't be pasted without the shapes at its ends. Said, rather than leaving an
       // older copy on the clipboard for the next paste to drop in unexpectedly.
       if (state.selection.edges.length > 0) useUiStore.getState().notify(CONNECTORS_NEED_SHAPES);
       return null;
     }
-    const fragment = extractFragment(state.document, state.selection.nodes);
+    const fragment = withChosenInk(extractFragment(state.document, state.selection.nodes), strokes);
     const text = encodeClipboard(fragment);
     // Remembered so the paste of this very text keeps the in-memory fragment: decoding it back
     // (`applyExternalClipboardText`) drops a `parentId` whose boundary wasn't copied.
@@ -2867,30 +3028,39 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   cutSelection() {
     const state = get();
     const { selection } = state;
-    if (selection.nodes.length === 0 && selection.edges.length === 0) return null;
+    const strokes = chosenInk(state.document);
+    if (selection.nodes.length === 0 && selection.edges.length === 0) {
+      if (strokes.length === 0) return null;
+      const text = get().copySelection();
+      state.apply('Cut sketch', (doc) => removeInk(doc, strokes.map((stroke) => stroke.id)), { selection: EMPTY_SELECTION });
+      useUiStore.getState().setInkSelection([]);
+      return text;
+    }
     // Only a node-bearing selection has a meaningful, self-contained
     // fragment to put on the clipboard — an edge-only cut, like an
     // edge-only copy, just removes what's selected. See `copySelection`.
     let text: string | null = null;
     if (selection.nodes.length === 0) useUiStore.getState().notify(`Deleted — ${CONNECTORS_NEED_SHAPES.charAt(0).toLowerCase()}${CONNECTORS_NEED_SHAPES.slice(1)}`);
     if (selection.nodes.length > 0) {
-      const fragment = extractFragment(state.document, selection.nodes);
+      const fragment = withChosenInk(extractFragment(state.document, selection.nodes), strokes);
       text = encodeClipboard(fragment);
       lastSystemClipboardText = text;
       set({ clipboard: fragment, pasteRepeat: 0 });
       void writeSystemClipboard(text);
     }
-    state.apply('Cut', (doc) => removeElements(doc, selection.nodes, selection.edges), {
+    state.apply('Cut', (doc) => removeInk(removeElements(doc, selection.nodes, selection.edges), strokes.map((stroke) => stroke.id)), {
       selection: EMPTY_SELECTION,
     });
+    if (strokes.length > 0) useUiStore.getState().setInkSelection([]);
     return text;
   },
 
   paste(targetCenter, options) {
     const state = get();
     const fragment = state.clipboard;
-    if (!fragment || fragment.nodes.length === 0) return;
-    const bounds = boundsOf(fragment.nodes);
+    if (!fragment || (fragment.nodes.length === 0 && !fragment.ink?.length)) return;
+    const inkBox = fragment.ink?.length ? inkUnionBounds(fragment.ink) : null;
+    const bounds = boundsOf([...fragment.nodes, ...(inkBox ? [inkBox] : [])]);
     const fragmentCenter = bounds ? centerOf(bounds) : { x: 0, y: 0 };
     const target = targetCenter ?? { x: fragmentCenter.x + 32, y: fragmentCenter.y + 32 };
     // Consecutive pastes of the same clipboard content step diagonally so they don't perfectly
@@ -2907,16 +3077,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       x: target.x - fragmentCenter.x + stagger,
       y: target.y - fragmentCenter.y + stagger,
     };
+    // Sketch strokes ride along with the shapes they were copied with, at the same offset.
+    const inkRoom = LIMITS.maxInkStrokes - totals(fileOf(state)).ink;
+    const pastedInk = reissueInk((fragment.ink ?? []).slice(0, Math.max(0, inkRoom)), offset.x, offset.y);
+    if (fragment.nodes.length === 0) {
+      if (pastedInk.length === 0) {
+        useUiStore.getState().notify('This canvas holds as many sketch strokes as it can.', 'error');
+        return;
+      }
+      state.apply('Paste sketch', (doc) => addInk(doc, pastedInk), { selection: EMPTY_SELECTION });
+      useUiStore.getState().setInkSelection(pastedInk.map((stroke) => stroke.id));
+      set({ pasteRepeat: repeat + 1 });
+      return;
+    }
     const result = pasteFragment(state.document, fragment, offset, { ...totals(fileOf(state)), depth: state.path.length });
     if (result.nodeIds.length === 0) {
       notifyNothingAdded(result.tooDeep);
       return;
     }
     // Pasted onto a boundary, the copy joins it, as a shape dropped there does.
-    const homed = reconcileMembershipOp(result.doc, result.nodeIds);
+    const homed = addInk(reconcileMembershipOp(result.doc, result.nodeIds), pastedInk);
     state.apply('Paste', () => homed, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
+    if (pastedInk.length > 0) useUiStore.getState().setInkSelection(pastedInk.map((stroke) => stroke.id));
     set({ pasteRepeat: repeat + 1 });
     if (result.truncated) {
       useUiStore.getState().notify(result.tooDeep
@@ -2931,7 +3115,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // so a large one isn't parsed again on every ⌘V.
     if (text === lastSystemClipboardText && get().clipboard) return true;
     const fragment = decodeClipboard(text);
-    if (!fragment || fragment.nodes.length === 0) return false;
+    if (!fragment || (fragment.nodes.length === 0 && !fragment.ink?.length)) return false;
     // A repeat paste of unchanged text is still a real paste (still returns `true`) — this
     // dedup guard only decides whether to re-`set` identical content and reset the stagger.
     if (text !== lastSystemClipboardText) {
@@ -3489,6 +3673,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (inside && !(selection.nodes.length === 1 && selection.edges.length === 0 && selection.nodes[0] === inside.nodeId)) {
       useUiStore.setState({ sequenceFocus: null, sequenceEdit: null });
     }
+    // Choosing shapes or connectors puts any chosen sketch strokes down: one selection at a time.
+    if (selection.nodes.length > 0 || selection.edges.length > 0) useUiStore.getState().setInkSelection([]);
     const current = get().selection;
     if (sameIdList(current.nodes, selection.nodes) && sameIdList(current.edges, selection.edges)) return;
     set({ selection });
@@ -3719,11 +3905,68 @@ function sameIdList(a: readonly string[], b: readonly string[]): boolean {
  * Guards against writes that produce an equal-but-new document object, which
  * would otherwise fill the undo stack with entries that change nothing.
  */
+/* ----------------------------------------------------------- Smart Ink -- */
+
+/** The chosen sketch strokes, as they are in the room. */
+function chosenInk(document: DraftDocument): DraftInk[] {
+  const chosen = new Set(useUiStore.getState().inkSelection);
+  return chosen.size === 0 ? [] : inkOf(document).filter((stroke) => chosen.has(stroke.id));
+}
+
+function withChosenInk<T extends { ink?: DraftInk[] }>(fragment: T, strokes: DraftInk[]): T {
+  return strokes.length > 0 ? { ...fragment, ink: strokes } : fragment;
+}
+
+/** Copies of strokes under new ids, moved by `dx`/`dy` — what a paste or duplicate adds. */
+function reissueInk(strokes: readonly DraftInk[], dx: number, dy: number): DraftInk[] {
+  return strokes.map((stroke) => ({ ...stroke, id: createId(INK_ID_PREFIX), x: Math.round((stroke.x + dx) * 10) / 10, y: Math.round((stroke.y + dy) * 10) / 10 }));
+}
+
+function inkAmendKey(nodeId: string): string {
+  return `ink:${nodeId}`;
+}
+
+/** Ink selection that still names strokes in the room — after an erase, an undo, a remote change. */
+function pruneInkSelection(document: DraftDocument): void {
+  const ui = useUiStore.getState();
+  if (ui.inkSelection.length === 0) return;
+  const present = new Set(inkOf(document).map((stroke) => stroke.id));
+  const kept = ui.inkSelection.filter((id) => present.has(id));
+  if (kept.length !== ui.inkSelection.length) ui.setInkSelection(kept);
+}
+
+/**
+ * The element a drawing becomes. A Boundary drawn round shapes stacks beneath every boundary it
+ * goes round, so it never covers them; everything else takes the next place on top.
+ */
+function inkShapeNode(doc: DraftDocument, choice: InkShapeChoice, drawn: Box, encloses: readonly string[]): DraftNode {
+  const type = INK_CHOICE_TYPE[choice];
+  const box = boxForChoice(choice, drawn, defaultSizeFor(type));
+  const inside = new Set(encloses);
+  const enclosedBoundaries = doc.nodes.filter((n) => n.type === 'group' && inside.has(n.id));
+  const z =
+    choice === 'boundary'
+      ? enclosedBoundaries.length > 0
+        ? Math.min(...enclosedBoundaries.map((n) => n.z)) - 1
+        : Math.min(0, ...doc.nodes.filter((n) => inside.has(n.id)).map((n) => n.z)) - (encloses.length > 0 ? 1 : 0)
+      : doc.nodes.reduce((top, n) => Math.max(top, n.z), 0) + 1;
+  return createNode({ type, x: box.x, y: box.y, width: box.width, height: box.height, z, ...(choice === 'boundary' ? { text: 'Boundary' } : {}) });
+}
+
+/** Adds the shape a drawing became, homed by the rule a placed shape follows — and, for a Boundary,
+ *  taking in the shapes drawn round. */
+function placeInkShape(doc: DraftDocument, node: DraftNode, choice: InkShapeChoice, encloses: readonly string[]): DraftDocument {
+  const homed = choice === 'boundary' ? [node.id, ...encloses] : [node.id];
+  return reconcileMembershipOp(addNodes(doc, [node]), homed);
+}
+
 function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
   return (
     a.nodes === b.nodes &&
     a.edges === b.edges &&
     a.flows === b.flows &&
+    // Sketches are content: drawing, erasing or moving one is an edit like any other.
+    a.ink === b.ink &&
     a.settings === b.settings &&
     a.viewport === b.viewport &&
     // Raising, editing or resolving an open point touches nothing on the canvas, so leaving this out

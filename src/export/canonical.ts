@@ -19,6 +19,7 @@ import type {
   DraftEdge,
   DraftFlow,
   DraftFlowStep,
+  DraftInk,
   DraftInside,
   DraftNode,
   DraftSequence,
@@ -155,7 +156,8 @@ const EDGE_KEYS = [
 ] as const satisfies KeysOf<DraftEdge>;
 const STEP_KEYS = ['id', 'edgeId', 'extraEdgeIds', 'extraNodeIds', 'viewport', 'caption'] as const satisfies KeysOf<DraftFlowStep>;
 const FLOW_KEYS = ['id', 'title', 'steps', 'accent', 'variantOf'] as const satisfies KeysOf<DraftFlow>;
-const INSIDE_KEYS = ['nodes', 'edges', 'flows', 'viewport', 'level'] as const satisfies KeysOf<DraftInside>;
+const INSIDE_KEYS = ['nodes', 'edges', 'flows', 'ink', 'viewport', 'level'] as const satisfies KeysOf<DraftInside>;
+const INK_KEYS = ['id', 'tool', 'color', 'size', 'x', 'y', 'points', 'pressure'] as const satisfies KeysOf<DraftInk>;
 const EMBEDDED_IMAGE_KEYS = ['dataUri', 'width', 'height'] as const satisfies KeysOf<EmbeddedBackgroundImage>;
 const BACKGROUND_KEYS = ['enabled', 'fit', 'dim', 'blur', 'imageId', 'image'] as const satisfies KeysOf<BackgroundSettings>;
 const SETTINGS_KEYS = ['showSequence', 'grid', 'background'] as const satisfies KeysOf<DraftSettings>;
@@ -221,6 +223,7 @@ const step = orderedIfObject(STEP_KEYS, { viewport });
 const flow = orderedIfObject(FLOW_KEYS, { steps: list(step) });
 const flows = list(flow);
 const edges = list(edge);
+const ink = list(orderedIfObject(INK_KEYS));
 const openPoint = orderedIfObject(OPEN_POINT_KEYS, { targets: list(orderedIfObject(OPEN_POINT_TARGET_KEYS)) });
 
 // An item may be a fragment, whose branches hold items.
@@ -241,7 +244,7 @@ function node(value: unknown): unknown {
   return orderedIfObject(NODE_KEYS, { attachments, evidence: deepSorted, inside, sequence })(value);
 }
 function inside(value: unknown): unknown {
-  return orderedIfObject(INSIDE_KEYS, { nodes: list(node), edges, flows, viewport })(value);
+  return orderedIfObject(INSIDE_KEYS, { nodes: list(node), edges, flows, ink, viewport })(value);
 }
 
 const background = orderedIfObject(BACKGROUND_KEYS, { image: orderedIfObject(EMBEDDED_IMAGE_KEYS) });
@@ -255,5 +258,6 @@ export const canonical = {
   viewport: viewport as (viewport: DraftViewport) => unknown,
   settings: settings as (settings: DraftSettings) => unknown,
   flows: flows as (flows: DraftFlow[]) => unknown,
+  ink: ink as (strokes: DraftInk[]) => unknown,
   openPoints: list(openPoint) as (points: OpenPoint[]) => unknown,
 } satisfies Partial<Record<keyof DraftDocument, unknown>>;

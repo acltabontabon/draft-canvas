@@ -22,6 +22,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Attach notes and code to sequence messages.** Right-click an arrow to start a new card,
   or drag a canvas note or code card onto it. Open the card from its chip while editing or presenting.
 - AI agents can add, read and change sequences.
+- **Sketch and Smart Ink** — Pick up the Pencil (`P`) to draw over a diagram: circle a service,
+  underline a risk, highlight a name. Smart Ink turns rough boxes, cylinders, circles and arrows into
+  real shapes and connectors as you draw, with a small strip to pick another kind; `Esc` or undo
+  puts your drawing back. Works with a mouse, a finger or a pen with pressure, offline. <!-- highlight -->
 - **Tidy up, with a preview** — One cleanup to reach for first, in `⌘K` and on right-click. It
   keeps every shape where you put it, straightens connectors that just miss level and re-attaches
   ones drawn through a shape, and shows the result over the diagram before anything changes.

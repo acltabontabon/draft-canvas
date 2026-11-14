@@ -5,6 +5,7 @@ import { prefersReducedMotion } from '../../../lib/motion';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
 import { ShapePicker } from './ShapePicker';
+import { pencilLabel, PENCIL_TOOLTIP } from '../ink/pencilCopy';
 import { ToolGlyph } from './ToolGlyph';
 
 /**
@@ -53,6 +54,10 @@ const SHAPES_TOOLTIP: PrimitiveTooltipContent = {
 export function CreateRail() {
   const armed = useUiStore((state) => state.armed);
   const arm = useUiStore((state) => state.arm);
+  const pencil = useUiStore((state) => state.pencil);
+  const smart = useUiStore((state) => state.inkPrefs.smart);
+  const setPencil = useUiStore((state) => state.setPencil);
+  const selecting = armed === null && pencil === null;
   const railRef = useRef<HTMLDivElement>(null);
   const shapesRef = useRef<HTMLButtonElement>(null);
   const [more, setMore] = useState({ start: false, end: false });
@@ -121,7 +126,7 @@ export function CreateRail() {
     const active = items.findIndex((button) => button.getAttribute('aria-pressed') === 'true');
     const home = active === -1 ? 0 : active;
     for (const [index, button] of items.entries()) button.tabIndex = index === home ? 0 : -1;
-  }, [armed]);
+  }, [armed, pencil]);
 
   // A rail scrolled sideways would leave the picker hanging off a button that is no longer there.
   useEffect(() => {
@@ -189,14 +194,36 @@ export function CreateRail() {
               <Button
                 variant="ghost"
                 className="dc-tool"
-                active={armed === null}
-                aria-pressed={armed === null}
+                active={selecting}
+                aria-pressed={selecting}
                 aria-label="Select"
-                onClick={() => arm(null)}
+                onClick={() => {
+                  arm(null);
+                  setPencil(null);
+                }}
                 {...tip}
               >
                 {/* No letter: Select's key is Esc, which its tooltip shows. */}
                 <ToolContent id="select" label="Select" />
+              </Button>
+            )}
+          </Tooltip>
+          <Tooltip content={PENCIL_TOOLTIP}>
+            {(tip) => (
+              <Button
+                variant="ghost"
+                className="dc-tool"
+                active={pencil !== null}
+                aria-pressed={pencil !== null}
+                aria-label="Pencil"
+                onClick={() => setPencil(pencil ? null : 'pen')}
+                {...tip}
+              >
+                <ToolContent
+                  id={pencil === 'highlighter' || pencil === 'eraser' ? pencil : smart ? 'smart' : 'pencil'}
+                  label={pencilLabel(pencil, smart)}
+                  shortcut="P"
+                />
               </Button>
             )}
           </Tooltip>

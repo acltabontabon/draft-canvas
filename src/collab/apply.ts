@@ -22,10 +22,11 @@
 import { embed, ownerAt, viewOf, type DepthPath } from '../depth/tree';
 import { LIMITS } from '../document/limits';
 import { insideHeight } from '../document/operations';
-import type { DraftDocument, DraftEdge, DraftFlow, DraftNode, DraftSettings, OpenPoint, ViewLevel } from '../document/types';
+import { withInk } from '../document/ink';
+import type { DraftDocument, DraftEdge, DraftFlow, DraftInk, DraftNode, DraftSettings, OpenPoint, ViewLevel } from '../document/types';
 import { CAN_HOLD_INSIDE } from '../document/validate';
 import type { Change, Collection, NodeValue, RoomId } from './changes';
-import { indexOf, pathOf, type FileIndex } from './fileIndex';
+import { COLLECTION_OF, elementsOf, indexOf, itemsOf, pathOf, type FileIndex } from './fileIndex';
 
 export function canHoldInside(node: Pick<DraftNode, 'type'>): boolean {
   return CAN_HOLD_INSIDE.includes(node.type);
@@ -47,7 +48,7 @@ export function applyChanges(file: DraftDocument, changes: readonly Change[]): D
 
 function move(file: DraftDocument, change: Extract<Change, { kind: 'move' }>): DraftDocument {
   const index = indexOf(file);
-  const located = (change.target === 'node' ? index.nodes : change.target === 'edge' ? index.edges : index.flows).get(change.id);
+  const located = elementsOf(index, change.target).get(change.id);
   if (!located || located.room === change.room) return file;
   const from = index.rooms.get(located.room)?.path;
   const to = pathOf(index, change.room);
@@ -61,10 +62,12 @@ function move(file: DraftDocument, change: Extract<Change, { kind: 'move' }>): D
     if (to.length > 0 && !canHoldInside(index.nodes.get(change.room)!.value)) return file;
   }
 
-  const key = change.target === 'node' ? 'nodes' : change.target === 'edge' ? 'edges' : 'flows';
-  const removed = updateRoom(file, from, (view) => ({ ...view, [key]: (view[key] as { id: string }[]).filter((item) => item.id !== change.id) }));
+  const key = COLLECTION_OF[change.target];
+  const write = (view: DraftDocument, items: { id: string }[]): DraftDocument =>
+    key === 'ink' ? withInk(view, items as DraftInk[]) : { ...view, [key]: items };
+  const removed = updateRoom(file, from, (view) => write(view, itemsOf(view, key).filter((item) => item.id !== change.id)));
   if (removed === file) return file;
-  const added = updateRoom(removed, to, (view) => ({ ...view, [key]: [...(view[key] as unknown[]), located.value] }));
+  const added = updateRoom(removed, to, (view) => write(view, [...itemsOf(view, key), located.value]));
   // The destination stopped resolving: leave the element where it was rather than lose it.
   return added === removed ? file : added;
 }
@@ -89,6 +92,7 @@ interface RoomPlan {
   nodes: ElementPlan<NodeValue>;
   edges: ElementPlan<DraftEdge>;
   flows: ElementPlan<DraftFlow>;
+  ink: ElementPlan<DraftInk>;
   level?: ViewLevel | null;
   orders: Map<Collection, string[]>;
 }
@@ -98,6 +102,7 @@ function emptyPlan(): RoomPlan {
     nodes: { set: new Map(), added: [] },
     edges: { set: new Map(), added: [] },
     flows: { set: new Map(), added: [] },
+    ink: { set: new Map(), added: [] },
     orders: new Map(),
   };
 }
@@ -108,7 +113,7 @@ function applyRooms(file: DraftDocument, changes: readonly Change[]): DraftDocum
   /** Where each shape added in this batch goes, so a room inside it can be found before it exists. */
   const addedNodeRooms = new Map<string, RoomId>();
   /** Ids this batch adds, file-wide: an id may be new in only one room, or two rooms would hold it. */
-  const adding = { node: new Map<string, RoomId>(), edge: new Map<string, RoomId>(), flow: new Map<string, RoomId>() };
+  const adding = { node: new Map<string, RoomId>(), edge: new Map<string, RoomId>(), flow: new Map<string, RoomId>(), ink: new Map<string, RoomId>() };
   const planFor = (room: RoomId) => {
     let plan = plans.get(room);
     if (!plan) plans.set(room, (plan = emptyPlan()));
@@ -119,14 +124,15 @@ function applyRooms(file: DraftDocument, changes: readonly Change[]): DraftDocum
     switch (change.kind) {
       case 'node':
       case 'edge':
-      case 'flow': {
-        const located = (change.kind === 'node' ? index.nodes : change.kind === 'edge' ? index.edges : index.flows).get(change.id);
+      case 'flow':
+      case 'ink': {
+        const located = elementsOf(index, change.kind).get(change.id);
         if (!located && change.value === null) break;
         // A second add of the same new id, aimed at another room, is the same element: it goes where
         // the first one put it.
         const room = located ? located.room : (adding[change.kind].get(change.id) ?? change.room);
         if (!located) adding[change.kind].set(change.id, room);
-        const plan = planFor(room)[`${change.kind}s`] as ElementPlan<unknown>;
+        const plan = planFor(room)[COLLECTION_OF[change.kind]] as ElementPlan<unknown>;
         if (!located && !plan.set.has(change.id)) plan.added.push(change.id);
         plan.set.set(change.id, change.value);
         if (change.kind === 'node' && !located) addedNodeRooms.set(change.id, room);
@@ -199,16 +205,20 @@ function applyRoomPlan(view: DraftDocument, plan: RoomPlan, index: FileIndex): D
   });
   const edges = applyElements(view.edges, plan.edges, index.edges, (_current, value) => value);
   const flows = applyElements(view.flows, plan.flows, index.flows, (_current, value) => value);
+  const currentInk = (view.ink ?? []) as DraftInk[];
+  const ink = applyElements(currentInk, plan.ink, index.ink, (_current, value) => value);
 
   const ordered = {
     nodes: reorder(nodes, plan.orders.get('nodes')),
     edges: reorder(edges, plan.orders.get('edges')),
     flows: reorder(flows, plan.orders.get('flows')),
   };
+  const orderedInk = reorder(ink, plan.orders.get('ink'));
+  const inkChanged = orderedInk !== currentInk;
   const levelChanged = plan.level !== undefined && (plan.level ?? undefined) !== view.level;
-  if (ordered.nodes === view.nodes && ordered.edges === view.edges && ordered.flows === view.flows && !levelChanged) return view;
+  if (ordered.nodes === view.nodes && ordered.edges === view.edges && ordered.flows === view.flows && !inkChanged && !levelChanged) return view;
 
-  const next: DraftDocument = { ...view, ...ordered };
+  const next: DraftDocument = inkChanged ? withInk({ ...view, ...ordered }, orderedInk) : { ...view, ...ordered };
   if (levelChanged) {
     if (plan.level === null) delete next.level;
     else next.level = plan.level!;

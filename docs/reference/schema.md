@@ -10,15 +10,16 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | Field | Contents |
 | --- | --- |
 | `format` | Always `"draft-canvas"` |
-| `version` | Format version, currently **27** (`CURRENT_VERSION`) |
+| `version` | Format version, currently **28** (`CURRENT_VERSION`) |
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
+| `ink` | Optional handwritten strokes over the top-level graph (`DraftInk`). Absent when there are none |
 | `settings` | Canvas settings, including the background |
 | `openPoints` | Unsettled questions attached to elements. Root only |
 | `level` | Optional `ViewLevel` |
 
-A node may own a room (`DraftNode.inside`): its own `nodes`, `edges`, `flows`, `viewport` and
-optional `level`. A document is a tree of graphs, nested at most 3 levels below the root.
+A node may own a room (`DraftNode.inside`): its own `nodes`, `edges`, `flows`, `viewport`, and
+optional `ink` and `level`. A document is a tree of graphs, nested at most 3 levels below the root.
 
 A node of type `sequence` carries a `sequence` payload (`DraftSequence`): `participants`, optional
 `groups` of neighbouring participants, and `items` in order — messages, notes and fragments, whose
@@ -79,6 +80,7 @@ Rules for a new version:
 | v24 → v25 | identity | No-op (optional connector `cadence`) |
 | v25 → v26 | identity | No-op (the `sequence` node type and its payload) |
 | v26 → v27 | identity | Message attachments and larger sequence frames |
+| v27 → v28 | identity | No-op (optional `ink` on the document and every room) |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
@@ -114,6 +116,9 @@ Repaired, after migration, and reported to the caller:
   steps to missing edges.
 - Rooms deeper than `maxInsideDepth` are dropped. A room with no shapes is dropped. Ids are unique
   across the whole file.
+- `ink` strokes are read per room: an unknown `tool` or unreadable points drop the stroke; size is
+  clamped; a `pressure` list that doesn't match the points is dropped; ids are unique across the
+  file; a room over `maxInkStrokes` keeps the first strokes.
 - `openPoints` is read at the root only. Targets are resolved after every room is loaded; a
   missing target is dropped, and a point with no targets left is dropped.
 - A `sequence` payload is normalized by `validateSequence.ts`: messages to or from a missing
@@ -136,6 +141,7 @@ From `LIMITS` in `src/document/limits.ts`:
 | `maxSequenceParticipants` / `maxSequenceItems` | 40 / 600 |
 | `maxSequenceDepth` / `maxSequenceOperands` / `maxSequenceGroups` | 8 / 12 / 20 |
 | `maxSequenceNameLength` / `maxSequenceNoteLength` | 120 / 1,000 |
+| `maxInkStrokes` / `maxInkPoints` | 4,000 per file / 2,000 per stroke |
 | `maxTitleLength` / `maxLabelLength` | 200 / 500 |
 | `maxTextLength` / `maxCodeLength` | 20,000 / 200,000 |
 | `maxDescriptionLength` / `maxTechnologyLength` | 280 / 60 |

@@ -55,6 +55,8 @@ Image options:
 - **Light** or **Dark**, **Transparent**, **Selection only**; PNG at 1×, 2× or 3×.
 - Inside a room: that room or **The whole canvas**. **Every level** zips one image per room.
 - Open-point markers are included unless you untick them.
+- [Sketches](sketching.md) are drawn over the diagram; a **Selection only** image leaves them out.
+  Text exports (Mermaid, PlantUML) leave them out.
 - **Editable** embeds the whole diagram, every room, so the image can
   be imported and edited. On by default for SVG, off for PNG.
 

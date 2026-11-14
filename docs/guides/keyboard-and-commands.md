@@ -22,6 +22,15 @@ Over a sequence, `S` `D` `Q` `A` `M` add a participant of that kind instead.
 shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch in
 [Settings → Canvas](getting-started.md#make-it-yours), hides them.
 
+## Draw
+
+| Key | Action |
+| --- | --- |
+| `P` | Pick up the [Pencil](sketching.md); again to switch Sketch and Smart Ink |
+| `H` / `E` | Highlighter / eraser |
+| `Esc` | Put the Pencil down; mid-stroke, take back that stroke |
+| `←` `→` / `Enter` / `Esc` | Smart Ink: change what a drawing became / keep and name it / keep the sketch |
+
 ## Move around
 
 | Key | Action |
