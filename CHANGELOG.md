@@ -86,6 +86,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - Connector labels keep clear of the shapes they join: a label beside an upright run moves to the
   side with room, and a relationship caption its line has no room for is left out instead of
   running under a shape.
+- **Connector words and notes in their place** — A connector's label or caption stays off its own
+  corners, its arrowhead and its reply line, and sits on a quiet backing so a line passing under it
+  never strikes through the words. Notes, code and open points on a connector line up in one row
+  just past its words, instead of floating near the line. The same in exports.
 - On right-click, Arrange is now **Rearrange layout** and **Rearrange selection**, next to the new
   **Tidy up**.
 - **Arrange, with a preview and a reading direction** — Arrange shows the diagram laid out again

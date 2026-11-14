@@ -3,7 +3,11 @@
  * trunk and label group it shares on purpose. The one place the quality harness asks for geometry.
  */
 
-import type { DraftEdge, DraftNode } from '../../../src/document/types';
+import type { DraftEdge, DraftNode, OpenPoint } from '../../../src/document/types';
+import { describeEdge } from '../../../src/edges/describe';
+import { getMeasurer } from '../../../src/render/text/measure';
+import { LIGHT } from '../../../src/render/theme/tokens';
+import { unresolvedOpenPointsFor } from '../../../src/document/openPoints';
 import { routingPlan } from '../../../src/edges/bundles';
 import { connectorRouteInputs } from '../../../src/edges/connectorRoutes';
 import { edgeRoutes } from '../../../src/edges/edgeRoutes';
@@ -26,11 +30,19 @@ export interface DrawnConnector {
   chip: Rect | null;
   spine?: string;
   labelGroup?: string;
+  /** Every box of words the connector draws (label chip, caption, reply chip, condition chip) and
+   *  every mark (attachment chip, open-point tab), as the exporter draws them. */
+  words: Rect[];
+  marks: Rect[];
 }
 
 /** `spread: false` draws every automatic end where it would sit with no endpoint plan — the picture
  *  before ends were spread, for measuring what spreading changes. */
-export function drawnConnectors(nodes: readonly DraftNode[], edges: readonly DraftEdge[], options: { spread?: boolean } = {}): DrawnConnector[] {
+export function drawnConnectors(
+  nodes: readonly DraftNode[],
+  edges: readonly DraftEdge[],
+  options: { spread?: boolean; openPoints?: readonly OpenPoint[] } = {},
+): DrawnConnector[] {
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const lanes = laneIndex(edges);
   const plan = routingPlan(nodes, edges, 'transient');
@@ -56,11 +68,25 @@ export function drawnConnectors(nodes: readonly DraftNode[], edges: readonly Dra
         chip = labelChipBox(labelChipSide(request.labelSide, responseAwayAt(request, routes.response, lane)), request.labelX + nudge.x, request.labelY + nudge.y, w, h);
       }
     }
+    const points = options.openPoints ? unresolvedOpenPointsFor(options.openPoints, { kind: 'edge', id: edge.id }) : [];
+    const described = describeEdge(edge, byId, {
+      theme: LIGHT,
+      measurer: getMeasurer(),
+      showSequence: false,
+      lane,
+      spine,
+      routes,
+      obstacles: inputs.obstacles,
+      ...(group ? { sharedLabel: { draws: group.members[0] === edge.id, x: group.x, y: group.y, side: group.side } } : {}),
+      ...(points.length ? { openPoints: points } : {}),
+    });
     out.push({
       edge,
       request,
       response: routes.response,
       chip,
+      words: described?.boxes.words ?? [],
+      marks: described?.boxes.marks ?? [],
       ...(spine ? { spine: spine.id } : {}),
       ...(group ? { labelGroup: group.key } : {}),
     });

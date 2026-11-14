@@ -8,9 +8,18 @@
  *      (a shared trunk, a shared label and a connector's own reply are on purpose);
  *   3. crossings;
  *   4. length plus 48 per bend.
+ *
+ * Words and marks are counted apart from the tiers, each held to its own baseline (`labels`):
+ *   - shape: a box of words over a shape;
+ *   - arrowhead: a box of words over any arrowhead;
+ *   - corner: a box of words reached by its own line's bend, or within a gap of one;
+ *   - junction: a box of words within a gap of where a bundled branch leaves its trunk;
+ *   - words: two boxes of words on each other;
+ *   - marks: an attachment chip or open-point tab on words, a shape, another mark or its own line.
  */
 
-import type { DraftEdge, DraftNode } from '../../../src/document/types';
+import type { DraftEdge, DraftNode, OpenPoint } from '../../../src/document/types';
+import { CONNECTOR_STYLE } from '../../../src/render/connectorStyle';
 import { drawnConnectors, type DrawnConnector, type DrawnLine } from './drawn';
 import { flattenPath, rectOf, type Rect, type Side } from '../../../src/edges/routing';
 import { stepPolyline } from '../../../src/edges/waypoints';
@@ -26,11 +35,25 @@ export interface Quality {
   /** Hard rules: must stay at zero (pins are counted, and enforced once the pin contract lands). */
   violations: { endpoint: number; continuity: number; bends: number; pins: number };
   tiers: { obstruction: number; overlap: number; crossings: number; cost: number };
+  /** Collisions of a connector's words and marks — see the header. */
+  labels: LabelCounts;
   /** Lines the router could not route clear, by status, and crowded node sides. */
   unresolved: { blocked: number; budget: number; crowded: number; skipped: number };
   /** Per-edge detail behind the numbers, for reading a regression. */
-  detail: { through: string[]; overlapping: string[]; pinsMoved: string[] };
+  detail: { through: string[]; overlapping: string[]; pinsMoved: string[]; labels: string[] };
 }
+
+export interface LabelCounts {
+  shape: number;
+  arrowhead: number;
+  corner: number;
+  junction: number;
+  words: number;
+  marks: number;
+}
+
+/** How close to a bend or a junction a box of words may come before it reads as sitting on it. */
+const WORDS_GAP = 4;
 
 const BEND_COST = 48;
 /** Inset of a shape before a line counts as entering it — `segmentEntersRect`'s. */
@@ -197,15 +220,20 @@ interface Measured {
   bounds: Rect;
 }
 
-export function measure(nodes: readonly DraftNode[], edges: readonly DraftEdge[], options: { spread?: boolean } = {}): Quality {
+export function measure(
+  nodes: readonly DraftNode[],
+  edges: readonly DraftEdge[],
+  options: { spread?: boolean; openPoints?: readonly OpenPoint[] } = {},
+): Quality {
   const connectors = drawnConnectors(nodes, edges, options);
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const solid = nodes.filter((n) => n.type !== 'group').map((n) => ({ id: n.id, rect: rectOf(n), box: inset(rectOf(n), THROUGH_INSET) }));
   const quality: Quality = {
     violations: { endpoint: 0, continuity: 0, bends: 0, pins: 0 },
     tiers: { obstruction: 0, overlap: 0, crossings: 0, cost: 0 },
+    labels: { shape: 0, arrowhead: 0, corner: 0, junction: 0, words: 0, marks: 0 },
     unresolved: { blocked: 0, budget: 0, crowded: 0, skipped: 0 },
-    detail: { through: [], overlapping: [], pinsMoved: [] },
+    detail: { through: [], overlapping: [], pinsMoved: [], labels: [] },
   };
 
   const lines: Measured[] = [];
@@ -307,7 +335,91 @@ export function measure(nodes: readonly DraftNode[], edges: readonly DraftEdge[]
   quality.unresolved.crowded = options.spread === false ? 0 : endpointPlan(nodes, edges, 'transient').crowded.length;
   quality.unresolved.skipped = separationPlan(nodes, edges, 'transient').skipped;
   quality.tiers.cost = Math.round(quality.tiers.cost);
+  countLabels(quality, connectors, lines, solid);
   return quality;
+}
+
+const grow = (r: Rect, by: number): Rect => ({ x: r.x - by, y: r.y - by, width: r.width + 2 * by, height: r.height + 2 * by });
+const contains = (r: Rect, p: Point) => p.x > r.x && p.x < r.x + r.width && p.y > r.y && p.y < r.y + r.height;
+const sameBox = (a: Rect, b: Rect) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5 && Math.abs(a.width - b.width) < 0.5 && Math.abs(a.height - b.height) < 0.5;
+
+/** The box an arrowhead covers: its length back from the tip along the last stretch, its width across. */
+function headOf(points: readonly Point[]): Rect | null {
+  const tip = points[points.length - 1]!;
+  for (let i = points.length - 2; i >= 0; i -= 1) {
+    const from = points[i]!;
+    const length = Math.hypot(tip.x - from.x, tip.y - from.y);
+    if (length < 1e-6) continue;
+    const ux = (tip.x - from.x) / length;
+    const uy = (tip.y - from.y) / length;
+    const back = { x: tip.x - ux * CONNECTOR_STYLE.arrowLength, y: tip.y - uy * CONNECTOR_STYLE.arrowLength };
+    const half = CONNECTOR_STYLE.arrowWidth / 2;
+    const xs = [tip.x, back.x].flatMap((x) => [x - uy * half, x + uy * half]);
+    const ys = [tip.y, back.y].flatMap((y) => [y + ux * half, y - ux * half]);
+    return boundsOf(xs.map((x, k) => ({ x, y: ys[k]! })));
+  }
+  return null;
+}
+
+/** The bends of a corner polyline: every vertex but its two ends where the line turns. */
+function bendPoints(points: readonly Point[]): Point[] {
+  const out: Point[] = [];
+  for (let i = 1; i + 1 < points.length; i += 1) {
+    const [a, b, c] = [points[i - 1]!, points[i]!, points[i + 1]!];
+    if (Math.abs((b.x - a.x) * (c.y - b.y) - (b.y - a.y) * (c.x - b.x)) > 1e-6) out.push(b);
+  }
+  return out;
+}
+
+function countLabels(quality: Quality, connectors: readonly DrawnConnector[], lines: readonly Measured[], solid: readonly { rect: Rect }[]): void {
+  const labels = quality.labels;
+  const note = (kind: keyof LabelCounts, id: string) => {
+    labels[kind] += 1;
+    quality.detail.labels.push(`${kind}:${id}`);
+  };
+  const heads = lines.flatMap((m) => (m.connector.edge.directed ? [headOf(m.corners)] : [])).filter((h): h is Rect => h !== null);
+  const junctions = connectors.flatMap((c) => {
+    const at = (c.request as { branchStart?: Point }).branchStart;
+    return at ? [at] : [];
+  });
+  const ownLines = new Map<DrawnConnector, Measured[]>();
+  for (const m of lines) ownLines.set(m.connector, [...(ownLines.get(m.connector) ?? []), m]);
+  // What a shape draws: a Data Store's or a tube's glyph, not the empty margin of its box.
+  const shapes = solid.map((s) => glyphOf(s.rect)).filter((r) => r.width > 2 * CAPTION_INSET && r.height > 2 * CAPTION_INSET).map((r) => inset(r, CAPTION_INSET));
+
+  const allWords: { id: string; box: Rect; group?: string }[] = [];
+  for (const c of connectors) {
+    const id = c.edge.id;
+    for (const box of c.words) {
+      allWords.push({ id, box, ...(c.labelGroup ? { group: c.labelGroup } : {}) });
+      if (shapes.some((s) => overlaps(box, s))) note('shape', id);
+      if (heads.some((h) => overlaps(box, h))) note('arrowhead', id);
+      const own = ownLines.get(c) ?? [];
+      const near = grow(box, WORDS_GAP);
+      const inner = inset(box, 1);
+      if (own.some((m) => m.corners.some((p, k) => k > 0 && entersRect(m.corners[k - 1]!, p, inner)) || bendPoints(m.corners).some((p) => contains(near, p)))) note('corner', id);
+      if (junctions.some((p) => contains(near, p))) note('junction', id);
+    }
+  }
+  for (let i = 0; i < allWords.length; i += 1) {
+    for (let j = i + 1; j < allWords.length; j += 1) {
+      const [a, b] = [allWords[i]!, allWords[j]!];
+      // Identical boxes are one caption drawn by every member of a bundle, on purpose.
+      if ((a.group && a.group === b.group) || sameBox(a.box, b.box)) continue;
+      if (overlaps(a.box, b.box)) note('words', `${a.id}|${b.id}`);
+    }
+  }
+  const allMarks = connectors.flatMap((c) => c.marks.map((box) => ({ connector: c, id: c.edge.id, box })));
+  for (let i = 0; i < allMarks.length; i += 1) {
+    const { connector, id, box } = allMarks[i]!;
+    const onWords = allWords.some((w) => overlaps(box, w.box));
+    const onShape = shapes.some((s) => overlaps(box, s));
+    const onMark = allMarks.some((other, k) => k !== i && overlaps(box, other.box));
+    // A chip lying across its own connector reads as a bead on the line, not a note beside it.
+    const inner = inset(box, 1);
+    const onLine = (ownLines.get(connector) ?? []).some((m) => m.corners.some((p, k) => k > 0 && entersRect(m.corners[k - 1]!, p, inner)));
+    if (onWords || onShape || onMark || onLine) note('marks', id);
+  }
 }
 
 /** Most important first: is `next` no worse than `base`, tier by tier? */

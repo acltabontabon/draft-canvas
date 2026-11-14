@@ -131,7 +131,10 @@ test.describe('Presentation callouts', () => {
       callout.locator('.dc-callout-card'),
       page.locator('.dc-attachment-chip-row').filter({ hasText: 'Note' }),
     ]);
-    expect(gapBetween(card, chip)).toBeLessThan(60);
+    // The note chip sits past the connector's words — here under its "publishes to" caption, which
+    // hangs below the line — so a card that has no room below (the flow bar is there) and goes above
+    // spans the line and the caption to reach it.
+    expect(gapBetween(card, chip)).toBeLessThan(100);
     expect(overlaps(card, (await nodeNamed(page, 'Outbox Relay').boundingBox())!)).toBe(false);
     expect(overlaps(card, (await nodeNamed(page, 'Domain Events').boundingBox())!)).toBe(false);
     await expectInViewAndClearOfChrome(page, card);

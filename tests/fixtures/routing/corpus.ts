@@ -9,7 +9,7 @@ import { connectorStyleDocument } from '../connectors/checkout';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { createEdge, createNode } from '../../../src/document/factory';
-import type { DraftDocument, DraftEdge, DraftNode, EdgeAnchor } from '../../../src/document/types';
+import type { Attachment, DraftDocument, DraftEdge, DraftNode, EdgeAnchor, OpenPoint } from '../../../src/document/types';
 import { walkGraphs, viewOf } from '../../../src/depth/tree';
 import { deserializeDocument } from '../../../src/export/project';
 import { compose } from '../../../src/agent/compile';
@@ -25,18 +25,52 @@ export interface RoutingFixture {
   edges: readonly DraftEdge[];
   /** Where the fixture came from: hand-made cases isolate one problem, the rest are real diagrams. */
   source: 'case' | 'starter' | 'gallery' | 'workload' | 'agent' | 'scatter';
+  /** Open points about the fixture's connectors, for the marks they draw. */
+  openPoints?: readonly OpenPoint[];
 }
 
 const box = (id: string, x: number, y: number, width = 160, height = 80): DraftNode =>
   createNode({ id, type: 'service', x, y, width, height });
 const pin = (side: EdgeAnchor['side'], offset = 0.5): EdgeAnchor => ({ side, offset });
-const edge = (id: string, source: string, target: string, extra: Partial<DraftEdge> = {}): DraftEdge =>
-  createEdge({ id, source, target, ...extra });
+const edge = (id: string, source: string, target: string, extra: Partial<DraftEdge> = {}): DraftEdge => ({
+  ...createEdge({ id, source, target, ...extra }),
+  // `createEdge` makes a fresh connector, which never carries attachments yet.
+  ...(extra.attachments ? { attachments: extra.attachments } : {}),
+});
 
 /** Hand-made cases, one problem each. */
 function cases(): RoutingFixture[] {
   const out: RoutingFixture[] = [];
-  const add = (id: string, nodes: DraftNode[], edges: DraftEdge[]) => out.push({ id: `case/${id}`, nodes, edges, source: 'case' });
+  const add = (id: string, nodes: DraftNode[], edges: DraftEdge[], openPoints?: OpenPoint[]) =>
+    out.push({ id: `case/${id}`, nodes, edges, source: 'case', ...(openPoints ? { openPoints } : {}) });
+  const note = (id: string): Attachment => ({ id, type: 'note', text: 'Why this hop exists' });
+  const code = (id: string): Attachment => ({ id, type: 'code', language: 'typescript', code: 'await pay(order);' });
+  const open = (id: string, edgeId: string): OpenPoint => ({ id, kind: 'tentative', targets: [{ kind: 'edge', id: edgeId }] });
+
+  // Words with marks beside them: a label, a caption and bare lines, level and upright, short and
+  // long, each carrying attachments and an open point.
+  add('marks', [
+    box('a', 0, 0), box('b', 520, 0), box('c', 0, 260), box('d', 300, 260), box('e', 0, 520), box('f', 0, 820),
+    box('g', 520, 520), box('h', 520, 820),
+  ], [
+    edge('ab', 'a', 'b', { label: 'Places order', attachments: [note('n1')] }),
+    edge('cd', 'c', 'd', { semantic: 'calls', attachments: [note('n2'), code('c2')] }),
+    edge('ef', 'e', 'f', { label: 'Settles', attachments: [code('c3')] }),
+    edge('gh', 'g', 'h', { semantic: 'writes', attachments: [note('n4')] }),
+    edge('bg', 'b', 'g', { attachments: [note('n5'), code('c5')], condition: 'paid' }),
+  ], [open('o1', 'ab'), open('o2', 'cd'), open('o3', 'ef'), open('o4', 'gh'), open('o5', 'bg')]);
+  // Words near what they must keep clear of: a corner turning toward them, a short last run into an
+  // arrowhead, and a fan's junction.
+  add('label-corners', [
+    box('a', 0, 200), box('b', 420, 0), box('c', 0, 520), box('d', 250, 540), box('hub', 700, 300),
+    box('t1', 1100, 120), box('t2', 1100, 300), box('t3', 1100, 480),
+  ], [
+    edge('ab', 'a', 'b', { label: 'Requests a long quote', sourceAnchor: pin('right'), targetAnchor: pin('left') }),
+    edge('cd', 'c', 'd', { label: 'Short hop with words', sourceAnchor: pin('right'), targetAnchor: pin('left') }),
+    edge('h1', 'hub', 't1', { semantic: 'publishes', label: 'OrderPlaced' }),
+    edge('h2', 'hub', 't2', { semantic: 'publishes', label: 'OrderPaid' }),
+    edge('h3', 'hub', 't3', { semantic: 'publishes', label: 'OrderShipped' }),
+  ]);
 
   // An elbow whose corner lands on a shape: the fast path never checks mixed side pairs.
   add('blocked-elbow', [box('a', 0, 0), box('b', 480, 320), box('wall', 440, 20, 200, 120)], [

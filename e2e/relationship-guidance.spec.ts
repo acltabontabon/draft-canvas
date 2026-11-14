@@ -91,8 +91,8 @@ test.describe('Topic-aware relationships', () => {
     // Both new connectors' own inferred captions read correctly — a more direct check than
     // clicking each short connector to select it, which the compact layout (the Worker node
     // necessarily overlapping both its own short edges) makes unreliable.
-    await expect(page.locator('svg text').filter({ hasText: 'consumed by' })).toBeVisible();
-    await expect(page.locator('svg text').filter({ hasText: 'publishes to' })).toBeVisible();
+    await expect(page.locator('.dc-edge-caption').filter({ hasText: 'consumed by' })).toBeVisible();
+    await expect(page.locator('.dc-edge-caption').filter({ hasText: 'publishes to' })).toBeVisible();
 
     await page.keyboard.press('Meta+z');
     await expect(page.locator('.dc-node')).toHaveCount(2);
@@ -176,13 +176,13 @@ test.describe('Request/response default caption', () => {
     // draws its reply line. A fresh connector no longer turns that on by
     // itself, so the caption is the plain relationship — turning Response on
     // in the connector's own editor is what brings "requests" back.
-    await expect(page.locator('svg text').filter({ hasText: 'calls' })).toBeVisible();
+    await expect(page.locator('.dc-edge-caption').filter({ hasText: 'calls' })).toBeVisible();
 
     await inspectorSelect(page, 'Protocol').click();
     await page.getByRole('option', { name: 'HTTP', exact: true }).click();
 
     // The protocol is not a caption on its own: the verb stays, and names the protocol with it.
-    await expect(page.locator('svg text').filter({ hasText: 'calls over HTTP' })).toBeVisible();
-    await expect(page.locator('svg text').filter({ hasText: /^calls$/ })).toHaveCount(0);
+    await expect(page.locator('.dc-edge-caption').filter({ hasText: 'calls over HTTP' })).toBeVisible();
+    await expect(page.locator('.dc-edge-caption').filter({ hasText: /^calls$/ })).toHaveCount(0);
   });
 });

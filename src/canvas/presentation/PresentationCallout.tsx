@@ -143,7 +143,7 @@ export function PresentationCallout({
   });
   // The marker's flow box, measured with this commit's obstacles rather than per frame. A marker not
   // mounted yet (its row renders in another component's commit) is looked for again next frame.
-  const markerRef = useRef<{ box: Box; measured: boolean } | null>(null);
+  const markerRef = useRef<{ box: Box; measured: boolean; below?: boolean } | null>(null);
   useLayoutEffect(() => {
     const { domNode: root, transform, nodeLookup } = storeApi.getState();
     markerRef.current = null;
@@ -223,7 +223,7 @@ export function PresentationCallout({
       kind: anchor.kind,
       marker,
       host: anchor.host ? toScreen(anchor.host) : marker,
-      preferBelow: anchor.preferBelow,
+      preferBelow: markerRef.current.below ?? anchor.preferBelow,
       avoid: anchor.avoid.map(toScreen),
       exclusions: [flowBar, exitButton, card]
         .filter((box): box is Box => box !== null)

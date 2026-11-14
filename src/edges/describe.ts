@@ -1,6 +1,6 @@
 import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
 import type { DraftEdge, DraftNode, OpenPoint } from '../document/types';
-import { MARKER_SIZE, describeMarker, edgeMarkerCenter, type OccupiedRect } from '../openPoints/marker';
+import { MARKER_SIZE, describeMarker, type OccupiedRect } from '../openPoints/marker';
 import type { Shape, TextAlign } from '../render/displayList';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
@@ -31,16 +31,19 @@ import {
 } from './routing';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from './kindStyle';
 import { badgeCrowds, badgePoint } from './badgePoint';
-import { attachmentRowBelowsSourceOrTarget, captionSideOf, describeAttachmentChips } from './attachmentChips';
+import { describeAttachmentChips } from './attachmentChips';
+import { connectorMarkRow, markRowAttachmentsWidth } from './connectorMarks';
 import { bridgePath } from './bridge';
-import { computeEdgeRoutes, type EdgeRoutes } from './edgeRoutes';
+import { computeEdgeRoutes, routedCaption, type EdgeRoutes } from './edgeRoutes';
+
+const captionOf = (caption: string | undefined) => (caption ? { caption } : {});
 import type { EdgeSpread } from './endpoints';
 import type { EdgeTracks } from './separation';
 import type { Crossing } from './crossings';
-import { relationshipCaptionLabel } from '../document/edgeSemantics';
-import { capabilityFor, categoryOf } from '../document/connectorSemantics';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
-import { compensationActionCaption, compensationLabelParts } from './compensationMarker';
+import { categoryOf } from '../document/connectorSemantics';
+import { connectorCaptionText } from './captionText';
+import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
+import { compensationLabelParts } from './compensationMarker';
 import { compensationDisplayLabel } from '../document/compensation';
 
 export interface EdgeDescribeContext {
@@ -143,18 +146,38 @@ export function captionAnchor(
   return { x, y: baseline - baselineOf(layout, 0), align: 'middle' };
 }
 
-/** Mirrors `conditionTransform` in `DraftEdgeView.tsx` — stacked below the label for a horizontal
- *  line (unchanged), stacked beside the line for a vertical one. */
-function conditionChipRect(side: Side, x: number, y: number, w: number): { left: number; top: number } {
-  switch (side) {
-    case 'right':
-      return { left: x + LABEL_LINE_GAP, top: y + CONDITION_OFFSET_Y };
-    case 'left':
-      return { left: x - LABEL_LINE_GAP - w, top: y + CONDITION_OFFSET_Y };
-    case 'top':
-    case 'bottom':
-      return { left: x - w / 2, top: y + CONDITION_OFFSET_Y };
-  }
+/** The condition chip's one line, laid out once for both renderers. */
+function layoutConditionChip(text: string, measurer?: TextMeasurer): TextLayout {
+  return layoutText(text, {
+    font: FONTS.presetTag,
+    maxWidth: 220,
+    lineHeight: FONTS.presetTag.size * LINE_HEIGHTS.label,
+    maxLines: 1,
+    measurer,
+  });
+}
+
+/** The condition chip's box size, with its padding — `.dc-edge-meta`'s. */
+export function conditionChipSize(text: string, measurer?: TextMeasurer): { width: number; height: number } {
+  const layout = layoutConditionChip(text, measurer);
+  return { width: layout.width + CONDITION_PADDING_X * 2, height: layout.height + CONDITION_PADDING_Y * 2 };
+}
+
+/** Between a connector's words and the condition chip stacked under them. */
+const CONDITION_STACK_GAP = 2;
+
+/**
+ * Where the condition chip sits: below the label point (beside the line for a vertical one), or — when
+ * the connector's words already hang there (a label or caption under its line, or words beside an
+ * upright run that reach that far down) — stacked just under them, never on them. Mirrors
+ * `conditionTransform` in `DraftEdgeView.tsx`; `words` is the box both renderers draw the words in.
+ */
+export function conditionChipRect(side: Side, x: number, y: number, w: number, h: number, words?: OccupiedRect): { left: number; top: number } {
+  const left = side === 'right' ? x + LABEL_LINE_GAP : side === 'left' ? x - LABEL_LINE_GAP - w : x - w / 2;
+  const top = y + CONDITION_OFFSET_Y;
+  const hits = words !== undefined
+    && left < words.left + words.width && words.left < left + w && top < words.top + words.height && words.top < top + h;
+  return { left, top: hits ? words.top + words.height + CONDITION_STACK_GAP : top };
 }
 
 export interface DescribedEdge {
@@ -173,7 +196,16 @@ export interface DescribedEdge {
   /** The label chip and step badge. Painted on top of everything. */
   overlay: Shape[];
   color: string;
+  /**
+   * Where this connector's words (label chip, caption, reply chip, condition chip) and marks
+   * (attachment chips, open-point tab) landed, as plain boxes. Nothing draws these: they are what
+   * the routing quality corpus measures for collisions, read off the very picture it exports.
+   */
+  boxes: { words: Rect[]; marks: Rect[] };
 }
+
+const boxOf = (left: number, top: number, width: number, height: number): Rect => ({ x: left, y: top, width, height });
+const rectOfOccupied = (occupied: OccupiedRect): Rect => boxOf(occupied.left, occupied.top, occupied.width, occupied.height);
 
 /** A connector's routes from a describe context: the inputs `connectorRouteInputs` builds, given here. */
 function routesOf(edge: DraftEdge, nodes: Map<string, DraftNode>, ctx: EdgeDescribeContext, obstacles: readonly Rect[]): EdgeRoutes | null {
@@ -185,6 +217,7 @@ function routesOf(edge: DraftEdge, nodes: Map<string, DraftNode>, ctx: EdgeDescr
     target: rectOf(target),
     routing: edge.routing,
     label: edge.label,
+    ...captionOf(routedCaption(edge, categoryOf(source), categoryOf(target))),
     sourceAnchor: edge.sourceAnchor,
     targetAnchor: edge.targetAnchor,
     hasResponse: edge.hasResponse,
@@ -292,6 +325,7 @@ export function describeEdge(
   ];
 
   const overlay: Shape[] = [];
+  const boxes: DescribedEdge['boxes'] = { words: [], marks: [] };
   // What already sits at the label point, for the open-point marker to take its place beside.
   let markerOccupied: OccupiedRect | undefined;
 
@@ -350,6 +384,7 @@ export function describeEdge(
         const w = responseLayout.width + LABEL_PADDING_X * 2;
         const h = responseLayout.height + LABEL_PADDING_Y * 2;
         const { left, top } = labelChipRect(responseLabel.side, responseLabel.x, responseLabel.y, w, h);
+        boxes.words.push(boxOf(left, top, w, h));
         overlay.push(
           {
             t: 'rect',
@@ -418,17 +453,12 @@ export function describeEdge(
     if (edge.semantic) {
       const sourceNode = nodes.get(edge.source);
       const targetNode = nodes.get(edge.target);
-      const sourceCategory = sourceNode ? categoryOf(sourceNode) : undefined;
-      const targetCategory = targetNode ? categoryOf(targetNode) : undefined;
-      const status = sourceCategory && targetCategory ? capabilityFor(sourceCategory, targetCategory)?.status : undefined;
-      const isUnusual = status === 'unusual' || status === 'questionable';
-      const label = compensationActionCaption(edge.compensationFor ? edge.compensationName : undefined, relationshipCaptionLabel(edge.semantic, {
-        hasResponse: edge.hasResponse,
-        deliveryAttempts: edge.deliveryAttempts,
-        source: sourceCategory,
-        target: targetCategory,
-      }));
-      const text = isUnusual ? `▲ ${label}` : label;
+      // Worded once for both renderers and routing (`connectorCaptionText`).
+      const { text, unusual: isUnusual } = connectorCaptionText(
+        edge,
+        sourceNode ? categoryOf(sourceNode) : undefined,
+        targetNode ? categoryOf(targetNode) : undefined,
+      )!;
       // A bundle's members all share one relationship, so repeating its
       // caption down every branch is pure noise — the exact "calls / calls /
       // calls / calls / calls" column this feature exists to remove. Every
@@ -450,6 +480,19 @@ export function describeEdge(
       if (captionLayout && !(badgeAt !== null && badgeCrowds(badgeAt, captionAt))) {
         const captionSide = collapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
         const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionLayout, collapsed ? responseAway : captionAwayForLane(ctx.lane ?? 0, responseAway));
+        const captionLeft = caption.align === 'start' ? caption.x : caption.align === 'end' ? caption.x - captionLayout.width : caption.x - captionLayout.width / 2;
+        // Mirrors `.dc-edge-caption`: the label's quiet canvas-toned mask, close around the text, so a
+        // line running under the words is erased there instead of striking through them.
+        overlay.push({
+          t: 'rect',
+          x: captionLeft - CAPTION_PADDING_X,
+          y: caption.y - CAPTION_PADDING_Y,
+          w: captionLayout.width + CAPTION_PADDING_X * 2,
+          h: captionLayout.height + CAPTION_PADDING_Y * 2,
+          r: 4,
+          fill: ctx.theme.canvas,
+          opacity: 0.82,
+        });
         overlay.push({
           t: 'text',
           x: caption.x,
@@ -459,11 +502,11 @@ export function describeEdge(
           fill: isUnusual ? ctx.theme.accents.amber.text : ctx.theme.textFaint,
           align: caption.align,
         });
+        boxes.words.push(boxOf(captionLeft, caption.y, captionLayout.width, captionLayout.height));
         // A caption on a shared trunk belongs to every member; a marker beside it would too, so a
         // bundled connector's marker sits at its own label point instead.
         if (!collapsed) {
-          const left = caption.align === 'start' ? caption.x : caption.align === 'end' ? caption.x - captionLayout.width : caption.x - captionLayout.width / 2;
-          markerOccupied = { left, top: caption.y, width: captionLayout.width, height: captionLayout.height };
+          markerOccupied = { left: captionLeft, top: caption.y, width: captionLayout.width, height: captionLayout.height };
         }
       }
     }
@@ -513,6 +556,7 @@ export function describeEdge(
     const chip = ctx.sharedLabel ?? { side: recoveryChipSide, x: labelX, y: labelY };
     const { left, top } = labelChipRect(chip.side, chip.x, chip.y, w, h);
     const centerY = top + h / 2;
+    boxes.words.push(boxOf(left, top, w, h));
     // A shared label is drawn once, so only the member drawing it has a chip to sit beside.
     if (!ctx.sharedLabel) markerOccupied = { left, top, width: w, height: h };
 
@@ -618,18 +662,14 @@ export function describeEdge(
   // anchor — a small, secondary tag, never competing with the label. A cadence ("hourly") shares
   // the chip, after the condition: both say when the connector carries anything.
   const meta = edgeMetaText(edge);
+  let conditionBox: Rect | undefined;
   if (meta) {
-    const value = meta;
-    const layout = layoutText(value, {
-      font: FONTS.presetTag,
-      maxWidth: 220,
-      lineHeight: FONTS.presetTag.size * LINE_HEIGHTS.label,
-      maxLines: 1,
-      measurer: ctx.measurer,
-    });
+    const layout = layoutConditionChip(meta, ctx.measurer);
     const w = layout.width + CONDITION_PADDING_X * 2;
     const h = layout.height + CONDITION_PADDING_Y * 2;
-    const { left, top } = conditionChipRect(labelSide, labelX, labelY, w);
+    const { left, top } = conditionChipRect(labelSide, labelX, labelY, w, h, markerOccupied);
+    conditionBox = boxOf(left, top, w, h);
+    boxes.words.push(conditionBox);
     overlay.push(
       {
         t: 'rect',
@@ -653,10 +693,32 @@ export function describeEdge(
     );
   }
 
-  // The open-point tab, last so it paints over the chip it sits beside — the same picture the
-  // canvas draws (`canvas/OpenPointMarker.tsx`), from the same `describeMarker`.
-  if (ctx.openPoints?.length) {
-    const center = edgeMarkerCenter({ x: labelX, y: labelY }, labelSide, markerOccupied);
+  // The connector's marks — its attachment chips, then its open-point tab — in one row beyond its
+  // words, where the canvas puts them (`connectorMarks.ts`). Last, so they paint over anything they
+  // must sit beside.
+  const source = nodes.get(edge.source);
+  const target = nodes.get(edge.target);
+  const row = source && target
+    ? connectorMarkRow({
+        point: { x: labelX, y: labelY },
+        upright: route.labelSide === 'left' || route.labelSide === 'right',
+        side: labelSide,
+        ...(markerOccupied ? { words: rectOfOccupied(markerOccupied) } : {}),
+        ...(conditionBox ? { condition: conditionBox } : {}),
+        attachmentsWidth: markRowAttachmentsWidth(edge.attachments, ctx.measurer),
+        openPoint: Boolean(ctx.openPoints?.length),
+        source: rectOf(source),
+        target: rectOf(target),
+      })
+    : null;
+  if (row?.attachments && edge.attachments?.length) {
+    const chips = describeAttachmentChips(edge.attachments, row.attachments.box.x, row.attachments.box.y, { theme: ctx.theme, measurer: ctx.measurer });
+    for (const chip of chips) if (chip.t === 'rect') boxes.marks.push(boxOf(chip.x, chip.y, chip.w, chip.h));
+    overlay.push(...chips);
+  }
+  if (row?.openPoint && ctx.openPoints?.length) {
+    const center = row.openPoint;
+    boxes.marks.push(boxOf(center.x - MARKER_SIZE / 2, center.y - MARKER_SIZE / 2, MARKER_SIZE, MARKER_SIZE));
     overlay.push({
       t: 'group',
       translate: { x: center.x - MARKER_SIZE / 2, y: center.y - MARKER_SIZE / 2 },
@@ -664,17 +726,7 @@ export function describeEdge(
     });
   }
 
-  // The connector's attachment chips, where the canvas hangs them — see `attachmentChips.ts`.
-  if (edge.attachments?.length) {
-    const source = nodes.get(edge.source);
-    const target = nodes.get(edge.target);
-    if (source && target) {
-      const below = attachmentRowBelowsSourceOrTarget(labelX, labelY, rectOf(source), rectOf(target), captionSideOf(edge, labelSide));
-      overlay.push(...describeAttachmentChips(edge.attachments, labelX, labelY, below, { theme: ctx.theme, measurer: ctx.measurer }));
-    }
-  }
-
-  return { route, line, responseLine, overlay, color };
+  return { route, line, responseLine, overlay, color, boxes };
 }
 
 

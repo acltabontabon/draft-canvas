@@ -447,10 +447,23 @@
   cursor: default;
 }
 
-/* A connector's relationship caption belongs to it: clicking the words selects it, like its label. */
+/* A connector's relationship caption belongs to it: clicking the words selects it, like its label.
+   It sits in the label layer above every line, on the same quiet canvas-toned mask as a label
+   (`.dc-edge-label`), only closer around its text: a line that runs under the words is erased there
+   rather than striking through them. `CAPTION_PADDING_X`/`_Y` in `edges/labelLayout.ts`, which the
+   exporter's backing uses too. */
 .dc-edge-caption {
-  pointer-events: visiblePainted;
+  position: absolute;
+  padding: 1px 3px;
+  border-radius: var(--dc-radius-xs);
+  background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
+  text-shadow: 0 0 3px var(--dc-canvas);
+  white-space: pre;
+  pointer-events: all;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: opacity 180ms ease;
 }
 
 /* A node's connection handle sits over the last stretch of every arrow; while the pointer is really
@@ -4698,6 +4711,7 @@
  * connector does not reach them. Without this the quiet steps keep shouting.
  */
 .dc-edge-label[data-dimmed='true'],
+.dc-edge-caption[data-dimmed='true'],
 .dc-edge-step[data-dimmed='true'],
 .dc-edge-meta[data-dimmed='true'] {
   opacity: 0.3;
@@ -4705,6 +4719,7 @@
 }
 
 .dc-edge-label[data-shown='true'],
+.dc-edge-caption[data-shown='true'],
 .dc-edge-step[data-shown='true'],
 .dc-edge-meta[data-shown='true'] {
   opacity: 0.62;
@@ -4749,6 +4764,7 @@
 
 .dc-canvas[data-explain-stage='overview'] .dc-edge[data-shown='true'],
 .dc-canvas[data-explain-stage='overview'] .dc-edge-label[data-shown='true'],
+.dc-canvas[data-explain-stage='overview'] .dc-edge-caption[data-shown='true'],
 .dc-canvas[data-explain-stage='overview'] .dc-edge-step[data-shown='true'],
 .dc-canvas[data-explain-stage='overview'] .dc-edge-meta[data-shown='true'],
 .dc-canvas[data-explain-stage='overview'] .dc-attachment-chip-row[data-explain-tier='shown'] {
@@ -5159,6 +5175,7 @@
 }
 
 .dc-edge-label[data-focus-dimmed='true'],
+.dc-edge-caption[data-focus-dimmed='true'],
 .dc-edge-step[data-focus-dimmed='true'],
 .dc-edge-meta[data-focus-dimmed='true'] {
   opacity: 0.22;
@@ -5194,6 +5211,7 @@
 }
 
 .dc-edge-label[data-lens-dimmed='true'],
+.dc-edge-caption[data-lens-dimmed='true'],
 .dc-edge-step[data-lens-dimmed='true'],
 .dc-edge-meta[data-lens-dimmed='true'] {
   opacity: 0.4;
@@ -7312,7 +7330,7 @@
   .dc-edge[data-arriving='true'] .dc-edge-response-line,
   .dc-edge[data-arriving='true'] .dc-edge-arrow,
   .dc-edge[data-arriving='true'] .dc-edge-async-marker,
-  .dc-edge[data-arriving='true'] .dc-edge-caption,
+  .dc-edge-caption[data-arriving='true'],
   .dc-edge-label[data-arriving='true'] {
   animation: dc-edge-resolve 440ms ease-out both;
   }

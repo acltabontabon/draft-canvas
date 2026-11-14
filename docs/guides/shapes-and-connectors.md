@@ -106,7 +106,12 @@ rail, with each caption outside its own line. Two differently named operations k
 a repeated relationship can share a trunk. These details also appear in SVG and PNG exports.
 
 A caption sits on its connector's longest straight stretch, never on a short jog or over the
-arrowhead. One too long for its line is cut short; hover it to read the whole caption.
+arrowhead, and clear of the connector's own corners and reply line. A line passing under it is
+masked, so it never strikes through the words. One too long for its line is cut short; hover it to
+read the whole caption.
+
+Notes and code attached to a connector, and its open points, sit in one row just past its words:
+above a label, below a caption, under the words beside an upright line.
 
 ![Default connectors: distinct operations, separate return rails and straight glyph attachments.](../media/connectors/style-light-after.png)
 

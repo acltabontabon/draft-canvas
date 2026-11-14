@@ -21,7 +21,7 @@ const BASELINE = resolve(process.cwd(), 'tests/fixtures/routing/quality-baseline
 const GOLDEN = resolve(process.cwd(), 'tests/fixtures/routing/golden-routes.json');
 const UPDATE = process.env.ROUTING_BASELINE === 'update';
 
-type Baseline = Record<string, Quality['tiers'] & { violations: Quality['violations']; unresolved: Quality['unresolved'] }>;
+type Baseline = Record<string, Quality['tiers'] & { violations: Quality['violations']; unresolved: Quality['unresolved']; labels: Quality['labels'] }>;
 type Golden = Record<string, Record<string, [string, string | null]>>;
 
 const read = <T>(url: string): T | null => (existsSync(url) ? (JSON.parse(readFileSync(url, 'utf8')) as T) : null);
@@ -29,7 +29,7 @@ const sorted = <T>(record: Record<string, T>): Record<string, T> => Object.fromE
 
 describe('routing quality', { timeout: 60_000 }, () => {
   const corpus = routingCorpus();
-  const results = new Map(corpus.map((fixture) => [fixture.id, measure(fixture.nodes, fixture.edges)]));
+  const results = new Map(corpus.map((fixture) => [fixture.id, measure(fixture.nodes, fixture.edges, fixture.openPoints ? { openPoints: fixture.openPoints } : {})]));
   const golden: Golden = Object.fromEntries(corpus.map((fixture) => [
     fixture.id,
     Object.fromEntries(drawnConnectors(fixture.nodes, fixture.edges).map((c) => [c.edge.id, [c.request.d, c.response?.d ?? null]])),
@@ -37,7 +37,7 @@ describe('routing quality', { timeout: 60_000 }, () => {
 
   if (UPDATE) {
     const baseline: Baseline = {};
-    for (const [id, q] of results) baseline[id] = { ...q.tiers, violations: q.violations, unresolved: q.unresolved };
+    for (const [id, q] of results) baseline[id] = { ...q.tiers, violations: q.violations, unresolved: q.unresolved, labels: q.labels };
     writeFileSync(BASELINE, `${JSON.stringify(sorted(baseline), null, 2)}\n`);
     writeFileSync(GOLDEN, `${JSON.stringify(sorted(golden), null, 1)}\n`);
   }
@@ -61,6 +61,10 @@ describe('routing quality', { timeout: 60_000 }, () => {
       expect(q.violations.continuity, 'broken lines').toBe(0);
       expect(q.violations.bends, 'hand bends lost').toBe(0);
       expect(q.violations.pins, `pins moved: ${q.detail.pinsMoved.join(', ')}`).toBeLessThanOrEqual(base!.violations.pins);
+      // A connector's words and marks: no view may gain a collision of any kind.
+      for (const kind of Object.keys(q.labels) as (keyof Quality['labels'])[]) {
+        expect(q.labels[kind], `${kind} collisions: ${q.detail.labels.filter((l) => l.startsWith(`${kind}:`)).join(', ')}`).toBeLessThanOrEqual(base!.labels?.[kind] ?? 0);
+      }
       expect(noWorse(q.tiers, base!), `tiers ${JSON.stringify(q.tiers)} vs ${JSON.stringify(base)}; through: ${q.detail.through.join(', ')}`).toBe(true);
     });
   }
@@ -72,6 +76,14 @@ describe('routing quality', { timeout: 60_000 }, () => {
       expect(before.overlap, fixture.id).toBeGreaterThan(0);
       expect(after.overlap, fixture.id).toBeLessThanOrEqual(before.overlap / 2);
       expect(after.obstruction, fixture.id).toBeLessThanOrEqual(before.obstruction);
+    }
+  });
+
+  it('keeps words off their own lines: a corner, or a reply turning back across them', () => {
+    // A short jog whose legs both turn up into the words above it, and the saga's request whose
+    // reply leaves beside it and runs back across its last run.
+    for (const id of ['gallery/24-skill-example/storefront/orders', 'starter/saga-orchestration', 'workload/typical']) {
+      expect(results.get(id)!.labels.corner, id).toBe(0);
     }
   });
 

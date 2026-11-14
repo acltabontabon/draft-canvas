@@ -17,7 +17,7 @@
  * Imports `document/` and `render/` only, so the exporter can use it without a store or a DOM.
  */
 
-import type { OpenPointKind, OpenPoint, Side } from '../document/types';
+import type { OpenPointKind, OpenPoint } from '../document/types';
 import { OPEN_POINT_LABELS, kindsAmong } from '../document/openPoints';
 import type { Shape } from '../render/displayList';
 import { FONTS, LINE_HEIGHTS, type FontSpec } from '../render/text/fonts';
@@ -29,7 +29,7 @@ import { RAIL_SIZE, markerRail, type RailContents } from '../document/markerRail
 /** The tab is 16 units square on the canvas and in exports — the size of a connector's step badge,
  *  and of every other mark in a shape's marker rail. */
 export const MARKER_SIZE = RAIL_SIZE;
-/** Gap between a connector's label chip (or caption) and the tab beside it. */
+/** Gap between a connector's attachment chips and the open-point tab after them (`edges/connectorMarks.ts`). */
 export const MARKER_GAP = 4;
 
 /** The count numeral, when several points share one tab. Small and heavy, like a step number. */
@@ -73,38 +73,6 @@ export interface OccupiedRect {
   height: number;
 }
 
-/**
- * The centre of a connector's tab.
- *
- * Beside whatever the connector already says at its label point — the label chip or the relationship
- * caption — continuing in reading direction, so it never lands on the words, on the line, on a
- * condition chip stacked below them, or on the attachment row hanging off the other side. A connector
- * saying nothing there gets the tab one gap off the line on the label's own side, where the chip
- * would have been.
- */
-export function edgeMarkerCenter(point: { x: number; y: number }, side: Side, occupied?: OccupiedRect): { x: number; y: number } {
-  const half = MARKER_SIZE / 2;
-  if (occupied) {
-    const centerY = occupied.top + occupied.height / 2;
-    // Words left of a vertical line read outward — the tab continues further left, never back
-    // toward the line the words were placed to clear.
-    if (side === 'left' || occupied.left + occupied.width <= point.x - MARKER_GAP) {
-      return { x: occupied.left - MARKER_GAP - half, y: centerY };
-    }
-    return { x: occupied.left + occupied.width + MARKER_GAP + half, y: centerY };
-  }
-  const clear = 8 + half;
-  switch (side) {
-    case 'top':
-      return { x: point.x, y: point.y - clear };
-    case 'bottom':
-      return { x: point.x, y: point.y + clear };
-    case 'left':
-      return { x: point.x - clear, y: point.y };
-    case 'right':
-      return { x: point.x + clear, y: point.y };
-  }
-}
 
 /** The tab itself: the small rounded plate every glyph sits on. */
 function tab(theme: Theme): Shape {
