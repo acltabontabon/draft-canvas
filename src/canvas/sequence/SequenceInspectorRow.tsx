@@ -170,7 +170,7 @@ function ParticipantRow({ node, sequence, focus, openPanel, setOpenPanel, menuDi
         .map((candidate) => ({ value: candidate.id, label: displayNameFor(candidate).replace(/\s+/g, ' ').trim() || 'Unnamed shape' }));
   return (
     <>
-      <div className="dc-popover-row dc-popover-config dc-element-identity-row">
+      <div className="dc-popover-row dc-popover-config dc-element-identity-row dc-seq-participant-controls">
         <InspectorColourButton
           label="Participant colour"
           accent={first.accent}
@@ -196,16 +196,18 @@ function ParticipantRow({ node, sequence, focus, openPanel, setOpenPanel, menuDi
         />
         <Tooltip content={{ title: 'Technology', description: 'What it is built with. A product the catalogue knows is drawn as its logo.' }}>
           {(tip) => (
-            <Button variant="quiet" active={detail} aria-expanded={detail} {...tip} onClick={() => setOpenPanel(detail ? null : 'details')}>
+            <Button variant="quiet" className="dc-seq-participant-technology" active={detail} aria-expanded={detail} {...tip} onClick={() => setOpenPanel(detail ? null : 'details')}>
               {first.technology || 'Technology'}
             </Button>
           )}
         </Tooltip>
-        <span className="dc-popover-divider" aria-hidden="true" />
-        <TooltipGroup>
-          <Direct icon="pencil" label="Rename" description="Change the participant's name." onClick={() => sequenceActions.edit(node.id, { kind: 'participant', id: first.id })} />
-          <Direct icon="trash" danger label="Delete" description="Remove this participant and its messages." onClick={() => sequenceActions.removeParticipants(node.id, [first.id])} />
-        </TooltipGroup>
+        <div className="dc-seq-participant-actions">
+          <span className="dc-popover-divider" aria-hidden="true" />
+          <TooltipGroup>
+            <Direct icon="pencil" label="Rename" description="Change the participant's name." onClick={() => sequenceActions.edit(node.id, { kind: 'participant', id: first.id })} />
+            <Direct icon="trash" danger label="Delete" description="Remove this participant and its messages." onClick={() => sequenceActions.removeParticipants(node.id, [first.id])} />
+          </TooltipGroup>
+        </div>
       </div>
       {(group || shape || linkable.length > 0) && (
         <div className="dc-element-action-row">

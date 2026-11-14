@@ -546,7 +546,7 @@
   outline-offset: 2px;
 }
 
-.dc-element-inspector:has(.dc-seq-primary-actions) {
+.dc-element-inspector:has(.dc-seq-primary-actions, .dc-seq-participant-controls) {
   max-width: min(460px, calc(100vw - 24px));
 }
 
@@ -583,4 +583,40 @@
 
 .dc-seq-attachment-actions {
   border-top: 1px solid var(--dc-border);
+}
+
+.dc-seq-participant-controls {
+  flex-wrap: wrap;
+}
+
+.dc-seq-participant-controls.dc-element-identity-row > .dc-inspector-select {
+  flex: 0 0 auto;
+  width: max-content;
+  max-width: 100%;
+}
+
+.dc-seq-participant-controls .dc-inspector-select-value {
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: anywhere;
+}
+
+.dc-seq-participant-controls .dc-inspector-select-button,
+.dc-seq-participant-technology.dc-button {
+  height: auto;
+  min-height: var(--dc-popover-control);
+}
+
+.dc-seq-participant-technology.dc-button {
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  text-align: start;
+}
+
+.dc-seq-participant-actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 2px;
 }

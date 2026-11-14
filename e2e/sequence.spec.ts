@@ -599,3 +599,33 @@ test('attaches note and code to a message, saves them, and reads them during pre
   await page.getByRole('button', { name: 'Step 2: API to Client' }).click();
   await expect(popover).toHaveCount(0);
 });
+
+test('keeps participant shape and kind labels readable even on a narrow canvas', async ({ page }) => {
+  await newCanvas(page, 'Readable sequence inspector');
+  await newSequence(page, ['API'], { x: 110, y: 170 });
+  await page.locator(HEAD).first().click();
+  const inspector = page.locator(INSPECTOR);
+  const ensureReadable = async (name: string) => {
+    const label = inspector.getByRole('button', { name, exact: true }).locator('.dc-inspector-select-value');
+    await expect(label).toBeVisible();
+    expect(await label.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      const labelBox = element.getBoundingClientRect();
+      return [...range.getClientRects()].every((rect) => rect.right <= labelBox.right + 1 && rect.bottom <= labelBox.bottom + 1);
+    })).toBe(true);
+  };
+  await ensureReadable('Shape: Service');
+  await ensureReadable('Kind: Generic');
+
+  await page.setViewportSize({ width: 375, height: 740 });
+  await inspector.getByRole('button', { name: 'Shape: Service', exact: true }).click();
+  await page.getByRole('option', { name: 'Data Store', exact: true }).click();
+  await inspector.getByRole('button', { name: 'Kind: Generic', exact: true }).click();
+  await page.getByRole('option', { name: 'Object Storage', exact: true }).click();
+  await ensureReadable('Shape: Data Store');
+  await ensureReadable('Kind: Object Storage');
+  const box = (await inspector.boundingBox())!;
+  expect(box.x).toBeGreaterThanOrEqual(0);
+  expect(box.x + box.width).toBeLessThanOrEqual(375);
+});
