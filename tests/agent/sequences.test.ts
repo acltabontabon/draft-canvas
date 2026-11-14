@@ -2,9 +2,11 @@ import Ajv from 'ajv';
 import { describe, expect, it } from 'vitest';
 import { capabilities } from '../../src/agent/capabilities';
 import { compose } from '../../src/agent/compile';
+import { buildImplementationContext } from '../../src/agent/context';
 import { AgentError } from '../../src/agent/errors';
 import { applyUpdate } from '../../src/agent/patch';
 import { readDiagram } from '../../src/agent/read';
+import { readSelectionContext } from '../../src/agent/selection';
 import { TOOLS } from '../../src/agent/schema';
 import { checkSequence } from '../../src/sequence/check';
 import { messagesOf, sequenceOf } from '../../src/document/sequenceModel';
@@ -152,6 +154,8 @@ describe('a sequence, read and changed', () => {
     expect(now.height).toBeGreaterThan(was.height);
     expect(messagesOf(sequenceOf(now)).at(-1)).toMatchObject({ kind: 'async', label: 'audit record' });
     expect(result.touched.has('place-order')).toBe(true);
+    // Nothing the readability check would refuse the change over.
+    expect(result.quality.errors).toEqual([]);
   });
 
   it('links alone re-link the participants it has; null lets them all go', () => {
@@ -174,6 +178,22 @@ describe('a sequence, read and changed', () => {
     expect(result.touched.has('place-order')).toBe(true);
   });
 
+  it('is what an agent implementing the design is given, and what a selection of it says', () => {
+    const { file } = withSequence();
+    const whole = buildImplementationContext(file, [], 'r1', 'd') as { sequences: { id: string; mermaid: string }[] };
+    expect(whole.sequences.map((sequence) => sequence.id)).toEqual(['place-order']);
+    expect(whole.sequences[0]!.mermaid).toContain('POST /orders');
+    // Focused on a shape: the sequences it takes part in.
+    const focused = buildImplementationContext(file, [], 'r1', 'd', { nodes: ['orders-db'] }) as { sequences?: unknown[] };
+    expect(focused.sequences).toHaveLength(1);
+    const unrelated = update(file, [{ op: 'add', nodes: [{ id: 'mailer', type: 'service', label: 'Mailer' }] }]).file;
+    expect((buildImplementationContext(unrelated, [], 'r1', 'd', { nodes: ['mailer'] }) as { sequences?: unknown[] }).sequences).toBeUndefined();
+
+    const selected = readSelectionContext(file, [], { nodes: ['place-order'], edges: [] }, 'r1', 'd') as { elements: unknown[]; sequences: { id: string; role: string; mermaid: string }[] };
+    expect(selected.elements).toEqual([]);
+    expect(selected.sequences).toMatchObject([{ id: 'place-order', role: 'selected', title: 'Place an order' }]);
+  });
+
   it('is added to a diagram that is already there, clear of it, and removed by id', () => {
     const plain = composed(architecture).file;
     const added = update(plain, [{ op: 'add', sequences: [{ id: 'place-order', mermaid: PLACE_ORDER, links: { api: 'orders-api', db: 'orders-db' } }] }]);
@@ -183,6 +203,7 @@ describe('a sequence, read and changed', () => {
     const overlaps = added.file.nodes.filter((other) => other.id !== node.id && other.x < node.x + node.width && node.x < other.x + other.width && other.y < node.y + node.height && node.y < other.y + other.height);
     expect(overlaps).toEqual([]);
     expect(added.counts.added).toBe(1);
+    expect(added.quality.errors).toEqual([]);
 
     const removed = update(added.file, [{ op: 'remove', ids: ['place-order'] }]).file;
     expect(removed.nodes.map((entry) => entry.id).sort()).toEqual(['orders-api', 'orders-db', 'shopper']);

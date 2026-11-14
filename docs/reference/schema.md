@@ -10,7 +10,7 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | Field | Contents |
 | --- | --- |
 | `format` | Always `"draft-canvas"` |
-| `version` | Format version, currently **23** (`CURRENT_VERSION`) |
+| `version` | Format version, currently **26** (`CURRENT_VERSION`) |
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
 | `settings` | Canvas settings, including the background |
@@ -19,6 +19,14 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 
 A node may own a room (`DraftNode.inside`): its own `nodes`, `edges`, `flows`, `viewport` and
 optional `level`. A document is a tree of graphs, nested at most 3 levels below the root.
+
+A node of type `sequence` carries a `sequence` payload (`DraftSequence`): `participants`, optional
+`groups` of neighbouring participants, and `items` in order — messages, notes and fragments, whose
+operands hold items in turn. Ids inside it are local to the node. A participant has the identity
+fields of a shape (`type`, kind, `technology`, `accent`) and an optional `ref`, the id of the shape
+in the same view it stands for. A message has `from`, `to`, a `kind` (`sync`, `async`, `reply`,
+`create`, `destroy`), a `label`, optional `replyTo`, and `activate` / `deactivate` flags. Nothing in
+the payload is a coordinate: layout, work bars and the node's size are derived.
 
 The same shape is stored in IndexedDB's `bodies` store.
 
@@ -65,6 +73,7 @@ Rules for a new version:
 | v22 → v23 | identity | No-op (retired per-connector style overrides are discarded by normalization) |
 | v23 → v24 | identity | No-op (optional `replicas` on Services and `kindOrigin` on Services, Data Stores and Queues) |
 | v24 → v25 | identity | No-op (optional connector `cadence`) |
+| v25 → v26 | identity | No-op (the `sequence` node type and its payload) |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
@@ -102,6 +111,9 @@ Repaired, after migration, and reported to the caller:
   across the whole file.
 - `openPoints` is read at the root only. Targets are resolved after every room is loaded; a
   missing target is dropped, and a point with no targets left is dropped.
+- A `sequence` payload is normalized by `validateSequence.ts`: messages to or from a missing
+  participant, replies whose call is gone, broken nesting and anything past the sequence limits are
+  dropped; a participant's `ref` to a missing shape is cleared and the participant kept.
 
 ## Limits
 
@@ -116,6 +128,9 @@ From `LIMITS` in `src/document/limits.ts`:
 | `maxFlows` / `maxStepsPerFlow` / `maxExtraMembersPerStep` | 50 / 200 / 40 |
 | `maxOpenPoints` / `maxOpenPointTargets` | 200 / 40 |
 | `maxWaypointsPerEdge` | 32 |
+| `maxSequenceParticipants` / `maxSequenceItems` | 40 / 600 |
+| `maxSequenceDepth` / `maxSequenceOperands` / `maxSequenceGroups` | 8 / 12 / 20 |
+| `maxSequenceNameLength` / `maxSequenceNoteLength` | 120 / 1,000 |
 | `maxTitleLength` / `maxLabelLength` | 200 / 500 |
 | `maxTextLength` / `maxCodeLength` | 20,000 / 200,000 |
 | `maxDescriptionLength` / `maxTechnologyLength` | 280 / 60 |

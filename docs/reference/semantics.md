@@ -165,6 +165,36 @@ Each Sequence Diagram message is `sync`, `async` or `response` (`InteractionKind
 Structural relationships produce no message. `STRUCTURAL_SEMANTICS` (`dependsOn`, `implementedBy`, `implements`)
 is in `src/sequence/structural.ts`. Their endpoints can still appear through other connectors.
 
+## Native sequences
+
+A [sequence](../guides/sequence-diagrams.md) stores what happens, never where it is drawn
+(`src/document/sequenceModel.ts`, `sequenceOps.ts`). What is derived, and what is only offered:
+
+- **Work bars are derived** (`src/sequence/executions.ts`). A message with `activate` opens one on
+  its receiver; one with `deactivate` closes the sender's. A reply closes the bar its own call
+  (`replyTo`) opened and any opened above it. A bar left open ends after its participant's last
+  message in the part where it began. Branches of a fragment each start from the bars open when the
+  fragment began.
+- **Defaults are written when a message is made, then left alone.** A call between two participants
+  starts work; a reply ends it; a message to itself starts none. A reply is never inserted.
+- **Kind is suggested, never assumed** (`src/sequence/suggest.ts`). A new message is a call. Where
+  the capability matrix says the pairing is normally asynchronous (into a queue or topic, or an
+  event), Asynchronous is marked as suggested; choosing a kind stamps `kindOrigin: 'explicit'` and
+  ends the suggestion.
+- **Labels are offered only from words already written**: labels of connectors between the two
+  linked shapes, and labels already used between the same two participants. Nothing is invented.
+- **The next message** offered after a call is its reply (between two services) or the onward call
+  (from a person), then a call to itself; after a reply, the reply still owed further back.
+- **Checks never change anything** (`src/sequence/check.ts`): a message before its participant is
+  created or after it is destroyed, a second create, a reply before or without its call, work ended
+  that never started. An unfinished sequence produces none. A move that would cause one is refused.
+- **A linked participant and its shape are one identity** (`src/document/sequenceLinks.ts`): name,
+  kind, technology and colour. Either end changed updates the other in the same undo step; where
+  both changed, the shape is believed. Position, connectors and what is inside stay the
+  architecture's.
+- **Order is never inferred** from connectors or layout. A sequence made from selected shapes has
+  no messages; one made from a flow takes the flow's own order.
+
 ## Intent Continuation rules
 
 Next moves for a selected node (`src/continuation/`). Connectors a rule adds are inferred from

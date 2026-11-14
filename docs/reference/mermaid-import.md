@@ -1,7 +1,7 @@
 # Mermaid import
 
 For the import workflow, see [saving and sharing](../guides/saving-and-sharing.md#importing-a-mermaid-flowchart).
-Draft Canvas accepts Mermaid `flowchart` and `graph`; it lays out the result itself.
+Draft Canvas accepts Mermaid `flowchart` and `graph`, and `sequenceDiagram`; it lays out the result itself.
 
 ## Supported syntax
 
@@ -33,7 +33,33 @@ links are skipped. Arrows to subgraphs are skipped too.
 - `RL` and `BT` become left-to-right and top-to-bottom.
 - HTML tags and control characters in labels are removed.
 - An arrow from a shape to itself is left out and listed as not drawn.
-- Other diagram kinds, including `sequenceDiagram` and `classDiagram`, are refused.
+- Other diagram kinds, including `classDiagram` and `stateDiagram`, are refused.
+
+## Sequence diagrams
+
+A `sequenceDiagram` becomes one [sequence](../guides/sequence-diagrams.md) on the canvas
+(`src/import/mermaid/sequence.ts`). Nothing is inferred: work starts and ends only where the text
+says so.
+
+| Mermaid | Sequence |
+| --- | --- |
+| `participant A`, `participant A as Name` | Participant (a Service) |
+| `actor A` | Participant (an Actor) |
+| `A->>B`, `A->B` | Call |
+| `A-)B`, `A--)B` | Asynchronous message |
+| `A-->>B`, `A-->B` | Reply, answering the latest unanswered call between the two |
+| `+` / `-` after the arrow, `activate` / `deactivate` beside a message | Work starts on the receiver / ends on the sender |
+| `create participant B` then a message to it | Create |
+| `destroy B` then a message | Destroy |
+| `Note over A,B`, `Note left of A`, `Note right of A` | Note |
+| `box Name … end` | Participant group |
+| `alt`/`else`, `opt`, `loop`, `par`/`and`, `critical`/`option`, `break` | Frame, with its branches and conditions |
+| `title`, or `title:` in front matter | The sequence's name |
+
+Listed in the import notice and not drawn: `autonumber`, a `rect` background (what is inside it is
+kept), `link`/`links`/`properties` on a participant, `activate`/`deactivate` with no message beside
+it, and lines it cannot read. A two-way arrow (`<<->>`) is drawn as one call and a lost message
+(`-x`) as a call. A sequence holds at most 40 participants and 600 messages, notes and frames.
 
 ## Limits
 

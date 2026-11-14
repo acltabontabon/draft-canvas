@@ -1249,7 +1249,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         }
       }
     },
-    [clearDwell, flowToScreenPosition, getInternalNode, getZoom, setNodes],
+    [armSequenceDrop, clearDwell, flowToScreenPosition, getInternalNode, getZoom, setNodes],
   );
 
   const setEdges = useCallback(
@@ -1494,7 +1494,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         })),
       };
     },
-    [clearDwell, screenToFlowPosition],
+    [clearDwell, clearSequenceDrop, screenToFlowPosition],
   );
 
   /**

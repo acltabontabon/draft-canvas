@@ -31,6 +31,7 @@ import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fix
  *   npx tsx e2e/docs-screenshots.ts --reader-only
  *   npx tsx e2e/docs-screenshots.ts --reader-only --theme dark   (the guide's `share-*-dark.png` pair)
  *   npx tsx e2e/docs-screenshots.ts --traffic-only
+ *   npx tsx e2e/docs-screenshots.ts --sequence-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -429,6 +430,76 @@ async function trafficScreenshots(page: Page) {
 }
 
 /** Import a real example and follow the same share-link route as a recipient. */
+/**
+ * A sequence, made the way the guide says to make one: named participants, then messages taken from
+ * the suggestion that follows each. Built by keyboard so the picture is whatever the editor draws,
+ * at the size the editor gives it.
+ */
+async function sequenceScreenshots(page: Page) {
+  log('sequence');
+  await page.getByRole('button', { name: 'New canvas' }).first().click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  const title = page.getByLabel('Diagram title');
+  await title.fill('Checkout');
+  await title.blur();
+  await page.mouse.move(330, 150);
+  await page.keyboard.press('l');
+  await expect(page.locator('.dc-seq-new input')).toBeFocused();
+  // A name, then Enter; the arrow keys choose what it is when the best guess is not it.
+  for (const [name, down] of [['Shopper', 1], ['Storefront', 0], ['Checkout API', 0], ['Orders', 2]] as const) {
+    await page.keyboard.type(name);
+    for (let press = 0; press < down; press += 1) await page.keyboard.press('ArrowDown');
+    if (name === 'Orders') {
+      // Off the heads, so none of them is drawn hovered.
+      await page.mouse.move(900, 560);
+      await shot(page, 'sequence-participants');
+    }
+    await page.keyboard.press('Enter');
+  }
+  // Left unnamed, the next one goes again and the sequence itself is selected: name it.
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('F2');
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Place an order');
+  await page.keyboard.press('Enter');
+  // Into the sequence, at its first participant. Tab takes the message offered next; ] offers another.
+  await page.keyboard.press('ControlOrMeta+ArrowDown');
+  const hint = page.locator('.dc-seq-ghost-hint');
+  const steps = [
+    ['Shopper calls Storefront', 'Place order'],
+    ['Storefront calls Checkout API', 'POST /orders'],
+    ['Checkout API calls Orders', 'INSERT order'],
+    ['Reply to Checkout API', 'order id'],
+    ['Reply to Storefront', '201 Created'],
+    ['Reply to Shopper', 'Order confirmed'],
+  ] as const;
+  for (const [offered, label] of steps) {
+    await expect(hint).toBeVisible();
+    for (let press = 0; press < 6 && !(await hint.innerText()).includes(offered); press += 1) await page.keyboard.press(']');
+    await expect(hint).toContainText(offered);
+    if (label === 'POST /orders') await shot(page, 'sequence-next');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('input.dc-seq-editor[aria-label="Message"]')).toBeFocused();
+    await page.keyboard.type(label);
+    await page.keyboard.press('Enter');
+  }
+  // The database call and its reply, wrapped: a fragment made from a selection, not drawn.
+  const messages = page.locator('.dc-seq-message');
+  await messages.nth(2).click();
+  await messages.nth(3).click({ modifiers: ['Shift'] });
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Wrap in…' }).click();
+  // Off the buttons, so no tooltip covers them.
+  await page.mouse.move(900, 600);
+  await shot(page, 'sequence-wrap');
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Optional' }).click();
+  await page.keyboard.type('cart is not empty');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Shift+Digit1');
+  await shot(page, 'sequence-diagram');
+}
+
 async function readerScreenshots(page: Page) {
   await page.setViewportSize({ width: VIEWPORT.width, height: 760 });
   for (const guided of [true, false]) {
@@ -485,6 +556,11 @@ async function main() {
 
     if (process.argv.includes('--traffic-only')) {
       await trafficScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--sequence-only')) {
+      await sequenceScreenshots(page);
       return;
     }
 
@@ -677,6 +753,9 @@ async function main() {
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
     await openGallery(page);
     await richTextScreenshots(page);
+    await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+    await openGallery(page);
+    await sequenceScreenshots(page);
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
     await openGallery(page);
     await collabScreenshots(browser, page);

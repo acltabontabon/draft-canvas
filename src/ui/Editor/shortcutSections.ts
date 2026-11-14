@@ -121,6 +121,20 @@ export const SECTIONS: Section[] = [
     ],
   },
   {
+    title: 'Sequences',
+    rows: [
+      { keys: ['L'], label: 'New sequence — name who takes part, one Enter each' },
+      { gesture: 'Drag between lifelines', label: 'Add a message — drag past the last one to add a participant with it' },
+      { keys: [mod, '↓'], label: 'Step into the selected sequence — Esc steps back out' },
+      { keys: [alt, 'Arrow'], label: 'Move the selection inside it — add Shift to extend' },
+      { keys: ['Arrow'], label: 'Move the message up or down, or the participant left or right' },
+      { keys: ['Tab'], label: 'Add the message that usually comes next — ] and [ offer others' },
+      { keys: ['P'], label: 'Add a participant after the selected one' },
+      { keys: [mod, 'G'], label: 'Wrap the selected messages, or group the selected participants' },
+      { gesture: 'Drop a shape in', label: 'It stands in the sequence — a shape on its own moves in' },
+    ],
+  },
+  {
     title: 'Open points',
     rows: [{ commandId: 'open-point-add', label: 'Raise an open point about the selection — the list of what is still open is in the status bar' }],
   },

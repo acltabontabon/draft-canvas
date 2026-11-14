@@ -176,7 +176,9 @@ Follow-ups change the same diagram:
 To limit a change, select shapes first and say so: "Add a retry path around this selection." The
 agent changes only what was selected when it read the selection.
 
-Agents use ordinary shapes, connectors, notes, flows and [rich text](shapes-and-connectors.md#write-rich-text).
+Agents use ordinary shapes, connectors, notes, flows, [sequences](sequence-diagrams.md) and
+[rich text](shapes-and-connectors.md#write-rich-text). Ask for one by what it shows: "Add a sequence
+for placing an order, with the payment-declined branch."
 
 ## Watch and undo
 

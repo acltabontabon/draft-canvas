@@ -118,8 +118,29 @@ pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semanti
 - A selected flow acts as a lighter lens, except during presentation or focus, or when empty.
 - Playback, emphasis and camera guidance are never saved, undone or exported. A presenter's pan takes
   the camera until guidance is requested again.
-- Sequence export writes every playable flow to one Mermaid or PlantUML file. The text is the product.
+- Sequence export writes every playable flow, and every native sequence, to one Mermaid or PlantUML file. The text is the product.
 - Nothing infers timing, outcomes or execution.
+
+## Sequences
+
+A sequence is one node (`type: 'sequence'`) with a nested, coordinate-free payload: semantic model →
+operations → checks → layout → display list → interaction overlay.
+
+- `document/sequenceOps.ts` holds the pure operations; `sequence/check.ts` the findings;
+  `sequence/layout.ts` a deterministic timeline solver (columns from label widths, rows in document
+  order, nested fragment bands) that also answers hit-tests and insertion slots.
+- `nodes/sequence.ts` turns the layout into the same display list every node uses, so canvas, PNG
+  and SVG agree. A participant's head is `describeNode` on a compact synthetic shape: the real
+  Service, Data Store, Queue, Actor or Component, with its technology mark.
+- The node's size follows its content (`nodes/sequenceFit.ts`), applied in the store's `apply` and
+  in the agent's update: a snug box stays snug, an enlarged one is kept until it must grow.
+- `canvas/sequence/` is the only interactive layer, mounted while the node is hovered, selected, a
+  drop target or presenting. Sub-selection (`uiStore.sequenceFocus`) and the open editor are
+  transient, never saved or undone.
+- Presenting plays a derived, never-saved flow (`document/sequenceFlow.ts`), one step per message,
+  through the existing playback.
+- Mermaid and PlantUML are written by `sequence/native/`; Mermaid is read by
+  `import/mermaid/sequence.ts`. Agents send and read the same Mermaid text (`agent/sequences.ts`).
 
 ## Command surface
 

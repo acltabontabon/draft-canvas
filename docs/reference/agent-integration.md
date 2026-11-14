@@ -485,6 +485,31 @@ and sequence export.
 - `variantOf` links a variant to a base flow; a variant of a variant is `INVALID_REFERENCE`.
 - There is no stored "main" flow. Agents build flows only from an order the person or code gives.
 
+## Sequences
+
+A native [sequence](../guides/sequence-diagrams.md) is sent and read as a Mermaid `sequenceDiagram`
+(`src/agent/sequences.ts`); the app parses it into its own model, lays it out and sizes it.
+
+- `sequences: [{id, title?, mermaid, links?}]` on `create_diagram` and the `add` op. On create it is
+  placed below the architecture; on add, where there is room. Nothing else moves.
+- `links: {participantId: elementId}` makes a participant stand for an element of the same view: it
+  takes that element's name, kind and technology and follows it. A participant written under an
+  element's own id is linked without being listed. One participant per element; only a service,
+  data store, queue, actor or component can be stood for.
+- `read_diagram` returns `sequences: [{id, title, participants, messages, mermaid, links?}]`, apart
+  from `elements`. Text over 6,000 characters is left out (`truncated: true`) unless `fullText` is
+  included or the read is focused.
+- `update` takes `set.title`, `set.mermaid` (replaces what it holds; participants still written under
+  the ids a read gave keep their links), `set.links` (re-links; `null` unlinks all) and `set.place`.
+  `remove` takes its id.
+- What the text asks for that is not drawn (`autonumber`, `rect`, lost messages) comes back as a
+  receipt advisory. Text that is not a sequence diagram is `INVALID_INPUT`.
+- A shape an agent renames or retypes is renamed where it stands in a sequence, in the same change.
+- `read_selection` reports a selected sequence under `sequences`, in full.
+  `get_implementation_context` includes the view's sequences (at most 8), or with a focus those a
+  focused shape takes part in: the order to implement.
+- As with flows, a sequence is built only from an order the person or the code gives.
+
 ## Relationship options
 
 Besides `label`, `semantic`, `kind`, direction, dashes and condition:
@@ -548,6 +573,7 @@ Per request (`AGENT_LIMITS` in `src/agent/input.ts`). A breach is `LIMIT_EXCEEDE
 | Flows / steps per flow | 20 / 60 |
 | Extra elements / relationships one step lights | 40 / 40 |
 | Notes / open points / ops | 60 / 50 / 100 |
+| Sequences / sequence text | 8 / 20,000 characters |
 | Attachments per element in a request | 4 |
 | Label / relationship label / group label | 120 / 80 / 80 characters |
 | Description / technology | 280 / 60 characters |
