@@ -31,7 +31,7 @@ const file = () =>
 describe('compact agent output', () => {
   it('answers get_capabilities without topics with an index and the common words, not every topic', () => {
     const index = capabilities({});
-    expect(Object.keys(index.topics as object)).toEqual(['types', 'relationships', 'c4', 'flows', 'notes', 'starters', 'limits', 'layout', 'readability']);
+    expect(Object.keys(index.topics as object)).toEqual(['types', 'relationships', 'c4', 'flows', 'notes', 'sequences', 'starters', 'limits', 'layout', 'readability']);
     expect(index.types).toContain('api');
     expect(index.noteKinds).toEqual(['note', 'question', 'warning', 'decision', 'code', 'label']);
     expect(index.readability).toBeUndefined();

@@ -299,6 +299,20 @@ const place: Schema = {
   properties: { x: num, y: num, rightOf: { type: 'string' }, leftOf: { type: 'string' }, above: { type: 'string' }, below: { type: 'string' }, gap: num, align: { enum: ['start', 'center', 'end'] }, width: num, height: num },
   additionalProperties: false,
 };
+const sequenceLinks: Schema = { type: 'object', additionalProperties: { type: 'string' }, description: 'Participant id in the text → its element.' };
+const sequence: Schema = {
+  type: 'object',
+  description: 'A native sequence diagram, written as Mermaid sequenceDiagram text (get_capabilities sequences).',
+  properties: {
+    id: id('sequence'),
+    title: text(AGENT_LIMITS.sequenceTitleLength),
+    mermaid: text(AGENT_LIMITS.sequenceSourceLength),
+    links: sequenceLinks,
+  },
+  required: ['id', 'mermaid'],
+  additionalProperties: false,
+};
+
 /** One end of a hand route: a side, an exact pin, or "auto". Shared through `$defs`: both ends of
  *  every route use it. */
 const routeEnd: Schema = {
@@ -319,6 +333,7 @@ const room = (depth = 0): Record<string, Schema> => ({
   groups: { type: 'array', maxItems: AGENT_LIMITS.groupsPerRequest, items: ref('group') },
   flows: { type: 'array', maxItems: AGENT_LIMITS.flowsPerRequest, items: ref('flow') },
   notes: { type: 'array', maxItems: AGENT_LIMITS.notesPerRequest, items: ref('note') },
+  sequences: { type: 'array', maxItems: AGENT_LIMITS.sequencesPerRequest, items: ref('sequence') },
 });
 
 /** What `room()`'s references resolve to — the same object on every tool that takes a room. */
@@ -333,6 +348,7 @@ const roomDefs: Record<string, Schema> = {
   group,
   flow,
   note,
+  sequence,
   labelStyle,
   element0: element(0),
   ...Object.fromEntries(Array.from({ length: AGENT_LIMITS.insideDepth }, (_, i) => [`element${i + 1}`, undescribed(element(i + 1))])),
@@ -381,6 +397,7 @@ const setProperties: Record<string, Schema> = {
   to: { type: 'string' },
   steps: ref('steps'), variantOf: nullable({ type: 'string' }),
   code: text(4000), language: { enum: CODE_LANGUAGES },
+  mermaid: text(AGENT_LIMITS.sequenceSourceLength), links: nullable(sequenceLinks),
   style: nullable(ref('labelStyle')),
   about: { anyOf: [{ type: 'string' }, { type: 'array', minItems: 1, maxItems: 40, items: { type: 'string' } }] },
   near: { type: 'string' }, place: ref('place'), route: nullable(ref('route')), context: nullable(text(500)), resolved: { type: 'boolean' }, resolution: nullable(text(500)), evidence: nullable(ref('evidence')),
@@ -480,7 +497,7 @@ const TOOL_INPUTS = [
     inputSchema: {
       type: 'object',
       properties: {
-        topics: { type: 'array', items: { enum: ['types', 'relationships', 'c4', 'flows', 'notes', 'starters', 'limits', 'layout', 'readability'] } },
+        topics: { type: 'array', items: { enum: ['types', 'relationships', 'c4', 'flows', 'notes', 'sequences', 'starters', 'limits', 'layout', 'readability'] } },
         starter: { type: 'string', pattern: STARTER_ID_PATTERN, description: 'Describe one starter from the starters gallery the person has downloaded: its element keys and flows.' },
       },
       additionalProperties: false,

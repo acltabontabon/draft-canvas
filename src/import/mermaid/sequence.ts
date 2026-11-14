@@ -16,7 +16,19 @@ import { normalizeSequence } from '../../document/validateSequence';
 import type { DraftSequence, SeqFragment, SeqGroup, SeqItem, SeqMessage, SeqMessageKind, SeqNote, SeqOperand, SeqOperator, SeqParticipant } from '../../document/types';
 import { FRONT_MATTER, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
 
-export type MermaidSequenceParse = { ok: true; title: string; sequence: DraftSequence; unsupported: string[] } | { ok: false; error: string };
+export type MermaidSequenceParse =
+  | {
+      ok: true;
+      title: string;
+      sequence: DraftSequence;
+      unsupported: string[];
+      /** By participant id, the name it was written under in the text (`api` in `participant api as Checkout API`). */
+      written: Map<string, string>;
+    }
+  | { ok: false; error: string };
+
+/** The title a sequence gets when its text gives none. */
+export const UNTITLED_SEQUENCE = 'Imported sequence';
 
 const ENTITIES: Record<string, string> = { lt: '<', gt: '>', amp: '&', quot: '"', nbsp: ' ' };
 
@@ -243,5 +255,7 @@ export function parseMermaidSequence(text: string): MermaidSequenceParse {
   const read = normalizeSequence({ participants, groups, items: root });
   if (read.dropped > 0) unsupported.add(`${read.dropped} part${read.dropped === 1 ? '' : 's'} beyond what one sequence holds`);
   if (read.sequence.participants.length === 0) return { ok: false, error: 'There is nobody in that sequence diagram.' };
-  return { ok: true, title: title?.trim() || 'Imported sequence', sequence: read.sequence, unsupported: [...unsupported] };
+  const kept = new Set(read.sequence.participants.map((entry) => entry.id));
+  const written = new Map([...byName].filter(([, entry]) => kept.has(entry.id)).map(([name, entry]) => [entry.id, name]));
+  return { ok: true, title: title?.trim() || UNTITLED_SEQUENCE, sequence: read.sequence, unsupported: [...unsupported], written };
 }

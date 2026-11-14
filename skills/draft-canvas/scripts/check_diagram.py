@@ -202,12 +202,13 @@ REQUEST_FIELDS = {
     'groups',
     'flows',
     'notes',
+    'sequences',
     'layout',
     'open',
     'allowDuplicateTitle',
     'fallbackType',
 }
-ROOM_FIELDS = {'level', 'nodes', 'relationships', 'groups', 'flows', 'notes'}
+ROOM_FIELDS = {'level', 'nodes', 'relationships', 'groups', 'flows', 'notes', 'sequences'}
 GROUP_FIELDS = {'id', 'label', 'kind', 'parent', 'color'}
 ELEMENT_FIELDS = {
     'id',
@@ -248,6 +249,7 @@ RELATIONSHIP_FIELDS = {
 }
 FLOW_FIELDS = {'id', 'title', 'color', 'variantOf', 'steps'}
 NOTE_FIELDS = {'id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style', 'color'}
+SEQUENCE_FIELDS = {'id', 'title', 'mermaid', 'links'}
 
 # Hard limits (the app refuses past these) and soft ones (past these it still draws, but reads worse).
 MAX = {
@@ -303,6 +305,7 @@ class View:
         self.groups: list[dict] = [g for g in body.get('groups') or [] if isinstance(g, dict)]
         self.flows: list[dict] = [f for f in body.get('flows') or [] if isinstance(f, dict)]
         self.notes: list[dict] = [n for n in body.get('notes') or [] if isinstance(n, dict)]
+        self.sequences: list[dict] = [s for s in body.get('sequences') or [] if isinstance(s, dict)]
         self.node_ids = {n.get('id') for n in self.nodes}
         self.rel_ids = {r.get('id') for r in self.rels}
         self.group_ids = {g.get('id') for g in self.groups}
@@ -359,6 +362,7 @@ def check(request: dict, repo: str | None) -> Report:
             ('group', view.groups),
             ('flow', view.flows),
             ('note', view.notes),
+            ('sequence', view.sequences),
         ):
             for item in items:
                 ident = item.get('id')
@@ -428,6 +432,7 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
         ('group', view.groups, GROUP_FIELDS),
         ('flow', view.flows, FLOW_FIELDS),
         ('note', view.notes, NOTE_FIELDS),
+        ('sequence', view.sequences, SEQUENCE_FIELDS),
     ):
         for item in items:
             unknown_fields(item, allowed, f'{p} {kind} {item.get("id")}', r)
@@ -707,6 +712,21 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
         if not any(isinstance(s, dict) and 'spotlight' in s for s in steps) and flow.get('variantOf') is None and is_top:
             r.warn(f'{p} flow {fid}', 'no opening {spotlight, caption} step — an overview first sets the scene when presenting')
 
+    # Sequences: Mermaid sequenceDiagram text, with the participants that stand for elements of this view.
+    for sequence in view.sequences:
+        where = f'{p} sequence {sequence.get("id")}'
+        source = sequence.get('mermaid')
+        if not isinstance(source, str) or not source.strip():
+            r.error(where, 'mermaid is required: the sequence as Mermaid sequenceDiagram text')
+        elif not re.match(r'^(?:---.*?---\s*)?(?:\s*%%[^\n]*\n)*\s*sequenceDiagram\b', source, re.S):
+            r.error(where, 'mermaid must start with "sequenceDiagram"')
+        links = sequence.get('links')
+        if links is not None and not isinstance(links, dict):
+            r.error(where, 'links is an object: {participantId: elementId}')
+        for name, element in (links or {}).items() if isinstance(links, dict) else ():
+            if element not in view.node_ids:
+                r.error(where, f'links.{name}: no element "{element}" in this view — a participant stands for an element of the same view')
+
     # Notes.
     if len(view.notes) > SOFT['notesPerView']:
         r.warn(p, f'{len(view.notes)} notes — keep the few that explain the diagram; the rest belong in docs')
@@ -778,7 +798,7 @@ PLACEHOLDER = re.compile(r'^\s*(TODO|FIXME|TBD|XXX)\b', re.I)
 #: Fields that hold one id, and fields that hold a list of them.
 REFERENCE_FIELDS = {'id', 'from', 'to', 'group', 'parent', 'about', 'near', 'relationship', 'variantOf', 'primaryFlow'}
 REFERENCE_LISTS = {'spotlight', 'highlight'}
-COLLECTIONS = {'nodes': 'element', 'relationships': 'relationship', 'groups': 'group', 'flows': 'flow', 'notes': 'note'}
+COLLECTIONS = {'nodes': 'element', 'relationships': 'relationship', 'groups': 'group', 'flows': 'flow', 'notes': 'note', 'sequences': 'sequence'}
 
 
 def plain_references(value: object, r: Report, path: str = 'top') -> object:

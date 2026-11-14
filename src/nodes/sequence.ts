@@ -100,13 +100,16 @@ const headSizes = new WeakMap<SeqParticipant, SizedHead>();
 function headSize(participant: SeqParticipant, ctx: DescribeContext, kit: SequenceKit): { width: number; height: number } {
   const cached = headSizes.get(participant);
   if (cached && cached.icons === ctx.technologyIcons && cached.measurer === ctx.measurer) return cached.size;
-  const base = headNode({ id: 'head' }, participant);
+  // One still waiting for its name is measured as if it had a short one: it stands as tall as it
+  // will, with the room its name goes in already there for the field to sit on.
+  const named = participant.name.trim() !== '';
+  const base = headNode({ id: 'head' }, named ? participant : { ...participant, name: 'Name' });
   // A name on one line if the head can be made wide enough for it; on two before it is cut short.
   const oneLine = kit.naturalSize(base, ctx, { maxWidth: HEAD_MAX_WIDTH, maxHeight: HEAD_MAX_HEIGHT, maxNameLines: 1 });
   const natural = oneLine.fits ? oneLine : kit.naturalSize(base, ctx, { maxWidth: HEAD_MAX_WIDTH, maxHeight: HEAD_MAX_HEIGHT, maxNameLines: 2 });
   // One still waiting for its name stands as wide as the field it is typed in, so the others have
   // already made room and the field covers nobody else's head.
-  const width = participant.name.trim() ? natural.width : Math.max(natural.width, UNNAMED_HEAD_WIDTH);
+  const width = named ? natural.width : Math.max(natural.width, UNNAMED_HEAD_WIDTH);
   const size = { width: Math.ceil(width), height: Math.ceil(natural.height) };
   headSizes.set(participant, { icons: ctx.technologyIcons, measurer: ctx.measurer, size });
   return size;

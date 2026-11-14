@@ -2,7 +2,7 @@
 name: draft-canvas
 description: Create, inspect, refine or refresh editable architecture diagrams in Draft Canvas through its desktop MCP tools. Use for repository maps, C4 views, request flows, look-inside views and proposed architectural changes in Draft Canvas. Does not build the application being diagrammed.
 metadata:
-  version: "22"
+  version: "23"
   contract: "3"
   requires: Draft Canvas Desktop with agent access on (MCP server draft-canvas)
 ---

@@ -15,6 +15,7 @@
               "c4",
               "flows",
               "notes",
+              "sequences",
               "starters",
               "limits",
               "layout",
@@ -921,6 +922,13 @@
             "$ref": "#/$defs/note"
           }
         },
+        "sequences": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/sequence"
+          }
+        },
         "layout": {
           "type": "object",
           "properties": {
@@ -1666,6 +1674,37 @@
           ],
           "additionalProperties": false
         },
+        "sequence": {
+          "type": "object",
+          "description": "A native sequence diagram, written as Mermaid sequenceDiagram text (get_capabilities sequences).",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$",
+              "description": "Your id for this sequence; reuse it to refer to it later."
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "mermaid": {
+              "type": "string",
+              "maxLength": 20000
+            },
+            "links": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Participant id in the text → its element."
+            }
+          },
+          "required": [
+            "id",
+            "mermaid"
+          ],
+          "additionalProperties": false
+        },
         "labelStyle": {
           "type": "object",
           "description": "A free label's look (not an attached one). In an update, false/\"none\" turns a field off and null makes it plain.",
@@ -1867,6 +1906,13 @@
                   "items": {
                     "$ref": "#/$defs/note"
                   }
+                },
+                "sequences": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "$ref": "#/$defs/sequence"
+                  }
                 }
               },
               "additionalProperties": false
@@ -2015,6 +2061,13 @@
                   "items": {
                     "$ref": "#/$defs/note"
                   }
+                },
+                "sequences": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "$ref": "#/$defs/sequence"
+                  }
                 }
               },
               "additionalProperties": false
@@ -2162,6 +2215,13 @@
                   "maxItems": 60,
                   "items": {
                     "$ref": "#/$defs/note"
+                  }
+                },
+                "sequences": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "$ref": "#/$defs/sequence"
                   }
                 }
               },
@@ -2458,6 +2518,13 @@
                     "maxItems": 60,
                     "items": {
                       "$ref": "#/$defs/note"
+                    }
+                  },
+                  "sequences": {
+                    "type": "array",
+                    "maxItems": 8,
+                    "items": {
+                      "$ref": "#/$defs/sequence"
                     }
                   },
                   "openPoints": {
@@ -2908,6 +2975,24 @@
                         "anyOf": [
                           {
                             "type": "string"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "mermaid": {
+                        "type": "string",
+                        "maxLength": 20000
+                      },
+                      "links": {
+                        "anyOf": [
+                          {
+                            "type": "object",
+                            "additionalProperties": {
+                              "type": "string"
+                            },
+                            "description": "Participant id in the text → its element."
                           },
                           {
                             "type": "null"
@@ -3858,6 +3943,37 @@
           ],
           "additionalProperties": false
         },
+        "sequence": {
+          "type": "object",
+          "description": "A native sequence diagram, written as Mermaid sequenceDiagram text (get_capabilities sequences).",
+          "properties": {
+            "id": {
+              "type": "string",
+              "pattern": "^[A-Za-z][A-Za-z0-9_.-]{0,63}$",
+              "description": "Your id for this sequence; reuse it to refer to it later."
+            },
+            "title": {
+              "type": "string",
+              "maxLength": 120
+            },
+            "mermaid": {
+              "type": "string",
+              "maxLength": 20000
+            },
+            "links": {
+              "type": "object",
+              "additionalProperties": {
+                "type": "string"
+              },
+              "description": "Participant id in the text → its element."
+            }
+          },
+          "required": [
+            "id",
+            "mermaid"
+          ],
+          "additionalProperties": false
+        },
         "labelStyle": {
           "type": "object",
           "description": "A free label's look (not an attached one). In an update, false/\"none\" turns a field off and null makes it plain.",
@@ -4059,6 +4175,13 @@
                   "items": {
                     "$ref": "#/$defs/note"
                   }
+                },
+                "sequences": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "$ref": "#/$defs/sequence"
+                  }
                 }
               },
               "additionalProperties": false
@@ -4207,6 +4330,13 @@
                   "items": {
                     "$ref": "#/$defs/note"
                   }
+                },
+                "sequences": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "$ref": "#/$defs/sequence"
+                  }
                 }
               },
               "additionalProperties": false
@@ -4354,6 +4484,13 @@
                   "maxItems": 60,
                   "items": {
                     "$ref": "#/$defs/note"
+                  }
+                },
+                "sequences": {
+                  "type": "array",
+                  "maxItems": 8,
+                  "items": {
+                    "$ref": "#/$defs/sequence"
                   }
                 }
               },

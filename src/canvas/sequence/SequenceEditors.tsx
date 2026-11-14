@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent } from 'react';
 import { findItem, findOperand, sequenceOf } from '../../document/sequenceModel';
 import type { DraftNode } from '../../document/types';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
@@ -153,10 +153,18 @@ function NamingParticipant({ node, layout, target }: { node: DraftNode; layout: 
   const { options, preferred } = useMemo(() => participantOptions(query, useEditorStore.getState().document.nodes, others), [query, others]);
   const [picked, setPicked] = useState<number | null>(null);
   const active = Math.min(options.length - 1, picked ?? preferred);
+  // The head shows what the name would make it, as it is typed and as the list is arrowed through.
+  const look = options[active] ? JSON.stringify(options[active].participant) : '';
+  useEffect(() => {
+    if (look) sequenceActions.previewNaming(node.id, target.id, JSON.parse(look) as ParticipantOption['participant']);
+  }, [look, node.id, target.id]);
   const column = layout.columns.find((entry) => entry.id === target.id);
   if (!column) return null;
   // The head was laid out as wide as this field (`UNNAMED_HEAD_WIDTH`), so the field sits on it and on nothing else.
   const width = column.head.w;
+  // Where the name will be: inside a box, under a cylinder, a tube or a person.
+  const under = options[active] ? options[active].participant.type !== 'service' && options[active].participant.type !== 'component' : false;
+  const top = under ? column.head.y + column.head.h - 26 : column.head.y + column.head.h / 2 - 13;
 
   const finish = (option: ParticipantOption | undefined, how: 'enter' | 'blur') => {
     const typed = query.replace(/\s+/g, ' ').trim();
@@ -167,7 +175,7 @@ function NamingParticipant({ node, layout, target }: { node: DraftNode; layout: 
   };
 
   return (
-    <div className="dc-seq-new nodrag nopan nowheel" style={{ left: column.x - width / 2, top: column.head.y + column.head.h / 2 - 13, width }} onPointerDown={(event) => event.stopPropagation()}>
+    <div className="dc-seq-new nodrag nopan nowheel" style={{ left: column.x - width / 2, top, width }} onPointerDown={(event) => event.stopPropagation()}>
       <Field
         style={{ width, height: 26 }}
         font={FONTS.nodeLabel}

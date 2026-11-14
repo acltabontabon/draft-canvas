@@ -20,7 +20,7 @@ export const CONTRACT_VERSION = 3;
 
 const STARTERS_OFF = 'No starters are downloaded: they come from the optional starters gallery, which the person turns on in Draft Canvas (Starters → Load starters). Compose the diagram from elements instead.';
 
-const TOPICS = ['types', 'relationships', 'c4', 'flows', 'notes', 'starters', 'limits', 'layout', 'readability'] as const;
+const TOPICS = ['types', 'relationships', 'c4', 'flows', 'notes', 'sequences', 'starters', 'limits', 'layout', 'readability'] as const;
 
 /** What each topic holds — the whole answer when no topic is asked for, so one call stays small. */
 const TOPIC_INDEX: Record<(typeof TOPICS)[number], string> = {
@@ -29,6 +29,7 @@ const TOPIC_INDEX: Record<(typeof TOPICS)[number], string> = {
   c4: 'Levels, inside views, moveInside/moveOutside, derived role and scope.',
   flows: 'Flows as presentations: order, steps, highlights, spotlights, variants.',
   notes: 'Notes, code snippets, Markdown labels and their style, attaching and detaching.',
+  sequences: 'Native sequence diagrams beside the architecture: Mermaid text in, linked participants, what is and is not drawn.',
   starters: 'Starter names and categories; {starter: id} describes one.',
   limits: 'Per-request and read limits.',
   layout: 'Automatic layout, exact place and route, arrange, previews, evidence.',
@@ -128,6 +129,17 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }, star
       beside: 'about = an element with attach: false: a free card laid out with it, just before it across the flow and inside its boundary — for a callout meant to be read at a glance (placement only — nothing records the link).',
       inside: 'about = a group: a member of the boundary, at its head. With attach: true, a note or snippet attaches to the boundary itself instead.',
       convert: 'update set.attach: true with about folds a free note, snippet or label onto that host; set.attach: false takes an attachment off as a free card (beside its host, or beside/inside about). The id stays either way.',
+    };
+  }
+  if (want('sequences')) {
+    out.sequences = {
+      what: 'A sequence is one self-laying-out element on the canvas, beside the architecture: participants with lifelines, messages in order, replies, work in progress, conditions, loops and parallel branches. It is behaviour over time; the architecture stays the shapes and relationships. People edit it in place and present it one message at a time.',
+      write: 'sequences: [{id, title, mermaid, links?}] on create_diagram or an add op. mermaid is a Mermaid sequenceDiagram: participant/actor lines (with "as" names), ->> a call, -) asynchronous, -->> a reply, + and - after the arrow for work starting and ending, create/destroy, Note over/left of/right of, box … end, and alt/else, opt, loop, par/and, critical/option, break. Nothing in it is positioned: the app lays it out and sizes it.',
+      links: 'links: {participantId: elementId} makes a participant stand for an element of the same view — it takes the element\'s name, kind and technology and follows it from then on. A participant written under an element\'s own id is linked without being listed. Link the participants that are shapes in the diagram; leave the rest free.',
+      order: 'Only from an order the person or the code gives, as with flows. A sequence is never derived from the layout or from which relationships exist.',
+      edit: 'read_diagram returns each sequence as {id, title, mermaid, links} (mermaid left out with truncated: true when long; include ["fullText"] gives it). update set.mermaid replaces what it holds and keeps the links of participants still written under the same ids; set.title renames it; set.links re-links (null unlinks all); set.place moves it. remove by id.',
+      notDrawn: 'autonumber, rect backgrounds, participant links/properties, two-way arrows and lost messages (-x) are not drawn; a receipt advisory names what was left out. A reply answers the latest unanswered call between the same two participants.',
+      versusFlows: 'A flow walks existing relationships and is the presentation of the architecture. Use a sequence when the order, replies, conditions or participants go beyond what the relationships say — a protocol, a saga, an error path.',
     };
   }
   if (want('starters')) {

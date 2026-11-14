@@ -35,6 +35,7 @@ import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
 import type { SourceEvidence } from '../document/types';
 import { CREATE_FIELDS, ROOM_FIELDS, unknownFieldHint } from './fields';
 import { readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
+import { readSequences, SEQUENCE_LIMITS, type SequenceSpec } from './sequences';
 import { GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes, type LineStyleName, type NativeShape } from './vocabulary';
 
 /** What one request may carry. Published through `get_capabilities` and the tool schemas. */
@@ -45,6 +46,7 @@ export const AGENT_LIMITS = {
   flowsPerRequest: 20,
   stepsPerFlow: 60,
   notesPerRequest: 60,
+  ...SEQUENCE_LIMITS,
   openPointsPerRequest: 50,
   openPointContextLength: LIMITS.maxOpenPointContextLength,
   openPointTargets: LIMITS.maxOpenPointTargets,
@@ -226,6 +228,8 @@ export interface RoomSpec {
   groups: GroupSpec[];
   flows: FlowSpec[];
   notes: NoteSpec[];
+  /** Sequences, each a native sequence element beside the architecture (`sequences.ts`). */
+  sequences: SequenceSpec[];
 }
 
 export interface LayoutSpec {
@@ -647,7 +651,9 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     if (id && body && relation) notes.push({ id, ...body, ...relation, ...(color ? { color } : {}), ...(style && Object.keys(style).length > 0 ? { style } : {}) });
   });
 
-  return { ...(level ? { level } : {}), nodes, relationships, groups, flows, notes };
+  const sequences = readSequences(r, raw.sequences, `${path}/sequences`, ctx.taken, elementIds, CREATE_FIELDS.sequence);
+
+  return { ...(level ? { level } : {}), nodes, relationships, groups, flows, notes, sequences };
 }
 
 /**

@@ -46,6 +46,11 @@ import {
 } from '../document/operations';
 import { reinferIfEligible } from '../document/reinfer';
 import { freeOriginFor } from '../document/geometry';
+import { syncLinks } from '../document/sequenceLinks';
+import { sequenceOf } from '../document/sequenceModel';
+import { fitSequenceNode, fitSequences } from '../nodes/sequenceFit';
+import { aliasesOf } from '../sequence/native/shared';
+import { linked, linksOf, readSequenceSource, sequenceNode, unsupportedAdvice } from './sequences';
 import { DEFAULTS, LIMITS } from '../document/limits';
 import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
@@ -168,7 +173,7 @@ function laterAdd(ops: readonly unknown[]): (problem: { path: string; message: s
   const addedBy = new Map<string, number>();
   ops.forEach((op, i) => {
     if (!op || typeof op !== 'object' || (op as Json).op !== 'add') return;
-    for (const field of ['nodes', 'relationships', 'groups', 'flows', 'notes', 'openPoints']) {
+    for (const field of ['nodes', 'relationships', 'groups', 'flows', 'notes', 'sequences', 'openPoints']) {
       const items = (op as Json)[field];
       if (Array.isArray(items)) for (const item of items) if (item && typeof (item as Json).id === 'string' && !addedBy.has((item as Json).id as string)) addedBy.set((item as Json).id as string, i);
     }
@@ -509,6 +514,14 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   problems.explain(laterAdd(ops));
   problems.throwIfAny();
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
+  // A shape renamed or retyped here is renamed in every sequence it stands in, as it is when a
+  // person renames it; and a sequence whose participants changed that way is given the room it needs.
+  const started = viewOf(file, path);
+  if (started && started !== view) {
+    const synced = fitSequences(started, syncLinks(started, view).doc, () => ctx);
+    for (const node of synced.nodes) if (node.type === 'sequence' && !view.nodes.includes(node)) touched.add(node.id);
+    view = synced;
+  }
 
   const nextFile = path.length ? embed(base, path, view) : view;
   // Only what this request could plausibly have broken — `touched` plus, through `checkQuality`'s
@@ -671,8 +684,55 @@ function labelStylePatch(r: Reader, value: unknown, at: string): Partial<DraftNo
   return patch;
 }
 
+/**
+ * A sequence changed in place, keeping its id and where it stands. `mermaid` replaces what it holds;
+ * a participant that stood for a shape still does when it is written under the id the read gave it,
+ * so text that was read, edited and sent back loses no link. `links` alone re-links the participants
+ * it has. Its box follows what it now holds, as it does in the editor.
+ */
+function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Json, at: string, ctx: ReturnType<typeof measureContext>, advisories: string[]): DraftDocument | undefined {
+  const shapes = new Map(view.nodes.map((n) => [n.id, n]));
+  // What a participant may stand for: the shapes of this view, never a card, a boundary or a sequence.
+  const elementIds = new Set(view.nodes.filter((n) => n.type !== 'group' && n.type !== 'sequence' && !isCard(n)).map((n) => n.id));
+  const current = sequenceOf(node);
+  let title = node.text ?? '';
+  if (set.title !== undefined) {
+    const named = r.text(set.title, `${at}/title`, AGENT_LIMITS.sequenceTitleLength, { required: true, singleLine: true });
+    if (named !== undefined) title = named;
+  }
+  let sequence = current;
+  if (set.mermaid !== undefined) {
+    const read = readSequenceSource(r, set, at, elementIds, linksOf(current));
+    if (!read) return undefined;
+    advisories.push(...unsupportedAdvice(node.id, read.unsupported));
+    sequence = linked(read.sequence, read.links, shapes, node.id, advisories);
+    if (set.title === undefined && read.title) title = read.title;
+  } else if (set.links !== undefined) {
+    // By the id each participant is written under in a read. A null (or a name left out of a
+    // whole new map) unlinks: the participant keeps what it is and goes its own way.
+    const given = set.links === null ? {} : r.object(set.links, `${at}/links`);
+    if (!given) return undefined;
+    const alias = aliasesOf(current);
+    const byName = new Map(current.participants.map((participant) => [alias.get(participant.id) ?? participant.id, participant.id]));
+    const links = new Map<string, string>();
+    for (const [name, element] of Object.entries(given)) {
+      const participant = byName.get(name);
+      if (!participant) r.problems.add('INVALID_REFERENCE', `${at}/links/${name}`, `no participant "${name}" in this sequence; links are keyed by a participant's id in the Mermaid text a read gives`);
+      else if (typeof element !== 'string' || !elementIds.has(element)) r.problems.add('INVALID_REFERENCE', `${at}/links/${name}`, `no element "${String(element)}" in this view`);
+      else if ([...links.values()].includes(element)) r.problems.add('INVALID_INPUT', `${at}/links/${name}`, `"${element}" already stands in this sequence; one participant per element`);
+      else links.set(participant, element);
+    }
+    if (!r.problems.empty) return undefined;
+    const unlinked = { ...current, participants: current.participants.map(({ ref: _ref, ...participant }) => participant) };
+    sequence = linked(unlinked, links, shapes, node.id, advisories);
+  }
+  if (!r.problems.empty) return undefined;
+  const changed = fitSequenceNode(node, { ...node, text: title, sequence }, ctx);
+  return { ...view, nodes: view.nodes.map((n) => (n.id === node.id ? changed : n)) };
+}
+
 /** Which `SET_FIELDS` a node of each type takes: a card's own fields, or an element's. */
-const NODE_FIELDS: Partial<Record<DraftNode['type'], keyof typeof SET_FIELDS>> = { group: 'group', note: 'note', code: 'code', text: 'label' };
+const NODE_FIELDS: Partial<Record<DraftNode['type'], keyof typeof SET_FIELDS>> = { group: 'group', note: 'note', code: 'code', text: 'label', sequence: 'sequence' };
 
 const isCard = (node: DraftNode) => node.type === 'note' || node.type === 'code' || node.type === 'text';
 
@@ -689,6 +749,14 @@ function updateOne(
   scope?: Scope,
 ): { view: DraftDocument } | undefined {
   const node = view.nodes.find((n) => n.id === id);
+  if (node?.type === 'sequence') {
+    refuseOutOfScope(r, at, outOfScope(scope, [id], 'nodes'));
+    if (!r.problems.empty) return undefined;
+    const next = updateSequence(r, view, node, set, at, ctx, advisories);
+    if (!next) return undefined;
+    touched.add(id);
+    return { view: next };
+  }
   if (node) {
     refuseOutOfScope(r, at, outOfScope(scope, [id], 'nodes'));
     if (!r.problems.empty) return undefined;
@@ -1049,7 +1117,7 @@ function addToView(
   advisories: string[],
 ): DraftDocument {
   const existingIds = new Set(view.nodes.map((n) => n.id));
-  const newIds = new Set([...room.nodes.map((n) => n.id), ...room.groups.map((g) => g.id), ...room.notes.map((n) => n.id)]);
+  const newIds = new Set([...room.nodes.map((n) => n.id), ...room.groups.map((g) => g.id), ...room.notes.map((n) => n.id), ...room.sequences.map((s) => s.id)]);
   const inner = room.relationships.filter((e) => newIds.has(e.from) && newIds.has(e.to));
   const bridging = room.relationships.filter((e) => !(newIds.has(e.from) && newIds.has(e.to)));
   // New elements — and new boundaries nested in one — that belong to an existing boundary are laid
@@ -1075,6 +1143,7 @@ function addToView(
     relationships: inner.map(({ route: _route, ...e }) => e),
     flows: [],
     notes: [],
+    sequences: [],
   };
   // Into an empty view, the flows that come with it say what the main path is (see `arrangeFreshRoom`).
   const fresh = view.nodes.length === 0 && bridging.length === 0;
@@ -1190,6 +1259,14 @@ function addToView(
       const at = freeOriginFor({ ...next, nodes: next.nodes.filter((n) => n.id !== note.id) }, note);
       next = updateNode(next, note.id, { x: Math.round(at.x), y: Math.round(at.y) });
     }
+  }
+
+  // Sequences: each where there is room for it, clear of everything already there. Its
+  // participants may stand for shapes this op added or shapes that were there before.
+  for (const spec of room.sequences) {
+    const made = sequenceNode(spec, new Map(next.nodes.map((n) => [n.id, n])), ctx, advisories);
+    const at = freeOriginFor(next, made);
+    next = { ...next, nodes: [...next.nodes, { ...made, x: Math.round(at.x), y: Math.round(at.y) }] };
   }
 
   // Flows (they may use new and existing connectors alike). variantOf is linked in a second pass,

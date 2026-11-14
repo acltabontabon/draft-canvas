@@ -155,6 +155,20 @@ export function sequenceSeatAt(point: { x: number; y: number }): { nodeId: strin
   return { nodeId: host.id, index: participantIndexAt(sequenceLayoutFor(host, describeContext(LIGHT)), point.x - host.x) };
 }
 
+/** Everything a participant can be, cleared: what it becomes is then exactly what it is given, with nothing left over from a look it was shown in. */
+const NOBODY: Partial<Omit<SeqParticipant, 'id'>> = {
+  serviceKind: undefined,
+  databaseKind: undefined,
+  queueKind: undefined,
+  deliveryRole: undefined,
+  actorKind: undefined,
+  componentKind: undefined,
+  technology: undefined,
+  kindOrigin: undefined,
+  accent: undefined,
+  ref: undefined,
+};
+
 export const sequenceActions = {
   select,
   edit,
@@ -206,6 +220,15 @@ export const sequenceActions = {
   },
 
   /**
+   * Shows the participant being named as what the field would make it right now — a cylinder for a
+   * data store, a tube with its mark for "Kafka" — before anything is chosen. Its look only: it has
+   * no name yet and stands for nothing. Part of the step the naming opened, so giving up undoes it.
+   */
+  previewNaming(nodeId: string, id: string, is: Omit<SeqParticipant, 'id'>): void {
+    run(nodeId, 'Add participant', (current) => updateParticipant(current, id, { ...NOBODY, ...is, name: '', ref: undefined }));
+  },
+
+  /**
    * Ends the naming of a participant added a moment ago. With a name (or a shape or technology
    * picked for it) it becomes that; with none it is taken out again, with any message drawn to it.
    * `then` says what follows: `'next'` goes straight on to naming another one beside it.
@@ -225,7 +248,7 @@ export const sequenceActions = {
       useUiStore.setState({ sequenceEdit: null, sequenceFocus: null });
       return;
     }
-    run(nodeId, 'Add participant', (current) => updateParticipant(current, id, is));
+    run(nodeId, 'Add participant', (current) => updateParticipant(current, id, { ...NOBODY, ...is }));
     // Closing the field ends the step: the participant, and a message drawn to it, are one undo.
     edit(nodeId, null);
     if (message) {

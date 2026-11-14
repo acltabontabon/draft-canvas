@@ -70,6 +70,7 @@ describe('the agent skill', () => {
     expect(pythonSet('RELATIONSHIP_FIELDS')).toEqual([...CREATE_FIELDS.relationship].sort());
     expect(pythonSet('FLOW_FIELDS')).toEqual([...CREATE_FIELDS.flow].sort());
     expect(pythonSet('NOTE_FIELDS')).toEqual([...CREATE_FIELDS.note].sort());
+    expect(pythonSet('SEQUENCE_FIELDS')).toEqual([...CREATE_FIELDS.sequence].sort());
   });
 
   it('knows the meanings each pair of element types takes, as the editor does', () => {

@@ -234,7 +234,9 @@ describe('MCP tool definitions', () => {
     // through $defs too. The ai-agent element type and the asks/delegates/escalates/notifies
     // relationships added ~0.3 KB. Linked compensation fields add ~1.7 KB across the create and
     // update tools, because each tool's schema stands alone. Pinned and automatic route ends add ~0.6 KB. Tightening the longest descriptions
-    // took ~1.5 KB back (68.6 KB). Keep a measured ceiling on growth.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(69_200);
+    // took ~1.5 KB back (68.6 KB). Native sequences (the `sequence` definition, the room field and
+    // set.mermaid/links) add ~2 KB across the tools that take a graph, each of whose schemas stands
+    // alone (71.0 KB). Keep a measured ceiling on growth.
+    expect(JSON.stringify(TOOLS).length).toBeLessThan(71_200);
   });
 });
