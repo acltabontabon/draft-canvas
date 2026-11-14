@@ -73,6 +73,8 @@ export interface ExportOptions {
   openPoints?: boolean;
   /** The exported legend is unnecessary when drawing a transient camera-sized room picture. */
   openPointKey?: boolean;
+  /** Preserve element ids in SVG data attributes for an interactive embedding. */
+  identifyElements?: boolean;
   /**
    * Whether the picture keeps the room's handwritten sketches, drawn over everything as on the
    * canvas. Defaults to `true`. A selection-only export (`only`) leaves them out: a sketch belongs
@@ -186,6 +188,7 @@ export interface Decoration {
 }
 
 export interface SceneOptions {
+  identifyElements?: boolean;
   only?: ReadonlySet<string>;
   selectedFlow?: DraftFlow;
   /** Clip-path id scope (see `beginClipScope`). Defaults to `'export'`; anything drawn into the
@@ -384,11 +387,15 @@ export function buildScene(
     for (const bend of edge.waypoints ?? []) overlayRects.push({ x: bend.x - 2, y: bend.y - 2, width: 4, height: 4 });
     const groupAttrs = decorateGroupAttrs(decoration);
 
-    const routedLines = groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls;
+    const routedLines = options.identifyElements
+      ? [el('g', { ...groupAttrs, 'data-diagram-edge': edge.id }, lineEls)]
+      : groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls;
     // Participant connectors cross the sequence surface to reach their lifelines.
     if (edge.sourceAnchor?.participantId || edge.targetAnchor?.participantId) edgeOverlays.push(...routedLines);
     else edgeLines.push(...routedLines);
-    edgeOverlays.push(...(groupAttrs ? [el('g', groupAttrs, overlayEls)] : overlayEls));
+    edgeOverlays.push(...(options.identifyElements && overlayEls.length
+      ? [el('g', { ...groupAttrs, 'data-diagram-edge-labels': edge.id }, overlayEls)]
+      : groupAttrs ? [el('g', groupAttrs, overlayEls)] : overlayEls));
     edgeEntries.push({ edge, lineEls, overlayEls });
   }
 
@@ -403,7 +410,11 @@ export function buildScene(
     const els = emitDisplayList(list);
     const group = el(
       'g',
-      { transform: `translate(${n(node.x)} ${n(node.y)})`, ...decorateGroupAttrs(decoration) },
+      {
+        transform: `translate(${n(node.x)} ${n(node.y)})`,
+        ...decorateGroupAttrs(decoration),
+        'data-diagram-node': options.identifyElements ? node.id : undefined,
+      },
       els,
     );
     if (node.type === 'group') backdropEls.push(group);
@@ -428,7 +439,11 @@ export function buildScene(
       const x = node.x + origin.x;
       const y = node.y + origin.y;
       markerEls.push(
-        el('g', { transform: `translate(${n(x)} ${n(y)})`, ...decorateGroupAttrs(decoration) }, emitDisplayList({
+        el('g', {
+          transform: `translate(${n(x)} ${n(y)})`,
+          ...decorateGroupAttrs(decoration),
+          'data-diagram-open-point': options.identifyElements ? node.id : undefined,
+        }, emitDisplayList({
           width: MARKER_SIZE,
           height: MARKER_SIZE,
           shapes: describeMarker(nodePoints, { theme: nodeCtx.theme, measurer: nodeCtx.measurer }),
@@ -465,7 +480,9 @@ export function renderDocumentSvg(
   const selectedFlow = options.selectedFlowId ? findFlow(document, options.selectedFlowId) : undefined;
 
   const openPoints = options.openPoints === false ? [] : unresolvedOpenPoints(document);
-  const scene = buildScene(document, nodeCtx, edgeCtx, { only: options.only, selectedFlow, openPoints });
+  const scene = buildScene(document, nodeCtx, edgeCtx, {
+    only: options.only, selectedFlow, openPoints, identifyElements: options.identifyElements,
+  });
   const withInk = options.ink !== false && !options.only;
   const inkEls = withInk ? inkSvgEls(document, theme.name) : [];
   const inkRects = withInk ? inkOf(document).map(inkPaintBounds) : [];

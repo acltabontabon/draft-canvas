@@ -40,4 +40,4 @@ down. It appears once any room exists.
 - `⌘↓` and `⌘↑` work while presenting.
 - Inside a room, image and **Other formats** exports offer the room or **The whole canvas**.
 - A `.draftcanvas` file holds every room; copying or deleting a shape includes its room.
-  [Limits](../reference/schema.md) count across all rooms.
+  Diagram size limits count across all rooms.

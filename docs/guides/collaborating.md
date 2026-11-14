@@ -128,5 +128,5 @@ The link stops when you turn it off or end the session.
 - Direct invite links and reply codes contain IP addresses: send them only to the people you mean.
 - The desktop local network link is the one unencrypted option.
 
-Details: [Privacy](../reference/privacy.md#live-collaboration) and
-[Security](../../SECURITY.md#live-collaboration).
+See [Privacy and security](../reference/privacy.md#live-collaboration) for what each part of a
+session can see.

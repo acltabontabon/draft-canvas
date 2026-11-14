@@ -67,7 +67,7 @@ Drawing styles are parameters of that renderer and a device preference, not docu
 
 One sparse capability matrix, keyed by both endpoints' categories, says what a connection probably
 means. Connector defaults, the relation picker, starters and suggestions all read it. An unlisted
-pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semantics](semantics.md).
+pairing stays free; an unusual one gets guidance, not rejection.
 
 ## Connector routing
 
@@ -203,8 +203,7 @@ The passphrase export is separate. See [Security](../../SECURITY.md#browser-stor
 ## Untrusted input and schema evolution
 
 Files, clipboard, stored records and collaboration changes pass one migrate-and-validate boundary.
-Recoverable defects are repaired and reported; newer formats are refused by name. See
-[Document schema](schema.md).
+Recoverable defects are repaired and reported; newer formats are refused by name.
 
 ## Desktop
 

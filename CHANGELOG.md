@@ -201,6 +201,10 @@ straight lines and even gaps, and on desktop give Nodi a `/` to tidy the layout 
 
 #### Added
 
+- The Draft Canvas website now has six interactive architecture examples based on published
+  systems. Explore C4 levels, trace data lineage, and open notes and code on the diagrams.
+- Search the documentation from any guide. The sidebar groups related guides and opens the current
+  topic, and privacy and security are covered on one page.
 - **Download for docs** gives a ZIP of the picture and its editable source, in a `diagrams` folder to
   put next to your Markdown file.
 

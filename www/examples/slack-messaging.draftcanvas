@@ -1,0 +1,444 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "example-slack-messaging",
+    "title": "Slack real-time messaging",
+    "createdAt": 1794614400000,
+    "updatedAt": 1794614400000
+  },
+  "nodes": [
+    {
+      "id": "core",
+      "type": "group",
+      "text": "Slack real-time core",
+      "x": 166,
+      "y": 0,
+      "width": 799,
+      "height": 440,
+      "z": 0,
+      "accent": "blue",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "edge-a",
+      "type": "group",
+      "text": "Edge region A",
+      "x": 1100,
+      "y": 0,
+      "width": 240,
+      "height": 273,
+      "z": 0,
+      "accent": "violet",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "edge-b",
+      "type": "group",
+      "text": "Edge region B",
+      "x": 1100,
+      "y": 304,
+      "width": 240,
+      "height": 163,
+      "z": 0,
+      "accent": "violet",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "sender",
+      "type": "actor",
+      "text": "Sender",
+      "x": 0,
+      "y": 51,
+      "width": 92,
+      "height": 80,
+      "z": 0,
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "webapp",
+      "type": "service",
+      "text": "Slack Webapp",
+      "x": 190,
+      "y": 51,
+      "width": 165,
+      "height": 80,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "api",
+      "description": "Accepts the message",
+      "parentId": "core"
+    },
+    {
+      "id": "admin",
+      "type": "service",
+      "text": "Admin server",
+      "x": 444,
+      "y": 51,
+      "width": 167,
+      "height": 80,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "generic",
+      "description": "Routes by channel ID",
+      "parentId": "core"
+    },
+    {
+      "id": "channel",
+      "type": "service",
+      "text": "Channel server",
+      "x": 742,
+      "y": 51,
+      "width": 191,
+      "height": 80,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "generic",
+      "description": "Owns a channel partition",
+      "parentId": "core"
+    },
+    {
+      "id": "ring",
+      "type": "service",
+      "text": "Ring manager",
+      "x": 190,
+      "y": 319,
+      "width": 165,
+      "height": 80,
+      "z": 0,
+      "accent": "teal",
+      "serviceKind": "worker",
+      "description": "Replaces unhealthy hosts",
+      "parentId": "core"
+    },
+    {
+      "id": "consul",
+      "type": "service",
+      "text": "Consul",
+      "x": 444,
+      "y": 319,
+      "width": 167,
+      "height": 80,
+      "z": 0,
+      "accent": "teal",
+      "serviceKind": "generic",
+      "description": "Publishes ring config",
+      "technology": "Consul",
+      "parentId": "core"
+    },
+    {
+      "id": "fan-out",
+      "type": "ellipse",
+      "text": "",
+      "x": 992,
+      "y": 79,
+      "width": 22,
+      "height": 22,
+      "z": 0,
+      "accent": "violet"
+    },
+    {
+      "id": "gateway-a",
+      "type": "service",
+      "text": "Gateway A",
+      "x": 1130,
+      "y": 51,
+      "width": 176,
+      "height": 80,
+      "z": 0,
+      "accent": "violet",
+      "serviceKind": "generic",
+      "description": "Holds subscriptions",
+      "parentId": "edge-a"
+    },
+    {
+      "id": "envoy",
+      "type": "service",
+      "text": "Envoy",
+      "x": 1130,
+      "y": 173,
+      "width": 176,
+      "height": 80,
+      "z": 0,
+      "accent": "violet",
+      "serviceKind": "gateway",
+      "description": "Terminates TLS",
+      "technology": "Envoy",
+      "parentId": "edge-a"
+    },
+    {
+      "id": "gateway-b",
+      "type": "service",
+      "text": "Gateway B",
+      "x": 1130,
+      "y": 355,
+      "width": 176,
+      "height": 80,
+      "z": 0,
+      "accent": "violet",
+      "serviceKind": "generic",
+      "description": "Holds subscriptions",
+      "parentId": "edge-b"
+    },
+    {
+      "id": "reader-a",
+      "type": "actor",
+      "text": "Reader B",
+      "x": 1437,
+      "y": 51,
+      "width": 109,
+      "height": 80,
+      "z": 0,
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "reader-b",
+      "type": "actor",
+      "text": "Reader C",
+      "x": 1437,
+      "y": 355,
+      "width": 109,
+      "height": 80,
+      "z": 0,
+      "actorFrame": "borderless"
+    }
+  ],
+  "edges": [
+    {
+      "id": "send",
+      "source": "sender",
+      "target": "webapp",
+      "label": "sends message",
+      "accent": "blue",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "admin-call",
+      "source": "webapp",
+      "target": "admin",
+      "label": "forwards event",
+      "accent": "blue",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "route",
+      "source": "admin",
+      "target": "channel",
+      "label": "routes by hash",
+      "accent": "blue",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "ring-config",
+      "source": "ring",
+      "target": "consul",
+      "label": "updates ring",
+      "accent": "teal",
+      "semantic": "syncs",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "discover",
+      "source": "admin",
+      "target": "consul",
+      "label": "reads ring config",
+      "accent": "teal",
+      "semantic": "reads",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "channel-config",
+      "source": "channel",
+      "target": "consul",
+      "label": "reads assignments",
+      "accent": "teal",
+      "semantic": "reads",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 837.5,
+          "y": 359
+        }
+      ]
+    },
+    {
+      "id": "broadcast",
+      "source": "channel",
+      "target": "fan-out",
+      "label": "broadcasts",
+      "accent": "violet",
+      "semantic": "fansOut",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "async": true
+    },
+    {
+      "id": "fan-region-a",
+      "source": "fan-out",
+      "target": "gateway-a",
+      "label": "subscribed",
+      "accent": "violet",
+      "semantic": "fansOut",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "async": true
+    },
+    {
+      "id": "fan-region-b",
+      "source": "fan-out",
+      "target": "gateway-b",
+      "label": "subscribed",
+      "accent": "violet",
+      "semantic": "fansOut",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 1003,
+          "y": 395
+        }
+      ],
+      "async": true
+    },
+    {
+      "id": "tls",
+      "source": "envoy",
+      "target": "gateway-a",
+      "label": "WebSocket",
+      "accent": "violet",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "deliver-a",
+      "source": "gateway-a",
+      "target": "reader-a",
+      "label": "pushes message",
+      "accent": "violet",
+      "semantic": "deliversTo",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "async": true
+    },
+    {
+      "id": "deliver-b",
+      "source": "gateway-b",
+      "target": "reader-b",
+      "label": "pushes message",
+      "accent": "violet",
+      "semantic": "deliversTo",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "async": true
+    }
+  ],
+  "notes": []
+}

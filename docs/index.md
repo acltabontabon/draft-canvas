@@ -1,49 +1,46 @@
-# Draft Canvas documentation
+<a id="draft-canvas-documentation"></a>
 
-New here? Start with [Getting started](guides/getting-started.md).
+# Documentation
+
+**[Getting started](guides/getting-started.md)**
+
+Draw, present, and export your first diagram.
 
 ## Guides
 
+### Draw and explore
+
 | Guide | Covers |
 | --- | --- |
-| **[Getting started](guides/getting-started.md)** | Draw, present and export a first diagram |
-| [Shapes and connectors](guides/shapes-and-connectors.md) | Shape kinds, labels, notes, boundaries |
-| [Sketch and Smart Ink](guides/sketching.md) | Draw over a diagram; turn rough drawings into shapes |
-| [Flows and presenting](guides/flows-and-presentation.md) | Record a path and present it step by step |
-| [Sequence diagrams](guides/sequence-diagrams.md) | Who says what to whom, in order, beside your architecture |
-| [Architecture examples](guides/examples.md) | Ready-made starters from the starters gallery |
-| [System levels](guides/depth.md) | Look inside a shape for more detail |
+| [Shapes and connectors](guides/shapes-and-connectors.md) | Choose shapes, label connections, and attach notes |
+| [Sketch and Smart Ink](guides/sketching.md) | Draw over a diagram and turn rough drawings into shapes |
+| [Architecture examples](guides/examples.md) | Browse ready-to-edit diagrams in the starters gallery |
+| [System levels](guides/depth.md) | Move from system context to containers and components |
 | [Open points](guides/open-points.md) | Track open questions |
 | [Traffic](guides/traffic.md) | See where modeled traffic concentrates |
-| [Keyboard shortcuts](guides/keyboard-and-commands.md) | Shortcuts and the command palette |
-| [Accessibility](guides/accessibility.md) | Keyboard, screen reader, touch |
-| [Saving and sharing](guides/saving-and-sharing.md) | Save, back up, export, import, share links |
+| [Keyboard shortcuts](guides/keyboard-and-commands.md) | Find commands and learn their shortcuts |
+| [Accessibility](guides/accessibility.md) | Use the canvas with a keyboard, screen reader, or touch |
+
+### Present and share
+
+| Guide | Covers |
+| --- | --- |
+| [Flows and presenting](guides/flows-and-presentation.md) | Record a path and walk through it step by step |
+| [Sequence diagrams](guides/sequence-diagrams.md) | Who says what to whom, in order, beside your architecture |
+| [Saving and sharing](guides/saving-and-sharing.md) | Back up, import, export, and share diagrams |
 | [Diagrams in your docs](guides/diagrams-in-docs.md) | Put a diagram in a README and keep it updated |
-| [Collaborating live](guides/collaborating.md) | Edit one canvas together |
-| [Desktop app](guides/desktop.md) | Install, files, projects, updates |
-| [AI agents](guides/connect-an-ai-agent.md) | Let a coding agent draw diagrams |
+| [Collaborating live](guides/collaborating.md) | Edit a shared canvas in real time |
+
+### Set up and extend
+
+| Guide | Covers |
+| --- | --- |
+| [Desktop app](guides/desktop.md) | Install the app, open projects, and manage updates |
+| [Bring your own agent](guides/connect-an-ai-agent.md) | Connect a coding agent via MCP and review its proposed edits |
 | [Self-hosting](guides/self-hosting.md) | Build and serve the web editor |
 
 ## Reference
 
 | Document | Covers |
 | --- | --- |
-| [Principles](reference/principles.md) | Your architecture, your agents, your decisions |
-| [Privacy](reference/privacy.md) | What is stored and what leaves the device |
-| [Agent integration](reference/agent-integration.md) | MCP tools and guarantees |
-| [Architecture](reference/architecture.md) | Design and module boundaries |
-| [Semantics](reference/semantics.md) | Relationship and suggestion rules |
-| [Document schema](reference/schema.md) | File format and limits |
-| [Mermaid import](reference/mermaid-import.md) | Supported flowchart and sequence syntax |
-| [Performance](reference/performance.md) | Benchmarks |
-| [Security](../SECURITY.md) | Threat model and reporting |
-
-## Contributing and maintenance
-
-- [Contributing](../CONTRIBUTING.md) · [Development](reference/development.md) ·
-  [Agent instructions](../AGENTS.md) · [Changelog](../CHANGELOG.md)
-- Releases: [workflow](reference/releases.md) · [desktop updates](reference/desktop-updates.md) ·
-  [website](reference/website.md)
-- Reliability: [recovery, diagnostics and release withdrawal](reference/reliability.md)
-- Dependencies: [library adoption](reference/library-adoption.md) ·
-  [third-party credits](reference/third-party.md)
+| [Privacy and security](reference/privacy.md) | Local storage, data protection, and vulnerability reporting |

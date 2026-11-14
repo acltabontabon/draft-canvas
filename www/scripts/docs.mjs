@@ -1,32 +1,29 @@
 /*
  * The documentation, as pages on the site.
  *
- *   docs/index.md                  ->  /draft-canvas/docs/
+ *   docs/index.md                  ->  sidebar and reading order
  *   docs/guides/<name>.md          ->  /draft-canvas/docs/<name>/
  *   docs/reference/privacy.md      ->  /draft-canvas/docs/privacy/
  *
  * The Markdown in docs/ stays the one copy anybody edits: it still reads on GitHub, and
  * tests/docs.test.ts still checks its links there. This only renders it, at build time, into plain
- * HTML that shares the landing page's stylesheet. The pages ship no script at all, so the site's
- * `connect-src 'none'` policy holds for them without a single hash.
+ * HTML that shares the landing page's stylesheet. Search loads a static catalog as a same-origin
+ * module, so the site's `connect-src 'none'` policy also holds for search.
  *
- * Only what someone *using* Draft Canvas reads is published: every guide, and the two reference
- * documents a user lands on from one. The rest of docs/reference/ explains the code to the people
- * changing it, and a link to it goes to GitHub, where the code is.
+ * Guides, references, and project documentation render here. Links to source code and workflow
+ * files still go to the repository.
  *
  * Every link is checked while it is rewritten. A page, a `#section` or an image that is not there
  * fails the build, because on a static site a broken link fails silently, and only for a reader.
  */
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join, posix } from 'node:path';
 import { Marked } from 'marked';
 
 export const SITE = 'https://draftcanvas.dev/';
 const GITHUB = 'https://github.com/acltabontabon/draft-canvas/blob/main/';
-
-/** The reference documents a user reaches from a guide. Published if present, linked to GitHub if not. */
-const PUBLISHED_REFERENCE = ['reference/privacy.md', 'reference/agent-integration.md'];
+export const DOCS_START = 'getting-started/';
 
 const escape = (text) =>
   String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -62,22 +59,16 @@ function pngSize(file) {
   return { width: bytes.readUInt32BE(16), height: bytes.readUInt32BE(20) };
 }
 
-/** Every page the site publishes, keyed by its path inside docs/. */
-function collect(docsDir) {
-  const sources = ['index.md'];
-  const guides = join(docsDir, 'guides');
-  if (existsSync(guides)) {
-    sources.push(...readdirSync(guides).filter((f) => f.endsWith('.md')).sort().map((f) => `guides/${f}`));
-  }
-  sources.push(...PUBLISHED_REFERENCE.filter((source) => existsSync(join(docsDir, source))));
-
+/** Every page in the public directory, keyed by its path inside docs/. */
+function collect(docsDir, index, navigation) {
+  const sources = ['index.md', ...navigation.flatMap(({ items }) => items.map(({ source }) => source))];
   const pages = new Map();
   const slugs = new Map();
   for (const source of sources) {
-    const slug = source === 'index.md' ? '' : posix.basename(source, '.md');
+    const slug = source === 'index.md' ? '' : posix.basename(source, '.md').toLowerCase();
     if (slugs.has(slug)) throw new Error(`docs: ${source} and ${slugs.get(slug)} would both be /docs/${slug}/`);
     slugs.set(slug, source);
-    const markdown = readFileSync(join(docsDir, source), 'utf8');
+    const markdown = slug ? readFileSync(join(docsDir, source), 'utf8') : index;
     pages.set(source, { source, slug, markdown, anchors: anchorsOf(markdown) });
   }
   return pages;
@@ -87,44 +78,69 @@ function anchorsOf(markdown) {
   const seen = new Map();
   const anchors = [];
   const prose = markdown.replace(/^(```|~~~)[\s\S]*?^\1/gm, '');
-  for (const [, depth, heading] of prose.matchAll(/^(#{1,6})\s+(.+?)\s*#*\s*$/gm)) {
+  const headings = [...prose.matchAll(/^(#{1,6})\s+(.+?)\s*#*\s*$/gm)];
+  for (const [index, match] of headings.entries()) {
+    const [line, depth, heading] = match;
     const base = slugOf(heading);
     const n = seen.get(base) ?? 0;
     seen.set(base, n + 1);
-    anchors.push({ id: n === 0 ? base : `${base}-${n}`, depth: depth.length, text: plain(heading) });
+    const content = plain(prose.slice(match.index + line.length, headings[index + 1]?.index));
+    anchors.push({ id: n === 0 ? base : `${base}-${n}`, depth: depth.length, text: plain(heading), content });
   }
   return anchors;
 }
 
-/**
- * The sidebar: the guides and reference documents docs/index.md lists in its tables, in its order
- * and under its own names for them. A published page the index only mentions in passing is still a
- * page, just not a destination in the sidebar.
- */
-function navigationOf(pages) {
-  const index = pages.get('index.md');
-  const guides = [];
-  const reference = [];
+/** Use the Markdown directory's headings and links as the sidebar's groups and reading order. */
+function navigationOf(index) {
+  const marked = new Marked({ gfm: true });
+  const groups = [{ heading: '', items: [] }];
   const seen = new Set();
-  for (const [, cell] of index.markdown.matchAll(/^\|\s*(.+?)\s*\|/gm)) {
-    // The index can emphasize a guide without removing it from the generated sidebar.
-    const link = cell.replace(/^\*\*(.*)\*\*$/, '$1').match(/^\[([^\]]+)\]\(([^)#\s]+)\)$/);
-    if (!link) continue;
-    const page = pages.get(posix.normalize(link[2]));
-    if (!page || seen.has(page.source)) continue;
-    seen.add(page.source);
-    (page.source.startsWith('guides/') ? guides : reference).push({ page, title: plain(link[1]) });
+  for (const token of marked.lexer(index)) {
+    if (token.type === 'heading' && token.depth > 1) {
+      groups.push({ heading: plain(token.text), items: [] });
+      continue;
+    }
+    marked.walkTokens([token], (link) => {
+      if (link.type !== 'link') return;
+      const source = posix.normalize(link.href.split('#')[0]);
+      if (source === 'index.md' || !source.endsWith('.md') || /^[\w+.-]+:|^\//.test(source) || seen.has(source)) return;
+      seen.add(source);
+      groups.at(-1).items.push({ source, title: plain(link.text) });
+    });
   }
-  return [
-    { heading: 'Guides', items: guides },
-    { heading: 'Reference', items: reference },
-  ].filter((group) => group.items.length);
+  return groups.filter(({ items }) => items.length);
+}
+
+function searchCatalog(index, pages, navigation) {
+  const names = new Map(navigation.flatMap(({ items }) => items.map(({ page, title }) => [page, title])));
+  return Array.from(pages.values()).filter((page) => page.slug).flatMap((page) => {
+    const heading = page.anchors.find(({ depth }) => depth === 1);
+    const title = names.get(page) ?? heading?.text ?? page.slug;
+    const href = pageHref(index, page);
+    return page.anchors.filter(({ depth }) => depth <= 3).map(({ id, depth, text, content }) => ({
+      href: depth === 1 ? href : `${href}#${id}`,
+      title,
+      section: depth === 1 ? '' : text,
+      content,
+    }));
+  });
+}
+
+function searchBox() {
+  return `<div class="doc-search" role="search" hidden>
+  <label id="docs-query-label" for="docs-query">Search documentation</label>
+  <input id="docs-query" type="search" placeholder="Try ‘export’ or ‘keyboard shortcuts’" autocomplete="off" aria-controls="docs-results" />
+</div>
+<section id="docs-results" aria-label="Search results" hidden>
+  <p role="status"></p>
+  <ul class="doc-directory" role="list"></ul>
+</section>`;
 }
 
 /** Where page `to` is, written relative to page `from`. Every page is a directory with an index.html. */
 function pageHref(from, to) {
   const up = from.slug ? '../' : '';
-  return `${up}${to.slug ? `${to.slug}/` : ''}` || './';
+  return `${up}${to.slug ? `${to.slug}/` : DOCS_START}`;
 }
 
 function rootOf(page) {
@@ -139,26 +155,40 @@ function rootOf(page) {
  * { 'docs/media/...': absolute path on disk }.
  */
 export function renderDocs({ docsDir, repoDir, stylesheet, policy = () => '' }) {
-  const pages = collect(docsDir);
-  const navigation = navigationOf(pages);
+  const index = readFileSync(join(docsDir, 'index.md'), 'utf8');
+  const directory = navigationOf(index);
+  const pages = collect(docsDir, index, directory);
+  const navigation = directory.map(({ heading, items }) => ({
+    heading,
+    items: items.map(({ source, title }) => ({ page: pages.get(source), title })),
+  }));
   const order = navigation.flatMap((group) => group.items);
   const files = {};
   const media = {};
   const broken = [];
 
   for (const page of pages.values()) {
+    if (!page.slug) continue;
     const resolve = (href) => {
       // The site's own pages, written out in full so they work on GitHub too, stay on whichever
       // copy of the site this is: production, the subpath preview, or the dev server.
       if (href.startsWith(SITE)) return { href: rootOf(page) + href.slice(SITE.length) };
-      if (/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(href)) return { href, external: true };
+      const [githubPath, githubAnchor] = href.startsWith(GITHUB) ? href.slice(GITHUB.length).split('#') : [];
+      const githubPage = githubPath && pages.get(posix.relative('docs', githubPath));
+      if (githubPage) {
+        if (githubAnchor && !githubPage.anchors.some((a) => a.id === githubAnchor)) broken.push(`${page.source} → ${href}`);
+        return { href: pageHref(page, githubPage) + (githubAnchor ? `#${githubAnchor}` : '') };
+      }
+      if (/^([a-z][a-z0-9+.-]*:|\/\/)/i.test(href)) return { href };
       const [path, anchor] = href.split('#');
       const hash = anchor ? `#${anchor}` : '';
       if (!path) {
         if (anchor && !page.anchors.some((a) => a.id === anchor)) broken.push(`${page.source} → #${anchor}`);
         return { href };
       }
-      const target = posix.normalize(posix.join(posix.dirname(page.source), path));
+      // Normalize from the repository root so root-level documents can link back into docs/.
+      const repoPath = posix.normalize(posix.join('docs', posix.dirname(page.source), path));
+      const target = posix.relative('docs', repoPath);
       const published = pages.get(target);
       if (published) {
         if (anchor && !published.anchors.some((a) => a.id === anchor)) broken.push(`${page.source} → ${href}`);
@@ -168,12 +198,11 @@ export function renderDocs({ docsDir, repoDir, stylesheet, policy = () => '' }) 
         const file = join(docsDir, target);
         if (!existsSync(file)) broken.push(`${page.source} → ${href} (no such file)`);
         media[`docs/${target}`] = file;
-        return { href: `${page.slug ? '../' : ''}${target}`, file };
+        return { href: `../${target}`, file };
       }
-      // Anything else lives in the repository: a contributor document, the README, a source file.
-      const repoPath = posix.normalize(posix.join('docs', target));
+      // Source files and repository configuration are linked to their original location.
       if (!existsSync(join(repoDir, repoPath))) broken.push(`${page.source} → ${href} (no such file)`);
-      return { href: `${GITHUB}${repoPath}${hash}`, external: true };
+      return { href: `${GITHUB}${repoPath}${hash}` };
     };
 
     const seen = new Map();
@@ -207,7 +236,9 @@ export function renderDocs({ docsDir, repoDir, stylesheet, policy = () => '' }) 
       },
     });
 
-    const body = marked.parse(page.markdown);
+    const tokens = marked.lexer(page.markdown);
+    const contents = page.anchors.filter((a) => a.depth === 2);
+    const body = marked.parser(tokens);
     const h1 = page.anchors.find((a) => a.depth === 1);
     const title = h1?.text ?? 'Draft Canvas';
     const lead = page.markdown.split(/\n\s*\n/).find((block) => /^[A-Za-z*_`[]/.test(block.trim()));
@@ -220,11 +251,11 @@ export function renderDocs({ docsDir, repoDir, stylesheet, policy = () => '' }) 
       body,
       stylesheet,
       navigation,
-      contents: page.anchors.filter((a) => a.depth === 2),
+      contents,
       previous: position > 0 ? order[position - 1] : null,
       next: position >= 0 && position < order.length - 1 ? order[position + 1] : null,
     });
-    files[`docs/${page.slug ? `${page.slug}/` : ''}index.html`] = html.replace(
+    files[`docs/${page.slug}/index.html`] = html.replace(
       '<head>',
       `<head>\n    <meta http-equiv="Content-Security-Policy" content="${policy(html)}" />`,
     );
@@ -233,38 +264,45 @@ export function renderDocs({ docsDir, repoDir, stylesheet, policy = () => '' }) 
   if (broken.length) {
     throw new Error(`docs: ${broken.length} broken link(s) in the published docs:\n  ${broken.join('\n  ')}`);
   }
+  files['docs/index.html'] = redirectPage(DOCS_START, 'Getting started', DOCS_START);
+  files['docs/security/index.html'] = redirectPage('privacy/', 'Privacy and security', '../privacy/');
+  const catalog = searchCatalog(pages.get('index.md'), pages, navigation);
+  files['docs-search-data.js'] = `export default ${JSON.stringify(catalog)};\n`;
   return { files, media };
 }
 
-function mark(size) {
-  return `<svg class="mark" viewBox="0 0 32 32" width="${size}" height="${size}" aria-hidden="true" focusable="false">
-          <rect x="6" y="8" width="11" height="7" rx="2" fill="none" stroke="currentColor" stroke-width="2" />
-          <rect x="15" y="18" width="11" height="7" rx="2" fill="none" stroke="var(--ink-ghost)" stroke-width="2" />
-          <path d="M11.5 15.5v3.5h4" fill="none" stroke="currentColor" stroke-width="1.6" />
-        </svg>`;
+function redirectPage(slug, title, href) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta http-equiv="refresh" content="0; url=${href}" />
+  <link rel="canonical" href="${SITE}docs/${slug}" />
+  <title>${title} — Draft Canvas docs</title>
+</head>
+<body><a href="${href}">${title}</a></body>
+</html>
+`;
 }
 
 function navList(page, navigation) {
-  return navigation
-    .map(
-      (group) => `<p class="docs-nav-heading">${escape(group.heading)}</p>
-          <ul>
-${group.items
-  .map(
-    (item) =>
-      `            <li><a href="${pageHref(page, item.page)}"${item.page === page ? ' aria-current="page"' : ''}>${escape(item.title)}</a></li>`,
-  )
-  .join('\n')}
-          </ul>`,
-    )
-    .join('\n          ');
+  return navigation.map(({ heading, items }) => {
+    const links = items.map((item) =>
+      `<a href="${pageHref(page, item.page)}"${item.page === page ? ' aria-current="page"' : ''}>${escape(item.title)}</a>`,
+    );
+    if (!heading || links.length === 1) return links.join('\n');
+    const open = items.some((item) => item.page === page) ? ' open' : '';
+    return `<details${open}>
+  <summary>${escape(heading)}</summary>
+  <ul role="list">${links.map((link) => `<li>${link}</li>`).join('')}</ul>
+</details>`;
+  }).join('\n');
 }
 
 function layout({ page, title, description, body, stylesheet, navigation, contents, previous, next }) {
   const root = rootOf(page);
-  const home = page.slug ? '../' : './';
-  const url = `${SITE}docs/${page.slug ? `${page.slug}/` : ''}`;
-  const fullTitle = page.slug ? `${title} — Draft Canvas docs` : 'Draft Canvas docs';
+  const url = `${SITE}docs/${page.slug}/`;
+  const fullTitle = `${title} — Draft Canvas docs`;
   const stylesheetHref = stylesheet.startsWith('/') ? stylesheet : `${root}${stylesheet}`;
   const current = navigation.flatMap((g) => g.items).find((item) => item.page === page);
 
@@ -284,45 +322,46 @@ function layout({ page, title, description, body, stylesheet, navigation, conten
     <meta property="og:image" content="${SITE}og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
-    <meta property="og:image:alt" content="Draft Canvas — Nodi and a team shaping a shared architecture diagram, sketched in fine lines on charcoal." />
+    <meta property="og:image:alt" content="Shopify’s inventory reservation architecture drawn in Draft Canvas." />
     <link rel="icon" href="${root}favicon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="${root}icon-180.png" />
-    <meta name="color-scheme" content="light dark" />
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0f1012" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#101217" />
     <link rel="stylesheet" href="${stylesheetHref}" />
   </head>
 
   <body class="docs">
     <a class="skip" href="#content">Skip to content</a>
 
-    <header class="masthead">
-      <a class="wordmark" href="${root}" aria-label="Draft Canvas, home">
-        ${mark(24)}
-        <span>Draft Canvas</span>
-      </a>
-      <nav class="masthead-nav" aria-label="Site">
-        <a href="${root}#features">Features</a>
-        <a href="${home}" aria-current="${page.slug ? 'true' : 'page'}">Docs</a>
-      </nav>
-      <a class="button button-primary masthead-cta" href="https://app.draftcanvas.dev/">Open editor</a>
+    <header class="docs-header">
+      <div class="drawing-width docs-header-inner">
+        <nav class="docs-brand" aria-label="Site">
+          <a class="features-brand" href="${root}" aria-label="Draft Canvas, home"><img src="${root}favicon.svg" width="26" height="26" alt="" /> Draft Canvas</a>
+          ${page.slug === 'getting-started' ? '' : `<a class="docs-home-link" href="../${DOCS_START}">Docs</a>`}
+        </nav>
+        <div class="docs-header-actions">
+          <button type="button" class="docs-search-trigger" aria-label="Search documentation" aria-haspopup="dialog" hidden>
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><circle cx="6.5" cy="6.5" r="4" /><path d="m9.5 9.5 3.5 3.5" /></svg>
+            <span>Search</span>
+          </button>
+          <a class="docs-editor-link" href="https://app.draftcanvas.dev/">Open web editor <span aria-hidden="true">↗</span></a>
+        </div>
+      </div>
     </header>
 
     <div class="docs-shell">
-      <nav class="docs-nav" aria-label="Documentation">
-        <a class="docs-nav-home" href="${home}"${page.slug ? '' : ' aria-current="page"'}>Overview</a>
+      <nav class="docs-nav docs-nav-links" aria-label="Documentation">
           ${navList(page, navigation)}
       </nav>
 
       <details class="docs-nav-compact">
-        <summary><span class="docs-nav-current">${escape(current?.title ?? (page.slug ? title : 'Overview'))}</span><span class="docs-nav-toggle">All docs</span></summary>
-        <nav aria-label="Documentation">
-          <a class="docs-nav-home" href="${home}"${page.slug ? '' : ' aria-current="page"'}>Overview</a>
+        <summary><span class="docs-nav-current">${escape(current?.title ?? title)}</span><span class="docs-nav-toggle">All docs</span></summary>
+        <nav class="docs-nav-links" aria-label="Documentation">
           ${navList(page, navigation)}
         </nav>
       </details>
 
-      <main id="content" class="doc">
+      <main id="content" class="doc" tabindex="-1">
 ${body}
         <footer class="doc-footer">
 ${
@@ -348,21 +387,22 @@ ${contents.map((a) => `          <li><a href="#${a.id}">${escape(a.text)}</a></l
     : ''
 }    </div>
 
-    <footer class="footer">
-      <p class="footer-brand">
-        ${mark(22)}
-        <span>Free &amp; open source · Apache 2.0</span>
-      </p>
-      <nav class="footer-links" aria-label="Elsewhere">
-        <a class="footer-coffee" href="https://ko-fi.com/aclt_attic">
-          <svg viewBox="0 0 20 20" width="17" height="17" aria-hidden="true" focusable="false"><path class="steam" d="M7.2 2.6c-.9 1 .9 1.7 0 2.9M10.6 2.6c-.9 1 .9 1.7 0 2.9" /><path d="M3.5 8h11v4.4a4 4 0 0 1-4 4h-3a4 4 0 0 1-4-4zM14.5 9.4h1a2 2 0 0 1 0 4h-1.1" /></svg>
-          <span>Buy me a coffee</span>
-        </a>
-        <a class="footer-icon" href="https://github.com/acltabontabon/draft-canvas" aria-label="Source on GitHub" title="Source on GitHub">
-          <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true" focusable="false"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" /></svg>
-        </a>
-      </nav>
+    <footer class="drawing-footer">
+      <div class="drawing-width drawing-bar">
+        <span>Draft Canvas</span>
+        <nav aria-label="Resources">
+          <a href="${root}#examples">Architecture examples</a>
+          <a href="../privacy/">Privacy and security</a>
+          <a href="https://github.com/acltabontabon/draft-canvas">GitHub</a>
+          <a href="https://ko-fi.com/aclt_attic">Support</a>
+        </nav>
+      </div>
     </footer>
+    <dialog class="docs-search-dialog" aria-labelledby="docs-query-label">
+      <button type="button" class="docs-search-close" aria-label="Close search">×</button>
+      ${searchBox()}
+    </dialog>
+    <script type="module" src="${root}docs-search.js"></script>
   </body>
 </html>
 `;

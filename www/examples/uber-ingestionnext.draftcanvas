@@ -1,0 +1,364 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "example-uber-ingestionnext",
+    "title": "Uber IngestionNext",
+    "createdAt": 1794614400000,
+    "updatedAt": 1794614400000
+  },
+  "nodes": [
+    {
+      "id": "streaming",
+      "type": "group",
+      "text": "IngestionNext",
+      "x": 242,
+      "y": 0,
+      "width": 920,
+      "height": 356,
+      "z": 0,
+      "accent": "teal",
+      "boundaryPreset": "system"
+    },
+    {
+      "id": "lifecycle",
+      "type": "service",
+      "text": "Job control plane",
+      "x": 282,
+      "y": 66,
+      "width": 180,
+      "height": 90,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "api",
+      "description": "Deploys and monitors jobs",
+      "parentId": "streaming"
+    },
+    {
+      "id": "checkpoint",
+      "type": "service",
+      "text": "Checkpoint recovery",
+      "x": 720,
+      "y": 66,
+      "width": 215,
+      "height": 90,
+      "z": 0,
+      "accent": "violet",
+      "serviceKind": "generic",
+      "description": "Matches offsets to commits",
+      "parentId": "streaming"
+    },
+    {
+      "id": "kafka",
+      "type": "queue",
+      "text": "Kafka topics",
+      "x": 0,
+      "y": 247.25,
+      "width": 155,
+      "height": 88,
+      "z": 0,
+      "queueKind": "stream",
+      "technology": "Kafka",
+      "accent": "teal"
+    },
+    {
+      "id": "poll",
+      "type": "service",
+      "text": "Partition polling",
+      "x": 282,
+      "y": 221,
+      "width": 180,
+      "height": 86,
+      "z": 0,
+      "accent": "teal",
+      "serviceKind": "worker",
+      "description": "Balances Kafka partitions",
+      "parentId": "streaming"
+    },
+    {
+      "id": "flink",
+      "type": "service",
+      "text": "Flink ingestion",
+      "x": 590,
+      "y": 221,
+      "width": 192,
+      "height": 86,
+      "z": 0,
+      "accent": "teal",
+      "serviceKind": "worker",
+      "description": "Processes events",
+      "technology": "Apache Flink",
+      "parentId": "streaming"
+    },
+    {
+      "id": "writer",
+      "type": "service",
+      "text": "Hudi writer",
+      "x": 940,
+      "y": 221,
+      "width": 182,
+      "height": 86,
+      "z": 0,
+      "accent": "teal",
+      "serviceKind": "worker",
+      "description": "Records checkpoint IDs",
+      "parentId": "streaming"
+    },
+    {
+      "id": "lake",
+      "type": "database",
+      "text": "Raw data lake",
+      "x": 1312,
+      "y": 234,
+      "width": 172,
+      "height": 88,
+      "z": 0,
+      "databaseKind": "table",
+      "accent": "teal",
+      "technology": "Apache Hudi"
+    },
+    {
+      "id": "batch",
+      "type": "service",
+      "text": "Batch fallback",
+      "x": 470,
+      "y": 413,
+      "width": 195,
+      "height": 86,
+      "z": 0,
+      "accent": "amber",
+      "serviceKind": "worker",
+      "description": "Runs during outages"
+    },
+    {
+      "id": "compact",
+      "type": "service",
+      "text": "Parquet compaction",
+      "x": 1288,
+      "y": 413,
+      "width": 220,
+      "height": 86,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "worker",
+      "description": "Merges matching row groups",
+      "technology": "Apache Parquet"
+    }
+  ],
+  "edges": [
+    {
+      "id": "consume",
+      "source": "kafka",
+      "target": "poll",
+      "label": "polls events",
+      "accent": "teal",
+      "semantic": "consumes",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "cadence": "streaming"
+    },
+    {
+      "id": "decode",
+      "source": "poll",
+      "target": "flink",
+      "label": "feeds subtasks",
+      "accent": "teal",
+      "semantic": "deliversTo",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "stage",
+      "source": "flink",
+      "target": "writer",
+      "label": "writes changes",
+      "accent": "teal",
+      "semantic": "writes",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "commit",
+      "source": "writer",
+      "target": "lake",
+      "label": "commits data",
+      "accent": "teal",
+      "semantic": "writes",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "start",
+      "source": "lifecycle",
+      "target": "poll",
+      "label": "deploys and restarts",
+      "accent": "blue",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "sync-checkpoint",
+      "source": "flink",
+      "target": "checkpoint",
+      "label": "consumed offsets",
+      "accent": "violet",
+      "semantic": "syncs",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 686,
+          "y": 111
+        }
+      ]
+    },
+    {
+      "id": "match-commit",
+      "source": "writer",
+      "target": "checkpoint",
+      "label": "commit metadata",
+      "accent": "violet",
+      "semantic": "reads",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 1031,
+          "y": 111
+        }
+      ]
+    },
+    {
+      "id": "batch-input",
+      "source": "kafka",
+      "target": "batch",
+      "label": "on outage",
+      "accent": "amber",
+      "semantic": "consumes",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 77.5,
+          "y": 456
+        }
+      ]
+    },
+    {
+      "id": "batch-output",
+      "source": "batch",
+      "target": "lake",
+      "label": "writes during fallback",
+      "accent": "amber",
+      "semantic": "writes",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.79
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 1228,
+          "y": 456
+        },
+        {
+          "x": 1228,
+          "y": 276.18
+        }
+      ]
+    },
+    {
+      "id": "compact-files",
+      "source": "compact",
+      "target": "lake",
+      "label": "merges small files",
+      "accent": "blue",
+      "semantic": "transforms",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      }
+    }
+  ],
+  "notes": []
+}

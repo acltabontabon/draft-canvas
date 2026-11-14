@@ -107,8 +107,7 @@ preview with the fixes named in the bar and marked in teal. When there is nothin
 - Several shapes selected? Drag from any one of their dots onto a shape to connect all of them to
   it at once — a faint line from each shows what the drop will do.
 - Keyboard: select a shape and run **Connect to…** from `⌘K`.
-- Click a connector to change its relationship
-  ([rules](../reference/semantics.md#the-capability-matrix)). Drag its end to reconnect it.
+- Click a connector to change its relationship. Drag its end to reconnect it.
 
 Hovering a connector briefly traces the request and then its reply, once. The canvas stays still
 otherwise, and reduced-motion preferences turn the trace off.
