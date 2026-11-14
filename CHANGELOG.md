@@ -92,8 +92,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   before anything moves, with **Across →** or **Down ↓** to choose and the better fit suggested.
   **Apply** is one undo step; **Cancel** keeps your layout. <!-- highlight -->
 - **Better proportions when arranging** — A long name gets a wider, shorter box instead of a tall
-  column, gaps between rows are only as long as their captions need, and a caption no longer lands
-  on a boundary's title. Agents' diagrams get the same.
+  column, gaps between rows are only as long as their captions need, and neither a caption nor a
+  line runs through a boundary's title. Agents' diagrams get the same.
 
 #### Fixed
 

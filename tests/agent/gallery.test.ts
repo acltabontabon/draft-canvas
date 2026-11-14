@@ -99,7 +99,9 @@ describe('layout gallery', { timeout: 30_000 }, () => {
     const inside = viewOf(doc, ['app'])!;
     // The original generated view crossed itself and used over 4,200px of connectors. No hand
     // coordinates or bends are present in this fixture: the improvement must come from defaults.
-    expect(legibilityOf(inside.nodes, inside.edges)).toMatchObject({ crossings: 0, detours: [], throughBoundaries: [] });
+    // One crossing is left: the only way from the handler up to the guard without it rose through
+    // the webview's long title, and a line jump reads where words struck out don't (`through-title`).
+    expect(legibilityOf(inside.nodes, inside.edges)).toMatchObject({ crossings: 1, detours: [], throughBoundaries: [] });
     expect(legibilityOf(inside.nodes, inside.edges).length).toBeLessThan(4000);
     expect(checkQuality(inside.nodes, inside.edges, measureContext())).toEqual({ errors: [], warnings: [] });
     expect(inside.edges.every((edge) => !edge.waypoints)).toBe(true);

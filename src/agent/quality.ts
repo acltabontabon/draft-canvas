@@ -251,6 +251,7 @@ export function checkQuality(
     // `byId`, not a map of the whole view rebuilt per connector.
     const problem = judged(edge.id, edge.source, edge.target) ? routeProblem(edge, nodes, edges, caption, undefined, byId) : undefined;
     if (problem?.kind === 'through-node') errors.push({ kind: 'through-node', ids: [edge.id, problem.node], message: `connector ${edge.id} runs through ${problem.node}.` });
+    if (problem?.kind === 'through-title') errors.push({ kind: 'through-node', ids: [edge.id, problem.node], message: `connector ${edge.id} runs through the title of ${problem.node}.` });
     if (problem?.kind === 'label-over-node') errors.push({ kind: 'label-over-node', ids: [edge.id, problem.node], message: `the caption of ${edge.id} covers ${problem.node}.` });
   }
   const drawn = othersOf(nodes, edges, caption, undefined, byId);
