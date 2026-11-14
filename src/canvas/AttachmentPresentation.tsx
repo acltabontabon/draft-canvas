@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useRef, useState, type CSSProperties } from 'react';
-import type { Attachment } from '../document/types';
-import { tokenizeCode } from '../render/code/highlight';
+import { CODE_LANGUAGES, type Attachment, type CodeLanguage } from '../document/types';
+import { LANGUAGE_LABELS, tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
@@ -103,6 +103,7 @@ export interface AttachmentActions {
 export function AttachmentChipRow({
   hostKind,
   hostId,
+  messageId,
   attachments,
   cardSide,
   editable,
@@ -111,9 +112,11 @@ export function AttachmentChipRow({
   explainTier,
   revealed,
   anchor,
+  onlyAttachmentId,
   style,
 }: {
-  hostKind: 'node' | 'edge';
+  hostKind: 'node' | 'edge' | 'message';
+  messageId?: string;
   hostId: string;
   attachments: Attachment[];
   cardSide: 'above' | 'below';
@@ -128,6 +131,7 @@ export function AttachmentChipRow({
   /** Where an edge's row is pinned (`connectorMarkRow`), named on the element so Presentation Mode's
    *  callout can find the row's box without working the layout out again. */
   anchor?: { anchor: 'start' | 'middle' | 'end'; anchorX: number; box: { y: number } };
+  onlyAttachmentId?: string;
   style?: CSSProperties;
 }) {
   if (!attachments.length) return null;
@@ -136,6 +140,7 @@ export function AttachmentChipRow({
       className="dc-attachment-chip-row"
       // Presentation Mode's callout measures the row it threads back to (`presentationAnchor.ts`).
       data-host-id={hostId}
+      data-direct-card={onlyAttachmentId ? true : undefined}
       data-flip={cardSide === 'below' ? 'below' : undefined}
       data-lens-dimmed={dimmed ? 'true' : undefined}
       data-explain-tier={explainTier}
@@ -159,7 +164,9 @@ export function AttachmentChipRow({
           key={attachment.id}
           hostKind={hostKind}
           hostId={hostId}
+          messageId={messageId}
           attachment={attachment}
+          hidden={Boolean(onlyAttachmentId && attachment.id !== onlyAttachmentId)}
           editable={editable}
           actions={actions}
           canMoveUp={index > 0}
@@ -192,17 +199,21 @@ export function AttachmentChipRow({
 function AttachmentChip({
   hostKind,
   hostId,
+  messageId,
   attachment,
   editable,
   actions,
+  hidden,
   canMoveUp,
   canMoveDown,
 }: {
-  hostKind: 'node' | 'edge';
+  hostKind: 'node' | 'edge' | 'message';
+  messageId?: string;
   hostId: string;
   attachment: Attachment;
   editable: boolean;
   actions: AttachmentActions;
+  hidden: boolean;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
 }) {
@@ -212,7 +223,8 @@ function AttachmentChip({
     (state) =>
       state.openAttachmentDetail?.hostKind === hostKind &&
       state.openAttachmentDetail?.hostId === hostId &&
-      state.openAttachmentDetail?.attachmentId === attachment.id,
+      state.openAttachmentDetail?.attachmentId === attachment.id &&
+      (state.openAttachmentDetail.hostKind !== 'message' || state.openAttachmentDetail.messageId === messageId),
   );
   // A connector's chips sit out on the canvas, and the canvas is one Tab stop — so they join the Tab
   // order only once they're relevant: their connector selected (keyboard users get there through
@@ -264,7 +276,13 @@ function AttachmentChip({
   // itself out from under a click that was only meant to view it. Editing is now a deliberate
   // second step (the pencil glyph in the header), and always resets shut the moment the card
   // itself closes, so re-opening a pinned attachment never resumes mid-edit by surprise.
-  const [editing, setEditing] = useState(false);
+  const editOnOpen = useUiStore((state) =>
+    pinned && state.openAttachmentDetail?.hostKind === 'message' && state.openAttachmentDetail.startEditing === true,
+  );
+  const [editing, setEditing] = useState(editOnOpen);
+  useEffect(() => {
+    if (editOnOpen) setEditing(true);
+  }, [editOnOpen]);
   useEffect(() => {
     if (!pinned) setEditing(false);
   }, [pinned]);
@@ -347,6 +365,10 @@ function AttachmentChip({
   const togglePin = () => {
     // Not presenting: a click pins the card open for editing — the existing
     // edit-mode behavior, unchanged.
+    if (hostKind === 'message') {
+      if (messageId) setOpenAttachmentDetail(pinned ? { hostKind, hostId, messageId, attachmentId: null } : { hostKind, hostId, messageId, attachmentId: attachment.id });
+      return;
+    }
     if (editable) {
       setOpenAttachmentDetail(pinned ? null : { hostKind, hostId, attachmentId: attachment.id });
       return;
@@ -372,7 +394,7 @@ function AttachmentChip({
     // The slot, not the chip, is what the outside-pointerdown check above measures against and what
     // the card is positioned from. The chip is a real button and the card its *sibling*: nested
     // inside a button, the card's own buttons and textarea were presentational to assistive tech.
-    <div ref={chipRef} className="dc-attachment-slot" data-open={cardMounted ? 'true' : undefined}>
+    <div ref={chipRef} className="dc-attachment-slot" hidden={hidden} data-open={cardMounted ? 'true' : undefined}>
       <button
         type="button"
         className="dc-attachment-chip"
@@ -389,7 +411,7 @@ function AttachmentChip({
         // `.dc-attachment-chip:hover:not([data-open])` in `canvas.css`.
         data-open={cardMounted ? 'true' : undefined}
         aria-expanded={visible}
-        tabIndex={hostKind === 'node' || !editable || visible || edgeSelected ? 0 : -1}
+        tabIndex={hostKind !== 'edge' || !editable || visible || edgeSelected ? 0 : -1}
         aria-controls={cardMounted ? cardId : undefined}
         title={chipName}
         aria-label={chipName}
@@ -434,7 +456,15 @@ function AttachmentChip({
               className="dc-attachment-card-header"
               style={look.headerBg ? { background: look.headerBg } : undefined}
             >
-              <span>{look.label}</span>
+              {pinned && editing && editable && hostKind === 'message' && attachment.type === 'code' ? (
+                <select
+                  aria-label="Code language"
+                  value={attachment.language ?? 'plaintext'}
+                  onChange={(event) => actions.update(attachment.id, { language: event.currentTarget.value as CodeLanguage })}
+                >
+                  {CODE_LANGUAGES.map((language) => <option key={language} value={language}>{LANGUAGE_LABELS[language]}</option>)}
+                </select>
+              ) : <span>{look.label}</span>}
               {pinned && (
                 <span className="dc-attachment-card-actions">
                   {!editing && editable && (
@@ -448,7 +478,7 @@ function AttachmentChip({
                       <Icon name="pencil" size={13} />
                     </button>
                   )}
-                  {actions.reorder && (
+                  {editable && actions.reorder && (
                     <>
                       <button
                         type="button"
@@ -472,7 +502,7 @@ function AttachmentChip({
                       </button>
                     </>
                   )}
-                  {actions.detach && (
+                  {editable && actions.detach && (
                     <button
                       type="button"
                       className="dc-attachment-card-action"
@@ -489,7 +519,7 @@ function AttachmentChip({
                       Detach
                     </button>
                   )}
-                  <button
+                  {editable && <button
                     type="button"
                     className="dc-attachment-card-action"
                     aria-label="Delete attached detail"
@@ -500,7 +530,7 @@ function AttachmentChip({
                     }}
                   >
                     <Icon name="trash" size={13} />
-                  </button>
+                  </button>}
                 </span>
               )}
             </header>

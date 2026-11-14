@@ -31,6 +31,7 @@ import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fix
  *   npx tsx e2e/docs-screenshots.ts --reader-only
  *   npx tsx e2e/docs-screenshots.ts --reader-only --theme dark   (the guide's `share-*-dark.png` pair)
  *   npx tsx e2e/docs-screenshots.ts --traffic-only
+ *   npx tsx e2e/docs-screenshots.ts --sequence-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -429,6 +430,151 @@ async function trafficScreenshots(page: Page) {
 }
 
 /** Import a real example and follow the same share-link route as a recipient. */
+/**
+ * A sequence, made the way the guide says to make one: named participants, then messages taken from
+ * the suggestion that follows each. Built by keyboard so the picture is whatever the editor draws,
+ * at the size the editor gives it.
+ */
+async function sequenceScreenshots(page: Page) {
+  log('sequence');
+  await page.getByRole('button', { name: 'New canvas' }).first().click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  const title = page.getByLabel('Diagram title');
+  await title.fill('Checkout');
+  await title.blur();
+  await page.mouse.move(330, 150);
+  await page.keyboard.press('l');
+  const heads = page.locator('.dc-seq-head');
+  const nameField = page.getByRole('textbox', { name: 'Participant name', exact: true });
+  const participants = [['Shopper', 'Actor'], ['Storefront'], ['Checkout API'], ['Orders', 'Data Store']] as const;
+  for (const [index, [name, kind]] of participants.entries()) {
+    if (index > 0) await page.getByRole('button', { name: 'Add a participant at the end' }).click();
+    await heads.nth(index).dblclick();
+    await expect(nameField).toBeFocused();
+    if (name === 'Orders') {
+      // Off the heads, so none of them is drawn hovered.
+      await page.mouse.move(900, 560);
+      await shot(page, 'sequence-participants');
+    }
+    await nameField.fill(name);
+    if (kind) {
+      await nameField.press('ArrowDown');
+      await page.getByRole('option', { name: new RegExp(`^${kind}`) }).click();
+    } else await nameField.press('Enter');
+  }
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('F2');
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type('Place an order');
+  await page.keyboard.press('Enter');
+  // Into the sequence, at its first participant. Tab takes the message offered next; ] offers another.
+  await page.keyboard.press('ControlOrMeta+ArrowDown');
+  const hint = page.locator('.dc-seq-ghost-hint');
+  const steps = [
+    ['Shopper calls Storefront', 'Place order'],
+    ['Storefront calls Checkout API', 'POST /orders'],
+    ['Checkout API calls Orders', 'INSERT order'],
+    ['Reply to Checkout API', 'order id'],
+    ['Reply to Storefront', '201 Created'],
+    ['Reply to Shopper', 'Order confirmed'],
+  ] as const;
+  for (const [offered, label] of steps) {
+    await expect(hint).toBeVisible();
+    for (let press = 0; press < 6 && !(await hint.innerText()).includes(offered); press += 1) await page.keyboard.press(']');
+    await expect(hint).toContainText(offered);
+    if (label === 'POST /orders') await shot(page, 'sequence-next');
+    await page.keyboard.press('Tab');
+    await expect(page.locator('input.dc-seq-editor[aria-label="Message"]')).toBeFocused();
+    await page.keyboard.type(label);
+    await page.keyboard.press('Enter');
+  }
+  // The database call and its reply, wrapped: a fragment made from a selection, not drawn.
+  const messages = page.locator('.dc-seq-message');
+  await messages.nth(2).click();
+  await messages.nth(3).click({ modifiers: ['Shift'] });
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Wrap in…' }).click();
+  // Off the buttons, so no tooltip covers them.
+  await page.mouse.move(900, 600);
+  await shot(page, 'sequence-wrap');
+  await page.locator('.dc-element-inspector').getByRole('button', { name: 'Optional' }).click();
+  await page.keyboard.type('cart is not empty');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Shift+Digit1');
+  await shot(page, 'sequence-diagram');
+
+  await page.locator('.dc-node[data-type="sequence"]').click({ position: { x: 28, y: 15 } });
+  await page.getByRole('button', { name: 'Present this sequence' }).click();
+  for (let step = 0; step < 3; step += 1) await page.keyboard.press('ArrowRight');
+  await expect(page.locator('.dc-explain-count')).toContainText('Step 3 / 6');
+  await expect(page.locator('.dc-seq-present-lifelines path[stroke-dasharray]')).toHaveCount(4);
+  await page.mouse.move(20, 85);
+  await shot(page, 'sequence-present');
+
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Shift+Digit1');
+  await messages.nth(1).click();
+  const inspector = page.locator('.dc-element-inspector');
+  await expect(inspector.getByRole('button', { name: 'Reply', exact: true })).toBeVisible();
+  await page.mouse.move(20, 85);
+  await shot(page, 'sequence-message-actions');
+  await messages.nth(1).click({ button: 'right' });
+  await page.locator('.dc-context-menu').getByRole('menuitem', { name: 'Attach code' }).click();
+  const attachment = page.getByRole('toolbar', { name: 'Message attachments' });
+  await attachment.getByRole('combobox', { name: 'Code language' }).selectOption('json');
+  await attachment.getByRole('textbox', { name: 'Attached code' }).fill('{\n  "cartId": "cart_123",\n  "currency": "USD"\n}');
+  await page.mouse.click(50, 116);
+  await page.locator('.dc-node[data-type="sequence"]').hover({ position: { x: 28, y: 15 } });
+  await messages.nth(1).click();
+  await page.getByRole('button', { name: 'View attached code for message 2' }).click();
+  await expect(attachment.getByText(/cart_123/)).toBeVisible();
+  await page.mouse.move(20, 85);
+  await shot(page, 'sequence-attachment');
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+  await page.getByRole('button', { name: 'New canvas' }).first().click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await title.fill('Checkout and fulfilment');
+  await title.blur();
+  const frames = page.locator('.dc-node[data-type="sequence"]');
+  const examples = [
+    { position: { x: 145, y: 160 }, title: 'Checkout', names: ['Storefront', 'Checkout API'] },
+    { position: { x: 730, y: 260 }, title: 'Fulfilment', names: ['Orders worker'] },
+  ];
+  for (const [frameIndex, example] of examples.entries()) {
+    await page.locator(CANVAS).hover({ position: example.position });
+    await page.keyboard.press('l');
+    const frame = frames.nth(frameIndex);
+    await expect(frame).toBeVisible();
+    await page.keyboard.press('F2');
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type(example.title);
+    await page.keyboard.press('Enter');
+    for (const [index, name] of example.names.entries()) {
+      if (index > 0) await page.getByRole('button', { name: 'Add a participant at the end' }).click();
+      await frame.locator('.dc-seq-head').nth(index).dblclick();
+      await nameField.fill(name);
+      await nameField.press('Enter');
+    }
+    await page.keyboard.press('Escape');
+  }
+
+  await frames.first().hover({ position: { x: 30, y: 12 } });
+  const start = await box(frames.first().locator('.dc-seq-lifeline').last());
+  const end = await box(frames.last().locator('.dc-seq-head'));
+  await page.mouse.move(start.x + start.width / 2, start.y + start.height * 0.8);
+  await page.mouse.down();
+  await page.mouse.move(end.x + end.width / 2, end.y + end.height + 20, { steps: 14 });
+  await expect(frames.last().locator('.dc-seq-lifeline')).toHaveAttribute('data-endpoint-target', 'true');
+  await page.mouse.up();
+  await expect(page.locator('.react-flow__edge')).toHaveAttribute('aria-label', /Checkout API.*Orders worker/);
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Shift+Digit1');
+  await page.mouse.move(20, 85);
+  await shot(page, 'sequence-cross-frame');
+}
+
 async function readerScreenshots(page: Page) {
   await page.setViewportSize({ width: VIEWPORT.width, height: 760 });
   for (const guided of [true, false]) {
@@ -488,6 +634,11 @@ async function main() {
       return;
     }
 
+    if (process.argv.includes('--sequence-only')) {
+      await sequenceScreenshots(page);
+      return;
+    }
+
     if (process.argv.includes('--empty-canvas-only')) {
       await page.getByRole('button', { name: 'New canvas', exact: true }).click();
       await expect(page.locator('.dc-editor')).toBeVisible();
@@ -525,7 +676,8 @@ async function main() {
     const handle = await box(service.locator('.dc-handle').nth(1));
     await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
     await page.mouse.down();
-    await page.mouse.move(480, 260, { steps: 12 });
+    // Far enough out for the connector's caption ("sends command to") to be read whole.
+    await page.mouse.move(540, 260, { steps: 12 });
     await page.mouse.up();
     await page.getByRole('menuitem', { name: /Queue/ }).first().click();
     // A shape made from the drop menu opens ready to name, like any other new shape.
@@ -546,7 +698,9 @@ async function main() {
     await page.keyboard.press('Escape');
     await levelWith(page, 1, 2);
     await page.mouse.click(700, 560);
-    await expect(page.locator('.dc-edge text')).toContainText(['sends command to', 'consumed by']);
+    // Captions are drawn above the lines (`.dc-edge-caption`), shortened only when there is no room:
+    // the picture must show both whole.
+    await expect(page.locator('.dc-edge-caption')).toHaveText(['sends command to', 'consumed by']);
     await shot(page, 'service-queue-worker');
 
     // A note, docked on the queue.
@@ -586,7 +740,7 @@ async function main() {
     await page.keyboard.type('Place an order');
     await page.keyboard.press('Enter');
     await page.keyboard.press('Escape');
-    await page.locator('.dc-edge text', { hasText: 'consumed by' }).click({ force: true });
+    await page.locator('.dc-edge-caption', { hasText: 'consumed by' }).click({ force: true });
     await inspector.getByRole('button', { name: 'Add to Place an order' }).click();
     await page.mouse.click(700, 560); // empty canvas: deselect, leaving the Flows panel open
     await shot(page, 'flows-panel');
@@ -677,6 +831,9 @@ async function main() {
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
     await openGallery(page);
     await richTextScreenshots(page);
+    await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+    await openGallery(page);
+    await sequenceScreenshots(page);
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
     await openGallery(page);
     await collabScreenshots(browser, page);

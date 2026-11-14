@@ -159,7 +159,7 @@ function place(
   };
   for (const edge of edges) {
     // Bent connectors face their bends and stay as drawn.
-    if (edge.waypoints?.length) continue;
+    if (edge.waypoints?.length || edge.sourceAnchor?.participantId || edge.targetAnchor?.participantId) continue;
     const source = byId.get(edge.source);
     const target = byId.get(edge.target);
     if (!source || !target || source.type === 'group' || target.type === 'group') continue;

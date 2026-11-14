@@ -169,6 +169,15 @@ export const DEV_PRESETS: Preset[] = [
     usageHint: "Use instead of Service when it isn't independently deployable.",
     accent: 'neutral',
   },
+  {
+    id: 'sequence',
+    label: 'Sequence',
+    type: 'sequence',
+    shortcut: 'L',
+    hint: 'Who calls whom, in order',
+    description: 'A sequence diagram: participants, and the messages between them from top to bottom.',
+    usageHint: 'Add participants, then drag from one lifeline to another. It lays itself out.',
+  },
 ];
 
 export const ALL_PRESETS = [...PRESETS, ...DEV_PRESETS];
@@ -200,6 +209,7 @@ export const PRESET_KEYWORDS: Record<string, string[]> = {
   // node type. A user reaches Module/Adapter by adding a Component, then picking its kind in the
   // inspector, same as every other kind-bearing shape.
   component: ['building block', 'internal', 'logical component'],
+  sequence: ['sequence diagram', 'lifeline', 'participant', 'message', 'interaction', 'uml', 'call flow', 'timeline'],
 };
 
 /**

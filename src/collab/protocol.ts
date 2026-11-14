@@ -99,6 +99,7 @@ export interface FollowState {
   view?: { width: number; height: number };
   presenting: boolean;
   flowId: string | null;
+  sequenceNodeId?: string;
   step: number | null;
 }
 
@@ -284,9 +285,10 @@ function readFollow(value: unknown): FollowState | null {
   const { x, y, zoom } = value.viewport;
   if (!path || !isFiniteNumber(x) || !isFiniteNumber(y) || !isFiniteNumber(zoom)) return null;
   if (typeof value.presenting !== 'boolean') return null;
-  const flowId = value.flowId === null ? null : readId(value.flowId);
+  const sequenceNodeId = readId(value.sequenceNodeId);
+  const flowId = sequenceNodeId ? null : value.flowId === null ? null : readId(value.flowId);
   const step = value.step === null ? null : isInt(value.step) ? value.step : undefined;
-  if ((value.flowId !== null && flowId === null) || step === undefined) return null;
+  if ((!sequenceNodeId && value.flowId !== null && flowId === null) || step === undefined) return null;
   let view: FollowState['view'];
   if (value.view !== undefined) {
     if (!isRecord(value.view) || !isFiniteNumber(value.view.width) || !isFiniteNumber(value.view.height)) return null;
@@ -303,6 +305,7 @@ function readFollow(value: unknown): FollowState | null {
     ...(view ? { view } : {}),
     presenting: value.presenting,
     flowId,
+    ...(sequenceNodeId ? { sequenceNodeId } : {}),
     step,
   };
 }

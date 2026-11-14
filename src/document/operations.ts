@@ -12,6 +12,7 @@ import { defaultSizeFor, maxSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
 import { cleanText, cleanTextFields } from './sanitize';
+import { dropParticipantLinks, mapSequenceText, repointParticipantLinks } from './sequenceOps';
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
 import type {
@@ -50,9 +51,9 @@ export function isCanvasEmpty(doc: Pick<DraftDocument, 'nodes'>): boolean {
   return doc.nodes.length === 0;
 }
 
-const clampSize = (n: number) =>
+const clampSize = (n: number, maxSize: number = LIMITS.maxNodeSize) =>
   Number.isFinite(n)
-    ? clamp(Math.round(n), LIMITS.minNodeSize, LIMITS.maxNodeSize)
+    ? clamp(Math.round(n), LIMITS.minNodeSize, maxSize)
     : LIMITS.minNodeSize;
 
 /** `attachment.width`/`height` should always be set by `createAttachment` — this is a safety
@@ -123,8 +124,9 @@ export function updateNode(
     const next: DraftNode = applyPatch<DraftNode>(node, patch);
     if (patch.x !== undefined) next.x = clampCoord(patch.x);
     if (patch.y !== undefined) next.y = clampCoord(patch.y);
-    if (patch.width !== undefined) next.width = clampSize(patch.width);
-    if (patch.height !== undefined) next.height = clampSize(patch.height);
+    const maxSize = next.type === 'sequence' ? LIMITS.maxSequenceNodeSize : LIMITS.maxNodeSize;
+    if (patch.width !== undefined) next.width = clampSize(patch.width, maxSize);
+    if (patch.height !== undefined) next.height = clampSize(patch.height, maxSize);
     if (sameFields(node, next)) return node;
     changed = true;
     return next;
@@ -221,7 +223,7 @@ export function reconnectEdge(
     // Dropped back on the handle it came from: nothing moved, so no undo step.
     const previousAnchor = edge[anchorKey];
     const sameNode = (endpoint === 'source' ? edge.source : edge.target) === newNodeId;
-    if (sameNode && previousAnchor?.side === anchor?.side && previousAnchor?.offset === anchor?.offset) return edge;
+    if (sameNode && !previousAnchor?.participantId && previousAnchor?.side === anchor?.side && previousAnchor?.offset === anchor?.offset) return edge;
     changed = true;
     const next: DraftEdge =
       endpoint === 'source' ? { ...edge, source: newNodeId } : { ...edge, target: newNodeId };
@@ -262,7 +264,7 @@ export function pinEnds(doc: DraftDocument, pins: ReadonlyMap<string, { source?:
   const edges = doc.edges.map((edge) => {
     const pin = pins.get(edge.id);
     if (!pin) return edge;
-    const same = (a: EdgeAnchor | undefined, b: EdgeAnchor | undefined) => !b || (a?.side === b.side && a.offset === b.offset);
+    const same = (a: EdgeAnchor | undefined, b: EdgeAnchor | undefined) => !b || (a?.side === b.side && a.offset === b.offset && a.participantId === b.participantId);
     if (same(edge.sourceAnchor, pin.source) && same(edge.targetAnchor, pin.target)) return edge;
     changed = true;
     return {
@@ -350,6 +352,15 @@ function translatePoints(points: readonly DraftPoint[], dx: number, dy: number):
   return points.map((point) => ({ x: clampCoord(point.x + dx), y: clampCoord(point.y + dy) }));
 }
 
+export function removeParticipantEdges(doc: DraftDocument, nodeId: string, removed: ReadonlySet<string>): DraftDocument {
+  if (removed.size === 0) return doc;
+  const edges = doc.edges.filter((edge) =>
+    (edge.source === nodeId && edge.sourceAnchor?.participantId && removed.has(edge.sourceAnchor.participantId)) ||
+    (edge.target === nodeId && edge.targetAnchor?.participantId && removed.has(edge.targetAnchor.participantId)),
+  );
+  return removeElements(doc, [], edges.map((edge) => edge.id));
+}
+
 /**
  * Deletes nodes and edges, cascading the references that would otherwise dangle:
  * edges attached to a deleted node, and children of a deleted group.
@@ -396,7 +407,9 @@ export function removeElements(
   // the room leaves with its owner, so every id inside it counts as removed here.
   const removedNodes = doc.nodes.filter((n) => removingNodes.has(n.id));
   for (const node of removedNodes) collectInsideIds(node, removingNodes, removedEdgeIds);
-  return pruneOpenPoints(pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds, removingNodes), removingNodes, removedEdgeIds);
+  const pruned = pruneOpenPoints(pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds, removingNodes), removingNodes, removedEdgeIds);
+  // A sequence participant that stood for a deleted shape stays, on its own.
+  return dropParticipantLinks(pruned, removingNodes);
 }
 
 /** Every node and connector id inside `node`'s rooms, however deep, added to the two sets. */
@@ -469,7 +482,7 @@ function reidentifyInside(inside: DraftInside, renamed?: IdRenames): DraftInside
     }
     if (node.attachments) next.attachments = node.attachments.map((a) => ({ ...a, id: createId('a') }));
     if (node.inside) next.inside = reidentifyInside(node.inside, renamed);
-    return next;
+    return repointParticipantLinks(next, nodeIds);
   });
 
   const edges = inside.edges.map((edge) => {
@@ -598,7 +611,9 @@ function instantiateFragment(
     // ids would give two shapes rooms full of the same nodes, and the second copy of a copy would
     // then be ambiguous to every id-keyed thing in the app.
     if (node.inside) next.inside = reidentifyInside(node.inside, inner);
-    return next;
+    // A sequence copied with the shapes its participants stand for follows the copies; one copied
+    // alone goes on standing for the originals.
+    return repointParticipantLinks(next, idMap);
   });
 
   const edgeIdMap = new Map(fragment.edges.map((edge) => [edge.id, createId('e')]));
@@ -938,7 +953,8 @@ export function distributeNodes(
  * ⌘A then Same height must not make every shape as tall as the boundary that holds them.
  */
 export function sizeMatchTargets<T extends Pick<DraftNode, 'type'>>(selected: readonly T[]): T[] {
-  const sized = selected.filter((node) => node.type !== 'ellipse');
+  // Nor a sequence, which is the size of what it holds.
+  const sized = selected.filter((node) => node.type !== 'ellipse' && node.type !== 'sequence');
   const shapes = sized.filter((node) => node.type !== 'group');
   return shapes.length > 0 ? shapes : sized;
 }
@@ -1694,9 +1710,16 @@ export function replaceLabels<T extends Labelled>(doc: T, find: string, replace:
   const nodes = doc.nodes.map((node) => {
     const text = swap(node.text, LIMITS.maxTextLength);
     const list = attachments(node.attachments);
-    if (text === node.text && list === node.attachments) return node;
+    // A sequence's names, messages, conditions and notes are labels too.
+    const sequence = node.sequence ? mapSequenceText(node.sequence, (words, max) => swap(words, max) ?? words) : undefined;
+    if (text === node.text && list === node.attachments && sequence === node.sequence) return node;
     changed = true;
-    return { ...node, ...(text === node.text ? {} : { text, textOrigin: 'explicit' as const }), ...(list === node.attachments ? {} : { attachments: list }) };
+    return {
+      ...node,
+      ...(text === node.text ? {} : { text, textOrigin: 'explicit' as const }),
+      ...(list === node.attachments ? {} : { attachments: list }),
+      ...(sequence === node.sequence ? {} : { sequence }),
+    };
   });
   const edges = doc.edges.map((edge) => {
     const label = swap(edge.label, LIMITS.maxLabelLength);

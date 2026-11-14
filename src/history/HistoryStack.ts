@@ -1,6 +1,7 @@
 import { changeKeys } from '../collab/selective';
 import { samePath, viewOf } from '../depth/tree';
-import type { DraftDocument } from '../document/types';
+import { LIMITS } from '../document/limits';
+import type { DraftDocument, DraftNode } from '../document/types';
 
 export interface Selection {
   nodes: string[];
@@ -142,7 +143,7 @@ function sameContent(a: DraftDocument, b: DraftDocument, path: readonly string[]
     // like a burst that changed nothing and be thrown away.
     viewA.level === viewB.level &&
     viewA.viewport === viewB.viewport &&
-    equivalent(viewA.nodes, viewB.nodes, 4) &&
+    sameNodes(viewA.nodes, viewB.nodes) &&
     equivalent(viewA.edges, viewB.edges, 4) &&
     equivalent(viewA.flows, viewB.flows, 4) &&
     equivalent(a.settings, b.settings, 4) &&
@@ -151,6 +152,31 @@ function sameContent(a: DraftDocument, b: DraftDocument, path: readonly string[]
     // window has to come out as a burst that changed nothing, not a dead undo step.
     equivalent(a.openPoints, b.openPoints, 5)
   );
+}
+
+/**
+ * Deep enough to reach a message at the bottom of the deepest nesting a sequence allows (three
+ * levels per fragment: its branches, a branch, that branch's items). Only rebuilt objects are
+ * walked, and a sequence's size is capped, so this stays cheap.
+ */
+const SEQUENCE_DEPTH = 6 + LIMITS.maxSequenceDepth * 3;
+
+/**
+ * Nodes, compared as `equivalent` compares everything else — except a sequence, whose messages sit
+ * far below the depth that suits a flat shape. Without this a message label typed and erased again
+ * looked like a change and left an undo step that did nothing.
+ */
+function sameNodes(a: readonly DraftNode[], b: readonly DraftNode[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((node, index) => {
+    const other = b[index]!;
+    if (node === other) return true;
+    if (!node.sequence && !other.sequence) return equivalent(node, other, 3);
+    const { sequence: left, ...restLeft } = node;
+    const { sequence: right, ...restRight } = other;
+    return equivalent(restLeft, restRight, 3) && equivalent(left, right, SEQUENCE_DEPTH);
+  });
 }
 
 function equivalent(a: unknown, b: unknown, depth: number): boolean {

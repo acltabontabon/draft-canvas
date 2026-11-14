@@ -1,6 +1,7 @@
+import { playbackFlowOf } from '../../document/sequenceFlow';
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
-import { findFlow } from '../../document/flow';
+
 import { useCollabStore } from '../../store/collabStore';
 import { useEditorStore } from '../../store/editorStore';
 import { Icon } from '../common/Icon';
@@ -33,8 +34,9 @@ function FollowPromptBody({ following }: { following: boolean }) {
   const [folded, setFolded] = useState(false);
   const presenter = useCollabStore((state) => presenterOf(state.peers));
   const flowId = useCollabStore((state) => state.presenter?.flowId ?? null);
+  const sequenceNodeId = useCollabStore((state) => state.presenter?.sequenceNodeId);
   const step = useCollabStore((state) => state.presenter?.step ?? null);
-  const flowTitle = useEditorStore((state) => (flowId ? findFlow(state.document, flowId)?.title.trim() || null : null));
+  const flowTitle = useEditorStore((state) => (playbackFlowOf(state.document, flowId, sequenceNodeId)?.title.trim() || null));
 
   const name = presenter?.name || 'The owner';
   const color = presenter ? presenter.color % 8 : 0;

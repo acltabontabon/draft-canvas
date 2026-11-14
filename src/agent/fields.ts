@@ -34,7 +34,7 @@ export function unknownFieldHint(key: string, allowed: readonly string[]): strin
 }
 
 /** Runtime field sets are also the keys of the published patch schema. */
-export const ROOM_FIELDS = ['level', 'nodes', 'relationships', 'groups', 'flows', 'notes'] as const;
+export const ROOM_FIELDS = ['level', 'nodes', 'relationships', 'groups', 'flows', 'notes', 'sequences'] as const;
 export const SET_FIELDS = {
   element: ['label', 'type', 'description', 'technology', 'replicas', 'color', 'group', 'evidence', 'place'],
   group: ['label', 'kind', 'group', 'color', 'place'],
@@ -45,6 +45,8 @@ export const SET_FIELDS = {
   label: ['label', 'text', 'kind', 'style', 'about', 'near', 'group', 'color', 'attach', 'place'],
   relationship: ['label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'from', 'to', 'compensationFor', 'compensationVisible', 'compensationName', 'compensationProtocol', 'compensationDescription', 'evidence', 'route'],
   flow: ['title', 'color', 'steps', 'variantOf'],
+  // A sequence is replaced whole by new text; `links` alone re-links the participants it has.
+  sequence: ['title', 'mermaid', 'links', 'place'],
   attachment: ['label', 'text', 'kind', 'code', 'language', 'about', 'attach'],
   openPoint: ['kind', 'context', 'resolved', 'resolution', 'about'],
 } as const;
@@ -57,6 +59,7 @@ export const CREATE_FIELDS = {
   relationship: ['id', 'from', 'to', 'label', 'semantic', 'kind', 'directed', 'async', 'condition', 'color', 'lineStyle', 'response', 'deliveryAttempts', 'compensationFor', 'compensationVisible', 'compensationName', 'compensationProtocol', 'compensationDescription', 'attachments', 'evidence', 'route'],
   flow: ['id', 'title', 'color', 'variantOf', 'steps'],
   note: ['id', 'text', 'kind', 'code', 'language', 'about', 'near', 'attach', 'style', 'color'],
+  sequence: ['id', 'title', 'mermaid', 'links'],
 } as const;
 export const OP_FIELDS: Record<string, readonly string[]> = {
   add: ['op', ...ROOM_FIELDS, 'openPoints'],

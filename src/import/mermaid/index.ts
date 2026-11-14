@@ -11,8 +11,13 @@
 
 import { createId } from '../../document/ids';
 import type { DraftDocument } from '../../document/types';
-import { deserializeDocument } from '../../export/project';
+import { deserializeDocument, serializeDocument } from '../../export/project';
+import { createDocument, createNode } from '../../document/factory';
+import { describeContext, naturalSequenceSizeFor } from '../../nodes/describe';
+import { LIGHT } from '../../render/theme/tokens';
 import { parseMermaidFlowchart } from './parse';
+import { parseMermaidSequence } from './sequence';
+import { looksLikeMermaidSequence } from './sniff';
 
 export { looksLikeMermaid, parseMermaidFlowchart, MERMAID_LIMITS } from './parse';
 
@@ -28,6 +33,7 @@ export const IMPORT_DEADLINE_MS = 8_000;
  * (a Mermaid `title:` front-matter line wins — it was written on purpose; a file name was not).
  */
 export async function importMermaid(text: string, title?: string): Promise<ImportResult> {
+  if (looksLikeMermaidSequence(text)) return importMermaidSequence(text, title);
   const parsed = parseMermaidFlowchart(text);
   if (!parsed.ok) return parsed;
   const create = title && parsed.create.title === 'Imported flowchart' ? { ...parsed.create, title } : parsed.create;
@@ -43,4 +49,20 @@ export async function importMermaid(text: string, title?: string): Promise<Impor
   const read = deserializeDocument(composed.text);
   if (!read.ok) return read;
   return { ok: true, document: read.document, unsupported: parsed.unsupported, legibility: composed.receipt.legibility };
+}
+
+/**
+ * A sequence diagram becomes one sequence on the canvas, the size of what it holds. Nothing is laid
+ * out here beyond that: a sequence lays itself out, so the text's order is the picture's.
+ */
+function importMermaidSequence(text: string, title?: string): ImportResult {
+  const parsed = parseMermaidSequence(text);
+  if (!parsed.ok) return parsed;
+  const name = title && parsed.title === 'Imported sequence' ? title : parsed.title;
+  const bare = { ...createNode({ type: 'sequence', x: 0, y: 0, text: name }), sequence: parsed.sequence };
+  const node = { ...bare, ...naturalSequenceSizeFor(bare, describeContext(LIGHT)) };
+  // Through the file reader, like every other document: what an import makes is checked the same way a file is.
+  const read = deserializeDocument(serializeDocument({ ...createDocument(name), nodes: [node] }));
+  if (!read.ok) return read;
+  return { ok: true, document: read.document, unsupported: parsed.unsupported, legibility: undefined };
 }

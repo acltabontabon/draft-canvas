@@ -34,7 +34,7 @@ Open **Share → Export** (`⌘⇧E`).
 | **Save an editable file → Encrypted** | A passphrase-protected `.dcenc` file |
 | **Save an image** | PNG or SVG |
 | **Use in a README** | An SVG for a README or other Markdown page, linked to its `.draftcanvas`; see [Diagrams in your docs](diagrams-in-docs.md) |
-| **Other formats → Flows** | Mermaid or PlantUML sequence diagrams of your flows |
+| **Other formats → Sequences** | Mermaid or PlantUML sequence diagrams of your flows and [sequences](sequence-diagrams.md) |
 | **Other formats → Architecture** | Mermaid flowchart, C4-PlantUML, Structurizr DSL or draw.io |
 
 ![Export with Save an editable file selected.](../media/guides/export-document.png)
@@ -75,6 +75,7 @@ dropped. Files over 24 MB are refused; other limits are in the [schema reference
 
 Import a `flowchart` or `graph` file for a new diagram, or paste Mermaid text onto a canvas (one
 undo removes it). Draft Canvas lays it out. Styling is skipped; other diagram types are refused.
+A `sequenceDiagram` becomes an editable [sequence](sequence-diagrams.md) the same way.
 See the [Mermaid import reference](../reference/mermaid-import.md).
 
 ## Share a diagram

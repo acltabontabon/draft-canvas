@@ -347,12 +347,13 @@ describe('parseMermaidFlowchart — refusals', () => {
 });
 
 describe('looksLikeMermaid', () => {
-  it('recognises a flowchart, fenced or bare, and nothing else', () => {
+  it('recognises a flowchart or a sequence diagram, fenced or bare, and nothing else', () => {
     expect(looksLikeMermaid('flowchart TD\n A --> B')).toBe(true);
     expect(looksLikeMermaid('  %% comment\ngraph LR; A-->B')).toBe(true);
     expect(looksLikeMermaid('text\n```mermaid\ngraph TD\nA\n```')).toBe(true);
     expect(looksLikeMermaid('---\ntitle: T\n---\nflowchart LR\nA')).toBe(true);
-    expect(looksLikeMermaid('sequenceDiagram\n A->>B: hi')).toBe(false);
+    expect(looksLikeMermaid('sequenceDiagram\n A->>B: hi')).toBe(true);
+    expect(looksLikeMermaid('classDiagram\n A <|-- B')).toBe(false);
     expect(looksLikeMermaid('{"format":"draft-canvas"}')).toBe(false);
     expect(looksLikeMermaid('graphics are nice')).toBe(false);
     expect(looksLikeMermaid('')).toBe(false);

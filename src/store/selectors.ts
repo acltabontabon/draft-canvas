@@ -1,3 +1,4 @@
+import { findItem } from '../document/sequenceModel';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 
 /**
@@ -34,4 +35,10 @@ export function selectNode(document: DraftDocument, id: string): DraftNode | und
 
 export function selectEdge(document: DraftDocument, id: string): DraftEdge | undefined {
   return edgeIndex(document.edges).get(id);
+}
+
+export function selectSequenceMessage(document: DraftDocument, nodeId: string, messageId: string) {
+  const sequence = selectNode(document, nodeId)?.sequence;
+  const item = sequence && findItem(sequence, messageId)?.item;
+  return item?.t === 'message' ? item : undefined;
 }

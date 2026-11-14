@@ -9,6 +9,7 @@ New here? Start with [Getting started](guides/getting-started.md).
 | **[Getting started](guides/getting-started.md)** | Draw, present and export a first diagram |
 | [Shapes and connectors](guides/shapes-and-connectors.md) | Shape kinds, labels, notes, boundaries |
 | [Flows and presenting](guides/flows-and-presentation.md) | Record a path and present it step by step |
+| [Sequence diagrams](guides/sequence-diagrams.md) | Who says what to whom, in order, beside your architecture |
 | [Architecture examples](guides/examples.md) | Ready-made starters from the starters gallery |
 | [System levels](guides/depth.md) | Look inside a shape for more detail |
 | [Open points](guides/open-points.md) | Track open questions |
@@ -32,7 +33,7 @@ New here? Start with [Getting started](guides/getting-started.md).
 | [Architecture](reference/architecture.md) | Design and module boundaries |
 | [Semantics](reference/semantics.md) | Relationship and suggestion rules |
 | [Document schema](reference/schema.md) | File format and limits |
-| [Mermaid import](reference/mermaid-import.md) | Supported flowchart syntax |
+| [Mermaid import](reference/mermaid-import.md) | Supported flowchart and sequence syntax |
 | [Performance](reference/performance.md) | Benchmarks |
 | [Security](../SECURITY.md) | Threat model and reporting |
 

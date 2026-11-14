@@ -34,6 +34,11 @@ import { pathKey } from '../../depth/tree';
 import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../../lib/isEditableTarget';
+import { handleSequenceKey } from '../../canvas/sequence/sequenceKeys';
+import { sequenceActions, sequenceSeatAt } from '../../store/sequenceActions';
+import { isLinkable } from '../../document/sequenceLinks';
+import { displayNameFor as nameOfShape } from '../../document/factory';
+import type { SeqParticipant } from '../../document/types';
 import { centerOf, overlapArea } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, hasSomethingToFit, lensFlow, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
@@ -114,7 +119,8 @@ function focusIsOnCanvas(): boolean {
 
 /** Shapes that open ready to be typed into when they are made — see `createAt`. A Junction has no text. */
 function hasNameToType(type: DraftNode['type']): boolean {
-  return type !== 'ellipse';
+  // Nor is a sequence named first: what it wants first is someone to take part.
+  return type !== 'ellipse' && type !== 'sequence';
 }
 
 /** Focus sits on a control that was reached from the keyboard (`:focus-visible`), not by a click. */
@@ -237,6 +243,21 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           ? naturalCodeSize(code, describeContext(theme))
           : undefined;
 
+      // A piece of architecture put down on a sequence joins it: a participant of that kind, where
+      // the pointer is. The same whichever way it was put
+      // down — a tool from the toolbar, a key over the canvas, the palette, the right-click menu.
+      // (`position` is the corner of a default shape centred on the point: see below.)
+      if (!spliceEdgeId && isLinkable({ type: preset.type })) {
+        const seat = sequenceSeatAt({ x: position.x + 88, y: position.y + 34 });
+        if (seat) {
+          const started = preset.technology ? technologyStart(preset.type, preset.technology) : {};
+          const is = { type: preset.type, ...started } as Omit<SeqParticipant, 'id' | 'name'>;
+          const name = preset.technology ?? preset.text ?? nameOfShape({ ...is, text: undefined });
+          sequenceActions.addParticipant(seat.nodeId, { ...is, name }, seat.index);
+          arm(null);
+          return null;
+        }
+      }
       // Refused past the node cap, with a toast — the store's `addNode` itself stays unconditional.
       if (!roomFor(1, 0)) return null;
       // Every caller hands the top-left a default 176×68 shape centred on the point would have
@@ -245,6 +266,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       const { width, height } = size ?? defaultSizeFor(preset.type);
       // Placed onto a connector: made and put into its middle as one undo step.
       const editor = useEditorStore.getState();
+      const startSequence = autoEdit && preset.type === 'sequence';
+      if (startSequence) editor.beginInteraction('Add sequence');
       if (spliceEdgeId) editor.beginInteraction('Insert into connector');
       const node = editor.addNode({
         type: preset.type,
@@ -273,6 +296,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // one. Escape or a click away keeps the placeholder. A code card (it arrives with sample code
       // to edit, not a name) and a junction (an `ellipse`, nothing to name) are left as they are.
       if (autoEdit && hasNameToType(node.type)) useUiStore.getState().requestEdit(node.id);
+      if (startSequence) {
+        sequenceActions.addDefaultParticipant(node.id);
+        useUiStore.getState().setSequenceFocus(null);
+        editor.endInteraction('Add sequence');
+      }
       return node;
     },
     [arm, theme],
@@ -414,7 +442,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   // With a `flowId`, that flow; without one, whatever `start()` decides (the active flow, the one
   // playable flow, else the picker).
   const onPresent = useCallback(
-    (requested?: string) => {
+    (requested?: string, sequenceNodeId?: string) => {
       // Every consumer types this as `() => void`, so nothing stops a `onClick={onPresent}` from
       // handing it a click event as the flow id — truthy, and the presentation would then start on
       // a flow that doesn't exist and silently do nothing. Cheap to make impossible.
@@ -422,7 +450,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // The camera has to be read before the fit below moves it. React Flow owns it, not the
       // store, which is why it is handed over rather than picked up there.
       setMode('present', getViewport());
-      if (flowId) playback.pickFlow(flowId);
+      if (flowId) playback.pickFlow(flowId, sequenceNodeId);
       else if (playback.canStart) playback.start();
       // A flow that started has framed its own opening (`useFlowPlayback`'s directed camera). Only
       // with none chosen — the picker, or nothing to present — is the whole diagram fitted, with
@@ -679,7 +707,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               onDismiss={dismissContextMenu}
             />
           )}
-          {!presenting && !tracing && <AttachmentPopover />}
+          {!tracing && <AttachmentPopover />}
           {/* In every mode: while presenting it opens read-only, so a presenter can show what is still
               open here without any editing surface appearing over the story. */}
           <OpenPointPopover />
@@ -996,6 +1024,12 @@ export function useKeyboard({
       if (ui.commandPaletteOpen || ui.contextMenu || ui.interactionActive || modalIsOpen()) return;
       const state = useEditorStore.getState();
       if (event.type === 'cut' && state.mode === 'present') return;
+      if (ui.sequenceFocus && state.selection.nodes.includes(ui.sequenceFocus.nodeId)) {
+        keyedClipboardText = null;
+        event.preventDefault();
+        ui.notify('Select the sequence frame to copy or cut it.');
+        return;
+      }
       // The ⌘C/⌘X keydown already copied (or cut) and left its text here: write that, don't repeat
       // the gesture — a second cut would find nothing left to cut.
       const keyed = keyedClipboardText;
@@ -1072,6 +1106,10 @@ export function useKeyboard({
       // offers present-only commands, so the keyboard must not be the one way to edit.
       const presenting = state.mode === 'present';
 
+      // Something selected inside a sequence takes its keys first: Delete is then that message, not
+      // the sequence; an arrow moves it, not the whole shape. See `sequenceKeys.ts`.
+      if (!presenting && !playback.active && useUiStore.getState().readOnly === null && handleSequenceKey(event)) return;
+
       // `]` / `[` step through Intent Continuation's alternatives — or, with nothing showing, ask
       // for them. Matched on the produced character, not the physical key, and ahead of the
       // Cmd/Ctrl branch because AltGr arrives as Ctrl+Alt on Windows (German `[` is AltGr+8, and
@@ -1102,6 +1140,12 @@ export function useKeyboard({
             return;
           case 'c':
           case 'x': {
+            const focus = useUiStore.getState().sequenceFocus;
+            if (focus && state.selection.nodes.includes(focus.nodeId)) {
+              event.preventDefault();
+              useUiStore.getState().notify('Select the sequence frame to copy or cut it.');
+              return;
+            }
             // Not `preventDefault`: the browser's own copy event still follows, and `onCopyOrCut`
             // writes this text through `clipboardData` — the one path that reaches the system
             // clipboard where `navigator.clipboard` is refused (a self-hosted copy over plain HTTP,

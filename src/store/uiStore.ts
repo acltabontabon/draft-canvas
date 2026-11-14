@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { SequenceEdit, SequenceFocus } from '../sequence/focus';
 import type { ArrangeFix } from '../lib/arrangeFixes';
 import type { Preset } from '../lib/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
@@ -294,6 +295,12 @@ export interface OpenPointPopoverState {
   pointId?: string;
 }
 
+export type AttachmentDetail = (
+  | { hostKind: 'node'; hostId: string }
+  | { hostKind: 'edge'; hostId: string }
+  | { hostKind: 'message'; hostId: string; messageId: string; startEditing?: boolean }
+) & { attachmentId: string | null };
+
 export interface UiStore {
   sharedFlowIntroduction: { documentId: string; flowId: string } | null;
   shareFromHere: boolean;
@@ -402,7 +409,27 @@ export interface UiStore {
    * yet"; non-null means a specific chip is additionally pinned open — a node's badge click and an
    * edge's chip click both write here, just at different granularity.
    */
-  openAttachmentDetail: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null;
+  openAttachmentDetail: AttachmentDetail | null;
+  /**
+   * What is selected *inside* a sequence: a participant, one or more messages, a branch, a group.
+   * The editor's selection holds only whole shapes and connectors, and a sequence is one shape — so
+   * this sits beside it, naming its host, and is dropped the moment the host stops being the one
+   * thing selected. Never saved, undone or shared.
+   */
+  sequenceFocus: SequenceFocus | null;
+  /** The piece of a sequence whose words are being typed, or the place a new participant is being named. */
+  sequenceEdit: SequenceEdit | null;
+  /** Which of the offered next messages is showing, for the selection inside a sequence. Back to the first whenever that selection changes. */
+  sequenceGhost: number;
+  /** The message under a dragged note or code card. */
+  sequenceAttachmentTarget: { nodeId: string; messageId: string } | null;
+  /**
+   * Where a shape being dragged over a sequence would join it as a participant. `stays`: the shape
+   * is part of a diagram (it has connectors, notes or an inside), so it stays where it is and the
+   * participant stands for it; otherwise the shape itself moves in.
+   */
+  sequenceDropTarget: { nodeId: string; index: number; stays: boolean } | null;
+  sequenceLinkTarget: { nodeId: string; participantId: string } | null;
   /**
    * The element a presenter clicked open while presenting — a chip on a connector, or a node's
    * attachment badge. Presentation Mode's callout shows that element's attachments instead of
@@ -642,7 +669,7 @@ export interface UiStore {
   setHoveredEdge: (id: string | null) => void;
   setHoveredRecoveryParent: (id: string | null) => void;
   setOpenAttachmentDetail: (
-    target: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null,
+    target: AttachmentDetail | null,
   ) => void;
   setPresentationReveal: (target: PresentationReveal | null) => void;
   /** Patches presentation state — a no-op (same object, no re-render) when nothing changes. */
@@ -660,6 +687,12 @@ export interface UiStore {
   setCompanionOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
+  setSequenceFocus: (focus: SequenceFocus | null) => void;
+  setSequenceEdit: (edit: SequenceEdit | null) => void;
+  setSequenceGhost: (index: number) => void;
+  setSequenceAttachmentTarget: (target: UiStore['sequenceAttachmentTarget']) => void;
+  setSequenceDropTarget: (target: { nodeId: string; index: number; stays: boolean } | null) => void;
+  setSequenceLinkTarget: (target: { nodeId: string; participantId: string } | null) => void;
   requestRecovery: (edgeId: string | null, actionId?: string | null) => void;
   setRecoveryConnect: (gesture: UiStore['recoveryConnect']) => void;
   setEditingText: (id: string | null) => void;
@@ -787,6 +820,12 @@ export const useUiStore = create<UiStore>((set, get) => ({
   hoveredEdgeId: null,
   hoveredRecoveryParentId: null,
   openAttachmentDetail: null,
+  sequenceFocus: null,
+  sequenceEdit: null,
+  sequenceGhost: 0,
+  sequenceAttachmentTarget: null,
+  sequenceDropTarget: null,
+  sequenceLinkTarget: null,
   presentationReveal: null,
   presentation: PRESENTATION_AT_REST,
   openPointPopover: null,
@@ -886,6 +925,35 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setHoveredEdge: (hoveredEdgeId) => set((state) => (state.hoveredEdgeId === hoveredEdgeId ? state : { hoveredEdgeId })),
   setHoveredRecoveryParent: (hoveredRecoveryParentId) => set((state) => (state.hoveredRecoveryParentId === hoveredRecoveryParentId ? state : { hoveredRecoveryParentId })),
   setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
+  setSequenceFocus: (sequenceFocus) =>
+    set((state) => {
+      const same =
+        state.sequenceFocus === sequenceFocus ||
+        (state.sequenceFocus !== null &&
+          sequenceFocus !== null &&
+          state.sequenceFocus.nodeId === sequenceFocus.nodeId &&
+          state.sequenceFocus.kind === sequenceFocus.kind &&
+          Boolean(state.sequenceFocus.quiet) === Boolean(sequenceFocus.quiet) &&
+          state.sequenceFocus.ids.length === sequenceFocus.ids.length &&
+          state.sequenceFocus.ids.every((id, index) => id === sequenceFocus.ids[index]));
+      return same ? state : { sequenceFocus, sequenceGhost: 0 };
+    }),
+  setSequenceGhost: (sequenceGhost) => set({ sequenceGhost }),
+  setSequenceEdit: (sequenceEdit) => set({ sequenceEdit }),
+  setSequenceAttachmentTarget: (sequenceAttachmentTarget) =>
+    set((state) => state.sequenceAttachmentTarget?.nodeId === sequenceAttachmentTarget?.nodeId &&
+      state.sequenceAttachmentTarget?.messageId === sequenceAttachmentTarget?.messageId ? state : { sequenceAttachmentTarget }),
+  setSequenceDropTarget: (sequenceDropTarget) =>
+    set((state) =>
+      state.sequenceDropTarget?.nodeId === sequenceDropTarget?.nodeId &&
+      state.sequenceDropTarget?.index === sequenceDropTarget?.index &&
+      state.sequenceDropTarget?.stays === sequenceDropTarget?.stays
+        ? state
+        : { sequenceDropTarget },
+    ),
+  setSequenceLinkTarget: (sequenceLinkTarget) =>
+    set((state) => state.sequenceLinkTarget?.nodeId === sequenceLinkTarget?.nodeId &&
+      state.sequenceLinkTarget?.participantId === sequenceLinkTarget?.participantId ? state : { sequenceLinkTarget }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setPresentation: (patch) =>
     set((state) => {

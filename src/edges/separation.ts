@@ -32,7 +32,7 @@ import { edgeRoutes, rawRouteInputs, type EdgeRouteInputs } from './edgeRoutes';
 import { labelLook } from './labelLook';
 import { polylineClear, type Box, type Point } from './pathfinder';
 import { flattenPath, roundedStepPath, shiftRuns, type Track } from './routing';
-import { sameNodeGeometry, type PlanScope } from './sameGeometry';
+import { sameRouteGeometry, type PlanScope } from './sameGeometry';
 import { stepPolyline } from './waypoints';
 
 export interface EdgeTracks {
@@ -96,7 +96,7 @@ export function separationPlan(nodes: readonly DraftNode[], edges: readonly Draf
   const known = (scope === 'canvas' ? cache : transientCache).get(nodes)?.get(edges) ?? cache.get(nodes)?.get(edges);
   if (known) return known;
   const previous = last;
-  const reusable = previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes) ? previous.plan : null;
+  const reusable = previous && previous.edges === edges && sameRouteGeometry(previous.nodes, nodes, edges) ? previous.plan : null;
   const plan = reusable ?? compute(nodes, edges, scope);
   if (scope === 'canvas') last = { nodes, edges, plan };
   const store = scope === 'canvas' ? cache : transientCache;

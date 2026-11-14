@@ -27,7 +27,7 @@
 import type { DraftEdge, DraftNode } from '../document/types';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel } from './labelLayout';
 import { distanceToPolyline, type Point } from './nearest';
-import { sameNodeGeometry, type PlanScope } from './sameGeometry';
+import { sameRouteGeometry, type PlanScope } from './sameGeometry';
 import { connectorRouteInputs } from './connectorRoutes';
 import { edgeRoutes } from './edgeRoutes';
 import {
@@ -415,7 +415,7 @@ export function labelGroupPlan(nodes: readonly DraftNode[], edges: readonly Draf
   // only on where shapes are and what kind they are — the same rule `routingPlan` reuses its plan by.
   // Without it every keystroke in a label re-routed the members of every shared label.
   const previous = lastBuilt;
-  const reused = previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes);
+  const reused = previous && previous.edges === edges && sameRouteGeometry(previous.nodes, nodes, edges);
   if (scope === 'transient') {
     if (reused) return previous.plan;
     const byTransient = transientCache.get(nodes);

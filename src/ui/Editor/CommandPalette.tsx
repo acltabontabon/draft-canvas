@@ -25,7 +25,7 @@ interface CommandPaletteProps {
   createAt: (preset: Preset, position: { x: number; y: number }) => DraftNode | null;
   createAtPointer: (preset: Preset) => DraftNode | null;
   playback: FlowPlaybackController;
-  onPresent: (flowId?: string) => void;
+  onPresent: (flowId?: string, sequenceNodeId?: string) => void;
 }
 
 /** How many recently used commands lead an empty palette. */

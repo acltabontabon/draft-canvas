@@ -20,6 +20,7 @@ is yours to review.
 - **C4-aware.** System Context, Containers, Components, and nested views.
 - **Tech-aware shapes.** Services, APIs, workers, stores, queues, actors, and boundaries.
 - **Presentation flows.** Trace and present happy or failure paths.
+- **Sequence diagrams.** Lifelines, replies, conditions and loops that lay themselves out, beside the architecture.
 - **Bring your own agent.** Connect Claude Code, Codex, Cursor, or any MCP client.
 - **Live collaboration.** Share, manage access, and follow presentations.
 - **Context for decisions.** Notes, code, sources, and open questions.

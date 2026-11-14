@@ -63,8 +63,17 @@ in focus too, including nested boundaries. Unrelated boundaries remain subdued.
 
 Pan and zoom freely; `R` hands the camera back. For a long step, choose **Read full step details**.
 
+A [sequence](sequence-diagrams.md) presents the same way, one message at a time: select it and
+choose **Present this sequence**.
+
+## Draw a flow as a sequence
+
+`⌘K` → **Draw the flow as a sequence** adds a [sequence](sequence-diagrams.md) beside the diagram:
+the flow's steps as messages, in the flow's order, between participants that stand for its shapes.
+Add replies, conditions and loops there. The flow itself is not changed.
+
 ## Export a flow
 
-**Share → Export → Other formats → Flows** (`⌘⇧E`) turns each flow into a **Mermaid** or **PlantUML**
-sequence diagram, nested levels included. With a flow selected, an image export numbers its
+**Share → Export → Other formats → Sequences** (`⌘⇧E`) turns each flow, and each sequence on the
+canvas, into a **Mermaid** or **PlantUML** sequence diagram, nested levels included. With a flow selected, an image export numbers its
 connectors. See [Saving and sharing](saving-and-sharing.md).

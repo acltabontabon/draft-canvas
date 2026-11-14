@@ -52,6 +52,8 @@ export function defaultSizeFor(type: DraftNodeType): { width: number; height: nu
       return { width: DEFAULTS.queueWidth, height: DEFAULTS.queueHeight };
     case 'component':
       return { width: DEFAULTS.componentWidth, height: DEFAULTS.componentHeight };
+    case 'sequence':
+      return { width: DEFAULTS.sequenceWidth, height: DEFAULTS.sequenceHeight };
     default:
       return { width: DEFAULTS.nodeWidth, height: DEFAULTS.nodeHeight };
   }
@@ -82,6 +84,10 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
       return { width: 200, height: 96 };
     case 'group':
       return { width: 160, height: 120 };
+    // The floor for an empty one. A sequence with anything in it is held to what it needs to stay
+    // readable (`canvas/resizeSnap.ts`'s `minResizeSizeFor`).
+    case 'sequence':
+      return { width: 200, height: 140 };
     default:
       return { width: 96, height: 48 };
   }
@@ -126,6 +132,8 @@ export function defaultTextFor(
       return ACTOR_KIND_NAMES[actorKind ?? 'human'];
     case 'group':
       return 'Boundary';
+    case 'sequence':
+      return 'Sequence';
     case 'note':
       return '';
     case 'code':
@@ -209,6 +217,8 @@ export function displayNameFor(
       return (node.actorKind && ACTOR_KIND_NAMES[node.actorKind]) || 'Actor';
     case 'group':
       return 'Boundary';
+    case 'sequence':
+      return 'Sequence';
     case 'note':
       return 'Note';
     case 'code':
@@ -297,6 +307,7 @@ export function createNode(input: CreateNodeInput): DraftNode {
     node.actorFrame = input.actorFrame ?? 'borderless';
   }
   if (input.type === 'component') node.componentKind = input.componentKind ?? 'generic';
+  if (input.type === 'sequence') node.sequence = { participants: [], items: [] };
   if (input.deliveryRole) node.deliveryRole = input.deliveryRole;
   if ((C4_TEXT_TYPES as readonly DraftNodeType[]).includes(input.type)) {
     if (input.description?.trim()) node.description = input.description.trim();

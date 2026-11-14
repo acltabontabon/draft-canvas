@@ -16,6 +16,7 @@ import type { DocumentSession } from '../../store/useDocumentSession';
 import { notifyLoadFailure } from '../common/notifyLoadFailure';
 
 export { looksLikeMermaid } from '../../import/mermaid/sniff';
+import { looksLikeMermaidSequence } from '../../import/mermaid/sniff';
 
 /** Lays a flowchart out and adds it to the current room, selected. Resolves to whether anything
  *  landed; never rejects, because every caller is a fire-and-forget paste or drop handler. */
@@ -31,7 +32,9 @@ export async function insertMermaidText(text: string): Promise<boolean> {
 async function insertMermaid(text: string): Promise<boolean> {
   const notify = useUiStore.getState().notify;
   const { importMermaid } = await import('../../import/mermaid');
-  const fallback = 'Pasted flowchart';
+  // A sequence diagram becomes a sequence on the canvas; a flowchart becomes shapes and connectors.
+  const sequence = looksLikeMermaidSequence(text);
+  const fallback = sequence ? 'Pasted sequence' : 'Pasted flowchart';
   const imported = await importMermaid(text, fallback);
   if (!imported.ok) {
     notify(imported.error, 'error');
@@ -39,7 +42,7 @@ async function insertMermaid(text: string): Promise<boolean> {
   }
   // A flowchart with its own title names a blank diagram (on the web; elsewhere the file names it).
   const { title } = imported.document.metadata;
-  const added = useEditorStore.getState().insertComposed(imported.document, 'Import flowchart', title !== fallback && hostKind() === null ? title : undefined);
+  const added = useEditorStore.getState().insertComposed(imported.document, sequence ? 'Import sequence' : 'Import flowchart', title !== fallback && hostKind() === null ? title : undefined);
   if (added.length === 0) return false;
   // It lands at the first free place, which is often off the edge of what you were looking at: the
   // camera follows it, the way it does after Arrange.

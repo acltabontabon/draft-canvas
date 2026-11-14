@@ -1,3 +1,4 @@
+import { LIMITS } from '../../document/limits';
 import { describeEdge } from '../../edges/describe';
 import { obstaclesForEdge } from '../../edges/obstacles';
 import { connectorRouteInputs } from '../../edges/connectorRoutes';
@@ -6,6 +7,7 @@ import { describeNode, describeContext, type DescribeContext } from '../../nodes
 import { technologyMarkBounds } from '../../nodes/technology';
 import { findFlow, stepIndexOf } from '../../document/flow';
 import { visibleEdges } from '../../document/compensation';
+import { recoverCappedSequence } from '../../nodes/sequenceFit';
 import { boundsOf } from '../../document/operations';
 import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../../document/types';
 import { unresolvedOpenPoints, unresolvedOpenPointsFor } from '../../document/openPoints';
@@ -255,9 +257,12 @@ export function buildScene(
   },
   options: SceneOptions = {},
 ): Scene {
-  const nodes = options.only
+  let nodes = options.only
     ? document.nodes.filter((node) => options.only!.has(node.id))
     : document.nodes;
+  if (nodes.some((node) => node.type === 'sequence' && (node.width === LIMITS.maxNodeSize || node.height === LIMITS.maxNodeSize))) {
+    nodes = nodes.map((node) => recoverCappedSequence(node, nodeCtx));
+  }
   const visible = new Set(nodes.map((node) => node.id));
   const isVisible = (edge: DraftEdge) => visible.has(edge.source) && visible.has(edge.target);
   // The document's own array whenever every connector is in the picture (the usual case — only a
@@ -345,7 +350,10 @@ export function buildScene(
     for (const bend of edge.waypoints ?? []) overlayRects.push({ x: bend.x - 2, y: bend.y - 2, width: 4, height: 4 });
     const groupAttrs = decorateGroupAttrs(decoration);
 
-    edgeLines.push(...(groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls));
+    const routedLines = groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls;
+    // Participant connectors cross the sequence surface to reach their lifelines.
+    if (edge.sourceAnchor?.participantId || edge.targetAnchor?.participantId) edgeOverlays.push(...routedLines);
+    else edgeLines.push(...routedLines);
     edgeOverlays.push(...(groupAttrs ? [el('g', groupAttrs, overlayEls)] : overlayEls));
     edgeEntries.push({ edge, lineEls, overlayEls });
   }

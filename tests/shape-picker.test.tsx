@@ -113,7 +113,7 @@ describe('create rail and shape picker', () => {
   it('keeps the everyday shapes on the rail and the rest behind Shapes', () => {
     renderToolbar();
     const names = within(rail()).getAllByRole('button').map((button) => button.getAttribute('aria-label'));
-    expect(names).toEqual(['Select', 'Text', 'Note', 'Boundary', 'Service', 'Data Store', 'Queue', 'Actor', 'All shapes']);
+    expect(names).toEqual(['Select', 'Text', 'Note', 'Boundary', 'Service', 'Data Store', 'Queue', 'Actor', 'Sequence', 'All shapes']);
   });
 
   it('names every shape in the picker, with what it is for and its key', async () => {

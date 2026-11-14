@@ -15,7 +15,7 @@ import { ToolGlyph } from './ToolGlyph';
  * Eleven permanent pictures asked a newcomer to learn eleven glyphs before drawing a box; the ones
  * that went are the three a diagram needs least often, not three that were hard to draw.
  */
-const ON_RAIL = new Set(['text', 'note', 'boundary', 'service', 'database', 'queue', 'actor']);
+const ON_RAIL = new Set(['text', 'note', 'boundary', 'service', 'database', 'queue', 'actor', 'sequence']);
 const onRail = (preset: Preset) => ON_RAIL.has(preset.id);
 
 const SHAPES_TOOLTIP: PrimitiveTooltipContent = {
@@ -204,7 +204,10 @@ export function CreateRail() {
         <span className="dc-rail-separator" aria-hidden="true" />
         <div className="dc-create-family">{PRESETS.filter(onRail).map(toolButton)}</div>
         <span className="dc-rail-separator" aria-hidden="true" />
-        <div className="dc-create-family">{DEV_PRESETS.filter(onRail).map(toolButton)}</div>
+        <div className="dc-create-family">{DEV_PRESETS.filter((preset) => onRail(preset) && preset.type !== 'sequence').map(toolButton)}</div>
+        <span className="dc-rail-separator" aria-hidden="true" />
+        {/* On its own: a sequence is not one more shape of an architecture but another kind of picture of it. */}
+        <div className="dc-create-family">{DEV_PRESETS.filter((preset) => onRail(preset) && preset.type === 'sequence').map(toolButton)}</div>
         <span className="dc-rail-separator" aria-hidden="true" />
         <div className="dc-create-family">
           <Tooltip content={tucked ? tooltipContentFor(tucked) : SHAPES_TOOLTIP}>

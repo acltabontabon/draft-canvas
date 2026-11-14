@@ -38,7 +38,8 @@ export function usePresenterBroadcast(): void {
         viewport: encodeFollowViewport({ x: transform[0], y: transform[1], zoom: transform[2] }, { width, height }),
         view: { width, height },
         presenting: true,
-        flowId: playback.active ? playback.flowId : null,
+        flowId: playback.active && !playback.sequenceNodeId ? playback.flowId : null,
+        ...(playback.active && playback.sequenceNodeId ? { sequenceNodeId: playback.sequenceNodeId } : {}),
         step: playback.active && playback.flowId ? playback.step : null,
       };
     };

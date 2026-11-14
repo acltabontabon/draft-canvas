@@ -92,7 +92,11 @@ describe('starter gallery files', () => {
     });
 
     it('opens without repairs', () => {
-      expect(parsed.ok && parsed.repairs, parsed.ok ? '' : parsed.error).toEqual([]);
+      // Being brought up to this build's format is not a repair. The gallery is read by apps people
+      // installed a while ago too, so its files stay at a version those can open and are upgraded
+      // on the way in — the same line `IndexedDbRepository` leaves out when it decides what changed.
+      const repairs = parsed.ok ? parsed.repairs.filter((line) => !line.startsWith('Upgraded document format')) : false;
+      expect(repairs, parsed.ok ? '' : parsed.error).toEqual([]);
     });
 
     it('has no overlapping shapes', () => {

@@ -1,12 +1,18 @@
 import { minSizeFor } from '../document/factory';
 import type { DraftNode } from '../document/types';
-import { noteLayout } from '../nodes/describe';
+import { describeContext, naturalSequenceSizeFor, noteLayout } from '../nodes/describe';
+import { LIGHT } from '../render/theme/tokens';
 import type { Rect } from '../edges/routing';
 import { computeSnap, SNAP_THRESHOLD, type Guide } from './snapping';
 
 /** Tagged notes need their tag plus one body line; the generic floor only fits a plain note. */
-export function minResizeSizeFor(node: Pick<DraftNode, 'type' | 'noteKind'>): { width: number; height: number } {
+export function minResizeSizeFor(node: Pick<DraftNode, 'type' | 'noteKind' | 'sequence' | 'text'>): { width: number; height: number } {
   const min = minSizeFor(node.type);
+  // A sequence resizes down to what it holds and no further.
+  if (node.type === 'sequence') {
+    const needed = naturalSequenceSizeFor(node, describeContext(LIGHT));
+    return { width: Math.max(min.width, needed.width), height: Math.max(min.height, needed.height) };
+  }
   if (node.type !== 'note') return min;
   const geo = noteLayout(node);
   return { ...min, height: Math.max(min.height, Math.ceil(geo.top + geo.lineHeight + geo.bottom)) };

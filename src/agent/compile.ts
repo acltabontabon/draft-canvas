@@ -404,7 +404,10 @@ function isBetterArrangement(a: Candidate, b: Candidate, preferred?: LayoutSpec[
     : clearlyBetterDirection(ca, cb, a.legibility.crossings < b.legibility.crossings) || fitsClearlyBetter(proportioned(a, ca), proportioned(b, cb));
 }
 
-function extentOf(nodes: readonly DraftNode[]): { width: number; height: number } {
+function extentOf(all: readonly DraftNode[]): { width: number; height: number } {
+  // A sequence stands below the architecture whichever way that reads: it says nothing about which
+  // direction fits a screen better.
+  const nodes = all.filter((n) => n.type !== 'sequence');
   if (!nodes.length) return { width: 1, height: 1 };
   const left = Math.min(...nodes.map((n) => n.x));
   const top = Math.min(...nodes.map((n) => n.y));
@@ -545,6 +548,7 @@ export function countAll(document: DraftDocument) {
   let elements = 0;
   let groups = 0;
   let notes = 0;
+  let sequences = 0;
   let attachments = 0;
   let relationships = 0;
   let flows = 0;
@@ -555,6 +559,7 @@ export function countAll(document: DraftDocument) {
       attachments += node.attachments?.length ?? 0;
       if (node.type === 'group') groups += 1;
       else if (node.type === 'note' || node.type === 'text' || node.type === 'code') notes += 1;
+      else if (node.type === 'sequence') sequences += 1;
       else elements += 1;
     }
     relationships += graph.edges.length;
@@ -563,7 +568,7 @@ export function countAll(document: DraftDocument) {
   });
   // Notes attached to elements and connectors are not graph nodes; report them separately so a
   // successful create never looks as if it dropped all the notes the agent asked for.
-  return { elements, relationships, groups, flows, notes, ...(attachments ? { attachments } : {}), insideViews: views };
+  return { elements, relationships, groups, flows, notes, ...(sequences ? { sequences } : {}), ...(attachments ? { attachments } : {}), insideViews: views };
 }
 
 /**

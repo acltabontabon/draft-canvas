@@ -54,7 +54,7 @@ const ICON_FONT: FontSpec = { stack: 'mono', size: 10, weight: 400 };
 const CHIP_HEIGHT = 23;
 /** A connector's attachment chip is this tall, on the canvas and in exports. */
 export const ATTACHMENT_CHIP_HEIGHT = CHIP_HEIGHT;
-const CHIP_GAP = 5;
+export const ATTACHMENT_CHIP_GAP = 5;
 const DOT = 6;
 
 /** `.dc-attachment-chip`'s 1px border, on each side: a chip on screen is this much wider than its
@@ -64,11 +64,10 @@ const CHIP_BORDER = 1;
 function chipWidth(attachment: Attachment, label: string, compact: boolean, measurer: TextMeasurer): number {
   const icon = attachment.type === 'code' ? measurer.width('{ }', ICON_FONT) : DOT;
   if (compact) return CHIP_BORDER + 5 + icon + 5 + CHIP_BORDER;
-  return CHIP_BORDER + 7 + icon + CHIP_GAP + measurer.width(label, CHIP_FONT) + 9 + CHIP_BORDER;
+  return CHIP_BORDER + 7 + icon + ATTACHMENT_CHIP_GAP + measurer.width(label, CHIP_FONT) + 9 + CHIP_BORDER;
 }
 
-function chipLooks(attachments: readonly Attachment[], theme: Theme, measurer: TextMeasurer) {
-  const compact = attachments.length > 1;
+function chipLooks(attachments: readonly Attachment[], theme: Theme, measurer: TextMeasurer, compact: boolean) {
   return attachments.map((attachment) => {
     const look = attachmentLookFor(theme, attachment);
     const label = look.label.toUpperCase();
@@ -76,22 +75,24 @@ function chipLooks(attachments: readonly Attachment[], theme: Theme, measurer: T
   });
 }
 
-/** How wide a connector's chip row rests: one named chip, or several compact ones (icons only). */
-export function attachmentRowWidth(attachments: readonly Attachment[], measurer: TextMeasurer): number {
-  if (attachments.length === 0) return 0;
-  // A chip's name is its kind, the same in every theme: only widths are read here.
-  const widths = chipLooks(attachments, LIGHT, measurer).map((chip) => chip.width);
-  return widths.reduce((sum, width) => sum + width, 0) + CHIP_GAP * (widths.length - 1);
+export function attachmentChipRowWidth(widths: readonly number[]): number {
+  return widths.reduce((sum, width) => sum + width, 0) + ATTACHMENT_CHIP_GAP * Math.max(0, widths.length - 1);
 }
 
-/**
- * A connector's chip row, drawn from `left` at `top` — where `connectorMarkRow` (`connectorMarks.ts`)
- * puts it. More than one attachment rests compact (icons only), as the canvas does until reached for.
- */
-export function describeAttachmentChips(attachments: readonly Attachment[], rowLeft: number, top: number, ctx: ChipContext): Shape[] {
+/** How wide a connector's chip row rests: one named chip, or several compact ones (icons only). */
+export function attachmentRowWidth(attachments: readonly Attachment[], measurer: TextMeasurer): number {
+  // A chip's name is its kind, the same in every theme: only widths are read here.
+  return attachmentChipRowWidth(chipLooks(attachments, LIGHT, measurer, attachments.length > 1).map((chip) => chip.width));
+}
+
+export function namedAttachmentChipWidths(attachments: readonly Attachment[], measurer: TextMeasurer): number[] {
+  return chipLooks(attachments, LIGHT, measurer, false).map((chip) => chip.width);
+}
+
+/** Draw a row at its top-left corner. Connectors show compact chips when there is more than one. */
+export function describeAttachmentChips(attachments: readonly Attachment[], rowLeft: number, top: number, ctx: ChipContext, compact = attachments.length > 1): Shape[] {
   if (attachments.length === 0) return [];
-  const compact = attachments.length > 1;
-  const looks = chipLooks(attachments, ctx.theme, ctx.measurer);
+  const looks = chipLooks(attachments, ctx.theme, ctx.measurer, compact);
   const shapes: Shape[] = [];
   let left = rowLeft;
   for (const { attachment, look, label, width } of looks) {
@@ -107,9 +108,9 @@ export function describeAttachmentChips(attachments: readonly Attachment[], rowL
     }
     if (!compact) {
       const text = layoutText(label, { font: CHIP_FONT, maxWidth: 400, lineHeight: CHIP_HEIGHT, maxLines: 1, measurer: ctx.measurer });
-      shapes.push({ t: 'text', x: iconLeft + iconWidth + CHIP_GAP, y: top, layout: text, font: CHIP_FONT, fill: look.accent, align: 'start' });
+      shapes.push({ t: 'text', x: iconLeft + iconWidth + ATTACHMENT_CHIP_GAP, y: top, layout: text, font: CHIP_FONT, fill: look.accent, align: 'start' });
     }
-    left += width + CHIP_GAP;
+    left += width + ATTACHMENT_CHIP_GAP;
   }
   return shapes;
 }

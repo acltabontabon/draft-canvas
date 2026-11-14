@@ -184,8 +184,17 @@ export function subscribeTechnologyIcon(technology: string | undefined, listener
 
 /** Preflight asynchronous image exports so even a never-opened room uses its real logos. */
 export async function loadTechnologyIcons(nodes: readonly DraftNode[]): Promise<void> {
-  const values = new Set(nodes.filter((node) => (C4_TEXT_TYPES as readonly string[]).includes(node.type)).map((node) => node.technology));
-  await Promise.all([...values].map(loadTechnologyIcon));
+  await Promise.all([...technologiesIn(nodes)].map(loadTechnologyIcon));
+}
+
+/** Every technology these shapes are drawn with: their own, and those of a sequence's participants. */
+export function technologiesIn(nodes: readonly DraftNode[]): Set<string | undefined> {
+  const values = new Set<string | undefined>();
+  for (const node of nodes) {
+    if ((C4_TEXT_TYPES as readonly string[]).includes(node.type)) values.add(node.technology);
+    for (const participant of node.sequence?.participants ?? []) values.add(participant.technology);
+  }
+  return values;
 }
 
 /** Exact names/slugs and known aliases are recognized; mixed stacks never borrow a single logo. */

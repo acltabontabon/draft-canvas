@@ -39,6 +39,7 @@ import {
   removeAttachment,
   removeEdgeAttachment,
   removeElements,
+  removeParticipantEdges,
   updateAttachment,
   updateEdge,
   updateEdgeAttachment,
@@ -46,8 +47,14 @@ import {
 } from '../document/operations';
 import { reinferIfEligible } from '../document/reinfer';
 import { freeOriginFor } from '../document/geometry';
+import { syncLinks } from '../document/sequenceLinks';
+import { messagesOf, sequenceOf } from '../document/sequenceModel';
+import { editMessageAttachments } from '../document/sequenceOps';
+import { fitSequenceNode, fitSequences } from '../nodes/sequenceFit';
+import { aliasesOf } from '../sequence/native/shared';
+import { linked, readSequenceSource, sequenceNode, unsupportedAdvice } from './sequences';
 import { DEFAULTS, LIMITS } from '../document/limits';
-import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode } from '../document/types';
+import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode, DraftSequence } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
 import { embed, totals, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
 import { effectiveLevel, inheritedLevel } from '../depth/level';
@@ -168,7 +175,7 @@ function laterAdd(ops: readonly unknown[]): (problem: { path: string; message: s
   const addedBy = new Map<string, number>();
   ops.forEach((op, i) => {
     if (!op || typeof op !== 'object' || (op as Json).op !== 'add') return;
-    for (const field of ['nodes', 'relationships', 'groups', 'flows', 'notes', 'openPoints']) {
+    for (const field of ['nodes', 'relationships', 'groups', 'flows', 'notes', 'sequences', 'openPoints']) {
       const items = (op as Json)[field];
       if (Array.isArray(items)) for (const item of items) if (item && typeof (item as Json).id === 'string' && !addedBy.has((item as Json).id as string)) addedBy.set((item as Json).id as string, i);
     }
@@ -199,6 +206,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   let base = file;
   let view = viewOf(file, path);
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
+  const originalView = view;
   const scope = readScope(r, rawScope, '/scope', view);
   problems.throwIfAny();
   const touched = new Set<string>();
@@ -509,6 +517,31 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   problems.explain(laterAdd(ops));
   problems.throwIfAny();
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
+  // A shape renamed or retyped here is renamed in every sequence it stands in, as it is when a
+  // person renames it; and a sequence whose participants changed that way is given the room it needs.
+  const started = viewOf(file, path);
+  if (started && started !== view) {
+    const synced = fitSequences(started, syncLinks(started, view).doc, () => ctx);
+    const beforeSync = new Map(view.nodes.map((node) => [node.id, node]));
+    const syncedIds = synced.nodes.filter((node) => beforeSync.get(node.id) !== node).map((node) => node.id);
+    refuseOutOfScope(r, '/scope', outOfScope(scope, syncedIds.filter((id) => originalView.nodes.some((node) => node.id === id)), 'nodes'));
+    for (const id of syncedIds) touched.add(id);
+    view = synced;
+  }
+  if (scope) {
+    // A sequence replacement may delete incident connectors, and link sync or unlink can
+    // change identities on either side. Arrange still owns its existing incident-route policy.
+    const nodes = new Map(view.nodes.map((node) => [node.id, node]));
+    const edges = new Set(view.edges.map((edge) => edge.id));
+    refuseOutOfScope(r, '/scope', [
+      ...outOfScope(scope, originalView.nodes.filter((node) => {
+        const next = nodes.get(node.id);
+        return node.type === 'sequence' && next && next.sequence !== node.sequence;
+      }).map((node) => node.id), 'nodes'),
+      ...outOfScope(scope, originalView.edges.filter((edge) => !edges.has(edge.id)).map((edge) => edge.id), 'edges'),
+    ]);
+    problems.throwIfAny();
+  }
 
   const nextFile = path.length ? embed(base, path, view) : view;
   // Only what this request could plausibly have broken — `touched` plus, through `checkQuality`'s
@@ -671,8 +704,91 @@ function labelStylePatch(r: Reader, value: unknown, at: string): Partial<DraftNo
   return patch;
 }
 
+/** Mermaid has no cards. Keep them on identifiable messages when a user or agent edits its source. */
+function keepMessageAttachments(before: DraftSequence, after: DraftSequence, id: string, advisories: string[]): DraftSequence {
+  const old = messagesOf(before);
+  if (!old.some((message) => message.attachments?.length)) return after;
+  const next = messagesOf(after);
+  const taken = new Set<string>();
+  const matches = new Map<string, string>();
+  const sameRoute = (a: (typeof old)[number], b: (typeof next)[number]) => a.from === b.from && a.to === b.to && a.kind === b.kind;
+  for (const message of old) {
+    const found = next.find((candidate) => !taken.has(candidate.id) && sameRoute(message, candidate) && message.label === candidate.label);
+    if (!found) continue;
+    matches.set(message.id, found.id);
+    taken.add(found.id);
+  }
+  for (const message of old) {
+    const attachments = message.attachments;
+    if (!attachments?.length) continue;
+    let target = matches.get(message.id);
+    if (!target) {
+      const alternatives = next.filter((candidate) => !taken.has(candidate.id) && sameRoute(message, candidate));
+      const remaining = old.filter((candidate) => !matches.has(candidate.id) && sameRoute(message, candidate));
+      if (alternatives.length === 1 && remaining.length === 1) {
+        target = alternatives[0]!.id;
+        taken.add(target);
+      }
+    }
+    if (target) after = editMessageAttachments(after, target, () => attachments);
+    else advisories.push(`Sequence "${id}": attachments on "${message.label || 'Message'}" could not be matched to a message in the new source.`);
+  }
+  return after;
+}
+
+/**
+ * A sequence changed in place, keeping its id and where it stands. `mermaid` replaces what it holds;
+ * a participant that stood for a shape still does when it is written under the id the read gave it,
+ * so text that was read, edited and sent back loses no link. `links` alone re-links the participants
+ * it has. Its box follows what it now holds, as it does in the editor.
+ */
+function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Json, at: string, ctx: ReturnType<typeof measureContext>, advisories: string[]): DraftDocument | undefined {
+  const shapes = new Map(view.nodes.map((n) => [n.id, n]));
+  // What a participant may stand for: the shapes of this view, never a card, a boundary or a sequence.
+  const elementIds = new Set(view.nodes.filter((n) => n.type !== 'group' && n.type !== 'sequence' && !isCard(n)).map((n) => n.id));
+  const current = sequenceOf(node);
+  let title = node.text ?? '';
+  if (set.title !== undefined) {
+    const named = r.text(set.title, `${at}/title`, AGENT_LIMITS.sequenceTitleLength, { required: true, singleLine: true });
+    if (named !== undefined) title = named;
+  }
+  let sequence = current;
+  if (set.mermaid !== undefined) {
+    const read = readSequenceSource(r, set, at, elementIds, current);
+    if (!read) return undefined;
+    advisories.push(...unsupportedAdvice(node.id, read.unsupported));
+    sequence = linked(read.sequence, read.links, shapes, node.id, advisories);
+    sequence = keepMessageAttachments(current, sequence, node.id, advisories);
+    if (current.numberMessages === false) sequence = { ...sequence, numberMessages: false };
+    if (set.title === undefined && read.title) title = read.title;
+  } else if (set.links !== undefined) {
+    // By the id each participant is written under in a read. A null (or a name left out of a
+    // whole new map) unlinks: the participant keeps what it is and goes its own way.
+    const given = set.links === null ? {} : r.object(set.links, `${at}/links`);
+    if (!given) return undefined;
+    const alias = aliasesOf(current);
+    const byName = new Map(current.participants.map((participant) => [alias.get(participant.id) ?? participant.id, participant.id]));
+    const links = new Map<string, string>();
+    for (const [name, element] of Object.entries(given)) {
+      const participant = byName.get(name);
+      if (!participant) r.problems.add('INVALID_REFERENCE', `${at}/links/${name}`, `no participant "${name}" in this sequence; links are keyed by a participant's id in the Mermaid text a read gives`);
+      else if (typeof element !== 'string' || !elementIds.has(element)) r.problems.add('INVALID_REFERENCE', `${at}/links/${name}`, `no element "${String(element)}" in this view`);
+      else if ([...links.values()].includes(element)) r.problems.add('INVALID_INPUT', `${at}/links/${name}`, `"${element}" already stands in this sequence; one participant per element`);
+      else links.set(participant, element);
+    }
+    if (!r.problems.empty) return undefined;
+    const unlinked = { ...current, participants: current.participants.map(({ ref: _ref, ...participant }) => participant) };
+    sequence = linked(unlinked, links, shapes, node.id, advisories);
+  }
+  if (!r.problems.empty) return undefined;
+  const changed = fitSequenceNode(node, { ...node, text: title, sequence }, ctx);
+  const kept = new Set(sequence.participants.map((participant) => participant.id));
+  const removed = new Set(current.participants.filter((participant) => !kept.has(participant.id)).map((participant) => participant.id));
+  return removeParticipantEdges({ ...view, nodes: view.nodes.map((n) => (n.id === node.id ? changed : n)) }, node.id, removed);
+}
+
 /** Which `SET_FIELDS` a node of each type takes: a card's own fields, or an element's. */
-const NODE_FIELDS: Partial<Record<DraftNode['type'], keyof typeof SET_FIELDS>> = { group: 'group', note: 'note', code: 'code', text: 'label' };
+const NODE_FIELDS: Partial<Record<DraftNode['type'], keyof typeof SET_FIELDS>> = { group: 'group', note: 'note', code: 'code', text: 'label', sequence: 'sequence' };
 
 const isCard = (node: DraftNode) => node.type === 'note' || node.type === 'code' || node.type === 'text';
 
@@ -689,6 +805,18 @@ function updateOne(
   scope?: Scope,
 ): { view: DraftDocument } | undefined {
   const node = view.nodes.find((n) => n.id === id);
+  if (node?.type === 'sequence') {
+    refuseOutOfScope(r, at, outOfScope(scope, [id], 'nodes'));
+    if (!r.problems.empty) return undefined;
+    const next = updateSequence(r, view, node, set, at, ctx, advisories);
+    if (!next) return undefined;
+    if (scope && next.flows !== view.flows && next.flows.some((flow, index) => flow !== view.flows[index])) {
+      r.problems.add('OUT_OF_SCOPE', at, 'replacing these participants would change a flow, which a captured selection never covers');
+      return undefined;
+    }
+    touched.add(id);
+    return { view: next };
+  }
   if (node) {
     refuseOutOfScope(r, at, outOfScope(scope, [id], 'nodes'));
     if (!r.problems.empty) return undefined;
@@ -1049,7 +1177,7 @@ function addToView(
   advisories: string[],
 ): DraftDocument {
   const existingIds = new Set(view.nodes.map((n) => n.id));
-  const newIds = new Set([...room.nodes.map((n) => n.id), ...room.groups.map((g) => g.id), ...room.notes.map((n) => n.id)]);
+  const newIds = new Set([...room.nodes.map((n) => n.id), ...room.groups.map((g) => g.id), ...room.notes.map((n) => n.id), ...room.sequences.map((s) => s.id)]);
   const inner = room.relationships.filter((e) => newIds.has(e.from) && newIds.has(e.to));
   const bridging = room.relationships.filter((e) => !(newIds.has(e.from) && newIds.has(e.to)));
   // New elements — and new boundaries nested in one — that belong to an existing boundary are laid
@@ -1075,6 +1203,7 @@ function addToView(
     relationships: inner.map(({ route: _route, ...e }) => e),
     flows: [],
     notes: [],
+    sequences: [],
   };
   // Into an empty view, the flows that come with it say what the main path is (see `arrangeFreshRoom`).
   const fresh = view.nodes.length === 0 && bridging.length === 0;
@@ -1190,6 +1319,14 @@ function addToView(
       const at = freeOriginFor({ ...next, nodes: next.nodes.filter((n) => n.id !== note.id) }, note);
       next = updateNode(next, note.id, { x: Math.round(at.x), y: Math.round(at.y) });
     }
+  }
+
+  // Sequences: each where there is room for it, clear of everything already there. Its
+  // participants may stand for shapes this op added or shapes that were there before.
+  for (const spec of room.sequences) {
+    const made = sequenceNode(spec, new Map(next.nodes.map((n) => [n.id, n])), ctx, advisories);
+    const at = freeOriginFor(next, made);
+    next = { ...next, nodes: [...next.nodes, { ...made, x: Math.round(at.x), y: Math.round(at.y) }] };
   }
 
   // Flows (they may use new and existing connectors alike). variantOf is linked in a second pass,

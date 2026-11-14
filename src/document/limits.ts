@@ -39,6 +39,7 @@ export const LIMITS = {
   maxCoordinate: 1_000_000,
   minNodeSize: 24,
   maxNodeSize: 20_000,
+  maxSequenceNodeSize: 200_000,
   minZoom: 0.1,
   maxZoom: 4,
   maxAttachmentsPerNode: 12,
@@ -68,6 +69,16 @@ export const LIMITS = {
    * most, so this keeps a file with a backdrop well inside `maxFileBytes` and a `git diff` bearable.
    */
   maxEmbeddedBackgroundBytes: 2 * 1024 * 1024,
+  /** One sequence. Past forty lifelines nobody can follow a message across the page. */
+  maxSequenceParticipants: 40,
+  /** Messages, notes and fragments in one sequence, at every depth. */
+  maxSequenceItems: 600,
+  /** Fragments inside fragments. Bounds the walk a hostile file can ask for. */
+  maxSequenceDepth: 8,
+  maxSequenceOperands: 12,
+  maxSequenceGroups: 20,
+  maxSequenceNameLength: 120,
+  maxSequenceNoteLength: 1000,
 } as const;
 
 export const DEFAULTS = {
@@ -124,4 +135,8 @@ export const DEFAULTS = {
    *  `height` entirely). */
   componentWidth: 152,
   componentHeight: 56,
+  /** An empty sequence: room for its title and the first participant. It is sized to what it holds
+   *  from then on (`sequence/fit.ts`). */
+  sequenceWidth: 320,
+  sequenceHeight: 200,
 } as const;

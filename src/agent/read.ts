@@ -20,6 +20,7 @@ import { categoryOf } from '../document/connectorSemantics';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlowStep, DraftNode } from '../document/types';
 import { AgentError } from './errors';
 import { reviewView, type ReviewFinding } from './review';
+import { sequenceRead } from './sequences';
 import { groupKindOf, lineStyleOf, typeWordOf } from './vocabulary';
 import { routeGeometry } from './route';
 
@@ -176,7 +177,7 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
       for (let collection = 0; collection < sizes.length; collection += 1) {
         const one = sizes.map((_size, index) => index === collection ? 1 : 0);
         const single = project(file, view, all.slice(offsets[0], offsets[0]! + one[0]!), all, path, level, ownLevel, owner, includes, revision, diagramId, offsets, one, scope !== undefined, signature, args.focus, geometryCache, review);
-        const progress = ['elements', 'groups', 'notes', 'relationships', 'flows', 'openPoints'].some((key) => Array.isArray(single[key]) && (single[key] as unknown[]).length > 0);
+        const progress = ['elements', 'groups', 'notes', 'sequences', 'relationships', 'flows', 'openPoints'].some((key) => Array.isArray(single[key]) && (single[key] as unknown[]).length > 0);
         if (progress && new TextEncoder().encode(JSON.stringify(single)).length <= READ_LIMITS.bytes) return single;
       }
       throw new AgentError('LIMIT_EXCEEDED', 'One item exceeds the read response limit.', { hint: 'Read fewer fields or omit fullText; use read_attachment for long attachment bodies.' });
@@ -262,6 +263,7 @@ function project(
   const elements: unknown[] = [];
   const groups: unknown[] = [];
   const notes: unknown[] = [];
+  const sequences: unknown[] = [];
   for (const node of page) {
     // Display numbers, to the hundredth: the document keeps its own exact coordinates.
     const geometry = includes.has('geometry') ? { geometry: { x: hundredths(node.x), y: hundredths(node.y), width: hundredths(node.width), height: hundredths(node.height) } } : {};
@@ -275,6 +277,11 @@ function project(
       : {};
     if (node.type === 'group') {
       groups.push({ id: node.id, label: node.text ?? '', kind: groupKindOf(node.boundaryPreset), ...(node.parentId ? { parent: node.parentId } : {}), ...(node.accent ? { color: node.accent } : {}), ...attachments, ...geometry });
+      continue;
+    }
+    if (node.type === 'sequence') {
+      // As update_diagram takes it back: the text, and which participants stand for which shapes.
+      sequences.push({ ...sequenceRead(node, includes.has('fullText') || focused), ...group, ...geometry });
       continue;
     }
     if (node.type === 'note' || node.type === 'text' || node.type === 'code') {
@@ -384,6 +391,7 @@ function project(
     relationships,
     ...(groups.length ? { groups } : {}),
     ...(notes.length ? { notes } : {}),
+    ...(sequences.length ? { sequences } : {}),
     flows: allFlows.slice(offsets[2], offsets[2]! + sizes[2]!).map((f) => ({
       id: f.id,
       title: f.title,

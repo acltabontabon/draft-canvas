@@ -1,6 +1,8 @@
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
 import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
+import { sequenceCommands, sequenceFromSelectionCommands, sequenceQuickCommands } from './sequence';
+import { sequenceActions } from '../store/sequenceActions';
 import { bridgeProblems } from '../document/splice';
 import { CONVERTIBLE_TYPES, CONVERTIBLE_TYPE_NAMES, isConvertibleType } from '../document/convert';
 import { reconnectProblem } from '../document/reconnect';
@@ -485,6 +487,29 @@ function flowCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.ui.setFlowPanelOpen(true),
     },
   );
+  // A flow is an order somebody gave: it can be drawn as a sequence without guessing at one.
+  if (ctx.playback.flows.length > 0) {
+    commands.push({
+      id: 'flow-to-sequence',
+      title: ctx.playback.flows.length === 1 ? 'Draw the flow as a sequence' : 'Draw a flow as a sequence…',
+      group: 'flow',
+      keywords: ['sequence diagram', 'lifelines', 'convert', 'messages'],
+      hint: 'A sequence beside the diagram, still linked to its shapes',
+      run: (inner) => {
+        const { flows } = inner.playback;
+        if (flows.length === 1) return void sequenceActions.createFromFlow(flows[0]!.id);
+        return {
+          prompt: 'Draw as a sequence',
+          options: flows.map((flow) => ({
+            id: `flow-to-sequence:${flow.id}`,
+            title: flow.title,
+            hint: count(flow.steps.length, 'step'),
+            run: () => void sequenceActions.createFromFlow(flow.id),
+          })),
+        };
+      },
+    });
+  }
   return commands;
 }
 
@@ -907,6 +932,7 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   component: 'Component',
   group: 'Boundary',
   ellipse: 'Junction',
+  sequence: 'Sequence',
 };
 
 function captionFor(node: DraftNode): string {
@@ -935,7 +961,8 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
     const edge = inner.editor.connect(source.id, target.id);
     if (edge) inner.editor.setSelection({ nodes: [], edges: [edge.id] });
   });
-  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse').map((preset) => ({
+  // Not a Junction (nothing to name) and not a Sequence (a connector does not lead to one).
+  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse' && preset.id !== 'sequence').map((preset) => ({
     id: `connect-new:${preset.id}`,
     title: `New ${preset.label}`,
     keywords: PRESET_KEYWORDS[preset.id],
@@ -1376,11 +1403,15 @@ export function primaryCommandsFor(ctx: CommandContext, node: DraftNode): Comman
     return hasInside(node) ? [...inside, ...quick] : [...quick, ...inside];
   }
   if (node.type === 'group') return [boundaryUngroupCommand()];
+  if (node.type === 'sequence') return sequenceQuickCommands(node).filter((command) => command.primary);
   return inside;
 }
 
 export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
   const commands: Command[] = [];
+  // What a sequence offers, and what the thing selected inside it does, come first: with a message
+  // selected, "Delete" in the palette should be that message.
+  if (node.type === 'sequence') commands.push(...sequenceCommands(ctx, node));
   const isBoundary = node.type === 'group';
   const suggested = continuationCommandFor(ctx, node);
   if (suggested) commands.push(suggested);
@@ -2112,13 +2143,13 @@ function selectionCommands(ctx: CommandContext): Command[] {
   const { document } = ctx.editor;
   if (nodes.length === 1 && edges.length === 0) {
     const node = document.nodes.find((entry) => entry.id === nodes[0]);
-    return node ? nodeCommands(ctx, node) : [];
+    return node ? [...nodeCommands(ctx, node), ...sequenceFromSelectionCommands(ctx)] : [];
   }
   if (edges.length === 1 && nodes.length === 0) {
     const edge = document.edges.find((entry) => entry.id === edges[0]);
     return edge ? edgeCommands(ctx, edge) : [];
   }
-  if (nodes.length + edges.length >= 2) return multiCommands(ctx);
+  if (nodes.length + edges.length >= 2) return [...multiCommands(ctx), ...sequenceFromSelectionCommands(ctx)];
   return [];
 }
 
@@ -2239,6 +2270,8 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'present-flow',
   'switch-flow',
   'flow-manage',
+  // A sequence telling itself is a presentation like any other: nothing is written.
+  'seq-present',
   // Open points: the panel and Focus are views; raising or resolving one is not.
   'open-points',
   'open-points-focus',

@@ -24,7 +24,10 @@ import { routingPlan } from '../src/edges/bundles';
 import { crossingPlan } from '../src/edges/crossings';
 import { labelGroupPlan } from '../src/edges/labelGroups';
 import { embed, totals, viewOf } from '../src/depth/tree';
-import type { DraftDocument } from '../src/document/types';
+import type { DraftDocument, DraftSequence } from '../src/document/types';
+import { createMessage, insertItem, updateMessage, wrapItems } from '../src/document/sequenceOps';
+import { describeContext, describeNode, naturalSequenceSizeFor, sequenceLayoutFor } from '../src/nodes/describe';
+import { LIGHT } from '../src/render/theme/tokens';
 import { ARCHITECTURE_STARTERS } from './fixtures/starters-v1';
 import { applyChanges } from '../src/collab/apply';
 import { diffFile } from '../src/collab/diff';
@@ -261,6 +264,39 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
     const started = performance.now();
     for (const edge of doc.edges) isEdgeFocused(focus, edge);
     expect(performance.now() - started).toBeLessThan(100);
+  });
+
+  it('lays out, draws and edits a large sequence within budget', () => {
+    // 30 participants and 300 messages, a third of them in nested conditions: far past what a
+    // sequence usually holds. Laying it out and drawing it from nothing is the cost of opening a
+    // file with it; an edit lays it out again, and must not pay for anything else on the canvas.
+    const ctx = describeContext(LIGHT);
+    const participants = Array.from({ length: 30 }, (_, index) => ({ id: `p${index}`, name: `Service number ${index}`, type: 'service' as const, serviceKind: 'generic' as const }));
+    let sequence: DraftSequence = { participants, items: [] };
+    for (let index = 0; index < 300; index += 1) {
+      const from = participants[index % 30]!.id;
+      const to = participants[(index * 7 + 3) % 30]!.id;
+      sequence = insertItem(sequence, createMessage({ id: `m${index}`, from, to: to === from ? participants[(index + 1) % 30]!.id : to, label: `Request ${index} with a label of ordinary length` }), { operandId: null, index });
+    }
+    for (let index = 0; index < 100; index += 10) sequence = wrapItems(sequence, [`m${index}`, `m${index + 1}`, `m${index + 2}`], { id: `f${index}`, operator: index % 20 ? 'alt' : 'loop', guard: 'a condition' });
+    const node = { ...createNode({ type: 'sequence', x: 0, y: 0, text: 'Large' }), sequence };
+
+    const started = performance.now();
+    const sized = { ...node, ...naturalSequenceSizeFor(node, ctx) };
+    const drawn = describeNode(sized, ctx);
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(drawn.shapes.length).toBeGreaterThan(300);
+
+    // The same sequence asked for again costs nothing: it is laid out once per content.
+    const again = performance.now();
+    for (let pass = 0; pass < 200; pass += 1) sequenceLayoutFor(sized, ctx);
+    expect(performance.now() - again).toBeLessThan(25);
+
+    // One label changed: a new layout, with the participants' heads measured only once ever.
+    const edited = { ...sized, sequence: updateMessage(sequence, 'm150', { label: 'Changed' }) };
+    const relaid = performance.now();
+    describeNode(edited, ctx);
+    expect(performance.now() - relaid).toBeLessThan(200);
   });
 
   it('classifies every edge and node against the active flow step within budget', () => {
@@ -731,4 +767,22 @@ describe('collaboration on a thousand-shape document', () => {
     // walk of the document would move the middle by an order of magnitude.
     expect(timings[Math.floor(timings.length / 2)]!).toBeLessThan(4);
   });
+});
+
+it('reuses plans after a sequence display edit and replans when a participant anchor moves', () => {
+  const doc = largeDocument();
+  const a = { id: 'a', name: 'API', type: 'service' as const };
+  const b = { id: 'b', name: 'Worker', type: 'service' as const };
+  const node = { ...createNode({ type: 'sequence', x: 5000, y: 4000 }), width: 600, height: 280,
+    sequence: { participants: [a, b], items: [] } as DraftSequence };
+  const original = [...doc.nodes, node];
+  const toggled = [...doc.nodes, { ...node, sequence: { ...node.sequence, numberMessages: false } }];
+  const first = crossingPlan(original, doc.edges);
+  expect(crossingPlan(toggled, doc.edges)).toBe(first);
+  const anchor = createEdge({ source: node.id, target: doc.nodes[0]!.id, sourceAnchor: { side: 'left', offset: 0.5, participantId: a.id } });
+  const anchored = [...doc.edges, anchor];
+  const plan = crossingPlan(original, anchored);
+  expect(crossingPlan(toggled, anchored)).toBe(plan);
+  const reordered = [...doc.nodes, { ...node, sequence: { ...node.sequence, participants: [b, a] } }];
+  expect(crossingPlan(reordered, anchored)).not.toBe(plan);
 });

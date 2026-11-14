@@ -26,6 +26,7 @@ import { LIGHT } from '../render/theme/tokens';
 import { BAND, BOUNDARY_HEADER, INNER_BAND, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD, GUTTER } from './compose';
 import { AgentError } from './errors';
 import type { AttachmentSpec, FlowSpec, LayoutSpec, NodeSpec, NoteSpec, RelationshipSpec, RoomSpec } from './input';
+import { sequenceNode } from './sequences';
 import { drawnRoute, repairAnchors, segmentHitsBox } from './route';
 import { GROUP_KINDS, LINE_STYLES } from './vocabulary';
 import { applyRoutes } from './placement';
@@ -790,6 +791,7 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
   const placed = arrangeParts({ elements, groups: groupNodes, memberNotes, besideNotes, edges, primaryEdges: new Set(primary?.steps.flatMap((s) => (s.relationship ? [s.relationship] : [])) ?? []) }, layout, ctx);
   let nodes = [...groupNodes.values(), ...elements.values(), ...memberNotes.values(), ...[...besideNotes.values()].flat()];
   nodes.push(...placeNotes(room, nodes, edges, placed.width, placed.height, layout.direction, ctx));
+  nodes.push(...placeSequences(room, nodes, ctx, advisories));
   // What the request placed or routed itself goes where it said, over the layout's choice.
   const places = new Map(room.nodes.flatMap((n) => (n.place ? [[n.id, n.place] as const] : [])));
   const routes = new Map(room.relationships.flatMap((e) => (e.route ? [[e.id, e.route] as const] : [])));
@@ -955,6 +957,22 @@ export function attachNote(host: { id: string; attachments?: Attachment[] } | un
 
 /** Notes beside what they're about when they say (placed clear of shapes and connectors, the way
  *  Intent Continuation places a companion); the rest in a column after the diagram. */
+/**
+ * A room's sequences, below everything else in it, side by side. A sequence is about the
+ * architecture and not part of its graph: it takes no part in the layout above and moves nothing in it.
+ */
+function placeSequences(room: RoomSpec, placed: readonly DraftNode[], ctx: DescribeContext, advisories: string[]): DraftNode[] {
+  if (room.sequences.length === 0) return [];
+  const shapes = new Map(placed.map((n) => [n.id, n]));
+  let x = placed.length ? Math.min(...placed.map((n) => n.x)) : 0;
+  const y = placed.length ? Math.max(...placed.map((n) => n.y + n.height)) + GUTTER : 0;
+  return room.sequences.map((spec) => {
+    const node = { ...sequenceNode(spec, shapes, ctx, advisories), x: Math.round(x), y: Math.round(y) };
+    x += node.width + GUTTER;
+    return node;
+  });
+}
+
 function placeNotes(room: RoomSpec, placed: DraftNode[], edges: DraftEdge[], width: number, height: number, direction: Direction, ctx: DescribeContext): DraftNode[] {
   const out: DraftNode[] = [];
   let loose = 0;

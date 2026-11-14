@@ -1,9 +1,10 @@
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { create } from 'zustand';
 import { reconnectProblem } from '../document/reconnect';
 import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // UI feedback for document limits and rejected reconnects stays outside document operations.
 import { PRESENTATION_AT_REST, useUiStore, type ArrangePreview, type TidyPreview } from './uiStore';
-import { edgeIndex, nodeIndex } from './selectors';
+import { edgeIndex, nodeIndex, selectSequenceMessage } from './selectors';
 import {
   createAttachment,
   createDocument,
@@ -29,7 +30,10 @@ import {
   type DepthPath,
 } from '../depth/tree';
 import { getMeasurer } from '../render/text/measure';
-import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalTextHeight } from '../nodes/describe';
+import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight } from '../nodes/describe';
+import { fitSequences, recoverCappedSequence } from '../nodes/sequenceFit';
+import { liveSequenceFocus, sequenceEditStillThere } from '../sequence/focus';
+import { syncLinks } from '../document/sequenceLinks';
 import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
@@ -201,6 +205,7 @@ export type EditorMode = 'edit' | 'present';
 export interface FlowPlaybackState {
   active: boolean;
   flowId: string | null;
+  sequenceNodeId?: string;
   step: number;
   /**
    * Which half of the current step's exchange is animating — irrelevant (and never read) unless
@@ -403,6 +408,13 @@ export interface EditorStore {
   /** `label` overrides the one `beginInteraction` opened with, when the gesture turned out to be
    *  something else (a drag that ended as an attach). */
   endInteraction: (label?: string) => void;
+  /**
+   * Gives up the step `beginInteraction` opened: the document goes back to exactly what it was when
+   * it began, and nothing is recorded. For a thing made and then let go before it was finished — a
+   * participant added and left unnamed — where putting things back by hand would leave an undo step
+   * that does nothing.
+   */
+  abandonInteraction: () => void;
 
   /* Editing commands */
   addNode: (input: CreateNodeInput) => DraftNode;
@@ -935,17 +947,38 @@ function carryAdoptedMetadata(
  * attachment that's gone keeps showing the rest, as before.
  */
 function closeStaleAttachmentDetail(doc: DraftDocument): void {
+  closeStaleSequenceFocus(doc);
   const detail = useUiStore.getState().openAttachmentDetail;
   if (!detail) return;
   const host =
     detail.hostKind === 'node'
       ? nodeIndex(doc.nodes).get(detail.hostId)
-      : edgeIndex(doc.edges).get(detail.hostId);
+      : detail.hostKind === 'edge'
+        ? edgeIndex(doc.edges).get(detail.hostId)
+        : selectSequenceMessage(doc, detail.hostId, detail.messageId);
   const attachments = host?.attachments ?? [];
   const alive =
     attachments.length > 0 &&
     (detail.hostKind === 'node' || detail.attachmentId === null || attachments.some((a) => a.id === detail.attachmentId));
   if (!alive) useUiStore.getState().setOpenAttachmentDetail(null);
+}
+
+/** `after` with every link between a participant and its shape brought back into step. */
+function linksInStep(before: DraftDocument, after: DraftDocument): DraftDocument {
+  const synced = syncLinks(before, after);
+  // A shape renamed from inside a sequence may need more room for its new name, as if it had been renamed where it stands.
+  return synced.shapes.reduce((doc, id) => growArchitectureToFit(doc, id), synced.doc);
+}
+
+/** After an edit, an undo or someone else's change: what was selected inside a sequence may be gone. */
+function closeStaleSequenceFocus(doc: DraftDocument): void {
+  const ui = useUiStore.getState();
+  if (!ui.sequenceFocus && !ui.sequenceEdit) return;
+  const hostId = ui.sequenceFocus?.nodeId ?? ui.sequenceEdit?.nodeId;
+  const host = hostId ? nodeIndex(doc.nodes).get(hostId) : undefined;
+  const focus = ui.sequenceFocus && host?.sequence ? liveSequenceFocus(host.sequence, ui.sequenceFocus) : null;
+  if (focus !== ui.sequenceFocus) ui.setSequenceFocus(focus);
+  if (ui.sequenceEdit && (!host?.sequence || !sequenceEditStillThere(host.sequence, ui.sequenceEdit.target))) ui.setSequenceEdit(null);
 }
 
 /** `document` carrying a stored title/project — the one place both fields are written together. */
@@ -1083,6 +1116,11 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
   ui.arm(null);
   useUiStore.setState({
     openAttachmentDetail: null,
+    sequenceFocus: null,
+    sequenceEdit: null,
+    sequenceAttachmentTarget: null,
+    sequenceDropTarget: null,
+    sequenceLinkTarget: null,
     quickConnect: null,
     contextMenu: null,
     presentationReveal: null,
@@ -1156,7 +1194,7 @@ export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefin
   const flow =
     lensFlow(state) ??
     (state.flowPlayback.active && state.flowPlayback.flowId
-      ? findFlow(state.document, state.flowPlayback.flowId)
+      ? playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)
       : undefined);
   if (!flow) return undefined;
   const ids = flowMemberNodeIds(state.document, flow);
@@ -1437,6 +1475,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   liveViewport: null,
 
   setDocument(document, options) {
+    const context = describeContext(LIGHT);
+    document = mapRooms(document, (graph) => {
+      const nodes = graph.nodes.map((node) => recoverCappedSequence(node, context));
+      return nodes.some((node, index) => node !== graph.nodes[index]) ? { ...graph, nodes } : graph;
+    });
     documentLoads.all += 1;
     if (!options?.keepPath) documentLoads.openings += 1;
     interaction = null;
@@ -1474,7 +1517,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return;
     const state = get();
     const before = state.document;
-    const next = touch(recipe(before));
+    // A sequence is sized by what it holds, whichever edit changed that — typing a message, a paste,
+    // a renamed title — so it is done here, once, rather than remembered by every action.
+    // And a participant that stands for a shape is that shape: renaming either renames both, here,
+    // in the same step (`sequenceLinks.ts`).
+    const next = touch(fitSequences(before, linksInStep(before, recipe(before)), () => describeContext(LIGHT)));
     // Structural sharing means an operation that changed nothing returns the
     // same object, so no-op commands never create a dead undo step.
     if (next === before || shallowEqualDocument(next, before)) return;
@@ -1638,6 +1685,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ...keys,
       }),
     }));
+  },
+
+  abandonInteraction() {
+    const active = interaction;
+    interaction = null;
+    if (!active) return;
+    // Only in the room it began in; anywhere else the baseline is no longer ours to put back.
+    if (get().document === active.document || !samePath(active.path, get().path)) return;
+    set((s) => ({ document: active.document, selection: active.selection, revision: s.revision + 1 }));
+    closeStaleAttachmentDetail(active.document);
   },
 
   addNode(input) {
@@ -2693,7 +2750,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   resizeNode(id, box) {
-    get().apply('Resize', (doc) => reconcileAfterResize(updateNode(doc, id, box), id));
+    get().apply('Resize', (doc) => {
+      // A sequence can be given room, never less than it needs: its text does not shrink to fit.
+      const node = doc.nodes.find((candidate) => candidate.id === id);
+      const floor = node?.type === 'sequence' ? naturalSequenceSizeFor(node, describeContext(LIGHT)) : null;
+      const held = floor ? { ...box, width: Math.max(box.width, floor.width), height: Math.max(box.height, floor.height) } : box;
+      return reconcileAfterResize(updateNode(doc, id, held), id);
+    });
   },
 
   fitSelectedLabels() {
@@ -3421,6 +3484,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     // A tap on empty canvas with nothing selected, or a click on what is already selected, writes
     // nothing: every subscriber would otherwise run for a selection that did not change.
+    // What is selected inside a sequence belongs to a selection of that sequence alone.
+    const inside = useUiStore.getState().sequenceFocus;
+    if (inside && !(selection.nodes.length === 1 && selection.edges.length === 0 && selection.nodes[0] === inside.nodeId)) {
+      useUiStore.setState({ sequenceFocus: null, sequenceEdit: null });
+    }
     const current = get().selection;
     if (sameIdList(current.nodes, selection.nodes) && sameIdList(current.edges, selection.edges)) return;
     set({ selection });

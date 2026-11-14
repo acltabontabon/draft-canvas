@@ -25,6 +25,7 @@ const KIND_WORDS: Record<DraftNodeType, string> = {
   component: 'component',
   group: 'boundary',
   ellipse: 'junction',
+  sequence: 'sequence',
 };
 
 /** The kind of a shape, in a word or two: "service", "topic", "SQL data store", "system boundary". */
@@ -100,8 +101,8 @@ export function connectorText(edge: DraftEdge, source: DraftNode | undefined, ta
 export function connectorReading(edge: DraftEdge, lookup: NodeLookup): string {
   const source = lookup(edge.source);
   const target = lookup(edge.target);
-  const from = source ? displayNameFor(source) : 'somewhere';
-  const to = target ? displayNameFor(target) : 'somewhere';
+  const from = source?.sequence?.participants.find(({ id }) => id === edge.sourceAnchor?.participantId)?.name || (source ? displayNameFor(source) : 'somewhere');
+  const to = target?.sequence?.participants.find(({ id }) => id === edge.targetAnchor?.participantId)?.name || (target ? displayNameFor(target) : 'somewhere');
   const text = connectorText(edge, source, target);
   if (text) return `${from} ${text} ${to}`;
   return edge.directed ? `${from} to ${to}` : `${from} and ${to}`;

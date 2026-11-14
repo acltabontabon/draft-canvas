@@ -13,8 +13,10 @@ Single keys work when the canvas has focus (`Tab` from the toolbar), not in text
 | `Q` | Queue | `T` | Text |
 | `A` | Actor | `B` | Boundary |
 | `M` | Component | `J` | Junction |
+| `L` | [Sequence](sequence-diagrams.md) | | |
 
 The shape appears under the pointer, ready to name. **Connect to…** in `⌘K` connects it.
+Over a sequence, `S` `D` `Q` `A` `M` add a participant of that kind instead.
 
 `Tab` accepts the faint next-shape suggestion; `]` / `[` cycle through others, or pick the next
 shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch in
@@ -30,7 +32,7 @@ shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch
 | `Shift+1` | Fit the diagram in view |
 | `⌘+` / `⌘−` / `⌘0` | Zoom in / out / to 100% |
 | `Space` + drag | Pan (scrolling also pans) |
-| `⌘↓` / `⌘↑` | [Look inside](depth.md) the selected shape / back out |
+| `⌘↓` / `⌘↑` | [Look inside](depth.md) the selected shape / back out; `⌘↓` also steps into a selected sequence |
 | `⌥O` | Outline: arrows move and expand, `Enter` edits, `Esc` closes |
 
 ## Edit
@@ -61,6 +63,22 @@ shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch
 
 Text also has [Markdown and format shortcuts](shapes-and-connectors.md#write-rich-text);
 `⌘K` there inserts a link.
+
+## Inside a sequence
+
+With a participant, message or frame of a [sequence](sequence-diagrams.md) selected:
+
+| Key | Action |
+| --- | --- |
+| `⌥` + arrow / `⌥⇧` + arrow | Move the selection / extend it |
+| Arrow | Move the message up or down, or the participant left or right |
+| `Enter` or `F2` | Edit |
+| `Tab`, `]` / `[` | Add the offered next message; offer another |
+| `P` | Add a participant after the selected one |
+| `⌘D` | Duplicate |
+| `⌘G` / `⌘⇧G` | Wrap messages or group participants / unwrap or ungroup |
+| `Delete` | Delete; on a frame, remove the frame and keep its messages |
+| `Esc` | Back out to the sequence |
 
 ## Command palette
 

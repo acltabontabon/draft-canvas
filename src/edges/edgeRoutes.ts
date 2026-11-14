@@ -42,7 +42,8 @@ import {
   type RoutedEdge,
   type Track,
 } from './routing';
-import { sameNodeGeometry, type PlanScope } from './sameGeometry';
+import { sameRouteGeometry, type PlanScope } from './sameGeometry';
+import { sequenceAnchorRect } from './sequenceAnchors';
 
 /** Everything a connector's routes depend on. */
 export interface EdgeRouteInputs {
@@ -213,8 +214,8 @@ function connectorInputsWithin(
   const target = nodes.get(edge.target);
   if (!source || !target) return null;
   return {
-    source: overrides.source ?? rectOf(source),
-    target: overrides.target ?? rectOf(target),
+    source: sequenceAnchorRect(source, overrides.source ?? rectOf(source), edge.sourceAnchor),
+    target: sequenceAnchorRect(target, overrides.target ?? rectOf(target), edge.targetAnchor),
     routing: edge.routing,
     label: edge.label,
     ...withCaption(routedCaption(edge, categoryOf(source), categoryOf(target))),
@@ -256,7 +257,7 @@ function deniedOf(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scop
   const known = deniedCache.get(nodes)?.get(edges);
   if (known) return known;
   const previous = lastDenied;
-  const denied = previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes) ? previous.denied : computeDenied(nodes, edges, scope);
+  const denied = previous && previous.edges === edges && sameRouteGeometry(previous.nodes, nodes, edges) ? previous.denied : computeDenied(nodes, edges, scope);
   if (scope === 'canvas') lastDenied = { nodes, edges, denied };
   const byNodes = deniedCache.get(nodes);
   if (byNodes) byNodes.set(edges, denied);

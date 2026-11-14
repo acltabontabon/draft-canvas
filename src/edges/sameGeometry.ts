@@ -1,4 +1,6 @@
-import type { DraftNode } from '../document/types';
+import type { DraftEdge, DraftNode } from '../document/types';
+import { sequenceAnchorRect } from './sequenceAnchors';
+import { rectOf } from './routing';
 
 /**
  * Whether two node arrays put every shape in the same place: same shapes, same kinds, same boxes.
@@ -23,6 +25,33 @@ export function sameNodeGeometry(a: readonly DraftNode[], b: readonly DraftNode[
     }
   }
   return true;
+}
+
+const participantEdges = new WeakMap<readonly DraftEdge[], readonly DraftEdge[]>();
+
+/** Route plans also consume lifeline points, while the obstacle grid only consumes frame boxes. */
+export function sameRouteGeometry(a: readonly DraftNode[], b: readonly DraftNode[], edges: readonly DraftEdge[]): boolean {
+  if (!sameNodeGeometry(a, b)) return false;
+  if (a === b) return true;
+  let anchored = participantEdges.get(edges);
+  if (!anchored) {
+    anchored = edges.filter((edge) => edge.sourceAnchor?.participantId || edge.targetAnchor?.participantId);
+    participantEdges.set(edges, anchored);
+  }
+  if (anchored.length === 0) return true;
+  const changed = new Map<string, number>();
+  for (const [index, node] of a.entries()) {
+    const next = b[index]!;
+    if (node.type === 'sequence' && (node.sequence !== next.sequence || node.text !== next.text)) changed.set(node.id, index);
+  }
+  const sameEnd = (id: string, anchor: DraftEdge['sourceAnchor']): boolean => {
+    const index = changed.get(id);
+    if (index === undefined || !anchor?.participantId) return true;
+    const before = sequenceAnchorRect(a[index], rectOf(a[index]!), anchor);
+    const after = sequenceAnchorRect(b[index], rectOf(b[index]!), anchor);
+    return before.x === after.x && before.y === after.y && before.width === after.width && before.height === after.height;
+  };
+  return anchored.every((edge) => sameEnd(edge.source, edge.sourceAnchor) && sameEnd(edge.target, edge.targetAnchor));
 }
 
 /**

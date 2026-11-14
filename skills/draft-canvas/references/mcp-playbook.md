@@ -159,6 +159,26 @@ architecturally? don't apply it"), send the ops through `submit_proposal` with a
 `rationale`, `assumptions` and `openQuestions`. Draft Canvas shows it for them to accept or reject;
 don't wait for the decision. `ops: []` with a summary is a valid "no architectural impact" answer.
 
+## Sequences
+
+A sequence is a native element beside the architecture: participants, messages in order, replies,
+conditions, loops and parallel branches, laid out by the app. Send one when the order, the replies or
+the conditions go beyond what the relationships say (a protocol, a saga, an error path) — and only
+from an order the person or the code gives. Write it as a Mermaid `sequenceDiagram`; `links` makes a
+participant stand for an element of the same view, so it takes that element's name, kind and
+technology and follows it:
+
+```json
+{ "op": "add", "sequences": [ { "id": "place-order", "title": "Place an order",
+  "mermaid": "sequenceDiagram\n  actor shopper as Shopper\n  participant api as Orders API\n  participant db as Orders\n  shopper->>+api: POST /orders\n  api->>+db: INSERT order\n  db-->>-api: order id\n  alt payment accepted\n    api-->>shopper: 201 Created\n  else declined\n    api-->>-shopper: 402 Payment Required\n  end",
+  "links": { "api": "orders-api", "db": "orders-db" } } ] }
+```
+
+`read_diagram` returns each sequence the same way (`mermaid`, `links`). `set.mermaid` replaces what
+it holds and keeps the links of participants still written under the same ids; `set.title` renames
+it; `set.links` re-links. A receipt advisory names anything in the text that is not drawn
+(`autonumber`, `rect`, lost messages). `get_capabilities` topic `sequences` has the rest.
+
 ## Styled labels
 
 A label's `text` is Markdown, drawn as such on the canvas and in every export: `#` headings,

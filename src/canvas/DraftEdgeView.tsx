@@ -1,3 +1,4 @@
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
@@ -65,6 +66,7 @@ import { EdgeBendHandles, type BendPreview } from './EdgeBendHandles';
 import { translateWaypoints } from '../edges/waypoints';
 import { computeEdgeRoutes, edgeRoutes, routedCaption, searchAllowed, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
 import { endpointPlan } from '../edges/endpoints';
+import { sequenceAnchorRect } from '../edges/sequenceAnchors';
 import { separationPlan } from '../edges/separation';
 
 const NO_OBSTACLES: readonly Rect[] = [];
@@ -334,8 +336,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // positions, it says whether a gesture is carrying both ends (and so this connector's bends) along.
   // The node objects themselves, so nothing is allocated per store update — and only a bent
   // connector asks at all.
-  const committedSource = useEditorStore((state) => (edge?.waypoints ? selectNode(state.document, edge.source) : undefined));
-  const committedTarget = useEditorStore((state) => (edge?.waypoints ? selectNode(state.document, edge.target) : undefined));
+  const committedSource = useEditorStore((state) => (edge && (edge.waypoints || edge.sourceAnchor?.participantId) ? selectNode(state.document, edge.source) : undefined));
+  const committedTarget = useEditorStore((state) => (edge && (edge.waypoints || edge.targetAnchor?.participantId) ? selectNode(state.document, edge.target) : undefined));
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
@@ -534,8 +536,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // crossing plan has usually filed it already.
   const transient = routeUnsettled;
   const routeRequest: EdgeRouteInputs = {
-    source: effectiveSourceRect,
-    target: effectiveTargetRect,
+    source: sequenceAnchorRect(committedSource, effectiveSourceRect, dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor),
+    target: sequenceAnchorRect(committedTarget, effectiveTargetRect, dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor),
     routing: edge.routing,
     label: displayLabel,
     // Its caption is placed with its size in view too, as every other renderer routes it.
@@ -1554,8 +1556,8 @@ type InternalNodeLike = { internals: { positionAbsolute: { x: number; y: number 
 
 /** The flow being presented, if any. */
 function playingFlowOf(state: EditorStore) {
-  const { active, flowId } = state.flowPlayback;
-  return active && flowId ? findFlow(state.document, flowId) : undefined;
+  const { active, flowId, sequenceNodeId } = state.flowPlayback;
+  return active && flowId ? playbackFlowOf(state.document, flowId, sequenceNodeId) : undefined;
 }
 
 /** This connector's Presentation tier — a string, so only connectors whose tier flips re-render.

@@ -1,3 +1,4 @@
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { TrafficReplayProvider } from './TrafficReplayContext';
 import { TrafficScenario } from './TrafficScenario';
 import { FlowTraceBadges } from './FlowTraceBadges';
@@ -33,16 +34,22 @@ import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { centerOf, pointInBox } from '../lib/math';
 import { pathKey } from '../depth/tree';
-import { findFlow } from '../document/flow';
+
 import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
 import { accentOf } from '../render/theme/tokens';
 import { lensFlow, useEditorStore } from '../store/editorStore';
 import { PresentationPointer } from './presentation/PresentationPointer';
-import { edgeIndex, nodeIndex } from '../store/selectors';
+import { edgeIndex, nodeIndex, selectSequenceMessage } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
 import { CanvasBackground } from './CanvasBackground';
 import { ATTACH_DWELL_MS, evaluateAttachCandidates } from './dragTargets';
+import { isLinkable, isPartOfDiagram } from '../document/sequenceLinks';
+import { LIMITS } from '../document/limits';
+import { describeContext, sequenceLayoutFor } from '../nodes/describe';
+import { LIGHT } from '../render/theme/tokens';
+import { hitSequence, participantIndexAt } from '../sequence/layout';
+import { sequenceActions } from '../store/sequenceActions';
 import {
   CAPSULE_MOVE_THRESHOLD_PX,
   CAPSULE_RELEASE_MARGIN_PX,
@@ -571,7 +578,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // colour — handed to every arrival ring, boundary outline and caption through a single variable.
   const explainAccent = useEditorStore((state) => {
     if (!state.flowPlayback.active || !state.flowPlayback.flowId) return undefined;
-    return findFlow(state.document, state.flowPlayback.flowId)?.accent;
+    return playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)?.accent;
   });
   const focusActive = useEditorStore((state) => state.focus.active);
   // A flow merely selected (not presented) acts as a gentler lens — see
@@ -693,7 +700,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     else if (
       editable &&
       useUiStore.getState().armed &&
-      nodeIndex(useEditorStore.getState().document.nodes).get(node.id)?.type === 'group'
+      // …and on a sequence, where a shape tool adds a participant (`EditorScreen`'s `createAt`).
+      ['group', 'sequence'].includes(nodeIndex(useEditorStore.getState().document.nodes).get(node.id)?.type ?? '')
     ) {
       // A tool armed and clicked inside a boundary places there, as on empty canvas; the boundary
       // covering the pane swallowed the click and the tool stayed armed with nothing placed.
@@ -819,6 +827,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     grabOrigin.current = null;
     clearPathCache();
     useUiStore.getState().setDragCapsule(null);
+    useUiStore.getState().setSequenceAttachmentTarget(null);
   }, []);
   useEffect(() => clearCapsule, [clearCapsule]);
 
@@ -893,6 +902,66 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
    * The document is only written when the gesture ends, which is what makes one
    * drag one undo entry and stops autosave firing sixty times a second.
    */
+  /**
+   * A piece of architecture held over a sequence joins it as a participant when dropped, and goes
+   * back to where it was: it belongs to the architecture, and only stands in the sequence.
+   *
+   * Armed like every other drop here — deliberately. The shape's centre has to rest inside the
+   * sequence for the same dwell a note needs over a shape, and while it is armed a line shows where
+   * the participant would stand, so a shape merely carried across a sequence never ends up in it.
+   */
+  const sequenceDwell = useRef<{ hostId: string; index: number; timer: number } | null>(null);
+  const clearSequenceDrop = useCallback(() => {
+    if (sequenceDwell.current) window.clearTimeout(sequenceDwell.current.timer);
+    sequenceDwell.current = null;
+    useUiStore.getState().setSequenceDropTarget(null);
+  }, []);
+  const armSequenceDrop = useCallback(
+    (changes: readonly NodeChange<DraftRfNode>[]) => {
+      const ui = useUiStore.getState();
+      if (dragCancelled.current || draggingIds.current.size !== 1 || sweptDescendants.current.size !== 0) return clearSequenceDrop();
+      const [draggedId] = draggingIds.current;
+      const { nodes } = useEditorStore.getState().document;
+      const dragged = nodeIndex(nodes).get(draggedId!);
+      const change = changes.find((candidate) => candidate.type === 'position' && candidate.id === draggedId);
+      const position = change?.type === 'position' ? change.position : undefined;
+      // The drag's last frame carries no position; what was armed a moment ago still stands.
+      if (!position) return;
+      if (!dragged || !isLinkable(dragged) || ui.attachArmedTarget || ui.attachArmedEdgeTarget || ui.spliceArmedEdgeTarget) return clearSequenceDrop();
+      const centre = centerOf({ ...position, width: dragged.width, height: dragged.height });
+      let host: DraftNode | undefined;
+      for (const node of nodes) {
+        if (node.type !== 'sequence' || !pointInBox(centre, node)) continue;
+        if (!host || node.z >= host.z) host = node;
+      }
+      const sequence = host?.sequence;
+      // Not twice: a shape that already stands in this sequence is only being moved past it.
+      if (!host || !sequence || sequence.participants.length >= LIMITS.maxSequenceParticipants || sequence.participants.some((participant) => participant.ref === dragged.id)) {
+        return clearSequenceDrop();
+      }
+      const index = participantIndexAt(sequenceLayoutFor(host, describeContext(LIGHT)), centre.x - host.x);
+      // A shape that is part of a diagram stays in it and is stood in for. One with nothing attached
+      // to it is simply being put into the sequence: leaving a copy behind would be a duplicate.
+      const stays = isPartOfDiagram(useEditorStore.getState().document, dragged);
+      if (ui.sequenceDropTarget?.nodeId === host.id) return ui.setSequenceDropTarget({ nodeId: host.id, index, stays });
+      if (sequenceDwell.current?.hostId === host.id) {
+        sequenceDwell.current.index = index;
+        return;
+      }
+      clearSequenceDrop();
+      const hostId = host.id;
+      sequenceDwell.current = {
+        hostId,
+        index,
+        timer: window.setTimeout(() => {
+          const waiting = sequenceDwell.current;
+          if (waiting?.hostId === hostId) useUiStore.getState().setSequenceDropTarget({ nodeId: hostId, index: waiting.index, stays });
+        }, ATTACH_DWELL_MS),
+      };
+    },
+    [clearSequenceDrop],
+  );
+
   const onNodesChange = useCallback(
     (changes: NodeChange<DraftRfNode>[]) => {
       // A cancelled drag (Escape) still receives frames until the pointer is released — React
@@ -977,6 +1046,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           clearDwell();
           useUiStore.getState().setAttachArmedTarget(null);
           useUiStore.getState().setAttachArmedEdgeTarget(null);
+          useUiStore.getState().setSequenceAttachmentTarget(null);
         } else if (draggedDoc && livePosition) {
           const liveRect: Rect = { ...livePosition, width: draggedDoc.width, height: draggedDoc.height };
           const collapsible = draggedDoc.type === 'note' || draggedDoc.type === 'code';
@@ -1014,7 +1084,30 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             exclude,
           );
 
-          if (overlapId) {
+          // The message under the cursor is more specific than its sequence frame. Outside its
+          // hit area, the usual shape/connector drop behavior still applies.
+          const host = collapsible && movedFar && !centerHitId && !overlapId
+            ? state.document.nodes.reduce<DraftNode | undefined>((top, node) => {
+              if (node.type !== 'sequence' || !pointInBox(aim, node)) return top;
+              return !top || node.z >= top.z ? node : top;
+            }, undefined)
+            : undefined;
+          const hit = host?.type === 'sequence'
+            ? hitSequence(sequenceLayoutFor(host, describeContext(LIGHT)), aim.x - host.x, aim.y - host.y)
+            : null;
+          const message = hit?.kind === 'message' && host?.sequence
+            ? selectSequenceMessage(state.document, host.id, hit.id)
+            : undefined;
+          const messageTarget = message && host && hasAttachmentRoom(message, 'edge') ? { nodeId: host.id, messageId: message.id } : null;
+          useUiStore.getState().setSequenceAttachmentTarget(messageTarget);
+          if (messageTarget) {
+            clearDwell();
+            capsuleInside = true;
+            capsuleHostRect.current = null;
+            nudge.current = { x: 0, y: 0 };
+            useUiStore.getState().setAttachArmedTarget(null);
+            useUiStore.getState().setAttachArmedEdgeTarget(null);
+          } else if (overlapId) {
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(overlapId);
             useUiStore.getState().setAttachArmedEdgeTarget(null);
@@ -1108,9 +1201,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         clearDwell();
         useUiStore.getState().setAttachArmedTarget(null);
         useUiStore.getState().setAttachArmedEdgeTarget(null);
+        useUiStore.getState().setSequenceAttachmentTarget(null);
       }
       if (!probingEdges) useUiStore.getState().setSpliceArmedEdgeTarget(null);
       if (!probingEdges) lastEdgeProbe.current = null;
+      armSequenceDrop(snapped.changes);
 
       // Collapse/expand, decided from the same aim point that decided arming above. This is pure
       // paint — the card itself never moves or resizes — so neither direction can make it jump,
@@ -1180,7 +1275,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         }
       }
     },
-    [clearDwell, flowToScreenPosition, getInternalNode, getZoom, setNodes],
+    [armSequenceDrop, clearDwell, flowToScreenPosition, getInternalNode, getZoom, setNodes],
   );
 
   const setEdges = useCallback(
@@ -1388,6 +1483,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       sweptDescendants.current = swept;
       useUiStore.getState().setInteractionActive(true, moving);
       clearDwell();
+      clearSequenceDrop();
       useUiStore.getState().setAttachArmedTarget(null);
       useUiStore.getState().setAttachArmedEdgeTarget(null);
       useUiStore.getState().setSpliceArmedEdgeTarget(null);
@@ -1424,7 +1520,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         })),
       };
     },
-    [clearDwell, screenToFlowPosition],
+    [clearDwell, clearSequenceDrop, screenToFlowPosition],
   );
 
   /**
@@ -1453,6 +1549,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const onDragCancel = useCallback(() => {
     dragCancelled.current = true;
     clearDwell();
+    clearSequenceDrop();
     clearCapsule();
     setGuides([]);
     useUiStore.getState().setAttachArmedTarget(null);
@@ -1470,7 +1567,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         return { ...node, position: { x: doc.x, y: doc.y }, dragging: false };
       }),
     );
-  }, [clearCapsule, clearDwell, setNodes]);
+  }, [clearCapsule, clearDwell, clearSequenceDrop, setNodes]);
   useEffect(() => {
     cancelDrag.current = onDragCancel;
   }, [onDragCancel]);
@@ -1491,6 +1588,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       lastEdgeProbe.current = null;
       sweptDescendants.current = new Map();
       clearDwell();
+      clearSequenceDrop();
       clearCapsule();
       useUiStore.getState().setAttachArmedTarget(null);
       useUiStore.getState().setAttachArmedEdgeTarget(null);
@@ -1511,9 +1609,33 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     const armedHost = useUiStore.getState().attachArmedTarget;
     const armedEdge = useUiStore.getState().attachArmedEdgeTarget;
     const armedSplice = useUiStore.getState().spliceArmedEdgeTarget;
+    const armedSequence = useUiStore.getState().sequenceDropTarget;
+    const armedMessage = useUiStore.getState().sequenceAttachmentTarget;
     let label: string | undefined;
 
-    if (singleId && armedHost) {
+    if (singleId && armedMessage) {
+      const attachment = sequenceActions.attachExistingNode(armedMessage.nodeId, armedMessage.messageId, singleId);
+      if (attachment) {
+        markArrived(attachment);
+        label = 'Attach to message';
+      } else {
+        state.commitMove(positions, draggedIds);
+      }
+    } else if (singleId && armedSequence) {
+      // Either way the shape is put back where it was before anything is written: a refused drop
+      // would otherwise leave it lying on the sequence. One undo step, and no move in it.
+      positions.delete(singleId);
+      if (positions.size > 0) state.commitPositions(positions);
+      const home = nodeIndex(state.document.nodes).get(singleId);
+      if (home) setNodes((current) => current.map((node) => (node.id === singleId ? { ...node, position: { x: home.x, y: home.y }, dragging: false } : node)));
+      if (armedSequence.stays) {
+        // Part of a diagram: it stays in the architecture and the participant stands for it.
+        if (sequenceActions.addParticipantFromShape(armedSequence.nodeId, singleId, armedSequence.index)) label = 'Add participant';
+      } else if (sequenceActions.moveShapeIn(armedSequence.nodeId, singleId, armedSequence.index)) {
+        // On its own: the shape itself goes into the sequence, and nothing is left on the canvas.
+        label = 'Move into sequence';
+      }
+    } else if (singleId && armedHost) {
       positions.delete(singleId);
       if (positions.size > 0) state.commitPositions(positions);
       markArrived(state.attachExistingNode(singleId, armedHost));
@@ -1540,12 +1662,13 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     lastEdgeProbe.current = null;
     sweptDescendants.current = new Map();
     clearDwell();
+    clearSequenceDrop();
     clearCapsule();
     useUiStore.getState().setAttachArmedTarget(null);
     useUiStore.getState().setAttachArmedEdgeTarget(null);
     useUiStore.getState().setSpliceArmedEdgeTarget(null);
     useUiStore.getState().setSpliceDrag(false);
-  }, [clearCapsule, clearDwell, getNodes]);
+  }, [clearCapsule, clearDwell, clearSequenceDrop, getNodes, setNodes]);
 
   useEffect(() => {
     finishDrag.current = onNodeDragStop;
