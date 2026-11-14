@@ -84,7 +84,63 @@ describe('commandsFor — edit mode', () => {
     expect(ids(stubContext())).toContain('focus-exit');
   });
 
-  it('"Switch to flow…" is a two-step command listing Whole diagram and each flow', () => {
+  it('names the spotlight one way: entering from open points, one exit row whichever way it began', () => {
+    const state = useEditorStore.getState();
+    const api = state.addNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    state.addOpenPoint('awaiting', [{ kind: 'node', id: api.id }], 'Who owns this?');
+    const titles = (ctx = stubContext()) => commandsFor(ctx).map((command) => command.title);
+    expect(titles()).toContain('Spotlight open points');
+    expect(titles()).not.toContain('Exit focus');
+    state.enterFocus([api.id], []);
+    // The same state however it was entered: one way out, and no second entry row.
+    expect(titles().filter((title) => /^Exit (focus|spotlight)$/.test(title))).toEqual(['Exit spotlight']);
+    expect(titles()).not.toContain('Spotlight open points');
+  });
+
+  it('"Show flows" says which way F will toggle the panel', () => {
+    const row = () => {
+      const ctx = stubContext();
+      return { command: commandsFor(ctx).find((command) => command.id === 'flow-manage')!, ctx };
+    };
+    expect(row().command.title).toBe('Show flows');
+    useUiStore.getState().setFlowPanelOpen(true);
+    const open = row();
+    expect(open.command.title).toBe('Hide flows');
+    open.command.run(open.ctx);
+    expect(useUiStore.getState().flowPanelOpen).toBe(false);
+  });
+
+  it('tells the palette\'s two note rows apart: Attach note to the selection, Add Note for a standalone one', () => {
+    const state = useEditorStore.getState();
+    const api = state.addNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    state.setSelection({ nodes: [api.id], edges: [] });
+    const rows = commandsFor(stubContext()).filter((command) => /note$/i.test(command.title));
+    expect(rows.map((row) => [row.id, row.title])).toEqual(expect.arrayContaining([['attach-note', 'Attach note'], ['add-note', 'Add Note']]));
+    expect(new Set(rows.map((row) => row.title)).size).toBe(rows.length);
+    // "Attach note" opens its card ready to type: no pencil click in between.
+    rows.find((row) => row.id === 'attach-note')!.run(stubContext());
+    expect(useUiStore.getState().openAttachmentDetail).toMatchObject({ hostKind: 'node', hostId: api.id, startEditing: true });
+  });
+
+  it('keeps every command title sentence-cased, apart from the names of shapes and acronyms', () => {
+    const SHAPE_WORDS = new Set(['Service', 'Data', 'Store', 'Queue', 'Actor', 'Component', 'Junction', 'Note', 'Code', 'Text', 'Boundary', 'Sequence', 'Ink', 'Canvas', 'Draft', 'DLQ']);
+    const state = useEditorStore.getState();
+    const queue = state.addNode({ type: 'queue', x: 0, y: 0, text: 'Orders' });
+    const group = state.addNode({ type: 'group', x: 300, y: 0, width: 300, height: 200, text: 'Boundary' });
+    for (const selected of [queue.id, group.id]) {
+      state.setSelection({ nodes: [selected], edges: [] });
+      for (const command of commandsFor(stubContext())) {
+        // "Add Service", "New Queue", "Add Note": the shape's own name. Everything else lower-cases
+        // the words after the first ("Add consumer", "Select contents").
+        if (/^(Add|New) [A-Z]/.test(command.title) && /^(add|new)-/.test(command.id)) continue;
+        const rest = command.title.replace(/^\S+\s*/, '').replace(/[…:]/g, '');
+        const stray = rest.split(/\s+/).filter((word) => /^[A-Z][a-z]/.test(word)).filter((word) => !SHAPE_WORDS.has(word));
+        expect(stray, `${command.id}: "${command.title}"`).toEqual([]);
+      }
+    }
+  });
+
+  it('"Switch flow…" is a two-step command listing Whole diagram and each flow', () => {
     const state = useEditorStore.getState();
     const checkout = state.createFlow('Checkout')!;
     const ctx = stubContext();
@@ -388,20 +444,26 @@ describe('commandsFor — contextual (8.2)', () => {
     const ctx = stubContext();
     const stage = stageOf(ctx, 'connect-to');
     expect(stage.prompt).toBe('Connect to');
+    // Nothing attached to the API yet: a chain is starting, so the new shapes lead
+    // (S, ⌘K, Enter, Enter makes a connected Service) and the existing ones follow.
     expect(stage.options.map((o) => o.title)).toEqual([
-      'Ledger',
       'New Service',
       'New Data Store',
       'New Queue',
       'New Actor',
       'New Component',
+      'Ledger',
     ]);
 
-    stage.options[0]!.run(ctx);
+    stage.options.find((o) => o.title === 'Ledger')!.run(ctx);
     const edges = useEditorStore.getState().document.edges;
     expect(edges).toHaveLength(1);
     expect(edges[0]).toMatchObject({ source: api.id, target: ledger.id });
     expect(useEditorStore.getState().selection.edges).toEqual([edges[0]!.id]);
+
+    // Once it has a connector the existing shapes lead again, the way they always did.
+    state.setSelection({ nodes: [api.id], edges: [] });
+    expect(stageOf(stubContext(), 'connect-to').options.map((o) => o.title).slice(0, 2)).toEqual(['Ledger', 'New Service']);
   });
 
   it('Connect to… → New Queue creates the node to the right of the source, connects, and selects it', () => {

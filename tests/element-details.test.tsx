@@ -54,8 +54,10 @@ describe('element details shortcut', () => {
 
   it.each(C4_TEXT_TYPES)('offers + Technology on an empty %s', (type) => {
     mount('', type);
+    // An icon until a technology is set: its name is "Details", but it spends no label on it.
     const chip = screen.getByRole('button', { name: 'Details' });
-    expect(chip).toHaveTextContent('Details');
+    expect(chip).toHaveAttribute('data-empty', 'true');
+    expect(chip).toHaveTextContent('');
     fireEvent.click(chip);
     expect(screen.getByRole('combobox', { name: 'Technology' })).toHaveFocus();
   });

@@ -45,22 +45,27 @@ export function neighborhoodOf(
     }
   }
   const category = categoryOf(node);
-  return { node, category, out, in: incoming, outOfOut, level, key: neighborhoodKey(category, out, incoming) };
+  return { node, category, out, in: incoming, outOfOut, level, key: neighborhoodKey(category, level, out, incoming) };
 }
 
 /**
  * A fingerprint that changes exactly when something a rule could react to changes: the node's own
- * category, or the set/semantics of its incident connectors. Positions, labels and unrelated parts
- * of the diagram do not move it — a dismissal survives those, and stops surviving the moment the
- * user draws something at this node.
+ * category, the view level (rules are quiet at some altitudes and only exist at others, so an Escape
+ * pressed in a System Context view says nothing about the same shape drawn at a component level),
+ * or the set/semantics of its incident connectors. Positions, labels and unrelated parts of the
+ * diagram do not move it — a dismissal survives those, and stops surviving the moment the user
+ * draws something at this node.
  */
 function neighborhoodKey(
   category: string,
+  level: ViewLevel | undefined,
   out: Neighborhood['out'],
   incoming: Neighborhood['in'],
 ): string {
   const parts = [...out, ...incoming]
     .map(({ edge }) => `${edge.id}:${edge.source}>${edge.target}:${edge.semantic ?? ''}`)
     .sort();
-  return `${category}|${parts.join(',')}`;
+  // A level that is unset and one that is `none` both say nothing is known, and read the same.
+  const known = level !== undefined && level !== 'none' ? level : '';
+  return `${category}|${known}|${parts.join(',')}`;
 }

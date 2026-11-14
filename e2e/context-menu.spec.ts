@@ -145,7 +145,7 @@ test.describe('context menu — a single node', () => {
     }
   });
 
-  test('Add Note attaches a note and opens its card', async ({ page }) => {
+  test('Attach note attaches a note and opens its card ready to type', async ({ page }) => {
     await newCanvas(page, 'Context menu add note');
     await create(page, 'Service', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click({ button: 'right' });
@@ -153,10 +153,17 @@ test.describe('context menu — a single node', () => {
     await expect(menu(page)).toBeHidden();
     await expect(page.locator('.dc-attachment-chip')).toHaveCount(1);
     await expect(page.locator('.dc-attachment-card[data-pinned="true"]')).toBeVisible();
-    // One click from editing — see `addAttachmentCommand`'s own comment for why this doesn't also
-    // force the card's separate `editing` state open.
-    await page.getByRole('button', { name: 'Edit attached detail' }).click();
+    // Ready to type, no pencil click: "Attach note" is a request to write one.
     await expect(page.locator('.dc-attachment-card textarea')).toBeFocused();
+    await page.keyboard.type('Retries three times');
+    // A click elsewhere keeps what was typed (Escape discards it, like every inline editor).
+    await page.locator('.react-flow__pane').click({ position: { x: 60, y: 500 } });
+    await expect(page.locator('.dc-attachment-card[data-pinned="true"]')).toHaveCount(0);
+    // With the card shut, the attachment is the shape's "1 attachment" badge; clicking it reopens the card.
+    await page.getByRole('button', { name: '1 attachment' }).click();
+    await expect(page.locator('.dc-attachment-card')).toContainText('Retries three times');
+    // A click on the existing chip only reads: the card opens without the editor.
+    await expect(page.locator('.dc-attachment-card textarea')).toHaveCount(0);
   });
 
   test('Bring to front changes stacking order, undoably', async ({ page }) => {
@@ -304,7 +311,7 @@ test.describe('context menu — an edge', () => {
 });
 
 test.describe('context menu — a boundary', () => {
-  test('right-clicking an empty boundary hides Select Contents; a populated one shows it and it selects the members', async ({ page }) => {
+  test('right-clicking an empty boundary hides Select contents; a populated one shows it and it selects the members', async ({ page }) => {
     await newCanvas(page, 'Context menu boundary');
     await create(page, 'Service', { x: 300, y: 250 });
     await create(page, 'Data Store', { x: 550, y: 250 });
@@ -319,15 +326,15 @@ test.describe('context menu — a boundary', () => {
     for (const title of ['Edit caption', 'Attach note', 'Attach code', 'Duplicate', 'Copy', 'Bring to front', 'Ungroup', 'Delete']) {
       await expect(menuItem(page, title)).toBeVisible();
     }
-    await expect(menuItem(page, 'Select Contents')).toBeVisible();
-    await menuItem(page, 'Select Contents').click();
+    await expect(menuItem(page, 'Select contents')).toBeVisible();
+    await menuItem(page, 'Select contents').click();
     await expect(menu(page)).toBeHidden();
     // The two members are selected, not the boundary itself.
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
     await expect(page.locator('.dc-node[data-type="group"][data-selected="true"]')).toHaveCount(0);
   });
 
-  test('Select Contents is absent on an empty boundary', async ({ page }) => {
+  test('Select contents is absent on an empty boundary', async ({ page }) => {
     await newCanvas(page, 'Context menu empty boundary');
     await create(page, 'Service', { x: 300, y: 250 });
     await create(page, 'Data Store', { x: 550, y: 250 });
@@ -343,7 +350,7 @@ test.describe('context menu — a boundary', () => {
     });
     await page.keyboard.press('Shift+1'); // fit-to-view, so the newly added boundary is on screen
     await page.locator(`[data-id="${empty}"]`).click({ button: 'right' });
-    await expect(menuItem(page, 'Select Contents')).toHaveCount(0);
+    await expect(menuItem(page, 'Select contents')).toHaveCount(0);
   });
 });
 
@@ -376,13 +383,13 @@ test.describe('context menu — multi-selection contents and commands', () => {
     await create(page, 'Data Store', { x: 550, y: 200 });
     await page.locator('.dc-node').nth(0).click({ modifiers: ['Shift'] });
     await expect(page.locator('.dc-inspector')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Distribute ↔' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Distribute horizontally' })).toHaveCount(0);
 
     await create(page, 'Actor', { x: 400, y: 450 });
     await page.locator('.dc-node').nth(0).click();
     await page.locator('.dc-node').nth(1).click({ modifiers: ['Shift'] });
     await page.locator('.dc-node').nth(2).click({ modifiers: ['Shift'] });
-    await expect(page.getByRole('button', { name: 'Distribute ↔' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Distribute horizontally' })).toBeVisible();
   });
 
   test('an edges-only multi-selection shows only Spotlight, Delete and a shared open point', async ({ page }) => {
@@ -414,7 +421,7 @@ test.describe('context menu — multi-selection contents and commands', () => {
     });
     await page.mouse.click(mid.x, mid.y, { button: 'right' });
     // The header counts what the menu acts on, so the rows themselves stay short.
-    await expect(menu(page).locator('.dc-context-menu-header')).toHaveText('2 elements');
+    await expect(menu(page).locator('.dc-context-menu-header')).toHaveText('2 connectors');
     await expect(menuItem(page, 'Spotlight')).toBeVisible();
     await expect(menuItem(page, 'Delete')).toBeVisible();
     // …plus one shared open point about both connectors, which any selection may raise.
@@ -516,12 +523,20 @@ test.describe('context menu — keyboard-only operation', () => {
     await expect(page.locator('.dc-node')).toHaveCount(1);
   });
 
-  test('is a no-op with nothing selected — there is no keyboard equivalent of a click point on empty canvas', async ({ page }) => {
+  test('with nothing selected it opens the canvas menu, at the middle of the canvas', async ({ page }) => {
     await newCanvas(page, 'Context menu keyboard empty');
     await create(page, 'Service', { x: 400, y: 300 });
     await page.keyboard.press('Escape'); // clear the selection creation left behind
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(0);
     await page.keyboard.press('Shift+F10');
+    // The pane menu was mouse-only: Paste, Tidy up and Arrange had no keyboard route from the canvas.
+    await expect(menu(page)).toBeVisible();
+    await expect(menuItem(page, 'Service')).toBeVisible();
+    await expect(menu(page).locator('[data-highlighted="true"]')).toHaveCount(1);
+    const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+    const box = (await menu(page).boundingBox())!;
+    expect(Math.abs(box.x - (pane.x + pane.width / 2))).toBeLessThan(pane.width / 4);
+    await page.keyboard.press('Escape');
     await expect(menu(page)).toHaveCount(0);
   });
 
@@ -573,7 +588,6 @@ test.describe('context menu — cross-cutting hardening', () => {
     await create(page, 'Service', { x: 400, y: 300 });
     await page.locator('.dc-node').first().click({ button: 'right' });
     await menuItem(page, 'Attach note').click();
-    await page.getByRole('button', { name: 'Edit attached detail' }).click();
     const textarea = page.locator('.dc-attachment-card textarea');
     await expect(textarea).toBeFocused();
     await textarea.click({ button: 'right' });

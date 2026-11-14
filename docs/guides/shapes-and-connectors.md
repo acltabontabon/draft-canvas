@@ -61,29 +61,47 @@ Dragging does most of the lining up for you:
   This catches from a little further away than the other snaps and wins over them.
 - It also snaps to its neighbours' edges and centres, and to an equal gap: when the space to a
   neighbour matches a gap already in the row or column, both gaps are marked with their size.
+- Snapping pulls the same distance on screen at every zoom: 6 pixels (12 for a connector's straight
+  line), however far in or out you are. Resizing snaps the edge you are dragging the same way.
+- Hold `⌥` while you drag or resize to turn snapping off and put a shape exactly where the pointer is.
+  Let go and it snaps again.
 
 For more, select shapes and use the bar at the bottom: **Align**, **Distribute** (three or more),
 and **Same width** / **Same height**, which give every selected shape the largest size among them.
 A boundary selected with shapes keeps its size; select only boundaries to match them.
 
 **Tidy up** is the one to reach for first. Run it from `⌘K` or by right-clicking the canvas. It
-keeps every shape where you put it and fixes only what looks untidy: a connector that just misses
-running level is straightened by nudging a shape a few pixels, and a connector drawn through a
-shape is re-attached so it goes round. Before anything changes you see the result laid over the
-diagram, with a faint outline where each nudged shape stands now. **Apply** (`Enter`) makes it one
-undo step; **Cancel** (`Esc`) leaves the diagram as it was.
+keeps every shape where you put it and fixes only what looks untidy: a connector that is drawn with
+a small step in it is straightened by nudging a shape a few pixels (up to 32), and a connector
+drawn through a shape is re-attached so it goes round. A connector that already runs straight is left
+alone even when its two shapes are a few pixels out of line, because the line is drawn level and
+nudging them would change nothing you can see. Before anything changes you see the result laid over
+the diagram, with a faint outline where each nudged shape stands now, and the bar says what it did and
+why: "2 shapes nudged to straighten connectors, 1 connector re-attached to clear shapes". **Apply**
+(`Enter`) makes it one undo step; **Cancel** (`Esc`) leaves the diagram as it was.
+
+On a large diagram Tidy up (and Arrange) work in the background: the bar says **Tidying…** or
+**Arranging…** with a **Cancel**, and the canvas stays usable. The work is limited by how much there
+is to do, not by the clock, so the same diagram gives the same result on any computer. When a very
+large diagram runs into that limit the bar says "Stopped early on a large diagram"; apply what it
+found and run Tidy up again to continue. If your diagram has sketches, the bar notes that they stay
+where they are: Tidy up and Arrange never move ink.
 
 With shapes selected, **Tidy up selection** touches only those shapes and their connectors. After
 adding a service or two, select them and tidy that corner; the rest of the diagram stays exactly
 as it is.
 
 The tools it draws on are still in `⌘K` for when you want one of them alone. **Straighten
-connectors** does only the nudging. **Arrange diagram** (**Rearrange layout** on right-click) is the
-bigger tool: it lays the whole view out again from scratch, so expect shapes to move.
+connectors** does only the nudging. **Arrange diagram** (**Rearrange layout** on right-click, and
+**Arrange Diagram** in the desktop app's Canvas menu) is the bigger tool: it lays the whole view out
+again from scratch, so expect shapes to move.
 
-Arrange shows its result first too, with the reading direction to choose: **Across →** or
-**Down ↓**. It starts on the suggested one, the way the diagram reads now unless the other way reads
-clearly better or, for a big diagram, fits a wide screen clearly better. Boundaries keep what they
+Arrange shows its result first, however you start it (Nodi's layout skills too), with the reading
+direction to choose: **Across →** or **Down ↓**. It starts on the suggested one, the way the diagram
+reads now unless the other way reads clearly better or, for a big diagram, fits a wide screen clearly
+better. On a very large diagram only one direction is worked out, and the bar says so ("Only one
+direction was worked out for a diagram this size") rather than leaving the choice out without a word.
+The bar also counts how many shapes the arrangement moves. Boundaries keep what they
 hold and notes stay beside their shapes. A long name gets a wider box so it reads in two lines, and
 the gap between two rows is only as long as its captions need. **Apply** makes it one undo step
 and frames the result; **Cancel** keeps your own layout and returns the view to where it was. With
@@ -254,7 +272,8 @@ with the boundary. Pick a kind and colour in its toolbar:
 | Network | A network scope |
 | Deployment | A runtime or hosting scope |
 
-Kinds change the look only.
+Kinds change the look only. Boundaries nest up to 32 levels deep; grouping past that is refused, so
+what you drew is what reopens.
 
 ## Write rich text
 

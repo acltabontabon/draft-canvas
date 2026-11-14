@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
 import { useToolbarHeight } from './useToolbarHeight';
 import { menuItemsOf, type AlignIcon, type ContextMenuEntry } from '../commands/contextMenu';
 import { warmCopyExports } from '../commands/registry';
@@ -107,7 +107,10 @@ export function ContextMenu({ screenPosition, entries, viaKeyboard = false, onSe
   const [highlight, setHighlight] = useState(() => (viaKeyboard && items.length > 0 ? 0 : -1));
   // A row answers only a press that began inside the menu. A long-press opens the menu under the
   // finger, and on a short screen it can land over the point being held — the click the lift
-  // produces must not pick whichever row ended up there.
+  // produces must not pick whichever row ended up there. A click with no press at all (`detail` 0:
+  // a screen reader's or switch control's activation, `Enter`/`Space` on a focused row, a scripted
+  // `.click()`) is not that lift and is always answered; it used to be dropped, so the menu did
+  // nothing for assistive technology that activates by click.
   const pressedInside = useRef(false);
   const highlightRef = useRef(highlight);
   highlightRef.current = highlight;
@@ -230,8 +233,8 @@ export function ContextMenu({ screenPosition, entries, viaKeyboard = false, onSe
       onPointerMove: () => {
         if (highlightRef.current !== index) setHighlight(index);
       },
-      onClick: () => {
-        if (pressedInside.current) onSelect(command);
+      onClick: (event: ReactMouseEvent) => {
+        if (pressedInside.current || event.detail === 0) onSelect(command);
       },
     };
   };

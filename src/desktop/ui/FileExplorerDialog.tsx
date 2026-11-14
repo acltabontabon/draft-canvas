@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ListBox, ListBoxItem } from 'react-aria-components';
 import type { ExplorerSaveRequest } from '../saveExplorer';
+import { DEFAULT_TITLE } from '../../document/sanitize';
 import type { DesktopController } from '../controller';
 import type { ExplorerDirectory, ExplorerEntry, ExplorerStart } from '../api';
 import { thumbnailOf, type Thumbnail } from '../thumbnails';
@@ -21,7 +22,7 @@ const bytesOf = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 * 
 export function FileExplorerDialog({ controller, onClose, mode, saveRequest }: { controller: DesktopController; onClose: () => void; mode: 'project' | 'file' | 'save'; saveRequest?: ExplorerSaveRequest }) {
   const fileMode = mode === 'file';
   const saveMode = mode === 'save';
-  const [fileName, setFileName] = useState(saveRequest?.suggestedName ?? 'Untitled canvas');
+  const [fileName, setFileName] = useState(saveRequest?.suggestedName ?? DEFAULT_TITLE);
   const [replacement, setReplacement] = useState<{ name: string; stamp: string; changed: boolean } | null>(null);
   const fileNameInput = useRef<HTMLInputElement>(null);
   const [start, setStart] = useState<ExplorerStart | null>(null);

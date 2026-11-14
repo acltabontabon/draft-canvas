@@ -87,7 +87,8 @@ const STEP_TEXT: Record<string, string> = {
 };
 
 export function stepText(tool: string): string {
-  return STEP_TEXT[tool] ?? tool;
+  // Own names only: a tool the agent calls "constructor" is not Object's.
+  return Object.hasOwn(STEP_TEXT, tool) ? STEP_TEXT[tool]! : tool;
 }
 
 /** What a step did, said once the turn is over. Getting ready is left out: it is the agent's own
@@ -131,7 +132,7 @@ export function activityOf(steps: readonly Step[], running: boolean): Activity {
   const said = new Set<string>();
   for (const step of steps) {
     if (step.status !== 'completed') continue;
-    const text = step.tool in DONE_TEXT ? DONE_TEXT[step.tool] : step.tool;
+    const text = Object.hasOwn(DONE_TEXT, step.tool) ? DONE_TEXT[step.tool] : step.tool;
     if (text && !said.has(text)) {
       said.add(text);
       done.push(text);

@@ -12,6 +12,13 @@ privacy message.
 If the status bar says **In memory only**, nothing is stored: export before closing.
 If another tab changed the same diagram, choose **Keep mine** or **Load the other tab's**.
 
+If a save fails, the status bar says why (the browser is out of space, or Draft Canvas lost its
+connection to the browser's storage) and offers **Retry**, **Export** and **Leave without saving**.
+**Export** downloads the diagram as it is on screen, so nothing is lost; to free space, export first,
+then delete diagrams you no longer need from the Library. **Leave without saving** asks before it
+gives up the changes that could not be stored. The same bar shows while presenting. Panning and
+zooming alone are saved in the background without any message.
+
 ## Back up the browser library
 
 1. On Home, choose **View all** to open the Library.
@@ -25,7 +32,7 @@ search; deleting a project moves its diagrams to **Unorganized**.
 
 ## Export a file
 
-Open **Share → Export** (`⌘⇧E`).
+Open **Share → Export…** (`⌘⇧E`).
 
 | Choose | You get |
 | --- | --- |
@@ -69,28 +76,31 @@ Choose **Import** on Home or in the Library, or drop the file onto the Library o
 - Editable PNG or SVG: opens the diagram inside.
 - Mermaid `.mmd`, `.mermaid` or Markdown: see below.
 
-An import never replaces an existing diagram. Older files upgrade; files from a newer version are
-refused until you update. Damaged files are repaired where possible, with a report of what was
-dropped. Files over 24 MB are refused.
+An import never replaces an existing diagram: one whose id is already stored comes in as a copy
+titled "… copy". Older files upgrade; a diagram saved by a newer version is left untouched until you
+update Draft Canvas. Damaged files are repaired where possible, with a report of what was dropped.
+Files over 24 MB are refused.
 
 ### Importing a Mermaid flowchart
 
 Import a `flowchart` or `graph` file for a new diagram, or paste Mermaid text onto a canvas (one
-undo removes it). Draft Canvas lays it out and skips styling. A `sequenceDiagram` becomes an
-editable [sequence](sequence-diagrams.md) the same way. Draft Canvas refuses other diagram types.
+undo removes it). Draft Canvas lays it out and skips styling. Several arrows between the same two
+shapes become one connector with the labels joined, and the notice says so. A `sequenceDiagram`
+becomes an editable [sequence](sequence-diagrams.md) the same way. Draft Canvas refuses other
+diagram types. See the [Mermaid import reference](../reference/mermaid-import.md).
 
 ## Share a diagram
 
 | Send | How | Recipient gets |
 | --- | --- | --- |
-| Link | **Share → Share read-only link**, or the same in `⌘K` | A protected, view-only snapshot in Guided reader or Focus view |
+| Link | **Share → Share read-only link…**, or the same in `⌘K` | A protected, view-only snapshot in Guided reader or Focus view |
 | File | **Document → Editable** or **Encrypted** | A diagram they can reopen |
 | Picture | **Image**, or **Copy as image** | A PNG or SVG; editing requires an embedded diagram |
-| Live session | **Share → Draw together, live** | A shared canvas; see [Collaborating live](collaborating.md) |
+| Live session | **Share → Collaborate…** | A shared canvas; see [Collaborating live](collaborating.md) |
 
 ### Create a protected link
 
-1. Choose **Share → Share read-only link**. **Require a passphrase** is on by default.
+1. Choose **Share → Share read-only link…**. **Require a passphrase** is on by default.
 2. Choose **Start at**: the diagram overview, current level or a playable Flow.
 3. Enter and confirm a passphrase of at least eight characters. A long, unique phrase is safer.
 4. Choose **Copy protected link**, then send the passphrase separately.
@@ -142,7 +152,7 @@ resolution notes. Browsing never changes the snapshot.
 
 [Focus view in dark mode](../media/guides/share-focus-view-dark.png).
 
-Run **Share read-only link…** in `⌘K`, or use **Start at** in **Share → Export → Share a link**.
+Run **Share read-only link…** in `⌘K`, or use **Start at** in **Share → Export… → Share a link**.
 It defaults to the selected playable Flow, then the current level, then the overview.
 A Flow link starts at its introduction; the reader chooses when to advance.
 

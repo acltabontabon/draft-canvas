@@ -25,6 +25,12 @@ Setup is in [Connect an AI agent](../guides/connect-an-ai-agent.md).
 - **Broker.** Owns access, folder scope, the request ledger, file reads, deadlines and the commit gate.
 - **Page.** Validation, layout and quality checks (`src/agent/`, `src/layout/`) share the canvas's
   shape, text and routing code, so results match the canvas. Heavy work runs in `src/agent/worker.ts`.
+  The editor's own Arrange and Tidy up run there too (`layoutPlan.ts`, jobs `arrange` and `tidy`), with
+  a Cancel that ends the worker; where no worker can measure text they run on the page after one
+  yield, so the "Arranging…" state paints first. They are bounded by a deterministic work budget
+  (units of drawing, `route.ts`'s `withBudget`), never by the clock: the same diagram gives the same
+  preview on any machine, a result that ran out says `partial`, and a wall-clock net far behind the
+  budget (40 s) is the only thing a slow machine can meet. An agent request keeps its time limit.
 - **One writer.** Edits to the open document go through the editor store and undo history. A new
   diagram is written by the shell with `create_new`, which never overwrites.
 - **No agent data in files.** An agent-made diagram is an ordinary diagram, on the web and the desktop.
@@ -271,8 +277,9 @@ and calls are kept few:
   itself (`nodiLines.ts`'s `smallTalkOf`): no run, no tokens. Confirmations such as "yes" and "ok"
   reach the selected agent, including its resumed session after an app restart.
 - Skills (`/` in the box, `nodiSkills.ts`) are worked out from the view when the menu opens: the
-  layouts are the editor's own Arrange with an `ArrangePreset` (direction, spacing or a primary flow,
-  one undo step each, played by `canvas/arrangeMotion.ts`); `/tidy` and `/present` run only when
+  layouts are the editor's own Arrange with an `ArrangePreset` (direction, spacing or a primary flow),
+  shown first as an Arrange preview like every other way in (`commands/arrange.ts`) and applied by
+  its Apply as one undo step (the rearrangement is played, `canvas/arrangeMotion.ts`); `/tidy` and `/present` run only when
   their ⌘K command or a playable flow exists; `/explain` and `/risks` go to the agent. A read-only
   diagram offers no layout. None of the local skills starts a run or spends tokens.
 

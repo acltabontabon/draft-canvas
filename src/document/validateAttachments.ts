@@ -37,18 +37,22 @@ export function validateAttachableFields(
 export function parseAttachments(
   value: unknown,
   max: number,
-): { attachments: Attachment[]; dropped: number; truncated: number } {
+): { attachments: Attachment[]; dropped: number; truncated: number; renamed: number } {
   const raw = Array.isArray(value) ? value : [];
   const attachments: Attachment[] = [];
   const seenIds = new Set<string>();
   let dropped = 0;
+  let renamed = 0;
   for (const rawAttachment of raw.slice(0, max)) {
     if (!isRecord(rawAttachment)) {
       dropped += 1;
       continue;
     }
     let id = safeId(rawAttachment.id);
-    if (!id || seenIds.has(id)) id = createId('a');
+    if (!id || seenIds.has(id)) {
+      id = createId('a');
+      renamed += 1;
+    }
     seenIds.add(id);
 
     const type = oneOf<AttachableType>(rawAttachment.type, ATTACHABLE_TYPES, 'note');
@@ -71,5 +75,5 @@ export function parseAttachments(
 
     attachments.push(attachment);
   }
-  return { attachments, dropped, truncated: Math.max(0, raw.length - max) };
+  return { attachments, dropped, truncated: Math.max(0, raw.length - max), renamed };
 }

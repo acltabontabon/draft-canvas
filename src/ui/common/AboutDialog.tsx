@@ -108,7 +108,7 @@ function WhatsNewView({
     return (
       <div className="dc-whats-new dc-view-enter">
         <h3 className="dc-whats-new-version-heading" ref={headingRef} tabIndex={-1}>
-          What's New
+          What’s New
         </h3>
         <p className="dc-about-sub">Nothing curated for this version yet.</p>
       </div>
@@ -248,15 +248,15 @@ function AboutDialogBody() {
   };
 
   const isWide = view.kind !== 'about';
-  const modalTitle = view.kind === 'about' ? 'About' : view.kind === 'whats-new' ? "What's New" : 'Release History';
+  const modalTitle = view.kind === 'about' ? 'About' : view.kind === 'whats-new' ? "What’s New" : 'Release History';
   const backLabel =
     view.kind === 'whats-new'
       ? 'Back to About'
       : view.kind === 'history'
-        ? "Back to What's New"
+        ? "Back to What’s New"
         : view.kind === 'detail' && view.from === 'history'
           ? 'Back to Release History'
-          : "Back to What's New";
+          : "Back to What’s New";
   const onBack =
     view.kind === 'about'
       ? undefined
@@ -307,7 +307,7 @@ function AboutDialogBody() {
               <button type="button" className="dc-about-version-action" onClick={openWhatsNew}>
                 {unread && <span className="dc-release-dot" aria-hidden="true" />}
                 <span>
-                  What's New{unread && <span className="dc-sr-only"> — new</span>}
+                  What’s New{unread && <span className="dc-sr-only"> — new</span>}
                   {'\u00a0→'}
                 </span>
               </button>

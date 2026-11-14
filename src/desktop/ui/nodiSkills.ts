@@ -14,7 +14,7 @@ import type { ArrangePreset } from '../../store/editorStore';
 export type SkillGlyph = 'right' | 'down' | 'flow' | 'room' | 'snug' | 'tidy' | 'explain' | 'risks' | 'present';
 
 export type SkillRun =
-  | { kind: 'arrange'; preset: ArrangePreset; done: string }
+  | { kind: 'arrange'; preset: ArrangePreset; shown: string }
   | { kind: 'command'; id: string }
   | { kind: 'present'; flowId: string }
   | { kind: 'ask'; prompt: string };
@@ -61,8 +61,8 @@ export function skillsFor(facts: SkillFacts): NodiSkill[] {
   // A shared copy refuses every edit: a layout offered there could only answer "nothing to move".
   if (facts.shapes >= 2 && !facts.readOnly) {
     skills.push(
-      { slash: 'across', title: 'Left to right', hint: 'Reads across, like a pipeline', group: 'Arrange', glyph: 'right', run: { kind: 'arrange', preset: { direction: 'right' }, done: 'Laid out left to right, boss. Reads like a pipeline now.' } },
-      { slash: 'down', title: 'Top down', hint: 'Reads down, callers above what they call', group: 'Arrange', glyph: 'down', run: { kind: 'arrange', preset: { direction: 'down' }, done: 'Stacked top down, boss. Gravity approves.' } },
+      { slash: 'across', title: 'Left to right', hint: 'Reads across, like a pipeline', group: 'Arrange', glyph: 'right', run: { kind: 'arrange', preset: { direction: 'right' }, shown: 'Here it is left to right, boss. Reads like a pipeline. Apply to keep it, or Cancel and nothing moves.' } },
+      { slash: 'down', title: 'Top down', hint: 'Reads down, callers above what they call', group: 'Arrange', glyph: 'down', run: { kind: 'arrange', preset: { direction: 'down' }, shown: 'Here it is top down, boss. Gravity approves. Apply to keep it, or Cancel and nothing moves.' } },
     );
     const used = new Set(skills.map((s) => s.slash));
     for (const flow of facts.flows.slice(0, FLOW_SKILLS)) {
@@ -75,12 +75,12 @@ export function skillsFor(facts: SkillFacts): NodiSkill[] {
         hint: 'Its steps in one straight line, the rest around it',
         group: 'Arrange',
         glyph: 'flow',
-        run: { kind: 'arrange', preset: { primaryFlow: flow.id }, done: `“${flow.title}” runs in a straight line now, boss. Follow the arrows, not the vibes.` },
+        run: { kind: 'arrange', preset: { primaryFlow: flow.id }, shown: `Here is “${flow.title}” in a straight line, boss. Apply to keep it, or Cancel and nothing moves.` },
       });
     }
     skills.push(
-      { slash: 'roomy', title: 'Give it room', hint: 'More space between everything', group: 'Arrange', glyph: 'room', run: { kind: 'arrange', preset: { spacing: 'spacious' }, done: 'Gave everything some room, boss. Social distancing for services.' } },
-      { slash: 'snug', title: 'Snug', hint: 'Closer together, for a smaller screen', group: 'Arrange', glyph: 'snug', run: { kind: 'arrange', preset: { spacing: 'compact' }, done: 'Packed it snug, boss. Cosy. Slightly claustrophobic.' } },
+      { slash: 'roomy', title: 'Give it room', hint: 'More space between everything', group: 'Arrange', glyph: 'room', run: { kind: 'arrange', preset: { spacing: 'spacious' }, shown: 'Here it is with some room, boss. Apply to keep it, or Cancel and nothing moves.' } },
+      { slash: 'snug', title: 'Snug', hint: 'Closer together, for a smaller screen', group: 'Arrange', glyph: 'snug', run: { kind: 'arrange', preset: { spacing: 'compact' }, shown: 'Here it is snug, boss. Apply to keep it, or Cancel and nothing moves.' } },
     );
   }
   // Straighten, not Tidy: Tidy exists only once a connector has a manual route, and only re-routes.

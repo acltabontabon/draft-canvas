@@ -7,7 +7,9 @@ import type { DraftDocument } from '../src/document/types';
 import { useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
 import { useDocumentSession, type DocumentSession } from '../src/store/useDocumentSession';
-import { __setRepository, type DraftRepository } from '../src/storage';
+import { __setRepository, QuotaExceededError, type DraftRepository } from '../src/storage';
+import { setFileSaver } from '../src/export/download';
+import { deserializeDocument } from '../src/export/project';
 import { stashForReload } from '../src/storage/reloadStash';
 import { encodeShareLink } from '../src/share/link';
 
@@ -198,7 +200,8 @@ describe('useDocumentSession — adoptDocument stale projectId repair', () => {
 
     expect(saved).toHaveLength(1);
     expect(saved[0]!.metadata.id).not.toBe(local.metadata.id);
-    expect(saved[0]!.metadata.title).toBe('Old export');
+    // A copy beside its twin says so, rather than carrying the identical title.
+    expect(saved[0]!.metadata.title).toBe('Old export copy');
     expect(useEditorStore.getState().document.metadata.id).toBe(saved[0]!.metadata.id);
   });
 });
@@ -442,7 +445,7 @@ describe('useDocumentSession — repository failures surface a toast, not an unh
       await session().adoptDocument(createDocument('Blank'));
     });
     const messages = useUiStore.getState().toasts.map((toast) => toast.message);
-    expect(messages).toContainEqual(expect.stringMatching(/local storage may be full or unavailable/));
+    expect(messages).toContainEqual(expect.stringMatching(/^Couldn’t save that diagram\. This browser’s storage didn’t accept it/));
   });
 
   it('renameDocument', async () => {
@@ -531,7 +534,7 @@ describe('useDocumentSession — repository failures surface a toast, not an unh
     await act(async () => {
       await session().duplicateDocument('unreadable');
     });
-    expect(useUiStore.getState().toasts.at(-1)?.message).toMatch(/Couldn't duplicate/);
+    expect(useUiStore.getState().toasts.at(-1)?.message).toMatch(/Couldn’t duplicate/);
   });
 
   it('deleteDocument', async () => {
@@ -612,7 +615,7 @@ describe('useDocumentSession — newDocument', () => {
     expect(saved[0]!.nodes).toHaveLength(4);
     expect(saved[0]!.flows).toHaveLength(1);
     expect(useUiStore.getState().exampleDocumentId).toBe(saved[0]!.metadata.id);
-    expect(saved[1]!.metadata.title).toBe('Untitled canvas');
+    expect(saved[1]!.metadata.title).toBe('Untitled diagram');
     expect(saved[1]!.nodes).toHaveLength(0);
   });
 });
@@ -752,5 +755,143 @@ describe('useDocumentSession — refresh on return', () => {
       window.dispatchEvent(new Event('visibilitychange'));
     });
     expect(lists).toBe(whileOpen);
+  });
+});
+
+describe('useDocumentSession — a save that failed is not a dead end', () => {
+  const unsaved = createDocument('Unsaved');
+
+  /** An open diagram whose store refuses every write, with one edit that could not be kept. */
+  async function openWithFailingSave(failure: unknown = new QuotaExceededError()) {
+    let failing = true;
+    const saves: string[] = [];
+    const repository = stubRepository({
+      load: async () => structuredClone(unsaved),
+      has: async () => true,
+      save: async (document) => {
+        if (failing) throw failure;
+        saves.push(document.metadata.title);
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(unsaved.metadata.id);
+    });
+    await act(async () => {
+      useEditorStore.getState().addNode({ type: 'note', x: 10, y: 10, text: 'Not stored yet' });
+    });
+    await waitFor(() => expect(useEditorStore.getState().save.status).toBe('error'), { timeout: 4000 });
+    return { session, saves, heal: () => (failing = false) };
+  }
+
+  afterEach(() => {
+    setFileSaver(null);
+    window.sessionStorage.clear();
+  });
+
+  it('says why: a full browser is told to export, then free space from the Library', async () => {
+    await openWithFailingSave();
+    const save = useEditorStore.getState().save;
+    expect(save.failure).toBe('full');
+    expect(save.message).toMatch(/out of storage space/);
+    expect(save.message).toMatch(/Export it, then free space by deleting diagrams in the Library/);
+  });
+
+  it('retries on request, and clears the error once the write lands', async () => {
+    const { session, saves, heal } = await openWithFailingSave();
+    await act(async () => {
+      expect(await session().retrySave()).toBe(false);
+    });
+    expect(useUiStore.getState().toasts.at(-1)?.message).toMatch(/Still couldn’t save/);
+    heal();
+    await act(async () => {
+      expect(await session().retrySave()).toBe(true);
+    });
+    expect(saves).toHaveLength(1);
+    expect(useEditorStore.getState().save.status).toMatch(/saved|idle/);
+    expect(useEditorStore.getState().save.failure).toBeUndefined();
+  });
+
+  it('exports the diagram on screen, edits that never reached storage included', async () => {
+    const { session } = await openWithFailingSave();
+    const exported: Array<{ blob: Blob; name: string }> = [];
+    setFileSaver(async (blob, name) => {
+      exported.push({ blob, name });
+    });
+    await act(async () => {
+      await session().exportUnsaved();
+    });
+    expect(exported).toHaveLength(1);
+    expect(exported[0]!.name).toBe('unsaved.draftcanvas');
+    const parsed = deserializeDocument(await exported[0]!.blob.text());
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.document.nodes.map((node) => node.text)).toContain('Not stored yet');
+    expect(useUiStore.getState().toasts.at(-1)?.message).toBe('Exported a copy of this diagram.');
+  });
+
+  it('says so when the copy could not be made, and says nothing when the Save dialog is dismissed', async () => {
+    const { session } = await openWithFailingSave();
+    setFileSaver(async () => {
+      throw new DOMException('dismissed', 'AbortError');
+    });
+    useUiStore.setState({ toasts: [] });
+    await act(async () => {
+      await session().exportUnsaved();
+    });
+    expect(useUiStore.getState().toasts).toEqual([]);
+    setFileSaver(async () => {
+      throw new Error('disk full');
+    });
+    await act(async () => {
+      await session().exportUnsaved();
+    });
+    expect(useUiStore.getState().toasts.at(-1)?.message).toMatch(/Couldn’t export a copy/);
+  });
+
+  it('refuses to close with unsaved changes, pointing at the status bar — and leaves when asked to give them up', async () => {
+    const { session } = await openWithFailingSave();
+    await act(async () => {
+      expect(await session().closeDocument()).toBe(false);
+    });
+    expect(useUiStore.getState().toasts.at(-1)?.message).toMatch(/Use the status bar to retry, export a copy, or leave without saving/);
+    expect(session().openId).toBe(unsaved.metadata.id);
+
+    stashForReload(useEditorStore.getState().document, { base: { title: 'Unsaved' } });
+    await act(async () => {
+      await session().leaveWithoutSaving();
+    });
+    expect(session().openId).toBeNull();
+    expect(useEditorStore.getState().save.status).toBe('idle');
+    expect(window.sessionStorage.getItem(`draft-canvas:reload:${unsaved.metadata.id}`)).toBeNull();
+  });
+});
+
+describe('useDocumentSession — a diagram that cannot be opened says why', () => {
+  it('names a newer Draft Canvas, and that the diagram is kept', async () => {
+    const session = renderSession(stubRepository({ load: async () => null, takeLoadFailure: () => 'newer' }));
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument('from-the-future');
+    });
+    const message = useUiStore.getState().toasts.at(-1)?.message ?? '';
+    expect(message).toMatch(/newer version of Draft Canvas/);
+    expect(message).toMatch(/kept untouched/);
+    expect(message).toMatch(/update Draft Canvas/i);
+    // The same refusal twice is one toast, not a stack.
+    await act(async () => {
+      await session().openDocument('from-the-future');
+    });
+    expect(useUiStore.getState().toasts.filter((toast) => toast.message === message)).toHaveLength(1);
+  });
+
+  it('keeps the plain message for a diagram that is simply damaged', async () => {
+    const session = renderSession(stubRepository({ load: async () => null }));
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument('damaged');
+    });
+    expect(useUiStore.getState().toasts.at(-1)?.message).toBe('Couldn’t read that diagram from this browser’s storage.');
   });
 });

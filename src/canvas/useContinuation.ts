@@ -1,7 +1,15 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { continuationSets, materialize, type MaterializedContinuation } from '../continuation';
-import { lensFlow, useEditorStore, viewLevel } from '../store/editorStore';
+import { lensFlow, spareRoom, useEditorStore, viewLevel } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
+
+/**
+ * How long a selection holds still before the quiet suggestion appears for it. Arrowing or clicking
+ * through shapes would otherwise flash a ghost on every one it passes; a person who stops on one has
+ * time to look, and one who is only passing through never sees it. Asking (`]`), a ghost that is
+ * already showing and an edit that updates it are not waiting on anything and stay immediate.
+ */
+export const CONTINUATION_DWELL_MS = 250;
 
 /**
  * Keeps `uiStore.continuation` in step with the quiet trigger — a single selected node and
@@ -21,7 +29,8 @@ import { useUiStore } from '../store/uiStore';
  * same, so a ghost's identity survives unrelated edits elsewhere.
  *
  * A drag or resize only hides the offer: the user's cycled choice is kept, and is dropped anyway
- * if the gesture really changed the anchor's neighborhood.
+ * if the gesture really changed the anchor's neighborhood. The quiet suggestion for a newly selected
+ * shape waits `CONTINUATION_DWELL_MS` for the selection to settle; see there for what does not.
  *
  * Offers made by the explicit trigger — a connector dropped on empty canvas — belong to the
  * Quick Connect menu while it is open; this hook leaves those alone.
@@ -47,12 +56,27 @@ export function useContinuation(interactive: boolean): void {
   const recent = useUiStore((state) => state.continuationRecent);
   const interactionActive = useUiStore((state) => state.interactionActive);
   const quickConnectOpen = useUiStore((state) => state.quickConnect !== null);
+  // The Pencil hides the ghost (`canvas.css`), and an offer nobody can see must not take Tab or `]`.
+  const pencilActive = useUiStore((state) => state.pencil !== null);
+
+  // Whether the selection has stayed on this anchor for `CONTINUATION_DWELL_MS`. Reset in the render
+  // that first sees a new anchor (React's way of adjusting state to a changed prop), so that render
+  // already reads "not yet" — an effect would let one frame, and a return to a shape passed a moment
+  // ago, count the old wait.
+  const [dwell, setDwell] = useState<{ anchor: string | null; settled: boolean }>({ anchor: anchorId, settled: false });
+  if (dwell.anchor !== anchorId) setDwell({ anchor: anchorId, settled: false });
+  const settled = dwell.anchor === anchorId && dwell.settled;
+  useEffect(() => {
+    if (anchorId === null) return;
+    const timer = setTimeout(() => setDwell((current) => (current.anchor === anchorId ? { anchor: anchorId, settled: true } : current)), CONTINUATION_DWELL_MS);
+    return () => clearTimeout(timer);
+  }, [anchorId]);
 
   useEffect(() => {
     const ui = useUiStore.getState();
     if (ui.continuation?.trigger === 'drop') return;
     const quiet =
-      enabled && interactive && anchorId && !focusActive && !playbackActive && !lensActive && !trafficActive && !interactionActive && !quickConnectOpen;
+      enabled && interactive && anchorId && !focusActive && !playbackActive && !lensActive && !trafficActive && !interactionActive && !quickConnectOpen && !pencilActive;
     if (!quiet) {
       ui.setContinuation(null);
       if (!interactionActive) ui.setContinuationCycle(null);
@@ -72,10 +96,22 @@ export function useContinuation(interactive: boolean): void {
       ui.setContinuation(null);
       return;
     }
+    // A quiet suggestion for a selection that has only just arrived waits for it to settle. One
+    // already on screen for this shape keeps being kept up to date, and a chosen alternative is the
+    // person asking.
+    if (!settled && !wantsCycle && !(ui.continuation?.trigger === 'select' && ui.continuation.anchorId === anchorId)) {
+      ui.setContinuation(null);
+      return;
+    }
+    // Only what there is room for: a ghost that accepting would refuse ("Nothing added — that would
+    // make this diagram too large.") is not worth showing. `]` says so itself (`stepContinuation`).
+    const spare = spareRoom();
     const placed = new Map<string, MaterializedContinuation>();
     for (const candidate of explicit) {
       const materialized = materialize(doc, candidate);
-      if (materialized) placed.set(candidate.id, materialized);
+      if (materialized && materialized.nodes.length <= spare.nodes && materialized.edges.length <= spare.edges) {
+        placed.set(candidate.id, materialized);
+      }
     }
     const chosen =
       wantsCycle && explicit.some((c) => c.id === cycle.candidateId && c.neighborhoodKey === cycle.neighborhoodKey)
@@ -101,6 +137,8 @@ export function useContinuation(interactive: boolean): void {
     recent,
     interactionActive,
     quickConnectOpen,
+    pencilActive,
+    settled,
     interactive,
   ]);
 }

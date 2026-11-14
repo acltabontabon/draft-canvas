@@ -12,6 +12,7 @@ import { parseEvidence } from './evidence';
  */
 import { createId } from './ids';
 import { LIMITS } from './limits';
+import { cleanDescription, cleanEdgeLabel, cleanTechnology, cleanTitle, DEFAULT_TITLE } from './sanitize';
 import { repairCompensationLinks } from './compensation';
 import { migrateToCurrent, UnsupportedVersionError } from './migrate';
 import { defaultSizeFor } from './factory';
@@ -86,7 +87,8 @@ import { INK_ID_PREFIX, parseInkStroke } from './ink';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
-  | { ok: false; error: string };
+  /** `reason: 'newer'` — written by a later version of Draft Canvas: nothing is wrong with the file. */
+  | { ok: false; error: string; reason?: 'newer' };
 
 /**
  * Whether `node`'s chain of boundaries ends within `LIMITS.maxGroupDepth` steps. Walked no further
@@ -103,12 +105,9 @@ export function withinGroupDepth(node: { parentId?: string }, byId: ReadonlyMap<
 
 
 
-/** Like `oneOf`, but an absent or invalid value stays absent rather than being
- *  coerced to a fallback — used for fields that are optional conveniences
- *  rather than always-present classifications (e.g. an edge's `semantic`). */
-
 /**
- * Like `oneOfOptional`, but for a number: absent or non-finite stays absent (never a fabricated
+ * Like `oneOfOptional` (`validationValues.ts`: an absent or invalid value stays absent rather than
+ * being coerced to a fallback), but for a number: absent or non-finite stays absent (never a fabricated
  * default — genuine absence is meaningful, e.g. a `deadLetters` edge someone hasn't configured a
  * count for yet), while a present-but-out-of-range value (zero, negative, a hand-edited million)
  * is clamped into range rather than dropped — the same "repair the value, don't reject the field"
@@ -337,7 +336,7 @@ export function parseDocument(input: unknown): NormalizeResult {
       repairs.push(`Upgraded document format from v${result.applied[0]} to v${CURRENT_VERSION}.`);
     }
   } catch (error) {
-    if (error instanceof UnsupportedVersionError) return { ok: false, error: error.message };
+    if (error instanceof UnsupportedVersionError) return { ok: false, error: error.message, reason: 'newer' };
     return {
       ok: false,
       error: error instanceof Error ? error.message : 'Could not read that file.',
@@ -393,6 +392,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   let droppedNodes = 0;
   let renamedNodes = 0;
   let droppedAttachments = 0;
+  /** Ids given afresh because the file's were missing or repeated: nodes, connectors, flows, steps, attachments. */
+  let renamedAttachments = 0;
+  let renamedEdges = 0;
+  let renamedFlows = 0;
+  let renamedSteps = 0;
   let truncatedAttachments = 0;
   let droppedInsides = 0;
   let droppedSequenceParts = 0;
@@ -433,16 +437,16 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       height: Math.round(
         clamp(finite(candidate.height, fallbackSize.height), LIMITS.minNodeSize, maxSize),
       ),
-      z: Math.round(clamp(finite(candidate.z, 0), -10_000, 10_000)),
+      z: Math.round(clamp(finite(candidate.z, 0), -LIMITS.maxZ, LIMITS.maxZ)),
     };
 
     const label = text(candidate.text, LIMITS.maxTextLength);
     if (label !== undefined) node.text = label;
     if ((C4_TEXT_TYPES as readonly DraftNodeType[]).includes(type)) {
       // Trimmed and empty-dropped: an empty line would still reserve room under the name.
-      const description = text(candidate.description, LIMITS.maxDescriptionLength)?.trim();
+      const description = typeof candidate.description === 'string' ? cleanDescription(candidate.description) : undefined;
       if (description) node.description = description;
-      const technology = text(candidate.technology, LIMITS.maxTechnologyLength)?.replace(/\s+/g, ' ').trim();
+      const technology = typeof candidate.technology === 'string' ? cleanTechnology(candidate.technology) : undefined;
       if (technology) node.technology = technology;
     }
 
@@ -524,6 +528,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
     const nodeAttachments = parseAttachments(candidate.attachments, LIMITS.maxAttachmentsPerNode);
     droppedAttachments += nodeAttachments.dropped;
+    renamedAttachments += nodeAttachments.renamed;
     truncatedAttachments += nodeAttachments.truncated;
     if (nodeAttachments.attachments.length > 0) node.attachments = nodeAttachments.attachments;
 
@@ -626,7 +631,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
     const originalEdgeId = typeof candidate.id === 'string' ? candidate.id : null;
     let id = safeId(candidate.id);
-    if (!id || seenEdgeIds.has(id)) id = createId('e');
+    if (!id || seenEdgeIds.has(id)) {
+      id = createId('e');
+      renamedEdges += 1;
+    }
     seenEdgeIds.add(id);
     if (originalEdgeId && !edgeIdRemap.has(originalEdgeId)) edgeIdRemap.set(originalEdgeId, id);
 
@@ -638,7 +646,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       routing: oneOf<EdgeRouting>(candidate.routing, EDGE_ROUTINGS, 'smoothstep'),
     };
 
-    const label = text(candidate.label, LIMITS.maxLabelLength);
+    const label = typeof candidate.label === 'string' ? cleanEdgeLabel(candidate.label) : undefined;
     if (label) edge.label = label;
 
     // See the matching comment on the node's own accent above: `neutral` is a
@@ -725,6 +733,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     // The identical `Attachment` shape a node carries, just hosted on a connector.
     const edgeAttachments = parseAttachments(candidate.attachments, LIMITS.maxAttachmentsPerEdge);
     droppedEdgeAttachments += edgeAttachments.dropped;
+    renamedAttachments += edgeAttachments.renamed;
     truncatedEdgeAttachments += edgeAttachments.truncated;
     if (edgeAttachments.attachments.length > 0) edge.attachments = edgeAttachments.attachments;
 
@@ -744,6 +753,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     repairs.push(`Gave ${renamedNodes} node(s) new ids (missing or duplicate).`);
   }
   if (droppedParents > 0) repairs.push(`Removed ${droppedParents} invalid grouping link(s).`);
+  if (renamedAttachments > 0) repairs.push(`Gave ${renamedAttachments} attachment(s) new ids (missing or duplicate).`);
   if (droppedAttachments > 0) {
     repairs.push(`Dropped ${droppedAttachments} unreadable attachment(s).`);
   }
@@ -756,6 +766,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   if (droppedSequenceParts > 0) {
     repairs.push(`Dropped ${droppedSequenceParts} part(s) of a sequence that could not be read.`);
   }
+  if (renamedEdges > 0) repairs.push(`Gave ${renamedEdges} connector(s) new ids (missing or duplicate).`);
   if (droppedEdges > 0) {
     repairs.push(`Dropped ${droppedEdges} connector(s) pointing at nodes that do not exist.`);
   }
@@ -793,8 +804,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       continue;
     }
     const rawId = typeof candidateFlow.id === 'string' ? candidateFlow.id : undefined;
-    let id = safeId(candidateFlow.id) ?? createId('f');
-    if (seenFlowIds.has(id)) id = createId('f');
+    let id = safeId(candidateFlow.id);
+    if (!id || seenFlowIds.has(id)) {
+      id = createId('f');
+      renamedFlows += 1;
+    }
     seenFlowIds.add(id);
     if (rawId) flowIdRemap.set(rawId, id);
     if (typeof candidateFlow.variantOf === 'string') pendingVariantOf.set(id, candidateFlow.variantOf);
@@ -855,7 +869,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       }
 
       let stepId = safeId(candidateStep.id);
-      if (!stepId || seenStepIds.has(stepId)) stepId = createId('fs');
+      if (!stepId || seenStepIds.has(stepId)) {
+        stepId = createId('fs');
+        renamedSteps += 1;
+      }
       seenStepIds.add(stepId);
 
       const step: DraftFlowStep = { id: stepId };
@@ -888,6 +905,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   }
   if (droppedVariantOf > 0) repairs.push(`Dropped ${droppedVariantOf} flow variant link(s) that pointed at itself, at another variant, or at nothing.`);
 
+  if (renamedFlows > 0) repairs.push(`Gave ${renamedFlows} flow(s) new ids (missing or duplicate).`);
+  if (renamedSteps > 0) repairs.push(`Gave ${renamedSteps} flow step(s) new ids (missing or duplicate).`);
   if (droppedFlows > 0) repairs.push(`Dropped ${droppedFlows} unreadable flow(s).`);
   if (droppedFlowSteps > 0) {
     repairs.push(`Dropped ${droppedFlowSteps} flow step(s) that were unreadable or had nothing left to show.`);
@@ -992,7 +1011,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     version: CURRENT_VERSION,
     metadata: {
       id: safeId(meta.id) ?? createId('d'),
-      title: text(meta.title, LIMITS.maxTitleLength)?.trim() || 'Untitled canvas',
+      title: typeof meta.title === 'string' ? cleanTitle(meta.title) : DEFAULT_TITLE,
       createdAt,
       updatedAt: Math.max(createdAt, finite(meta.updatedAt, now)),
       ...(safeId(meta.projectId) ? { projectId: safeId(meta.projectId)! } : {}),

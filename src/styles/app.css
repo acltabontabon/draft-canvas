@@ -64,13 +64,14 @@ input[type='range'] {
    stays teal — a mismatched half-active, half-hover look. This keeps hover reading as "active,
    and now also hovered" instead. */
 .dc-button[data-active='true']:hover:not(:disabled) {
-  background: color-mix(in srgb, var(--dc-selection) 22%, transparent);
+  /* 16%, not 22%: the accent ink on the 22% tint was 4.28:1 in light. */
+  background: color-mix(in srgb, var(--dc-selection) 16%, transparent);
   color: var(--dc-selection);
 }
 
 /* `ghost` (the default) is today's full-weight look; `quiet` is a step dimmer, for actions that
-   should read as lower-priority than creation tools (Undo/Redo/Fit/Export/Settings/Keyboard/Info/
-   Theme) — hover still brightens to the same `--dc-text`/`--dc-surface-raised` every button gets
+   should read as lower-priority than creation tools (Undo/Redo, the zoom controls, Settings, Help and
+   the like) — hover still brightens to the same `--dc-text`/`--dc-surface-raised` every button gets
    (see `.dc-button:hover` above, which wins on specificity regardless of variant), so quiet
    buttons get a relatively stronger hover contrast for free. */
 .dc-button-quiet {
@@ -2040,6 +2041,13 @@ kbd {
   font-size: 12px;
 }
 
+/* The question before giving work up: read, then answered, never a button's label squeezed to fit. */
+.dc-save-confirm {
+  margin-right: 4px;
+  color: var(--dc-text-muted);
+  white-space: nowrap;
+}
+
 .dc-status-hint {
   white-space: normal;
   overflow-wrap: anywhere;
@@ -2130,6 +2138,24 @@ kbd {
   flex: none;
   align-items: center;
   gap: 10px;
+}
+
+/* What a preview did not do or leaves alone (stopped early, one direction, sketches that stay): one
+   line above its bar, quieter than the bar and out of the way of the shapes being judged. */
+.dc-tidy-bar-notes {
+  position: absolute;
+  bottom: 62px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: var(--dc-z-bar);
+  max-width: calc(100% - 32px);
+  padding: 3px 12px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  text-align: center;
 }
 
 /* What the arrangement fixes: in the selection colour, as the fixed shapes are on the sheet. */
@@ -3550,6 +3576,22 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-outline-scroll {
   overflow-y: auto;
   padding: 6px 8px 8px;
+}
+
+/* Docked beside the canvas, the panel is 40vw wide — about 150px on a phone, too narrow to read a name in.
+   Under 720px it docks below the canvas instead, full width and a part of the height, which is
+   where a list reads best on a tall, narrow screen. */
+@media (max-width: 720px) {
+  .dc-editor-body {
+    flex-direction: column;
+  }
+
+  .dc-outline {
+    width: auto;
+    height: min(240px, 42%);
+    border-top: 1px solid var(--dc-border);
+    border-left: 0;
+  }
 }
 
 .dc-outline-tree,
@@ -5544,6 +5586,11 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   gap: 8px;
 }
 
+.dc-export-hold {
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
 /* The lock: a quiet round control whose tooltip says where the export was made. */
 .dc-export-privacy {
   display: grid;
@@ -6235,8 +6282,10 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
 
 .dc-toasts {
   position: fixed;
-  /* Below the toolbar, not over its tools for the few seconds a message is up. */
-  top: calc(var(--dc-bar-height) + 10px);
+  /* Below the toolbar, not over its tools for the few seconds a message is up. The measured height,
+     because the toolbar is two rows at 720px and under (the create rail takes the second); the bar
+     height is only what it is before an editor has measured it. */
+  top: calc(var(--dc-toolbar-height, var(--dc-bar-height)) + 10px);
   left: 50%;
   transform: translateX(-50%);
   z-index: var(--dc-z-toast);
@@ -6298,7 +6347,8 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   padding: 6px 8px;
   }
 
-  /* Held to its track: sized to its content, the title's own intrinsic width ran under Undo/Redo. */
+  /* Held to its track: sized to its content, the title's own intrinsic width ran under the Present and
+     Share buttons. */
   .dc-toolbar-lead {
   grid-area: lead;
   justify-self: stretch;
@@ -6317,17 +6367,35 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   max-width: 42vw;
   }
 
+  /* The undo, zoom and help cluster is nearly a phone's whole bar (more so under a finger, where each
+     control is 40px), so a save message that is longer than "Saved locally" — "Storage full — not
+     saved" — would run under Undo. The bar wraps instead: the message keeps a line when it needs one,
+     and the cluster sits at the end of its own. */
   .dc-status {
   height: auto;
+  flex-wrap: wrap;
+  row-gap: 2px;
   padding: 6px 10px;
   }
 
-  /* The undo, zoom and help cluster already fills a phone's bar; the Traffic chip pushed it over
-     "Saved locally". Traffic stays in the canvas menu and ⌘K. */
+  .dc-status-left {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  }
+
+  .dc-status-right {
+  margin-left: auto;
+  }
+
+  /* The cluster already fills a phone's bar; the Traffic chip pushed it over "Saved locally", and the
+     open-points and level chips would do the same. All three stay reachable from the canvas menu and
+     ⌘K (Traffic, Open points, View level…). */
   .dc-status-hint,
   .dc-status-right > .dc-muted,
   .dc-status-right > .dc-inspector-divider,
-  .dc-status-right > button.dc-status-traffic {
+  .dc-status-right > button.dc-status-traffic,
+  .dc-status-right > button.dc-status-open-points,
+  .dc-status-right > button.dc-status-level {
   display: none;
   }
 
@@ -7333,4 +7401,39 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
 
 .dc-ink-keep {
   color: var(--dc-text-faint);
+}
+
+/* ------------------------------------------------------- touch targets -- */
+
+/* A finger needs about 40px where a mouse is happy with 24–28, so chrome grows on a coarse pointer
+   only: a desktop window keeps the compact layout, whatever its width. The popovers' and the context
+   menu's share of this is at the end of `canvas.css`, which loads after this file and would win a tie. */
+@media (pointer: coarse) {
+  .dc-button {
+    height: 40px;
+  }
+
+  .dc-button[data-icon-only='true'] {
+    min-width: 40px;
+  }
+
+  .dc-status {
+    min-height: 48px;
+  }
+
+  .dc-status .dc-button,
+  .dc-status button.dc-zoom-value,
+  .dc-status button.dc-status-traffic,
+  .dc-status button.dc-status-open-points,
+  .dc-status button.dc-status-level {
+    min-height: 40px;
+  }
+
+  .dc-status button.dc-zoom-value {
+    min-width: 48px;
+  }
+
+  .dc-save-conflict .dc-button {
+    height: 40px;
+  }
 }

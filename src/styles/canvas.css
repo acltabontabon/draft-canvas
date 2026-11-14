@@ -19,6 +19,14 @@
   background: transparent;
 }
 
+/* Empty canvas is not a target: a click on it only clears the selection, and a drag is a marquee.
+   React Flow gives the pane a pointing hand while a marquee can start from it (`selectionOnDrag`),
+   which read as "click here" over nothing, against the grab on shapes and the crosshair of an armed
+   tool. The armed tool, the Pencil, Present and a recovery arrow set their own, further down. */
+.dc-canvas .react-flow__pane.selection {
+  cursor: default;
+}
+
 /* The whole diagram on its own compositor layer. Without it a pan moved an uncomposited transform,
  * so every frame re-layerized and re-painted every shape and connector, and the main thread spent
  * most of each frame waiting for that commit: at 500 shapes a pointer pan ran at 88 ms frames
@@ -33,10 +41,14 @@
   will-change: auto;
 }
 
-/* Keep keyboard focus for editing, without framing the whole drawing as a selected object.
- * An inset focus ring lingered after deleting shapes; selected nodes and edges carry feedback. */
+/* The canvas is the one Tab stop for the drawing, so keyboard focus on it has to be visible: with
+ * `outline: none` there was no sign of where Tab had landed. An inset ring — a negative offset, so it
+ * never moves the layout — and only for keyboard modality (`:focus-visible`), so a click that focuses
+ * the canvas draws nothing. (It once lingered after deleting shapes with the mouse; that was the
+ * pointer-focus case, which `:focus-visible` no longer matches.) */
 .dc-canvas:focus-visible {
-  outline: none;
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
 /* ------------------------------------------------------- 5.1 background -- */
@@ -263,19 +275,39 @@
   transition: opacity 90ms ease, visibility 90ms, width 90ms ease, height 90ms ease;
 }
 
+/* What the hit rings of handles and bends are built from. A ring is drawn inside the zoomed layer,
+   so a size on screen is divided by `--dc-zoom` (published by `Canvas.tsx`) into the flow units it
+   is drawn in. */
+.dc-canvas {
+  /* The 9px dot a handle is drawn as, in flow units: no ring is smaller than it. */
+  --dc-handle-dot: 9px;
+  /* How big a ring is on screen, while the canvas is zoomed out as far as the cap allows. */
+  --dc-ring: 18px;
+  /* The most flow units a ring grows to while zooming out, so neighbouring anchors (44 units apart on
+     an ordinary shape) never swallow one another. Past it a ring shrinks with the zoom... */
+  --dc-ring-cap: 36px;
+  /* ...but only to this on screen. Capped alone, the ring was 3.6px at the furthest zoom out
+     (`minZoom` 0.1 in `Canvas.tsx`): a target nobody could hit. A connector end's ring
+     (`.dc-edge-endpoint`) holds its size on screen the same way. */
+  --dc-ring-floor: 9px;
+}
+
 /* An invisible hit ring that stays a comfortable size on screen as the canvas zooms out — the
-   9px dot itself is drawn in flow units and shrinks to a 2px target at 25%. `--dc-zoom` is
-   published by `Canvas.tsx`. The extra reach is pushed outward, off the node, so it never covers
-   the body a node drag starts from; capped so neighbouring anchors never overlap. */
+   9px dot itself is drawn in flow units and shrinks to a 2px target at 25%. The extra reach is
+   pushed outward, off the node, so it never covers the body a node drag starts from; capped so
+   neighbouring anchors never overlap, and never below the floor on screen. */
 .dc-handle,
 .dc-resize-handle {
-  --dc-hit: clamp(9px, calc(18px / var(--dc-zoom, 1)), 36px);
+  --dc-hit: max(
+    clamp(var(--dc-handle-dot), calc(var(--dc-ring) / var(--dc-zoom, 1)), var(--dc-ring-cap)),
+    calc(var(--dc-ring-floor) / var(--dc-zoom, 1))
+  );
 }
 
 .dc-handle::before,
 .dc-edge-endpoint::before,
 .dc-resize-handle::before {
-  --dc-out: calc((var(--dc-hit) - 9px) / 2);
+  --dc-out: calc((var(--dc-hit) - var(--dc-handle-dot)) / 2);
   content: '';
   position: absolute;
   top: 50%;
@@ -651,7 +683,10 @@
  * points adds a bend. All of them keep a hit ring wider than they are drawn.
  */
 .dc-edge-bend {
-  --dc-hit: clamp(12px, calc(18px / var(--dc-zoom, 1)), 28px);
+  --dc-hit: max(
+    clamp(12px, calc(var(--dc-ring) / var(--dc-zoom, 1)), 28px),
+    calc(var(--dc-ring-floor) / var(--dc-zoom, 1))
+  );
   position: absolute;
   width: 8px;
   height: 8px;
@@ -1998,10 +2033,13 @@
   flex: none;
 }
 
-/* A selected shape reads as a small canvas card: identity above, contextual actions below. */
+/* A selected shape reads as a small canvas card: identity above, contextual actions below.
+   400px, not 340: a default Service's identity row (swatch, kind, instances, details, divider, two
+   actions) needs about 360, and at 340 the only two shrinkable items — the kind select and the
+   Details label — ellipsised to "Gene…" and "Deta…" on every new Service. */
 .dc-element-inspector {
   width: max-content;
-  max-width: min(340px, calc(100vw - 24px));
+  max-width: min(400px, calc(100vw - 24px));
 }
 
 .dc-element-identity-row {
@@ -2009,8 +2047,12 @@
   padding: 7px 8px;
 }
 
+/* The kind picker sizes to its label and only gives way when the row is genuinely out of room;
+   it never grows to fill spare width (which is what squeezed Details beside it). In a shape's
+   one-row popover it reads as text with a chevron — its border shows on hover or focus — so the
+   row is a line of words, not a form. */
 .dc-popover-config.dc-element-identity-row > .dc-inspector-select {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -2039,6 +2081,12 @@
   text-align: center;
 }
 
+/* The two steps are a glyph each; the row's usual 8px side padding made the stepper ~68px wide for
+   "− ×1 +", the widest single control on a default Service. */
+.dc-popover-row .dc-element-replicas .dc-button {
+  padding: 0 6px;
+}
+
 .dc-element-technology svg {
   flex: none;
 }
@@ -2049,9 +2097,11 @@
   white-space: nowrap;
 }
 
-/* Actor has both a kind and a frame picker. Keep the technology action legible as an icon
-   instead of squeezing its text into a meaningless "T…" between those controls. */
-.dc-element-inspector[data-node-type='actor'] .dc-element-technology {
+/* Until a technology is set the action is an icon, not the word "Details": Actor has both a kind
+   and a frame picker, and every other shape would otherwise spend a label on a control whose
+   tooltip already says what it opens. Once a technology is set its name takes the label. */
+.dc-element-inspector[data-node-type='actor'] .dc-element-technology,
+.dc-element-inspector .dc-element-technology[data-empty='true'] {
   flex: none;
   justify-content: center;
   width: var(--dc-popover-control);
@@ -2395,12 +2445,6 @@
 .dc-element-inspector[data-dragging='true'] {
   visibility: hidden;
   pointer-events: none;
-}
-
-/* The kind picker sizes to its label, and in a shape's one-row popover reads as text with a
-   chevron — its border shows on hover or focus — so the row is a line of words, not a form. */
-.dc-popover-config .dc-inspector-select {
-  flex: none;
 }
 
 .dc-element-inspector .dc-inspector-select-button {
@@ -2836,7 +2880,11 @@
 .dc-recovery-collapse:focus-visible {
   background: var(--dc-selection-soft);
   color: var(--dc-selection);
-  outline: none;
+}
+
+.dc-recovery-collapse:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
 .dc-recovery-show-arrow {
@@ -2936,7 +2984,11 @@
 .dc-recovery-protocol-button:hover,
 .dc-recovery-protocol-button:focus-visible {
   color: var(--dc-text);
-  outline: none;
+}
+
+.dc-recovery-protocol-button:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
 .dc-recovery-protocol-button[aria-pressed='true'] {
@@ -3671,7 +3723,7 @@
 
 .dc-quick-connect-item:hover,
 .dc-quick-connect-item:focus-visible {
-  background: var(--dc-surface-hover);
+  background: var(--dc-selection-soft);
   outline: none;
 }
 
@@ -4203,6 +4255,11 @@
  */
 .dc-empty-start {
   max-width: 440px;
+}
+
+/* Space kept, so the starters below do not jump when the chooser opens and closes. */
+.dc-empty-start[data-chooser='true'] {
+  visibility: hidden;
 }
 
 .dc-empty-title {
@@ -6335,10 +6392,18 @@
   }
 }
 
+/* The pill is drawn in flow space like the ghost beside it, so at a low zoom its eleven pixels of
+   text would shrink to a few. It scales back up by the inverse of the zoom (`--dc-zoom`, published by
+   `Canvas.tsx`) — so it reads at 11px anywhere from 40% to 200% zoom — not below 0.5, so zoomed further
+   in it grows slowly rather than with the diagram, and not above 2.5, so far out it does not swallow
+   the shape it sits under. The scale lives in the inline `transform`
+   beside the pill's position; the origin is its own corner so that position stays where it is. */
 .dc-ghost-pill {
+  --dc-ghost-pill-scale: clamp(0.5, calc(1 / var(--dc-zoom, 1)), 2.5);
   position: absolute;
   left: 0;
   top: 0;
+  transform-origin: 0 0;
   display: inline-flex;
   align-items: stretch;
   border: 1px solid var(--dc-border);
@@ -6378,6 +6443,47 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* What `]` has to say when there is nothing to step to — set off from the key hints by a hairline. */
+.dc-ghost-pill .dc-ghost-pill-note {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px 4px 8px;
+  border-left: 1px solid var(--dc-border);
+  color: var(--dc-text-muted);
+}
+
+/* Touch has no Tab to accept with and no Esc to wave away with: the pill is itself the accept target
+   (it is a button), and the dismiss is a visible button instead of a key hint. Everywhere else the
+   button is not rendered at all — a keyboard has Esc, and the pill's tooltip says so. */
+.dc-ghost-pill .dc-ghost-pill-dismiss {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .dc-ghost-pill kbd {
+    display: none;
+  }
+
+  .dc-ghost-pill .dc-ghost-pill-dismiss {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px 4px 8px;
+    border-left: 1px solid var(--dc-border);
+    color: var(--dc-text-muted);
+  }
+
+  .dc-ghost-pill .dc-ghost-pill-dismiss:hover,
+  .dc-ghost-pill .dc-ghost-pill-dismiss:focus-visible {
+    background: var(--dc-selection-soft);
+    color: var(--dc-text);
+  }
+
+  .dc-ghost-pill .dc-ghost-pill-dismiss:focus-visible {
+    outline: 2px solid var(--dc-selection);
+    outline-offset: -2px;
+  }
+}
+
 .dc-ghost-pill:has(.dc-ghost-pill-accept:hover, .dc-ghost-pill-accept:focus-visible) {
   border-color: var(--dc-selection);
 }
@@ -6387,7 +6493,14 @@
 .dc-ghost-pill-next:hover,
 .dc-ghost-pill-next:focus-visible {
   background: var(--dc-selection-soft);
-  outline: none;
+}
+
+/* The tint alone is no focus indicator; the pill's own border (below) turns to the accent for the
+   accept button, and the others get the same inset ring everything else uses. */
+.dc-ghost-pill-accept:focus-visible,
+.dc-ghost-pill-next:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
 .dc-ghost-pill .dc-ghost-pill-next:hover,
@@ -6433,13 +6546,34 @@
 /* The settle: a just-accepted node fades up from ghost opacity to real. Under reduced motion the
    ghost is simply replaced by the node, which is already the right end state. */
 @media (prefers-reduced-motion: no-preference) {
-  .dc-ghost-node-body,
-  .dc-ghost-pill {
+  .dc-ghost-node-body {
   animation: dc-attachment-card-in 120ms ease;
+  }
+
+  /* Opacity only: `dc-attachment-card-in` animates `transform` too, and a running animation replaces
+     the pill's inline `transform` (its position and its zoom scale) — it sat at the layer's origin for
+     the 120 ms of the fade, then jumped. A cycle moves the pill by gliding, as a same-identity ghost does. */
+  .dc-ghost-pill {
+  animation: dc-ghost-pill-in 120ms ease;
+  transition: transform 140ms ease;
+  }
+
+  /* A cycle swaps the words under the pill's key hint; they fade in as the ghost they name does. */
+  .dc-ghost-pill-main {
+  animation: dc-ghost-pill-in 120ms ease;
   }
 
   .dc-node[data-settle='true'] {
   animation: dc-ghost-settle 180ms ease-out 1;
+  }
+}
+
+@keyframes dc-ghost-pill-in {
+  from {
+  opacity: 0;
+  }
+  to {
+  opacity: 1;
   }
 }
 
@@ -6465,8 +6599,19 @@
   flex: none;
 }
 
+/* The soft tint alone is 1.1:1 against the menu, which read as no highlight at all. The accent bar
+   down the row's edge is the cue (3:1 and up in both themes) and the tint only backs it; the
+   keyboard-focused row adds a full ring. */
+.dc-quick-connect-item:hover,
+.dc-quick-connect-item:focus-visible,
 .dc-quick-connect-item[data-highlighted='true'] {
   background: var(--dc-selection-soft);
+  box-shadow: inset 3px 0 0 var(--dc-selection);
+}
+
+.dc-quick-connect-item:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
 .dc-quick-connect-item[data-suggested='true']::after {
@@ -7533,4 +7678,31 @@ g[data-ink-erasing='true'] .dc-ink-stroke {
 .dc-canvas[data-pencil] .react-flow__handle,
 .dc-canvas[data-pencil] .dc-ghost {
   visibility: hidden;
+}
+
+/* ------------------------------------------------------- touch targets -- */
+
+/* A finger needs about 40px where a mouse is happy with 24–28 (the rest of this lives at the end of
+   `app.css`; these two are here because this file loads after it and the popover's own sizes would win
+   a tie). Every control in a popover is sized from `--dc-popover-control` / `--dc-popover-field`, so one
+   token carries them all, and a row that no longer fits wraps instead of clipping. Long-press is the
+   touch way to Attach note, Delete and Align, so the context menu's rows grow with the rest. */
+@media (pointer: coarse) {
+  .dc-popover {
+    --dc-popover-control: 40px;
+    --dc-popover-field: 40px;
+  }
+
+  .dc-popover-row {
+    flex-wrap: wrap;
+  }
+
+  .dc-context-menu-item {
+    min-height: 40px;
+  }
+
+  .dc-context-menu-icon {
+    min-width: 40px;
+    height: 40px;
+  }
 }

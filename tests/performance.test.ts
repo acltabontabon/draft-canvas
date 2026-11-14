@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDBFactory } from 'fake-indexeddb';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
@@ -12,9 +12,9 @@ import {
 } from '../src/document/operations';
 import { createFlow, explainEdgeTier, stepIndexOf } from '../src/document/flow';
 import { evaluateAttachCandidates } from '../src/canvas/dragTargets';
-import { clearPathCache, distanceToPath } from '../src/edges/nearest';
+import { clearPathCache, distanceToPath, verticesOf } from '../src/edges/nearest';
 import { obstaclesForEdge, withoutNodes } from '../src/edges/obstacles';
-import { isEdgeFocused } from '../src/store/editorStore';
+import { isEdgeFocused, useEditorStore } from '../src/store/editorStore';
 import { serializeDocument } from '../src/export/project';
 import { parseDocument } from '../src/document/validate';
 import { renderDocumentSvg } from '../src/render/svg/document';
@@ -33,6 +33,22 @@ import { applyChanges } from '../src/collab/apply';
 import { diffFile } from '../src/collab/diff';
 import { freeOriginFor } from '../src/document/operations';
 import { buildStarter, starterSize } from './fixtures/starters-v1/build';
+import { buildDocumentForNodeCount } from '../benchmark/workloads/generator';
+import { ARRANGE_WORK_UNITS, planArrange, planTidy, TIDY_WORK_PER_CONNECTOR, TIDY_WORK_UNITS } from '../src/agent/layoutPlan';
+
+// Counts the work `evaluateAttachCandidates` does to prepare a frame's candidates, which is the thing
+// a drag must not repeat: a pass over every shape asking whether it has room.
+const attachRoom = vi.hoisted(() => ({ calls: 0 }));
+vi.mock('../src/document/operations', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/document/operations')>();
+  return {
+    ...original,
+    hasAttachmentRoom: (...args: Parameters<typeof original.hasAttachmentRoom>) => {
+      attachRoom.calls += 1;
+      return original.hasAttachmentRoom(...args);
+    },
+  };
+});
 
 /**
  * The brief asks for a document of 100 nodes and 150–200 edges to stay
@@ -212,20 +228,37 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
   it('runs attach/reparent hit-testing repeatedly over the full document within budget', () => {
     const dragged = doc.nodes[0]!;
     const draggedRect = { x: dragged.x, y: dragged.y, width: dragged.width, height: dragged.height };
-    const exclude = new Set([dragged.id]);
+    // The code card in the fixture is attachable, so the evaluation really runs.
+    const card = doc.nodes.find((node) => node.type === 'code')!;
+    const exclude = new Set([card.id]);
+    attachRoom.calls = 0;
 
     const started = performance.now();
     for (let frame = 0; frame < 60; frame += 1) {
       const point = { x: draggedRect.x + frame, y: draggedRect.y };
-      evaluateAttachCandidates({ ...draggedRect, x: point.x }, dragged.type, doc, exclude);
+      evaluateAttachCandidates({ ...draggedRect, x: point.x }, card.type, doc, exclude);
       // The same scan a collapsed Note/Code card runs: a zero-size rect at its aim point rather
       // than its own rectangle. Same code path, so it shares this budget rather than getting a
       // performance test of its own.
       evaluateAttachCandidates({ ...point, width: 0, height: 0 }, 'note', doc, exclude);
     }
-    // A generous budget: this exists to catch an accidental quadratic scan
+    // The candidates are worked out once for the gesture — one pass asking each shape whether it has
+    // room — not once a frame: 120 evaluations cost one pass, however many frames the drag runs.
+    expect(attachRoom.calls).toBeGreaterThan(0);
+    expect(attachRoom.calls).toBeLessThanOrEqual(doc.nodes.length);
+    // A generous budget on top: this exists to catch an accidental quadratic scan
     // per candidate, not to police milliseconds on a variable CI machine.
     expect(performance.now() - started).toBeLessThan(500);
+  });
+
+  it('asks nothing of the document for a shape that cannot be attached, frame after frame', () => {
+    const service = doc.nodes.find((node) => node.type === 'service')!;
+    attachRoom.calls = 0;
+    for (let frame = 0; frame < 60; frame += 1) {
+      const found = evaluateAttachCandidates({ x: frame, y: 0, width: 100, height: 60 }, service.type, doc, new Set([service.id]));
+      expect(found).toEqual({ overlapId: null, centerHitId: null });
+    }
+    expect(attachRoom.calls).toBe(0);
   });
 
   /**
@@ -243,6 +276,25 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
       for (const d of routes) distanceToPath({ x: frame * 4, y: 300 }, d);
     }
     expect(performance.now() - started).toBeLessThan(500);
+
+    // What keeps it flat is that each route is flattened once: asked again, it is the same list —
+    // not a new one built over the same path — until the gesture ends and the cache is cleared.
+    for (const d of routes) expect(verticesOf(d)).toBe(verticesOf(d));
+    const flat = verticesOf(routes[0]!);
+    clearPathCache();
+    expect(verticesOf(routes[0]!)).not.toBe(flat);
+    expect(verticesOf(routes[0]!)).toEqual(flat);
+  });
+
+  it('measures the right distance to a cached route', () => {
+    clearPathCache();
+    const route = 'M 0,0 L 600,0 L 600,200';
+    // 300 below the level run, 100 right of the vertical one, and 30 under the level run again.
+    expect(distanceToPath({ x: 40, y: 300 }, route)).toBeCloseTo(300);
+    expect(distanceToPath({ x: 700, y: 100 }, route)).toBeCloseTo(100);
+    expect(distanceToPath({ x: 300, y: 30 }, route)).toBeCloseTo(30);
+    // The cached answer is the same answer.
+    expect(distanceToPath({ x: 300, y: 30 }, route)).toBeCloseTo(30);
   });
 
   it('never touches the document (or reprojects) while Focus/Explain state changes', () => {
@@ -251,19 +303,36 @@ describe(`a document with ${NODE_COUNT} nodes and ~${EDGE_COUNT} edges`, () => {
       selectedEdges: new Set<string>(),
       interactive: true,
     };
-    const projectedBefore = projectNodes(doc, [], options);
+    const store = useEditorStore;
+    store.getState().setDocument(doc);
+    try {
+      const documentBefore = store.getState().document;
+      const projectedBefore = projectNodes(documentBefore, [], options);
+      const projectedEdges = projectEdges(documentBefore, [], options);
 
-    // Toggling focus membership is store-only — the document reference (and
-    // therefore the projection) must not change at all.
-    const focus = { active: true, nodeIds: [doc.nodes[0]!.id, doc.nodes[1]!.id], edgeIds: [] };
-    const projectedAfter = projectNodes(doc, projectedBefore, options);
-    expect(projectedAfter).toBe(projectedBefore);
+      // Toggling focus membership is store-only: the state really changes...
+      const nodeIds = [doc.nodes[0]!.id, doc.nodes[1]!.id];
+      store.getState().enterFocus(nodeIds, []);
+      expect(store.getState().focus).toEqual({ active: true, nodeIds, edgeIds: [] });
+      store.getState().enterFocus([doc.nodes[2]!.id], []);
+      store.getState().exitFocus();
+      expect(store.getState().focus.active).toBe(false);
 
-    // Classifying every edge's focus state is a plain per-edge check, not a
-    // scan of the whole document each time — stays fast even for all ~180.
-    const started = performance.now();
-    for (const edge of doc.edges) isEdgeFocused(focus, edge);
-    expect(performance.now() - started).toBeLessThan(100);
+      // ...and the document reference (and therefore the projection) does not.
+      const documentAfter = store.getState().document;
+      expect(documentAfter).toBe(documentBefore);
+      expect(projectNodes(documentAfter, projectedBefore, options)).toBe(projectedBefore);
+      expect(projectEdges(documentAfter, projectedEdges, options)).toBe(projectedEdges);
+
+      // Classifying every edge's focus state is a plain per-edge check, not a
+      // scan of the whole document each time — stays fast even for all ~180.
+      const focus = { active: true, nodeIds, edgeIds: [] };
+      const started = performance.now();
+      for (const edge of doc.edges) isEdgeFocused(focus, edge);
+      expect(performance.now() - started).toBeLessThan(100);
+    } finally {
+      store.getState().setDocument(createDocument('Untitled'));
+    }
   });
 
   it('lays out, draws and edits a large sequence within budget', () => {
@@ -785,4 +854,60 @@ it('reuses plans after a sequence display edit and replans when a participant an
   expect(crossingPlan(toggled, anchored)).toBe(plan);
   const reordered = [...doc.nodes, { ...node, sequence: { ...node.sequence, participants: [b, a] } }];
   expect(crossingPlan(reordered, anchored)).not.toBe(plan);
+});
+
+
+/**
+ * Arrange and Tidy up are bounded by work, not by the clock (`agent/layoutPlan.ts`): units of drawing,
+ * the same on every machine. What this holds is that bound — the units spent stay within a small
+ * multiple of the budget, where the unbounded search spent 235,000 on a 100-shape diagram and took
+ * minutes — and that a diagram too big for it says so (`partial`) instead of silently doing less. Times
+ * are recorded, not asserted: they are a machine's, and the work is what must not regress.
+ *
+ * Measured at 100 / 300 / 1000 shapes of the starters' own composition (`benchmark/workloads`). The
+ * overshoot is real and small: a first candidate arrangement is one step the budget cannot stop in the
+ * middle of, so the bound is a multiple, not the budget itself.
+ */
+describe('Arrange and Tidy up are bounded by work, at 100, 300 and 1000 shapes', () => {
+  const OVERSHOOT = 6;
+  const SIZES = [100, 300, 1000] as const;
+  const record = (what: string, size: number, ms: number, detail: string) => process.stdout.write(`[layout] ${what} ${size} shapes: ${Math.round(ms)} ms, ${detail}\n`);
+
+  it.each(SIZES)('Tidy up on %i shapes spends no more than its budget allows', (size) => {
+    const doc = buildDocumentForNodeCount(size);
+    const budget = TIDY_WORK_UNITS + TIDY_WORK_PER_CONNECTOR * doc.edges.length;
+    const started = performance.now();
+    const result = planTidy(doc);
+    const used = result.kind === 'plan' ? result.plan.used : result.used;
+    const partial = result.kind === 'plan' ? result.plan.partial : result.partial;
+    record('tidy', doc.nodes.length, performance.now() - started, `${used} units of ${budget}${partial ? ', stopped early' : ''}`);
+    expect(used).toBeLessThanOrEqual(budget * 1.5);
+    // Stopping early is said, and only ever because the budget was reached.
+    if (partial) expect(used).toBeGreaterThanOrEqual(budget);
+  }, 120_000);
+
+  it.each([100, 300] as const)('Arrange on %i shapes spends a bounded amount of work and says when it stopped early', (size) => {
+    const doc = buildDocumentForNodeCount(size);
+    const started = performance.now();
+    const result = planArrange(doc);
+    expect(result.kind).toBe('plan');
+    if (result.kind !== 'plan') return;
+    const { plan } = result;
+    record('arrange', doc.nodes.length, performance.now() - started, `${plan.used} units of ${ARRANGE_WORK_UNITS}, ${Object.keys(plan.options).join(' and ')}${plan.partial ? ', stopped early' : ''}${plan.alternativeSkipped ? ', one direction only' : ''}`);
+    expect(plan.used).toBeLessThanOrEqual(ARRANGE_WORK_UNITS * OVERSHOOT);
+    // A diagram this size spends its budget on the first direction: said, not silently left out.
+    expect(plan.partial).toBe(true);
+    expect(Object.keys(plan.options).length === 1).toBe(plan.alternativeSkipped);
+  }, 120_000);
+
+  // The thousand-shape Arrange is a quarter-minute of CPU: recorded when asked for (`PERF_ARRANGE_1000=1`).
+  it.skipIf(!process.env.PERF_ARRANGE_1000)('Arrange on 1000 shapes spends a bounded amount of work', () => {
+    const doc = buildDocumentForNodeCount(1000);
+    const started = performance.now();
+    const result = planArrange(doc);
+    expect(result.kind).toBe('plan');
+    if (result.kind !== 'plan') return;
+    record('arrange', doc.nodes.length, performance.now() - started, `${result.plan.used} units of ${ARRANGE_WORK_UNITS}`);
+    expect(result.plan.used).toBeLessThanOrEqual(ARRANGE_WORK_UNITS * OVERSHOOT);
+  }, 300_000);
 });

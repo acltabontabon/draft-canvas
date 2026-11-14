@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { nodeCommands } from '../src/commands/registry';
+import { nodeCommands, viewCommands } from '../src/commands/registry';
 import type { CommandContext } from '../src/commands/types';
 import { __resetClipboardSync, __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore, type ContinuationOffer } from '../src/store/uiStore';
@@ -18,12 +18,16 @@ import {
   type ContinuationTrigger,
 } from '../src/continuation';
 import { capabilityFor, categoryOf, inferRelationship } from '../src/document/connectorSemantics';
-import { createDocument, createEdge, createNode, defaultSizeFor } from '../src/document/factory';
+import { createDocument, createEdge, createNode, defaultSizeFor, displayNameFor } from '../src/document/factory';
 import { addFlow, createFlow } from '../src/document/flow';
 import { starterById } from './fixtures/starters-v1';
 import { buildStarter } from './fixtures/starters-v1/build';
 import { addEdges, addNodes, placeNear } from '../src/document/operations';
-import { flattenPath, rectOf, routeBetween, routeEdge } from '../src/edges/routing';
+import { anchorPoint, flattenPath, rectOf, routeBetween, routeEdge } from '../src/edges/routing';
+import { connectorRoutes } from '../src/edges/connectorRoutes';
+import { routedCaption } from '../src/edges/edgeRoutes';
+import { fittedConnectorCaption, layoutConnectorCaption } from '../src/edges/labelLayout';
+import { BOUNDARY_HEADER_BAND } from '../src/document/boundaryHeader';
 import { connectorClearance } from '../src/edges/clearance';
 import type { CreateNodeInput } from '../src/document/factory';
 import type { DraftDocument, DraftNode, EdgeSemantic, ViewLevel } from '../src/document/types';
@@ -293,15 +297,15 @@ const CASES: Case[] = [
     name: 'Scheduler with nothing triggered yet',
     doc: graph([scheduler('t')], []),
     anchor: 't',
-    select: ['scheduler-trigger-service'],
-    drop: ['scheduler-trigger-service', 'scheduler-trigger-worker'],
+    select: ['scheduler-trigger-worker'],
+    drop: ['scheduler-trigger-worker', 'scheduler-trigger-service'],
   },
   {
     name: 'Scheduler already triggering something — silent on select, still offered on an explicit drop',
     doc: graph([scheduler('t'), service('s')], [['t', 's']]),
     anchor: 't',
     select: [],
-    drop: ['scheduler-trigger-service', 'scheduler-trigger-worker'],
+    drop: ['scheduler-trigger-worker', 'scheduler-trigger-service'],
   },
   {
     name: 'Object Storage with an upload and nowhere for it to notify',
@@ -467,6 +471,49 @@ describe('continuationsFor — rule tables', () => {
 /* The matrix is the only authority on validity                        */
 /* ------------------------------------------------------------------ */
 
+/**
+ * One document per shipped rule, anchored on `t`, in which the rule fires — what the checks that
+ * must cover *every* rule (valid fragments, straight connectors, captions that fit) are run on. A new
+ * rule without an entry here fails them, which is the point.
+ */
+const RULE_ANCHORS: Record<string, DraftDocument> = {
+  'topic-fan-out-queue': graph([service('p'), topic('t')], [['p', 't']]),
+  'topic-subscriber': graph([service('p'), topic('t')], [['p', 't']]),
+  'service-data-store': graph([service('t')], []),
+  'service-topic': graph([service('t')], []),
+  'service-queue': graph([service('t')], []),
+  'service-service': graph([service('t')], []),
+  'service-cache': graph([service('t')], []),
+  'service-external': graph([service('t')], []),
+  'service-search-index': reword(graph([service('t'), database('db')], [['t', 'db']]), 't', 'db', 'writes'),
+  'actor-gateway': graph([actor('t')], []),
+  'actor-api': graph([actor('t')], []),
+  'actor-web-app': graph([actor('t')], []),
+  'topic-fan-out-worker': graph([service('p'), topic('t')], [['p', 't']]),
+  'queue-consumer': graph([service('p'), queue('t')], [['p', 't']]),
+  'queue-dead-letter': graph([service('p'), queue('t'), worker('w')], [['p', 't'], ['t', 'w']]),
+  // Anchored on the consumer, not the stream: a stream keeps every record, so the dead-letter
+  // path belongs to whoever reads it.
+  'stream-consumer-dead-letter': graph([service('p'), stream('s'), worker('t')], [['p', 's'], ['s', 't']]),
+  'gateway-route': graph([actor('p'), gateway('t')], [['p', 't']]),
+  'scheduler-trigger-service': graph([scheduler('t')], []),
+  'scheduler-trigger-worker': graph([scheduler('t')], []),
+  'object-storage-fan-out-queue': graph([service('p'), objectStorage('t')], [['p', 't']]),
+  'object-storage-fan-out-topic': graph([service('p'), objectStorage('t')], [['p', 't']]),
+  'port-implementation-component': graph([service('p'), port('t')], [['p', 't']]),
+  'port-implementation-service': graph([service('p'), port('t')], [['p', 't']]),
+  'adapter-port': graph([{ id: 't', type: 'component', componentKind: 'adapter' }], []),
+  'worker-indexes': graph([service('p'), worker('t')], [['p', 't']]),
+  'table-next-stage': graph([table('p'), table('t')], [['p', 't']]),
+  // Level-gated rules (see `ContinuationRule.levels`) only fire where the view has been said
+  // to be one — the fixture says so the same way the editor does.
+  'person-system': graph([actor('t')], [], 'context'),
+  'person-external': graph([actor('t')], [], 'context'),
+  'component-component': graph([component('t')], [], 'component'),
+  'component-adapter': graph([component('t')], [], 'component'),
+  'component-data-store': graph([component('t')], [], 'component'),
+};
+
 describe('continuationsFor — technical validity is the matrix, never the rule', () => {
   const always: Pick<ContinuationRule, 'tier' | 'label' | 'reason' | 'when'> = {
     tier: 'primary',
@@ -506,44 +553,8 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
   });
 
   it('every shipped rule produces matrix-valid fragments from a neighborhood it fires on', () => {
-    const anchors: Record<string, DraftDocument> = {
-      'topic-fan-out-queue': graph([service('p'), topic('t')], [['p', 't']]),
-      'topic-subscriber': graph([service('p'), topic('t')], [['p', 't']]),
-      'service-data-store': graph([service('t')], []),
-      'service-topic': graph([service('t')], []),
-      'service-queue': graph([service('t')], []),
-      'service-service': graph([service('t')], []),
-      'service-cache': graph([service('t')], []),
-      'service-external': graph([service('t')], []),
-      'service-search-index': reword(graph([service('t'), database('db')], [['t', 'db']]), 't', 'db', 'writes'),
-      'actor-gateway': graph([actor('t')], []),
-      'actor-api': graph([actor('t')], []),
-      'topic-fan-out-worker': graph([service('p'), topic('t')], [['p', 't']]),
-      'queue-consumer': graph([service('p'), queue('t')], [['p', 't']]),
-      'queue-dead-letter': graph([service('p'), queue('t'), worker('w')], [['p', 't'], ['t', 'w']]),
-      // Anchored on the consumer, not the stream: a stream keeps every record, so the dead-letter
-      // path belongs to whoever reads it.
-      'stream-consumer-dead-letter': graph([service('p'), stream('s'), worker('t')], [['p', 's'], ['s', 't']]),
-      'gateway-route': graph([actor('p'), gateway('t')], [['p', 't']]),
-      'scheduler-trigger-service': graph([scheduler('t')], []),
-      'scheduler-trigger-worker': graph([scheduler('t')], []),
-      'object-storage-fan-out-queue': graph([service('p'), objectStorage('t')], [['p', 't']]),
-      'object-storage-fan-out-topic': graph([service('p'), objectStorage('t')], [['p', 't']]),
-      'port-implementation-component': graph([service('p'), port('t')], [['p', 't']]),
-      'port-implementation-service': graph([service('p'), port('t')], [['p', 't']]),
-      'adapter-port': graph([{ id: 't', type: 'component', componentKind: 'adapter' }], []),
-      'worker-indexes': graph([service('p'), worker('t')], [['p', 't']]),
-      'table-next-stage': graph([table('p'), table('t')], [['p', 't']]),
-      // Level-gated rules (see `ContinuationRule.levels`) only fire where the view has been said
-      // to be one — the fixture says so the same way the editor does.
-      'person-system': graph([actor('t')], [], 'context'),
-      'person-external': graph([actor('t')], [], 'context'),
-      'component-component': graph([component('t')], [], 'component'),
-      'component-adapter': graph([component('t')], [], 'component'),
-      'component-data-store': graph([component('t')], [], 'component'),
-    };
     for (const rule of RULES) {
-      const doc = anchors[rule.id];
+      const doc = RULE_ANCHORS[rule.id];
       expect(doc, `no fixture for ${rule.id}`).toBeDefined();
       const nb = neighborhoodOf(doc!, 't', doc!.level)!;
       expect(rule.when(nb, 'drop')).toBe(true);
@@ -556,6 +567,18 @@ describe('continuationsFor — technical validity is the matrix, never the rule'
         expect(cap?.status ?? 'valid').toBe('valid');
       }
     }
+  });
+
+  it('every candidate says why it is on offer, for the pill and the screen reader', () => {
+    for (const rule of RULES) {
+      const doc = RULE_ANCHORS[rule.id]!;
+      const candidate = continuationsFor(doc, 't', 'invoke', { level: doc.level }).find((c) => c.ruleId === rule.id)!;
+      expect(candidate.reason).toBe(rule.reason);
+    }
+    // The two kinds no rule writes have a sentence of their own.
+    const existing = graph([{ ...service('svc'), x: 0, text: 'Order Service' }, { ...topic('events'), x: 300, text: 'Order Events' }], []);
+    const connect = continuationsFor(existing, 'svc', 'invoke').find((c) => c.ruleId === 'connect-existing')!;
+    expect(connect.reason).toMatch(/Order Events.*already on the canvas/);
   });
 
   it('every rule carries a stable id, a label and an authored reason', () => {
@@ -755,6 +778,20 @@ describe('ambiguity — never silently empty when asked', () => {
 /* ------------------------------------------------------------------ */
 
 describe('continuationsFor — dismissal', () => {
+  it('a dismissal is pinned to the view level too: Escape in one altitude says nothing about another', () => {
+    const doc = graph([service('pub'), topic('t')], [['pub', 't']]);
+    const key = (level?: ViewLevel) => neighborhoodOf(doc, 't', level)!.key;
+    expect(key('container')).not.toBe(key('component'));
+    expect(key('context')).not.toBe(key());
+    // Nothing known and an explicit "just a drawing" are the same thing to the engine, so to the key.
+    expect(key('none')).toBe(key());
+
+    const first = continuationsFor(doc, 't', 'select', { level: 'container' })[0]!;
+    const dismissed = new Set([dismissalKey('t', first.id, first.neighborhoodKey)]);
+    expect(continuationsFor(doc, 't', 'select', { level: 'container', dismissed })).toEqual([]);
+    expect(continuationsFor(doc, 't', 'select', { level: 'component', dismissed }).map((c) => c.id)).toEqual([first.id]);
+  });
+
   it('suppresses a dismissed (anchor, rule, neighborhood) and nothing else', () => {
     const doc = graph([service('pub'), topic('t')], [['pub', 't']]);
     const [offer] = continuationsFor(doc, 't', 'select');
@@ -796,7 +833,7 @@ describe('continuationsFor — dismissal', () => {
 /* ------------------------------------------------------------------ */
 
 describe('materialize', () => {
-  it('places the node where placeNear would, with matrix semantics and a DLQ attempt count', () => {
+  it('hangs a dead-letter queue below its queue, off the connectors, with matrix semantics and a DLQ attempt count', () => {
     const doc = graph([service('s'), queue('q'), worker('w')], [['s', 'q'], ['q', 'w']]);
     const dlqOffer = continuationsFor(doc, 'q', 'drop').find((c) => c.ruleId === 'queue-dead-letter')!;
     const m = materialize(doc, dlqOffer)!;
@@ -1020,6 +1057,140 @@ describe('materialize', () => {
 });
 
 /* ------------------------------------------------------------------ */
+/* Where a suggestion lands: a straight connector, a caption that fits  */
+/* ------------------------------------------------------------------ */
+
+/** What a rule's suggestion draws once accepted: its fragment's connectors, routed as the canvas routes them. */
+function drawn(ruleId: string) {
+  const doc = RULE_ANCHORS[ruleId]!;
+  const candidate = continuationsFor(doc, 't', 'invoke', { level: doc.level }).find((c) => c.ruleId === ruleId)!;
+  const placed = materialize(doc, candidate)!;
+  const accepted = addEdges(addNodes(doc, placed.nodes), placed.edges);
+  const byId = new Map(accepted.nodes.map((n) => [n.id, n]));
+  return {
+    placed,
+    accepted,
+    lines: placed.edges.map((edge) => {
+      const source = byId.get(edge.source)!;
+      const target = byId.get(edge.target)!;
+      const routes = connectorRoutes(accepted.edges.find((e) => e.id === edge.id)!, accepted, 'transient')!;
+      return { edge, source, target, routes, caption: routedCaption(edge, categoryOf(source), categoryOf(target)) };
+    }),
+  };
+}
+
+describe('materialize — a suggestion lands where its connector is straight and its caption is whole', () => {
+  // The suggested shape used to be set down top-to-top with the one beside it. Anchors are not at a
+  // box's top (a Queue's is its tube, a Data Store's its glyph), so most connectors drew with a jog —
+  // and a jog is where a caption loses its room: "sends command to" read "sends…" on the very first
+  // suggestion a new Service offered.
+  it.each(RULES.map((rule) => [rule.id] as const))('%s', (ruleId) => {
+    expect(RULE_ANCHORS[ruleId], `no fixture for ${ruleId}`).toBeDefined();
+    const { lines } = drawn(ruleId);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const { edge, routes, caption } of lines) {
+      const points = flattenPath(routes.request.d);
+      const level = points.every((p) => Math.abs(p.y - points[0]!.y) < 0.5);
+      const plumb = points.every((p) => Math.abs(p.x - points[0]!.x) < 0.5);
+      expect(level || plumb, `${ruleId}: ${edge.semantic} connector is not a straight line: ${routes.request.d}`).toBe(true);
+      // Only a level run puts its caption between the two shapes; beside an upright one it has the whole side.
+      if (caption && level) {
+        const whole = layoutConnectorCaption(caption);
+        const room = routes.request.labelRoom!;
+        const fitted = fittedConnectorCaption(caption, undefined, room);
+        expect(fitted?.lines[0]?.text, `${ruleId}: "${caption}" is clipped in ${room}px`).toBe(whole.lines[0]!.text);
+        // Whole is not enough: the gap leaves 16px to spare, past the arrowhead's own clearance, so a
+        // shape moved a few pixels (or one more word of caption) does not take it back.
+        expect(room, `${ruleId}: "${caption}" (${whole.width}px) has only ${room}px`).toBeGreaterThanOrEqual(whole.width + 15);
+      }
+    }
+  });
+
+  it('meets a Queue on its tube, not at the middle of its box', () => {
+    const { lines } = drawn('service-queue');
+    const { source, target } = lines[0]!;
+    const from = anchorPoint(rectOf(source), 'right');
+    const to = anchorPoint(rectOf(target), 'left');
+    expect(Math.abs(from.y - to.y)).toBeLessThan(1);
+    // …which is not where top-aligned boxes put it.
+    expect(Math.abs(source.y + source.height / 2 - (target.y + target.height / 2))).toBeGreaterThan(10);
+  });
+
+  it('stands a suggestion below its anchor on the anchor’s centre line, whatever its width', () => {
+    const pubAbove = createNode({ id: 'p', type: 'service', x: 0, y: -300 });
+    const t = createNode({ id: 't', type: 'queue', queueKind: 'topic', x: 0, y: 0 });
+    let doc = addNodes(createDocument('Vertical flow'), [pubAbove, t]);
+    doc = addEdges(doc, [createEdge({ source: 'p', target: 't', ...inferRelationship(pubAbove, t) })]);
+    const worker = continuationsFor(doc, 't', 'invoke').find((c) => c.ruleId === 'topic-fan-out-worker')!;
+    const node = materialize(doc, worker)!.nodes[0]!;
+    expect(node.y).toBeGreaterThan(t.y);
+    expect(node.width).not.toBe(t.width);
+    expect(node.x + node.width / 2).toBe(t.x + t.width / 2);
+  });
+
+  it('keeps the fixed offsets when only a diagonal spot is free — the one case that cannot be straight', () => {
+    // Beside and below are both taken, so the suggestion goes below-and-right: not on a shared axis with
+    // the anchor, so there is nothing to level and the connector steps down to it. Documented here so a
+    // change to the fallback list knows what it is trading.
+    const pub = createNode({ id: 'pub', type: 'service', x: 0, y: 0 });
+    const t = createNode({ id: 't', type: 'queue', queueKind: 'topic', x: 480, y: 0 });
+    const beside = createNode({ id: 'beside', type: 'note', x: 700, y: -60, width: 300, height: 110 });
+    const under = createNode({ id: 'under', type: 'note', x: 440, y: 70, width: 250, height: 70 });
+    let doc = addNodes(createDocument('Diagonal'), [pub, t, beside, under]);
+    doc = addEdges(doc, [createEdge({ source: 'pub', target: 't', ...inferRelationship(pub, t), semanticsOrigin: 'inferred' })]);
+    const placed = materialize(doc, continuationsFor(doc, 't', 'select')[0]!)!;
+    const node = placed.nodes[0]!;
+    expect(node.x).toBeGreaterThan(t.x + t.width);
+    expect(node.y).toBe(t.y + t.height + 32);
+    const accepted = addEdges(addNodes(doc, placed.nodes), placed.edges);
+    const route = connectorRoutes(accepted.edges.find((e) => e.id === placed.edges[0]!.id)!, accepted, 'transient')!;
+    const points = flattenPath(route.request.d);
+    expect(points.every((p) => Math.abs(p.y - points[0]!.y) < 0.5) || points.every((p) => Math.abs(p.x - points[0]!.x) < 0.5)).toBe(false);
+  });
+
+  it('leaves addConsumer and addDeadLetterQueue where they were: level boxes, for `horizontalAnchorsFor`', () => {
+    const doc = graph([service('s'), queue('q')], [['s', 'q']]);
+    const host = doc.nodes.find((n) => n.id === 'q')!;
+    // `placeNear` without `align` is the fixed offset those two commands use.
+    expect(placeNear(doc, host, defaultSizeFor('service'), 40).y).toBe(host.y);
+  });
+});
+
+describe('materialize — against a boundary', () => {
+  // The Queue sits at the left of a boundary just wide enough that the Worker to its right crosses
+  // the boundary's right edge: visibly inside, and not a member (it stays behind when the boundary moves).
+  function nearTheEdge(width: number, queueY = 90) {
+    const group = createNode({ id: 'g', type: 'group', text: 'Backend', x: 0, y: 0, width, height: 260 });
+    const host = createNode({ id: 'q', type: 'queue', queueKind: 'queue', x: 24, y: queueY, parentId: 'g' });
+    const feeder = createNode({ id: 'f', type: 'service', x: -300, y: queueY });
+    const doc = addEdges(addNodes(createDocument('Bounded'), [group, host, feeder]), [
+      createEdge({ source: 'f', target: 'q', ...inferRelationship(feeder, host), semanticsOrigin: 'inferred' }),
+    ]);
+    const offer = continuationsFor(doc, 'q', 'select')[0]!;
+    return { group, node: materialize(doc, offer)!.nodes[0]! };
+  }
+
+  it('never straddles the edge of its own boundary: inside as a member, or wholly outside', () => {
+    for (const width of [300, 330, 360, 400, 420, 450]) {
+      const { group, node } = nearTheEdge(width);
+      const crossesRight = node.x < group.x + group.width && node.x + node.width > group.x + group.width;
+      const crossesBottom = node.y < group.y + group.height && node.y + node.height > group.y + group.height;
+      expect(crossesRight || crossesBottom, `a ${width}-wide boundary`).toBe(false);
+      const inside = node.x >= group.x && node.x + node.width <= group.x + group.width && node.y >= group.y && node.y + node.height <= group.y + group.height;
+      expect(node.parentId, `a ${width}-wide boundary`).toBe(inside ? 'g' : undefined);
+    }
+  });
+
+  it('keeps out of the boundary’s title row when another spot inside is free', () => {
+    // The Queue is hung from the title row; levelling the Worker's connector with its tube lifts the
+    // Worker into the row, so it goes below the Queue instead — still inside.
+    const { group, node } = nearTheEdge(700, 36);
+    expect(node.y).toBeGreaterThanOrEqual(group.y + BOUNDARY_HEADER_BAND);
+    expect(node.parentId).toBe('g');
+  });
+});
+
+/* ------------------------------------------------------------------ */
 /* Store: accept, undo, dismiss, identity                              */
 /* ------------------------------------------------------------------ */
 
@@ -1204,6 +1375,31 @@ describe('uiStore continuation state', () => {
     expect(continuationsFor(doc, 't', 'invoke', { rules: twoStrong }).map((c) => c.id)).toEqual(['first', 'second']);
   });
 
+  it('an edit from elsewhere that removes the shape a picker was previewing for closes the preview with it', () => {
+    // The picker is closed when its source is removed (`closeWhatPointsAtRemoved`); the drop offer it
+    // was previewing stayed behind, and a lingering drop offer is what keeps the quiet suggestions
+    // switched off — until the next accept, room change or settings toggle.
+    const doc = useEditorStore.getState().document;
+    const [first] = continuationsFor(doc, 't', 'drop');
+    useUiStore.getState().setQuickConnect({ source: 't', flowPosition: { x: 0, y: 0 }, screenPosition: { x: 0, y: 0 } });
+    useUiStore.getState().setContinuation({ ...materialize(doc, first!)!, trigger: 'drop' });
+    expect(useUiStore.getState().continuation?.trigger).toBe('drop');
+
+    expect(useEditorStore.getState().applyRemote({ ...doc, nodes: doc.nodes.filter((n) => n.id !== 't'), edges: [] })).toBe(true);
+    expect(useUiStore.getState().quickConnect).toBeNull();
+    expect(useUiStore.getState().continuation).toBeNull();
+  });
+
+  it('…but leaves it alone when the shape is still there', () => {
+    const doc = useEditorStore.getState().document;
+    const [first] = continuationsFor(doc, 't', 'drop');
+    useUiStore.getState().setQuickConnect({ source: 't', flowPosition: { x: 0, y: 0 }, screenPosition: { x: 0, y: 0 } });
+    const offer: ContinuationOffer = { ...materialize(doc, first!)!, trigger: 'drop' };
+    useUiStore.getState().setContinuation(offer);
+    useEditorStore.getState().applyRemote({ ...doc, nodes: doc.nodes.map((n) => (n.id === 'pub' ? { ...n, text: 'Renamed' } : n)) });
+    expect(useUiStore.getState().continuation?.id).toBe(offer.id);
+  });
+
   it('turning the preference off clears the current offer; resetContinuation forgets dismissals', () => {
     useUiStore.getState().setContinuation(selectOffer('t'));
     useUiStore.getState().setContinuationsEnabled(false);
@@ -1250,6 +1446,17 @@ describe('commands: Add <label> (suggested)', () => {
     expect(useEditorStore.getState().history.past[0]!.label).toBe('Add Queue');
   });
 
+  it('turns the feature on and off under the one name Settings and the guides use, and is still found by the old one', () => {
+    const toggle = () => viewCommands(ctx()).find((c) => c.id === 'continuation-toggle')!;
+    expect(toggle().title).toBe('Turn off next-shape suggestions');
+    toggle().run(ctx());
+    expect(useUiStore.getState().continuationsEnabled).toBe(false);
+    expect(toggle().title).toBe('Turn on next-shape suggestions');
+    expect(toggle().keywords).toEqual(expect.arrayContaining(['intent', 'continuation']));
+    toggle().run(ctx());
+    expect(useUiStore.getState().continuationsEnabled).toBe(true);
+  });
+
   it('is absent when the preference is off or there is nothing to suggest', () => {
     const topicNode = useEditorStore.getState().document.nodes.find((n) => n.id === 't')!;
     useUiStore.getState().setContinuationsEnabled(false);
@@ -1290,7 +1497,56 @@ describe('ranking — asked-for alternatives', () => {
   it('an Actor gets where a request enters, only when asked', () => {
     const doc = graph([actor('u')], []);
     expect(ids(doc, 'u', 'select')).toEqual([]);
-    expect(ids(doc, 'u', 'invoke')).toEqual(['actor-gateway', 'actor-api']);
+    expect(ids(doc, 'u', 'invoke')).toEqual(['actor-gateway', 'actor-api', 'actor-web-app']);
+  });
+
+  it('a Web App is a plain Service with a name, not a new kind of shape — and only where infrastructure is in view', () => {
+    const doc = graph([actor('u')], []);
+    const offer = continuationsFor(doc, 'u', 'invoke').find((c) => c.ruleId === 'actor-web-app')!;
+    expect(offer.label).toBe('Web App');
+    const node = materialize(doc, offer)!.nodes[0]!;
+    expect(node).toMatchObject({ type: 'service', serviceKind: 'generic', text: 'Web App' });
+    expect(materialize(doc, offer)!.edges[0]).toMatchObject({ source: 'u', semantic: 'calls' });
+    // Not unprompted, and not in a System Context view, whose people reach a system and not an app.
+    expect(ids(doc, 'u', 'select')).toEqual([]);
+    expect(ids(doc, 'u', 'drop')).toEqual([]);
+    expect(continuationsFor(doc, 'u', 'invoke', { level: 'context' }).map((c) => c.ruleId)).not.toContain('actor-web-app');
+  });
+
+  it('a gateway’s route is called what it draws: an API', () => {
+    const doc = graph([actor('p'), gateway('g')], [['p', 'g']]);
+    const [route] = continuationsFor(doc, 'g', 'select');
+    expect(route!.ruleId).toBe('gateway-route');
+    expect(route!.label).toBe('API');
+    expect(materialize(doc, route!)!.nodes[0]).toMatchObject({ serviceKind: 'api', text: 'API' });
+  });
+
+  it('every suggested Service is called what its ghost’s box says', () => {
+    // A pill reading "Service" over a box that says "API" is how a preview stops being believable.
+    // Only Services: they are named in the box, while a Data Store or a Queue says what it is with its glyph.
+    let checked = 0;
+    for (const rule of RULES) {
+      const doc = RULE_ANCHORS[rule.id]!;
+      const candidate = continuationsFor(doc, 't', 'invoke', { level: doc.level }).find((c) => c.ruleId === rule.id)!;
+      const [spec, ...more] = candidate.fragment.nodes;
+      if (spec?.type !== 'service' || more.length > 0) continue;
+      checked += 1;
+      expect(displayNameFor(materialize(doc, candidate)!.nodes[0]!), rule.id).toBe(rule.label);
+    }
+    expect(checked).toBeGreaterThan(8);
+  });
+
+  it('a Scheduler’s job is a Worker: that leads, a plain Service is the other thing it could be', () => {
+    const doc = graph([scheduler('t')], []);
+    const [quiet] = continuationsFor(doc, 't', 'select');
+    expect(quiet!.ruleId).toBe('scheduler-trigger-worker');
+    expect(quiet!.tier).toBe('primary');
+    const both = continuationsFor(doc, 't', 'invoke');
+    expect(both.map((c) => [c.ruleId, c.tier, c.confidence])).toEqual([
+      ['scheduler-trigger-worker', 'primary', 'high'],
+      ['scheduler-trigger-service', 'secondary', 'medium'],
+    ]);
+    expect(materialize(doc, quiet!)!.nodes[0]).toMatchObject({ serviceKind: 'worker' });
   });
 
   it('recently accepted rules get a nudge among optional candidates, never a promotion to unprompted', () => {
@@ -1593,6 +1849,32 @@ describe('connecting to what is already drawn', () => {
     expect(continuationsFor(doc, 's', 'select')).toEqual([]);
   });
 
+  it('“bus” is a kind word too, though it has no singular: two “… Bus” shapes share no name', () => {
+    // Looked up only after singularising, "bus" became "bu" — a word nothing lists — and any two
+    // buses were taken to be about the same thing.
+    const doc = graph(
+      [
+        at(named(service('s'), 'Billing Bus'), 0),
+        at(named(database('a'), 'Audit Bus'), 300),
+        at(named(database('b'), 'Ledger'), 0, 200),
+      ],
+      [],
+    );
+    expect(continuationsFor(doc, 's', 'select')).toEqual([]);
+  });
+
+  it('“user” and “data” name no domain on purpose: a plain “User” actor is not about every “User Service”', () => {
+    const doc = graph(
+      [
+        at(named(actor('u'), 'User'), 0),
+        at(named(service('a'), 'User Service'), 300),
+        at(named(service('b'), 'Data Service'), 0, 200),
+      ],
+      [],
+    );
+    expect(continuationsFor(doc, 'u', 'select')).toEqual([]);
+  });
+
   it('continuationSets answers exactly what the select and invoke calls would, in one pass', () => {
     const fixtures = [
       graph([service('pub'), topic('t')], [['pub', 't']]),
@@ -1689,6 +1971,37 @@ describe('connecting to what is already drawn', () => {
 });
 
 describe('naming', () => {
+  it('a Worker after a Topic or a Stream named for what it carries takes the same stem', () => {
+    const topicDoc = graph([service('s'), { id: 't', type: 'queue', queueKind: 'topic', text: 'Billing Topic' }], [['s', 't']]);
+    const subscriber = continuationsFor(topicDoc, 't', 'invoke').find((c) => c.ruleId === 'topic-fan-out-worker')!;
+    expect(materialize(topicDoc, subscriber)!.nodes[0]).toMatchObject({ text: 'Billing Worker', textOrigin: 'auto' });
+
+    const streamDoc = graph([service('s'), { id: 'st', type: 'queue', queueKind: 'stream', text: 'Audit Stream' }], [['s', 'st']]);
+    const reader = continuationsFor(streamDoc, 'st', 'select')[0]!;
+    expect(reader.ruleId).toBe('queue-consumer');
+    expect(materialize(streamDoc, reader)!.nodes[0]!.text).toBe('Audit Worker');
+  });
+
+  it('invents no words: the stem is whatever precedes the kind, and a broker not named that way is left alone', () => {
+    const named = (text: string, queueKind: 'queue' | 'topic' | 'stream') =>
+      graph([service('s'), { id: 'b', type: 'queue', queueKind, text }], [['s', 'b']]);
+    const workerName = (text: string, queueKind: 'queue' | 'topic' | 'stream') => {
+      const doc = named(text, queueKind);
+      const consumer = continuationsFor(doc, 'b', 'invoke').find((c) => c.ruleId === 'queue-consumer' || c.ruleId === 'topic-fan-out-worker')!;
+      return materialize(doc, consumer)!.nodes[0]!.text;
+    };
+    expect(workerName('Order Events Topic', 'topic')).toBe('Order Events Worker');
+    expect(workerName('order stream', 'stream')).toBe('order Worker');
+    // Nothing before the kind word, or the kind word is not last: the factory default.
+    expect(workerName('Topic', 'topic')).toBe('Worker');
+    expect(workerName('Topics for Billing', 'topic')).toBe('Worker');
+    expect(workerName('Order Events', 'topic')).toBe('Worker');
+    // A subscriber's own queue is unnamed, so the Worker behind it has no stem to take.
+    const doc = named('Billing Topic', 'topic');
+    const chain = continuationsFor(doc, 'b', 'invoke').find((c) => c.ruleId === 'topic-subscriber')!;
+    expect(materialize(doc, chain)!.nodes.map((n) => n.text)).toEqual(['', 'Worker']);
+  });
+
   it('a Worker after an explicitly named “Billing Queue” is “Billing Worker”, still an automatic name', () => {
     const doc = graph([service('s'), queue('q', { text: 'Billing Queue' })], [['s', 'q']]);
     const [offer] = continuationsFor(doc, 'q', 'select');
@@ -1855,7 +2168,7 @@ describe('what a view is showing changes what comes next', () => {
   it.each([undefined, 'none'] as const)('is exactly what it always was when the view says %s', (level) => {
     const { doc, platform, customer } = customerAndSystem();
     expect(asked(doc, platform.id, level)).toEqual(WHOLE_VOCABULARY);
-    expect(asked(doc, customer.id, level)).toEqual(['Gateway', 'API']);
+    expect(asked(doc, customer.id, level)).toEqual(['Gateway', 'API', 'Web App']);
   });
 
   it.each(['container', 'component'] as const)('leaves the whole vocabulary alone at %s', (level) => {

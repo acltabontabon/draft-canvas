@@ -35,6 +35,8 @@ export const LIMITS = {
   /** The most instances a Service can be drawn with (`DraftNode.replicas`). */
   maxReplicas: 99,
   maxIdLength: 128,
+  /** Stacking order is clamped to ±this: an unbounded `z` is only ever a way to overflow a sort. */
+  maxZ: 10_000,
   /** Coordinates are clamped to keep the viewport maths well-conditioned. */
   maxCoordinate: 1_000_000,
   minNodeSize: 24,

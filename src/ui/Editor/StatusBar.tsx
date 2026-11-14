@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import { flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
 import { useShallow } from 'zustand/react/shallow';
@@ -8,6 +8,8 @@ import { count } from '../../lib/plural';
 import { LEVEL_HINTS, LEVEL_LABELS } from '../../depth/level';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
+import { Tooltip, TooltipGroup } from '../common/Tooltip';
+import { toolbarLabel, toolbarTooltip } from './toolbar/toolbarTooltips';
 import { motionMs } from '../../lib/motion';
 import { DesktopStatus } from '../../desktop/ui/DesktopStatus';
 import { NodiDock } from '../../desktop/ui/NodiDock';
@@ -16,6 +18,7 @@ import { useUiStore } from '../../store/uiStore';
 import { pointsOf } from '../../document/openPoints';
 import { roomMayHaveTraffic } from '../../store/traffic';
 import { toggleTraffic } from './trafficToggle';
+import type { SaveFailure } from '../../storage/saveFailure';
 
 /**
  * The save indicator is the only place the local-first promise is visible while
@@ -31,13 +34,21 @@ import { toggleTraffic } from './trafficToggle';
  * line in the bar, so the reassurance is there to be read without asking to be. Only what needs
  * something from the user — nothing being stored, a save that failed — is given weight.
  */
-function saveLabel(save: { status: string; message?: string }, durable: boolean) {
+const FAILURE_LABELS: Record<SaveFailure, string> = {
+  full: 'Storage full — not saved',
+  closed: 'Storage disconnected — not saved',
+  other: 'Couldn’t save',
+};
+
+function saveLabel(save: { status: string; message?: string; failure?: SaveFailure }, durable: boolean) {
   if (!durable) return 'In memory only';
   switch (save.status) {
     case 'saving':
       return 'Saving…';
     case 'error':
-      return save.message ?? 'Could not save locally';
+      // The reason leads in the bar; the sentence that says what to do about it follows, and is what
+      // a screen reader announces (below).
+      return save.failure ? FAILURE_LABELS[save.failure] : (save.message ?? 'Couldn’t save locally');
     case 'dirty':
       return 'Unsaved changes';
     default:
@@ -55,6 +66,14 @@ interface StatusBarProps {
   presenting?: boolean;
   /** See `DocumentSession.resolveConflict`. */
   onResolveConflict?: (choice: 'keep' | 'discard') => void;
+  /** What a failed save offers instead of a dead end — see `DocumentSession.retrySave` and its neighbours. */
+  onSaveFailure?: SaveFailureActions;
+}
+
+export interface SaveFailureActions {
+  retry: () => void;
+  exportCopy: () => void;
+  leave: () => void;
 }
 
 function ConflictChoice({ conflict, onResolveConflict }: { conflict: 'changed' | 'deleted'; onResolveConflict: (choice: 'keep' | 'discard') => void }) {
@@ -62,11 +81,53 @@ function ConflictChoice({ conflict, onResolveConflict }: { conflict: 'changed' |
     // Saving waits here until one copy is chosen, so the choice stays on screen, not in a toast.
     <span className="dc-save-conflict" role="group" aria-label="Choose which copy to keep">
       <Button variant="quiet" onClick={() => onResolveConflict('keep')}>
-        {conflict === 'deleted' ? 'Keep this canvas' : 'Keep mine'}
+        {conflict === 'deleted' ? 'Keep this diagram' : 'Keep mine'}
       </Button>
       <Button variant="quiet" onClick={() => onResolveConflict('discard')}>
         {conflict === 'deleted' ? 'Close it' : 'Load the other tab’s'}
       </Button>
+    </span>
+  );
+}
+
+/**
+ * A failed save is not the end of the road: try again, take a copy out, or give the changes up and
+ * leave. The last is asked twice — it is the one that loses work — and, with the connection to
+ * storage gone, Retry is left out because nothing here can write again until a reload.
+ */
+function SaveFailureChoice({ failure, actions }: { failure: SaveFailure | undefined; actions: SaveFailureActions }) {
+  const [confirming, setConfirming] = useState(false);
+  const keepEditing = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (confirming) keepEditing.current?.focus();
+  }, [confirming]);
+  return (
+    <span className="dc-save-conflict" role="group" aria-label="Save problem">
+      {confirming ? (
+        <>
+          <span className="dc-save-confirm">Changes since the last save will be lost.</span>
+          <Button variant="quiet" onClick={actions.leave}>
+            Discard and leave
+          </Button>
+          <Button ref={keepEditing} variant="quiet" onClick={() => setConfirming(false)}>
+            Keep editing
+          </Button>
+        </>
+      ) : (
+        <>
+          {failure !== 'closed' && (
+            <Button variant="quiet" onClick={actions.retry}>
+              Retry
+            </Button>
+          )}
+          <Button variant="quiet" onClick={actions.exportCopy}>
+            Export
+          </Button>
+          <Button variant="quiet" onClick={() => setConfirming(true)}>
+            Leave without saving
+          </Button>
+        </>
+      )}
     </span>
   );
 }
@@ -108,7 +169,7 @@ function LiveStatus({ role }: { role: 'host' | 'guest' }) {
   );
 }
 
-export function StatusBar({ durable, presenting = false, onResolveConflict }: StatusBarProps) {
+export function StatusBar({ durable, presenting = false, onResolveConflict, onSaveFailure }: StatusBarProps) {
   const collab = useCollabStore((state) => state.role);
   // A collaborator's copy left on screen after the session: still nobody's file, whatever this tab
   // last saved before it.
@@ -118,12 +179,25 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
   // A cross-tab conflict (another tab changed or deleted this canvas) can arrive while presenting;
   // the rest of the status bar stays out of the way, but the conflict itself must still be
   // resolvable — otherwise it sits invisible until the presenter happens to exit.
+  // The same goes for a save that failed: work that cannot be stored is not something to find out
+  // about after the talk, and the way to export it must not be behind a mode the person is in.
+  const failed = durable && save.status === 'error' && !save.conflict && onSaveFailure !== undefined;
   if (presenting) {
-    if (!save.conflict || !onResolveConflict) return null;
+    const conflict = save.conflict && onResolveConflict ? save.conflict : null;
+    if (!conflict && !failed) return null;
     return (
       <footer className="dc-status">
         <div className="dc-status-left">
-          <ConflictChoice conflict={save.conflict} onResolveConflict={onResolveConflict} />
+          {conflict ? (
+            <ConflictChoice conflict={conflict} onResolveConflict={onResolveConflict!} />
+          ) : (
+            <>
+              <span className="dc-save" data-status="error" role="status">
+                {saveLabel(save, durable)}
+              </span>
+              <SaveFailureChoice failure={save.failure} actions={onSaveFailure!} />
+            </>
+          )}
         </div>
       </footer>
     );
@@ -148,10 +222,12 @@ export function StatusBar({ durable, presenting = false, onResolveConflict }: St
             {saveLabel(save, durable)}
           </span>
           {save.conflict && onResolveConflict && <ConflictChoice conflict={save.conflict} onResolveConflict={onResolveConflict} />}
+          {failed && <SaveFailureChoice failure={save.failure} actions={onSaveFailure!} />}
+          {failed && save.message && <span className="dc-muted dc-status-hint">{save.message}</span>}
           {/* Announced separately from the label, which cycles Unsaved → Saving… → Saved on every
               commit and would speak three times per drag. Only a failure is news. */}
           <span className="dc-sr-only" role="status">
-            {!durable ? 'Storage unavailable. Changes are kept in memory only.' : save.status === 'error' ? saveLabel(save, durable) : ''}
+            {!durable ? 'Storage unavailable. Changes are kept in memory only.' : save.status === 'error' ? (save.message ?? saveLabel(save, durable)) : ''}
           </span>
           {collab === 'host' && durable && !save.conflict ? (
             <LiveStatus role="host" />
@@ -189,16 +265,20 @@ function TrafficChip() {
   if (!available && !active) return null;
   return (
     <>
-      <button
-        type="button"
-        className="dc-status-traffic"
-        title={active ? 'Hide traffic (Esc)' : 'Show where modeled traffic concentrates'}
-        aria-pressed={active}
-        onClick={toggleTraffic}
+      <Tooltip
+        content={
+          active
+            ? { title: 'Hide traffic', shortcut: 'Esc' }
+            : { title: 'Show traffic', description: 'Where the traffic this diagram describes concentrates.' }
+        }
       >
-        <span className="dc-status-traffic-glyph" aria-hidden="true" />
-        Traffic
-      </button>
+        {(tip) => (
+          <button type="button" className="dc-status-traffic" aria-pressed={active} onClick={toggleTraffic} {...tip}>
+            <span className="dc-status-traffic-glyph" aria-hidden="true" />
+            Traffic
+          </button>
+        )}
+      </Tooltip>
       <span className="dc-inspector-divider" />
     </>
   );
@@ -223,18 +303,22 @@ function OpenPointsChip() {
   const label = count(open, 'open point');
   return (
     <>
-      <button
-        type="button"
-        className="dc-status-open-points"
-        data-none={open === 0 || undefined}
-        title={open > 0 ? 'Still open — review open points' : 'Every open point is resolved'}
-        aria-label={open > 0 ? `${label}, review` : 'Open points, all resolved'}
-        aria-expanded={panelOpen}
-        onClick={() => useUiStore.getState().setOpenPointsPanelOpen(!panelOpen)}
-      >
-        <span className="dc-status-open-points-glyph" aria-hidden="true" />
-        {open > 0 ? `${open} open` : 'resolved'}
-      </button>
+      <Tooltip content={{ title: open > 0 ? 'Review open points' : 'Every open point is resolved', description: open > 0 ? `${label} still to settle.` : 'Open the list to see what was settled.' }}>
+        {(tip) => (
+          <button
+            type="button"
+            className="dc-status-open-points"
+            data-none={open === 0 || undefined}
+            aria-label={open > 0 ? `${label}, review` : 'Open points, all resolved'}
+            aria-expanded={panelOpen}
+            onClick={() => useUiStore.getState().setOpenPointsPanelOpen(!panelOpen)}
+            {...tip}
+          >
+            <span className="dc-status-open-points-glyph" aria-hidden="true" />
+            {open > 0 ? `${open} open` : 'resolved'}
+          </button>
+        )}
+      </Tooltip>
       <span className="dc-inspector-divider" />
     </>
   );
@@ -255,14 +339,13 @@ function LevelChip() {
     <>
       {/* The thing that says what this view shows is also the way to say something else — a label
           you cannot act on is the kind of chrome that makes people go looking for a setting. */}
-      <button
-        type="button"
-        className="dc-status-level"
-        title={`${LEVEL_HINTS[level]} — change what this view shows`}
-        onClick={() => useUiStore.getState().openCommandPaletteAt('View level')}
-      >
-        {LEVEL_LABELS[level]}
-      </button>
+      <Tooltip content={{ title: LEVEL_LABELS[level], description: `${LEVEL_HINTS[level]} Choose another level to change what this view shows.` }}>
+        {(tip) => (
+          <button type="button" className="dc-status-level" onClick={() => useUiStore.getState().openCommandPaletteAt('View level')} {...tip}>
+            {LEVEL_LABELS[level]}
+          </button>
+        )}
+      </Tooltip>
       <span className="dc-inspector-divider" />
     </>
   );
@@ -290,22 +373,28 @@ function ZoomControls() {
     if (hasSomethingToFit(state)) void fitView({ padding: 0.2, duration: motionMs(300), nodes: flowFitViewNodes(state) });
   };
   return (
-    <>
-      <Button variant="quiet" onClick={() => void zoomOut()} aria-label="Zoom out">
-        −
-      </Button>
-      <button
-        type="button"
-        className="dc-zoom-value"
-        aria-label={`${percent}%, fit to view`}
-        onClick={fitNow}
-        title="Fit to view"
-      >
-        {percent}%
-      </button>
-      <Button variant="quiet" onClick={() => void zoomIn()} aria-label="Zoom in">
-        +
-      </Button>
-    </>
+    <TooltipGroup>
+      <Tooltip content={toolbarTooltip('zoomOut')}>
+        {(tip) => (
+          <Button variant="quiet" onClick={() => void zoomOut()} aria-label={toolbarLabel('zoomOut')} {...tip}>
+            −
+          </Button>
+        )}
+      </Tooltip>
+      <Tooltip content={toolbarTooltip('zoomFit')}>
+        {(tip) => (
+          <button type="button" className="dc-zoom-value" aria-label={`${percent}%, fit to view`} onClick={fitNow} {...tip}>
+            {percent}%
+          </button>
+        )}
+      </Tooltip>
+      <Tooltip content={toolbarTooltip('zoomIn')}>
+        {(tip) => (
+          <Button variant="quiet" onClick={() => void zoomIn()} aria-label={toolbarLabel('zoomIn')} {...tip}>
+            +
+          </Button>
+        )}
+      </Tooltip>
+    </TooltipGroup>
   );
 }

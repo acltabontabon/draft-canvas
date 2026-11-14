@@ -7,7 +7,7 @@ import { minResizeSizeFor, snapResize } from '../src/canvas/resizeSnap';
 
 /**
  * Resize snapping reuses `computeSnap` unmodified — see `snapResizeChanges`
- * in `src/canvas/Canvas.tsx`, which feeds it the in-progress resized rect
+ * in `src/canvas/dragSnap.ts`, which feeds it the in-progress resized rect
  * instead of a moved one. These tests exercise that same math directly
  * against a resize-shaped scenario, since `computeSnap` itself has no idea
  * whether the rect it was given came from a drag or a resize.

@@ -39,9 +39,19 @@ export function Toolbar({
     if (!header || !editor) return;
     // Wrapped names grow the header. Extend the dotted sheet beneath its actual height too;
     // a fixed bar-height left a blank strip behind the title's second line.
-    const update = (height: number) => editor.style.setProperty('--dc-toolbar-height', `${height}px`);
+    // Also on the page root: toasts live outside the editor, and below 720px the toolbar is two rows
+    // (title, then the create rail) — a toast placed under one bar-height covered the rail.
+    const root = window.document.documentElement;
+    const update = (height: number) => {
+      editor.style.setProperty('--dc-toolbar-height', `${height}px`);
+      root.style.setProperty('--dc-toolbar-height', `${height}px`);
+    };
+    const clear = () => {
+      editor.style.removeProperty('--dc-toolbar-height');
+      root.style.removeProperty('--dc-toolbar-height');
+    };
     update(header.getBoundingClientRect().height);
-    if (typeof ResizeObserver === 'undefined') return () => editor.style.removeProperty('--dc-toolbar-height');
+    if (typeof ResizeObserver === 'undefined') return clear;
     let frame: number | undefined;
     const observer = new ResizeObserver(([entry]) => {
       const height = entry?.borderBoxSize?.[0]?.blockSize ?? header.getBoundingClientRect().height;
@@ -54,7 +64,7 @@ export function Toolbar({
     return () => {
       observer.disconnect();
       if (frame !== undefined) cancelAnimationFrame(frame);
-      editor.style.removeProperty('--dc-toolbar-height');
+      clear();
     };
   }, []);
 

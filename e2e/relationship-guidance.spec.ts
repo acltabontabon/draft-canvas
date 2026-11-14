@@ -69,7 +69,7 @@ test.describe('Topic-aware relationships', () => {
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('No type');
 
     const guidance = page.locator('.dc-relationship-guidance-text');
-    await expect(guidance).toHaveText(/doesn't typically publish to a topic/);
+    await expect(guidance).toHaveText(/doesn’t typically publish to a topic/);
     await expect(page.getByRole('button', { name: 'Insert Worker' })).toBeVisible();
   });
 
@@ -128,7 +128,7 @@ test.describe('Topic-aware relationships', () => {
     // Still reads "Writes" — an explicit choice is never silently overwritten by a reconnect.
     await expect(relation).toHaveText('Writes');
     await expect(page.locator('.dc-relationship-guidance-text')).toHaveText(
-      /"Writes" doesn't typically apply to this connection/,
+      /"Writes" doesn’t typically apply to this connector/,
     );
     const fix = page.getByRole('button', { name: 'Use "publishes to" instead' });
     await expect(fix).toBeVisible();

@@ -164,6 +164,9 @@ export function ExportDialog() {
     };
   }, [open, document]);
   const [busy, setBusy] = useState(false);
+  // Esc, the X and the backdrop do nothing while an export is running (closing then would orphan the
+  // download); a press on any of them says so here instead of being a silent no-op.
+  const [closeHeld, setCloseHeld] = useState(false);
   const [protectedLink, setProtectedLink] = useState(true);
   const [passphrase, setPassphrase] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -226,6 +229,11 @@ export function ExportDialog() {
     notify,
     onFinished: () => close(),
   });
+
+  // The notice belongs to one wait: once nothing is running it is dropped, so the next export does
+  // not open with a stale "still exporting".
+  const working = busy || Boolean(docs?.busy);
+  if (!working && closeHeld) setCloseHeld(false);
 
   const close = () => {
     requestExportSelection(false);
@@ -346,7 +354,7 @@ export function ExportDialog() {
               type: 'file',
               icon: 'pencil',
               badge: 'DRAFTCANVAS',
-              meta: `${count(document.nodes.length, 'element')} · ${count(document.edges.length, 'connector')}${backgroundNote}`,
+              meta: `${count(document.nodes.length, 'shape')} · ${count(document.edges.length, 'connector')}${backgroundNote}`,
             },
           }
         : {
@@ -469,9 +477,9 @@ export function ExportDialog() {
       : effectiveMode === 'document'
       ? documentFormat === 'editable'
         ? {
-            label: 'Export document',
+            label: 'Export file',
             disabled: busy,
-            onClick: () => void run(() => exportProjectFile(fileWithLiveViewport(useEditorStore.getState())), 'Document export'),
+            onClick: () => void run(() => exportProjectFile(fileWithLiveViewport(useEditorStore.getState())), 'File export'),
           }
         : { label: 'Export securely…', disabled: busy, onClick: () => setSecurePromptOpen(true) }
       : levelsOn
@@ -551,7 +559,7 @@ export function ExportDialog() {
       title="Export & share"
       width={880}
       className="dc-modal-export"
-      onClose={busy || docs?.busy ? () => {} : close}
+      onClose={working ? () => setCloseHeld(true) : close}
       footer={
         <div className="dc-export-footer">
           {/* Where it was made, said once on hover, focus or click of the lock — not a line of text
@@ -563,6 +571,11 @@ export function ExportDialog() {
               </button>
             )}
           </Tooltip>
+          {closeHeld && working && (
+            <span className="dc-export-hold" role="status">
+              {effectiveMode === 'share' && shareStage ? 'Cancel the link first, or wait for it.' : 'Still exporting — this closes when it is done.'}
+            </span>
+          )}
           <span className="dc-export-footer-actions">
             {copy && (
               <Button icon="copy" disabled={copy.disabled} onClick={() => void runCopy()}>

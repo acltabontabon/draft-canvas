@@ -1,9 +1,8 @@
 import { setFileSaver } from '../export/download';
 import { registerDesktopHost } from '../host/hostInfo';
+import { startArrange } from '../commands/arrange';
 import { logDiagnostic } from '../lib/diagnostics';
-import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
-import { ARRANGE_FAILED, notifyLoadFailure } from '../ui/common/notifyLoadFailure';
 import { DesktopError, type DesktopApi } from './api';
 import { createHostLink } from './channel';
 import { dispatchEditCommand } from './commands';
@@ -41,13 +40,8 @@ const ui: DesktopUi = {
     if (command === 'canvas-settings') return ui.setSettingsOpen(true);
     if (command === 'find-replace') return ui.setFindReplaceOpen(true);
     if (command === 'commands') return ui.setCommandPaletteOpen(true);
-    void useEditorStore
-      .getState()
-      .arrangeRoom()
-      .then((moved) => {
-        if (moved) useUiStore.getState().requestFit();
-      })
-      .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
+    // Arrange shows its result first, whichever way it is asked for: the same preview the palette opens.
+    void startArrange();
   },
   openMove: () => {
     const { doc } = desktopStore.getSnapshot();

@@ -29,6 +29,7 @@ import {
   type ViewLevel,
 } from '../document/types';
 import { LIMITS } from '../document/limits';
+import { DEFAULT_TITLE } from '../document/sanitize';
 import { Problems } from './errors';
 import { starterFor, starterIds, type AgentStarter } from './starter';
 import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
@@ -929,7 +930,7 @@ export function readCreate(raw: unknown, resolved?: AgentStarter): CreateSpec {
   const problems = new Problems();
   const r = new Reader(problems);
   const body = r.object(raw, '', CREATE_FIELDS.request) ?? {};
-  const title = r.text(body.title, '/title', LIMITS.maxTitleLength, { required: true, singleLine: true }) ?? 'Untitled diagram';
+  const title = r.text(body.title, '/title', LIMITS.maxTitleLength, { required: true, singleLine: true }) ?? DEFAULT_TITLE;
   const taken = new Set<string>();
   let starter: StarterSpec | undefined;
   if (body.starter !== undefined) {
@@ -939,7 +940,7 @@ export function readCreate(raw: unknown, resolved?: AgentStarter): CreateSpec {
       if (!id) problems.add('INVALID_INPUT', '/starter/id', 'must be a starter id from get_capabilities (topics: ["starters"])');
       const prefix = s.prefix === undefined ? '' : typeof s.prefix === 'string' && /^[A-Za-z][A-Za-z0-9_.-]{0,15}$|^$/.test(s.prefix) ? s.prefix : undefined;
       if (prefix === undefined) problems.add('INVALID_INPUT', '/starter/prefix', 'must be a short id prefix (a letter, then up to 15 letters, digits, "_", "." or "-")');
-      const overrides: StarterSpec['overrides'] = {};
+      const overrides = Object.create(null) as StarterSpec['overrides'];
       const rawOverrides = s.overrides === undefined ? {} : r.object(s.overrides, '/starter/overrides') ?? {};
       for (const [key, value] of Object.entries(rawOverrides)) {
         const at = `/starter/overrides/${key}`;

@@ -8,10 +8,9 @@ import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { ViewportLayer } from './ViewportLayer';
 import { liveInkSurface } from './liveInk';
+import { INK_DRAG_THRESHOLD_PX } from './gestureThresholds';
 
 
-/** A press that moves less than this (screen px) on a stroke is a click, not a drag. */
-const DRAG_THRESHOLD = 3;
 
 /**
  * The room's handwritten sketches, drawn over its shapes and connectors in the viewport (so they pan
@@ -69,22 +68,41 @@ export const InkLayer = memo(function InkLayer({ theme, selectable }: { theme: T
       const onMove = (move: PointerEvent) => {
         const sx = move.clientX - startX;
         const sy = move.clientY - startY;
-        if (!dragging && Math.hypot(sx, sy) < DRAG_THRESHOLD) return;
+        if (!dragging && Math.hypot(sx, sy) < INK_DRAG_THRESHOLD_PX) return;
         dragging = true;
         dx = sx / zoom;
         dy = sy / zoom;
         for (const [el, s] of moving) el.setAttribute('transform', `translate(${s.x + dx} ${s.y + dy})`);
       };
-      const onUp = () => {
+      const stop = () => {
         window.removeEventListener('pointermove', onMove);
         window.removeEventListener('pointerup', onUp);
-        window.removeEventListener('pointercancel', onUp);
+        window.removeEventListener('pointercancel', onCancel);
+        window.removeEventListener('keydown', onKey, true);
+      };
+      // Put back where the strokes were: the drag was only ever shown, never written.
+      const cancel = () => {
+        stop();
+        for (const [el, s] of moving) el.setAttribute('transform', `translate(${s.x} ${s.y})`);
+      };
+      const onUp = () => {
+        stop();
         if (!dragging) return;
         useEditorStore.getState().moveInk([...moving.values()].map((s) => s.id), dx, dy);
       };
+      // The browser took the pointer (a system gesture) or Escape was pressed: the person did not
+      // choose where the sketch lands, so it stays where it was rather than commit a half drag.
+      const onCancel = () => cancel();
+      const onKey = (key: KeyboardEvent) => {
+        if (key.key !== 'Escape' || !dragging) return;
+        key.preventDefault();
+        key.stopPropagation();
+        cancel();
+      };
       window.addEventListener('pointermove', onMove);
       window.addEventListener('pointerup', onUp);
-      window.addEventListener('pointercancel', onUp);
+      window.addEventListener('pointercancel', onCancel);
+      window.addEventListener('keydown', onKey, true);
     },
     [storeApi],
   );
@@ -201,7 +219,8 @@ function useMarqueeSelection(enabled: boolean): void {
     if (!enabled) return;
     let last: { x: number; y: number; width: number; height: number } | null = null;
     let transform = storeApi.getState().transform;
-    return storeApi.subscribe((state) => {
+    let pending: number | undefined;
+    const unsubscribe = storeApi.subscribe((state) => {
       const rect = state.userSelectionRect;
       if (rect && state.userSelectionActive) {
         last = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
@@ -222,7 +241,12 @@ function useMarqueeSelection(enabled: boolean): void {
         .map((stroke) => stroke.id);
       if (inside.length === 0) return;
       // After React Flow has finished settling its own selection from the same marquee.
-      setTimeout(() => useUiStore.getState().setInkSelection(inside), 0);
+      pending = window.setTimeout(() => useUiStore.getState().setInkSelection(inside), 0);
     });
+    return () => {
+      unsubscribe();
+      // A marquee released as the canvas goes away must not pick strokes in whatever replaced it.
+      window.clearTimeout(pending);
+    };
   }, [enabled, storeApi]);
 }

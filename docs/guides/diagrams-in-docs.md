@@ -18,7 +18,7 @@ and no Draft Canvas. Anyone who wants to change the diagram opens the `.draftcan
 
 ## Use in docs
 
-Open **Share → Export** (`⌘⇧E`) and choose **Use in a README**, or run **Use in docs…** in `⌘K`.
+Open **Share → Export…** (`⌘⇧E`) and choose **Use in a README**, or run **Use in docs…** in `⌘K`.
 
 ![Use in a README, with the picture shown as it will read on a page.](../media/guides/export-docs.png)
 

@@ -69,7 +69,7 @@ export const DARK: Theme = {
   codeBg: '#12151a',
   codeBorder: '#2c333d',
   shadow: 'rgba(0, 0, 0, 0.45)',
-  danger: '#e2687f',
+  danger: '#ea7087',
   accents: {
     // Not a chrome-token alias: a shape with no explicit accent should read as
     // an intentional slate surface sitting *on* the canvas, not flush with it —
@@ -105,7 +105,7 @@ export const LIGHT: Theme = {
   borderStrong: '#b9c0ca',
   text: '#1a1d23',
   textMuted: '#59606d',
-  textFaint: '#6a7280',
+  textFaint: '#666e7c',
   edgeText: '#6a7280',
   selection: '#2c6f68',
   selectionSoft: 'rgba(44, 111, 104, 0.12)',
@@ -114,7 +114,7 @@ export const LIGHT: Theme = {
   codeBg: '#f7f8fa',
   codeBorder: '#e2e6eb',
   shadow: 'rgba(19, 24, 32, 0.10)',
-  danger: '#c2455f',
+  danger: '#b0334d',
   accents: {
     // Same reasoning as DARK.neutral, tuned independently rather than inverted:
     // a hair warmer than pure white, and a line/chip with a touch more presence

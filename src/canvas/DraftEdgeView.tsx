@@ -6,7 +6,7 @@ import { reconnectProblem } from '../document/reconnect';
 import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
 import { useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
-import type { DraftNode, DraftPoint } from '../document/types';
+import type { DraftEdge, DraftNode, DraftPoint } from '../document/types';
 import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
 import { edgeTierInPlayback, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
@@ -26,6 +26,7 @@ import {
   responseAwayAt,
   strokeSeed,
   type Rect,
+  type RoutedEdge,
   type Side,
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
@@ -68,6 +69,7 @@ import { computeEdgeRoutes, edgeRoutes, routedCaption, searchAllowed, type EdgeR
 import { endpointPlan } from '../edges/endpoints';
 import { sequenceAnchorRect } from '../edges/sequenceAnchors';
 import { separationPlan } from '../edges/separation';
+import { DRAG_THRESHOLD_PX } from './gestureThresholds';
 
 const NO_OBSTACLES: readonly Rect[] = [];
 
@@ -98,10 +100,6 @@ function RecoveryHoverTooltip({ parentId, x, y, side }: { parentId: string; x: n
  *  renders (selection, lens, playback, hover) move none of them, and building the shared cache's
  *  string key meant serialising every obstacle rect on each of those renders, for every connector. */
 const LAST_ROUTES = new Lru<string, { inputs: readonly unknown[]; routes: EdgeRoutes }>(LIMITS.maxEdges);
-
-/** Minimum pointer movement, in screen pixels, before an endpoint gesture
- *  counts as a drag rather than a click — see `EdgeEndpointHandle`. */
-const DRAG_THRESHOLD_PX = 4;
 
 interface DragOverride {
   endpoint: 'source' | 'target';
@@ -1060,31 +1058,15 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           which has no notion of this app's per-side offsets or custom routing.
         */}
         {selected && mode !== 'present' && (
-          <>
-            <EdgeEndpointHandle
-              edgeId={edge.id}
-              endpoint="source"
-              x={route.source.x}
-              y={route.source.y}
-              pinned={edge.sourceAnchor !== undefined}
-              oppositeNodeId={edge.target}
-              onDrag={setDragOverride}
-            />
-            <EdgeEndpointHandle
-              edgeId={edge.id}
-              endpoint="target"
-              x={route.target.x}
-              y={route.target.y}
-              pinned={edge.targetAnchor !== undefined}
-              oppositeNodeId={edge.source}
-              onDrag={setDragOverride}
-            />
-          </>
-        )}
-        {/* Bend handles, beside the endpoint ones and for the same pointer-priority reason. Hidden
-            while an end is being re-pointed: the line they sit on is then a preview. */}
-        {selected && soleSelection && mode !== 'present' && !dragOverride && (
-          <EdgeBendHandles edgeId={edge.id} routing={edge.routing} route={route} waypoints={waypoints} onPreview={setBendPreview} />
+          <EdgeEditHandles
+            edge={edge}
+            route={route}
+            waypoints={waypoints}
+            soleSelection={soleSelection}
+            reshaping={dragOverride !== null}
+            onDrag={setDragOverride}
+            onBendPreview={setBendPreview}
+          />
         )}
 
         {/* A subtle caption of the relationship — independent of `kind`'s glyph, so a plain
@@ -1324,6 +1306,62 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     </g>
   );
 });
+
+/**
+ * A selected connector's handles: one at each end, to re-point it, and — beside them, for the same
+ * pointer-priority reason — the bend handles. Hidden while an end is being re-pointed: the line the
+ * bend handles sit on is then a preview.
+ *
+ * A component of its own for the one thing they need beyond the connector: whether this copy can be
+ * edited at all. A shared or view-only one cannot (the store refuses the write, and the drag only
+ * snapped back), and nothing is being traced. One boolean selector, mounted only for the connector
+ * that is selected — never another subscription on every connector in the diagram.
+ */
+function EdgeEditHandles({
+  edge,
+  route,
+  waypoints,
+  soleSelection,
+  reshaping,
+  onDrag,
+  onBendPreview,
+}: {
+  edge: DraftEdge;
+  route: RoutedEdge;
+  waypoints: DraftPoint[] | undefined;
+  soleSelection: boolean;
+  reshaping: boolean;
+  onDrag: (override: DragOverride | null) => void;
+  onBendPreview: (preview: BendPreview | null) => void;
+}) {
+  const editable = useUiStore((state) => state.readOnly === null && state.flowTrace === null);
+  if (!editable) return null;
+  return (
+    <>
+      <EdgeEndpointHandle
+        edgeId={edge.id}
+        endpoint="source"
+        x={route.source.x}
+        y={route.source.y}
+        pinned={edge.sourceAnchor !== undefined}
+        oppositeNodeId={edge.target}
+        onDrag={onDrag}
+      />
+      <EdgeEndpointHandle
+        edgeId={edge.id}
+        endpoint="target"
+        x={route.target.x}
+        y={route.target.y}
+        pinned={edge.targetAnchor !== undefined}
+        oppositeNodeId={edge.source}
+        onDrag={onDrag}
+      />
+      {soleSelection && !reshaping && (
+        <EdgeBendHandles edgeId={edge.id} routing={edge.routing} route={route} waypoints={waypoints} onPreview={onBendPreview} />
+      )}
+    </>
+  );
+}
 
 /**
  * One draggable connector endpoint. Grabbing it and dropping it on a node

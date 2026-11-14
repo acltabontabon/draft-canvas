@@ -12,6 +12,7 @@ import { applyUpdate, type PatchResult } from './patch';
 import { prepareProposal, type PreparedProposal } from './proposal';
 import { silent, type Report } from './progress';
 import { smallestArrange, type QualityReport } from './quality';
+import { planArrange, planTidy, type ArrangePlanResult, type ArrangePreset, type TidyPlanResult } from './layoutPlan';
 import { withDeadline } from './route';
 import { legibilityOf, type Legibility } from './legibility';
 import { routingAdvice } from './advice';
@@ -22,7 +23,11 @@ import type { AgentStarter } from './starter';
 export type Job =
   | { kind: 'compose'; raw: unknown; diagramId: string; starter?: AgentStarter }
   | { kind: 'update'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown; scope?: unknown }
-  | { kind: 'proposal'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown; scope?: unknown };
+  | { kind: 'proposal'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown; scope?: unknown }
+  /** The editor's Arrange: `doc` is the room on screen (see `layoutPlan.ts`), bounded by work, not by `deadline`. */
+  | { kind: 'arrange'; doc: DraftDocument; selection?: string[]; preset?: ArrangePreset }
+  /** The editor's Tidy up. */
+  | { kind: 'tidy'; doc: DraftDocument; scope?: string[] };
 
 export type JobResult =
   | { kind: 'compose'; composed: Composed }
@@ -44,13 +49,19 @@ export type JobResult =
       /** What reads badly in the edited view although its lines are clean (see `proportion.ts`). */
       proportion?: ProportionFinding[];
     }
-  | { kind: 'proposal'; prepared: PreparedProposal };
+  | { kind: 'proposal'; prepared: PreparedProposal }
+  | { kind: 'arrange'; result: ArrangePlanResult }
+  | { kind: 'tidy'; result: TidyPlanResult };
 
 /**
  * Runs `job`, repairing layouts until `deadline` (a `performance.now()` time), telling `report` where
  * it is (see `progress.ts`). Throws `AgentError`.
  */
 export function runJob(job: Job, deadline: number, report: Report = silent): JobResult {
+  // The editor's layout previews are bounded by a work budget of their own (`layoutPlan.ts`), the same
+  // on any machine; `deadline` is the agent's time limit, which would make their result depend on speed.
+  if (job.kind === 'arrange') return { kind: 'arrange', result: planArrange(job.doc, { ...(job.selection ? { selection: job.selection } : {}), ...(job.preset ? { preset: job.preset } : {}) }) };
+  if (job.kind === 'tidy') return { kind: 'tidy', result: planTidy(job.doc, job.scope) };
   if (job.kind === 'compose') return { kind: 'compose', composed: compose(job.raw, job.diagramId, { deadline, report, ...(job.starter ? { starter: job.starter } : {}) }) };
   if (job.kind === 'proposal') {
     return withDeadline(deadline, () => {

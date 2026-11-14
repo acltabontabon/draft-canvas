@@ -286,8 +286,8 @@ function searchedLine(memo: Memo, edge: DraftEdge): { line: Line; work: number }
 const sameAnchor = (a: EdgeAnchor | undefined, b: EdgeAnchor | undefined) => a === b || (a !== undefined && b !== undefined && a.side === b.side && a.offset === b.offset);
 const sameBand = (a: Rect['anchorBand'], b: Rect['anchorBand']) =>
   a === b || (a !== undefined && b !== undefined && a.top === b.top && a.bottom === b.bottom && a.left === b.left && a.right === b.right && a.glyphTop === b.glyphTop);
-const sameRect = (a: Rect, b: Rect) => a === b || (a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height && sameBand(a.anchorBand, b.anchorBand));
-const sameRects = (a: readonly Rect[], b: readonly Rect[]) => a === b || (a.length === b.length && a.every((rect, i) => sameRect(rect, b[i]!)));
+export const sameRect = (a: Rect, b: Rect) => a === b || (a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height && sameBand(a.anchorBand, b.anchorBand));
+export const sameRects = (a: readonly Rect[], b: readonly Rect[]) => a === b || (a.length === b.length && a.every((rect, i) => sameRect(rect, b[i]!)));
 const sameSpine = (a: EdgeSpine | undefined, b: EdgeSpine | undefined) =>
   a === b || (a !== undefined && b !== undefined && a.id === b.id && a.hub === b.hub && a.hubSide === b.hubSide && a.trunkGap === b.trunkGap && a.corridor === b.corridor && a.count === b.count);
 

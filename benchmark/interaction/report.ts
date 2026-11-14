@@ -7,6 +7,7 @@
 
 import type { BenchmarkEnvironment } from '../types';
 import type { ScenarioSummary } from './run';
+import { median } from './stats';
 
 export interface InteractionResult {
   meta: {
@@ -59,9 +60,26 @@ export function formatRun(result: InteractionResult): string {
   lines.push('frames past that; stalls = frames > 50 ms; lat95 = input event → next frame, p95; LT = long tasks (count, worst ms);');
   lines.push('busy% = main-thread task time ÷ gesture wall time; tailLT / tailMax = long tasks and worst frame in the 0.4–1.6 s after.');
   for (const scenario of result.scenarios) {
+    const drop = dropLine(scenario);
+    if (drop) lines.push(drop);
+  }
+  for (const scenario of result.scenarios) {
     for (const problem of scenario.problems) lines.push(`  [${scenario.size}/${scenario.scenario}] ${problem}`);
   }
   return lines.join('\n');
+}
+
+/** Median across a scenario's iterations of one number its run noted, or `undefined` if it noted none. */
+function noted(scenario: ScenarioSummary, key: string): number | undefined {
+  const values = scenario.iterations.map((iteration) => iteration.notes[key]).filter((value): value is number => typeof value === 'number');
+  return values.length === 0 ? undefined : median(values);
+}
+
+/** What a drop scenario (`drag-commit`) saw after the release — the stall the drag's own percentiles hide. */
+function dropLine(scenario: ScenarioSummary): string | undefined {
+  const frame = noted(scenario, 'afterDropWorstFrameMs');
+  if (frame === undefined) return undefined;
+  return `  [${scenario.size}/${scenario.scenario}] after pointer-up: worst frame ${num(frame, 0)} ms, longest task ${num(noted(scenario, 'afterDropLongTaskMaxMs') ?? 0, 0)} ms (${num(noted(scenario, 'afterDropLongTasks') ?? 0, 0)} long task(s), ${num(noted(scenario, 'afterDropLongTaskTotalMs') ?? 0, 0)} ms in all) — median of ${scenario.iterations.length}`;
 }
 
 const delta = (before: number, after: number) => {
@@ -91,6 +109,15 @@ export function formatComparison(before: InteractionResult, after: InteractionRe
     lines.push(
       `${pad(current.size, 7)}${pad(current.scenario, 15)}${cell(a.frameP95, b.frameP95)}${cell(a.frameP99, b.frameP99)}${cell(a.frameMax, b.frameMax, 0)}${padLeft(`${num(a.hitchPct)}→${num(b.hitchPct)}`, 14)}${padLeft(`${num(a.busyPct, 0)}→${num(b.busyPct, 0)}`, 14)}${padLeft(`${num(a.longTaskMaxMs, 0)}→${num(b.longTaskMaxMs, 0)}`, 14)}${cell(a.tailLongTaskMaxMs, b.tailLongTaskMaxMs, 0)}`,
     );
+  }
+  for (const current of after.scenarios) {
+    const previous = beforeByKey.get(key(current));
+    const was = previous ? noted(previous, 'afterDropWorstFrameMs') : undefined;
+    const now = noted(current, 'afterDropWorstFrameMs');
+    if (!previous || was === undefined || now === undefined) continue;
+    const taskWas = noted(previous, 'afterDropLongTaskMaxMs') ?? 0;
+    const taskNow = noted(current, 'afterDropLongTaskMaxMs') ?? 0;
+    lines.push(`  [${current.size}/${current.scenario}] after pointer-up: worst frame ${num(was, 0)}→${num(now, 0)} ms ${delta(was, now)}, longest task ${num(taskWas, 0)}→${num(taskNow, 0)} ms ${delta(taskWas, taskNow)}`);
   }
   return lines.join('\n');
 }

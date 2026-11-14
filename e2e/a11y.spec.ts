@@ -45,7 +45,7 @@ async function scan(page: Page, where: string) {
 test.describe('accessibility (axe)', () => {
   test('the Library', async ({ page }) => {
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'New canvas' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Quick Draft' })).toBeVisible();
     await scan(page, 'Library');
   });
 
@@ -81,6 +81,17 @@ test.describe('accessibility (axe)', () => {
     await scan(page, 'Outline panel');
     await page.keyboard.press('Alt+o');
     await expect(page.getByRole('complementary', { name: 'Outline' })).toBeHidden();
+
+    // The Flows panel is a tree (a treeitem per flow, its steps a nested group), scanned open on a
+    // flow so the nested level is in the page: axe checks the required owned/parent roles.
+    await page.getByRole('button', { name: 'Flows', exact: true }).click();
+    const flows = page.getByRole('tree', { name: 'Flows' });
+    await expect(flows).toBeVisible();
+    await flows.getByRole('treeitem', { level: 1 }).nth(1).locator('.dc-flow-expand').click();
+    await expect(flows.getByRole('treeitem', { level: 2 }).first()).toBeVisible();
+    await scan(page, 'Flows panel');
+    await page.getByRole('region', { name: 'Flows' }).getByRole('button', { name: 'Close' }).click();
+    await expect(page.getByRole('tree', { name: 'Flows' })).toBeHidden();
 
     await page.keyboard.press('ControlOrMeta+k');
     await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();

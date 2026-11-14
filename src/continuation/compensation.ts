@@ -55,6 +55,7 @@ export function compensationCandidates(nb: Neighborhood): Continuation[] {
       score: 0,
       label: `Compensate ${name}`,
       actionLabel: `Compensate ${name}`,
+      reason: `${name} is a step this saga drives but cannot yet undo.`,
       fragment: {
         nodes: [],
         edges: [{ from: 'anchor', to: 'target', semantic: 'compensates', compensationFor: edge.id }],

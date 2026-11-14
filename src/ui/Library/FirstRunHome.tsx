@@ -32,6 +32,7 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
   const shelfRef = useRef<HTMLElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const importHintId = useId();
+  const startHintId = useId();
   const [chosen, setChosen] = useState<HomeView | null>(null);
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<DraftSummary | null>(null);
@@ -64,12 +65,12 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
       if (event.repeat || event.defaultPrevented || isImeKeyEvent(event)) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (event.target !== document.body && event.target !== document.documentElement) return;
+      // Enter is deliberately not claimed here: with nothing focused it used to start a blank
+      // canvas, so a stray press (a key left over from another window, a dismissed dialog) added an
+      // "Untitled diagram". Quick Draft starts one on Enter when it has focus, like any button.
       if ((event.key === '/' || (event.key === 'f' && (event.metaKey || event.ctrlKey))) && currentActions.current.hasDiagrams) {
         event.preventDefault();
         currentActions.current.onBrowse({ kind: 'all' }, true);
-      } else if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-        event.preventDefault();
-        void currentActions.current.session.newDocument();
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -109,7 +110,7 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
         {notice}
         <WebHomeScene
           start={
-            <button ref={sheetRef} type="button" className="dc-web-start" aria-label="New canvas"
+            <button ref={sheetRef} type="button" className="dc-web-start" aria-label="Quick Draft" aria-describedby={startHintId}
               onClick={() => void session.newDocument()}
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowDown') return;
@@ -119,7 +120,7 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
               }}>
               <span className="dc-web-start-mark" aria-hidden="true"><Icon name="plus" size={28} /></span>
               <span className="dc-web-start-name">Quick Draft<Icon name="forward" size={18} /></span>
-              <span className="dc-web-start-hint">No title needed. Just begin.</span>
+              <span id={startHintId} className="dc-web-start-hint">No title needed. Just begin.</span>
             </button>
           }
           example={<Button variant="quiet" icon="flow" onClick={() => void session.newDocument(undefined, 'example')}>Try an example</Button>}

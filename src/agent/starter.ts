@@ -81,7 +81,7 @@ export function buildFromStarter(spec: CreateSpec, layout: LayoutSpec, ctx: Desc
   // shrinks) to show them in full; the quality check refuses the result if that crowds a neighbour.
   const nodes: DraftNode[] = built.nodes.map((node) => {
     const key = node.id.slice(choice.prefix.length);
-    const override = choice.overrides[key];
+    const override = Object.hasOwn(choice.overrides, key) ? choice.overrides[key] : undefined;
     if (!override) return node;
     const next: DraftNode = {
       ...node,

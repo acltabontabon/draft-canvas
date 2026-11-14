@@ -13,13 +13,14 @@
  */
 
 import { cloneDocumentAsNew } from '../document/factory';
+import { titleWithSuffix } from '../document/sanitize';
 import { LIMITS } from '../document/limits';
 import { cleanText } from '../document/sanitize';
 import type { DraftDocument, Project } from '../document/types';
 import { parseDocument } from '../document/validate';
 import { adoptEmbeddedBackground } from '../export/background';
 import { fileNameFor, serializeDocument } from '../export/project';
-import { unzipFiles, zipFiles } from '../export/zip';
+import { unzipFilesLeniently, zipFiles } from '../export/zip';
 import { blobToBase64 } from '../lib/base64';
 import type { DraftRepository } from './DraftRepository';
 
@@ -171,11 +172,12 @@ function readManifest(data: Uint8Array | undefined): Manifest {
  * project now exists; otherwise it is simply unorganized, never invisible.
  */
 export async function restoreBackup(repository: DraftRepository, bytes: Uint8Array): Promise<RestoreResult> {
-  const entries = unzipFiles(bytes);
+  // One entry that cannot be read (compressed by some other tool, corrupt) is named and left; the rest
+  // of the archive is still the person's backup.
+  const { entries, unreadable } = unzipFilesLeniently(bytes);
   const manifest = readManifest(entries.find((entry) => entry.name === MANIFEST_NAME)?.data);
 
-  const result: RestoreResult = { restored: 0, renamed: 0, skipped: [] };
-
+  const result: RestoreResult = { restored: 0, renamed: 0, skipped: [...unreadable] };
   // `saveProject` is a put, so recreating a project we merely failed to *see* would overwrite a
   // real one with the backup's name. When the list can't be read, create no project at all: the
   // diagrams still restore, unorganized, and the manifest is reported as skipped.
@@ -217,7 +219,8 @@ export async function restoreBackup(repository: DraftRepository, bytes: Uint8Arr
       document = { ...document, metadata };
       // Taken means stored under that id, readable or not — the same question an import asks.
       const taken = await repository.has(document.metadata.id).catch(() => true);
-      if (taken) document = cloneDocumentAsNew(document, document.metadata.title);
+      // A copy under the same title would be indistinguishable in the Library from the diagram it clashed with.
+      if (taken) document = cloneDocumentAsNew(document, titleWithSuffix(document.metadata.title, ' copy'));
       // The image goes into its own store under the id the canvas now has (so after the clone above)
       // and out of the document — the same order `adoptDocument` follows for an imported file.
       document = await adoptEmbeddedBackground(document, repository);
@@ -235,6 +238,6 @@ export async function restoreBackup(repository: DraftRepository, bytes: Uint8Arr
 export function describeRestore(result: RestoreResult): string {
   const diagrams = result.restored === 1 ? '1 diagram' : `${result.restored} diagrams`;
   const renamed = result.renamed === 0 ? '' : ` (${result.renamed} renamed as ${result.renamed === 1 ? 'a copy' : 'copies'})`;
-  const skipped = result.skipped.length === 0 ? '' : `; ${result.skipped.length} ${result.skipped.length === 1 ? 'file' : 'files'} couldn't be read`;
+  const skipped = result.skipped.length === 0 ? '' : `; ${result.skipped.length} ${result.skipped.length === 1 ? 'file' : 'files'} couldn’t be read`;
   return `Restored ${diagrams}${renamed}${skipped}.`;
 }

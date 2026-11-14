@@ -108,14 +108,20 @@ Rejected outright:
 Repaired, after migration, and reported to the caller:
 
 - Enums are checked against closed sets; invalid values fall back or are dropped.
-- Text has control characters stripped and is length-clamped.
+- Text has control characters stripped and is length-clamped. A title, a connector label, a
+  description and a technology are also trimmed (a technology on one line, a title never cut mid-emoji),
+  and none left means the field is absent. The editor writes them the same way, so a save holds what
+  the next open keeps.
 - Numbers are coerced to finite values and clamped.
 - Collections over their limit are truncated. `maxNodes` and `maxEdges` are one allowance across
   the file, spent outermost first.
 - Dangling references are dropped: edges to missing nodes, missing `parentId` boundaries, flow
   steps to missing edges.
+- Boundaries nested deeper than `maxGroupDepth` lose the link ("Removed … invalid grouping link(s)");
+  the editor refuses to nest that deep, so only a hand-edited file reaches it.
 - Rooms deeper than `maxInsideDepth` are dropped. A room with no shapes is dropped. Ids are unique
-  across the whole file.
+  across the whole file. A missing or repeated id on a shape, connector, flow, flow step or
+  attachment gets a new one, and the report says how many.
 - `ink` strokes are read per room: an unknown `tool` or unreadable points drop the stroke; size is
   clamped; a `pressure` list that doesn't match the points is dropped; ids are unique across the
   file; a room over `maxInkStrokes` keeps the first strokes.
@@ -133,7 +139,8 @@ From `LIMITS` in `src/document/limits.ts`:
 | --- | --- |
 | `maxFileBytes` | 24 MB |
 | `maxNodes` / `maxEdges` | 5,000 / 10,000 |
-| `maxInsideDepth` | 3 |
+| `maxInsideDepth` / `maxGroupDepth` | 3 / 32 |
+| `maxZ` | ±10,000 (stacking order) |
 | `maxAttachmentsPerNode` / `maxAttachmentsPerEdge` | 12 / 4 |
 | `maxFlows` / `maxStepsPerFlow` / `maxExtraMembersPerStep` | 50 / 200 / 40 |
 | `maxOpenPoints` / `maxOpenPointTargets` | 200 / 40 |

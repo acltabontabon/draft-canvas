@@ -164,7 +164,7 @@ test('a protected link unlocks locally, keeps the real diagram and relocks witho
 test('a damaged link is refused and lands on the Library', async ({ page }) => {
   await page.goto('/#d=1.not-a-real-payload');
   await expect(page.locator('.dc-editor')).toHaveCount(0);
-  await expect(page.getByText(/could not be opened/)).toBeVisible();
+  await expect(page.getByText(/couldn’t be opened/)).toBeVisible();
   await expect(page).not.toHaveURL(/#d=/);
 });
 

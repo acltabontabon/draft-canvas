@@ -221,6 +221,63 @@ async function selectDoorway({ page, depthOwnerId }: ScenarioContext): Promise<v
   depthOwnerId);
 }
 
+/**
+ * Watches what happens after the next pointer-up: every frame from the release on, and every long task
+ * that was still running at it or began after. A drop commits the move, and that — replanning every
+ * connector — is where a large diagram stalls; the drag's own frame percentiles never see it, and the
+ * recorder's gesture window only keeps two frames of it. Installed before the release.
+ */
+async function watchDrop(page: Page): Promise<void> {
+  await page.evaluate(`(() => {
+    window.__drop?.stop();
+    const state = { at: null, last: performance.now(), frames: [], tasks: [], raf: 0 };
+    const onUp = (event) => { if (state.at === null) state.at = event.timeStamp; };
+    window.addEventListener('pointerup', onUp, true);
+    let observer = null;
+    try {
+      observer = new PerformanceObserver((list) => { for (const entry of list.getEntries()) state.tasks.push([entry.startTime, entry.duration]); });
+      observer.observe({ type: 'longtask' });
+    } catch (error) {
+      // A Chromium without Long Tasks is reported by absence below.
+    }
+    const tick = (now) => {
+      if (state.at !== null && now >= state.at) state.frames.push(now - state.last);
+      state.last = now;
+      state.raf = requestAnimationFrame(tick);
+    };
+    state.raf = requestAnimationFrame(tick);
+    window.__drop = {
+      state,
+      stop() {
+        cancelAnimationFrame(state.raf);
+        window.removeEventListener('pointerup', onUp, true);
+        observer?.disconnect();
+      },
+    };
+  })()`);
+}
+
+/** What `watchDrop` saw, and stops it. */
+async function readDrop(page: Page): Promise<Notes> {
+  const raw = (await page.evaluate(`(() => {
+    const watcher = window.__drop;
+    watcher.stop();
+    delete window.__drop;
+    return watcher.state;
+  })()`)) as { at: number | null; frames: number[]; tasks: Array<[number, number]> };
+  if (raw.at === null) throw new Error('The drop was never seen.');
+  const at = raw.at;
+  // A task that began before the release but ran past it is the commit's own, if only the end of it.
+  const tasks = raw.tasks.filter(([start, duration]) => start + duration > at).map(([, duration]) => duration);
+  return {
+    afterDropWorstFrameMs: raw.frames.length === 0 ? 0 : Math.max(...raw.frames),
+    afterDropFrames: raw.frames.length,
+    afterDropLongTasks: tasks.length,
+    afterDropLongTaskMaxMs: tasks.length === 0 ? 0 : Math.max(...tasks),
+    afterDropLongTaskTotalMs: tasks.reduce((total, value) => total + value, 0),
+  };
+}
+
 export const SCENARIOS: Scenario[] = [
   {
     id: 'depth-enter',
@@ -317,6 +374,27 @@ export const SCENARIOS: Scenario[] = [
       await glide(page, from, { x: from.x + 220, y: from.y + 110 }, STEPS);
       await page.mouse.up();
       return { node: (node as Box).id };
+    },
+    restore: ({ page }) => undo(page),
+  },
+  {
+    id: 'drag-commit',
+    title: 'Drop a shape: the stall right after pointer-up',
+    tailMs: 1500,
+    async prepare(context) {
+      return { node: await pickLeaf(context) };
+    },
+    async run({ page }, { node }) {
+      const from = centre(node as Box);
+      await page.mouse.move(from.x, from.y);
+      await page.mouse.down();
+      // Short on purpose: this scenario is about the release, not the drag (`drag-single`).
+      await glide(page, from, { x: from.x + 120, y: from.y + 60 }, 30);
+      await watchDrop(page);
+      await page.mouse.up();
+      // Frames only run once the commit's work is over, so waiting for a few of them waits it out.
+      await settle(page, 6);
+      return { node: (node as Box).id, ...(await readDrop(page)) };
     },
     restore: ({ page }) => undo(page),
   },

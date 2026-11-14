@@ -9,7 +9,7 @@ import { expect, test, type Page } from '@playwright/test';
  */
 
 async function newCanvas(page: Page, title: string) {
-  await page.getByRole('button', { name: 'New canvas' }).click();
+  await page.getByRole('button', { name: 'Quick Draft' }).click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   const titleField = page.getByLabel('Diagram title');
   await titleField.fill(title);

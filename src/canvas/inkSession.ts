@@ -13,18 +13,16 @@
  */
 import { pathKey } from '../depth/tree';
 import { inkAbsolutePoints, inkOf, inkUnionBounds } from '../document/ink';
-import type { DraftInk } from '../document/types';
+import type { DraftDocument, DraftInk } from '../document/types';
 import type { InkInterpretation } from '../ink/interpret';
 import { boxGap, type Box } from '../ink/geometry';
+import { CONTINUES_FRACTION, CONTINUES_WITHIN_PX, RESOLVE_MS, SETTLE_MS } from '../ink/thresholds';
 import { motionMs } from '../lib/motion';
 import { useEditorStore } from '../store/editorStore';
-import { useUiStore } from '../store/uiStore';
+import { useUiStore, type InkSuggestion } from '../store/uiStore';
 
-/** How long the pen may rest before a drawing counts as finished. */
-export const SETTLE_MS = 650;
-/** A stroke this close (screen px) to the drawing in progress continues it. */
-const CONTINUES_WITHIN = 28;
-const RESOLVE_MS = 260;
+// Every threshold, with its unit, is in `ink/thresholds.ts`; the one callers wait on is re-exported.
+export { SETTLE_MS };
 
 interface Pending {
   ids: string[];
@@ -51,7 +49,7 @@ export function warmSmartInk(): void {
 /** Whether a stroke started at this point (room coordinates) would continue the drawing in progress. */
 export function continuesDrawing(point: { x: number; y: number }, zoom: number): boolean {
   if (!pending) return false;
-  const reach = Math.max(CONTINUES_WITHIN / zoom, Math.max(pending.box.width, pending.box.height) * 0.25);
+  const reach = Math.max(CONTINUES_WITHIN_PX / zoom, Math.max(pending.box.width, pending.box.height) * CONTINUES_FRACTION);
   return boxGap(pending.box, { x: point.x, y: point.y, width: 0, height: 0 }) <= reach;
 }
 
@@ -61,6 +59,17 @@ export function strokeStarted(point: { x: number; y: number }, zoom: number): vo
   if (pending.timer) clearTimeout(pending.timer);
   pending.timer = null;
   if (!continuesDrawing(point, zoom)) flushSmartInk();
+}
+
+/**
+ * A stroke that `strokeStarted` stopped the clock for was thrown away instead (Escape mid-stroke, a
+ * pointer the browser took, a stroke the room could not hold): the drawing in progress goes back to
+ * waiting for the pen to rest. Without this its timer stayed stopped, and four box strokes stayed ink,
+ * unread, until the next stroke happened to start the reading again.
+ */
+export function strokeAbandoned(): void {
+  if (!pending || pending.timer) return;
+  pending.timer = setTimeout(flushSmartInk, SETTLE_MS);
 }
 
 /** A Smart Ink stroke was kept: it joins (or starts) the drawing in progress. */
@@ -115,9 +124,10 @@ async function readDrawing(ids: readonly string[], zoom: number, options: { forc
   if (pathKey(editor.path) !== options.room || useUiStore.getState().readOnly) return 'none';
   const wanted = new Set(ids);
   const strokes = inkOf(editor.document).filter((stroke) => wanted.has(stroke.id));
-  // A highlighter is emphasis by definition; it never becomes architecture.
+  // A highlighter is emphasis by definition; it never becomes architecture. In a selection that
+  // holds both, the pen strokes are read and the highlighter stays exactly where it was.
   const pens = strokes.filter((stroke) => stroke.tool === 'pen');
-  if (pens.length === 0 || pens.length !== strokes.length) return 'none';
+  if (pens.length === 0) return 'none';
   const recognition = recognize(pens.map(inkAbsolutePoints), { scale: zoom });
   const interpretation = interpret(recognition, editor.document.nodes, { scale: zoom, forced: options.forced });
   return act(interpretation, pens, options.forced);
@@ -162,6 +172,18 @@ function resolve(strokes: DraftInk[]): void {
   }, duration + 40);
 }
 
+/**
+ * Whether the drawing an offer was made for is no longer there: another room, or a stroke gone from
+ * the canvas (undone, erased, the file changed under it). An offer turns strokes *into* a shape; with
+ * the strokes gone, choosing it would make a shape from nothing, and one undo step for it.
+ */
+export function offerStale(suggestion: InkSuggestion, document: DraftDocument, room: string): boolean {
+  if (suggestion.room !== room) return true;
+  if (suggestion.mode !== 'offer') return false;
+  const present = new Set(inkOf(document).map((stroke) => stroke.id));
+  return !suggestion.strokeIds.every((id) => present.has(id));
+}
+
 /** Applies a choice from the suggestion popover. */
 export function chooseSuggestion(index: number): void {
   const ui = useUiStore.getState();
@@ -170,6 +192,10 @@ export function chooseSuggestion(index: number): void {
   const choice = suggestion.choices[index];
   if (!choice) return;
   const editor = useEditorStore.getState();
+  if (offerStale(suggestion, editor.document, pathKey(editor.path))) {
+    ui.setInkSuggestion(null);
+    return;
+  }
   if (suggestion.mode === 'converted' && suggestion.nodeId) {
     if (index === suggestion.chosen) return;
     editor.retypeInkShape(suggestion.nodeId, suggestion.strokes, choice, suggestion.drawn, suggestion.encloses);

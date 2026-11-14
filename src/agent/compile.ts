@@ -267,7 +267,7 @@ function chooseArrangement(
   if (!starter && !pastDeadline()) {
     const explicitRoutes = new Set(room.relationships.filter((r) => r.route).map((r) => r.id));
     const edges = best.placed.edges.map((e) => ({ ...e }));
-    repairAnchors(edges.filter((e) => !explicitRoutes.has(e.id)), best.placed.nodes, captionSizer(best.placed.nodes, ctx), edges, undefined, true);
+    repairAnchors(edges.filter((e) => !explicitRoutes.has(e.id)), best.placed.nodes, captionSizer(best.placed.nodes, ctx), edges, true);
     const placed = { ...best.placed, edges };
     const polished: Candidate = {
       ...best,

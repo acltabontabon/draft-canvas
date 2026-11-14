@@ -20,11 +20,11 @@ test.describe('focus mode', () => {
     // Select nodes A and B (not C), and enter Focus.
     await page.locator('.dc-node').nth(0).click();
     await page.locator('.dc-node').nth(1).click({ modifiers: ['Shift'] });
-    await expect(page.locator('.dc-inspector')).toContainText('2 elements');
+    await expect(page.locator('.dc-inspector')).toContainText('2 shapes');
     await page.getByRole('button', { name: 'Spotlight', exact: true }).click();
 
     await expect(page.locator('.dc-canvas[data-focus="on"]')).toBeVisible();
-    await expect(page.locator('.dc-focus-indicator')).toContainText('2 nodes');
+    await expect(page.locator('.dc-focus-indicator')).toContainText('2 shapes');
 
     // A and B stay lit; C is dimmed — checked via the actual visual effect
     // (the react-flow wrapper's opacity), since that is what the feature promises.
@@ -75,7 +75,7 @@ test.describe('focus mode', () => {
     await page.getByRole('button', { name: 'Spotlight', exact: true }).click();
     await expect(page.locator('.dc-focus-indicator')).toBeVisible();
 
-    await page.locator('.dc-focus-indicator').getByRole('button', { name: 'Exit focus' }).click();
+    await page.locator('.dc-focus-indicator').getByRole('button', { name: 'Exit spotlight' }).click();
     await expect(page.locator('.dc-focus-indicator')).toHaveCount(0);
     await expect(page.locator('.dc-canvas[data-focus="on"]')).toHaveCount(0);
 

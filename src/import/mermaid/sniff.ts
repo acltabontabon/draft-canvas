@@ -4,6 +4,9 @@
  * don't carry the whole parser in their first chunk; the reader loads when a flowchart actually lands.
  */
 
+/** What an imported flowchart is called when neither its front matter nor its file name says. */
+export const DEFAULT_IMPORT_TITLE = 'Imported diagram';
+
 /** Text past this is not a flowchart anyone drew by hand; refused before any line is read. */
 export const MERMAID_TEXT_LIMIT = 512 * 1024;
 

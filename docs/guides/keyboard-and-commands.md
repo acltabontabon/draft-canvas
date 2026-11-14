@@ -18,9 +18,10 @@ Single keys work when the canvas has focus (`Tab` from the toolbar), not in text
 The shape appears under the pointer, ready to name. **Connect to…** in `⌘K` connects it.
 Over a sequence, `S` `D` `Q` `A` `M` add a participant of that kind instead.
 
-`Tab` accepts the faint next-shape suggestion; `]` / `[` cycle through others, or pick the next
-shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch in
-[Settings → Canvas](getting-started.md#make-it-yours), hides them.
+`Tab` accepts the faint next-shape suggestion; `Esc` waves it away; `]` / `[` cycle through others,
+or pick the next shape when none shows. **Turn off next-shape suggestions** in `⌘K`, or the switch in
+[Settings → Canvas](getting-started.md#make-it-yours), stops them; the shape picker that opens when
+you drop a connector on empty canvas still lists them first.
 
 ## Draw
 
@@ -38,6 +39,7 @@ shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch
 | `⌥` + arrow | Select the nearest shape in that direction |
 | `⌥⇧→` / `⌥⇧←` | Follow an outgoing / incoming connector |
 | Arrow / `Shift` + arrow | Nudge the selection 1 / 10 units |
+| Hold `⌥` while dragging or resizing | Turn off [snapping](shapes-and-connectors.md#line-things-up) |
 | `Shift+1` | Fit the diagram in view |
 | `⌘+` / `⌘−` / `⌘0` | Zoom in / out / to 100% |
 | `Space` + drag | Pan (scrolling also pans) |
@@ -49,7 +51,7 @@ shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch
 | Key | Action |
 | --- | --- |
 | `Enter` or `F2` | Edit the selected shape's or connector's text; `F2` with nothing selected renames the diagram |
-| `Esc` | Step back: editing, a popover, the selection, then out of a shape |
+| `Esc` | Step back: editing, a popover, a next-shape suggestion, the selection, then out of a shape |
 | `⌘Z` / `⌘⇧Z` or `⌘Y` | Undo / redo |
 | `⌘C` / `⌘X` / `⌘V` | Copy / cut / paste, also between diagrams |
 | `⌘D` | Duplicate |
@@ -60,7 +62,7 @@ shape when none shows. **Turn off Intent Continuation** in `⌘K`, or the switch
 | `⌘G` / `⌘⇧G` | Group into a boundary / ungroup |
 | `⌘B` / `⌘I` | Bold / italic on the selected Text |
 | `⌘⌥F` (`Ctrl+H`) | Find and replace across every room |
-| `Shift+F10` or Menu key | Context menu |
+| `Shift+F10` or Menu key | Context menu for the selection; with nothing selected, the canvas menu (Add here, Paste, Tidy up, Arrange) |
 | `F` | Flows panel |
 | `I` | Add an open point to the selection |
 | `⌘⇧E` or `⌘E` | Export |

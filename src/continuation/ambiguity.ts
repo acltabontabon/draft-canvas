@@ -77,7 +77,7 @@ export const AMBIGUOUS: readonly Ambiguity[] = [
   },
   {
     id: 'dead-letter',
-    label: 'Dead-letter queue',
+    label: 'Dead-Letter Queue',
     matches: (nb) => nb.category === 'deadLetter',
     reason: 'Re-driving dead letters is a choice, not a default — many never leave the queue.',
   },

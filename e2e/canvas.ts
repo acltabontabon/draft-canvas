@@ -8,7 +8,7 @@ import { expect, type Locator, type Page } from '@playwright/test';
 /** A fresh canvas from the Library, titled so a later reload can find it. */
 export async function newCanvas(page: Page, title: string) {
   await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
+  await page.getByRole('button', { name: 'Quick Draft' }).click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   const field = page.getByLabel('Diagram title');
   await field.fill(title);

@@ -135,15 +135,15 @@ describe('CommandPalette', () => {
     useEditorStore.getState().createFlow('Checkout');
     mount();
     fireEvent.change(input(), { target: { value: 'switch' } });
-    expect(highlighted()).toHaveTextContent('Switch to flow');
+    expect(highlighted()).toHaveTextContent('Switch flow');
     key('Enter');
 
     expect(useUiStore.getState().commandPaletteOpen).toBe(true);
-    expect(screen.getByText('Switch to')).toHaveClass('dc-palette-stage');
+    expect(screen.getByText('Switch flow', { selector: '.dc-palette-stage' })).toHaveClass('dc-palette-stage');
     expect(options().map((o) => o.textContent)).toEqual([expect.stringContaining('Whole diagram'), expect.stringContaining('Checkout')]);
 
     key('Backspace');
-    expect(screen.queryByText('Switch to')).toBeNull();
+    expect(screen.queryByText('Switch flow', { selector: '.dc-palette-stage' })).toBeNull();
     expect(options().length).toBeGreaterThan(2);
   });
 
@@ -247,7 +247,12 @@ describe('CommandPalette', () => {
     mount();
     fireEvent.change(input(), { target: { value: ' zzzzqq ' } });
     expect(screen.queryAllByRole('option')).toHaveLength(0);
-    expect(screen.getByText('No matching commands.')).toBeInTheDocument();
+    expect(screen.getByText('No matching commands.', { exact: false })).toBeInTheDocument();
+    // A next step, and a combobox that says its list is closed while there is nothing in it.
+    expect(screen.getByText(/press Esc to close/)).toBeInTheDocument();
+    expect(input()).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.change(input(), { target: { value: 'serv' } });
+    expect(input()).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('ArrowDown on an empty list leaves the highlight on the first row once the list refills', () => {
@@ -263,7 +268,7 @@ describe('CommandPalette', () => {
     useEditorStore.setState({ mode: 'present' });
     mount();
     fireEvent.change(input(), { target: { value: 'zzzzqq' } });
-    expect(screen.getByText('No matching commands.')).toBeInTheDocument();
+    expect(screen.getByText('No matching commands.', { exact: false })).toBeInTheDocument();
     key('Enter'); // nothing to run — must not throw or close
     expect(useUiStore.getState().commandPaletteOpen).toBe(true);
   });

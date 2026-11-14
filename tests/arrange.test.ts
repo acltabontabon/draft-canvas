@@ -1,10 +1,13 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createAttachment, createDocument } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { startArrange, startTidy } from '../src/commands/arrange';
+import { useUiStore, type ArrangePreview } from '../src/store/uiStore';
 
 /**
- * "Arrange diagram": the room laid out again by the agent's engine, as one undo step that keeps
- * every id, connector, flow and the selection — only positions change.
+ * "Arrange diagram": the room laid out again by the agent's engine, shown as a preview and applied
+ * only by `commitArrange` as one undo step that keeps every id, connector, flow and the selection —
+ * only positions change.
  */
 
 function reset() {
@@ -22,9 +25,16 @@ function reset() {
   });
 }
 
+/** What Arrange does end to end: the preview, then Apply. False when there was nothing to apply. */
+async function arrange(options: { selection?: boolean } = {}): Promise<boolean> {
+  const plan = await useEditorStore.getState().planArrange(options.selection ?? false);
+  if (plan === null || typeof plan === 'string') return false;
+  return useEditorStore.getState().commitArrange(plan);
+}
+
 const positionsOf = () => Object.fromEntries(useEditorStore.getState().document.nodes.map((node) => [node.id, { x: node.x, y: node.y }]));
 
-describe('arrangeRoom', () => {
+describe('Arrange diagram', () => {
   beforeEach(reset);
 
   it('moves overlapping shapes apart, keeps ids, connectors, flows and the selection, and undoes in one step', async () => {
@@ -40,8 +50,12 @@ describe('arrangeRoom', () => {
     const before = positionsOf();
     const stepsBefore = useEditorStore.getState().history.past.length;
 
-    const moved = await useEditorStore.getState().arrangeRoom();
-    expect(moved).toBe(true);
+    const plan = (await useEditorStore.getState().planArrange()) as ArrangePreview;
+    // A preview first: working it out changes nothing.
+    expect(typeof plan).toBe('object');
+    expect(positionsOf()).toEqual(before);
+    expect(useEditorStore.getState().history.past.length).toBe(stepsBefore);
+    expect(useEditorStore.getState().commitArrange(plan)).toBe(true);
 
     const after = useEditorStore.getState();
     const nodes = after.document.nodes;
@@ -65,12 +79,12 @@ describe('arrangeRoom', () => {
     const state = useEditorStore.getState();
     state.addNode({ type: 'note', x: 0, y: 0, text: 'Just a note' });
     const steps = useEditorStore.getState().history.past.length;
-    expect(await useEditorStore.getState().arrangeRoom()).toBe(false);
+    expect(await arrange()).toBe(false);
     expect(useEditorStore.getState().history.past.length).toBe(steps);
   });
 });
 
-describe('arrangeSelection', () => {
+describe('Arrange selection', () => {
   beforeEach(reset);
   it('keeps unselected shapes and nearby notes fixed, and undoes once', async () => {
     const editor = useEditorStore.getState();
@@ -81,7 +95,7 @@ describe('arrangeSelection', () => {
     editor.connect(a.id, b.id);
     editor.setSelection({ nodes: [a.id, b.id, note.id], edges: [] });
     const before = useEditorStore.getState();
-    await editor.arrangeSelection();
+    await arrange({ selection: true });
     const after = useEditorStore.getState();
     expect(after.document.nodes.find((node) => node.id === fixed.id)).toBe(before.document.nodes.find((node) => node.id === fixed.id));
     expect(after.document.nodes.find((node) => node.id === note.id)).toBe(before.document.nodes.find((node) => node.id === note.id));
@@ -93,9 +107,9 @@ describe('arrangeSelection', () => {
     const editor = useEditorStore.getState();
     const node = editor.addNode({ type: 'service', x: 0, y: 0 });
     editor.setSelection({ nodes: [node.id], edges: [] });
-    const pending = editor.arrangeSelection();
+    const pending = editor.planArrange(true);
     editor.setSelection({ nodes: [], edges: [] });
-    expect(await pending).toBe(false);
+    expect(await pending).toBeNull();
   });
 });
 
@@ -115,7 +129,7 @@ it('arranges boundary members without shrinking their container or losing explan
   const group = useEditorStore.getState().document.nodes.find(node => node.type === 'group')!;
   editor.setSelection({ nodes: [a.id, b.id], edges: [] });
   const before = useEditorStore.getState().document;
-  expect(await editor.arrangeSelection()).toBe(true);
+  expect(await arrange({ selection: true })).toBe(true);
   const after = useEditorStore.getState().document;
   expect(after.flows).toEqual(before.flows);
   expect(after.openPoints).toHaveLength(1);
@@ -130,7 +144,74 @@ it('arranges boundary members without shrinking their container or losing explan
   expect(useEditorStore.getState().document.nodes).toEqual(before.nodes);
 });
 
-describe('arrange under a time budget', () => {
+describe('starting Arrange', () => {
+  beforeEach(() => {
+    reset();
+    useUiStore.setState({ arrangePreview: null, tidyPreview: null, layoutBusy: null, readOnly: null, flowTrace: null });
+  });
+
+  function stacked() {
+    const state = useEditorStore.getState();
+    const a = state.addNode({ type: 'service', x: 100, y: 100, text: 'Orders API' });
+    const b = state.addNode({ type: 'database', x: 100, y: 100, text: 'Orders DB' });
+    state.connect(a.id, b.id);
+  }
+
+  it('says it is arranging while it works, opens a preview, and changes nothing until Apply', async () => {
+    stacked();
+    const before = positionsOf();
+    const started = startArrange();
+    // Busy at once, with a Cancel: the person is told before any work is done.
+    expect(useUiStore.getState().layoutBusy).toMatchObject({ kind: 'arrange', scoped: false });
+    // A second start while one is running is ignored rather than doubled.
+    expect(await startArrange()).toBe('nothing');
+    expect(await started).toBe('preview');
+    expect(useUiStore.getState().layoutBusy).toBeNull();
+    expect(useUiStore.getState().arrangePreview).not.toBeNull();
+    expect(positionsOf()).toEqual(before);
+  });
+
+  it('Cancel stops it: no preview, nothing changed, and Arrange can be started again', async () => {
+    stacked();
+    const before = positionsOf();
+    const started = startArrange();
+    useUiStore.getState().layoutBusy!.cancel();
+    expect(await started).toBe('nothing');
+    expect(useUiStore.getState().layoutBusy).toBeNull();
+    expect(useUiStore.getState().arrangePreview).toBeNull();
+    expect(positionsOf()).toEqual(before);
+    expect(await startArrange()).toBe('preview');
+  });
+
+  it('a layout skill\'s ask is a preview too, set up to play its motion on Apply', async () => {
+    stacked();
+    expect(await startArrange({ preset: { direction: 'down' } })).toBe('preview');
+    const preview = useUiStore.getState().arrangePreview!;
+    // Asked for "down": that is the one direction offered, and nothing has moved.
+    expect(Object.keys(preview.options)).toEqual(['down']);
+    expect(preview.motion).toBe(true);
+  });
+
+  it('does not offer a preview of a room that changed while it was worked out', async () => {
+    stacked();
+    const started = startArrange();
+    useEditorStore.getState().addNode({ type: 'service', x: 900, y: 0, text: 'Late' });
+    expect(await started).toBe('nothing');
+    expect(useUiStore.getState().arrangePreview).toBeNull();
+  });
+
+  it('Tidy up is told the same way, and Cancel leaves nothing behind', async () => {
+    stacked();
+    const started = startTidy(false);
+    expect(useUiStore.getState().layoutBusy).toMatchObject({ kind: 'tidy' });
+    useUiStore.getState().layoutBusy!.cancel();
+    await started;
+    expect(useUiStore.getState().layoutBusy).toBeNull();
+    expect(useUiStore.getState().tidyPreview).toBeNull();
+  });
+});
+
+describe('arrange under a work budget', () => {
   beforeEach(reset);
 
   /** A tangled 100-shape room: unbounded, arranging it held the page for tens of seconds. */
@@ -158,29 +239,58 @@ describe('arrange under a time budget', () => {
     return count;
   };
 
-  it('a deadline already past still leaves a valid layout: every shape placed, none overlapping', async () => {
-    tangle();
-    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }, { withDeadline }] = await Promise.all([
+  const signature = (nodes: readonly { id: string; x: number; y: number }[]) => nodes.map((n) => `${n.id}:${n.x},${n.y}`).join('|');
+
+  async function arrangeWith(work: number) {
+    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }, { withBudget }] = await Promise.all([
       import('../src/agent/arrange'), import('../src/agent/place'), import('../src/agent/errors'), import('../src/agent/route'),
     ]);
     const doc = useEditorStore.getState().document;
-    const arranged = withDeadline(performance.now() - 1, () => arrangeView(doc, {
+    return withBudget({ work }, () => arrangeView(doc, {
       connectors: 'tidy', move: true,
       layout: { direction: readingDirectionOf(doc), spacing: 'comfortable', allowDegraded: false, normalizePeerSizes: false },
     }, measureContext(), new Problems(), '/arrange'));
+  }
+
+  it('a spent budget still leaves a valid layout: every shape placed, none overlapping', async () => {
+    tangle();
+    const { value: arranged, partial } = await arrangeWith(0);
     expect(arranged).toBeDefined();
+    // Said: the repairs it skipped are why the result may not be the best there is.
+    expect(partial).toBe(true);
     useEditorStore.setState({ document: arranged!.view });
     expect(useEditorStore.getState().document.nodes).toHaveLength(100);
     expect(useEditorStore.getState().document.edges).toHaveLength(148);
     expect(overlapping()).toBe(0);
   }, 30_000);
 
-  it('arranges a large tangled room within its budget instead of holding the page', async () => {
+  it('gives the same layout however long it takes: the budget counts work, not time', async () => {
+    tangle();
+    const slow = async () => {
+      const first = await arrangeWith(6_000);
+      // Another job's worth of the clock passes between the two runs; nothing may depend on it.
+      await new Promise((resolve) => setTimeout(resolve, 120));
+      const second = await arrangeWith(6_000);
+      return [first, second] as const;
+    };
+    const [a, b] = await slow();
+    expect(a.partial).toBe(true);
+    expect(a.used).toBe(b.used);
+    expect(signature(a.value!.view.nodes)).toBe(signature(b.value!.view.nodes));
+    expect(JSON.stringify(a.value!.view.edges.map((e) => [e.id, e.sourceAnchor, e.targetAnchor]))).toBe(JSON.stringify(b.value!.view.edges.map((e) => [e.id, e.sourceAnchor, e.targetAnchor])));
+  }, 60_000);
+
+  it('arranges a large tangled room within its budget, as a preview that says it stopped early', async () => {
     tangle();
     const started = performance.now();
-    expect(await useEditorStore.getState().arrangeRoom()).toBe(true);
-    // The budget is 1.5 s of repairs; generous for CI. Unbounded, this took over ten times as long.
-    expect(performance.now() - started).toBeLessThan(8_000);
+    const plan = (await useEditorStore.getState().planArrange()) as ArrangePreview;
+    expect(plan.partial).toBe(true);
+    // A diagram this size spends its budget on the first direction; the bar says why there is one.
+    expect(Object.keys(plan.options)).toHaveLength(1);
+    expect(plan.alternativeSkipped).toBe(true);
+    expect(useEditorStore.getState().commitArrange(plan)).toBe(true);
+    // Unbounded, this took over ten times as long.
+    expect(performance.now() - started).toBeLessThan(20_000);
     expect(overlapping()).toBe(0);
-  }, 30_000);
+  }, 60_000);
 });
