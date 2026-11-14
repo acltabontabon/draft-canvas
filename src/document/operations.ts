@@ -12,6 +12,7 @@ import { defaultSizeFor, maxSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
 import { cleanText, cleanTextFields } from './sanitize';
+import { dropParticipantLinks, repointParticipantLinks } from './sequenceOps';
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
 import type {
@@ -396,7 +397,9 @@ export function removeElements(
   // the room leaves with its owner, so every id inside it counts as removed here.
   const removedNodes = doc.nodes.filter((n) => removingNodes.has(n.id));
   for (const node of removedNodes) collectInsideIds(node, removingNodes, removedEdgeIds);
-  return pruneOpenPoints(pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds, removingNodes), removingNodes, removedEdgeIds);
+  const pruned = pruneOpenPoints(pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds, removingNodes), removingNodes, removedEdgeIds);
+  // A sequence participant that stood for a deleted shape stays, on its own.
+  return dropParticipantLinks(pruned, removingNodes);
 }
 
 /** Every node and connector id inside `node`'s rooms, however deep, added to the two sets. */
@@ -469,7 +472,7 @@ function reidentifyInside(inside: DraftInside, renamed?: IdRenames): DraftInside
     }
     if (node.attachments) next.attachments = node.attachments.map((a) => ({ ...a, id: createId('a') }));
     if (node.inside) next.inside = reidentifyInside(node.inside, renamed);
-    return next;
+    return repointParticipantLinks(next, nodeIds);
   });
 
   const edges = inside.edges.map((edge) => {
@@ -598,7 +601,9 @@ function instantiateFragment(
     // ids would give two shapes rooms full of the same nodes, and the second copy of a copy would
     // then be ambiguous to every id-keyed thing in the app.
     if (node.inside) next.inside = reidentifyInside(node.inside, inner);
-    return next;
+    // A sequence copied with the shapes its participants stand for follows the copies; one copied
+    // alone goes on standing for the originals.
+    return repointParticipantLinks(next, idMap);
   });
 
   const edgeIdMap = new Map(fragment.edges.map((edge) => [edge.id, createId('e')]));

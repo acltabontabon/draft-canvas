@@ -85,6 +85,7 @@ import {
 import { clamp, isFiniteNumber } from '../lib/math';
 import { isRecord } from '../lib/isRecord';
 import { normalizeOpenPointText, normalizeTargets, OPEN_POINT_ID_PREFIX } from './openPoints';
+import { normalizeSequence } from './validateSequence';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
@@ -480,6 +481,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   let droppedAttachments = 0;
   let truncatedAttachments = 0;
   let droppedInsides = 0;
+  let droppedSequenceParts = 0;
   let droppedEdgeAttachments = 0;
   let truncatedEdgeAttachments = 0;
   /** Maps the id as written in the file to the id we actually used. */
@@ -599,6 +601,12 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       if (textBackground !== undefined) node.textBackground = textBackground;
     }
 
+    if (type === 'sequence') {
+      const read = normalizeSequence(candidate.sequence);
+      node.sequence = read.sequence;
+      droppedSequenceParts += read.dropped;
+    }
+
     const nodeAttachments = parseAttachments(candidate.attachments, LIMITS.maxAttachmentsPerNode);
     droppedAttachments += nodeAttachments.dropped;
     truncatedAttachments += nodeAttachments.truncated;
@@ -632,6 +640,15 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       continue;
     }
     node.parentId = mapped;
+  }
+  // A participant's link follows a shape whose id was reissued above. One that leads nowhere is
+  // kept: see `SeqParticipant.ref`.
+  for (const node of nodes) {
+    if (!node.sequence) continue;
+    for (const participant of node.sequence.participants) {
+      const mapped = participant.ref ? nodeIdRemap.get(participant.ref) : undefined;
+      if (mapped && mapped !== participant.ref) participant.ref = mapped;
+    }
   }
   // A link is only broken where the node itself sits on the cycle. A node whose chain merely
   // leads into a cycle keeps its parent — the cycle is cut at one of its own members instead.
@@ -820,6 +837,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   }
   if (droppedInsides > 0) {
     repairs.push(`Dropped what was inside ${droppedInsides} shape(s) — shapes of that kind hold nothing.`);
+  }
+  if (droppedSequenceParts > 0) {
+    repairs.push(`Dropped ${droppedSequenceParts} part(s) of a sequence that could not be read.`);
   }
   if (droppedEdges > 0) {
     repairs.push(`Dropped ${droppedEdges} connector(s) pointing at nodes that do not exist.`);

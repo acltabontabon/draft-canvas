@@ -9,7 +9,8 @@ import { addOpenPoint, createOpenPoint, removeOpenPoint } from '../../src/docume
 import { addEdges, addNodes, insideHeight, removeElements, setParent, setSettings, setTitle, updateEdge, updateNode } from '../../src/document/operations';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import { LIMITS } from '../../src/document/limits';
-import type { DraftDocument, DraftInside, DraftNode, ViewLevel } from '../../src/document/types';
+import { addParticipant, createMessage, insertItem, updateSequence, wrapItems } from '../../src/document/sequenceOps';
+import type { DraftDocument, DraftInside, DraftNode, DraftSequence, ViewLevel } from '../../src/document/types';
 import { canHoldInside } from '../../src/collab/apply';
 import type { CollabTransport, TransportState } from '../../src/collab/transport/types';
 
@@ -31,7 +32,7 @@ function pick<T>(rng: Rng, items: readonly T[]): T | undefined {
   return items.length === 0 ? undefined : items[Math.floor(rng() * items.length)];
 }
 
-const TYPES = ['service', 'component', 'database', 'queue', 'note', 'group', 'actor'] as const;
+const TYPES = ['service', 'component', 'database', 'queue', 'note', 'group', 'actor', 'sequence'] as const;
 const LEVELS: ViewLevel[] = ['context', 'container', 'component', 'none'];
 
 /** Mostly a room that has shapes to work with; sometimes an empty one inside a shape that could hold one. */
@@ -55,6 +56,17 @@ function inRoom(file: DraftDocument, path: DepthPath, fn: (room: DraftDocument) 
 
 let counter = 0;
 
+function growSequence(sequence: DraftSequence, n: number): DraftSequence {
+  if (sequence.participants.length < 3) {
+    return addParticipant(sequence, { id: `sp_${n}`, name: `Participant ${n}`, type: 'service', serviceKind: 'generic' });
+  }
+  const from = sequence.participants[n % sequence.participants.length]!.id;
+  const to = sequence.participants[(n + 1) % sequence.participants.length]!.id;
+  const message = createMessage({ id: `sm_${n}`, from, to, label: `call ${n}` });
+  const grown = insertItem(sequence, message, { operandId: null, index: sequence.items.length });
+  return n % 4 === 0 ? wrapItems(grown, [message.id], { id: `sf_${n}`, operator: 'opt', guard: `case ${n}` }) : grown;
+}
+
 /** One random edit, made with the document's own operations. Returns the file unchanged when the dice pick something impossible. */
 export function randomEdit(file: DraftDocument, rng: Rng): DraftDocument {
   const path = chooseRoom(file, rng);
@@ -77,6 +89,8 @@ export function randomEdit(file: DraftDocument, rng: Rng): DraftDocument {
       return inRoom(file, path, (view) => addNodes(view, [created]));
     }
     case 2:
+      // A sequence is edited the way it is on the canvas: a lifeline, then messages between them.
+      if (node?.type === 'sequence') return inRoom(file, path, (view) => updateSequence(view, node.id, (sequence) => growSequence(sequence, counter)));
       return node ? inRoom(file, path, (view) => updateNode(view, node.id, { text: `renamed ${counter}` })) : file;
     case 3:
       return node ? inRoom(file, path, (view) => updateNode(view, node.id, { x: node.x + 10, y: node.y - 5 })) : file;

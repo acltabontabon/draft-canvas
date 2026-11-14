@@ -629,6 +629,9 @@ const MIGRATIONS: Record<number, Migration> = {
   23: (document) => document,
   // Optional `cadence` on connectors; a diagram without it means the same.
   24: (document) => document,
+  // The `sequence` shape. Nothing older holds one; the number moves so a build that has never heard
+  // of it refuses the file instead of opening its sequences as empty notes.
+  25: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

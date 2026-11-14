@@ -907,6 +907,7 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   component: 'Component',
   group: 'Boundary',
   ellipse: 'Junction',
+  sequence: 'Sequence',
 };
 
 function captionFor(node: DraftNode): string {

@@ -21,6 +21,7 @@ import type {
   DraftFlowStep,
   DraftInside,
   DraftNode,
+  DraftSequence,
   DraftSettings,
   DraftViewport,
   EdgeAnchor,
@@ -28,6 +29,12 @@ import type {
   EmbeddedBackgroundImage,
   OpenPoint,
   OpenPointTarget,
+  SeqFragment,
+  SeqGroup,
+  SeqMessage,
+  SeqNote,
+  SeqOperand,
+  SeqParticipant,
 } from '../document/types';
 
 type Plain = Record<string, unknown>;
@@ -76,7 +83,45 @@ const NODE_KEYS = [
   'textFont',
   'textBackground',
   'inside',
+  'sequence',
 ] as const satisfies KeysOf<DraftNode>;
+const SEQUENCE_KEYS = ['participants', 'groups', 'items'] as const satisfies KeysOf<DraftSequence>;
+const SEQ_PARTICIPANT_KEYS = [
+  'id',
+  'name',
+  'type',
+  'serviceKind',
+  'databaseKind',
+  'queueKind',
+  'deliveryRole',
+  'actorKind',
+  'componentKind',
+  'technology',
+  'kindOrigin',
+  'accent',
+  'ref',
+] as const satisfies KeysOf<SeqParticipant>;
+const SEQ_GROUP_KEYS = ['id', 'name', 'accent', 'participantIds'] as const satisfies KeysOf<SeqGroup>;
+// One order for the three kinds of item, so every item starts `id`, `t` and reads on from there.
+const SEQ_ITEM_KEYS = [
+  'id',
+  't',
+  'from',
+  'to',
+  'kind',
+  'label',
+  'replyTo',
+  'activate',
+  'deactivate',
+  'kindOrigin',
+  'operator',
+  'covers',
+  'operands',
+  'text',
+  'over',
+  'side',
+] as const satisfies readonly (keyof SeqMessage | keyof SeqFragment | keyof SeqNote)[];
+const SEQ_OPERAND_KEYS = ['id', 'guard', 'items'] as const satisfies KeysOf<SeqOperand>;
 const EDGE_KEYS = [
   'id',
   'source',
@@ -177,9 +222,21 @@ const flows = list(flow);
 const edges = list(edge);
 const openPoint = orderedIfObject(OPEN_POINT_KEYS, { targets: list(orderedIfObject(OPEN_POINT_TARGET_KEYS)) });
 
+// An item may be a fragment, whose branches hold items.
+function sequenceItem(value: unknown): unknown {
+  return orderedIfObject(SEQ_ITEM_KEYS, {
+    operands: list(orderedIfObject(SEQ_OPERAND_KEYS, { items: list(sequenceItem) })),
+  })(value);
+}
+const sequence = orderedIfObject(SEQUENCE_KEYS, {
+  participants: list(orderedIfObject(SEQ_PARTICIPANT_KEYS)),
+  groups: list(orderedIfObject(SEQ_GROUP_KEYS)),
+  items: list(sequenceItem),
+});
+
 // `node` and `inside` refer to each other: a room holds nodes, and a node may hold a room.
 function node(value: unknown): unknown {
-  return orderedIfObject(NODE_KEYS, { attachments, evidence: deepSorted, inside })(value);
+  return orderedIfObject(NODE_KEYS, { attachments, evidence: deepSorted, inside, sequence })(value);
 }
 function inside(value: unknown): unknown {
   return orderedIfObject(INSIDE_KEYS, { nodes: list(node), edges, flows, viewport })(value);

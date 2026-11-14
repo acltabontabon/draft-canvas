@@ -25,6 +25,7 @@ const KIND_WORDS: Record<DraftNodeType, string> = {
   component: 'component',
   group: 'boundary',
   ellipse: 'junction',
+  sequence: 'sequence',
 };
 
 /** The kind of a shape, in a word or two: "service", "topic", "SQL data store", "system boundary". */
