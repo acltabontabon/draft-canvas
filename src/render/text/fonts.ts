@@ -85,6 +85,10 @@ export const TEXT_SIZES = {
   /** A shape's C4 description. The smallest body text on the canvas that is still meant to be read
    *  rather than glanced at; below this it stops being legible across a meeting room. */
   nodeDescription: 11,
+  sequenceMessage: 12,
+  sequenceGuard: 11,
+  sequenceOperator: 10.5,
+  sequenceNote: 11.5,
 } as const;
 
 /** Line heights are absolute multiples so the exporter can reproduce them exactly. */
@@ -112,4 +116,9 @@ export const FONTS = {
   connectorCaption: { stack: 'sans', size: TEXT_SIZES.connectorCaption, weight: 500 } satisfies FontSpec,
   nodeTechnology: { stack: 'sans', size: TEXT_SIZES.nodeTechnology, weight: 500 } satisfies FontSpec,
   nodeDescription: { stack: 'sans', size: TEXT_SIZES.nodeDescription, weight: 400 } satisfies FontSpec,
+  /** A sequence's messages are what it is read for, so they sit a step above a connector's label. */
+  sequenceMessage: { stack: 'sans', size: TEXT_SIZES.sequenceMessage, weight: 500 } satisfies FontSpec,
+  sequenceGuard: { stack: 'sans', size: TEXT_SIZES.sequenceGuard, weight: 500 } satisfies FontSpec,
+  sequenceOperator: { stack: 'sans', size: TEXT_SIZES.sequenceOperator, weight: 700 } satisfies FontSpec,
+  sequenceNote: { stack: 'sans', size: TEXT_SIZES.sequenceNote, weight: 400 } satisfies FontSpec,
 } as const;

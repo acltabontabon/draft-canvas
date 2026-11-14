@@ -67,12 +67,18 @@ function read(items: readonly SeqItem[], stacks: Stacks, state: State): Map<stri
       touched.set(item.from, item.id);
       touched.set(item.to, item.id);
       if (item.deactivate) {
-        const top = stackOf(stacks, item.from).pop();
-        if (top) {
-          top.endId = item.id;
-          top.ends = 'at';
-        } else {
+        // A reply ends the work its own call started, and with it anything that work had begun and
+        // not finished. Anything else that ends work ends the innermost.
+        const stack = stackOf(stacks, item.from);
+        const answered = item.replyTo ? stack.findIndex((running) => running.startId === item.replyTo) : -1;
+        const from = answered >= 0 ? answered : stack.length - 1;
+        if (from < 0) {
           state.unmatched.push(item.id);
+        } else {
+          for (const running of stack.splice(from)) {
+            running.endId = item.id;
+            running.ends = 'at';
+          }
         }
       }
       if (item.kind === 'destroy') {

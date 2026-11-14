@@ -28,6 +28,8 @@ import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../theme/usePersonality';
 import { clamp } from '../lib/math';
 import { nodeTechnologyIcon, technologyIconSnapshot, technologyMarkBounds, TECHNOLOGY_MARK_SIZE, type TechnologyIconSnapshot } from './technology';
+import { describeSequence, naturalSequenceSize, sequenceFrame, sequenceLayoutOf, type SequenceKit } from './sequence';
+import type { SequenceLayout } from '../sequence/layout';
 
 /**
  * Turns a node from the document model into a display list.
@@ -372,6 +374,31 @@ export function describeNode(node: DraftNode, ctx: DescribeContext): DisplayList
   return { width: node.width, height: node.height, shapes };
 }
 
+/** What a sequence borrows from here — see `SequenceKit` — so its heads are these same shapes. */
+const SEQUENCE_KIT: SequenceKit = {
+  describe: (node, ctx) => describeNode(node, ctx),
+  naturalSize: (node, ctx, bounds) => naturalArchitectureSize(node, ctx, bounds),
+  outline: (seedId, ctx, rect, paint) => outlineShape(seedId, ctx, rect, paint),
+};
+
+/** Where everything in a sequence node is drawn, at its current box. */
+export function sequenceLayoutFor(node: Pick<DraftNode, 'sequence' | 'text' | 'width' | 'height'>, ctx: DescribeContext): SequenceLayout {
+  return sequenceLayoutOf(node, ctx, SEQUENCE_KIT);
+}
+
+/** The size a sequence needs to show everything it holds. */
+export function naturalSequenceSizeFor(node: Pick<DraftNode, 'sequence' | 'text'>, ctx: DescribeContext): { width: number; height: number } {
+  return naturalSequenceSize(node, ctx, SEQUENCE_KIT);
+}
+
+/** A sequence's frame alone, and a few of its messages alone: what presentation lights and redraws. */
+export function describeSequenceFrame(node: DraftNode, ctx: DescribeContext): Shape[] {
+  return sequenceFrame(node, ctx, SEQUENCE_KIT);
+}
+export function describeSequenceMessages(node: DraftNode, ctx: DescribeContext, only: ReadonlySet<string>): Shape[] {
+  return describeSequence(node, ctx, SEQUENCE_KIT, { only });
+}
+
 function shapesFor(node: DraftNode, ctx: DescribeContext): Shape[] {
   switch (node.type) {
     case 'code':
@@ -394,6 +421,8 @@ function shapesFor(node: DraftNode, ctx: DescribeContext): Shape[] {
       return replicated(node, ctx);
     case 'component':
       return component(node, ctx);
+    case 'sequence':
+      return describeSequence(node, ctx, SEQUENCE_KIT);
     default:
       // Defensive fallback for a node type that somehow bypassed
       // `document/validate.ts` — every valid `DraftNodeType` is handled above.

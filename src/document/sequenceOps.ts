@@ -416,7 +416,9 @@ export function createMessage(input: {
     kind,
     label: cleanText(input.label ?? '', LIMITS.maxLabelLength),
   };
-  if (kind === 'sync') message.activate = true;
+  // A call to someone else starts work there. A call to oneself is a step in work already under
+  // way, so it starts none unless asked to.
+  if (kind === 'sync' && input.from !== input.to) message.activate = true;
   if (kind === 'reply') {
     message.deactivate = true;
     if (input.replyTo) message.replyTo = input.replyTo;
@@ -529,7 +531,7 @@ export function setMessageKind(sequence: DraftSequence, id: string, kind: SeqMes
     if (item.kind === kind) return item.kindOrigin === 'explicit' ? item : { ...item, kindOrigin: 'explicit' };
     const { activate: _a, deactivate: _d, replyTo, ...rest } = item;
     const next: SeqMessage = { ...rest, kind, kindOrigin: 'explicit' };
-    if (kind === 'sync') next.activate = true;
+    if (kind === 'sync' && item.from !== item.to) next.activate = true;
     if (kind === 'reply') {
       next.deactivate = true;
       if (replyTo) next.replyTo = replyTo;

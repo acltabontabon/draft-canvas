@@ -50,7 +50,7 @@ import { describeAttachmentTab } from '../edges/attachmentChips';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { count } from '../lib/plural';
 import { TechnologyDetails } from './TechnologyDetails';
-import { useTechnologyIcon } from './useTechnologyIcon';
+import { useTechnologyIcon, useTechnologyRevision } from './useTechnologyIcon';
 import { nodeTechnologyIcon } from '../nodes/technology';
 import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
 
@@ -302,6 +302,13 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // text underneath as well would show two copies wherever the two wrap differently by a word.
   const editingNote = editing && (isNote || isText);
   const technologyIcon = useTechnologyIcon(node?.technology);
+  // A sequence's heads carry their participants' logos; it draws again as each arrives.
+  const participants = node?.sequence?.participants;
+  const participantTechnologies = useMemo(
+    () => (participants ?? []).map((participant) => participant.technology ?? '').filter(Boolean).join('\n'),
+    [participants],
+  );
+  const participantIcons = useTechnologyRevision(participantTechnologies);
   const shapes = useMemo(() => {
     if (!liveNode) return [];
     beginClipScope(liveNode.id);
@@ -310,7 +317,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     const described = editingNote ? { ...liveNode, text: isText ? '\u200b' : '' } : liveNode;
     return emitDisplayList(describeNode(described, describeContext(theme, preset)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
-  }, [liveNode, theme, preset, editingNote, technologyIcon]);
+  }, [liveNode, theme, preset, editingNote, technologyIcon, participantIcons]);
 
   /**
    * The font a plain shape label (Service/Component/Database/Queue/Actor/Group — everything but

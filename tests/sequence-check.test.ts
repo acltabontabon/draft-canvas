@@ -39,6 +39,21 @@ describe('activations', () => {
     ]);
   });
 
+  it('a reply ends the work its own call started, and whatever that work left running', () => {
+    const outer = call('outer', 'a', 'b');
+    const again = call('again', 'c', 'b');
+    const plan = executionsOf(sequence([outer, again, reply('done', outer)]));
+    expect(plan.executions.map((bar) => [bar.startId, bar.endId, bar.ends])).toEqual([
+      ['outer', 'done', 'at'],
+      ['again', 'done', 'at'],
+    ]);
+  });
+
+  it('a call to oneself is a step, not new work, unless asked', () => {
+    expect(call('self', 'a', 'a').activate).toBeUndefined();
+    expect(executionsOf(sequence([call('m1', 'a', 'b'), call('self', 'b', 'b')])).executions).toHaveLength(1);
+  });
+
   it('a call never answered runs to the last thing its receiver does', () => {
     const m1 = call('m1', 'a', 'b');
     const m2 = createMessage({ id: 'm2', from: 'b', to: 'c', kind: 'async' });
