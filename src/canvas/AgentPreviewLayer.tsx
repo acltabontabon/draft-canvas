@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useRef, useState } from 'react';
 import { pathKey } from '../depth/tree';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { useEditorStore } from '../store/editorStore';
@@ -73,6 +73,10 @@ export const TidyPreviewLayer = memo(function TidyPreviewLayer() {
  * What Arrange would do, before it is applied (`uiStore.arrangePreview`, set by the Arrange commands
  * and cleared by `ArrangeBar`): the arrangement for the reading direction shown, on the same tracing
  * sheet Tidy up's preview uses — the whole result is the question, more so for a room laid out again.
+ *
+ * The result alone, unless asked (`ArrangeShow`): a re-layout moves everything, and an outline and a
+ * trail for every shape competed with the drawing being judged. One shape's move shows when it is
+ * pointed at, clicked or selected; `moves` shows them all; `before` takes the sheet away.
  */
 export const ArrangePreviewLayer = memo(function ArrangePreviewLayer() {
   const preview = useUiStore((state) => state.arrangePreview);
@@ -83,13 +87,35 @@ export const ArrangePreviewLayer = memo(function ArrangePreviewLayer() {
     () => preview && view && { path: preview.path, nodes: view.nodes, edges: view.edges, base: { nodes: preview.base.nodes, edges: preview.base.edges } },
     [preview, view],
   );
-  if (!source || !current || pathKey(source.path as string[]) !== pathKey(path)) return null;
-  return <PreviewBody preview={source} source="tidy" label="Arrange preview" sheet />;
+  // What this arrangement fixes (`ArrangePreview.fixes`) is inked like a change, so the correction
+  // can be found in a drawing where everything else merely moved.
+  const fixes = preview?.fixes?.[preview.direction];
+  const marked = useMemo(() => new Set((fixes ?? []).map((fix) => fix.id).filter(Boolean)), [fixes]);
+  if (!source || !current || preview?.show === 'before' || pathKey(source.path as string[]) !== pathKey(path)) return null;
+  return <PreviewBody preview={source} source="tidy" label="Arrange preview" sheet trails={preview?.show === 'moves' ? 'all' : 'picked'} marked={marked} />;
 });
 
 type PreviewOrigin = 'live' | 'proposal' | 'tidy';
 
-function PreviewBody({ preview, source, label, sheet = false }: { preview: PreviewSource; source: PreviewOrigin; label: string; sheet?: boolean }) {
+/** Which moved shapes trail back to where they stand now: every one, or only those picked out. */
+type Trails = 'all' | 'picked';
+
+function PreviewBody({
+  preview,
+  source,
+  label,
+  sheet = false,
+  trails = 'all',
+  marked,
+}: {
+  preview: PreviewSource;
+  source: PreviewOrigin;
+  label: string;
+  sheet?: boolean;
+  trails?: Trails;
+  /** Shapes and connectors to ink as changed whatever the diff says of them. */
+  marked?: ReadonlySet<string>;
+}) {
   const theme = useThemeValue();
   const { preset } = usePersonality();
   const liveNodes = useEditorStore((state) => state.document.nodes);
@@ -116,7 +142,7 @@ function PreviewBody({ preview, source, label, sheet = false }: { preview: Previ
   const base = useMemo(() => ({ nodes, edges }), [nodes, edges]);
 
   if (sheet || moved.length > 0) {
-    return <TracingSheet preview={preview} source={source} base={base} diff={diff} moved={moved} after={after} before={before} />;
+    return <TracingSheet preview={preview} source={source} base={base} diff={diff} moved={moved} after={after} before={before} trails={trails} marked={marked} />;
   }
 
   return (
@@ -186,6 +212,8 @@ function TracingSheet({
   moved,
   after,
   before,
+  trails,
+  marked,
 }: {
   preview: PreviewSource;
   source: PreviewOrigin;
@@ -194,9 +222,23 @@ function TracingSheet({
   moved: MovedShape[];
   after: ReturnType<typeof ghostGraph>;
   before: ReturnType<typeof ghostGraph>;
+  trails: Trails;
+  marked?: ReadonlySet<string>;
 }) {
   const theme = useThemeValue();
   const { preset } = usePersonality();
+  // With trails on request, the ones shown: the shape under the pointer, one clicked to keep its
+  // trail up (clicked again, or another, to let it go), and whatever is selected in the diagram.
+  const picking = trails === 'picked';
+  const selected = useEditorStore((state) => state.selection.nodes);
+  const [hovered, setHovered] = useState<string | null>(null);
+  const [pinned, setPinned] = useState<string | null>(null);
+  const pressed = useRef<{ x: number; y: number } | null>(null);
+  const trailed = useMemo(
+    () => (picking ? moved.filter(({ node }) => node.id === hovered || node.id === pinned || selected.includes(node.id)) : moved),
+    [picking, moved, hovered, pinned, selected],
+  );
+  const movedIds = useMemo(() => new Set(moved.map(({ node }) => node.id)), [moved]);
   // Teal is for what the change really alters. A shape that only moves is drawn plain, its trail says
   // it moved: on a re-layout everything moves, and inking it all would leave nothing standing out.
   const inkOf = useMemo(() => {
@@ -213,22 +255,23 @@ function TracingSheet({
       const was = wasEdge.get(e.id);
       if (!was || changedBeyondPlace(was, e)) ink.set(e.id, 'changed');
     }
+    for (const id of marked ?? []) if (!ink.has(id)) ink.set(id, 'changed');
     return (id: string): Ink => ink.get(id) ?? 'plain';
-  }, [diff, base]);
+  }, [diff, base, marked]);
   const groups = preview.nodes.filter((n) => n.type === 'group');
   const shapes = preview.nodes.filter((n) => n.type !== 'group');
   const removed = [...diff.removedNodes, ...diff.removedGroups];
 
   return (
-    <div className="dc-ghost dc-agent-preview" data-mode="sheet" data-source={source} data-many={moved.length > 3 ? 'true' : undefined} aria-hidden="true">
+    <div className="dc-ghost dc-agent-preview" data-mode="sheet" data-source={source} data-many={trailed.length > 3 ? 'true' : undefined} data-pick={picking ? 'true' : undefined} aria-hidden="true">
       {/* No tag: the sheet itself says this is the proposal, and a tag would sit over what moved. */}
       <div className="dc-preview-sheet" />
       {/* Where each moved shape stands now, faint, and the trail to where it goes. */}
-      {moved.map(({ node, from }) => (
+      {trailed.map(({ node, from }) => (
         <div key={`was-${node.id}`} className="dc-preview-was" style={{ transform: `translate(${from.x}px, ${from.y}px)`, width: from.width, height: from.height }} />
       ))}
       <svg className="dc-preview-trails" width={1} height={1} aria-hidden="true" focusable="false">
-        {moved.map(({ node, from }) => (
+        {trailed.map(({ node, from }) => (
           <g key={`trail-${node.id}`}>
             <line x1={from.x + from.width / 2} y1={from.y + from.height / 2} x2={node.x + node.width / 2} y2={node.y + node.height / 2} />
             <circle cx={from.x + from.width / 2} cy={from.y + from.height / 2} r={3} />
@@ -268,11 +311,29 @@ function TracingSheet({
           );
         })}
       </svg>
-      {shapes.map((node) => (
-        <div key={node.id} className="dc-preview-ink" data-ink={inkOf(node.id)}>
-          <GhostNode node={node} theme={theme} preset={preset} />
-        </div>
-      ))}
+      {shapes.map((node) => {
+        const pickable = picking && movedIds.has(node.id);
+        return (
+          <div
+            key={node.id}
+            className="dc-preview-ink"
+            data-ink={inkOf(node.id)}
+            data-moved={pickable ? 'true' : undefined}
+            data-picked={pickable && node.id === pinned ? 'true' : undefined}
+            onPointerEnter={pickable ? () => setHovered(node.id) : undefined}
+            onPointerLeave={pickable ? () => setHovered((id) => (id === node.id ? null : id)) : undefined}
+            onPointerDown={pickable ? (event) => { pressed.current = { x: event.clientX, y: event.clientY }; } : undefined}
+            onClick={pickable ? (event) => {
+              // A pan that began on the shape ends in a click too: only a press that stayed put picks.
+              const from = pressed.current;
+              if (from && Math.hypot(event.clientX - from.x, event.clientY - from.y) > 4) return;
+              setPinned((id) => (id === node.id ? null : node.id));
+            } : undefined}
+          >
+            <GhostNode node={node} theme={theme} preset={preset} />
+          </div>
+        );
+      })}
     </div>
   );
 }

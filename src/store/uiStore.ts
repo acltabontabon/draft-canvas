@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { ArrangeFix } from '../lib/arrangeFixes';
 import type { Preset } from '../lib/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
@@ -157,9 +158,26 @@ export interface ArrangePreview {
   current: ArrangeDirection;
   /** Whether only the selection was arranged. */
   scoped: boolean;
+  /** What the canvas shows while the person decides: see `ArrangeShow`. */
+  show: ArrangeShow;
+  /** What each arrangement fixes that reads badly now (`agent/proportion.ts`): names stacked into
+   *  columns, captions with no room, header-heavy boundaries, an overview too small to read. Only
+   *  what that arrangement resolves, so nothing is reported that Apply would not change. */
+  fixes?: Partial<Record<ArrangeDirection, ArrangeFix[]>>;
 }
 
+export type { ArrangeFix };
+
 export type ArrangeDirection = 'right' | 'down';
+
+/**
+ * What an Arrange preview puts on the canvas. `result` is the proposal alone, framed to fit, since
+ * that is the picture being judged; `before` lifts the sheet off the diagram as it is, in the view the
+ * person had; `moves` lays both in one frame, every shape trailing back to where it stands now. The
+ * last used to be the only one, and made the decision harder: framing both made the result smaller,
+ * and a whole re-layout's outlines and trails crossed it everywhere.
+ */
+export type ArrangeShow = 'result' | 'before' | 'moves';
 
 /**
  * A pending MCP proposal's reviewed result, shown as a ghost on the canvas alongside

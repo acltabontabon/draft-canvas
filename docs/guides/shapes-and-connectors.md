@@ -85,9 +85,21 @@ Arrange shows its result first too, with the reading direction to choose: **Acro
 **Down ↓**. It starts on the suggested one, the way the diagram reads now unless the other way reads
 clearly better or, for a big diagram, fits a wide screen clearly better. Boundaries keep what they
 hold and notes stay beside their shapes. A long name gets a wider box so it reads in two lines, and
-the gap between two rows is only as long as its captions need. **Apply** makes it one undo step;
-**Cancel** keeps your own layout. With shapes selected, **Rearrange selection** lays out only those,
-in the direction the rest of the diagram reads.
+the gap between two rows is only as long as its captions need. **Apply** makes it one undo step
+and frames the result; **Cancel** keeps your own layout and returns the view to where it was. With
+shapes selected, **Rearrange selection** lays out only those, in the direction the rest of the
+diagram reads.
+
+The preview shows the **Result** on its own, fitted to the screen. **Before** shows the diagram as
+it is, in the view you had, and **Moves** shows both, with a trail from where each shape stands to
+where it goes. In **Result**, point at a shape to see its move, or click it to keep the trail up.
+
+**Check layout** in `⌘K` looks for what makes a tidy diagram hard to read: a name stacked into a tall
+column, a caption with no room to show, a boundary that is mostly header, and spacing that leaves the
+whole diagram too small to read on a screen. It reports only what Arrange fixes, by opening that
+preview with the fixes named in the bar and marked in teal. When there is nothing to fix it says so.
+**Tidy up** says the same when a diagram is already tidy but would read better laid out again, with
+**Show fix** to open that preview.
 
 ## Connect shapes
 

@@ -2132,6 +2132,11 @@ kbd {
   gap: 10px;
 }
 
+/* What the arrangement fixes: in the selection colour, as the fixed shapes are on the sheet. */
+.dc-arrange-bar-fixes {
+  color: var(--dc-selection);
+}
+
 /* As wide as its longest word, so Apply stays under the pointer while the direction changes. */
 .dc-arrange-bar-direction .dc-tidy-bar-summary {
   min-width: 7.5em;
@@ -4862,6 +4867,115 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 /* A transparent export shows the classic checkerboard — the empty pixels are the point. */
 .dc-export-stage[data-transparent='true'] {
   background: repeating-conic-gradient(var(--dc-border) 0 25%, var(--dc-surface-raised) 0 50%) 0 0 / 12px 12px;
+}
+
+/* The thumbnail is a button that opens the image large (`ExportInspector`): the stage as it was,
+   with a word in its corner on hover and focus saying what a click does. */
+button.dc-export-stage {
+  width: 100%;
+  font: inherit;
+  cursor: zoom-in;
+}
+
+button.dc-export-stage:hover,
+button.dc-export-stage:focus-visible {
+  border-color: var(--dc-border-strong);
+}
+
+.dc-export-stage-hint {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px 2px 5px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  font-size: 11px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+button.dc-export-stage:hover .dc-export-stage-hint,
+button.dc-export-stage:focus-visible .dc-export-stage-hint {
+  opacity: 1;
+}
+
+/* The inspector: most of the window, the image in a pane that scrolls both ways. */
+.dc-modal-inspect {
+  height: 84dvh;
+}
+
+.dc-modal-inspect .dc-modal-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  padding: 12px 16px 16px;
+}
+
+.dc-export-inspect-bar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 14px;
+}
+
+.dc-export-inspect-meta {
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dc-export-inspect-name {
+  overflow: hidden;
+  color: var(--dc-text);
+  font-family: var(--dc-mono);
+  text-overflow: ellipsis;
+}
+
+.dc-export-inspect-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-canvas);
+  cursor: grab;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.dc-export-inspect-view:active {
+  cursor: grabbing;
+}
+
+.dc-export-inspect-view[data-transparent='true'] {
+  background: repeating-conic-gradient(var(--dc-border) 0 25%, var(--dc-surface-raised) 0 50%) 0 0 / 16px 16px;
+}
+
+/* `margin: auto` centres an image smaller than the pane and still lets a larger one scroll from its
+   top-left corner, which centring the flex line would cut off. */
+.dc-export-inspect-view img {
+  display: block;
+  flex: none;
+  margin: auto;
+  max-width: none;
+}
+
+.dc-export-inspect-view[data-zoom='fit'] img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
 }
 
 /* Text formats sit on a sliver of the canvas's own dot grid. */

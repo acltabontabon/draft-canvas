@@ -11,3 +11,5 @@ export function directionNote(preview: Pick<ArrangePreview, 'direction' | 'sugge
   if (preview.direction === preview.suggested) return 'Suggested';
   return preview.direction === preview.current ? 'As it reads now' : 'Turned';
 }
+
+export { fixesNote } from '../../lib/arrangeFixes';

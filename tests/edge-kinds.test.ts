@@ -234,7 +234,7 @@ describe('kind survives structural sharing', () => {
 describe('a connector\'s subtle relationship caption', () => {
   function described(edge: DraftEdge) {
     const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
-    const b = createNode({ id: 'b', type: 'queue', x: 300, y: 0 });
+    const b = createNode({ id: 'b', type: 'queue', x: 340, y: 0 });
     const nodes = new Map([[a.id, a], [b.id, b]]);
     return describeEdge(edge, nodes, { theme: DARK, measurer: getMeasurer(), showSequence: false })!;
   }
@@ -244,7 +244,7 @@ describe('a connector\'s subtle relationship caption', () => {
     const texts = described(edge).overlay.filter((s) => s.t === 'text');
     expect(texts).toHaveLength(1);
     expect(texts[0]!.layout.lines.map((l) => l.text).join('')).toBe('publishes to');
-    expect(texts[0]!.fill).toBe(DARK.textFaint);
+    expect(texts[0]!.fill).toBe(DARK.edgeText);
   });
 
   it('has no caption when the connector has no semantic to describe', () => {

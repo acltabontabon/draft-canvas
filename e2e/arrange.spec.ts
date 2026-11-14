@@ -67,3 +67,44 @@ test('arranges three overlapping shapes apart from the palette, and ⌘Z restore
   await page.keyboard.press('ControlOrMeta+z');
   await expect.poll(() => positions(page)).toEqual(stacked);
 });
+
+test('the preview frames the result, and Cancel puts the view back exactly where it was', async ({ page }) => {
+  await newCanvas(page, 'Arrange camera');
+  await create(page, 'Service', { x: 200, y: 200 });
+  await create(page, 'Data Store', { x: 500, y: 200 });
+  await create(page, 'Queue', { x: 800, y: 200 });
+  await page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    type Placed = { x: number; y: number };
+    // Far apart and off to one side, so framing the arrangement has to move and zoom the camera.
+    useEditorStore.getState().apply('Scatter', (doc: { nodes: Placed[] }) => ({ ...doc, nodes: doc.nodes.map((node: Placed, i: number) => ({ ...node, x: 300 + i * 40, y: 300 + i * 900 })) }));
+    // Nothing selected: a selected shape shows its own move, which is the next assertion's subject.
+    useEditorStore.getState().setSelection({ nodes: [], edges: [] });
+  });
+  const camera = () => page.locator('.react-flow__viewport').evaluate((el) => (el as HTMLElement).style.transform);
+  const before = await camera();
+
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('Arrange diagram');
+  await expect(page.getByRole('option', { selected: true })).toContainText('Arrange diagram');
+  await page.keyboard.press('Enter');
+  const bar = page.getByRole('region', { name: 'Arrange preview' });
+  await expect(bar).toBeVisible();
+  // The result alone by default: no outline or trail for a shape nobody pointed at.
+  await expect(bar.getByRole('radio', { name: /^Result/ })).toBeChecked();
+  await expect(page.locator('.dc-preview-was')).toHaveCount(0);
+  await expect.poll(camera).not.toBe(before);
+
+  // Moves shows where every shape came from; Before lifts the sheet and returns the view.
+  await bar.getByText('Moves', { exact: true }).click();
+  await expect(page.locator('.dc-preview-was')).toHaveCount(3);
+  await bar.getByText('Before', { exact: true }).click();
+  await expect(page.locator('.dc-agent-preview')).toHaveCount(0);
+  await expect.poll(camera).toBe(before);
+
+  await bar.getByText('Result', { exact: true }).click();
+  await expect.poll(camera).not.toBe(before);
+  await bar.getByRole('button', { name: 'Cancel' }).click();
+  await expect(bar).toBeHidden();
+  await expect.poll(camera).toBe(before);
+});

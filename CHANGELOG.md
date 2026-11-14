@@ -94,7 +94,21 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   **Tidy up**.
 - **Arrange, with a preview and a reading direction** — Arrange shows the diagram laid out again
   before anything moves, with **Across →** or **Down ↓** to choose and the better fit suggested.
-  **Apply** is one undo step; **Cancel** keeps your layout. <!-- highlight -->
+  **Apply** is one undo step; **Cancel** keeps your layout and puts the view back exactly where it
+  was. The preview shows the result on its own, fitted to the screen: **Before** flips to the
+  diagram as it is, **Moves** shows where every shape goes, and pointing at one shape shows its own
+  move. <!-- highlight -->
+- **Check layout** — New in `⌘K`. It looks for names stacked into tall columns, captions with no
+  room to show, boundaries that are mostly header and spacing that makes the whole diagram too small
+  to read, and reports only what laying the view out again fixes: the Arrange preview opens with
+  the fixes named and marked. Every Arrange preview now says what it fixes, **Tidy up** names them
+  when a diagram is tidy but still reads badly, and agents get the same findings in their receipts.
+- Reply labels of neighbouring connectors no longer run into each other: each slides along its own
+  line to make room.
+- **Connector words are easier to read** — Labels and relationship captions are a size larger and
+  brighter on the dark canvas, so a request can be followed without zooming in.
+- **Inspect an image before exporting** — Click the preview in Export to open it large, and switch to
+  100% to read its text at actual size.
 - **Better proportions when arranging** — A long name gets a wider, shorter box instead of a tall
   column, gaps between rows are only as long as their captions need, and neither a caption nor a
   line runs through a boundary's title. Agents' diagrams get the same.

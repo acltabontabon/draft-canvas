@@ -2397,8 +2397,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const before = get();
     if (selection && before.selection.nodes.length === 0) return null;
     if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
-    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }, { withDeadline }] = await Promise.all([
-      import('../agent/arrange'), import('../agent/place'), import('../agent/errors'), import('../agent/route'),
+    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }, { withDeadline }, { proportionFindings, resolvedBy }] = await Promise.all([
+      import('../agent/arrange'), import('../agent/place'), import('../agent/errors'), import('../agent/route'), import('../agent/proportion'),
     ]);
     const current = get();
     // As `planTidy`: what was asked about is no longer what is on screen.
@@ -2410,25 +2410,56 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // The same defaults the agent's `{op:"arrange"}` resolves to when it names nothing, both ways
     // round for the whole room. A selection keeps the view's direction: it has to read the way the
     // rest of the view still does.
-    const arranged = withDeadline(performance.now() + ARRANGE_BUDGET_MS, () => arrangeView(
+    const ctx = measureContext();
+    const deadline = performance.now() + ARRANGE_BUDGET_MS;
+    const arranged = withDeadline(deadline, () => arrangeView(
       current.document,
       scoped
         ? { scope: { nodes: [...current.selection.nodes] }, keepOutsideFixed: true, connectors: 'tidy', move: true, layout: { ...layout, directionChosen: true } }
         : { connectors: 'tidy', move: true, bothDirections: true, layout },
-      measureContext(),
+      ctx,
       new Problems(),
       '/arrange',
     ));
     if (!arranged) return 'no-room';
+    // What reads badly now, and what of it each arrangement fixes (`agent/proportion.ts`).
+    const found = proportionFindings(current.document, ctx);
     const options: ArrangePreview['options'] = {};
+    const fixes: NonNullable<ArrangePreview['fixes']> = {};
     for (const each of [arranged, arranged.alternative]) {
-      if (each && each.touched.size > 0 && !sameLayout(each.view, current.document)) options[each.direction ?? reads] = each.view;
+      if (!each || each.touched.size === 0 || sameLayout(each.view, current.document)) continue;
+      const direction = each.direction ?? reads;
+      let view = each.view;
+      let after = proportionFindings(view, ctx);
+      // Comfortable spacing that leaves the whole room too small to read on a screen: the same
+      // arrangement set tighter, kept when that draws it clearly larger. Within the one budget.
+      if (!scoped && after.some((finding) => finding.kind === 'sparse') && performance.now() < deadline) {
+        const tighter = withDeadline(deadline, () => arrangeView(
+          current.document,
+          { connectors: 'tidy', move: true, layout: { ...layout, direction, directionChosen: true, spacing: 'compact' } },
+          ctx,
+          new Problems(),
+          '/arrange',
+        ));
+        if (tighter && tighter.touched.size > 0) {
+          const tightened = proportionFindings(tighter.view, ctx);
+          // Judged as a fix of the roomier one: larger on screen, and nothing else made worse.
+          const gained = resolvedBy(after, tightened).some((finding) => finding.kind === 'sparse');
+          const lost = resolvedBy(tightened, after).length > 0;
+          if (gained && !lost) {
+            view = tighter.view;
+            after = tightened;
+          }
+        }
+      }
+      options[direction] = view;
+      fixes[direction] = resolvedBy(found, after).map(({ kind, id }) => ({ kind, id }));
     }
     const suggested = arranged.direction ?? reads;
     // Already arranged the suggested way: nothing to show, even if the other way would differ —
     // offering only a turn the layout recommends against isn't a cleanup.
     if (!options[suggested]) return 'unchanged';
-    return { path: current.path, base: current.document, options, direction: suggested, suggested, current: reads, scoped };
+    return { path: current.path, base: current.document, options, direction: suggested, suggested, current: reads, scoped, show: 'result', fixes };
   },
 
   commitArrange(preview) {

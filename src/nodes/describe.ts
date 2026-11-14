@@ -2649,7 +2649,7 @@ function textInkOf(node: DraftNode, ctx: DescribeContext): TextInk {
   if (node.textBackground === 'card') {
     return { text: accented ? palette.text : ctx.theme.text, muted: accented ? palette.chip : ctx.theme.textMuted, knockout: false };
   }
-  if (effectiveTextRole(node) === 'label') return { text: ctx.theme.textFaint, muted: ctx.theme.textFaint, knockout: false };
+  if (effectiveTextRole(node) === 'label') return { text: ctx.theme.edgeText, muted: ctx.theme.edgeText, knockout: false };
   if (node.textBackground === 'marker') return { text: ctx.theme.text, muted: ctx.theme.textMuted, knockout: false };
   return { text: accented ? palette.chip : ctx.theme.text, muted: accented ? palette.chip : ctx.theme.textMuted, knockout: false };
 }

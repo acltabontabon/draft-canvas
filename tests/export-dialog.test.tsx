@@ -372,6 +372,27 @@ describe('ExportDialog — output artifact', () => {
     expect(screen.getByText(/^\d+ × \d+ px · 2×$/)).toBeInTheDocument();
   });
 
+  it('opens the thumbnail large to inspect, at actual size on request, and Escape closes only that', async () => {
+    const user = userEvent.setup();
+    useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });
+    const { baseElement: container } = renderDialog();
+
+    await user.click(screen.getByRole('button', { name: 'Inspect image at actual size' }));
+    const inspector = screen.getByRole('dialog', { name: 'Inspect image' });
+    const image = inspector.querySelector<HTMLImageElement>('.dc-export-inspect-view img')!;
+    expect(image.getAttribute('src')).toBe(container.querySelector('.dc-export-stage img')!.getAttribute('src'));
+    // Fitted first; 100% draws one pixel per unit of the diagram, the size the caption quotes at 1×.
+    expect(image.style.width).toBe('');
+    await user.click(within(inspector).getByRole('radio', { name: '100%, actual size' }));
+    const [, width, height] = /^(\d+) × (\d+) px · 2×$/.exec(container.querySelector('.dc-export-artifact .dc-export-meta')!.textContent ?? '')!;
+    expect(image.style.width).toBe(`${Number(width) / 2}px`);
+    expect(image.style.height).toBe(`${Number(height) / 2}px`);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(screen.queryByRole('dialog', { name: 'Inspect image' })).toBeNull();
+    expect(container.querySelector('.dc-export-stage img')).not.toBeNull();
+  });
+
   it('offers 1×/2×/3× for PNG only, reports the chosen scale, and remembers it', async () => {
     const user = userEvent.setup();
     useEditorStore.setState({ document: withFlow(), selection: { nodes: [], edges: [] }, selectedFlowId: null });

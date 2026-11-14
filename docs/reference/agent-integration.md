@@ -408,6 +408,17 @@ budget; a worker still busy at 20 s is ended. Either way nothing changes.
 | `farNotes` | Notes more than 160 px from their subject |
 | `fill` | Shape area over the diagram's area |
 
+**Proportion** (`src/agent/proportion.ts`) reports what reads badly although the lines are clean. It
+never refuses or repairs a layout; the fields appear beside the legibility measures only when found,
+and an update's advisories name the ones the edit touched, each with the op that fixes it:
+
+| Field | Reports |
+| --- | --- |
+| `stackedNames` | Shapes whose name wraps into more than two lines where a wider box takes fewer |
+| `hiddenCaptions` | Connectors whose label or caption is cut short or left out for lack of room |
+| `heavyHeaders` | Boundaries whose header band is 45% or more of their height |
+| `smallOverview` | The view fitted to a 1440×900 screen draws its smallest text under 8 px; `scale` says how small |
+
 **Advisories** (`src/agent/advice.ts`) name what to change, with ops where possible: ungroup unrelated
 external systems, move detail inside past 8 elements per boundary or 15 per view, give a note an
 `about`, set a `primaryFlow` when there are many crossings or detours, or name a technology as its product

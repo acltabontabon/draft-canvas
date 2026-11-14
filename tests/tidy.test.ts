@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { tidyView } from '../src/agent/tidy';
 import { measureContext } from '../src/agent/place';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
@@ -142,6 +142,34 @@ describe('Tidy up in the editor', () => {
     expect(idsOf().find((command) => command.id === 'tidy')!.title).toBe('Tidy up selection');
     const shared = idsOf(stubContext({ ui: { ...useUiStore.getState(), readOnly: { sharedTitle: 'Shared' } } }));
     expect(shared.some((command) => command.id === 'tidy')).toBe(false);
+  });
+
+  it('says a tidy diagram is tidy, and names what laying it out again would fix', async () => {
+    const run = async () => {
+      const notify = vi.fn();
+      const ctx = stubContext({ ui: { ...useUiStore.getState(), notify } });
+      canvasCommands(ctx).find((command) => command.id === 'tidy')!.run(ctx);
+      await vi.waitFor(() => expect(notify).toHaveBeenCalled());
+      return notify.mock.calls[0] as [string, string, { label: string; run: () => void }];
+    };
+    // Level and apart: nothing to tidy, and nothing that reads badly.
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'A' });
+    const b = createNode({ id: 'b', type: 'service', x: 420, y: 0, text: 'B' });
+    const edge = createEdge({ id: 'ab', source: 'a', target: 'b' });
+    useEditorStore.getState().setDocument(addEdges(addNodes(createDocument('Tidy'), [a, b]), [edge]));
+    const [plain, , rearrange] = await run();
+    expect(plain).toBe('Already tidy.');
+    expect(rearrange.label).toBe('Rearrange');
+
+    // The same, with a long name stacked into a narrow column: still tidy, but worth laying out.
+    const stacked = { ...a, text: 'Customer-Facing Public API Gateway and Edge Routing Layer for Web and Mobile', width: 150, height: 190, y: -61 };
+    useEditorStore.getState().setDocument(addEdges(addNodes(createDocument('Tidy'), [stacked, b]), [edge]));
+    const [message, , fix] = await run();
+    expect(message).toBe('Already tidy. Rearranging would fix 1 stacked name.');
+    expect(fix.label).toBe('Show fix');
+    fix.run();
+    expect(useUiStore.getState().arrangePreview?.fixes?.[useUiStore.getState().arrangePreview!.direction]).toContainEqual({ kind: 'stacked-name', id: 'a' });
+    useUiStore.getState().setArrangePreview(null);
   });
 
   it('says what a preview changes in plain words', () => {
