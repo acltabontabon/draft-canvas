@@ -1720,6 +1720,26 @@ function turnsLeft(vertices: readonly PathVertex[], end: number): boolean {
   return false;
 }
 
+/** How many flattened paths `flattenedRoute` keeps: a crowded view's routes, several times over. */
+const FLATTENED_LIMIT = 2048;
+const flattened = new Map<string, readonly PathVertex[]>();
+
+/**
+ * `flattenPath`, kept for paths seen before. Placing words clear of their own line flattens every
+ * labelled route, and an agent's anchor repair routes the same candidates over and over — parsing
+ * the same `d` each time made a crowded layout a tenth slower. Strings in, plain points out: nothing
+ * of the routing that made the path is held. Readers must not change what they get.
+ */
+function flattenedRoute(d: string): readonly PathVertex[] {
+  let vertices = flattened.get(d);
+  if (!vertices) {
+    if (flattened.size >= FLATTENED_LIMIT) flattened.clear();
+    vertices = flattenPath(d);
+    flattened.set(d, vertices);
+  }
+  return vertices;
+}
+
 function clearLabel(
   d: string,
   initial: { x: number; y: number; side: Side },
@@ -1735,7 +1755,7 @@ function clearLabel(
 ): { x: number; y: number; side: Side } {
   const nudge = labelLaneOffset(sourceSide, targetSide, lane);
   const occupied = [sourceRect, targetRect, ...obstacles];
-  const vertices = flattenPath(d);
+  const vertices = flattenedRoute(d);
   const head = arrowheadBox(vertices);
   const away = size.away ?? 0;
   const caption = size.caption === true;
@@ -1830,7 +1850,7 @@ function placedClear(route: RoutedEdge, sourceRect: Rect, targetRect: Rect, opti
   if (!options?.label) return route;
   const label = clearLabel(route.d, { x: route.labelX, y: route.labelY, side: route.labelSide }, options.label,
     sourceRect, targetRect, options.obstacles ?? [], options.lane ?? 0, route.source.side, route.target.side, route.labelRoom,
-    others.map(flattenPath));
+    others.map(flattenedRoute));
   if (label.x === route.labelX && label.y === route.labelY) return { ...route, labelSide: label.side };
   // Moved clear of a shape: the room measured at the old point no longer applies.
   const { labelRoom: _stale, ...moved } = route;

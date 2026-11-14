@@ -42,8 +42,10 @@ const geometry = (doc: DraftDocument) => {
 
 // Each case composes and lays out a whole diagram: seconds of real work on a two-core CI runner.
 // Check straightness here too: a separate sweep regenerated the whole gallery under one timeout
-// and exceeded 30 seconds with CI coverage instrumentation.
-describe('layout gallery', { timeout: 30_000 }, () => {
+// and exceeded 30 seconds with CI coverage instrumentation. The crowded batch cases (22, 23) take
+// under 4s locally but sat just under 30s per case there, so placing words clear of their own
+// lines tipped them over: this is a guard against a hang, not a speed budget (`performance-budget.test.ts` is one).
+describe('layout gallery', { timeout: 45_000 }, () => {
   for (const entry of GALLERY) {
     it(`${entry.id}: ${entry.title}`, () => {
       const { doc, before, touched } = galleryDocument(entry);
