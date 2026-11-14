@@ -44,6 +44,29 @@ async function start(page: Page, id: string) {
 
 const boxOf = async (page: Page, id: string) => (await page.locator(`.react-flow__node[data-id="${id}"]`).boundingBox())!;
 
+/**
+ * Drags a shape `distance` to the left, in legs of at most 350 (Firefox auto-pans a drag held near
+ * the canvas edge). A short first move starts the drag and a couple of frames pass before the rest:
+ * moves that arrive while the press is still being taken as a drag are lost, which left a shape up
+ * to ~100px short in CI WebKit — far enough for these routes to take a different side.
+ */
+async function dragLeft(page: Page, id: string, distance: number) {
+  const box = await boxOf(page, id);
+  const x = box.x + box.width / 2;
+  const y = box.y + box.height / 2;
+  await page.mouse.move(x, y);
+  await page.mouse.down();
+  await page.mouse.move(x - 10, y, { steps: 2 });
+  await nextFrames(page);
+  for (let moved = Math.min(350, distance); ; moved = Math.min(moved + 350, distance)) {
+    await page.mouse.move(x - moved, y, { steps: 8 });
+    if (moved === distance) break;
+  }
+  await nextFrames(page);
+  await page.mouse.up();
+  await nextFrames(page);
+}
+
 /** The canvas hit path is the exact line export and agent checks read. */
 async function expectRouteParity(page: Page, id: string) {
   const expected = await page.evaluate(async (edgeId) => {
@@ -67,16 +90,8 @@ test('dragging a shape across turns an automatic end to face it and leaves a pin
   expect(pinnedBefore.x).toBeCloseTo(a.x + a.width, 0);
   expect(pinnedBefore.y).toBeCloseTo(a.y + a.height * 0.75, 0);
 
-  // Drag B and C over to A's left. Stay clear of the canvas edge: Firefox auto-pans a drag held near it.
-  for (const id of ['b', 'c']) {
-    const box = await boxOf(page, id);
-    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-    await page.mouse.down();
-    await page.mouse.move(box.x + box.width / 2 - 350, box.y + box.height / 2, { steps: 8 });
-    await page.mouse.move(box.x + box.width / 2 - 700, box.y + box.height / 2, { steps: 8 });
-    await page.mouse.up();
-    await nextFrames(page);
-  }
+  // Drag B and C over to A's left.
+  for (const id of ['b', 'c']) await dragLeft(page, id, 700);
   await cameraAtRest(page);
   // The route is recomputed a frame or two after the drop; WebKit sometimes lets a single read land
   // on the old route (flaky in CI), so retry the whole group of reads until it settles.
@@ -110,11 +125,7 @@ test('a new connector follows its shapes even when drawn between off-centre dots
   expect((await start(page, edgeId)).y).toBeCloseTo(b.y + b.height, 0);
   await expectRouteParity(page, edgeId);
 
-  const c = await boxOf(page, 'c');
-  await page.mouse.move(c.x + c.width / 2, c.y + c.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(c.x + c.width / 2 - 700, c.y + c.height / 2, { steps: 12 });
-  await page.mouse.up();
+  await dragLeft(page, 'c', 700);
   await cameraAtRest(page);
   // C is now down to the left, past A. Straight out of B's left side would run along A's own line
   // and through A, so the automatic end keeps the bottom and turns once into C (`edges/sides.ts`):
