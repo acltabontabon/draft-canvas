@@ -166,7 +166,8 @@ export interface SequenceLayout {
 
 /* ------------------------------------------------------------------ measures -- */
 
-const PAD_X = 20;
+/** From the frame to the outermost thing in it: room for the frame's own handles and a place to add a participant. */
+const PAD_X = 30;
 const PAD_TOP = 12;
 const PAD_BOTTOM = 14;
 const TITLE_GAP = 8;
@@ -809,8 +810,8 @@ export function participantGapX(layout: SequenceLayout, index: number): number {
   const before = layout.columns[index - 1];
   const after = layout.columns[index];
   if (before && after) return (before.x + after.x) / 2;
-  if (after) return after.head.x - 14;
-  if (before) return before.head.x + before.head.w + 14;
+  if (after) return after.head.x - 15;
+  if (before) return before.head.x + before.head.w + 15;
   return PAD_X + 40;
 }
 

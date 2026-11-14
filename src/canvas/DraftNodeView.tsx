@@ -19,8 +19,8 @@ import {
   naturalNoteHeight,
   naturalTextHeight,
   noteLayout,
-  textPaddingOf,
-} from '../nodes/describe';
+  textPaddingOf, sequenceLayoutFor } from '../nodes/describe';
+import { SequenceOverlay } from './sequence/SequenceOverlay';
 import { activeTextEditor, handleMarkdownKey } from './textEditor';
 import { nodeReading } from '../nodes/readings';
 import { HANDLE_ANCHORS } from '../edges/routing';
@@ -157,6 +157,13 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const isCode = node?.type === 'code';
   const isNote = node?.type === 'note';
   const isText = node?.type === 'text';
+  const isSequence = node?.type === 'sequence';
+  // A sequence's own controls exist only while someone is at it: under the pointer, selected, or
+  // with something inside it selected, being typed or being dropped onto.
+  const [hovered, setHovered] = useState(false);
+  const sequenceBusy = useUiStore(
+    (state) => state.sequenceFocus?.nodeId === id || state.sequenceEdit?.nodeId === id || state.sequenceDropTarget?.nodeId === id,
+  );
   const copiedTimeout = useRef<number | null>(null);
   useEffect(
     () => () => {
@@ -371,6 +378,14 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const viewOnly = useUiStore((state) => state.readOnly !== null);
   const readOnly = mode === 'present' || viewOnly;
 
+  // The same geometry the display list above was drawn from (it is kept by the sequence's identity),
+  // so every target sits exactly on what it is for.
+  const sequenceLayout = useMemo(
+    () => (isSequence && liveNode && mode !== 'present' && (hovered || selected || sequenceBusy) ? sequenceLayoutFor(liveNode, describeContext(theme, preset)) : null),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `participantIcons` is the redraw signal for loaded logos.
+    [isSequence, liveNode, mode, hovered, selected, sequenceBusy, theme, preset, participantIcons],
+  );
+
   // `NodeResizer` below is only rendered while `!readOnly`, so switching to Presentation Mode
   // mid-resize (e.g. Cmd/Ctrl+Enter pressed without releasing the resize handle) unmounts it
   // without its own `onResizeEnd` ever firing. Without this, the interaction bracket it opened
@@ -497,13 +512,20 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         } as CSSProperties
       }
       onDoubleClick={beginEditing}
-      onMouseEnter={layer ? () => useUiStore.getState().setDepthShapeHoverId(id) : undefined}
+      // A click that reaches the sequence itself was on none of its parts (they keep their own
+      // clicks): it is the whole sequence that is meant now.
+      onClick={isSequence ? () => useUiStore.getState().setSequenceFocus(null) : undefined}
+      onMouseEnter={
+        isSequence ? () => setHovered(true) : layer ? () => useUiStore.getState().setDepthShapeHoverId(id) : undefined
+      }
       onMouseLeave={
-        layer
-          ? () => {
-              if (useUiStore.getState().depthShapeHoverId === id) useUiStore.getState().setDepthShapeHoverId(null);
-            }
-          : undefined
+        isSequence
+          ? () => setHovered(false)
+          : layer
+            ? () => {
+                if (useUiStore.getState().depthShapeHoverId === id) useUiStore.getState().setDepthShapeHoverId(null);
+              }
+            : undefined
       }
     >
       {/* A picture is all the depth glyph is, so what it means is said here as well. Part of the
@@ -652,6 +674,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       <SvgSurface className="dc-node-surface" width={effectiveWidth} height={effectiveHeight}>
         {shapes}
       </SvgSurface>
+
+      {sequenceLayout && liveNode && !capsule && (
+        <SequenceOverlay node={liveNode} layout={sequenceLayout} readOnly={readOnly} selected={Boolean(selected)} />
+      )}
 
       {/* Illustrative work per minute, in words as well as the halo — never a colour alone.
           Chrome, like the halo: it never reaches an export. */}

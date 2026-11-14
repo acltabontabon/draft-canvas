@@ -15,6 +15,7 @@ import {
   pasteAtCommand,
   viewCommands,
 } from './registry';
+import { SEQUENCE_WRAP_IDS } from './sequence';
 import type { Command, CommandContext } from './types';
 import type { ContextMenuTarget } from '../store/uiStore';
 
@@ -180,6 +181,32 @@ function edgeHeader(ctx: CommandContext, edge: DraftEdge): Extract<ContextMenuEn
 const COPY_AND_ORDER = ['duplicate', 'copy', 'bring-to-front', 'send-to-back'];
 const ATTACH = ['attach-note', 'attach-code', 'open-point-add'];
 
+/**
+ * A sequence's menu is about what was right-clicked: a message, a participant, a branch — and only
+ * about the whole sequence when none of them was. (The overlay selects what is under the pointer
+ * before the menu opens, so "what is selected inside it" is "what was clicked".)
+ */
+function sequenceMenu(ctx: CommandContext, node: DraftNode, commands: Command[]): ContextMenuEntry[] {
+  const inside = ctx.ui.sequenceFocus?.nodeId === node.id ? ctx.ui.sequenceFocus : null;
+  if (!inside) {
+    return grouped(nodeHeader(node), [
+      pick(commands, ['seq-add-participant', 'edit-text']),
+      pick(commands, ATTACH),
+      pick(commands, COPY_AND_ORDER),
+      pick(commands, ['spotlight']),
+      pick(commands, ['delete']),
+    ]);
+  }
+  const title = inside.kind === 'participant' ? 'Participant' : inside.kind === 'group' ? 'Group' : inside.kind === 'operand' ? 'Branch' : inside.ids.length > 1 ? `${inside.ids.length} selected` : 'In this sequence';
+  return grouped({ type: 'header', title, caption: 'Sequence' }, [
+    pick(commands, ['seq-rename', 'seq-edit', 'seq-add-reply', 'seq-reverse']),
+    pick(commands, ['seq-add-branch', 'seq-unwrap', 'seq-group', 'seq-leave-group', 'seq-ungroup']),
+    pick(commands, SEQUENCE_WRAP_IDS),
+    pick(commands, ['seq-duplicate']),
+    pick(commands, ['seq-remove-branch', 'seq-delete']),
+  ]);
+}
+
 /** A Junction is a routing point, not a content holder — no Add Note/Add Code. */
 function junctionMenu(node: DraftNode, commands: Command[]): ContextMenuEntry[] {
   return grouped(nodeHeader(node), [
@@ -226,6 +253,7 @@ function nodeMenu(ctx: CommandContext, node: DraftNode): ContextMenuEntry[] {
   // into a second menu, never a second copy of it.
   const commands = [...arrangeSelectionCommands(ctx), ...nodeCommands(ctx, node), ...pick(openPointCommands(ctx), ['open-point-add'])];
   if (node.type === 'group') return boundaryMenu(node, commands);
+  if (node.type === 'sequence') return sequenceMenu(ctx, node, commands);
   if (categoryOf(node) === 'junction') return junctionMenu(node, commands);
   return regularNodeMenu(ctx, node, commands);
 }

@@ -34,6 +34,7 @@ import { pathKey } from '../../depth/tree';
 import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../../lib/isEditableTarget';
+import { handleSequenceKey } from '../../canvas/sequence/sequenceKeys';
 import { centerOf, overlapArea } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, hasSomethingToFit, lensFlow, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
@@ -274,6 +275,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // one. Escape or a click away keeps the placeholder. A code card (it arrives with sample code
       // to edit, not a name) and a junction (an `ellipse`, nothing to name) are left as they are.
       if (autoEdit && hasNameToType(node.type)) useUiStore.getState().requestEdit(node.id);
+      // A sequence opens asking who takes part: type a name, Enter, the next name, Enter.
+      if (autoEdit && node.type === 'sequence') {
+        useUiStore.getState().setSequenceEdit({ nodeId: node.id, target: { kind: 'new-participant', index: 0 } });
+      }
       return node;
     },
     [arm, theme],
@@ -1072,6 +1077,10 @@ export function useKeyboard({
       // Presenting is read-only: the canvas already refuses pointer edits and the palette
       // offers present-only commands, so the keyboard must not be the one way to edit.
       const presenting = state.mode === 'present';
+
+      // Something selected inside a sequence takes its keys first: Delete is then that message, not
+      // the sequence; an arrow moves it, not the whole shape. See `sequenceKeys.ts`.
+      if (!presenting && !playback.active && useUiStore.getState().readOnly === null && handleSequenceKey(event)) return;
 
       // `]` / `[` step through Intent Continuation's alternatives — or, with nothing showing, ask
       // for them. Matched on the produced character, not the physical key, and ahead of the

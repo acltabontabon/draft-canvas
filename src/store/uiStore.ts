@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { SequenceEdit, SequenceFocus } from '../sequence/focus';
 import type { ArrangeFix } from '../lib/arrangeFixes';
 import type { Preset } from '../lib/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
@@ -404,6 +405,19 @@ export interface UiStore {
    */
   openAttachmentDetail: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null;
   /**
+   * What is selected *inside* a sequence: a participant, one or more messages, a branch, a group.
+   * The editor's selection holds only whole shapes and connectors, and a sequence is one shape — so
+   * this sits beside it, naming its host, and is dropped the moment the host stops being the one
+   * thing selected. Never saved, undone or shared.
+   */
+  sequenceFocus: SequenceFocus | null;
+  /** The piece of a sequence whose words are being typed, or the place a new participant is being named. */
+  sequenceEdit: SequenceEdit | null;
+  /** Which of the offered next messages is showing, for the selection inside a sequence. Back to the first whenever that selection changes. */
+  sequenceGhost: number;
+  /** Where a shape being dragged over a sequence would join it as a participant. */
+  sequenceDropTarget: { nodeId: string; index: number } | null;
+  /**
    * The element a presenter clicked open while presenting — a chip on a connector, or a node's
    * attachment badge. Presentation Mode's callout shows that element's attachments instead of
    * whatever the step would say on its own (`resolvePresentationSubject`). A read-only counterpart
@@ -660,6 +674,10 @@ export interface UiStore {
   setCompanionOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
+  setSequenceFocus: (focus: SequenceFocus | null) => void;
+  setSequenceEdit: (edit: SequenceEdit | null) => void;
+  setSequenceGhost: (index: number) => void;
+  setSequenceDropTarget: (target: { nodeId: string; index: number } | null) => void;
   requestRecovery: (edgeId: string | null, actionId?: string | null) => void;
   setRecoveryConnect: (gesture: UiStore['recoveryConnect']) => void;
   setEditingText: (id: string | null) => void;
@@ -787,6 +805,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
   hoveredEdgeId: null,
   hoveredRecoveryParentId: null,
   openAttachmentDetail: null,
+  sequenceFocus: null,
+  sequenceEdit: null,
+  sequenceGhost: 0,
+  sequenceDropTarget: null,
   presentationReveal: null,
   presentation: PRESENTATION_AT_REST,
   openPointPopover: null,
@@ -886,6 +908,27 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setHoveredEdge: (hoveredEdgeId) => set((state) => (state.hoveredEdgeId === hoveredEdgeId ? state : { hoveredEdgeId })),
   setHoveredRecoveryParent: (hoveredRecoveryParentId) => set((state) => (state.hoveredRecoveryParentId === hoveredRecoveryParentId ? state : { hoveredRecoveryParentId })),
   setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
+  setSequenceFocus: (sequenceFocus) =>
+    set((state) => {
+      const same =
+        state.sequenceFocus === sequenceFocus ||
+        (state.sequenceFocus !== null &&
+          sequenceFocus !== null &&
+          state.sequenceFocus.nodeId === sequenceFocus.nodeId &&
+          state.sequenceFocus.kind === sequenceFocus.kind &&
+          Boolean(state.sequenceFocus.quiet) === Boolean(sequenceFocus.quiet) &&
+          state.sequenceFocus.ids.length === sequenceFocus.ids.length &&
+          state.sequenceFocus.ids.every((id, index) => id === sequenceFocus.ids[index]));
+      return same ? state : { sequenceFocus, sequenceGhost: 0 };
+    }),
+  setSequenceGhost: (sequenceGhost) => set({ sequenceGhost }),
+  setSequenceEdit: (sequenceEdit) => set({ sequenceEdit }),
+  setSequenceDropTarget: (sequenceDropTarget) =>
+    set((state) =>
+      state.sequenceDropTarget?.nodeId === sequenceDropTarget?.nodeId && state.sequenceDropTarget?.index === sequenceDropTarget?.index
+        ? state
+        : { sequenceDropTarget },
+    ),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setPresentation: (patch) =>
     set((state) => {

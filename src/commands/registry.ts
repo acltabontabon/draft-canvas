@@ -1,6 +1,7 @@
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
 import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
+import { sequenceCommands, sequenceQuickCommands } from './sequence';
 import { bridgeProblems } from '../document/splice';
 import { CONVERTIBLE_TYPES, CONVERTIBLE_TYPE_NAMES, isConvertibleType } from '../document/convert';
 import { reconnectProblem } from '../document/reconnect';
@@ -1378,11 +1379,15 @@ export function primaryCommandsFor(ctx: CommandContext, node: DraftNode): Comman
     return hasInside(node) ? [...inside, ...quick] : [...quick, ...inside];
   }
   if (node.type === 'group') return [boundaryUngroupCommand()];
+  if (node.type === 'sequence') return sequenceQuickCommands(node).filter((command) => command.primary);
   return inside;
 }
 
 export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
   const commands: Command[] = [];
+  // What a sequence offers, and what the thing selected inside it does, come first: with a message
+  // selected, "Delete" in the palette should be that message.
+  if (node.type === 'sequence') commands.push(...sequenceCommands(ctx, node));
   const isBoundary = node.type === 'group';
   const suggested = continuationCommandFor(ctx, node);
   if (suggested) commands.push(suggested);

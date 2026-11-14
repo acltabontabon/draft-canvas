@@ -1,0 +1,392 @@
+/*
+ * A sequence's controls. The picture is the display list; everything here is the editor's own
+ * furniture over it, drawn in the sequence's coordinates and scaled with the canvas.
+ */
+
+.dc-seq-overlay {
+  position: absolute;
+  inset: 0 auto auto 0;
+  z-index: 1;
+  /* Only what can be taken hold of takes the pointer: the rest of the sequence stays a shape that
+     can be picked up and moved. */
+  pointer-events: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.dc-seq-overlay > *,
+.dc-seq-frame > * {
+  position: absolute;
+}
+
+.dc-seq-target,
+.dc-seq-lifeline,
+.dc-seq-add,
+.dc-seq-empty,
+.dc-seq-new,
+.dc-seq-editor {
+  pointer-events: auto;
+}
+
+.dc-seq-target {
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* Selection is the canvas's own ring, a little tighter: these are parts of a shape, not shapes. */
+.dc-seq-target[data-focused='true'],
+.dc-seq-frame[data-focused='true'] {
+  outline: 1.5px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-seq-target:not([data-focused='true']):hover {
+  background: color-mix(in srgb, var(--dc-selection) 9%, transparent);
+}
+
+.dc-seq-message,
+.dc-seq-note {
+  cursor: grab;
+}
+
+.dc-seq-head {
+  cursor: grab;
+  border-radius: 9px;
+}
+
+.dc-seq-target[data-moving='true'] {
+  background: color-mix(in srgb, var(--dc-selection) 14%, transparent);
+  outline: 1.5px dashed var(--dc-selection);
+}
+
+.dc-seq-overlay[data-dragging] .dc-seq-target,
+.dc-seq-overlay[data-dragging] .dc-seq-lifeline {
+  cursor: grabbing;
+}
+
+.dc-seq-overlay[data-dragging='draw'] .dc-seq-target,
+.dc-seq-overlay[data-dragging='draw'] .dc-seq-lifeline {
+  cursor: crosshair;
+}
+
+/* A frame is held by its tab and its line; the middle is left to what it holds. */
+.dc-seq-frame {
+  pointer-events: none;
+  border-radius: 5px;
+}
+
+.dc-seq-frame-edge[data-side='top'] {
+  inset: -3px 0 auto 0;
+  height: 6px;
+}
+
+.dc-seq-frame-edge[data-side='bottom'] {
+  inset: auto 0 -3px 0;
+  height: 6px;
+}
+
+.dc-seq-frame-edge[data-side='left'] {
+  inset: 0 auto 0 -3px;
+  width: 6px;
+}
+
+.dc-seq-frame-edge[data-side='right'] {
+  inset: 0 -3px 0 auto;
+  width: 6px;
+}
+
+.dc-seq-frame-edge:hover,
+.dc-seq-frame-tab:hover {
+  background: color-mix(in srgb, var(--dc-selection) 22%, transparent);
+}
+
+.dc-seq-frame-tab {
+  cursor: grab;
+}
+
+.dc-seq-branch {
+  border-radius: 4px;
+  cursor: text;
+}
+
+.dc-seq-group {
+  border-radius: 8px 8px 4px 4px;
+}
+
+.dc-seq-lifeline {
+  cursor: crosshair;
+}
+
+/* "Start a message here": a dot on the lifeline, at the place in the order it would take. */
+.dc-seq-dot {
+  width: 9px;
+  height: 9px;
+  margin: -4.5px 0 0 -4.5px;
+  border-radius: 50%;
+  background: var(--dc-selection);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dc-selection) 22%, transparent);
+  pointer-events: none;
+}
+
+/* Adding a participant: a small plus in each gap. Out of sight until the sequence is in hand. */
+.dc-seq-add {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: 50%;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--dc-dur-fast, 120ms) ease, transform var(--dc-dur-fast, 120ms) ease;
+}
+
+.dc-seq-add::before,
+.dc-seq-add::after {
+  content: '';
+  position: absolute;
+  inset: 50% auto auto 50%;
+  width: 8px;
+  height: 1.5px;
+  margin: -0.75px 0 0 -4px;
+  border-radius: 1px;
+  background: currentColor;
+}
+
+.dc-seq-add::after {
+  transform: rotate(90deg);
+}
+
+.dc-seq-overlay[data-selected='true'] .dc-seq-add {
+  opacity: 0.55;
+}
+
+.dc-seq-add:hover,
+.dc-seq-add:focus-visible {
+  opacity: 1;
+  transform: scale(1.15);
+  border-color: var(--dc-selection);
+  color: var(--dc-selection);
+}
+
+.dc-seq-empty {
+  transform: translate(-50%, -50%);
+  padding: 6px 12px;
+  border: 1px dashed var(--dc-border-strong);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: 500 12px/1.2 var(--dc-font);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.dc-seq-empty:hover,
+.dc-seq-empty:focus-visible {
+  border-color: var(--dc-selection);
+  color: var(--dc-text);
+}
+
+/* Fields: the words they edit, in place, on the canvas's raised surface. */
+.dc-seq-editor {
+  z-index: 3;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 4px;
+  border: 0;
+  border-radius: 4px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+  outline: 1.5px solid var(--dc-selection);
+  outline-offset: 1px;
+  resize: none;
+  overflow: hidden;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.dc-seq-editor::placeholder {
+  color: var(--dc-text-faint);
+  font-weight: 400;
+}
+
+.dc-seq-new {
+  z-index: 4;
+}
+
+.dc-seq-new .dc-seq-editor {
+  position: relative;
+  display: block;
+}
+
+.dc-seq-options {
+  margin: 6px 0 0;
+  padding: 4px;
+  border: 1px solid var(--dc-border);
+  border-radius: 8px;
+  background: var(--dc-surface-raised);
+  box-shadow: 0 6px 20px color-mix(in srgb, var(--dc-shadow, #000) 18%, transparent);
+  list-style: none;
+  font: 500 12px/1.3 var(--dc-font);
+}
+
+.dc-seq-options li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 7px;
+  border-radius: 5px;
+  color: var(--dc-text);
+  cursor: pointer;
+}
+
+.dc-seq-options li[data-active='true'] {
+  background: color-mix(in srgb, var(--dc-selection) 16%, transparent);
+}
+
+.dc-seq-option-hint {
+  color: var(--dc-text-faint);
+  font-size: 10.5px;
+  font-weight: 400;
+}
+
+/* A message being drawn. */
+.dc-seq-draw {
+  inset: 0 auto auto 0;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dc-seq-draw path {
+  fill: none;
+  stroke: var(--dc-selection);
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dc-seq-draw circle {
+  fill: var(--dc-surface-raised);
+  stroke: var(--dc-selection);
+  stroke-width: 1.5;
+}
+
+/* Where something being moved would land in the order. */
+.dc-seq-insert {
+  height: 2px;
+  margin-top: -1px;
+  border-radius: 1px;
+  background: var(--dc-selection);
+  pointer-events: none;
+}
+
+.dc-seq-insert[data-refused='true'] {
+  background: var(--dc-text-faint);
+}
+
+/* Where a participant being moved, or a shape being dropped in, would stand. */
+.dc-seq-stand {
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--dc-selection);
+  pointer-events: none;
+}
+
+.dc-seq-reason {
+  position: absolute;
+  inset: auto auto 6px 8px;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--dc-surface-raised);
+  border: 1px solid var(--dc-border);
+  color: var(--dc-text-muted);
+  font: 500 11px/1.3 var(--dc-font);
+  white-space: nowrap;
+}
+
+.dc-seq-stand .dc-seq-reason {
+  inset: 0 auto auto 8px;
+  color: var(--dc-text);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-seq-add {
+    transition: none;
+  }
+}
+
+/* In the inspector, while something inside a sequence is selected. */
+.dc-seq-count {
+  padding: 0 4px;
+  color: var(--dc-text-muted);
+  font: 500 12px/1 var(--dc-font);
+  white-space: nowrap;
+}
+
+.dc-seq-suggestion,
+.dc-seq-findings p {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 6px 10px;
+  border-top: 1px solid var(--dc-border);
+  color: var(--dc-text-muted);
+  font: 400 12px/1.35 var(--dc-font);
+  max-width: 380px;
+}
+
+.dc-seq-suggestion span,
+.dc-seq-findings span {
+  flex: 1 1 auto;
+}
+
+.dc-seq-findings p::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border: 5px solid transparent;
+  border-top-width: 0;
+  border-bottom: 9px solid var(--dc-accent-amber-line, #b7791f);
+}
+
+.dc-seq-technology {
+  min-width: 220px;
+}
+
+/* What usually comes next: the continuation ghost's look, in a sequence. */
+.dc-seq-draw[data-ghost='true'] path {
+  stroke-dasharray: 4 4;
+  opacity: 0.6;
+}
+
+.dc-seq-ghost-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transform: translateX(-50%);
+  padding: 2px 7px 2px 3px;
+  border: 1px solid var(--dc-border);
+  border-radius: 999px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  font: 500 11px/1.4 var(--dc-font);
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.dc-seq-ghost-hint kbd {
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dc-selection) 18%, transparent);
+  color: var(--dc-text);
+  font: inherit;
+}
+
+.dc-seq-ghost-hint em {
+  color: var(--dc-text-faint);
+  font-style: normal;
+}

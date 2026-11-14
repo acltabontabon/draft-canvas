@@ -31,6 +31,7 @@ import {
 import { getMeasurer } from '../render/text/measure';
 import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight } from '../nodes/describe';
 import { fitSequences } from '../nodes/sequenceFit';
+import { liveSequenceFocus, sequenceEditStillThere } from '../sequence/focus';
 import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
@@ -936,6 +937,7 @@ function carryAdoptedMetadata(
  * attachment that's gone keeps showing the rest, as before.
  */
 function closeStaleAttachmentDetail(doc: DraftDocument): void {
+  closeStaleSequenceFocus(doc);
   const detail = useUiStore.getState().openAttachmentDetail;
   if (!detail) return;
   const host =
@@ -947,6 +949,17 @@ function closeStaleAttachmentDetail(doc: DraftDocument): void {
     attachments.length > 0 &&
     (detail.hostKind === 'node' || detail.attachmentId === null || attachments.some((a) => a.id === detail.attachmentId));
   if (!alive) useUiStore.getState().setOpenAttachmentDetail(null);
+}
+
+/** After an edit, an undo or someone else's change: what was selected inside a sequence may be gone. */
+function closeStaleSequenceFocus(doc: DraftDocument): void {
+  const ui = useUiStore.getState();
+  if (!ui.sequenceFocus && !ui.sequenceEdit) return;
+  const hostId = ui.sequenceFocus?.nodeId ?? ui.sequenceEdit?.nodeId;
+  const host = hostId ? nodeIndex(doc.nodes).get(hostId) : undefined;
+  const focus = ui.sequenceFocus && host?.sequence ? liveSequenceFocus(host.sequence, ui.sequenceFocus) : null;
+  if (focus !== ui.sequenceFocus) ui.setSequenceFocus(focus);
+  if (ui.sequenceEdit && (!host?.sequence || !sequenceEditStillThere(host.sequence, ui.sequenceEdit.target))) ui.setSequenceEdit(null);
 }
 
 /** `document` carrying a stored title/project — the one place both fields are written together. */
@@ -1084,6 +1097,9 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
   ui.arm(null);
   useUiStore.setState({
     openAttachmentDetail: null,
+    sequenceFocus: null,
+    sequenceEdit: null,
+    sequenceDropTarget: null,
     quickConnect: null,
     contextMenu: null,
     presentationReveal: null,
@@ -3430,6 +3446,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     // A tap on empty canvas with nothing selected, or a click on what is already selected, writes
     // nothing: every subscriber would otherwise run for a selection that did not change.
+    // What is selected inside a sequence belongs to a selection of that sequence alone.
+    const inside = useUiStore.getState().sequenceFocus;
+    if (inside && !(selection.nodes.length === 1 && selection.edges.length === 0 && selection.nodes[0] === inside.nodeId)) {
+      useUiStore.setState({ sequenceFocus: null, sequenceEdit: null });
+    }
     const current = get().selection;
     if (sameIdList(current.nodes, selection.nodes) && sameIdList(current.edges, selection.edges)) return;
     set({ selection });

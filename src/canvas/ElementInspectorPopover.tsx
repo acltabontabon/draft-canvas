@@ -39,7 +39,8 @@ import {
 } from '../document/types';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
 import { MOD_SYMBOL } from '../lib/platform';
-import { effectiveTextRole } from '../nodes/describe';
+import { describeContext, effectiveTextRole, sequenceLayoutFor } from '../nodes/describe';
+import { SequenceInspectorRow } from './sequence/SequenceInspectorRow';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { familyOf } from '../render/text/fonts';
 import { useEditorStore } from '../store/editorStore';
@@ -177,21 +178,36 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   // Not while stepping between rooms: the camera is still gliding, and backing out selects the shape
   // it lands on — the popover waits for the move to settle instead of chasing it.
   const moving = useUiStore((state) => state.depthTransition !== null);
-  const open = selectedNodeId !== null && measured && !moving;
+  // Something inside a sequence that was selected by being made a moment ago: see `SequenceFocus.quiet`.
+  const justMade = useUiStore((state) => state.sequenceFocus?.quiet === true && state.sequenceFocus.nodeId === selectedNodeId);
+  const open = selectedNodeId !== null && measured && !moving && !justMade;
   const { mounted, closing } = usePopoverPresence(open, POPOVER_EXIT_MS);
   // The element it was showing, kept for the fade-out after selection has already moved on.
   const shownNodeId = useLastPresent(open ? selectedNodeId : null);
+  // What inside a sequence it is about decides which side it stands on: beside the sequence, level
+  // with a selected message, so no row is ever covered by it; above the sequence for a participant.
+  // Remounted when that changes, because a placement is otherwise kept for as long as it fits.
+  const inside = useUiStore((state) =>
+    state.sequenceFocus && state.sequenceFocus.nodeId === shownNodeId
+      ? state.sequenceFocus.kind === 'item' || state.sequenceFocus.kind === 'operand'
+        ? 'row'
+        : 'column'
+      : 'whole',
+  );
   if (!mounted || !shownNodeId) return null;
-  return <ElementInspectorBody key={shownNodeId} nodeId={shownNodeId} closing={closing} buildCommandContext={buildCommandContext} />;
+  return <ElementInspectorBody key={`${shownNodeId}:${inside}`} nodeId={shownNodeId} closing={closing} beside={inside === 'row'} buildCommandContext={buildCommandContext} />;
 }
 
 function ElementInspectorBody({
   nodeId,
   closing,
+  beside,
   buildCommandContext,
 }: {
   nodeId: string;
   closing: boolean;
+  /** Start to the side of the element rather than above it. */
+  beside: boolean;
   buildCommandContext: () => CommandContext;
 }) {
   const document = useEditorStore((state) => state.document);
@@ -261,7 +277,39 @@ function ElementInspectorBody({
     };
   }, [openPanel]);
 
-  const rect = displayInternal ? rectOfInternal(displayInternal) : null;
+  // With something inside a sequence selected, this is that thing's inspector: it sits by the
+  // message or participant in question, not by the sequence as a whole, and offers what can be done
+  // to it. The geometry is the sequence's own (kept by its identity), so this costs no new layout.
+  const { preset: sequencePreset } = usePersonality();
+  const sequenceFocus = useUiStore((state) => (state.sequenceFocus?.nodeId === nodeId ? state.sequenceFocus : null));
+  const insideSequence = sequenceFocus && displayNode?.type === 'sequence' && displayNode.sequence ? sequenceFocus : null;
+  const nodeRect = displayInternal ? rectOfInternal(displayInternal) : null;
+  const rect = (() => {
+    if (!nodeRect || !insideSequence || !displayNode) return nodeRect;
+    const boxes = sequenceLayoutFor(displayNode, describeContext(theme, sequencePreset)).boxes;
+    let left = Infinity;
+    let top = Infinity;
+    let right = -Infinity;
+    let bottom = -Infinity;
+    for (const id of insideSequence.ids) {
+      const box = boxes.get(id);
+      if (!box) continue;
+      left = Math.min(left, box.x);
+      top = Math.min(top, box.y);
+      right = Math.max(right, box.x + box.w);
+      bottom = Math.max(bottom, box.y + box.h);
+    }
+    if (left === Infinity) return nodeRect;
+    // A message, a note, a fragment or a branch: as wide as the sequence and as tall as its row, so
+    // the inspector stands in the margin beside it. A branch is a tall band; its row is its header.
+    if (insideSequence.kind === 'item' || insideSequence.kind === 'operand') {
+      const height = insideSequence.kind === 'operand' ? 22 : Math.min(bottom - top, 44);
+      return { x: nodeRect.x, y: nodeRect.y + top, width: nodeRect.width, height };
+    }
+    // A participant or a group: as wide as it is and as tall as the sequence, so the inspector
+    // stands above the sequence, over the column in question.
+    return { x: nodeRect.x + left, y: nodeRect.y, width: right - left, height: nodeRect.height };
+  })();
   const editingText = useUiStore((state) => state.editingTextId !== null && state.editingTextId === nodeId);
 
   // The element's own screen-space vertical bounds, so a dropdown can shrink/flip rather than cover it
@@ -319,7 +367,7 @@ function ElementInspectorBody({
   // `interactionActive` flips back to false), avoids that.
   // `frozen` while hidden mid-gesture: no layout read, no transform write per frame for a popover
   // nobody can see — it re-places on the render that ends the gesture.
-  const { target, placement } = useOverlayPosition<Placement>(panelRef, displayNode?.type === 'ellipse' ? 'right' : 'above', (frame, current) => {
+  const { target, placement } = useOverlayPosition<Placement>(panelRef, beside || displayNode?.type === 'ellipse' ? 'right' : 'above', (frame, current) => {
     if (!anchors) return null;
     // Read at placement time, not render time: a docked panel changes where the canvas ends
     // after this rendered (see `useOverlayPosition`'s canvas observer) — plus the Flows panel while
@@ -374,7 +422,15 @@ function ElementInspectorBody({
         <span className="dc-popover-caret" aria-hidden="true" />
         <button type="button" className="dc-popover-drag-zone" aria-label="Move element popup" tabIndex={-1} data-pointer-only {...dragControl.handle} />
         <div className="dc-popover-inner">
-          {editingText ? (
+          {insideSequence && displayNode.sequence ? (
+            <SequenceInspectorRow
+              node={displayNode}
+              sequence={displayNode.sequence}
+              focus={insideSequence}
+              menuDirection={menuDirection}
+              getMenuAvoidRect={getMenuAvoidRect}
+            />
+          ) : editingText ? (
             <TextFormatBar theme={theme} />
           ) : (
           <ElementInspectorRow
