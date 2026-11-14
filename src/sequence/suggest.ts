@@ -1,19 +1,26 @@
 /**
  * What Draft Canvas can offer about a message from what it already knows about its ends.
  *
- * Offers, and only offers. The same table that says how two shapes on the canvas usually relate
- * (`connectorSemantics.ts`) says how two participants usually do — a service writing to a queue
- * does not usually wait for it. That is a fact about the usual case, not about this system, so
- * nothing is changed until someone takes the suggestion, and a message whose kind was chosen is
- * never second-guessed again. Nothing here names an endpoint, an event or a response: those are
- * only ever what a person typed.
+ * Sequence messages use the canvas's relationship table for editable default captions and kind
+ * suggestions. Specific endpoints, events and responses come from what people write.
  */
 import { categoryOf, defaultsToResponse, inferRelationship, type NodeCategory } from '../document/connectorSemantics';
+import { relationLabel } from '../document/edgeSemantics';
 import { messagesOf, slotOf, type SeqSlot } from '../document/sequenceModel';
 import type { DraftEdge, DraftSequence, SeqMessage, SeqMessageKind, SeqParticipant } from '../document/types';
 import { executionsOf } from './executions';
 
 const participantOf = (sequence: DraftSequence, id: string): SeqParticipant | undefined => sequence.participants.find((participant) => participant.id === id);
+
+/** The same editable caption a connector between these shapes would start with. */
+export function defaultMessageLabel(sequence: DraftSequence, message: Pick<SeqMessage, 'from' | 'to'> & Partial<Pick<SeqMessage, 'kind'>>): string {
+  if (message.from === message.to || message.kind === 'reply' || message.kind === 'create' || message.kind === 'destroy') return '';
+  const from = participantOf(sequence, message.from);
+  const to = participantOf(sequence, message.to);
+  if (!from || !to) return '';
+  const semantic = inferRelationship(from, to)?.semantic;
+  return semantic ? relationLabel(semantic, categoryOf(from), categoryOf(to)) : '';
+}
 
 /** How a category is spoken of in a reason: the word a person would use for that end. */
 const CATEGORY_WORDS: Partial<Record<NodeCategory, string>> = {

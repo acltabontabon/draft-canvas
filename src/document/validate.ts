@@ -165,7 +165,8 @@ function parseAnchor(value: unknown): EdgeAnchor | undefined {
   if (!isRecord(value)) return undefined;
   const side = oneOfOptional(value.side, SIDES);
   if (!side) return undefined;
-  return { side, offset: clamp(finite(value.offset, 0.5), 0, 1) };
+  const participantId = safeId(value.participantId);
+  return { side, offset: clamp(finite(value.offset, 0.5), 0, 1), ...(participantId ? { participantId } : {}) };
 }
 
 /** A connector's bend points: finite numbers kept on the canvas, at most `maxWaypointsPerEdge`.

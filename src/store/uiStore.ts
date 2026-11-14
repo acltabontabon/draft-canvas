@@ -421,6 +421,7 @@ export interface UiStore {
    * participant stands for it; otherwise the shape itself moves in.
    */
   sequenceDropTarget: { nodeId: string; index: number; stays: boolean } | null;
+  sequenceLinkTarget: { nodeId: string; participantId: string } | null;
   /**
    * The element a presenter clicked open while presenting — a chip on a connector, or a node's
    * attachment badge. Presentation Mode's callout shows that element's attachments instead of
@@ -682,6 +683,7 @@ export interface UiStore {
   setSequenceEdit: (edit: SequenceEdit | null) => void;
   setSequenceGhost: (index: number) => void;
   setSequenceDropTarget: (target: { nodeId: string; index: number; stays: boolean } | null) => void;
+  setSequenceLinkTarget: (target: { nodeId: string; participantId: string } | null) => void;
   requestRecovery: (edgeId: string | null, actionId?: string | null) => void;
   setRecoveryConnect: (gesture: UiStore['recoveryConnect']) => void;
   setEditingText: (id: string | null) => void;
@@ -813,6 +815,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   sequenceEdit: null,
   sequenceGhost: 0,
   sequenceDropTarget: null,
+  sequenceLinkTarget: null,
   presentationReveal: null,
   presentation: PRESENTATION_AT_REST,
   openPointPopover: null,
@@ -935,6 +938,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
         ? state
         : { sequenceDropTarget },
     ),
+  setSequenceLinkTarget: (sequenceLinkTarget) =>
+    set((state) => state.sequenceLinkTarget?.nodeId === sequenceLinkTarget?.nodeId &&
+      state.sequenceLinkTarget?.participantId === sequenceLinkTarget?.participantId ? state : { sequenceLinkTarget }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setPresentation: (patch) =>
     set((state) => {

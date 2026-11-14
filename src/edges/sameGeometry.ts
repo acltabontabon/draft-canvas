@@ -18,6 +18,7 @@ export function sameNodeGeometry(a: readonly DraftNode[], b: readonly DraftNode[
     const x = a[i]!;
     const y = b[i]!;
     if (x === y) continue;
+    if (x.type === 'sequence' && (x.sequence !== y.sequence || x.text !== y.text)) return false;
     if (x.id !== y.id || x.type !== y.type || x.x !== y.x || x.y !== y.y || x.width !== y.width || x.height !== y.height) {
       return false;
     }

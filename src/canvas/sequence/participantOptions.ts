@@ -1,11 +1,10 @@
 /**
- * What a name typed for a new participant could mean, best guess first — offered, never assumed.
+ * What a name typed for a participant could mean, best guess first — offered, never assumed.
  *
  * Three things, all read from what the app already knows: a shape that is already on the canvas
  * under that name (the participant then stands for it), a technology the catalogue recognises
  * ("Kafka" is a topic), and the five kinds of shape a participant can be, ranked by the same words
- * the shape picker understands ("user" finds an Actor, "db" a Data Store). The one a plain Enter
- * takes is marked, so it is always visible before it is chosen.
+ * the shape picker understands ("user" finds an Actor, "db" a Data Store).
  */
 import { displayNameFor } from '../../document/factory';
 import { isLinkable, participantFromNode } from '../../document/sequenceLinks';

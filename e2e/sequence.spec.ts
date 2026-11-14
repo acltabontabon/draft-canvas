@@ -13,30 +13,38 @@ const MESSAGE = '.dc-seq-message';
 const LIFELINE = '.dc-seq-lifeline';
 const FRAME = '.dc-seq-frame';
 const INSPECTOR = '.dc-element-inspector';
-const NEW_PARTICIPANT = '.dc-seq-new input';
+const PARTICIPANT_NAME = 'input.dc-seq-editor[aria-label="Participant name"]';
 const LABEL = 'input.dc-seq-editor[aria-label="Message"]';
 const CONDITION = 'input.dc-seq-editor[aria-label="Condition"]';
+const PARTICIPANT_KINDS: Record<string, string> = { Client: 'Actor', Database: 'Data Store' };
 
-/** Presses L over the canvas and names the participants, one Enter each. */
+async function renameParticipant(page: Page, index: number, name: string, kind?: string) {
+  await page.locator(HEAD).nth(index).dblclick();
+  const field = page.locator(PARTICIPANT_NAME);
+  await expect(field).toBeFocused();
+  await field.fill(name);
+  if (kind) {
+    await field.press('ArrowDown');
+    await page.getByRole('option', { name: new RegExp(`^${kind}`) }).click();
+  } else await field.press('Enter');
+  await expect(field).toHaveCount(0);
+}
+
 async function newSequence(page: Page, participants: string[], at = { x: 420, y: 260 }) {
   await page.locator(CANVAS).hover({ position: at });
   await page.keyboard.press('l');
-  await expect(page.locator(NEW_PARTICIPANT)).toBeFocused();
+  await expect(page.locator(HEAD)).toHaveCount(1);
+  await expect(page.locator(PARTICIPANT_NAME)).toHaveCount(0);
   for (const [index, name] of participants.entries()) {
-    await page.keyboard.type(name);
-    await page.keyboard.press('Enter');
-    // The next one is already standing there, waiting for its name.
-    await expect(page.locator(HEAD)).toHaveCount(index + 2);
-    await expect(page.locator(NEW_PARTICIPANT)).toBeFocused();
+    if (index > 0) await page.getByRole('button', { name: 'Add a participant at the end' }).click();
+    await renameParticipant(page, index, name, PARTICIPANT_KINDS[name]);
   }
-  // Left unnamed, it goes again.
   await page.keyboard.press('Escape');
-  await expect(page.locator(NEW_PARTICIPANT)).toHaveCount(0);
   await expect(page.locator(HEAD)).toHaveCount(participants.length);
 }
 
 /** Drags from one lifeline to another near the bottom of both, then types what the message says. */
-async function draw(page: Page, from: number, to: number, label: string) {
+async function draw(page: Page, from: number, to: number, label: string, defaultLabel?: string) {
   const start = (await page.locator(LIFELINE).nth(from).boundingBox())!;
   const end = (await page.locator(LIFELINE).nth(to).boundingBox())!;
   const y = start.y + start.height - 6;
@@ -44,8 +52,11 @@ async function draw(page: Page, from: number, to: number, label: string) {
   await page.mouse.down();
   await page.mouse.move((start.x + end.x) / 2, y + 1, { steps: 5 });
   await page.mouse.move(end.x + end.width / 2, y, { steps: 5 });
+  await expect(page.locator(LIFELINE).nth(to)).toHaveAttribute('data-endpoint-target', 'true');
   await page.mouse.up();
+  await expect(page.locator(`${LIFELINE}[data-endpoint-target="true"]`)).toHaveCount(0);
   await expect(page.locator(LABEL)).toBeFocused();
+  if (defaultLabel !== undefined) await expect(page.locator(LABEL)).toHaveValue(defaultLabel);
   await page.keyboard.type(label);
   await page.keyboard.press('Enter');
   await expect(page.locator(LABEL)).toHaveCount(0);
@@ -65,12 +76,45 @@ test.describe('Sequence', () => {
     await expect(page.locator(`${INSPECTOR} .dc-inspector-select`).first()).toContainText('Data Store');
 
     await draw(page, 0, 1, 'GET /orders');
-    await draw(page, 1, 2, 'SELECT orders');
+    await draw(page, 1, 2, 'SELECT orders', 'reads / writes');
     expect(await said(page)).toEqual(['Client to API: GET /orders', 'API to Database: SELECT orders']);
+    await expect(page.locator(MESSAGE).nth(0)).toHaveAttribute('aria-description', 'Message 1 of 2');
+    await expect(page.locator(MESSAGE).nth(1)).toHaveAttribute('aria-description', 'Message 2 of 2');
 
-    // Each participant and each message is one step back: six in all, then nothing is left.
-    for (let step = 0; step < 6; step += 1) await page.keyboard.press('ControlOrMeta+z');
+    // Undo two messages, three renames, two adds and the sequence with its first participant.
+    for (let step = 0; step < 8; step += 1) await page.keyboard.press('ControlOrMeta+z');
     await expect(page.locator(SEQUENCE)).toHaveCount(0);
+  });
+
+  test('starts from the toolbar and takes a suggested message with the mouse', async ({ page }) => {
+    await newCanvas(page, 'Pointer');
+    await page.getByRole('toolbar', { name: 'Create' }).getByRole('button', { name: 'Sequence', exact: true }).click();
+    await page.locator(CANVAS).click({ position: { x: 420, y: 260 } });
+    await expect(page.locator(HEAD)).toHaveCount(1);
+    await page.getByRole('button', { name: 'Add a participant at the end' }).click();
+    await expect(page.locator(HEAD)).toHaveCount(2);
+    await expect(page.locator(PARTICIPANT_NAME)).toHaveCount(0);
+
+    await page.locator(HEAD).first().click();
+    await page.locator('.dc-seq-ghost-hint').click();
+    const field = page.locator(LABEL);
+    await expect(field).toBeFocused();
+    await expect(page.locator(`${MESSAGE}[data-focused="true"]`)).toHaveCount(0);
+    await field.fill('Fetch orders');
+    await page.locator(CANVAS).click({ position: { x: 30, y: 30 } });
+    await page.locator(SEQUENCE).hover();
+    expect(await said(page)).toEqual(['Participant 1 to Participant 2: Fetch orders']);
+
+    const message = page.locator(MESSAGE).first();
+    await message.click();
+    await expect(page.locator('.dc-seq-selected-arrows path')).toHaveCount(2);
+    await expect(page.locator(INSPECTOR)).toBeVisible();
+    await page.locator(INSPECTOR).getByRole('button', { name: 'Edit', exact: true }).click();
+    await expect(field).toBeFocused();
+    await expect(page.locator('.dc-seq-selected-arrows')).toHaveCount(0);
+    await expect(page.locator(INSPECTOR)).toHaveCount(0);
+    await field.press('Escape');
+    await expect(page.locator(INSPECTOR)).toBeVisible();
   });
 
   test('selecting inside it: one click, a range with Shift, and the sequence still moves as a shape', async ({ page }) => {
@@ -106,6 +150,36 @@ test.describe('Sequence', () => {
     expect(after.x - before.x).toBeGreaterThan(60);
     expect(after.y - before.y).toBeGreaterThan(30);
     expect(await said(page)).toEqual(['Client to API: GET /orders', 'API to Database: SELECT orders']);
+  });
+
+  test('retargets a self-message by its arrowhead and leaves space to draw a second message', async ({ page }) => {
+    await newCanvas(page, 'Endpoints');
+    await newSequence(page, ['Client', 'API', 'Database']);
+    await draw(page, 0, 0, 'Read orders');
+
+    const message = page.locator(MESSAGE).first();
+    await message.click();
+    const receiver = page.locator('.dc-seq-endpoint[data-end="to"]');
+    const start = (await receiver.boundingBox())!;
+    const target = (await page.locator(HEAD).nth(2).boundingBox())!;
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    const between = { x: start.x + start.width / 2 + 32, y: start.y + start.height / 2 + 26 };
+    await page.mouse.move(between.x, between.y);
+    // The loose end follows in both axes even between participants, before there is a drop target.
+    await expect.poll(async () => page.locator('.dc-seq-draw:not([data-ghost]) path').first().evaluate((path: SVGPathElement, pointer) => {
+      const tip = path.getPointAtLength(path.getTotalLength()).matrixTransform(path.getScreenCTM()!);
+      return Math.hypot(tip.x - pointer.x, tip.y - pointer.y);
+    }, between)).toBeLessThan(2);
+    await expect(message).toHaveAttribute('aria-label', 'Message from Client to Client: Read orders');
+    await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 });
+    await expect(page.locator(LIFELINE).nth(2)).toHaveAttribute('data-endpoint-target', 'true');
+    await page.mouse.up();
+    await expect(page.locator(`${LIFELINE}[data-endpoint-target="true"]`)).toHaveCount(0);
+
+    await expect(message).toHaveAttribute('aria-label', 'Message from Client to Database: Read orders');
+    await draw(page, 0, 1, 'Fetch orders');
+    expect(await said(page)).toEqual(['Client to Database: Read orders', 'Client to API: Fetch orders']);
   });
 
   test('replies land below what their call set going, and a stretch is wrapped without drawing a box', async ({ page }) => {
@@ -259,18 +333,19 @@ test.describe('Sequence', () => {
     await page.mouse.click(last.x + last.width + 24, last.y + last.height + 40);
     await expect(page.locator(HEAD)).toHaveCount(3);
     await expect(page.locator('.dc-node[data-type="database"]')).toHaveCount(0);
-    await page.keyboard.type('Orders');
-    await page.keyboard.press('Enter');
+    await expect(page.locator(HEAD).nth(2)).toHaveAttribute('aria-label', 'Participant Data Store');
+    await expect(page.locator(PARTICIPANT_NAME)).toHaveCount(0);
+    await renameParticipant(page, 2, 'Orders');
     await page.locator(HEAD).nth(2).click();
     await expect(page.locator(`${INSPECTOR} .dc-inspector-select`).first()).toContainText('Data Store');
 
     // The + between the first two: the others make room, and the name is typed where it will stand.
     await page.keyboard.press('Escape');
     await page.locator('.dc-seq-add').nth(1).click();
-    await expect(page.locator(NEW_PARTICIPANT)).toBeFocused();
     await expect(page.locator(HEAD)).toHaveCount(4);
-    await page.keyboard.type('Gateway');
-    await page.keyboard.press('Enter');
+    await expect(page.locator(HEAD).nth(1)).toHaveAttribute('aria-label', 'Participant Participant 1');
+    await expect(page.locator(PARTICIPANT_NAME)).toHaveCount(0);
+    await renameParticipant(page, 1, 'Gateway');
     await page.keyboard.press('Escape');
     expect(await page.locator(HEAD).evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))).toEqual([
       'Participant Shopper',
@@ -296,13 +371,14 @@ test.describe('Sequence', () => {
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
     await expect(page.locator(`${SEQUENCE}[data-seq-telling="true"]`)).toHaveCount(1);
+    await expect(page.locator('.dc-seq-present-lifelines path[stroke-dasharray]')).toHaveCount(3);
     // Only the message being told, and the two it is between, are drawn at full strength.
-    expect(await page.locator('.dc-seq-now text').allTextContents()).toEqual(expect.arrayContaining(['GET /orders', 'Client', 'API']));
+    expect(await page.locator('.dc-seq-now text').allTextContents()).toEqual(expect.arrayContaining(['1', 'GET /orders', 'Client', 'API']));
     expect(await page.locator('.dc-seq-now text').allTextContents()).not.toContain('Database');
 
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 2 / 2');
-    expect(await page.locator('.dc-seq-now text').allTextContents()).toEqual(expect.arrayContaining(['SELECT orders', 'API', 'Database']));
+    expect(await page.locator('.dc-seq-now text').allTextContents()).toEqual(expect.arrayContaining(['2', 'SELECT orders', 'API', 'Database']));
     expect(await page.locator('.dc-seq-told text').allTextContents()).toContain('GET /orders');
 
     // Leaving puts everything back as it was, still editable.
@@ -349,18 +425,83 @@ test.describe('Sequence', () => {
   test('is still there, and still editable, after a reload', async ({ page }) => {
     await newCanvas(page, 'Kept');
     await newSequence(page, ['Shopper', 'Storefront']);
+    await page.locator(HEAD).first().click();
+    const colour = page.getByRole('button', { name: 'Participant colour' });
+    await colour.click();
+    await page.getByRole('button', { name: 'Colour violet' }).click();
+    await expect(colour).toHaveAttribute('aria-expanded', 'false');
     await draw(page, 0, 1, 'Place order');
+    const numbering = page.getByRole('button', { name: 'Message numbers' });
+    await page.locator(SEQUENCE).click({ position: { x: 30, y: 12 } });
+    await expect(numbering).toHaveAttribute('aria-pressed', 'true');
+    await numbering.click();
+    await expect(numbering).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator(SEQUENCE).locator('text').getByText('1', { exact: true })).toHaveCount(0);
     await expect(page.getByText('Saved locally')).toBeVisible();
 
     await reopenAfterReload(page, 'Kept');
     await expect(page.locator(SEQUENCE)).toHaveCount(1);
     await page.locator(SEQUENCE).hover();
     expect(await said(page)).toEqual(['Shopper to Storefront: Place order']);
+    await page.locator(SEQUENCE).click({ position: { x: 30, y: 12 } });
+    await expect(numbering).toHaveAttribute('aria-pressed', 'false');
+    await numbering.click();
+    await expect(page.locator(SEQUENCE).locator('text').getByText('1', { exact: true })).toHaveCount(1);
+    await page.locator(HEAD).first().click();
+    await colour.click();
+    await expect(page.getByRole('button', { name: 'Colour violet' })).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.press('Escape');
 
     await page.locator(MESSAGE).first().dblclick();
     await expect(page.locator(LABEL)).toBeFocused();
     await page.keyboard.type('Check out');
     await page.keyboard.press('Enter');
     expect(await said(page)).toEqual(['Shopper to Storefront: Check out']);
+  });
+
+  test('connects two sequences at their participant lifelines', async ({ page }) => {
+    await newCanvas(page, 'Two sequences');
+    await newSequence(page, ['Sender'], { x: 265, y: 230 });
+    await page.locator(CANVAS).hover({ position: { x: 880, y: 350 } });
+    await page.keyboard.press('l');
+    await expect(page.locator(SEQUENCE)).toHaveCount(2);
+    const left = page.locator(SEQUENCE).first();
+    const right = page.locator(SEQUENCE).last();
+    await left.hover({ position: { x: 30, y: 12 } });
+    const start = (await left.locator(LIFELINE).boundingBox())!;
+    const destination = (await right.locator('.dc-node-surface').boundingBox())!;
+    await page.mouse.move(start.x + start.width / 2, start.y + start.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(destination.x + 80, destination.y + 64, { steps: 12 });
+    await expect(right.locator(`${LIFELINE}[data-endpoint-target="true"]`)).toHaveCount(1);
+    await page.mouse.up();
+    const edge = page.locator('.react-flow__edge');
+    await expect(edge).toHaveCount(1);
+    await expect(edge).toHaveAttribute('aria-label', /Sender.*Participant 1/);
+    const route = edge.locator('.dc-edge-line');
+    const destinationHead = (await right.locator(HEAD).boundingBox())!;
+    const landed = await route.evaluate((path: SVGPathElement) => {
+      const point = path.getPointAtLength(path.getTotalLength()).matrixTransform(path.getScreenCTM()!);
+      return { x: point.x, y: point.y };
+    });
+    expect(Math.abs(landed.x - (destinationHead.x + destinationHead.width / 2))).toBeLessThan(2);
+    expect(landed.y).toBeGreaterThanOrEqual(destinationHead.y + destinationHead.height - 3);
+    const before = await route.getAttribute('d');
+    const frame = (await right.boundingBox())!;
+    await page.mouse.move(frame.x + 36, frame.y + 13);
+    await page.mouse.down();
+    await page.mouse.move(frame.x + 36, frame.y + 77, { steps: 8 });
+    await page.mouse.up();
+    await expect(route).not.toHaveAttribute('d', before!);
+    await expect(left.locator(MESSAGE)).toHaveCount(0);
+    await expect(page.getByText('Saved locally')).toBeVisible();
+    await reopenAfterReload(page, 'Two sequences');
+    await expect(edge).toHaveCount(1);
+    await page.locator(SEQUENCE).last().hover({ position: { x: 35, y: 13 } });
+    await page.locator(SEQUENCE).last().locator(HEAD).click();
+    await page.keyboard.press('Delete');
+    await expect(edge).toHaveCount(0);
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(edge).toHaveCount(1);
   });
 });

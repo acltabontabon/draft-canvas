@@ -33,14 +33,52 @@
   cursor: pointer;
 }
 
-/* Selection is the canvas's own ring, a little tighter: these are parts of a shape, not shapes. */
-.dc-seq-target[data-focused='true'],
+/* Use a small ring for parts with a surface. Messages are highlighted along the arrow itself. */
+.dc-seq-target:not(.dc-seq-message)[data-focused='true'],
 .dc-seq-frame[data-focused='true'] {
   outline: 1.5px solid var(--dc-selection);
   outline-offset: 1px;
 }
 
-.dc-seq-target:not([data-focused='true']):hover {
+.dc-seq-selected-arrows {
+  inset: 0 auto auto 0;
+  overflow: visible;
+  pointer-events: none;
+  color: var(--dc-selection);
+  filter: drop-shadow(0 0 2px currentColor) drop-shadow(0 0 5px color-mix(in srgb, currentColor 65%, transparent));
+}
+
+.dc-seq-endpoint {
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+  pointer-events: auto;
+  cursor: grab;
+  touch-action: none;
+}
+
+.dc-seq-endpoint::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border: 1.5px solid var(--dc-selection);
+  border-radius: 50%;
+  background: var(--dc-canvas);
+}
+
+.dc-seq-endpoint:hover::before,
+.dc-seq-overlay[data-dragging='endpoint'] .dc-seq-endpoint::before {
+  background: var(--dc-selection);
+}
+
+.dc-seq-overlay[data-dragging='endpoint'] .dc-seq-endpoint {
+  cursor: grabbing;
+}
+
+.dc-node:not([data-seq-editing='true']) .dc-seq-target:not([data-focused='true']):hover {
   background: color-mix(in srgb, var(--dc-selection) 9%, transparent);
 }
 
@@ -54,7 +92,11 @@
   border-radius: 9px;
 }
 
-.dc-seq-target[data-moving='true'] {
+.dc-seq-head[data-endpoint-target='true'] {
+  background: color-mix(in srgb, var(--dc-selection) 18%, transparent);
+}
+
+.dc-seq-target:not(.dc-seq-message)[data-moving='true'] {
   background: color-mix(in srgb, var(--dc-selection) 14%, transparent);
   outline: 1.5px dashed var(--dc-selection);
 }
@@ -95,11 +137,11 @@
   width: 6px;
 }
 
-.dc-seq-frame-edge:hover,
-.dc-seq-frame-tab:hover {
+.dc-node:not([data-seq-editing='true']) :is(.dc-seq-frame-edge, .dc-seq-frame-tab):hover {
   background: color-mix(in srgb, var(--dc-selection) 22%, transparent);
 }
 
+.dc-seq-frame-edge,
 .dc-seq-frame-tab {
   cursor: grab;
 }
@@ -114,7 +156,19 @@
 }
 
 .dc-seq-lifeline {
+  /* Keep the next-message button from intercepting a drag started on a lifeline. */
+  z-index: 1;
   cursor: crosshair;
+}
+
+.dc-seq-lifeline[data-endpoint-target='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(50% - 1px);
+  border-radius: 1px;
+  background: var(--dc-selection);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--dc-selection) 60%, transparent);
+  pointer-events: none;
 }
 
 /* "Start a message here": a dot on the lifeline, at the place in the order it would take. */
@@ -159,7 +213,7 @@
 }
 
 .dc-seq-overlay[data-selected='true'] .dc-seq-add {
-  opacity: 0.55;
+  opacity: 0.7;
 }
 
 .dc-seq-add:hover,
@@ -195,11 +249,11 @@
   margin: 0;
   padding: 0 4px;
   border: 0;
-  border-radius: 4px;
+  border-radius: 6px;
   background: var(--dc-surface-raised);
   color: var(--dc-text);
-  outline: 1.5px solid var(--dc-selection);
-  outline-offset: 1px;
+  outline: none;
+  box-shadow: 0 1px 0 var(--dc-selection), 0 2px 8px color-mix(in srgb, var(--dc-shadow, #000) 16%, transparent);
   resize: none;
   overflow: hidden;
   -webkit-user-select: text;
@@ -223,6 +277,8 @@
 .dc-seq-options {
   /* Wider than a narrow head when it has to be: below the heads there are only lifelines to cover. */
   min-width: 176px;
+  max-height: 192px;
+  overflow: auto;
   margin: 6px 0 0;
   padding: 4px;
   border: 1px solid var(--dc-border);
@@ -243,7 +299,8 @@
   cursor: pointer;
 }
 
-.dc-seq-options li[data-active='true'] {
+.dc-seq-options li[data-active='true'],
+.dc-seq-options li:hover {
   background: color-mix(in srgb, var(--dc-selection) 16%, transparent);
 }
 
@@ -377,7 +434,14 @@
   color: var(--dc-text-muted);
   font: 500 11px/1.4 var(--dc-font);
   white-space: nowrap;
-  pointer-events: none;
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.dc-seq-ghost-hint:hover,
+.dc-seq-ghost-hint:focus-visible {
+  border-color: var(--dc-selection);
+  color: var(--dc-text);
 }
 
 .dc-seq-ghost-hint kbd {
@@ -386,11 +450,6 @@
   background: color-mix(in srgb, var(--dc-selection) 18%, transparent);
   color: var(--dc-text);
   font: inherit;
-}
-
-.dc-seq-ghost-hint em {
-  color: var(--dc-text-faint);
-  font-style: normal;
 }
 
 /* "This participant is that shape": a small link on the corner of its head. */
@@ -420,6 +479,7 @@
   transition: opacity var(--dc-dur-slow, 220ms) var(--dc-ease-out, ease-out);
 }
 
+.dc-seq-present-lifelines,
 .dc-seq-told,
 .dc-seq-now {
   position: absolute;

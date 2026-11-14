@@ -122,6 +122,8 @@ export type Side = (typeof SIDES)[number];
 export interface EdgeAnchor {
   side: Side;
   offset: number;
+  /** When present, the offset runs down this sequence participant's lifeline. */
+  participantId?: string;
 }
 
 export const GRID_MODES = ['dots', 'lines', 'none'] as const;
@@ -498,6 +500,8 @@ export interface DraftSequence {
   groups?: SeqGroup[];
   /** Top to bottom. */
   items: SeqItem[];
+  /** Show message numbers on the diagram. Defaults to on. */
+  numberMessages?: boolean;
 }
 
 /** The shapes a participant may be: the ones that stand for a piece of architecture. */

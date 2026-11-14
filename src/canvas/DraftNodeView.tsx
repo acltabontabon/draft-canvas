@@ -164,8 +164,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // with something inside it selected, being typed or being dropped onto.
   const [hovered, setHovered] = useState(false);
   const sequenceBusy = useUiStore(
-    (state) => state.sequenceFocus?.nodeId === id || state.sequenceEdit?.nodeId === id || state.sequenceDropTarget?.nodeId === id,
+    (state) => state.sequenceFocus?.nodeId === id || state.sequenceEdit?.nodeId === id || state.sequenceDropTarget?.nodeId === id || state.sequenceLinkTarget?.nodeId === id,
   );
+  const sequenceEditing = useUiStore((state) => state.sequenceEdit?.nodeId === id);
   // Which of its messages is being told, while this sequence is the one being presented: a number
   // (counted from 1), 0 for the opening and closing looks at the whole of it, null otherwise.
   const sequenceStep = useEditorStore((state) =>
@@ -513,6 +514,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-arriving={arriving && !settling ? 'true' : undefined}
       data-changed={changed ? 'true' : undefined}
       data-plate-focus={plateFocused ? 'true' : undefined}
+      data-seq-editing={sequenceEditing ? 'true' : undefined}
       data-seq-telling={sequenceStep ? 'true' : undefined}
       style={
         {
@@ -544,7 +546,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       {insideCount > 0 && <span className="dc-sr-only">, has an inside, {count(insideCount, 'shape')}</span>}
       {!readOnly && (
         <NodeResizer
-          isVisible={Boolean(selected)}
+          isVisible={Boolean(selected) && !sequenceEditing}
           minWidth={min.width}
           minHeight={min.height}
           maxWidth={max?.width}
@@ -688,7 +690,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       {isSequence && liveNode && sequenceStep ? <SequenceStepLayer node={liveNode} step={sequenceStep} theme={theme} preset={preset} /> : null}
 
       {sequenceLayout && liveNode && !capsule && (
-        <SequenceOverlay node={liveNode} layout={sequenceLayout} readOnly={readOnly} selected={Boolean(selected)} />
+        <SequenceOverlay node={liveNode} layout={sequenceLayout} readOnly={readOnly} selected={Boolean(selected)} preset={preset} />
       )}
 
       {/* Illustrative work per minute, in words as well as the halo — never a colour alone.

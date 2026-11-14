@@ -142,6 +142,10 @@
   border-radius: 50%;
 }
 
+.dc-node[data-seq-editing='true']::after {
+  content: none;
+}
+
 /* A keyboard-navigated selection reads as a plain selection plus a soft outer glow, shown only
  * while `.dc-canvas` itself has real *keyboard* focus (`:focus-visible` already tells a Tab-driven
  * focus apart from a mouse click on this plain, non-form `tabIndex` element — no extra JS state
@@ -379,6 +383,11 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 25%, transparent);
 }
 
+.react-flow:not(.connecting) .dc-node[data-seq-editing='true'] .dc-handle {
+  opacity: 0;
+  visibility: hidden;
+}
+
 /* Present mode keeps the handles in the DOM but out of sight. */
 .dc-editor[data-mode='present'] .dc-handle {
   opacity: 0 !important;
@@ -394,7 +403,8 @@
 /* A boundary's outline *is* its kind and colour, and its resize line would sit exactly on top of
  * it — hiding the colour whenever it's selected. The ring just outside says "selected"; the line
  * stays as an invisible grab strip for resizing. */
-.dc-node[data-type='group'] .dc-resize-line {
+.dc-node[data-type='group'] .dc-resize-line,
+.dc-node[data-type='sequence'] .dc-resize-line {
   opacity: 0;
 }
 

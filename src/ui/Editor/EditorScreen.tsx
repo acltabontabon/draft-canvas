@@ -244,7 +244,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           : undefined;
 
       // A piece of architecture put down on a sequence joins it: a participant of that kind, where
-      // the pointer is, opening for its name like any new shape. The same whichever way it was put
+      // the pointer is. The same whichever way it was put
       // down — a tool from the toolbar, a key over the canvas, the palette, the right-click menu.
       // (`position` is the corner of a default shape centred on the point: see below.)
       if (!spliceEdgeId && isLinkable({ type: preset.type })) {
@@ -253,7 +253,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           const started = preset.technology ? technologyStart(preset.type, preset.technology) : {};
           const is = { type: preset.type, ...started } as Omit<SeqParticipant, 'id' | 'name'>;
           const name = preset.technology ?? preset.text ?? nameOfShape({ ...is, text: undefined });
-          sequenceActions.startParticipant(seat.nodeId, seat.index, { is: { ...is, name } });
+          sequenceActions.addParticipant(seat.nodeId, { ...is, name }, seat.index);
           arm(null);
           return null;
         }
@@ -266,6 +266,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       const { width, height } = size ?? defaultSizeFor(preset.type);
       // Placed onto a connector: made and put into its middle as one undo step.
       const editor = useEditorStore.getState();
+      const startSequence = autoEdit && preset.type === 'sequence';
+      if (startSequence) editor.beginInteraction('Add sequence');
       if (spliceEdgeId) editor.beginInteraction('Insert into connector');
       const node = editor.addNode({
         type: preset.type,
@@ -294,8 +296,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // one. Escape or a click away keeps the placeholder. A code card (it arrives with sample code
       // to edit, not a name) and a junction (an `ellipse`, nothing to name) are left as they are.
       if (autoEdit && hasNameToType(node.type)) useUiStore.getState().requestEdit(node.id);
-      // A sequence opens asking who takes part: type a name, Enter, the next name, Enter.
-      if (autoEdit && node.type === 'sequence') sequenceActions.startParticipant(node.id, 0);
+      if (startSequence) {
+        sequenceActions.addDefaultParticipant(node.id);
+        useUiStore.getState().setSequenceFocus(null);
+        editor.endInteraction('Add sequence');
+      }
       return node;
     },
     [arm, theme],

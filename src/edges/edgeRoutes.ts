@@ -43,6 +43,7 @@ import {
   type Track,
 } from './routing';
 import { sameNodeGeometry, type PlanScope } from './sameGeometry';
+import { sequenceAnchorRect } from './sequenceAnchors';
 
 /** Everything a connector's routes depend on. */
 export interface EdgeRouteInputs {
@@ -213,8 +214,8 @@ function connectorInputsWithin(
   const target = nodes.get(edge.target);
   if (!source || !target) return null;
   return {
-    source: overrides.source ?? rectOf(source),
-    target: overrides.target ?? rectOf(target),
+    source: sequenceAnchorRect(source, overrides.source ?? rectOf(source), edge.sourceAnchor),
+    target: sequenceAnchorRect(target, overrides.target ?? rectOf(target), edge.targetAnchor),
     routing: edge.routing,
     label: edge.label,
     ...withCaption(routedCaption(edge, categoryOf(source), categoryOf(target))),

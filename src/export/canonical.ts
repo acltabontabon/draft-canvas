@@ -43,7 +43,7 @@ type Plain = Record<string, unknown>;
 type KeysOf<T> = readonly (keyof T & string)[];
 
 const VIEWPORT_KEYS = ['x', 'y', 'zoom'] as const satisfies KeysOf<DraftViewport>;
-const ANCHOR_KEYS = ['side', 'offset'] as const satisfies KeysOf<EdgeAnchor>;
+const ANCHOR_KEYS = ['side', 'offset', 'participantId'] as const satisfies KeysOf<EdgeAnchor>;
 const EDGE_DETAILS_KEYS = ['language', 'code'] as const satisfies KeysOf<EdgeDetails>;
 const ATTACHMENT_KEYS = ['id', 'type', 'text', 'noteKind', 'language', 'code', 'accent', 'width', 'height'] as const satisfies KeysOf<Attachment>;
 const NODE_KEYS = [
@@ -85,7 +85,7 @@ const NODE_KEYS = [
   'inside',
   'sequence',
 ] as const satisfies KeysOf<DraftNode>;
-const SEQUENCE_KEYS = ['participants', 'groups', 'items'] as const satisfies KeysOf<DraftSequence>;
+const SEQUENCE_KEYS = ['participants', 'groups', 'items', 'numberMessages'] as const satisfies KeysOf<DraftSequence>;
 const SEQ_PARTICIPANT_KEYS = [
   'id',
   'name',

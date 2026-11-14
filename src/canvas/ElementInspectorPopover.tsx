@@ -12,7 +12,6 @@ import { DepthGlyph } from './DepthGlyph';
 import { usePersonality } from '../theme/usePersonality';
 import type { Command, CommandContext } from '../commands/types';
 import {
-  ACCENTS,
   BOUNDARY_PRESETS,
   C4_TEXT_TYPES,
   CODE_LANGUAGES,
@@ -44,6 +43,7 @@ import { SequenceInspectorRow } from './sequence/SequenceInspectorRow';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { familyOf } from '../render/text/fonts';
 import { useEditorStore } from '../store/editorStore';
+import { sequenceActions } from '../store/sequenceActions';
 import { replicasField } from '../document/replicas';
 import { useUiStore } from '../store/uiStore';
 import { nodeIndex } from '../store/selectors';
@@ -67,6 +67,7 @@ import { useOverlayPosition } from './useOverlayPosition';
 import { usePopoverDrag } from './usePopoverDrag';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
+import { InspectorColourButton, InspectorColourPalette } from './InspectorColour';
 import { TextFormatBar } from './TextFormatBar';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
 import { QUEUE_ICON_OPTIONS } from './queueOptions';
@@ -180,7 +181,8 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
   const moving = useUiStore((state) => state.depthTransition !== null);
   // Something inside a sequence that was selected by being made a moment ago: see `SequenceFocus.quiet`.
   const justMade = useUiStore((state) => state.sequenceFocus?.quiet === true && state.sequenceFocus.nodeId === selectedNodeId);
-  const open = selectedNodeId !== null && measured && !moving && !justMade;
+  const sequenceEditing = useUiStore((state) => state.sequenceEdit?.nodeId === selectedNodeId);
+  const open = selectedNodeId !== null && measured && !moving && !justMade && !sequenceEditing;
   const { mounted, closing } = usePopoverPresence(open, POPOVER_EXIT_MS);
   // The element it was showing, kept for the fade-out after selection has already moved on.
   const shownNodeId = useLastPresent(open ? selectedNodeId : null);
@@ -194,7 +196,8 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
         : 'column'
       : 'whole',
   );
-  if (!mounted || !shownNodeId) return null;
+  // Clear the typing area immediately, including when the inspector would still be fading out.
+  if (sequenceEditing || !mounted || !shownNodeId) return null;
   return <ElementInspectorBody key={`${shownNodeId}:${inside}`} nodeId={shownNodeId} closing={closing} beside={inside === 'row'} buildCommandContext={buildCommandContext} />;
 }
 
@@ -231,10 +234,10 @@ function ElementInspectorBody({
   const panelRef = useRef<HTMLDivElement>(null);
   const dragControl = usePopoverDrag(panelRef, nodeId);
   usePopoverKeyboard(panelRef);
+  const sequenceFocus = useUiStore((state) => (state.sequenceFocus?.nodeId === nodeId ? state.sequenceFocus : null));
 
-  // Selecting a *different* element, or the popover starting to close, closes the colour
-  // palette/typography panel.
-  const panelOwner = closing ? null : nodeId;
+  // Close an open panel when the selection changes, including selection inside a sequence.
+  const panelOwner = closing ? null : sequenceFocus ?? nodeId;
   const [openPanelOwner, setOpenPanelOwner] = useState(panelOwner);
   if (openPanelOwner !== panelOwner) {
     setOpenPanelOwner(panelOwner);
@@ -281,7 +284,6 @@ function ElementInspectorBody({
   // message or participant in question, not by the sequence as a whole, and offers what can be done
   // to it. The geometry is the sequence's own (kept by its identity), so this costs no new layout.
   const { preset: sequencePreset } = usePersonality();
-  const sequenceFocus = useUiStore((state) => (state.sequenceFocus?.nodeId === nodeId ? state.sequenceFocus : null));
   const insideSequence = sequenceFocus && displayNode?.type === 'sequence' && displayNode.sequence ? sequenceFocus : null;
   const nodeRect = displayInternal ? rectOfInternal(displayInternal) : null;
   const rect = (() => {
@@ -427,6 +429,8 @@ function ElementInspectorBody({
               node={displayNode}
               sequence={displayNode.sequence}
               focus={insideSequence}
+              openPanel={openPanel === 'color' || openPanel === 'details' ? openPanel : null}
+              setOpenPanel={setOpenPanel}
               menuDirection={menuDirection}
               getMenuAvoidRect={getMenuAvoidRect}
             />
@@ -440,7 +444,6 @@ function ElementInspectorBody({
             setOpenPanel={setOpenPanel}
             menuDirection={menuDirection}
             getMenuAvoidRect={getMenuAvoidRect}
-            theme={theme}
             buildCommandContext={buildCommandContext}
           />
           )}
@@ -507,7 +510,6 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   setOpenPanel,
   menuDirection,
   getMenuAvoidRect,
-  theme,
   buildCommandContext,
 }: {
   node: DraftNode;
@@ -516,11 +518,8 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   setOpenPanel: (panel: ElementPanel | null) => void;
   menuDirection: 'up' | 'down';
   getMenuAvoidRect: () => { top: number; bottom: number } | null;
-  theme: ReturnType<typeof useThemeValue>;
   buildCommandContext: () => CommandContext;
 }) {
-  // A shape has no automatic colour (unlike a connector): left unset, it is drawn neutral, and says so.
-  const shownAccent = node.accent ?? 'neutral';
   const { preset: personality } = usePersonality();
   const technologyIcon = useTechnologyIcon(node.technology) ?? GENERIC_TECHNOLOGY_ICON;
 
@@ -647,15 +646,23 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
     <>
       {/* Identity stays near the shape; canvas actions have their own compact row. */}
       <div className="dc-popover-row dc-popover-config dc-element-identity-row">
-        <button
-          type="button"
-          className="dc-inspector-color-swatch"
-          aria-label="Element colour"
-          aria-expanded={openPanel === 'color'}
-          title={shownAccent === 'neutral' ? 'Colour: default. Change colour' : 'Change colour'}
-          style={{ background: theme.accents[shownAccent].chip }}
+        <InspectorColourButton
+          label="Element colour"
+          accent={node.accent}
+          open={openPanel === 'color'}
           onClick={() => setOpenPanel(openPanel === 'color' ? null : 'color')}
         />
+        {node.type === 'sequence' && (
+          <Button
+            variant="quiet"
+            active={node.sequence?.numberMessages !== false}
+            aria-pressed={node.sequence?.numberMessages !== false}
+            title="Show or hide message numbers on this sequence"
+            onClick={() => sequenceActions.setMessageNumbering(node.id, node.sequence?.numberMessages === false)}
+          >
+            Message numbers
+          </Button>
+        )}
         {node.type === 'text' && (
           <Button
             variant="quiet"
@@ -774,24 +781,10 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
       )}
 
       {openPanel === 'color' && (
-        <div className="dc-popover-panel dc-swatches">
-          {ACCENTS.map((accent) => (
-            <button
-              key={accent}
-              type="button"
-              className="dc-swatch"
-              title={accent === 'neutral' ? 'Default colour' : accent}
-              aria-label={`Colour ${accent}`}
-              aria-pressed={(node.accent ?? 'neutral') === accent}
-              style={{ background: theme.accents[accent].chip }}
-              onClick={() => {
-                // The default colour is no colour at all, as a new shape has.
-                useEditorStore.getState().updateNodeById(node.id, { accent: accent === 'neutral' ? undefined : accent }, 'Recolour');
-                setOpenPanel(null);
-              }}
-            />
-          ))}
-        </div>
+        <InspectorColourPalette accent={node.accent} onChange={(accent) => {
+          useEditorStore.getState().updateNodeById(node.id, { accent }, 'Recolour');
+          setOpenPanel(null);
+        }} />
       )}
 
       {openPanel === 'details' && C4_TYPES.has(node.type) && <C4DetailsPanel key={node.id} node={node} />}

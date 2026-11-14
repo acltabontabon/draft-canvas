@@ -73,6 +73,7 @@ export interface LabelLayout {
 
 export interface MessageLayout {
   id: string;
+  number: number;
   kind: SeqMessageKind;
   from: string;
   to: string;
@@ -184,7 +185,7 @@ const HEAD_GAP = 28;
 const MIN_COLUMN_GAP = 132;
 const HEAD_TO_BODY = 18;
 const MIN_LIFELINE = 44;
-const LIFELINE_TAIL = 14;
+const LIFELINE_TAIL = 24;
 
 const LABEL_MAX_WIDTH = 240;
 const LABEL_MIN_WIDTH = 56;
@@ -192,7 +193,8 @@ const LABEL_MIN_WIDTH = 56;
 const LABEL_SIDE = 16;
 const LABEL_GAP = 4;
 const ROW_MIN_ABOVE = 10;
-const ROW_AFTER = 13;
+// Leave a clear target between the arrow's endpoint handles and the next insertion slot.
+const ROW_AFTER = 30;
 
 const SELF_REACH = 30;
 const SELF_DROP = 18;
@@ -212,7 +214,6 @@ const FRAME_HEADER = 24;
 const FRAME_BRANCH_HEADER = 20;
 const FRAME_EMPTY = 22;
 const FRAME_BOTTOM = 8;
-const FRAME_AFTER = 12;
 const TAB_PAD_X = 8;
 const TAB_HEIGHT = 18;
 /** Between a tab's cut corner and the lifeline beside it. */
@@ -226,7 +227,6 @@ const REF_HEIGHT = 44;
 const NOTE_PAD_X = 8;
 const NOTE_PAD_Y = 6;
 const NOTE_MAX_WIDTH = 180;
-const NOTE_AFTER = 12;
 const NOTE_SIDE_GAP = 12;
 
 const lineHeightOf = (font: FontSpec, ratio = LINE_HEIGHTS.label): number => font.size * ratio;
@@ -457,6 +457,7 @@ function solve(
       const right = label ? labelX + layout!.width : from + BAR_WIDTH + SELF_REACH;
       const message: MessageLayout = {
         id: item.id,
+        number: messages.length + 1,
         kind: item.kind,
         from: item.from,
         to: item.to,
@@ -495,6 +496,7 @@ function solve(
     const left = Math.min(from, end);
     const message: MessageLayout = {
       id: item.id,
+      number: messages.length + 1,
       kind: item.kind,
       from: item.from,
       to: item.to,
@@ -526,7 +528,7 @@ function solve(
     const box: Rect = { x, y: cursor, w: width, h: height };
     notes.push({ id: item.id, box, text: { x: x + NOTE_PAD_X, y: cursor + NOTE_PAD_Y, align: 'start', layout, font: FONTS.sequenceNote } });
     boxes.set(item.id, box);
-    cursor += height + NOTE_AFTER;
+    cursor += height + ROW_AFTER;
     return { min: x - FRAME_NEST, max: x + width + FRAME_NEST };
   };
 
@@ -553,7 +555,7 @@ function solve(
       cursor += FRAME_BOTTOM;
     }
     const bottom = cursor;
-    cursor += FRAME_AFTER;
+    cursor += ROW_AFTER;
 
     if (extent.min === Infinity) {
       const covered = (item.covers ?? []).map((id) => indexOf.get(id)).filter((at): at is number => at !== undefined);

@@ -308,5 +308,6 @@ export function normalizeSequence(raw: unknown): NormalizedSequence {
   const sequence: DraftSequence = { participants, items };
   const grouped = normalizeGroups(source.groups, participants, reading.seen);
   if (grouped.groups.length > 0) sequence.groups = grouped.groups;
+  if (source.numberMessages === false) sequence.numberMessages = false;
   return { sequence, dropped: reading.dropped + grouped.dropped };
 }

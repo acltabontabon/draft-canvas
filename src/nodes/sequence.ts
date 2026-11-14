@@ -19,6 +19,7 @@ import type { DisplayList, Shape, Stroke } from '../render/displayList';
 import { connectorHead, connectorStrokePath } from '../render/connectorStyle';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { FONTS } from '../render/text/fonts';
+import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { checkSequence } from '../sequence/check';
@@ -193,8 +194,25 @@ function lineColor(theme: Theme, participant: SeqParticipant | undefined): strin
   return accent === 'neutral' ? theme.edge : accentOf(theme, accent).line;
 }
 
-function messageShapes(message: MessageLayout, color: string, seed: string, ctx: DescribeContext): Shape[] {
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+function messageNumber(message: MessageLayout, colour: string, ctx: DescribeContext): Shape[] {
+  const font = FONTS.variantTag;
+  const layout = layoutText(String(message.number), { font, lineHeight: 1, maxWidth: 42, maxLines: 1, measurer: ctx.measurer });
+  const width = Math.max(15, Math.ceil(layout.width) + 8);
+  const height = 14;
+  const span = message.self ? SELF_LOOP : Math.abs(message.x2 - message.x1);
+  const direction = message.self || message.x2 >= message.x1 ? 1 : -1;
+  const x = message.x1 + direction * Math.min(span / 2, width / 2 + 9);
+  // Keep the badge below the caption's baseline gap while it straddles the arrow.
+  const centerY = message.y + 3;
+  const y = centerY - height / 2;
+  return [
+    { t: 'rect', x: x - width / 2, y, w: width, h: height, r: height / 2, fill: ctx.theme.surfaceRaised, stroke: { color: colour, width: 1 } },
+    text({ x, y: centerY - layout.height / 2, align: 'middle', layout, font }, ctx.theme.textMuted),
+  ];
+}
+
+export function sequenceArrowShapes(message: MessageLayout, color: string, seed: string, preset: DescribeContext['preset']): Shape[] {
+  const profile = PERSONALITY_PROFILES[preset];
   const open = message.kind === 'async' || message.kind === 'reply' || message.kind === 'create';
   const dashed = message.kind === 'reply' || message.kind === 'create';
   const stroke: Stroke = { color, width: LINE_WIDTH, linecap: 'round', ...(dashed ? { dash: REPLY_DASH } : {}) };
@@ -265,6 +283,16 @@ export interface DescribeSequenceOptions {
   only?: ReadonlySet<string>;
 }
 
+export function sequenceLifelines(layout: SequenceLayout, theme: Theme): Shape[] {
+  return layout.columns.map((column) => ({
+    t: 'path',
+    d: `M ${column.x} ${column.lifeTop} V ${column.lifeBottom}`,
+    fill: 'none',
+    stroke: { color: theme.edge, width: 1.1, dash: LIFELINE_DASH },
+    opacity: 0.85,
+  }));
+}
+
 export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: SequenceKit, options: DescribeSequenceOptions = {}): Shape[] {
   const sequence = sequenceOf(node);
   const layout = sequenceLayoutOf(node, ctx, kit);
@@ -302,15 +330,7 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
       }
     }
 
-    for (const column of layout.columns) {
-      shapes.push({
-        t: 'path',
-        d: `M ${column.x} ${column.lifeTop} V ${column.lifeBottom}`,
-        fill: 'none',
-        stroke: { color: theme.edge, width: 1.1, dash: LIFELINE_DASH },
-        opacity: 0.85,
-      });
-    }
+    shapes.push(...sequenceLifelines(layout, theme));
 
     for (const bar of layout.executions) {
       shapes.push({
@@ -355,7 +375,8 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
     lit.add(message.from);
     lit.add(message.to);
     const color = lineColor(theme, byId.get(message.from));
-    shapes.push(...messageShapes(message, color, `${node.id}:${message.id}`, ctx));
+    shapes.push(...sequenceArrowShapes(message, color, `${node.id}:${message.id}`, ctx.preset));
+    if (sequence.numberMessages !== false) shapes.push(...messageNumber(message, color, ctx));
     if (message.kind === 'destroy') {
       const x = layout.columns.find((column) => column.id === message.to)?.x ?? message.x2;
       shapes.push({ t: 'path', d: crossAt(x, message.yEnd), fill: 'none', stroke: { color, width: LINE_WIDTH + 0.4, linecap: 'round' } });

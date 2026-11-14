@@ -345,7 +345,10 @@ export function buildScene(
     for (const bend of edge.waypoints ?? []) overlayRects.push({ x: bend.x - 2, y: bend.y - 2, width: 4, height: 4 });
     const groupAttrs = decorateGroupAttrs(decoration);
 
-    edgeLines.push(...(groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls));
+    const routedLines = groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls;
+    // Participant connectors cross the sequence surface to reach their lifelines.
+    if (edge.sourceAnchor?.participantId || edge.targetAnchor?.participantId) edgeOverlays.push(...routedLines);
+    else edgeLines.push(...routedLines);
     edgeOverlays.push(...(groupAttrs ? [el('g', groupAttrs, overlayEls)] : overlayEls));
     edgeEntries.push({ edge, lineEls, overlayEls });
   }

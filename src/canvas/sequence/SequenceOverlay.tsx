@@ -1,6 +1,11 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react';
+import { useReactFlow } from '@xyflow/react';
 import { findItem, itemsAt, sequenceOf, type SeqSlot } from '../../document/sequenceModel';
 import type { DraftNode, SeqItem } from '../../document/types';
+import { sequenceArrowShapes } from '../../nodes/sequence';
+import { describeContext, sequenceLayoutFor } from '../../nodes/describe';
+import { emitDisplayList } from '../../render/svg/emit';
+import { LIGHT } from '../../render/theme/tokens';
 import { moveProblem } from '../../sequence/check';
 import { itemRange, type SequenceEditTarget, type SequenceFocus } from '../../sequence/focus';
 import {
@@ -19,6 +24,8 @@ import { useEditorStore } from '../../store/editorStore';
 import { nodeIndex } from '../../store/selectors';
 import { sequenceActions } from '../../store/sequenceActions';
 import { useUiStore } from '../../store/uiStore';
+import type { PersonalityPreset } from '../../theme/usePersonality';
+import { SvgSurface } from '../SvgSurface';
 import { SequenceEditors } from './SequenceEditors';
 import './sequence.css';
 
@@ -41,13 +48,18 @@ import './sequence.css';
 type Held =
   | { what: 'lifeline'; id: string }
   | { what: 'item'; id: string }
+  | { what: 'endpoint'; id: string; end: 'from' | 'to' }
   | { what: 'participant'; id: string };
+
+type Point = { x: number; y: number };
+type ParticipantDrop = { nodeId: string; participantId: string; offset: number };
 
 type Gesture =
   /** A message being drawn from a lifeline. `to` is null past the last lifeline: a new participant. */
-  | { kind: 'draw'; from: string; to: string | null; slot: SlotLayout | null; x: number }
+  | { kind: 'draw'; from: string; to: string | null; slot: SlotLayout | null; originY: number; pointer: Point; other: ParticipantDrop | null }
   /** A message, note or fragment being moved to another place in the order. */
-  | { kind: 'item'; id: string; slot: SlotLayout | null; problem: string | null }
+  | { kind: 'item'; id: string; slot: SlotLayout | null; problem: string | null; offset: Point }
+  | { kind: 'endpoint'; id: string; end: 'from' | 'to'; participant: string | null; pointer: Point }
   /** A participant being moved along the row. */
   | { kind: 'participant'; id: string; index: number; x: number };
 
@@ -62,18 +74,21 @@ interface Props {
   layout: SequenceLayout;
   readOnly: boolean;
   selected: boolean;
+  preset: PersonalityPreset;
 }
 
-export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, readOnly, selected }: Props) {
+export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, readOnly, selected, preset }: Props) {
   const nodeId = node.id;
+  const { screenToFlowPosition } = useReactFlow();
   const sequence = sequenceOf(node);
   const focus = useUiStore((state) => (state.sequenceFocus?.nodeId === nodeId ? state.sequenceFocus : null));
   const editing = useUiStore((state) => (state.sequenceEdit?.nodeId === nodeId ? state.sequenceEdit.target : null));
   const dropIndex = useUiStore((state) => (state.sequenceDropTarget?.nodeId === nodeId ? state.sequenceDropTarget.index : null));
   const dropStays = useUiStore((state) => state.sequenceDropTarget?.nodeId === nodeId && state.sequenceDropTarget.stays);
+  const externalTarget = useUiStore((state) => state.sequenceLinkTarget?.nodeId === nodeId ? state.sequenceLinkTarget.participantId : null);
 
   const rootRef = useRef<HTMLDivElement>(null);
-  const held = useRef<(Held & { x: number; y: number }) | null>(null);
+  const held = useRef<(Held & { client: Point; origin: Point }) | null>(null);
   const gestureRef = useRef<Gesture | null>(null);
   /** The click that follows a drag belongs to the drag: it selects nothing. */
   const dragged = useRef(false);
@@ -88,7 +103,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   };
 
   /** A pointer position in the sequence's own coordinates, whatever the canvas is zoomed to. */
-  const local = (clientX: number, clientY: number): { x: number; y: number } => {
+  const local = (clientX: number, clientY: number): Point => {
     const root = rootRef.current;
     if (!root) return { x: 0, y: 0 };
     const rect = root.getBoundingClientRect();
@@ -99,6 +114,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   const end = () => {
     held.current = null;
     if (gestureRef.current) {
+      if (gestureRef.current.kind === 'draw') useUiStore.getState().setSequenceLinkTarget(null);
       setGesture(null);
       useUiStore.getState().setInteractionActive(false);
     }
@@ -119,6 +135,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   }, [gesture !== null]);
   useEffect(
     () => () => {
+      if (gestureRef.current?.kind === 'draw') useUiStore.getState().setSequenceLinkTarget(null);
       if (gestureRef.current) useUiStore.getState().setInteractionActive(false);
     },
     [],
@@ -127,8 +144,12 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   /* ------------------------------------------------------------------ gestures -- */
 
   const press = (event: PointerEvent<HTMLElement>, what: Held) => {
-    if (readOnly || event.button !== 0 || editing) return;
-    held.current = { ...what, x: event.clientX, y: event.clientY };
+    if (readOnly || event.button !== 0 || editing || useUiStore.getState().armed) return;
+    held.current = {
+      ...what,
+      client: { x: event.clientX, y: event.clientY },
+      origin: local(event.clientX, event.clientY),
+    };
     dragged.current = false;
     event.currentTarget.setPointerCapture(event.pointerId);
   };
@@ -136,7 +157,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   const track = (event: PointerEvent<HTMLElement>) => {
     const start = held.current;
     if (!start) return;
-    if (!gestureRef.current && Math.hypot(event.clientX - start.x, event.clientY - start.y) < DRAG_THRESHOLD_PX) return;
+    if (!gestureRef.current && Math.hypot(event.clientX - start.client.x, event.clientY - start.client.y) < DRAG_THRESHOLD_PX) return;
     // A menu opened under a long press: the press was for the menu.
     if (useUiStore.getState().contextMenu) return end();
     if (!gestureRef.current) {
@@ -145,9 +166,42 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
     }
     const point = local(event.clientX, event.clientY);
     if (start.what === 'lifeline') {
+      const hoveredNode = document.elementFromPoint(event.clientX, event.clientY)
+        ?.closest<HTMLElement>('.react-flow__node')?.dataset.id;
+      const otherNode = hoveredNode && hoveredNode !== nodeId ? nodeIndex(useEditorStore.getState().document.nodes).get(hoveredNode) : undefined;
+      let other: ParticipantDrop | null = null;
+      if (otherNode?.type === 'sequence') {
+        const flow = screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: false });
+        const x = flow.x - otherNode.x;
+        const y = flow.y - otherNode.y;
+        const targetLayout = sequenceLayoutFor(otherNode, describeContext(LIGHT));
+        const hit = hitSequence(targetLayout, x, y);
+        const column = hit.kind === 'participant'
+          ? targetLayout.columns.find((entry) => entry.id === hit.id)
+          : columnNear(targetLayout, x, 20);
+        if (column && (hit.kind === 'participant' || (y >= column.lifeTop && y <= column.lifeBottom))) {
+          other = { nodeId: otherNode.id, participantId: column.id, offset: offsetOnLifeline(column, y) };
+        }
+      }
+      useUiStore.getState().setSequenceLinkTarget(other);
       const last = layout.columns[layout.columns.length - 1];
       const beyond = !!last && point.x > last.head.x + last.head.w + NEW_PARTICIPANT_REACH;
-      setGesture({ kind: 'draw', from: start.id, to: beyond ? null : (columnNear(layout, point.x)?.id ?? start.id), slot: slotAt(layout, point.x, point.y), x: point.x });
+      setGesture({
+        kind: 'draw',
+        from: start.id,
+        to: beyond ? null : (columnNear(layout, point.x)?.id ?? start.id),
+        slot: otherNode?.type === 'sequence' ? null : slotAt(layout, point.x, point.y),
+        originY: start.origin.y,
+        pointer: point,
+        other,
+      });
+    } else if (start.what === 'endpoint') {
+      const head = layout.columns.find(({ head }) =>
+        point.x >= head.x && point.x <= head.x + head.w && point.y >= head.y && point.y <= head.y + head.h,
+      );
+      const column = head ?? columnNear(layout, point.x, 20);
+      const participant = column && point.y >= column.head.y && point.y <= layout.bodyBottom ? column.id : null;
+      setGesture({ kind: 'endpoint', id: start.id, end: start.end, participant, pointer: point });
     } else if (start.what === 'item') {
       let slot = slotAt(layout, point.x, point.y);
       const moving = findItem(sequence, start.id)?.item;
@@ -155,7 +209,13 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
       if (slot && moving && slot.operandId !== null && moving.t === 'fragment' && holds(moving, slot.operandId)) slot = null;
       const at = findItem(sequence, start.id)?.at;
       if (slot && at && (at.operand?.id ?? null) === slot.operandId && (slot.index === at.index || slot.index === at.index + 1)) slot = null;
-      setGesture({ kind: 'item', id: start.id, slot, problem: slot ? moveProblem(sequence, start.id, { operandId: slot.operandId, index: slot.index }) : null });
+      setGesture({
+        kind: 'item',
+        id: start.id,
+        slot,
+        problem: slot ? moveProblem(sequence, start.id, { operandId: slot.operandId, index: slot.index }) : null,
+        offset: { x: point.x - start.origin.x, y: point.y - start.origin.y },
+      });
     } else {
       setGesture({ kind: 'participant', id: start.id, index: participantIndexAt(layout, point.x), x: point.x });
     }
@@ -171,13 +231,20 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
     dragged.current = true;
     end();
     if (done.kind === 'draw') {
+      if (done.other) {
+        const column = layout.columns.find((entry) => entry.id === done.from);
+        if (column) sequenceActions.connectParticipants({ nodeId, participantId: done.from, offset: offsetOnLifeline(column, done.originY) }, done.other);
+        return;
+      }
       if (!done.slot) return;
       const slot: SeqSlot = { operandId: done.slot.operandId, index: done.slot.index };
       if (done.to === null) {
-        sequenceActions.startParticipant(nodeId, sequence.participants.length, { message: { from: done.from, slot } });
+        sequenceActions.addMessageToNewParticipant(nodeId, done.from, slot);
       } else {
         sequenceActions.addMessage(nodeId, { from: done.from, to: done.to }, slot);
       }
+    } else if (done.kind === 'endpoint') {
+      if (done.participant) sequenceActions.setEnds(nodeId, done.id, { [done.end]: done.participant });
     } else if (done.kind === 'item') {
       if (!done.slot) return;
       if (done.problem) useUiStore.getState().notify(done.problem);
@@ -227,10 +294,10 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
     sequenceActions.edit(nodeId, target);
   };
 
-  /** A new participant, standing at `index`: in the sequence at once, with its name being asked for. */
+  /** A new participant stands at `index`. */
   const add = (event: MouseEvent, index: number) => {
     event.stopPropagation();
-    if (!readOnly) sequenceActions.startParticipant(nodeId, index);
+    if (!readOnly) sequenceActions.addDefaultParticipant(nodeId, index);
   };
 
   /** A right-click on something not yet selected selects it first; the menu is then about it. */
@@ -244,7 +311,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
     onContextMenu: menu(kind, id),
   });
 
-  const isFocused = (kind: SequenceFocus['kind'], id: string): boolean => focus?.kind === kind && focus.ids.includes(id);
+  const isFocused = (kind: SequenceFocus['kind'], id: string): boolean => !editing && focus?.kind === kind && focus.ids.includes(id);
   const nameOf = (participantId: string): string => sequence.participants.find((participant) => participant.id === participantId)?.name.trim() || 'Unnamed participant';
 
   /* ------------------------------------------------------------------- drawing -- */
@@ -261,6 +328,19 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   const heads = layout.columns.filter((column) => !column.created);
   const headRowMiddle = heads.length > 0 ? Math.max(...heads.map((column) => column.head.y + column.head.h)) - 22 : layout.bodyTop;
   const quiet = gesture !== null || editing !== null;
+  const selectedArrows = focus?.kind === 'item' && !editing
+    ? layout.messages.filter((message) => focus.ids.includes(message.id))
+    : [];
+  const endpointMessage = !readOnly && selectedArrows.length === 1 ? selectedArrows[0] : undefined;
+  const reconnecting = gesture?.kind === 'endpoint' ? gesture : null;
+  const targetParticipant = externalTarget ?? reconnecting?.participant ?? (gesture?.kind === 'draw' && gesture.slot ? gesture.to : null);
+  const reordering = gesture?.kind === 'item' ? layout.messages.find((message) => message.id === gesture.id) : undefined;
+  const highlightedArrows = selectedArrows.filter((message) => reconnecting?.id !== message.id && reordering?.id !== message.id);
+
+  const targetOnLifeline = (event: MouseEvent) => {
+    const point = local(event.clientX, event.clientY);
+    return hitSequence(layout, point.x, point.y);
+  };
 
   return (
     <div
@@ -270,6 +350,15 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
       data-dragging={gesture ? gesture.kind : undefined}
       style={{ width: node.width, height: node.height }}
     >
+      {highlightedArrows.length > 0 && (
+        <SvgSurface className="dc-seq-selected-arrows" width={node.width} height={node.height}>
+          {emitDisplayList({
+            width: node.width,
+            height: node.height,
+            shapes: highlightedArrows.flatMap((message) => sequenceArrowShapes(message, 'currentColor', `${node.id}:${message.id}`, preset)),
+          })}
+        </SvgSurface>
+      )}
       {/* Groups: their caption is the handle. */}
       {layout.groups.map((group) => (
         <div
@@ -295,7 +384,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
             {...gestures({ what: 'item', id: frame.id })}
           />
           {(['top', 'right', 'bottom', 'left'] as const).map((side) => (
-            <div key={side} className="dc-seq-target dc-seq-frame-edge nodrag nopan" data-side={side} {...targetProps('item', frame.id, null)} />
+            <div key={side} className="dc-seq-target dc-seq-frame-edge nodrag nopan" data-side={side} {...targetProps('item', frame.id, null)} {...gestures({ what: 'item', id: frame.id })} />
           ))}
           {frame.operator === 'ref' && (
             <div
@@ -332,6 +421,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           data-moving={gesture?.kind === 'item' && gesture.id === message.id ? 'true' : undefined}
           role="button"
           aria-label={`Message from ${nameOf(message.from)} to ${nameOf(message.to)}${message.label ? `: ${message.label.layout.lines.map((line) => line.text).join(' ')}` : ''}`}
+          aria-description={sequence.numberMessages === false ? undefined : `Message ${message.number} of ${layout.messages.length}`}
           style={box(message.box, 3)}
           {...targetProps('item', message.id, { kind: 'message', id: message.id })}
           {...gestures({ what: 'item', id: message.id })}
@@ -356,26 +446,43 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           <div
             key={column.id}
             className="dc-seq-lifeline nodrag nopan"
+            data-endpoint-target={targetParticipant === column.id ? 'true' : undefined}
             style={{ left: column.x - 7, top: column.lifeTop, width: 14, height: Math.max(0, column.lifeBottom - column.lifeTop) }}
             onPointerMove={(event) => {
               if (held.current) return track(event);
               const point = local(event.clientX, event.clientY);
-              const slot = slotAt(layout, column.x, point.y);
+              const hit = hitSequence(layout, point.x, point.y);
+              const slot = hit.kind === 'lifeline' ? slotAt(layout, column.x, point.y) : null;
               if (slot && !(hover?.participantId === column.id && hover.slot === slot)) setHover({ participantId: column.id, slot });
+              else if (!slot && hover) setHover(null);
             }}
             onPointerLeave={() => setHover(null)}
-            onPointerDown={(event) => press(event, { what: 'lifeline', id: column.id })}
+            onPointerDown={(event) => {
+              const under = targetOnLifeline(event);
+              if (under.kind === 'message' || under.kind === 'note') press(event, { what: 'item', id: under.id });
+              else press(event, { what: 'lifeline', id: column.id });
+            }}
             onPointerUp={release}
             onPointerCancel={end}
             onClick={(event) => {
               // A click with no drag selects whatever the lifeline was pressed through.
-              const point = local(event.clientX, event.clientY);
-              const under = hitSequence(layout, point.x, point.y);
-              if (under.kind === 'message' || under.kind === 'note') pick(event, 'item', under.id);
+              const under = targetOnLifeline(event);
+              if (under.kind === 'message' || under.kind === 'note' || under.kind === 'fragment') pick(event, 'item', under.id);
+              else if (under.kind === 'operand') pick(event, 'operand', under.id);
               else pick(event, 'participant', column.id);
             }}
-            onDoubleClick={(event) => event.stopPropagation()}
-            onContextMenu={menu('participant', column.id)}
+            onDoubleClick={(event) => {
+              event.stopPropagation();
+              const under = targetOnLifeline(event);
+              if (under.kind === 'message' || under.kind === 'note') open(event, { kind: under.kind, id: under.id });
+              if (under.kind === 'operand') open(event, { kind: 'guard', id: under.id });
+            }}
+            onContextMenu={(event) => {
+              const under = targetOnLifeline(event);
+              if (under.kind === 'message' || under.kind === 'note' || under.kind === 'fragment') menu('item', under.id)();
+              else if (under.kind === 'operand') menu('operand', under.id)();
+              else menu('participant', column.id)();
+            }}
           />
         ))}
 
@@ -385,6 +492,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           key={column.id}
           className="dc-seq-target dc-seq-head nodrag nopan"
           data-focused={isFocused('participant', column.id) ? 'true' : undefined}
+          data-endpoint-target={targetParticipant === column.id ? 'true' : undefined}
           data-moving={gesture?.kind === 'participant' && gesture.id === column.id ? 'true' : undefined}
           role="button"
           aria-label={`Participant ${nameOf(column.id)}`}
@@ -438,28 +546,66 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
         <span className="dc-seq-dot" style={{ left: columnX(hover.participantId) ?? 0, top: hover.slot.y }} aria-hidden="true" />
       )}
 
+      {endpointMessage && !reordering && (['from', 'to'] as const).map((end) => (
+        <span
+          key={`${endpointMessage.id}:${end}`}
+          className="dc-seq-endpoint nodrag nopan"
+          data-end={end}
+          title={end === 'from' ? 'Drag to change sender' : 'Drag to change receiver'}
+          style={reconnecting?.end === end
+            ? { left: reconnecting.pointer.x, top: reconnecting.pointer.y }
+            : { left: end === 'from' ? endpointMessage.x1 : endpointMessage.x2, top: end === 'from' ? endpointMessage.y : endpointMessage.yEnd }}
+          {...gestures({ what: 'endpoint', id: endpointMessage.id, end })}
+          onClick={(event) => event.stopPropagation()}
+          onDoubleClick={(event) => event.stopPropagation()}
+        />
+      ))}
+      {endpointMessage && reconnecting && (
+        <PointerArrow
+          from={reconnecting.end === 'from' ? reconnecting.pointer : { x: endpointMessage.x1, y: endpointMessage.y }}
+          to={reconnecting.end === 'to' ? reconnecting.pointer : { x: endpointMessage.x2, y: endpointMessage.yEnd }}
+          width={node.width}
+          height={node.height}
+        />
+      )}
+
       {offer && offerSlot && (
         <>
-          <DrawPreview ghost from={columnX(offer.from) ?? 0} to={columnX(offer.to) ?? 0} self={offer.from === offer.to} fresh={false} y={offerSlot.y + 6} width={node.width} height={node.height} />
-          <span className="dc-seq-ghost-hint" style={{ left: ((columnX(offer.from) ?? 0) + (columnX(offer.to) ?? 0)) / 2 + (offer.from === offer.to ? 44 : 0), top: offerSlot.y + 14 }}>
-            <kbd>Tab</kbd>
+          <SuggestedArrow from={columnX(offer.from) ?? 0} to={columnX(offer.to) ?? 0} self={offer.from === offer.to} y={offerSlot.y + 6} width={node.width} height={node.height} />
+          <button
+            type="button"
+            className="dc-seq-ghost-hint nodrag nopan"
+            style={{ left: ((columnX(offer.from) ?? 0) + (columnX(offer.to) ?? 0)) / 2 + (offer.from === offer.to ? 44 : 0), top: offerSlot.y + 14 }}
+            onClick={(event) => {
+              if (useUiStore.getState().armed) return;
+              event.stopPropagation();
+              sequenceActions.addMessage(nodeId, offer, offer.slot);
+            }}
+          >
+            <kbd aria-hidden="true">Tab</kbd>
             {offer.title}
-            {offers.length > 1 && <em>] for another</em>}
-          </span>
+          </button>
         </>
       )}
 
       {/* What is being dragged, and where it would land. */}
-      {gesture?.kind === 'draw' && gesture.slot && (
-        <DrawPreview
-          from={columnX(gesture.from) ?? 0}
-          to={gesture.to === null ? gesture.x : (columnX(gesture.to) ?? gesture.x)}
-          self={gesture.to === gesture.from}
-          fresh={gesture.to === null}
-          y={gesture.slot.y}
+      {gesture?.kind === 'draw' && (
+        <PointerArrow
+          from={{ x: columnX(gesture.from) ?? 0, y: gesture.originY }}
+          to={gesture.pointer}
+          drop={gesture.slot && { x: columnX(gesture.to) ?? gesture.pointer.x, y: gesture.slot.y }}
           width={node.width}
           height={node.height}
         />
+      )}
+      {reordering && gesture?.kind === 'item' && (
+        <SvgSurface className="dc-seq-selected-arrows" width={node.width} height={node.height} style={{ transform: `translate(${gesture.offset.x}px, ${gesture.offset.y}px)` }}>
+          {emitDisplayList({
+            width: node.width,
+            height: node.height,
+            shapes: sequenceArrowShapes(reordering, 'currentColor', `${node.id}:${reordering.id}`, preset),
+          })}
+        </SvgSurface>
       )}
       {gesture?.kind === 'item' && gesture.slot && (
         <div className="dc-seq-insert" data-refused={gesture.problem ? 'true' : undefined} style={{ left: gesture.slot.x1 + 6, top: gesture.slot.y, width: Math.max(20, gesture.slot.x2 - gesture.slot.x1 - 12) }}>
@@ -480,14 +626,34 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   );
 });
 
+function offsetOnLifeline(column: { lifeTop: number; lifeBottom: number }, y: number): number {
+  return Math.max(0, Math.min(1, (y - column.lifeTop) / Math.max(1, column.lifeBottom - column.lifeTop)));
+}
+
 /** Whether a branch is somewhere inside an item: a fragment cannot be moved into itself. */
 function holds(item: SeqItem, operandId: string): boolean {
   if (item.t !== 'fragment') return false;
   return item.operands.some((branch) => branch.id === operandId || branch.items.some((child) => holds(child, operandId)));
 }
 
-/** A message being drawn: its line, its head, and a tick where it would join the order. */
-function DrawPreview({ from, to, self, fresh, ghost, y, width, height }: { from: number; to: number; self: boolean; fresh: boolean; ghost?: boolean; y: number; width: number; height: number }) {
+/** The cursor controls the loose end. The drop marker shows where the message would settle. */
+function PointerArrow({ from, to, drop, width, height }: { from: Point; to: Point; drop?: Point | null; width: number; height: number }) {
+  const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
+  const dx = (to.x - from.x) / length;
+  const dy = (to.y - from.y) / length;
+  const back = Math.min(length, 8);
+  const x = to.x - back * dx;
+  const y = to.y - back * dy;
+  return (
+    <svg className="dc-seq-draw" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+      <path d={`M ${from.x} ${from.y} L ${to.x} ${to.y}`} />
+      <path d={`M ${x + 4.5 * dy} ${y - 4.5 * dx} L ${to.x} ${to.y} L ${x - 4.5 * dy} ${y + 4.5 * dx}`} />
+      {drop && <circle cx={drop.x} cy={drop.y} r={4} />}
+    </svg>
+  );
+}
+
+function SuggestedArrow({ from, to, self, y, width, height }: { from: number; to: number; self: boolean; y: number; width: number; height: number }) {
   const direction = to >= from ? 1 : -1;
   const d = self
     ? `M ${from} ${y - 6} H ${from + 30} V ${y + 10} H ${from + 6}`
@@ -496,10 +662,9 @@ function DrawPreview({ from, to, self, fresh, ghost, y, width, height }: { from:
     ? `M ${from + 13} ${y + 6} L ${from + 6} ${y + 10} L ${from + 13} ${y + 14}`
     : `M ${to - direction * 8} ${y - 4.5} L ${to} ${y} L ${to - direction * 8} ${y + 4.5}`;
   return (
-    <svg className="dc-seq-draw" data-ghost={ghost ? 'true' : undefined} width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+    <svg className="dc-seq-draw" data-ghost="true" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
       <path d={d} />
       <path d={head} />
-      {fresh && <circle cx={to} cy={y} r={4} />}
     </svg>
   );
 }

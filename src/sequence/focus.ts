@@ -24,13 +24,7 @@ export interface SequenceFocus {
 }
 
 export type SequenceEditTarget =
-  /**
-   * A participant's name. `naming` marks one that was added a moment ago and is being named for the
-   * first time: the field then lists what the name could mean (a shape on the canvas, a technology,
-   * a kind), Enter goes on to the next participant, and leaving it empty takes the participant away
-   * again. `message` is a message drawn out to it before it had a name.
-   */
-  | { kind: 'participant'; id: string; naming?: boolean; message?: string }
+  | { kind: 'participant'; id: string }
   | { kind: 'message'; id: string }
   | { kind: 'note'; id: string }
   | { kind: 'guard'; id: string }

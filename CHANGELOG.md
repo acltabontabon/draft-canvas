@@ -10,15 +10,15 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
-- **Sequence diagrams, on the canvas** — Press `L` and name who takes part; drag between lifelines
-  to say what happens. A sequence lays itself out beside your architecture: replies land below what
-  their call set going, work bars follow, and nothing is placed by hand. Wrap messages in a
-  condition, loop or parallel branches; `Tab` adds the message that usually comes next. <!-- highlight -->
-- **Your shapes take part** — Drop a Service, Data Store or Queue into a sequence and it stands
-  there with its name, kind and technology. Rename either one and the other follows; a shape on its
-  own simply moves in. <!-- highlight -->
-- **Present a sequence** one message at a time, and take it in and out as Mermaid or PlantUML: a
-  pasted `sequenceDiagram` becomes an editable sequence, and a flow can be drawn as one.
+- **Sequence diagrams, on the canvas** — Press `L` to start with a participant. Drag between
+  lifelines to add messages or move an arrow's ends. Replies and work bars lay themselves out.
+  Wrap messages in a condition, loop or parallel branches, or press `Tab` to add the suggested
+  next message. Turn automatic message numbering on or off for each sequence. <!-- highlight -->
+- **Your shapes take part** — Drop a Service, Data Store or Queue into a sequence to use its name,
+  kind, technology and colour. Linked shapes and participants update together. Messages suggest
+  labels based on who's connected, and you can connect lifelines in separate frames. <!-- highlight -->
+- **Present a sequence** one message at a time with every lifeline visible. Export to Mermaid or
+  PlantUML, paste a Mermaid `sequenceDiagram` to edit it, or draw an existing flow as a sequence.
 - AI agents can add, read and change sequences.
 - **Tidy up, with a preview** — One cleanup to reach for first, in `⌘K` and on right-click. It
   keeps every shape where you put it, straightens connectors that just miss level and re-attaches

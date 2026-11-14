@@ -22,11 +22,14 @@ optional `level`. A document is a tree of graphs, nested at most 3 levels below 
 
 A node of type `sequence` carries a `sequence` payload (`DraftSequence`): `participants`, optional
 `groups` of neighbouring participants, and `items` in order — messages, notes and fragments, whose
-operands hold items in turn. Ids inside it are local to the node. A participant has the identity
+operands hold items in turn. Set `numberMessages` to `false` to hide the sequence's message numbers.
+Ids inside it are local to the node. A participant has the identity
 fields of a shape (`type`, kind, `technology`, `accent`) and an optional `ref`, the id of the shape
 in the same view it stands for. A message has `from`, `to`, a `kind` (`sync`, `async`, `reply`,
 `create`, `destroy`), a `label`, optional `replyTo`, and `activate` / `deactivate` flags. Nothing in
-the payload is a coordinate: layout, work bars and the node's size are derived.
+the payload is a coordinate: layout, work bars and the node's size are derived. A canvas connector
+can attach to a participant through `sourceAnchor.participantId` or `targetAnchor.participantId`.
+Its anchor offset is then measured along the participant's lifeline.
 
 The same shape is stored in IndexedDB's `bodies` store.
 

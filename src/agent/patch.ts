@@ -706,6 +706,7 @@ function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Js
     if (!read) return undefined;
     advisories.push(...unsupportedAdvice(node.id, read.unsupported));
     sequence = linked(read.sequence, read.links, shapes, node.id, advisories);
+    if (current.numberMessages === false) sequence = { ...sequence, numberMessages: false };
     if (set.title === undefined && read.title) title = read.title;
   } else if (set.links !== undefined) {
     // By the id each participant is written under in a read. A null (or a name left out of a

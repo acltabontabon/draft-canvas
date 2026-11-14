@@ -178,32 +178,16 @@ describe('in the editor', () => {
     expect(sequenceIn(id)!.participants.map((entry) => entry.name)).toEqual(['Checkout API']);
   });
 
-  it('a new participant is made where it will stand and named there: one step with a name, none without', () => {
+  it('adds a participant at the requested seat with an available default name and one undo step', () => {
     const id = sequenceActions.createFromShapes(['n_api'])!;
-    const before = editor().document;
+    sequenceActions.addDefaultParticipant(id);
     const steps = editor().history.past.length;
-
-    // Left unnamed, it is taken out again and nothing is recorded.
-    const blank = sequenceActions.startParticipant(id, 1)!;
-    expect(sequenceIn(id)!.participants.map((entry) => entry.id)).toContain(blank);
-    expect(useUiStore.getState().sequenceEdit).toMatchObject({ target: { kind: 'participant', id: blank, naming: true } });
-    sequenceActions.finishNaming(id, blank, null);
-    expect(editor().document).toBe(before);
-    expect(editor().history.past.length).toBe(steps);
+    const made = sequenceActions.addDefaultParticipant(id, 0)!;
+    expect(sequenceIn(id)!.participants[0]).toMatchObject({ id: made, name: 'Participant 2', type: 'service' });
     expect(useUiStore.getState().sequenceEdit).toBeNull();
-    expect(editor().selection.nodes).toEqual([id]);
-
-    // Named, it is one step — and Enter goes straight on to the next one, beside it.
-    const named = sequenceActions.startParticipant(id, 0)!;
-    sequenceActions.finishNaming(id, named, { name: 'Shopper', type: 'actor' }, 'next');
-    expect(sequenceIn(id)!.participants.slice(0, 2)).toMatchObject([{ id: named, name: 'Shopper', type: 'actor' }, { name: '' }]);
-    const next = sequenceIn(id)!.participants[1]!.id;
-    expect(useUiStore.getState().sequenceEdit).toMatchObject({ target: { kind: 'participant', id: next, naming: true } });
-    sequenceActions.finishNaming(id, next, null);
-    expect(sequenceIn(id)!.participants.map((entry) => entry.name)).toEqual(['Shopper', 'Checkout API']);
     expect(editor().history.past.length).toBe(steps + 1);
     editor().undo();
-    expect(sequenceIn(id)!.participants.map((entry) => entry.name)).toEqual(['Checkout API']);
+    expect(sequenceIn(id)!.participants.map((entry) => entry.name)).toEqual(['Checkout API', 'Participant 1']);
   });
 
   it('a shape tool put down on a sequence is a participant of that kind, at the seat under it', () => {
@@ -213,12 +197,27 @@ describe('in the editor', () => {
     expect(sequenceSeatAt({ x: host.x + 4, y: host.y + 60 })).toEqual({ nodeId: id, index: 0 });
     expect(sequenceSeatAt({ x: host.x + host.width - 4, y: host.y + 60 })).toEqual({ nodeId: id, index: 2 });
 
-    // What it is was chosen on the toolbar: only its name is asked for.
-    const made = sequenceActions.startParticipant(id, 2, { is: { name: 'Queue', type: 'queue' } })!;
-    expect(sequenceIn(id)!.participants[2]).toMatchObject({ id: made, type: 'queue' });
-    const target = useUiStore.getState().sequenceEdit!.target;
-    expect(target).toMatchObject({ kind: 'participant', id: made });
-    expect('naming' in target).toBe(false);
+    const made = sequenceActions.addParticipant(id, { name: 'Queue', type: 'queue' }, 2)!;
+    expect(sequenceIn(id)!.participants[2]).toMatchObject({ id: made, name: 'Queue', type: 'queue' });
+    expect(useUiStore.getState().sequenceEdit).toBeNull();
+  });
+
+  it('adds a default receiver and its message as one undo step', () => {
+    const id = sequenceActions.createFromShapes(['n_api'])!;
+    const receiverBefore = sequenceIn(id)!.participants[0]!.id;
+    const steps = editor().history.past.length;
+    sequenceActions.addMessageToNewParticipant(id, receiverBefore, { operandId: null, index: 0 });
+    const receiver = sequenceIn(id)!.participants[1]!;
+    const message = sequenceIn(id)!.items[0]!;
+    expect(receiver.name).toBe('Participant 1');
+    expect(message).toMatchObject({ from: receiverBefore, to: receiver.id });
+    expect(useUiStore.getState().sequenceEdit?.target).toEqual({ kind: 'message', id: message.id });
+    sequenceActions.setLabel(id, message.id, 'Start checkout');
+    sequenceActions.edit(id, null);
+    expect(editor().history.past.length).toBe(steps + 1);
+    editor().undo();
+    expect(sequenceIn(id)!.participants).toHaveLength(1);
+    expect(sequenceIn(id)!.items).toHaveLength(0);
   });
 
   it('offers to start a sequence from one shape, and the sequence’s own commands inside it', () => {

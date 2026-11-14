@@ -1,7 +1,8 @@
 import { memo, useMemo } from 'react';
 import { sequenceFlow } from '../../document/sequenceFlow';
 import type { DraftNode } from '../../document/types';
-import { describeContext, describeSequenceMessages } from '../../nodes/describe';
+import { describeContext, describeSequenceMessages, sequenceLayoutFor } from '../../nodes/describe';
+import { sequenceLifelines } from '../../nodes/sequence';
 import { beginClipScope, emitDisplayList } from '../../render/svg/emit';
 import type { Theme } from '../../render/theme/tokens';
 import type { PersonalityPreset } from '../../theme/usePersonality';
@@ -32,6 +33,11 @@ export const SequenceStepLayer = memo(function SequenceStepLayer({
   theme: Theme;
   preset: PersonalityPreset;
 }) {
+  const lifelines = useMemo(() => emitDisplayList({
+    width: node.width,
+    height: node.height,
+    shapes: sequenceLifelines(sequenceLayoutFor(node, describeContext(theme, preset)), theme),
+  }), [node, theme, preset]);
   const layers = useMemo(() => {
     const ids = sequenceFlow(node).steps.map((entry) => entry.id);
     const now = ids[step - 1];
@@ -47,6 +53,9 @@ export const SequenceStepLayer = memo(function SequenceStepLayer({
   if (!layers) return null;
   return (
     <>
+      <SvgSurface className="dc-seq-present-lifelines" width={node.width} height={node.height}>
+        {lifelines}
+      </SvgSurface>
       {layers.told && (
         <SvgSurface className="dc-seq-told" width={node.width} height={node.height}>
           {layers.told}

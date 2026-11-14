@@ -8,6 +8,9 @@
  * here; none of them touches a sequence's data on its own.
  */
 import { createId } from '../document/ids';
+import { createEdge } from '../document/factory';
+import { categoryOf, inferRelationship } from '../document/connectorSemantics';
+import { relationLabel } from '../document/edgeSemantics';
 import {
   contains,
   findItem,
@@ -46,7 +49,7 @@ import {
   updateSequence,
   wrapItems,
 } from '../document/sequenceOps';
-import { removeElements } from '../document/operations';
+import { addEdges, removeElements } from '../document/operations';
 import { isLinkable, participantFromNode } from '../document/sequenceLinks';
 import type { DraftNode, DraftSequence, SeqMessage, SeqMessageKind, SeqOperator, SeqParticipant } from '../document/types';
 import { describeContext, sequenceLayoutFor } from '../nodes/describe';
@@ -55,9 +58,10 @@ import { participantIndexAt } from '../sequence/layout';
 import type { SequenceFinding } from '../sequence/check';
 import { executionsOf } from '../sequence/executions';
 import { sequenceFromFlow } from '../sequence/fromFlow';
+import { defaultMessageLabel } from '../sequence/suggest';
 import { describeSequenceFocus, type SequenceEditTarget, type SequenceFocus } from '../sequence/focus';
 import { announce } from '../lib/announce';
-import { useEditorStore } from './editorStore';
+import { roomFor, useEditorStore } from './editorStore';
 import { nodeIndex } from './selectors';
 import { useUiStore } from './uiStore';
 
@@ -155,8 +159,8 @@ export function sequenceSeatAt(point: { x: number; y: number }): { nodeId: strin
   return { nodeId: host.id, index: participantIndexAt(sequenceLayoutFor(host, describeContext(LIGHT)), point.x - host.x) };
 }
 
-/** Everything a participant can be, cleared: what it becomes is then exactly what it is given, with nothing left over from a look it was shown in. */
-const NOBODY: Partial<Omit<SeqParticipant, 'id'>> = {
+/** Clear fields specific to the previous type before applying a participant suggestion. */
+const PARTICIPANT_KIND_FIELDS: Partial<Omit<SeqParticipant, 'id'>> = {
   serviceKind: undefined,
   databaseKind: undefined,
   queueKind: undefined,
@@ -165,13 +169,49 @@ const NOBODY: Partial<Omit<SeqParticipant, 'id'>> = {
   componentKind: undefined,
   technology: undefined,
   kindOrigin: undefined,
-  accent: undefined,
-  ref: undefined,
 };
+
+function defaultParticipant(sequence: DraftSequence): Omit<SeqParticipant, 'id'> {
+  const names = new Set(sequence.participants.map((entry) => entry.name.trim().toLowerCase()));
+  let number = 1;
+  while (names.has(`participant ${number}`)) number += 1;
+  return { type: 'service', name: `Participant ${number}` };
+}
 
 export const sequenceActions = {
   select,
   edit,
+
+  setMessageNumbering(nodeId: string, enabled: boolean): void {
+    run(nodeId, enabled ? 'Show message numbers' : 'Hide message numbers', (sequence) => {
+      if ((sequence.numberMessages !== false) === enabled) return sequence;
+      const { numberMessages: _previous, ...rest } = sequence;
+      return enabled ? rest : { ...rest, numberMessages: false };
+    });
+  },
+
+  connectParticipants(source: { nodeId: string; participantId: string; offset: number }, target: { nodeId: string; participantId: string; offset: number }): void {
+    if (source.nodeId === target.nodeId) return;
+    const editor = useEditorStore.getState();
+    const nodes = nodeIndex(editor.document.nodes);
+    const sourceNode = nodes.get(source.nodeId);
+    const targetNode = nodes.get(target.nodeId);
+    const from = sourceNode?.sequence?.participants.find((participant) => participant.id === source.participantId);
+    const to = targetNode?.sequence?.participants.find((participant) => participant.id === target.participantId);
+    if (!sourceNode || !targetNode || !from || !to || !roomFor(0, 1)) return;
+    const rightward = targetNode.x + targetNode.width / 2 >= sourceNode.x + sourceNode.width / 2;
+    const relationship = inferRelationship(from, to);
+    const edge = createEdge({
+      source: source.nodeId,
+      target: target.nodeId,
+      sourceAnchor: { side: rightward ? 'right' : 'left', offset: source.offset, participantId: from.id },
+      targetAnchor: { side: rightward ? 'left' : 'right', offset: target.offset, participantId: to.id },
+      ...relationship,
+      label: relationship?.semantic ? relationLabel(relationship.semantic, categoryOf(from), categoryOf(to)) : undefined,
+    });
+    editor.apply('Connect sequence participants', (doc) => addEdges(doc, [edge]), { selection: { nodes: [], edges: [edge.id] } });
+    useUiStore.getState().setQuietEdge(edge.id);
+  },
 
   /* ------------------------------------------------------------- participants -- */
 
@@ -187,79 +227,29 @@ export const sequenceActions = {
     return id;
   },
 
-  /**
-   * Adds a participant and opens it for its name, as one undo step. It is in the sequence from the
-   * first moment — the lifelines make room for it and the field sits on its head — and if it is left
-   * without a name it is taken out again, leaving nothing behind (`finishNaming`).
-   *
-   * `is` gives what it is when that is already known: a tool taken from the toolbar and put down on
-   * the sequence. `message` draws a message to it from a lifeline, for one made by dragging a
-   * message out past the last participant.
-   */
-  startParticipant(nodeId: string, index: number, options: { is?: Omit<SeqParticipant, 'id'>; message?: { from: string; slot: SeqSlot } } = {}): string | null {
-    const id = createId('sp');
-    const editor = useEditorStore.getState();
-    editor.beginInteraction('Add participant');
-    const added = run(nodeId, 'Add participant', (sequence) => addParticipant(sequence, { id, ...(options.is ?? { name: '', type: 'service' }) }, index));
-    if (!added) {
-      useEditorStore.getState().endInteraction('Add participant');
-      useUiStore.getState().notify('This sequence has as many participants as it can hold.');
-      return null;
-    }
-    const pending = options.message;
-    const message = pending ? createMessage({ from: pending.from, to: id }) : null;
-    if (message && pending) run(nodeId, 'Add participant', (sequence) => insertItem(sequence, message, pending.slot));
-    selectMade(nodeId, 'participant', id);
-    useUiStore.getState().setSequenceEdit({
-      nodeId,
-      // Known already (`is`): only its name is asked for. Otherwise the field offers what it could be.
-      target: { kind: 'participant', id, ...(options.is ? {} : { naming: true }), ...(message ? { message: message.id } : {}) },
-      fresh: 'Add participant',
-    });
-    return id;
-  },
-
-  /**
-   * Shows the participant being named as what the field would make it right now — a cylinder for a
-   * data store, a tube with its mark for "Kafka" — before anything is chosen. Its look only: it has
-   * no name yet and stands for nothing. Part of the step the naming opened, so giving up undoes it.
-   */
-  previewNaming(nodeId: string, id: string, is: Omit<SeqParticipant, 'id'>): void {
-    run(nodeId, 'Add participant', (current) => updateParticipant(current, id, { ...NOBODY, ...is, name: '', ref: undefined }));
-  },
-
-  /**
-   * Ends the naming of a participant added a moment ago. With a name (or a shape or technology
-   * picked for it) it becomes that; with none it is taken out again, with any message drawn to it.
-   * `then` says what follows: `'next'` goes straight on to naming another one beside it.
-   */
-  finishNaming(nodeId: string, id: string, is: Omit<SeqParticipant, 'id'> | null, then: 'next' | 'done' = 'done'): void {
+  addDefaultParticipant(nodeId: string, index?: number): string | null {
     const sequence = sequenceIn(nodeId);
-    const target = useUiStore.getState().sequenceEdit?.target;
-    const message = target?.kind === 'participant' ? target.message : undefined;
-    const at = sequence?.participants.findIndex((participant) => participant.id === id) ?? -1;
-    if (!sequence || at < 0) return edit(nodeId, null);
-    if (!is) {
-      // Nothing was typed: there is no participant to keep, and nothing to undo. The step it was
-      // added in is given up, which puts the sequence back exactly as it was. (Clearing the field
-      // first would end the step instead, and record it.)
-      useEditorStore.getState().abandonInteraction();
-      useEditorStore.getState().setSelection({ nodes: [nodeId], edges: [] });
-      useUiStore.setState({ sequenceEdit: null, sequenceFocus: null });
-      return;
+    return sequence ? sequenceActions.addParticipant(nodeId, defaultParticipant(sequence), index) : null;
+  },
+
+  /** Drawing past the final lifeline adds its receiver and the message in the same undo step. */
+  addMessageToNewParticipant(nodeId: string, from: string, slot: SeqSlot): void {
+    if (!sequenceIn(nodeId)) return;
+    const id = createId('sp');
+    const message = createMessage({ from, to: id });
+    const recipe: Recipe = (sequence) => {
+      const withParticipant = addParticipant(sequence, { ...defaultParticipant(sequence), id });
+      if (withParticipant === sequence) return sequence;
+      const withMessage = insertItem(withParticipant, { ...message, label: defaultMessageLabel(withParticipant, message) }, slot);
+      return withMessage === withParticipant ? sequence : withMessage;
+    };
+    if (!makeThenName(nodeId, 'Add participant and message', recipe, { kind: 'message', id: message.id }, () => selectMade(nodeId, 'item', message.id))) {
+      useUiStore.getState().notify('There is no room for another participant and message here.');
     }
-    run(nodeId, 'Add participant', (current) => updateParticipant(current, id, { ...NOBODY, ...is }));
-    // Closing the field ends the step: the participant, and a message drawn to it, are one undo.
-    edit(nodeId, null);
-    if (message) {
-      select(nodeId, 'item', [message], true);
-      edit(nodeId, { kind: 'message', id: message });
-    } else if (then === 'next') {
-      sequenceActions.startParticipant(nodeId, at + 1);
-    } else {
-      // Back to the sequence as a whole, whose inspector offers the next thing to do.
-      useUiStore.getState().setSequenceFocus(null);
-    }
+  },
+
+  chooseParticipant(nodeId: string, id: string, participant: Omit<SeqParticipant, 'id'>): void {
+    run(nodeId, 'Edit participant', (sequence) => updateParticipant(sequence, id, { ...PARTICIPANT_KIND_FIELDS, ...participant }));
   },
 
   /**
@@ -347,7 +337,16 @@ export const sequenceActions = {
   },
 
   removeParticipants(nodeId: string, ids: readonly string[]): void {
-    run(nodeId, ids.length > 1 ? 'Delete participants' : 'Delete participant', (sequence) => ids.reduce(removeParticipant, sequence));
+    const removing = new Set(ids);
+    useEditorStore.getState().apply(ids.length > 1 ? 'Delete participants' : 'Delete participant', (doc) => {
+      const next = updateSequence(doc, nodeId, (sequence) => ids.reduce(removeParticipant, sequence));
+      if (next === doc) return doc;
+      const edges = doc.edges.filter((edge) =>
+        (edge.source === nodeId && edge.sourceAnchor?.participantId && removing.has(edge.sourceAnchor.participantId)) ||
+        (edge.target === nodeId && edge.targetAnchor?.participantId && removing.has(edge.targetAnchor.participantId)),
+      );
+      return removeElements(next, [], edges.map((edge) => edge.id));
+    }, { selection: { nodes: [nodeId], edges: [] } });
   },
 
   moveParticipant(nodeId: string, id: string, toIndex: number): void {
@@ -377,7 +376,9 @@ export const sequenceActions = {
 
   /** Adds a message at a slot, selects it and opens it for its words. Answers its id. */
   addMessage(nodeId: string, input: { from: string; to: string; kind?: SeqMessageKind; label?: string; replyTo?: string }, slot: SeqSlot, thenEdit = true): string | null {
-    const message = createMessage(input);
+    const sequence = sequenceIn(nodeId);
+    if (!sequence) return null;
+    const message = createMessage({ ...input, label: input.label ?? defaultMessageLabel(sequence, input) });
     const add: Recipe = (sequence) => insertItem(sequence, message, slot);
     const focus = () => selectMade(nodeId, 'item', message.id);
     if (thenEdit) return makeThenName(nodeId, 'Add message', add, { kind: 'message', id: message.id }, focus) ? message.id : null;

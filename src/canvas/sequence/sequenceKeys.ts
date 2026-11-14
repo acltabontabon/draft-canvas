@@ -180,7 +180,7 @@ export function handleSequenceKey(event: KeyboardEvent): boolean {
     event.preventDefault();
     const first = sequence.participants[0];
     if (first) sequenceActions.select(nodeId, 'participant', [first.id]);
-    else sequenceActions.startParticipant(nodeId, 0);
+    else sequenceActions.addDefaultParticipant(nodeId, 0);
     return true;
   }
 
@@ -247,7 +247,7 @@ export function handleSequenceKey(event: KeyboardEvent): boolean {
     case 'p':
     case 'P': {
       const at = focus.kind === 'participant' ? sequence.participants.findIndex((participant) => participant.id === focus.ids[focus.ids.length - 1]) + 1 : sequence.participants.length;
-      sequenceActions.startParticipant(nodeId, at);
+      sequenceActions.addDefaultParticipant(nodeId, at);
       return done();
     }
     case 'ArrowUp':

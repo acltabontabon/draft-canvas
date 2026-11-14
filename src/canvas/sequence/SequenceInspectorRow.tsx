@@ -26,6 +26,7 @@ import { ACTOR_ICON_OPTIONS } from '../actorOptions';
 import { COMPONENT_ICON_OPTIONS } from '../componentOptions';
 import { DATABASE_ICON_OPTIONS } from '../dataStoreOptions';
 import { InspectorSelect, type InspectorSelectOption } from '../InspectorSelect';
+import { InspectorColourButton, InspectorColourPalette } from '../InspectorColour';
 import { QUEUE_ICON_OPTIONS } from '../queueOptions';
 import { SERVICE_ICON_OPTIONS } from '../serviceOptions';
 import { TechnologyInput } from '../TechnologyInput';
@@ -80,6 +81,8 @@ interface RowProps {
   node: DraftNode;
   sequence: DraftSequence;
   focus: SequenceFocus;
+  openPanel: 'color' | 'details' | null;
+  setOpenPanel: (panel: 'color' | 'details' | null) => void;
   menuDirection: 'up' | 'down';
   getMenuAvoidRect: () => { top: number; bottom: number } | null;
 }
@@ -112,10 +115,10 @@ export function SequenceInspectorRow(props: RowProps) {
   return <ItemRow {...props} />;
 }
 
-function ParticipantRow({ node, sequence, focus, menuDirection, getMenuAvoidRect }: RowProps) {
+function ParticipantRow({ node, sequence, focus, openPanel, setOpenPanel, menuDirection, getMenuAvoidRect }: RowProps) {
   const chosen = sequence.participants.filter((participant) => focus.ids.includes(participant.id));
   const [first] = chosen;
-  const [detail, setDetail] = useState(false);
+  const detail = openPanel === 'details';
   const nodes = useEditorStore((state) => state.document.nodes);
   if (!first) return null;
   const group = sequence.groups?.find((entry) => entry.participantIds.includes(first.id));
@@ -147,6 +150,12 @@ function ParticipantRow({ node, sequence, focus, menuDirection, getMenuAvoidRect
   return (
     <>
       <div className="dc-popover-row dc-popover-config dc-element-identity-row">
+        <InspectorColourButton
+          label="Participant colour"
+          accent={first.accent}
+          open={openPanel === 'color'}
+          onClick={() => setOpenPanel(openPanel === 'color' ? null : 'color')}
+        />
         <InspectorSelect
           ariaLabel="Shape"
           value={first.type}
@@ -166,7 +175,7 @@ function ParticipantRow({ node, sequence, focus, menuDirection, getMenuAvoidRect
         />
         <Tooltip content={{ title: 'Technology', description: 'What it is built with. A product the catalogue knows is drawn as its logo.' }}>
           {(tip) => (
-            <Button variant="quiet" active={detail} aria-expanded={detail} {...tip} onClick={() => setDetail(!detail)}>
+            <Button variant="quiet" active={detail} aria-expanded={detail} {...tip} onClick={() => setOpenPanel(detail ? null : 'details')}>
               {first.technology || 'Technology'}
             </Button>
           )}
@@ -209,6 +218,12 @@ function ParticipantRow({ node, sequence, focus, menuDirection, getMenuAvoidRect
           </TooltipGroup>
         </div>
       )}
+      {openPanel === 'color' && (
+        <InspectorColourPalette accent={first.accent} onChange={(accent) => {
+          sequenceActions.updateParticipant(node.id, first.id, { accent }, 'Recolour participant');
+          setOpenPanel(null);
+        }} />
+      )}
       {detail && (
         <div className="dc-popover-panel dc-seq-technology">
           <TechnologyInput
@@ -220,7 +235,7 @@ function ParticipantRow({ node, sequence, focus, menuDirection, getMenuAvoidRect
               const patch = technologyKindPatch(headNode(node, first), technology) as Partial<SeqParticipant> | null;
               sequenceActions.updateParticipant(node.id, first.id, { technology, ...(patch ?? {}) }, 'Change technology');
             }}
-            onConfirm={() => setDetail(false)}
+            onConfirm={() => setOpenPanel(null)}
           />
         </div>
       )}

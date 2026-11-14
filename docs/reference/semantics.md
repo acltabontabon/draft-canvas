@@ -181,8 +181,9 @@ A [sequence](../guides/sequence-diagrams.md) stores what happens, never where it
   the capability matrix says the pairing is normally asynchronous (into a queue or topic, or an
   event), Asynchronous is marked as suggested; choosing a kind stamps `kindOrigin: 'explicit'` and
   ends the suggestion.
-- **Labels are offered only from words already written**: labels of connectors between the two
-  linked shapes, and labels already used between the same two participants. Nothing is invented.
+- **New message labels** use the same relationship caption as a canvas connector when the
+  participants have a known pairing. Replies, self-messages and lifecycle messages start blank.
+  Labels from linked connectors and earlier messages are available as suggestions in the editor.
 - **The next message** offered after a call is its reply (between two services) or the onward call
   (from a person), then a call to itself; after a reply, the reply still owed further back.
 - **Checks never change anything** (`src/sequence/check.ts`): a message before its participant is

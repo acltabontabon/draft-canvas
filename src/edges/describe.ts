@@ -35,6 +35,7 @@ import { describeAttachmentChips } from './attachmentChips';
 import { connectorMarkRow, markRowAttachmentsWidth } from './connectorMarks';
 import { bridgePath } from './bridge';
 import { computeEdgeRoutes, routedCaption, type EdgeRoutes } from './edgeRoutes';
+import { sequenceAnchorRect } from './sequenceAnchors';
 
 const captionOf = (caption: string | undefined) => (caption ? { caption } : {});
 import type { EdgeSpread } from './endpoints';
@@ -215,8 +216,8 @@ function routesOf(edge: DraftEdge, nodes: Map<string, DraftNode>, ctx: EdgeDescr
   const target = nodes.get(edge.target);
   if (!source || !target) return null;
   return computeEdgeRoutes({
-    source: rectOf(source),
-    target: rectOf(target),
+    source: sequenceAnchorRect(source, rectOf(source), edge.sourceAnchor),
+    target: sequenceAnchorRect(target, rectOf(target), edge.targetAnchor),
     routing: edge.routing,
     label: edge.label,
     ...captionOf(routedCaption(edge, categoryOf(source), categoryOf(target))),

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { decodeClipboard, encodeClipboard } from '../src/document/clipboardCodec';
-import { createDocument, createNode } from '../src/document/factory';
+import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { LIMITS } from '../src/document/limits';
 import { addNodes, extractFragment, pasteFragment } from '../src/document/operations';
 import { countItems, heightOf, messagesOf } from '../src/document/sequenceModel';
@@ -35,13 +35,30 @@ describe('reading a sequence', () => {
   });
 
   it('survives the file format untouched', () => {
-    const doc = documentWith(sample());
+    const doc = documentWith({ ...sample(), numberMessages: false });
     const result = parseDocument(serializeDocument(doc));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.repairs).toEqual([]);
     expect(result.document.nodes[0]).toEqual(doc.nodes[0]);
     expect(result.document.version).toBe(CURRENT_VERSION);
+  });
+
+  it('keeps participant attachments on connectors between sequences', () => {
+    const doc = documentWith(sample());
+    const source = doc.nodes[0]!.id;
+    const target = { ...createNode({ type: 'sequence', x: 720, y: 40 }), sequence: sample() };
+    const edge = createEdge({
+      source,
+      target: target.id,
+      sourceAnchor: { side: 'right', offset: 0.25, participantId: 'b' },
+      targetAnchor: { side: 'left', offset: 0.5, participantId: 'a' },
+    });
+    const result = parseDocument(serializeDocument({ ...doc, nodes: [...doc.nodes, target], edges: [edge] }));
+    expect(result.ok && result.document.edges[0]).toMatchObject({
+      sourceAnchor: edge.sourceAnchor,
+      targetAnchor: edge.targetAnchor,
+    });
   });
 
   it('a sequence node with nothing in it reads as an empty sequence, not a note', () => {

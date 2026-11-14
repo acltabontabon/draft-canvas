@@ -238,6 +238,22 @@ describe('lifetimes and work', () => {
 });
 
 describe('finding things', () => {
+  it('numbers message arrows in reading order across fragments', () => {
+    const layout = lay(checkout());
+    expect(layout.messages.map(({ id, number }) => [id, number])).toEqual(
+      messagesOf(checkout()).map(({ id }, index) => [id, index + 1]),
+    );
+  });
+
+  it('leaves an insertion target clear of a self-message and the message after it', () => {
+    const layout = lay({ participants: [who('a'), who('b')], items: [call('self', 'a', 'a'), call('next', 'a', 'b')] });
+    const [self, next] = layout.messages;
+    const slot = slotFor(layout, null, 1)!;
+    expect(slot.y - (self!.box.y + self!.box.h)).toBeGreaterThanOrEqual(9);
+    expect(next!.box.y - slot.y).toBeGreaterThanOrEqual(9);
+    expect(hitSequence(layout, layout.columns[0]!.x, slot.y)).toEqual({ kind: 'lifeline', participantId: 'a' });
+  });
+
   it('a point on a message, a head, a frame’s tab and a lifeline each find what is there', () => {
     const layout = lay(checkout());
     const post = layout.messages.find((message) => message.id === 'post')!;

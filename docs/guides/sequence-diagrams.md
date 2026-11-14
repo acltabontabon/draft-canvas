@@ -8,41 +8,47 @@ say who takes part and what happens; you never place a lifeline, size an arrow o
 
 ## Start one
 
-Press `L`, or click **Sequence** on the toolbar and then the canvas. The first participant is
-already waiting for its name.
+Press `L`, or click **Sequence** in the toolbar and then click the canvas. The sequence starts
+with **Participant 1**. Click **+** to add another participant anywhere along the row, with a
+default name assigned immediately.
 
-1. Type a name and press `Enter`. The next participant opens beside it.
-2. Repeat for each participant, then press `Esc` on the empty one.
+Double-click a participant to rename it. Press `Enter` or click away to save the name. While
+editing, use the arrow keys to browse suggestions. Click an option to choose a participant
+type, a matching technology, or [a shape already on the canvas](#use-shapes-from-your-architecture).
 
-![Naming a participant: the list offers what it could be.](../media/guides/sequence-participants.png)
-
-The list under the name offers what the participant could be. A plain `Enter` takes the marked
-one; the arrow keys choose another:
-
-- **A shape already on the canvas** with that name. The participant then stands for it
-  ([see below](#use-shapes-from-your-architecture)).
-- **A technology** the name matches. "Kafka" is a topic with its logo; "PostgreSQL" a data store.
-- **A kind of shape**: Service, Actor, Data Store, Queue or Component.
-
-The head shows the choice before you make it.
+![Renaming a participant in place.](../media/guides/sequence-participants.png)
 
 ## Add messages
 
-Drag from one lifeline to another, then type what the message says. The row where it will land is
-shown while you drag.
+Drag from one lifeline to another, then type what the message says. The arrow follows the pointer,
+the destination lifeline lights up, and a dot marks where the message will land.
 
-- Drag past the last lifeline to add a participant with the message.
+New messages start with the same editable label as a canvas connection between those shapes.
+For example, a service calling a data store starts with **reads / writes**. A cache starts with
+**reads from**. Type to replace the label or press `Enter` to keep it.
+
+By default, arrows are numbered in reading order. The numbers update when messages are inserted,
+moved, or deleted. Click the sequence title or frame, then toggle **Message numbers** in the
+inspector. Each sequence saves its own setting.
+
+- Drag past the last lifeline to add a participant with a default name and write the message.
 - Drag away and back onto the same lifeline for a message to itself.
 - Hover between two participants and click **+** to add one there. The others make room.
 
-With the keyboard, `Tab` adds the message that usually comes next, shown faintly below the
-selection; `]` and `[` offer others (a reply, an onward call, a call to itself).
+Click the suggested message below the selection or press `Tab` to add it. Use `]` and `[` to
+browse other suggestions, such as a reply, a call onward, or a call to itself.
 
 ![The next message offered after a call.](../media/guides/sequence-next.png)
 
 A call starts work on its receiver, drawn as a bar on the lifeline. **Add reply** puts the reply
 below whatever that call set going, and ends the bar. Nothing is added that you did not ask for:
 a reply is never inserted on its own.
+
+To connect two sequences, drag from a lifeline in one frame to a participant's head or lifeline
+in the other. The connector stays attached as you move either frame or reorder its participants.
+Select it to edit its label as you would any canvas connector.
+
+![A connector from the Checkout API lifeline to the Orders worker in another sequence.](../media/guides/sequence-cross-frame.png)
 
 ## Select and change
 
@@ -51,7 +57,7 @@ What you can do appears beside it and nowhere else.
 
 | Selected | You can |
 | --- | --- |
-| Participant | Rename, change its shape, kind or technology, link or unlink a shape, group, delete |
+| Participant | Rename, change its colour, shape, kind or technology, link or unlink a shape, group, delete |
 | Message | Edit, make it a **Call**, **Asynchronous**, **Reply**, **Create** or **Destroy**, reverse it, turn its work bar on or off, add a reply or a note, duplicate, delete |
 | Several messages | **Wrap in…** a condition, optional part, loop, parallel branches, break or critical section |
 | Frame or branch | Change its kind, edit the condition, add, move or remove a branch, unwrap, delete |
@@ -62,6 +68,9 @@ The right-click menu and `⌘K` offer the same commands.
 - **Reorder** by dragging a message or frame up or down, or a participant sideways. A move that
   cannot be right (a reply above its call, a message to something not yet created) is refused, and
   says why.
+- **Change the sender or receiver** by selecting a message and dragging either end of its arrow
+  to another participant's head or lifeline. The destination lifeline lights up, and the arrow
+  snaps into place on release.
 - **Asynchronous** is suggested, never assumed, where the receiver is usually sent to without
   waiting (a queue or topic). One click applies it.
 - **Create** starts the receiver's lifeline at that message; **Destroy** ends it.
@@ -135,12 +144,16 @@ sequence** draws it beside the diagram, with participants that stand for the flo
 Select the sequence and choose **Present this sequence** (also in `⌘K` and the right-click menu). It plays one
 message at a time with the same keys as a [flow](flows-and-presentation.md#present): what has been
 said stays, what is being said is lit, and the caption names the condition or branch it is in.
+The lifelines stay visible throughout.
+
+![Presentation highlights the current message and keeps every participant's lifeline visible.](../media/guides/sequence-present.png)
 
 ## Export and import
 
-- **Images** (PNG, SVG) show a sequence as drawn.
+- **Images** (PNG, SVG) show sequences as drawn, including message numbers and connectors between
+  frames.
 - **Share → Export → Other formats → Sequences** writes each sequence, and each flow, as
-  **Mermaid** or **PlantUML**, with its conditions, loops, work bars and groups.
+  standalone **Mermaid** or **PlantUML**, with its conditions, loops, work bars and groups.
 - Paste or import a Mermaid `sequenceDiagram` to get an editable sequence. Anything it uses that
   is not drawn is listed. See the [Mermaid import reference](../reference/mermaid-import.md#sequence-diagrams).
 - An [AI agent](connect-an-ai-agent.md) can add, read and change sequences when asked.

@@ -6,7 +6,7 @@ import { findItem, messagesOf } from '../src/document/sequenceModel';
 import { addOperand, createMessage, createReply, setMessageKind, wrapItems } from '../src/document/sequenceOps';
 import type { DraftSequence, SeqFragment, SeqMessage, SeqParticipant } from '../src/document/types';
 import { describeSequenceFocus, itemRange, neighbourItem } from '../src/sequence/focus';
-import { labelSuggestions, nextFromParticipant, nextMessages, suggestedKind } from '../src/sequence/suggest';
+import { defaultMessageLabel, labelSuggestions, nextFromParticipant, nextMessages, suggestedKind } from '../src/sequence/suggest';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { sequenceActions, sequenceIn } from '../src/store/sequenceActions';
 import { useUiStore } from '../src/store/uiStore';
@@ -82,6 +82,18 @@ describe('what is offered', () => {
   it('never suggests against a kind someone chose', () => {
     const chosen = setMessageKind(setMessageKind(messaging, 'publish', 'async'), 'publish', 'sync');
     expect(suggestedKind(chosen, messagesOf(chosen)[0]!)).toBeNull();
+  });
+
+  it('uses canvas captions for participant shapes and their technology-derived kinds', () => {
+    const sequence: DraftSequence = {
+      participants: [...messaging.participants, who('db', { type: 'database' }), who('cache', { type: 'database', databaseKind: 'cache', technology: 'Redis' })],
+      items: [],
+    };
+    expect(defaultMessageLabel(sequence, { from: 'orders', to: 'db' })).toBe('reads / writes');
+    expect(defaultMessageLabel(sequence, { from: 'orders', to: 'cache' })).toBe('reads from');
+    expect(defaultMessageLabel(sequence, { from: 'orders', to: 'events' })).toBe('publishes to');
+    expect(defaultMessageLabel(sequence, { from: 'db', to: 'orders', kind: 'reply' })).toBe('');
+    expect(defaultMessageLabel(sequence, { from: 'orders', to: 'orders' })).toBe('');
   });
 
   it('offers only words somebody already wrote: a connector between the linked shapes, what was said before', () => {
@@ -177,6 +189,7 @@ describe('in the editor', () => {
     const steps = editor().history.past.length;
     const id = sequenceActions.addMessage(nodeId, { from: client!, to: api! }, { operandId: null, index: 0 })!;
     expect(useUiStore.getState().sequenceEdit).toMatchObject({ target: { kind: 'message', id }, fresh: 'Add message' });
+    expect(messagesOf(sequenceIn(nodeId)!)[0]?.label).toBe('calls');
     sequenceActions.setLabel(nodeId, id, 'GET /cart');
     sequenceActions.edit(nodeId, null);
     expect(editor().history.past.length).toBe(steps + 1);

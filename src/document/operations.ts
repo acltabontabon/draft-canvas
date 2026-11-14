@@ -222,7 +222,7 @@ export function reconnectEdge(
     // Dropped back on the handle it came from: nothing moved, so no undo step.
     const previousAnchor = edge[anchorKey];
     const sameNode = (endpoint === 'source' ? edge.source : edge.target) === newNodeId;
-    if (sameNode && previousAnchor?.side === anchor?.side && previousAnchor?.offset === anchor?.offset) return edge;
+    if (sameNode && !previousAnchor?.participantId && previousAnchor?.side === anchor?.side && previousAnchor?.offset === anchor?.offset) return edge;
     changed = true;
     const next: DraftEdge =
       endpoint === 'source' ? { ...edge, source: newNodeId } : { ...edge, target: newNodeId };
@@ -263,7 +263,7 @@ export function pinEnds(doc: DraftDocument, pins: ReadonlyMap<string, { source?:
   const edges = doc.edges.map((edge) => {
     const pin = pins.get(edge.id);
     if (!pin) return edge;
-    const same = (a: EdgeAnchor | undefined, b: EdgeAnchor | undefined) => !b || (a?.side === b.side && a.offset === b.offset);
+    const same = (a: EdgeAnchor | undefined, b: EdgeAnchor | undefined) => !b || (a?.side === b.side && a.offset === b.offset && a.participantId === b.participantId);
     if (same(edge.sourceAnchor, pin.source) && same(edge.targetAnchor, pin.target)) return edge;
     changed = true;
     return {
