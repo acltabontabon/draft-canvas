@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { measureContext } from '../../src/agent/place';
-import { proportionFindings, resolvedBy, type ProportionFinding } from '../../src/agent/proportion';
+import { legibilityReceipt } from '../../src/agent/compile';
+import { legibilityOf } from '../../src/agent/legibility';
+import { proportionAdvice, proportionFindings, proportionReceipt, resolvedBy, type ProportionFinding } from '../../src/agent/proportion';
 import { createEdge, createNode } from '../../src/document/factory';
 import type { DraftNode } from '../../src/document/types';
 import { naturalArchitectureSize } from '../../src/nodes/describe';
@@ -84,5 +86,45 @@ describe('what an arrangement fixes', () => {
       .toBe('Fixes 2 stacked names, 1 cut-off caption, a small overview');
     expect(fixesNote([])).toBe('');
     expect(fixesNote(undefined)).toBe('');
+  });
+});
+
+describe('what an agent is told', () => {
+  const found: ProportionFinding[] = [
+    { kind: 'stacked-name', id: 'gateway' },
+    { kind: 'hidden-caption', id: 'e1' },
+    { kind: 'heavy-header', id: 'orders' },
+    { kind: 'sparse', id: '', scale: 0.4321 },
+  ];
+
+  it('lists the findings by id in the receipt, and nothing for a clean view', () => {
+    expect(proportionReceipt(found)).toEqual({
+      stackedNames: ['gateway'],
+      hiddenCaptions: ['e1'],
+      heavyHeaders: ['orders'],
+      smallOverview: { scale: 0.43, screen: [1440, 900] },
+    });
+    expect(proportionReceipt([])).toEqual({});
+  });
+
+  it('rides beside the legibility measures', () => {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'Orders' });
+    const receipt = legibilityReceipt(legibilityOf([a], []), [{ kind: 'stacked-name', id: 'a' }]);
+    expect(receipt).toMatchObject({ crossings: 0, stackedNames: ['a'] });
+    expect(legibilityReceipt(legibilityOf([a], []))).not.toHaveProperty('stackedNames');
+  });
+
+  it('advises each with the op that fixes it, only for what the edit touched', () => {
+    const all = proportionAdvice(found);
+    expect(all).toHaveLength(4);
+    expect(all[0]).toContain('"gateway"');
+    expect(all[0]).toContain('{"op":"arrange"}');
+    expect(all[2]).toContain('{"op":"arrange","scope":{"group":"orders"}}');
+    expect(all[3]).toContain('43%');
+    expect(all[3]).toContain('{"op":"arrange","spacing":"compact"}');
+
+    const mine = proportionAdvice(found, (id) => id === 'e1', false);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]).toContain('"e1"');
   });
 });

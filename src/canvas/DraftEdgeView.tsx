@@ -29,6 +29,7 @@ import {
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
+import { replyLabelPlan } from '../edges/replyLabels';
 import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { compensationLabelParts } from '../edges/compensationMarker';
@@ -309,6 +310,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Connectors leaving together under one label draw it once, on the run they share — see
   // `edges/labelGroups.ts`. The group is identity-stable out of a memoized plan, like `spine`.
   const labelGroup = useEditorStore((state) => labelGroupPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).groupFor(id));
+  // How far this connector's reply label moves to keep clear of a neighbour's
+  // (`edges/replyLabels.ts`): identity-stable out of a memoized plan, and `undefined` for most.
+  const replyShift = useEditorStore((state) => replyLabelPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).shiftFor(id));
   // A numbered step rides inside each connector's own label chip, so while a flow's steps show, a
   // group whose members carry them keeps separate labels.
   const groupStepped = useEditorStore((state) => {
@@ -731,7 +735,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // that nudge on top of the response lane used to push the response label tens of pixels
   // further away than the line it sits against. This paired anchor is cached with the routes
   // and shared with edges/describe.ts.
-  const responseLabel = routes.responseLabel;
+  // …then moved along its run when a neighbour's reply label would be written over it.
+  const responseLabel = routes.responseLabel && replyShift && !routeUnsettled
+    ? { ...routes.responseLabel, x: routes.responseLabel.x + replyShift.x, y: routes.responseLabel.y + replyShift.y }
+    : routes.responseLabel;
   // Compact by default; the response's own half of a two-phase presentation pulse also counts as
   // "useful to see right now", same as hover/selection.
   const responseRevealed = selected || hovering || pulseTarget === 'response';

@@ -112,3 +112,39 @@ export function resolvedBy(before: readonly ProportionFinding[], after: readonly
     return !sparseAfter || (sparseAfter.scale ?? 0) >= (finding.scale ?? 0) * CLEARLY_LARGER;
   });
 }
+
+/** What a receipt says of these findings, by id, beside the legibility counts; nothing when clean. */
+export function proportionReceipt(findings: readonly ProportionFinding[]) {
+  const ids = (kind: ProportionKind) => findings.filter((finding) => finding.kind === kind).map((finding) => finding.id).slice(0, 10);
+  const stacked = ids('stacked-name');
+  const hidden = ids('hidden-caption');
+  const heavy = ids('heavy-header');
+  const sparse = findings.find((finding) => finding.kind === 'sparse');
+  return {
+    ...(stacked.length ? { stackedNames: stacked } : {}),
+    ...(hidden.length ? { hiddenCaptions: hidden } : {}),
+    ...(heavy.length ? { heavyHeaders: heavy } : {}),
+    ...(sparse ? { smallOverview: { scale: Math.round((sparse.scale ?? 0) * 100) / 100, screen: [...OVERVIEW_SCREEN] } } : {}),
+  };
+}
+
+const quoted = (ids: readonly string[]) => ids.map((id) => `"${id}"`).join(', ');
+
+/**
+ * What to change for each finding, with the op that does it — for a receipt's advisories. `mine`
+ * narrows it to what an edit touched (an edit is not told to fix what it never went near); `sparse`
+ * is left out by a caller that knows the view was already that small before the edit.
+ */
+export function proportionAdvice(findings: readonly ProportionFinding[], mine: (id: string) => boolean = () => true, sparse = true): string[] {
+  const of = (kind: ProportionKind) => findings.filter((finding) => finding.kind === kind && mine(finding.id)).map((finding) => finding.id).slice(0, 3);
+  const out: string[] = [];
+  const stacked = of('stacked-name');
+  if (stacked.length) out.push(`${quoted(stacked)} ${stacked.length > 1 ? 'wrap their names' : 'wraps its name'} into a tall column: ${JSON.stringify({ op: 'arrange' })} gives a long name a wider box, or shorten the name.`);
+  const hidden = of('hidden-caption');
+  if (hidden.length) out.push(`The words on ${quoted(hidden)} have no room on ${hidden.length > 1 ? 'their lines and are' : 'its line and is'} cut short or left out: ${JSON.stringify({ op: 'arrange' })} makes the gap as long as the caption needs, or shorten the label.`);
+  const heavy = of('heavy-header');
+  if (heavy.length) out.push(`${heavy.length > 1 ? 'Boundaries' : 'Boundary'} ${quoted(heavy)} ${heavy.length > 1 ? 'are' : 'is'} mostly header, with ${heavy.length > 1 ? 'their' : 'its'} contents a strip at the bottom: ${JSON.stringify({ op: 'arrange', scope: { group: heavy[0] } })} fits it to what it holds.`);
+  const small = sparse ? findings.find((finding) => finding.kind === 'sparse') : undefined;
+  if (small) out.push(`Fitted to a ${OVERVIEW_SCREEN[0]}×${OVERVIEW_SCREEN[1]} screen this view is drawn at ${Math.round((small.scale ?? 0) * 100)}%, its smallest text too small to read: ${JSON.stringify({ op: 'arrange', spacing: 'compact' })} sets it tighter, or move detail into an element's inside view.`);
+  return out;
+}

@@ -98,6 +98,8 @@ where it goes. In **Result**, point at a shape to see its move, or click it to k
 column, a caption with no room to show, a boundary that is mostly header, and spacing that leaves the
 whole diagram too small to read on a screen. It reports only what Arrange fixes, by opening that
 preview with the fixes named in the bar and marked in teal. When there is nothing to fix it says so.
+**Tidy up** says the same when a diagram is already tidy but would read better laid out again, with
+**Show fix** to open that preview.
 
 ## Connect shapes
 

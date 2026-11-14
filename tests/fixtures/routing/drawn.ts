@@ -13,6 +13,7 @@ import { connectorRouteInputs } from '../../../src/edges/connectorRoutes';
 import { edgeRoutes } from '../../../src/edges/edgeRoutes';
 import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutEdgeLabel } from '../../../src/edges/labelLayout';
 import { labelChipBox, labelGroupPlan } from '../../../src/edges/labelGroups';
+import { replyLabelPlan } from '../../../src/edges/replyLabels';
 import { labelChipSide, labelLaneOffset, laneIndex, responseAwayAt, type Rect, type Side } from '../../../src/edges/routing';
 
 export interface DrawnLine {
@@ -47,6 +48,7 @@ export function drawnConnectors(
   const lanes = laneIndex(edges);
   const plan = routingPlan(nodes, edges, 'transient');
   const groups = labelGroupPlan(nodes, edges, 'transient');
+  const replies = replyLabelPlan(nodes, edges, 'transient');
   const out: DrawnConnector[] = [];
   for (const edge of edges) {
     const lane = lanes.get(edge.id)?.offset ?? 0;
@@ -79,6 +81,7 @@ export function drawnConnectors(
       obstacles: inputs.obstacles,
       ...(group ? { sharedLabel: { draws: group.members[0] === edge.id, x: group.x, y: group.y, side: group.side } } : {}),
       ...(points.length ? { openPoints: points } : {}),
+      replyShift: replies.shiftFor(edge.id),
     });
     out.push({
       edge,

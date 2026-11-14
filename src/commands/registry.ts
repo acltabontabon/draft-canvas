@@ -30,7 +30,7 @@ import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
 import { fileOf, fileWithLiveViewport, lensFlow, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
-import { pointer, type UiStore } from '../store/uiStore';
+import { pointer, type ArrangeDirection, type ArrangePreview, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
 import { useCollabStore } from '../store/collabStore';
 import { leaveSessionKeepingView, stopHosting } from '../store/collabBridge';
@@ -61,6 +61,7 @@ import type { GalleryCategory } from '../gallery';
 import { useGalleryStore } from '../store/galleryStore';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
 import { count } from '../lib/plural';
+import { fixesList } from '../lib/arrangeFixes';
 import { openPointsOverview, unresolvedTargetsIn } from '../openPoints/collect';
 import type { OpenPointTarget } from '../document/types';
 
@@ -680,7 +681,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
             if (preview) inner.ui.setTidyPreview(preview);
             // Said, so the command doesn't look like it did nothing; and the stronger tool is one
             // click away for a diagram that is tidy as drawn but wants laying out again.
-            else if (!inner.ui.readOnly) inner.ui.notify('Already tidy.', 'info', { label: 'Rearrange', run: () => rearrange(inner) });
+            else if (!inner.ui.readOnly) alreadyTidy(inner, scoped);
           })
           .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
       },
@@ -2044,16 +2045,54 @@ function checkLayout(inner: CommandContext): void {
   void inner.editor.planArrange()
     .then((plan) => {
       if (plan === null) return;
-      const fixes = typeof plan === 'object' ? Object.values(plan.fixes ?? {}).some((found) => found.length > 0) : false;
-      if (typeof plan !== 'object' || !fixes) {
-        inner.ui.notify('Nothing to fix: names, captions and spacing read well.');
-        return;
-      }
-      // The direction that fixes something, the suggested one first.
-      const direction = plan.fixes?.[plan.direction]?.length ? plan.direction : plan.direction === 'right' ? 'down' : 'right';
-      inner.ui.setArrangePreview({ ...plan, direction });
+      const fixing = fixingPlan(plan);
+      if (fixing) inner.ui.setArrangePreview(fixing);
+      else inner.ui.notify('Nothing to fix: names, captions and spacing read well.');
     })
     .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
+}
+
+/** An Arrange plan that fixes something `agent/proportion.ts` checks, opened on the direction that
+ *  does (the suggested one first); `null` for a plan that fixes none of it, or no plan at all. */
+function fixingPlan(plan: ArrangePreview | 'unchanged' | 'no-room' | null): ArrangePreview | null {
+  if (plan === null || typeof plan !== 'object') return null;
+  const fixes = (direction: ArrangeDirection) => plan.fixes?.[direction]?.length ?? 0;
+  if (fixes(plan.direction)) return plan;
+  const other: ArrangeDirection = plan.direction === 'right' ? 'down' : 'right';
+  return fixes(other) ? { ...plan, direction: other } : null;
+}
+
+/**
+ * Tidy up found nothing to do. Tidy as drawn is not the same as easy to read: when laying the view
+ * out again would fix a stacked name, a cut-off caption, a top-heavy boundary or a small overview,
+ * the toast says which and offers that preview. Otherwise it offers Rearrange as it always has. A
+ * tidied selection is told only that it is tidy: the findings are about the whole view.
+ */
+function alreadyTidy(inner: CommandContext, scoped: boolean): void {
+  const plain = () => inner.ui.notify('Already tidy.', 'info', { label: 'Rearrange', run: () => rearrange(inner) });
+  if (scoped) {
+    plain();
+    return;
+  }
+  void inner.editor.planArrange()
+    .then((plan) => {
+      const fixing = fixingPlan(plan);
+      if (!fixing) {
+        plain();
+        return;
+      }
+      inner.ui.notify(`Already tidy. Rearranging would fix ${fixesList(fixing.fixes?.[fixing.direction])}.`, 'info', {
+        label: 'Show fix',
+        // Only while the view is still the one the fix was worked out for.
+        run: () => {
+          const latest = useEditorStore.getState();
+          if (latest.document === fixing.base && latest.path === fixing.path) inner.ui.setArrangePreview(fixing);
+          else rearrange(inner);
+        },
+      });
+    })
+    // The check is a courtesy on top of the answer already known: never an error of its own.
+    .catch(plain);
 }
 
 export function arrangeSelectionCommands(ctx: CommandContext): Command[] {

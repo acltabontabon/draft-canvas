@@ -76,6 +76,8 @@ export interface EdgeDescribeContext {
    * none. Absent means its own label, where its own route puts it.
    */
   sharedLabel?: { draws: boolean; x: number; y: number; side: Side };
+  /** How far the reply's label moves to keep clear of a neighbour's (`edges/replyLabels.ts`). */
+  replyShift?: { x: number; y: number };
   /** Intentional Roughness. Defaults to `'clean'` at call sites
    *  that construct this object directly without a preset. */
   preset?: PersonalityPreset;
@@ -379,7 +381,9 @@ export function describeEdge(
       if (edge.response) {
         // Share the live canvas's paired anchor, not an independent longest-run midpoint or
         // the real-sibling label nudge, which would separate these words from their own arrow.
-        const responseLabel = responseLabelAnchor(route, responseRoute, rectOf(sourceNode), rectOf(targetNode), ctx.lane);
+        const anchor = responseLabelAnchor(route, responseRoute, rectOf(sourceNode), rectOf(targetNode), ctx.lane);
+        // Moved along its run when a neighbour's reply label would be written over it.
+        const responseLabel = ctx.replyShift ? { ...anchor, x: anchor.x + ctx.replyShift.x, y: anchor.y + ctx.replyShift.y } : anchor;
         const responseLayout = layoutEdgeResponse(edge.response, ctx.measurer);
         const w = responseLayout.width + LABEL_PADDING_X * 2;
         const h = responseLayout.height + LABEL_PADDING_Y * 2;

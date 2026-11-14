@@ -101,7 +101,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Check layout** — New in `⌘K`. It looks for names stacked into tall columns, captions with no
   room to show, boundaries that are mostly header and spacing that makes the whole diagram too small
   to read, and reports only what laying the view out again fixes: the Arrange preview opens with
-  the fixes named and marked. Every Arrange preview now says what it fixes.
+  the fixes named and marked. Every Arrange preview now says what it fixes, **Tidy up** names them
+  when a diagram is tidy but still reads badly, and agents get the same findings in their receipts.
+- Reply labels of neighbouring connectors no longer run into each other: each slides along its own
+  line to make room.
 - **Connector words are easier to read** — Labels and relationship captions are a size larger and
   brighter on the dark canvas, so a request can be followed without zooming in.
 - **Inspect an image before exporting** — Click the preview in Export to open it large, and switch to

@@ -15,6 +15,7 @@ import { laneIndex } from '../../edges/routing';
 import { routingPlan } from '../../edges/bundles';
 import { crossingPlan } from '../../edges/crossings';
 import { labelGroupPlan } from '../../edges/labelGroups';
+import { replyLabelPlan } from '../../edges/replyLabels';
 import { blurRadiusFor } from '../backgroundAnchor';
 import { themeFor, type Theme, type ThemeName } from '../theme/tokens';
 import { getMeasurer } from '../text/measure';
@@ -284,6 +285,7 @@ export function buildScene(
   // Connectors that leave together under one label draw it once, as on the canvas — unless a flow's
   // numbered steps are showing, which ride inside each connector's own label.
   const labels = labelGroupPlan(nodes, edges, 'transient');
+  const replies = replyLabelPlan(nodes, edges, 'transient');
   const sharedLabelOf = (edgeId: string) => {
     const group = labels.groupFor(edgeId);
     const stepped = edgeCtx.showSequence && group?.members.some((member) => stepIndexOf(options.selectedFlow, member) !== undefined);
@@ -317,6 +319,7 @@ export function buildScene(
       ...(edgePoints.length ? { openPoints: edgePoints } : {}),
       spine: plan.spineFor(edge.id),
       sharedLabel: sharedLabelOf(edge.id),
+      replyShift: replies.shiftFor(edge.id),
       obstacles: inputs?.obstacles ?? obstaclesForEdge(nodes, edge.source, edge.target, 'transient'),
       crossings: crossings.crossingsFor(edge.id),
       ...(inputs ? { routes: edgeRoutes(inputs, 'transient') } : {}),

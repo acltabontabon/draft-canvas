@@ -19,6 +19,8 @@ import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBo
 import { pastDeadline, relaxLayoutAnchors, repairAnchors, withDeadline, type KeptPin } from './route';
 import { buildFromStarter, type AgentStarter } from './starter';
 import { legibilityCost, legibilityOf, type Legibility } from './legibility';
+import { proportionAdvice, proportionFindings, proportionReceipt, type ProportionFinding } from './proportion';
+import type { DescribeContext } from '../nodes/describe';
 import { reviewFile } from './review';
 import { adviceFor } from './advice';
 import { routingPlan } from '../edges/bundles';
@@ -88,7 +90,9 @@ function composeWithin(raw: unknown, diagramId: string, report: Report, starter?
   // Every inside view measured as the top one is: a container view one level down that crosses itself
   // is as much the agent's to fix as the top, and without its numbers it could only find out by
   // rendering each view and looking.
-  const insides = insideLegibility(spec, placed);
+  const insides = insideLegibility(spec, placed, ctx);
+  // Names, captions, boundaries and spacing that read badly although every line is clean.
+  const proportion = proportionFindings(placed, ctx);
   // What the request itself could change for a clearer diagram comes first: it is the advice the agent
   // can act on in this same turn (see `advice.ts`). An inside view's advice says which view it is about.
   const advice = [
@@ -96,6 +100,10 @@ function composeWithin(raw: unknown, diagramId: string, report: Report, starter?
     // Judged against the inside view's own main path, which it was laid out around: advice to name one
     // when it already leads the view sent agents looking for a primaryFlow they had already given.
     ...(spec.starter ? [] : insides.flatMap(({ path, room, legibility: l }) => adviceFor(room, l, mainFlowOf(room)?.id).map((a) => `Inside ${path.join(' ▸ ')}: ${a}`))),
+    // A small overview is reported (`legibility.smallOverview`) but not advised here: a new diagram
+    // was just laid out, and `fit` already speaks for a request that named its viewport.
+    ...(spec.starter ? [] : proportionAdvice(proportion, undefined, false)),
+    ...(spec.starter ? [] : insides.flatMap(({ path, proportion: p }) => proportionAdvice(p, undefined, false).map((a) => `Inside ${path.join(' ▸ ')}: ${a}`))),
     ...levelAdvisories(document.nodes, document.level),
     ...placed.advisories,
   ];
@@ -112,8 +120,8 @@ function composeWithin(raw: unknown, diagramId: string, report: Report, starter?
       ...(issues.length || (fit && !fit.readable) ? { degraded: true } : {}),
       quality: qualityReceipt('whole-diagram', found),
       legibility: {
-        ...legibilityReceipt(legibility),
-        ...(insides.length ? { views: insides.map(({ path, legibility: l }) => ({ view: path, ...legibilityReceipt(l) })) } : {}),
+        ...legibilityReceipt(legibility, proportion),
+        ...(insides.length ? { views: insides.map(({ path, legibility: l, proportion: p }) => ({ view: path, ...legibilityReceipt(l, p) })) } : {}),
       },
       ...(fit ? { fit } : {}),
       ...(relaxed.kept.length ? { pinned: relaxed.kept.slice(0, 20) } : {}),
@@ -451,8 +459,10 @@ function relaxPlaced(room: RoomSpec, placed: PlacedRoom, ctx: ReturnType<typeof 
 }
 
 /** What a receipt says about legibility: the counts, and which connectors or notes to look at. */
-export function legibilityReceipt(l: Legibility) {
+export function legibilityReceipt(l: Legibility, proportion: readonly ProportionFinding[] = []) {
   return {
+    // Whether the view explains itself, beyond clean lines (`proportion.ts`): by id, only when found.
+    ...proportionReceipt(proportion),
     crossings: l.crossings,
     // Which ones, so an agent can see what crosses instead of re-arranging until the count moves.
     ...(l.crossed.length ? { crossed: l.crossed.slice(0, 8) } : {}),
@@ -472,14 +482,14 @@ function aboutOf(room: RoomSpec): Map<string, string> {
 }
 
 /** The legibility of every inside view, depth first, by the element ids leading down to it. */
-function insideLegibility(spec: RoomSpec, placed: PlacedRoom): { path: string[]; room: RoomSpec; legibility: Legibility }[] {
-  const out: { path: string[]; room: RoomSpec; legibility: Legibility }[] = [];
+function insideLegibility(spec: RoomSpec, placed: PlacedRoom, ctx: DescribeContext): { path: string[]; room: RoomSpec; legibility: Legibility; proportion: ProportionFinding[] }[] {
+  const out: { path: string[]; room: RoomSpec; legibility: Legibility; proportion: ProportionFinding[] }[] = [];
   const visit = (room: RoomSpec, nodes: readonly DraftNode[], path: string[]) => {
     for (const node of nodes) {
       const inner = node.inside && room.nodes.find((n) => n.id === node.id)?.inside;
       if (!node.inside || !inner) continue;
       const here = [...path, node.id];
-      out.push({ path: here, room: inner, legibility: legibilityOf(node.inside.nodes, node.inside.edges, aboutOf(inner)) });
+      out.push({ path: here, room: inner, legibility: legibilityOf(node.inside.nodes, node.inside.edges, aboutOf(inner)), proportion: proportionFindings(node.inside, ctx) });
       visit(inner, node.inside.nodes, here);
     }
   };

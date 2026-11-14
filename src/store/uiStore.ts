@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import type { ArrangeFix } from '../lib/arrangeFixes';
 import type { Preset } from '../lib/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
@@ -165,11 +166,7 @@ export interface ArrangePreview {
   fixes?: Partial<Record<ArrangeDirection, ArrangeFix[]>>;
 }
 
-/** One thing an arrangement fixes: the kind, and the shape, connector or boundary (none for `sparse`). */
-export interface ArrangeFix {
-  kind: 'stacked-name' | 'hidden-caption' | 'heavy-header' | 'sparse';
-  id: string;
-}
+export type { ArrangeFix };
 
 export type ArrangeDirection = 'right' | 'down';
 

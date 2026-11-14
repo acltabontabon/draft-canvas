@@ -617,7 +617,7 @@ function receiptCounts(result: Extract<JobResult, { kind: 'update' }>) {
     ...(result.counts.arranged ? { arranged: result.counts.arranged } : {}),
     ...advisoriesReceipt(result.advisories, 5),
     quality: qualityReceipt('touched', result.quality),
-    ...(result.legibility ? { legibility: legibilityReceipt(result.legibility) } : {}),
+    ...(result.legibility ? { legibility: legibilityReceipt(result.legibility, result.proportion) } : {}),
   };
 }
 
