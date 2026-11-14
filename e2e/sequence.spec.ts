@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { create, newCanvas, reopenAfterReload } from './canvas';
+import { connect, create, newCanvas, reopenAfterReload } from './canvas';
 
 /**
  * A sequence on the canvas, driven the way a person drives it: named participants, messages drawn
@@ -25,10 +25,14 @@ async function newSequence(page: Page, participants: string[], at = { x: 420, y:
   for (const [index, name] of participants.entries()) {
     await page.keyboard.type(name);
     await page.keyboard.press('Enter');
-    await expect(page.locator(HEAD)).toHaveCount(index + 1);
+    // The next one is already standing there, waiting for its name.
+    await expect(page.locator(HEAD)).toHaveCount(index + 2);
+    await expect(page.locator(NEW_PARTICIPANT)).toBeFocused();
   }
+  // Left unnamed, it goes again.
   await page.keyboard.press('Escape');
   await expect(page.locator(NEW_PARTICIPANT)).toHaveCount(0);
+  await expect(page.locator(HEAD)).toHaveCount(participants.length);
 }
 
 /** Drags from one lifeline to another near the bottom of both, then types what the message says. */
@@ -144,9 +148,9 @@ test.describe('Sequence', () => {
     await newCanvas(page, 'Keyboard');
     await newSequence(page, ['Client', 'API', 'Database']);
 
-    // The last participant named is selected: over to Client, then take what is offered.
-    await page.keyboard.press('Alt+ArrowLeft');
-    await page.keyboard.press('Alt+ArrowLeft');
+    // The sequence is selected; the key that looks inside a shape steps into it, at its first participant.
+    await page.keyboard.press('ControlOrMeta+ArrowDown');
+    await expect(page.locator(`${HEAD}[data-focused="true"]`)).toHaveAttribute('aria-label', 'Participant Client');
     await expect(page.locator('.dc-seq-ghost-hint')).toContainText('Client calls API');
     for (const label of ['GET /orders', 'SELECT orders', 'rows', '200 OK']) {
       await page.keyboard.press('Tab');
@@ -172,17 +176,8 @@ test.describe('Sequence', () => {
     await expect(page.locator('.react-flow__node.selected')).toHaveCount(1);
   });
 
-  test('a shape dropped in stands in the sequence, stays in the architecture, and the two are renamed together', async ({ page }) => {
-    await newCanvas(page, 'Linked');
-    await create(page, 'Service', { x: 220, y: 520 });
-    const shape = page.locator('.dc-node[data-type="service"]');
-    await shape.dblclick();
-    await page.keyboard.type('Checkout API');
-    await page.keyboard.press('Enter');
-    await page.keyboard.press('Escape');
-    await newSequence(page, ['Shopper', 'Orders'], { x: 620, y: 200 });
-
-    // Carry the shape over the sequence, between its two participants, and rest there.
+  /** Carries a shape over the sequence, between its first two participants, rests there and lets go. */
+  async function dropBetweenFirstTwo(page: Page, shape: ReturnType<Page['locator']>, hint: string) {
     const home = (await shape.boundingBox())!;
     const first = (await page.locator(HEAD).nth(0).boundingBox())!;
     const second = (await page.locator(HEAD).nth(1).boundingBox())!;
@@ -190,16 +185,46 @@ test.describe('Sequence', () => {
     await page.mouse.move(home.x + home.width / 2, home.y + home.height / 2);
     await page.mouse.down();
     await page.mouse.move(over.x, over.y, { steps: 12 });
-    await expect(page.locator('.dc-seq-stand[data-drop="true"]')).toContainText('Add as participant');
+    await expect(page.locator('.dc-seq-stand[data-drop="true"]')).toContainText(hint);
     await page.mouse.up();
+    return home;
+  }
 
-    // It stands between the two, and the shape is back exactly where it was.
-    await expect(page.locator(HEAD)).toHaveCount(3);
+  test('a shape on its own, dropped in, moves into the sequence: nothing is left behind', async ({ page }) => {
+    await newCanvas(page, 'Moved in');
+    await create(page, 'Data Store', { x: 220, y: 520 });
+    const shape = page.locator('.dc-node[data-type="database"]');
+    await newSequence(page, ['Shopper', 'Orders API'], { x: 620, y: 200 });
+
+    await dropBetweenFirstTwo(page, shape, 'Move into the sequence');
+    await expect(shape).toHaveCount(0);
     expect(await page.locator(HEAD).evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))).toEqual([
       'Participant Shopper',
-      'Participant Checkout API',
-      'Participant Orders',
+      'Participant Data Store',
+      'Participant Orders API',
     ]);
+    // It is the participant now, not a stand-in for something else.
+    await expect(page.locator('.dc-seq-link')).toHaveCount(0);
+
+    // One step back and it is on the canvas again, where it was.
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(shape).toHaveCount(1);
+    await page.locator(SEQUENCE).hover();
+    await expect(page.locator(HEAD)).toHaveCount(2);
+  });
+
+  test('a shape that is part of a diagram stays in it, stands in the sequence, and the two are renamed together', async ({ page }) => {
+    await newCanvas(page, 'Linked');
+    await create(page, 'Service', { x: 180, y: 520 });
+    await create(page, 'Data Store', { x: 520, y: 520 });
+    await connect(page, 0, 1);
+    const shape = page.locator('.dc-node[data-type="service"]');
+    await page.keyboard.press('Escape');
+    await newSequence(page, ['Shopper', 'Orders'], { x: 760, y: 160 });
+
+    const home = await dropBetweenFirstTwo(page, shape, 'stays linked');
+    await expect(page.locator(HEAD)).toHaveCount(3);
     const back = (await shape.boundingBox())!;
     expect(Math.abs(back.x - home.x)).toBeLessThan(1);
     expect(Math.abs(back.y - home.y)).toBeLessThan(1);
@@ -222,6 +247,39 @@ test.describe('Sequence', () => {
     await page.locator(SEQUENCE).hover();
     await expect(page.locator(HEAD)).toHaveCount(2);
     await expect(shape).toHaveCount(1);
+  });
+
+  test('a shape tool put down on a sequence adds a participant of that kind, and the + between two adds one there', async ({ page }) => {
+    await newCanvas(page, 'Placed');
+    await newSequence(page, ['Shopper', 'Orders API']);
+
+    // Data Store from the toolbar, clicked past the last participant.
+    await page.getByRole('toolbar', { name: 'Create' }).getByRole('button', { name: 'Data Store', exact: true }).click();
+    const last = (await page.locator(HEAD).nth(1).boundingBox())!;
+    await page.mouse.click(last.x + last.width + 24, last.y + last.height + 40);
+    await expect(page.locator(HEAD)).toHaveCount(3);
+    await expect(page.locator('.dc-node[data-type="database"]')).toHaveCount(0);
+    await page.keyboard.type('Orders');
+    await page.keyboard.press('Enter');
+    await page.locator(HEAD).nth(2).click();
+    await expect(page.locator(`${INSPECTOR} .dc-inspector-select`).first()).toContainText('Data Store');
+
+    // The + between the first two: the others make room, and the name is typed where it will stand.
+    await page.keyboard.press('Escape');
+    await page.locator('.dc-seq-add').nth(1).click();
+    await expect(page.locator(NEW_PARTICIPANT)).toBeFocused();
+    await expect(page.locator(HEAD)).toHaveCount(4);
+    await page.keyboard.type('Gateway');
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    expect(await page.locator(HEAD).evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')))).toEqual([
+      'Participant Shopper',
+      'Participant Gateway',
+      'Participant Orders API',
+      'Participant Orders',
+    ]);
+    // With the naming done the sequence itself is selected again, and offers what comes next.
+    await expect(page.locator(INSPECTOR).getByRole('button', { name: 'Add participant' })).toBeVisible();
   });
 
   test('is presented one message at a time, through the canvas’s own presentation', async ({ page }) => {

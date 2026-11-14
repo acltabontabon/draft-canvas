@@ -415,8 +415,12 @@ export interface UiStore {
   sequenceEdit: SequenceEdit | null;
   /** Which of the offered next messages is showing, for the selection inside a sequence. Back to the first whenever that selection changes. */
   sequenceGhost: number;
-  /** Where a shape being dragged over a sequence would join it as a participant. */
-  sequenceDropTarget: { nodeId: string; index: number } | null;
+  /**
+   * Where a shape being dragged over a sequence would join it as a participant. `stays`: the shape
+   * is part of a diagram (it has connectors, notes or an inside), so it stays where it is and the
+   * participant stands for it; otherwise the shape itself moves in.
+   */
+  sequenceDropTarget: { nodeId: string; index: number; stays: boolean } | null;
   /**
    * The element a presenter clicked open while presenting — a chip on a connector, or a node's
    * attachment badge. Presentation Mode's callout shows that element's attachments instead of
@@ -677,7 +681,7 @@ export interface UiStore {
   setSequenceFocus: (focus: SequenceFocus | null) => void;
   setSequenceEdit: (edit: SequenceEdit | null) => void;
   setSequenceGhost: (index: number) => void;
-  setSequenceDropTarget: (target: { nodeId: string; index: number } | null) => void;
+  setSequenceDropTarget: (target: { nodeId: string; index: number; stays: boolean } | null) => void;
   requestRecovery: (edgeId: string | null, actionId?: string | null) => void;
   setRecoveryConnect: (gesture: UiStore['recoveryConnect']) => void;
   setEditingText: (id: string | null) => void;
@@ -925,7 +929,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setSequenceEdit: (sequenceEdit) => set({ sequenceEdit }),
   setSequenceDropTarget: (sequenceDropTarget) =>
     set((state) =>
-      state.sequenceDropTarget?.nodeId === sequenceDropTarget?.nodeId && state.sequenceDropTarget?.index === sequenceDropTarget?.index
+      state.sequenceDropTarget?.nodeId === sequenceDropTarget?.nodeId &&
+      state.sequenceDropTarget?.index === sequenceDropTarget?.index &&
+      state.sequenceDropTarget?.stays === sequenceDropTarget?.stays
         ? state
         : { sequenceDropTarget },
     ),

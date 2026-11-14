@@ -5,6 +5,7 @@ import { findItem, messagesOf } from '../src/document/sequenceModel';
 import { addOperand, createFragment, createMessage, createNote, createReply, groupParticipants, insertItem, moveItem, wrapItems } from '../src/document/sequenceOps';
 import type { DraftSequence, SeqFragment, SeqItem, SeqMessage, SeqParticipant } from '../src/document/types';
 import { describeContext, describeNode, naturalSequenceSizeFor, sequenceLayoutFor } from '../src/nodes/describe';
+import { UNNAMED_HEAD_WIDTH } from '../src/nodes/sequence';
 import { LIGHT } from '../src/render/theme/tokens';
 import {
   columnNear,
@@ -296,6 +297,17 @@ describe('as a node', () => {
     expect(drawn.shapes.filter((shape) => shape.t === 'group')).toHaveLength(5);
     expect(describeNode(sized, ctx)).toEqual(drawn);
     expect(sequenceLayoutFor(sized, ctx)).toBe(sequenceLayoutFor(sized, ctx));
+  });
+
+  it('one still waiting for its name stands as wide as the field it is typed in, so the field covers nobody else', () => {
+    const blank = { id: 'new', name: '', type: 'service' as const };
+    const sequence = { ...checkout(), participants: [checkout().participants[0]!, blank, ...checkout().participants.slice(1)] };
+    const node = { ...createNode({ type: 'sequence', x: 0, y: 0, text: 'Checkout' }), sequence };
+    const layout = sequenceLayoutFor({ ...node, ...naturalSequenceSizeFor(node, ctx) }, ctx);
+    const [left, made, right] = layout.columns;
+    expect(made!.head.w).toBeGreaterThanOrEqual(UNNAMED_HEAD_WIDTH);
+    expect(left!.head.x + left!.head.w).toBeLessThan(made!.head.x);
+    expect(made!.head.x + made!.head.w).toBeLessThan(right!.head.x);
   });
 
   it('the size it asks for does not depend on the box it is in', () => {

@@ -407,6 +407,13 @@ export interface EditorStore {
   /** `label` overrides the one `beginInteraction` opened with, when the gesture turned out to be
    *  something else (a drag that ended as an attach). */
   endInteraction: (label?: string) => void;
+  /**
+   * Gives up the step `beginInteraction` opened: the document goes back to exactly what it was when
+   * it began, and nothing is recorded. For a thing made and then let go before it was finished — a
+   * participant added and left unnamed — where putting things back by hand would leave an undo step
+   * that does nothing.
+   */
+  abandonInteraction: () => void;
 
   /* Editing commands */
   addNode: (input: CreateNodeInput) => DraftNode;
@@ -1668,6 +1675,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         ...keys,
       }),
     }));
+  },
+
+  abandonInteraction() {
+    const active = interaction;
+    interaction = null;
+    if (!active) return;
+    // Only in the room it began in; anywhere else the baseline is no longer ours to put back.
+    if (get().document === active.document || !samePath(active.path, get().path)) return;
+    set((s) => ({ document: active.document, selection: active.selection, revision: s.revision + 1 }));
+    closeStaleAttachmentDetail(active.document);
   },
 
   addNode(input) {

@@ -4,7 +4,7 @@ import type { DraftNode } from '../../document/types';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { cssFont, FONTS, LINE_HEIGHTS, type FontSpec } from '../../render/text/fonts';
 import type { SequenceEditTarget } from '../../sequence/focus';
-import { participantGapX, type SequenceLayout } from '../../sequence/layout';
+import type { SequenceLayout } from '../../sequence/layout';
 import { labelSuggestions } from '../../sequence/suggest';
 import { useEditorStore } from '../../store/editorStore';
 import { sequenceActions } from '../../store/sequenceActions';
@@ -140,50 +140,35 @@ function MessageLabel({
   );
 }
 
-/** Naming a new participant: a field in the gap it will stand in, with what the name could mean listed under it. */
-function NewParticipant({ node, layout, target }: { node: DraftNode; layout: SequenceLayout; target: Extract<SequenceEditTarget, { kind: 'new-participant' }> }) {
+/**
+ * Naming a participant that was added a moment ago. It is already in the sequence — the lifelines
+ * have made room and the field sits on its head — and under the field is what the name could mean.
+ * Enter keeps it and goes on to the next one; leaving it empty, or Escape, takes it out again.
+ */
+function NamingParticipant({ node, layout, target }: { node: DraftNode; layout: SequenceLayout; target: Extract<SequenceEditTarget, { kind: 'participant' }> }) {
   const sequence = sequenceOf(node);
   const [query, setQuery] = useState('');
-  const { options, preferred } = useMemo(
-    () => participantOptions(query, useEditorStore.getState().document.nodes, sequence),
-    [query, sequence],
-  );
+  // The others in the sequence: a shape one of them already stands for is not offered twice.
+  const others = useMemo(() => ({ ...sequence, participants: sequence.participants.filter((participant) => participant.id !== target.id) }), [sequence, target.id]);
+  const { options, preferred } = useMemo(() => participantOptions(query, useEditorStore.getState().document.nodes, others), [query, others]);
   const [picked, setPicked] = useState<number | null>(null);
   const active = Math.min(options.length - 1, picked ?? preferred);
+  const column = layout.columns.find((entry) => entry.id === target.id);
+  if (!column) return null;
+  // The head was laid out as wide as this field (`UNNAMED_HEAD_WIDTH`), so the field sits on it and on nothing else.
+  const width = column.head.w;
 
-  const x = layout.columns.length === 0 ? layout.width / 2 : participantGapX(layout, target.index);
-  const heads = layout.columns.filter((column) => !column.created);
-  const y = heads.length > 0 ? Math.max(...heads.map((column) => column.head.y + column.head.h)) - 34 : Math.max(44, layout.bodyTop - 10);
-  const width = 168;
-
-  const create = (option: ParticipantOption | undefined, how: 'enter' | 'blur') => {
+  const finish = (option: ParticipantOption | undefined, how: 'enter' | 'blur') => {
     const typed = query.replace(/\s+/g, ' ').trim();
-    const linked = option?.key.startsWith('shape:') || option?.key.startsWith('technology:');
-    // Nothing typed and nothing picked from the list: there is no participant to make.
-    if (!option || (!typed && !linked)) {
-      sequenceActions.edit(node.id, null);
-      return;
-    }
-    const id = sequenceActions.addParticipant(node.id, option.participant, target.index);
-    if (!id) {
-      sequenceActions.edit(node.id, null);
-      return;
-    }
-    if (target.message) {
-      sequenceActions.addMessage(node.id, { from: target.message.from, to: id }, target.message.slot);
-    } else if (how === 'enter') {
-      // Straight on to the next one: "Client ⏎ API ⏎ Database ⏎" is three participants.
-      sequenceActions.edit(node.id, { kind: 'new-participant', index: target.index + 1 });
-    } else {
-      sequenceActions.edit(node.id, null);
-    }
+    const named = option?.key.startsWith('shape:') || option?.key.startsWith('technology:');
+    // Nothing typed and nothing picked from the list: there is no participant to keep.
+    const is = option && (typed || named) ? option.participant : null;
+    sequenceActions.finishNaming(node.id, target.id, is, how === 'enter' ? 'next' : 'done');
   };
 
   return (
-    <div className="dc-seq-new nodrag nopan nowheel" style={{ left: x - width / 2, top: y, width }} onPointerDown={(event) => event.stopPropagation()}>
+    <div className="dc-seq-new nodrag nopan nowheel" style={{ left: column.x - width / 2, top: column.head.y + column.head.h / 2 - 13, width }} onPointerDown={(event) => event.stopPropagation()}>
       <Field
-        // Remounted for each new participant, so the field is empty and focused again.
-        key={`${target.index}:${sequence.participants.length}`}
         style={{ width, height: 26 }}
         font={FONTS.nodeLabel}
         value=""
@@ -194,8 +179,8 @@ function NewParticipant({ node, layout, target }: { node: DraftNode; layout: Seq
           setQuery(value);
           setPicked(null);
         }}
-        onCommit={(_value, how) => create(how === 'blur' && picked === null ? options[preferred] : options[active], how)}
-        onCancel={() => sequenceActions.edit(node.id, null)}
+        onCommit={(_value, how) => finish(how === 'blur' && picked === null ? options[preferred] : options[active], how)}
+        onCancel={() => sequenceActions.finishNaming(node.id, target.id, null)}
         onKey={(event) => {
           if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return false;
           event.preventDefault();
@@ -213,7 +198,7 @@ function NewParticipant({ node, layout, target }: { node: DraftNode; layout: Seq
             // `mousedown`, not `click`: the field's blur would otherwise commit before the click lands.
             onMouseDown={(event) => {
               event.preventDefault();
-              create(option, 'enter');
+              finish(option, 'enter');
             }}
           >
             <span className="dc-seq-option-label">{option.label}</span>
@@ -229,7 +214,8 @@ export function SequenceEditors({ node, layout, target }: { node: DraftNode; lay
   const sequence = sequenceOf(node);
   const close = () => sequenceActions.edit(node.id, null);
 
-  if (target.kind === 'new-participant') return <NewParticipant node={node} layout={layout} target={target} />;
+  // Keyed by the participant, so going on to the next one starts with an empty, focused field.
+  if (target.kind === 'participant' && target.naming) return <NamingParticipant key={target.id} node={node} layout={layout} target={target} />;
 
   if (target.kind === 'participant') {
     const participant = sequence.participants.find((entry) => entry.id === target.id);

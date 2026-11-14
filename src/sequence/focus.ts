@@ -6,7 +6,7 @@
  * against the sequence it names, so it can be kept in the transient UI state and never outlive
  * what it points at.
  */
-import { findItem, findOperand, itemsAt, slotOf, walkItems, type SeqSlot } from '../document/sequenceModel';
+import { findItem, findOperand, itemsAt, slotOf, walkItems } from '../document/sequenceModel';
 import type { DraftSequence, SeqItem } from '../document/types';
 
 export interface SequenceFocus {
@@ -24,9 +24,13 @@ export interface SequenceFocus {
 }
 
 export type SequenceEditTarget =
-  | { kind: 'participant'; id: string }
-  /** `message`: a message waiting on the new participant — drawn out past the last lifeline. */
-  | { kind: 'new-participant'; index: number; message?: { from: string; slot: SeqSlot } }
+  /**
+   * A participant's name. `naming` marks one that was added a moment ago and is being named for the
+   * first time: the field then lists what the name could mean (a shape on the canvas, a technology,
+   * a kind), Enter goes on to the next participant, and leaving it empty takes the participant away
+   * again. `message` is a message drawn out to it before it had a name.
+   */
+  | { kind: 'participant'; id: string; naming?: boolean; message?: string }
   | { kind: 'message'; id: string }
   | { kind: 'note'; id: string }
   | { kind: 'guard'; id: string }
@@ -81,8 +85,6 @@ export function liveSequenceFocus(sequence: DraftSequence, focus: SequenceFocus)
 
 export function sequenceEditStillThere(sequence: DraftSequence, target: SequenceEditTarget): boolean {
   switch (target.kind) {
-    case 'new-participant':
-      return true;
     case 'participant':
       return exists(sequence, 'participant', target.id);
     case 'group':

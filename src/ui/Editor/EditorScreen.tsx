@@ -35,6 +35,10 @@ import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../../lib/isEditableTarget';
 import { handleSequenceKey } from '../../canvas/sequence/sequenceKeys';
+import { sequenceActions, sequenceSeatAt } from '../../store/sequenceActions';
+import { isLinkable } from '../../document/sequenceLinks';
+import { displayNameFor as nameOfShape } from '../../document/factory';
+import type { SeqParticipant } from '../../document/types';
 import { centerOf, overlapArea } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, hasSomethingToFit, lensFlow, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
@@ -239,6 +243,21 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           ? naturalCodeSize(code, describeContext(theme))
           : undefined;
 
+      // A piece of architecture put down on a sequence joins it: a participant of that kind, where
+      // the pointer is, opening for its name like any new shape. The same whichever way it was put
+      // down — a tool from the toolbar, a key over the canvas, the palette, the right-click menu.
+      // (`position` is the corner of a default shape centred on the point: see below.)
+      if (!spliceEdgeId && isLinkable({ type: preset.type })) {
+        const seat = sequenceSeatAt({ x: position.x + 88, y: position.y + 34 });
+        if (seat) {
+          const started = preset.technology ? technologyStart(preset.type, preset.technology) : {};
+          const is = { type: preset.type, ...started } as Omit<SeqParticipant, 'id' | 'name'>;
+          const name = preset.technology ?? preset.text ?? nameOfShape({ ...is, text: undefined });
+          sequenceActions.startParticipant(seat.nodeId, seat.index, { is: { ...is, name } });
+          arm(null);
+          return null;
+        }
+      }
       // Refused past the node cap, with a toast — the store's `addNode` itself stays unconditional.
       if (!roomFor(1, 0)) return null;
       // Every caller hands the top-left a default 176×68 shape centred on the point would have
@@ -276,9 +295,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // to edit, not a name) and a junction (an `ellipse`, nothing to name) are left as they are.
       if (autoEdit && hasNameToType(node.type)) useUiStore.getState().requestEdit(node.id);
       // A sequence opens asking who takes part: type a name, Enter, the next name, Enter.
-      if (autoEdit && node.type === 'sequence') {
-        useUiStore.getState().setSequenceEdit({ nodeId: node.id, target: { kind: 'new-participant', index: 0 } });
-      }
+      if (autoEdit && node.type === 'sequence') sequenceActions.startParticipant(node.id, 0);
       return node;
     },
     [arm, theme],

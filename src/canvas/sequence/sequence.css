@@ -221,6 +221,8 @@
 }
 
 .dc-seq-options {
+  /* Wider than a narrow head when it has to be: below the heads there are only lifelines to cover. */
+  min-width: 176px;
   margin: 6px 0 0;
   padding: 4px;
   border: 1px solid var(--dc-border);

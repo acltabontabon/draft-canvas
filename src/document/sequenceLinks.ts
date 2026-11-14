@@ -32,6 +32,21 @@ export function identityOf(node: DraftNode & { type: SeqParticipantType }): Omit
   return identity;
 }
 
+/**
+ * Whether a shape is part of a diagram, and so stays in it when it is dropped into a sequence: it
+ * is connected to something, sits in a boundary, has a view inside it, carries a note or an open
+ * point, is a step in a flow, or another sequence already has it standing in it. One that is none
+ * of these is a shape on its own, and putting it into a sequence moves it there — leaving it behind
+ * as well would be a copy nobody asked for.
+ */
+export function isPartOfDiagram(document: DraftDocument, node: DraftNode): boolean {
+  if (node.parentId || node.inside || (node.attachments?.length ?? 0) > 0) return true;
+  if (document.edges.some((edge) => edge.source === node.id || edge.target === node.id)) return true;
+  if ((document.openPoints ?? []).some((point) => point.targets.some((target) => target.kind === 'node' && target.id === node.id))) return true;
+  if ((document.flows ?? []).some((flow) => flow.steps.some((step) => step.extraNodeIds?.includes(node.id)))) return true;
+  return document.nodes.some((other) => other.sequence?.participants.some((participant) => participant.ref === node.id));
+}
+
 /** The participant that stands for `node`, linked to it. */
 export function participantFromNode(node: DraftNode & { type: SeqParticipantType }, id: string): SeqParticipant {
   return { id, ...identityOf(node), ref: node.id };

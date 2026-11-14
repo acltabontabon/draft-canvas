@@ -70,6 +70,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   const focus = useUiStore((state) => (state.sequenceFocus?.nodeId === nodeId ? state.sequenceFocus : null));
   const editing = useUiStore((state) => (state.sequenceEdit?.nodeId === nodeId ? state.sequenceEdit.target : null));
   const dropIndex = useUiStore((state) => (state.sequenceDropTarget?.nodeId === nodeId ? state.sequenceDropTarget.index : null));
+  const dropStays = useUiStore((state) => state.sequenceDropTarget?.nodeId === nodeId && state.sequenceDropTarget.stays);
 
   const rootRef = useRef<HTMLDivElement>(null);
   const held = useRef<(Held & { x: number; y: number }) | null>(null);
@@ -173,7 +174,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
       if (!done.slot) return;
       const slot: SeqSlot = { operandId: done.slot.operandId, index: done.slot.index };
       if (done.to === null) {
-        sequenceActions.edit(nodeId, { kind: 'new-participant', index: sequence.participants.length, message: { from: done.from, slot } });
+        sequenceActions.startParticipant(nodeId, sequence.participants.length, { message: { from: done.from, slot } });
       } else {
         sequenceActions.addMessage(nodeId, { from: done.from, to: done.to }, slot);
       }
@@ -201,6 +202,9 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   /* ----------------------------------------------------------------- selecting -- */
 
   const pick = (event: MouseEvent, kind: SequenceFocus['kind'], id: string) => {
+    // With a tool in hand the click is the tool's: it is being put down on the sequence, wherever on
+    // it the pointer happens to be (`createAt`).
+    if (useUiStore.getState().armed) return;
     event.stopPropagation();
     if (dragged.current) {
       dragged.current = false;
@@ -221,6 +225,12 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
     event.stopPropagation();
     if (readOnly) return;
     sequenceActions.edit(nodeId, target);
+  };
+
+  /** A new participant, standing at `index`: in the sequence at once, with its name being asked for. */
+  const add = (event: MouseEvent, index: number) => {
+    event.stopPropagation();
+    if (!readOnly) sequenceActions.startParticipant(nodeId, index);
   };
 
   /** A right-click on something not yet selected selects it first; the menu is then about it. */
@@ -407,7 +417,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
             aria-label={index === layout.columns.length ? 'Add a participant at the end' : `Add a participant before ${nameOf(layout.columns[index]!.id)}`}
             title="Add a participant"
             style={{ left: participantGapX(layout, index) - 9, top: headRowMiddle - 9 }}
-            onClick={(event) => open(event, { kind: 'new-participant', index })}
+            onClick={(event) => add(event, index)}
             onDoubleClick={(event) => event.stopPropagation()}
           />
         ))}
@@ -416,7 +426,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           type="button"
           className="dc-seq-empty nodrag nopan"
           style={{ left: node.width / 2, top: Math.max(node.height / 2, layout.bodyTop + 30) }}
-          onClick={(event) => open(event, { kind: 'new-participant', index: 0 })}
+          onClick={(event) => add(event, 0)}
           onDoubleClick={(event) => event.stopPropagation()}
         >
           Add a participant
@@ -461,7 +471,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
       )}
       {dropIndex !== null && (
         <div className="dc-seq-stand" data-drop="true" style={{ left: participantGapX(layout, dropIndex), top: Math.max(8, layout.bodyTop - 70), height: Math.max(60, layout.bodyBottom - layout.bodyTop + 70) }}>
-          <span className="dc-seq-reason">Add as participant</span>
+          <span className="dc-seq-reason">{dropStays ? 'Add as participant · stays linked to this shape' : 'Move into the sequence'}</span>
         </div>
       )}
 

@@ -46,8 +46,12 @@ import {
   updateSequence,
   wrapItems,
 } from '../document/sequenceOps';
+import { removeElements } from '../document/operations';
 import { isLinkable, participantFromNode } from '../document/sequenceLinks';
-import type { DraftSequence, SeqMessage, SeqMessageKind, SeqOperator, SeqParticipant } from '../document/types';
+import type { DraftNode, DraftSequence, SeqMessage, SeqMessageKind, SeqOperator, SeqParticipant } from '../document/types';
+import { describeContext, sequenceLayoutFor } from '../nodes/describe';
+import { LIGHT } from '../render/theme/tokens';
+import { participantIndexAt } from '../sequence/layout';
 import type { SequenceFinding } from '../sequence/check';
 import { executionsOf } from '../sequence/executions';
 import { sequenceFromFlow } from '../sequence/fromFlow';
@@ -135,6 +139,22 @@ useUiStore.subscribe((state, previous) => {
   if (was?.fresh && state.sequenceEdit !== was) useEditorStore.getState().endInteraction(was.fresh);
 });
 
+/**
+ * The place in a sequence a point on the canvas falls on: which sequence (the topmost under the
+ * point), and where among its participants. Null on open canvas. What turns "put a shape down
+ * here" into "add a participant here" when here is a sequence.
+ */
+export function sequenceSeatAt(point: { x: number; y: number }): { nodeId: string; index: number } | null {
+  let host: DraftNode | undefined;
+  for (const node of useEditorStore.getState().document.nodes) {
+    if (node.type !== 'sequence') continue;
+    if (point.x < node.x || point.x > node.x + node.width || point.y < node.y || point.y > node.y + node.height) continue;
+    if (!host || node.z >= host.z) host = node;
+  }
+  if (!host) return null;
+  return { nodeId: host.id, index: participantIndexAt(sequenceLayoutFor(host, describeContext(LIGHT)), point.x - host.x) };
+}
+
 export const sequenceActions = {
   select,
   edit,
@@ -149,6 +169,86 @@ export const sequenceActions = {
       useUiStore.getState().notify('This sequence has as many participants as it can hold.');
       return null;
     }
+    selectMade(nodeId, 'participant', id);
+    return id;
+  },
+
+  /**
+   * Adds a participant and opens it for its name, as one undo step. It is in the sequence from the
+   * first moment — the lifelines make room for it and the field sits on its head — and if it is left
+   * without a name it is taken out again, leaving nothing behind (`finishNaming`).
+   *
+   * `is` gives what it is when that is already known: a tool taken from the toolbar and put down on
+   * the sequence. `message` draws a message to it from a lifeline, for one made by dragging a
+   * message out past the last participant.
+   */
+  startParticipant(nodeId: string, index: number, options: { is?: Omit<SeqParticipant, 'id'>; message?: { from: string; slot: SeqSlot } } = {}): string | null {
+    const id = createId('sp');
+    const editor = useEditorStore.getState();
+    editor.beginInteraction('Add participant');
+    const added = run(nodeId, 'Add participant', (sequence) => addParticipant(sequence, { id, ...(options.is ?? { name: '', type: 'service' }) }, index));
+    if (!added) {
+      useEditorStore.getState().endInteraction('Add participant');
+      useUiStore.getState().notify('This sequence has as many participants as it can hold.');
+      return null;
+    }
+    const pending = options.message;
+    const message = pending ? createMessage({ from: pending.from, to: id }) : null;
+    if (message && pending) run(nodeId, 'Add participant', (sequence) => insertItem(sequence, message, pending.slot));
+    selectMade(nodeId, 'participant', id);
+    useUiStore.getState().setSequenceEdit({
+      nodeId,
+      // Known already (`is`): only its name is asked for. Otherwise the field offers what it could be.
+      target: { kind: 'participant', id, ...(options.is ? {} : { naming: true }), ...(message ? { message: message.id } : {}) },
+      fresh: 'Add participant',
+    });
+    return id;
+  },
+
+  /**
+   * Ends the naming of a participant added a moment ago. With a name (or a shape or technology
+   * picked for it) it becomes that; with none it is taken out again, with any message drawn to it.
+   * `then` says what follows: `'next'` goes straight on to naming another one beside it.
+   */
+  finishNaming(nodeId: string, id: string, is: Omit<SeqParticipant, 'id'> | null, then: 'next' | 'done' = 'done'): void {
+    const sequence = sequenceIn(nodeId);
+    const target = useUiStore.getState().sequenceEdit?.target;
+    const message = target?.kind === 'participant' ? target.message : undefined;
+    const at = sequence?.participants.findIndex((participant) => participant.id === id) ?? -1;
+    if (!sequence || at < 0) return edit(nodeId, null);
+    if (!is) {
+      // Nothing was typed: there is no participant to keep, and nothing to undo. The step it was
+      // added in is given up, which puts the sequence back exactly as it was. (Clearing the field
+      // first would end the step instead, and record it.)
+      useEditorStore.getState().abandonInteraction();
+      useEditorStore.getState().setSelection({ nodes: [nodeId], edges: [] });
+      useUiStore.setState({ sequenceEdit: null, sequenceFocus: null });
+      return;
+    }
+    run(nodeId, 'Add participant', (current) => updateParticipant(current, id, is));
+    // Closing the field ends the step: the participant, and a message drawn to it, are one undo.
+    edit(nodeId, null);
+    if (message) {
+      select(nodeId, 'item', [message], true);
+      edit(nodeId, { kind: 'message', id: message });
+    } else if (then === 'next') {
+      sequenceActions.startParticipant(nodeId, at + 1);
+    } else {
+      // Back to the sequence as a whole, whose inspector offers the next thing to do.
+      useUiStore.getState().setSequenceFocus(null);
+    }
+  },
+
+  /**
+   * A shape with nothing connected to it, moved into the sequence: it becomes a participant and is
+   * no longer on the canvas. (One that is part of a diagram stays where it is and is stood in for —
+   * `addParticipantFromShape`.) Runs inside whatever step is open, so a drop is one undo.
+   */
+  moveShapeIn(nodeId: string, shapeId: string, index?: number): string | null {
+    const id = sequenceActions.addParticipantFromShape(nodeId, shapeId, index);
+    if (!id) return null;
+    // Deleting the shape drops the link it had to it: what is left is the participant alone.
+    useEditorStore.getState().apply('Move into sequence', (doc) => removeElements(doc, [shapeId]), { selection: { nodes: [nodeId], edges: [] } });
     selectMade(nodeId, 'participant', id);
     return id;
   },

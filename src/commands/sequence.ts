@@ -33,7 +33,7 @@ export function sequenceQuickCommands(node: DraftNode): Command[] {
       keywords: ['lifeline', 'actor', 'service', 'who'],
       hint: 'Someone or something that takes part',
       shortcut: 'P',
-      run: () => sequenceActions.edit(node.id, { kind: 'new-participant', index: sequence.participants.length }),
+      run: () => void sequenceActions.startParticipant(node.id, sequence.participants.length),
     },
     // Presenting it is the canvas's own presentation, told one message at a time
     // (`document/sequenceFlow.ts`): nothing is added to the diagram's flows.

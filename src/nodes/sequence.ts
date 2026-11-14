@@ -91,6 +91,9 @@ interface SizedHead {
   size: { width: number; height: number };
 }
 
+/** How wide a participant with no name yet stands: the width of the field its name is typed in. */
+export const UNNAMED_HEAD_WIDTH = 140;
+
 /** A head's size asks the shape's own renderer, which is not cheap; a participant is immutable, so once is enough. */
 const headSizes = new WeakMap<SeqParticipant, SizedHead>();
 
@@ -101,7 +104,10 @@ function headSize(participant: SeqParticipant, ctx: DescribeContext, kit: Sequen
   // A name on one line if the head can be made wide enough for it; on two before it is cut short.
   const oneLine = kit.naturalSize(base, ctx, { maxWidth: HEAD_MAX_WIDTH, maxHeight: HEAD_MAX_HEIGHT, maxNameLines: 1 });
   const natural = oneLine.fits ? oneLine : kit.naturalSize(base, ctx, { maxWidth: HEAD_MAX_WIDTH, maxHeight: HEAD_MAX_HEIGHT, maxNameLines: 2 });
-  const size = { width: Math.ceil(natural.width), height: Math.ceil(natural.height) };
+  // One still waiting for its name stands as wide as the field it is typed in, so the others have
+  // already made room and the field covers nobody else's head.
+  const width = participant.name.trim() ? natural.width : Math.max(natural.width, UNNAMED_HEAD_WIDTH);
+  const size = { width: Math.ceil(width), height: Math.ceil(natural.height) };
   headSizes.set(participant, { icons: ctx.technologyIcons, measurer: ctx.measurer, size });
   return size;
 }

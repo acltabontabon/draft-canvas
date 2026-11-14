@@ -44,7 +44,7 @@ import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
 import { CanvasBackground } from './CanvasBackground';
 import { ATTACH_DWELL_MS, evaluateAttachCandidates } from './dragTargets';
-import { isLinkable } from '../document/sequenceLinks';
+import { isLinkable, isPartOfDiagram } from '../document/sequenceLinks';
 import { LIMITS } from '../document/limits';
 import { describeContext, sequenceLayoutFor } from '../nodes/describe';
 import { LIGHT } from '../render/theme/tokens';
@@ -700,7 +700,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     else if (
       editable &&
       useUiStore.getState().armed &&
-      nodeIndex(useEditorStore.getState().document.nodes).get(node.id)?.type === 'group'
+      // …and on a sequence, where a shape tool adds a participant (`EditorScreen`'s `createAt`).
+      ['group', 'sequence'].includes(nodeIndex(useEditorStore.getState().document.nodes).get(node.id)?.type ?? '')
     ) {
       // A tool armed and clicked inside a boundary places there, as on empty canvas; the boundary
       // covering the pane swallowed the click and the tool stayed armed with nothing placed.
@@ -938,7 +939,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         return clearSequenceDrop();
       }
       const index = participantIndexAt(sequenceLayoutFor(host, describeContext(LIGHT)), centre.x - host.x);
-      if (ui.sequenceDropTarget?.nodeId === host.id) return ui.setSequenceDropTarget({ nodeId: host.id, index });
+      // A shape that is part of a diagram stays in it and is stood in for. One with nothing attached
+      // to it is simply being put into the sequence: leaving a copy behind would be a duplicate.
+      const stays = isPartOfDiagram(useEditorStore.getState().document, dragged);
+      if (ui.sequenceDropTarget?.nodeId === host.id) return ui.setSequenceDropTarget({ nodeId: host.id, index, stays });
       if (sequenceDwell.current?.hostId === host.id) {
         sequenceDwell.current.index = index;
         return;
@@ -950,7 +954,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         index,
         timer: window.setTimeout(() => {
           const waiting = sequenceDwell.current;
-          if (waiting?.hostId === hostId) useUiStore.getState().setSequenceDropTarget({ nodeId: hostId, index: waiting.index });
+          if (waiting?.hostId === hostId) useUiStore.getState().setSequenceDropTarget({ nodeId: hostId, index: waiting.index, stays });
         }, ATTACH_DWELL_MS),
       };
     },
@@ -1583,14 +1587,19 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     let label: string | undefined;
 
     if (singleId && armedSequence) {
-      // The shape stays in the architecture, exactly where it was: put it back before anything is
-      // written (a refused drop would otherwise leave it lying on the sequence), then let it stand
-      // in the sequence as a participant. One undo step, and no move in it.
+      // Either way the shape is put back where it was before anything is written: a refused drop
+      // would otherwise leave it lying on the sequence. One undo step, and no move in it.
       positions.delete(singleId);
       if (positions.size > 0) state.commitPositions(positions);
       const home = nodeIndex(state.document.nodes).get(singleId);
       if (home) setNodes((current) => current.map((node) => (node.id === singleId ? { ...node, position: { x: home.x, y: home.y }, dragging: false } : node)));
-      if (sequenceActions.addParticipantFromShape(armedSequence.nodeId, singleId, armedSequence.index)) label = 'Add participant';
+      if (armedSequence.stays) {
+        // Part of a diagram: it stays in the architecture and the participant stands for it.
+        if (sequenceActions.addParticipantFromShape(armedSequence.nodeId, singleId, armedSequence.index)) label = 'Add participant';
+      } else if (sequenceActions.moveShapeIn(armedSequence.nodeId, singleId, armedSequence.index)) {
+        // On its own: the shape itself goes into the sequence, and nothing is left on the canvas.
+        label = 'Move into sequence';
+      }
     } else if (singleId && armedHost) {
       positions.delete(singleId);
       if (positions.size > 0) state.commitPositions(positions);

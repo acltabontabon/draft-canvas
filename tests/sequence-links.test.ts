@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { createDocument, createNode } from '../src/document/factory';
-import { addNodes, moveNodes, updateNode } from '../src/document/operations';
-import { hasDrifted, participantFromNode, syncLinks } from '../src/document/sequenceLinks';
+import { createDocument, createEdge, createNode } from '../src/document/factory';
+import { addEdges, addNodes, moveNodes, updateNode } from '../src/document/operations';
+import { hasDrifted, isPartOfDiagram, participantFromNode, syncLinks } from '../src/document/sequenceLinks';
 import { updateParticipant, updateSequence } from '../src/document/sequenceOps';
 import type { DraftDocument, DraftNode, SeqParticipant } from '../src/document/types';
 import { sequenceCommands, sequenceFromSelectionCommands } from '../src/commands/sequence';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
-import { sequenceActions, sequenceIn } from '../src/store/sequenceActions';
+import { sequenceActions, sequenceIn, sequenceSeatAt } from '../src/store/sequenceActions';
 import { useUiStore } from '../src/store/uiStore';
 import { stubContext } from './commandStubs';
 
@@ -152,6 +152,73 @@ describe('in the editor', () => {
     sequenceActions.unlink(id, sequenceIn(id)!.participants[0]!.id);
     editor().updateNodeText('n_api', 'Something else');
     expect(sequenceIn(id)!.participants[0]!.name).toBe('Checkout API');
+  });
+
+  it('a shape on its own moves into the sequence, in one step; one that is part of a diagram stays', () => {
+    const id = sequenceActions.createFromShapes(['n_api'])!;
+    expect(isPartOfDiagram(editor().document, shape(editor().document, 'n_db'))).toBe(false);
+    // Already standing in a sequence, connected, or inside a boundary: part of a diagram.
+    expect(isPartOfDiagram(editor().document, shape(editor().document, 'n_api'))).toBe(true);
+    const wired = addEdges(editor().document, [createEdge({ source: 'n_bus', target: 'n_db' })]);
+    expect(isPartOfDiagram(wired, shape(wired, 'n_bus'))).toBe(true);
+    expect(isPartOfDiagram(editor().document, { ...shape(editor().document, 'n_db'), parentId: 'n_boundary' })).toBe(true);
+
+    const steps = editor().history.past.length;
+    // As a drop does it: inside the step the drag opened.
+    editor().beginInteraction('Move');
+    const made = sequenceActions.moveShapeIn(id, 'n_db', 0)!;
+    editor().endInteraction('Move into sequence');
+    expect(editor().document.nodes.some((node) => node.id === 'n_db')).toBe(false);
+    // The participant is the shape now: what it was, and a stand-in for nothing.
+    expect(sequenceIn(id)!.participants[0]).toMatchObject({ id: made, name: 'Orders', type: 'database', technology: 'PostgreSQL' });
+    expect(sequenceIn(id)!.participants[0]!.ref).toBeUndefined();
+    expect(editor().history.past.length).toBe(steps + 1);
+    editor().undo();
+    expect(shape(editor().document, 'n_db')).toMatchObject({ x: 600, y: 0, text: 'Orders' });
+    expect(sequenceIn(id)!.participants.map((entry) => entry.name)).toEqual(['Checkout API']);
+  });
+
+  it('a new participant is made where it will stand and named there: one step with a name, none without', () => {
+    const id = sequenceActions.createFromShapes(['n_api'])!;
+    const before = editor().document;
+    const steps = editor().history.past.length;
+
+    // Left unnamed, it is taken out again and nothing is recorded.
+    const blank = sequenceActions.startParticipant(id, 1)!;
+    expect(sequenceIn(id)!.participants.map((entry) => entry.id)).toContain(blank);
+    expect(useUiStore.getState().sequenceEdit).toMatchObject({ target: { kind: 'participant', id: blank, naming: true } });
+    sequenceActions.finishNaming(id, blank, null);
+    expect(editor().document).toBe(before);
+    expect(editor().history.past.length).toBe(steps);
+    expect(useUiStore.getState().sequenceEdit).toBeNull();
+    expect(editor().selection.nodes).toEqual([id]);
+
+    // Named, it is one step — and Enter goes straight on to the next one, beside it.
+    const named = sequenceActions.startParticipant(id, 0)!;
+    sequenceActions.finishNaming(id, named, { name: 'Shopper', type: 'actor' }, 'next');
+    expect(sequenceIn(id)!.participants.slice(0, 2)).toMatchObject([{ id: named, name: 'Shopper', type: 'actor' }, { name: '' }]);
+    const next = sequenceIn(id)!.participants[1]!.id;
+    expect(useUiStore.getState().sequenceEdit).toMatchObject({ target: { kind: 'participant', id: next, naming: true } });
+    sequenceActions.finishNaming(id, next, null);
+    expect(sequenceIn(id)!.participants.map((entry) => entry.name)).toEqual(['Shopper', 'Checkout API']);
+    expect(editor().history.past.length).toBe(steps + 1);
+    editor().undo();
+    expect(sequenceIn(id)!.participants.map((entry) => entry.name)).toEqual(['Checkout API']);
+  });
+
+  it('a shape tool put down on a sequence is a participant of that kind, at the seat under it', () => {
+    const id = sequenceActions.createFromShapes(['n_api', 'n_db'])!;
+    const host = shape(editor().document, id);
+    expect(sequenceSeatAt({ x: host.x - 40, y: host.y + 40 })).toBeNull();
+    expect(sequenceSeatAt({ x: host.x + 4, y: host.y + 60 })).toEqual({ nodeId: id, index: 0 });
+    expect(sequenceSeatAt({ x: host.x + host.width - 4, y: host.y + 60 })).toEqual({ nodeId: id, index: 2 });
+
+    // What it is was chosen on the toolbar: only its name is asked for.
+    const made = sequenceActions.startParticipant(id, 2, { is: { name: 'Queue', type: 'queue' } })!;
+    expect(sequenceIn(id)!.participants[2]).toMatchObject({ id: made, type: 'queue' });
+    const target = useUiStore.getState().sequenceEdit!.target;
+    expect(target).toMatchObject({ kind: 'participant', id: made });
+    expect('naming' in target).toBe(false);
   });
 
   it('offers to start a sequence from one shape, and the sequence’s own commands inside it', () => {
