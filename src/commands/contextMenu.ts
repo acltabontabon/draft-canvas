@@ -67,6 +67,8 @@ export type ContextMenuEntry =
 const MENU_LABELS: Record<string, string> = {
   'attach-note': 'Attach note',
   'attach-code': 'Attach code',
+  'seq-attach-note': 'Attach note',
+  'seq-attach-code': 'Attach code',
   'open-point-add': 'Add open point…',
   spotlight: 'Spotlight',
   'add-consumer': 'Add consumer',
@@ -200,6 +202,7 @@ function sequenceMenu(ctx: CommandContext, node: DraftNode, commands: Command[])
   const title = inside.kind === 'participant' ? 'Participant' : inside.kind === 'group' ? 'Group' : inside.kind === 'operand' ? 'Branch' : inside.ids.length > 1 ? `${inside.ids.length} selected` : 'In this sequence';
   return grouped({ type: 'header', title, caption: 'Sequence' }, [
     pick(commands, ['seq-rename', 'seq-edit', 'seq-add-reply', 'seq-reverse']),
+    pick(commands, ['seq-attach-note', 'seq-attach-code']),
     pick(commands, ['seq-add-branch', 'seq-unwrap', 'seq-group', 'seq-leave-group', 'seq-ungroup']),
     pick(commands, SEQUENCE_WRAP_IDS),
     pick(commands, ['seq-duplicate']),

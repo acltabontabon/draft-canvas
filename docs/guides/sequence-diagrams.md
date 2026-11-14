@@ -104,10 +104,11 @@ both.
 
 **Timeline note** draws a note over one or two participants on its own row.
 
-To keep supporting details on the arrow, select a message and choose **Attach** → **Attach note**
-or **Attach code** to start typing. You can also drag an existing canvas note or code card onto
-the arrow and release when **Attach to message** appears. Click a note or code chip below the arrow
-to reopen its card. Cards stay with the message as you move it, and can be reordered, deleted or
+To keep supporting details on the arrow, right-click a message and choose **Attach note** or
+**Attach code** to start typing. With a message selected, you can also use **Attach note to message**
+or **Attach code to message** from the command palette. To reuse an existing canvas note or code
+card, drag it onto the arrow and release when **Attach to message** appears. Click a note or code
+chip below the arrow to reopen its card. Cards stay with the message as you move it, and can be reordered, deleted or
 detached onto the canvas. During a presentation, the current message’s chips open its cards for
 reading.
 

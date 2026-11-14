@@ -19,7 +19,7 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   labels based on who's connected, and you can connect lifelines in separate frames. <!-- highlight -->
 - **Present a sequence** one message at a time with every lifeline visible. Export to Mermaid or
   PlantUML, paste a Mermaid `sequenceDiagram` to edit it, or draw an existing flow as a sequence.
-- **Attach notes and code to sequence messages.** Select an arrow to start typing into a new card,
+- **Attach notes and code to sequence messages.** Right-click an arrow to start a new card,
   or drag a canvas note or code card onto it. Open the card from its chip while editing or presenting.
 - AI agents can add, read and change sequences.
 - **Tidy up, with a preview** — One cleanup to reach for first, in `⌘K` and on right-click. It

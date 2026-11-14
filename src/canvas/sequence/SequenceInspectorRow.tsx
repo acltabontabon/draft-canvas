@@ -11,7 +11,6 @@ import {
   type SeqParticipant,
   type SeqParticipantType,
 } from '../../document/types';
-import { hasAttachmentRoom } from '../../document/operations';
 import { displayNameFor } from '../../document/factory';
 import { hasDrifted, isLinkable } from '../../document/sequenceLinks';
 import { technologyKindPatch } from '../../document/technologyKind';
@@ -460,7 +459,6 @@ function MessageRow({
   }));
   const slot = slotOf(sequence, message.id);
   const answered = message.kind !== 'reply' && message.from !== message.to;
-  const [attaching, setAttaching] = useState(false);
   const starts = message.kind !== 'reply' && message.kind !== 'destroy';
 
   return (
@@ -513,29 +511,9 @@ function MessageRow({
           {answered && <MessageAction icon="reply" label="Reply" description="Add the return message after this call’s work." onClick={() => sequenceActions.addReply(node.id, message.id)} />}
           {message.from !== message.to && <MessageAction icon="swap" label="Reverse" description="Swap the sender and receiver." onClick={() => sequenceActions.reverse(node.id, message.id)} />}
           {slot && <MessageAction icon="file" label="Timeline note" description="Add a visible note beneath this arrow." onClick={() => sequenceActions.addNote(node.id, [...participantsIn(message)].slice(0, 2), { operandId: slot.operandId, index: slot.index + 1 })} />}
-          <MessageAction icon="overview" label="Wrap" description="Put the message in a condition, loop, or other fragment." expanded={wrapping} onClick={() => {
-            setAttaching(false);
-            setWrapping(!wrapping);
-          }} />
-          {(hasAttachmentRoom(message, 'edge') || Boolean(message.attachments?.length)) && (
-            <MessageAction label="Attach" description="Add or open supporting notes and code." expanded={attaching} onClick={() => {
-              setWrapping(false);
-              setAttaching(!attaching);
-            }} />
-          )}
+          <MessageAction icon="overview" label="Wrap" description="Put the message in a condition, loop, or other fragment." expanded={wrapping} onClick={() => setWrapping(!wrapping)} />
         </TooltipGroup>
       </div>
-      {attaching && (
-        <div className="dc-seq-message-actions dc-seq-attachment-actions" role="group" aria-label="Attachment actions">
-          <TooltipGroup>
-            {Boolean(message.attachments?.length) && <MessageAction label="View attachments" description="Open the cards on this message." onClick={() => sequenceActions.showAttachments(node.id, message.id)} />}
-            {hasAttachmentRoom(message, 'edge') && <>
-              <MessageAction icon="file" label="Attach note" description="Add a note that stays with the arrow." onClick={() => sequenceActions.addAttachment(node.id, message.id, 'note')} />
-              <MessageAction icon="code" label="Attach code" description="Add an example payload or code snippet." onClick={() => sequenceActions.addAttachment(node.id, message.id, 'code')} />
-            </>}
-          </TooltipGroup>
-        </div>
-      )}
       {wrapPanel}
       {problems}
     </>

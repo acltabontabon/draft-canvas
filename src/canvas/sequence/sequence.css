@@ -581,10 +581,6 @@
   color: var(--dc-text);
 }
 
-.dc-seq-attachment-actions {
-  border-top: 1px solid var(--dc-border);
-}
-
 .dc-seq-participant-controls {
   flex-wrap: wrap;
 }

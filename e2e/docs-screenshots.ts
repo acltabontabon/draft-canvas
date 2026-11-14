@@ -519,8 +519,8 @@ async function sequenceScreenshots(page: Page) {
   await expect(inspector.getByRole('button', { name: 'Reply', exact: true })).toBeVisible();
   await page.mouse.move(20, 85);
   await shot(page, 'sequence-message-actions');
-  await inspector.getByRole('button', { name: 'Attach', exact: true }).click();
-  await inspector.getByRole('button', { name: 'Attach code' }).click();
+  await messages.nth(1).click({ button: 'right' });
+  await page.locator('.dc-context-menu').getByRole('menuitem', { name: 'Attach code' }).click();
   const attachment = page.getByRole('toolbar', { name: 'Message attachments' });
   await attachment.getByRole('combobox', { name: 'Code language' }).selectOption('json');
   await attachment.getByRole('textbox', { name: 'Attached code' }).fill('{\n  "cartId": "cart_123",\n  "currency": "USD"\n}');

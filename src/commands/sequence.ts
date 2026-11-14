@@ -107,8 +107,8 @@ export function sequenceCommands(ctx: CommandContext, node: DraftNode): Command[
   const item = held.ids.length === 1 ? findItem(sequence, id)?.item : undefined;
   if (item?.t === 'message') {
     if (hasAttachmentRoom(item, 'edge')) {
-      add({ id: 'seq-attach-note', title: 'Attach note', run: () => sequenceActions.addAttachment(node.id, id, 'note') });
-      add({ id: 'seq-attach-code', title: 'Attach code', run: () => sequenceActions.addAttachment(node.id, id, 'code') });
+      add({ id: 'seq-attach-note', title: 'Attach note to message', run: () => sequenceActions.addAttachment(node.id, id, 'note') });
+      add({ id: 'seq-attach-code', title: 'Attach code to message', run: () => sequenceActions.addAttachment(node.id, id, 'code') });
     }
     if (item.attachments?.length) add({ id: 'seq-attachments', title: 'View message attachments', run: () => sequenceActions.showAttachments(node.id, id) });
     add({ id: 'seq-edit', title: 'Edit message', shortcut: 'Enter', run: () => sequenceActions.edit(node.id, { kind: 'message', id }) });
