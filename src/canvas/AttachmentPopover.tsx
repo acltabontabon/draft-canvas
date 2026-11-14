@@ -139,13 +139,20 @@ function AttachmentPopoverBody({ detail, closing, listening, editable }: { detai
   const directAttachmentId = messageId && attachments.some((attachment) => attachment.id === detail.attachmentId)
     ? detail.attachmentId ?? undefined : undefined;
   let rect = shown ? rectOfInternal(shown.internal) : null;
+  let chipRow = null;
   if (rect && messageId && displayHost) {
     const context = describeContext(LIGHT);
     const layout = sequenceLayoutFor(displayHost, context);
     const drawn = layout.messages.find((message) => message.id === messageId);
     if (drawn) {
       const index = Math.max(0, attachments.findIndex((attachment) => attachment.id === detail.attachmentId));
-      const chip = sequenceAttachmentChips(drawn, attachments, layout.width, context.measurer)[index];
+      const chips = sequenceAttachmentChips(drawn, attachments, layout.width, context.measurer);
+      const chip = chips[index];
+      const first = chips[0];
+      const last = chips.at(-1);
+      if (directAttachmentId && first && last) {
+        chipRow = { x: rect.x + first.x, y: rect.y + first.y, width: last.x + last.w - first.x, height: first.h };
+      }
       if (chip) rect = { x: rect.x + chip.x, y: rect.y + chip.y, width: chip.w, height: chip.h };
     }
   }
@@ -172,7 +179,7 @@ function AttachmentPopoverBody({ detail, closing, listening, editable }: { detai
     const clearances = { ...baseClearances, right: rightClearance(flowPanelOpen, LEFT_CLEARANCE, frame.root.right) };
     const next = interactionActive
       ? current
-      : resolvePlacement(current, anchors, frame.flowToScreenPosition, frame.size, clearances);
+      : resolvePlacement(current, anchors, frame.flowToScreenPosition, frame.size, clearances, chipRow ? [chipRow] : []);
     return {
       placement: next,
       transform: placementTransform(next, anchors, frame.size, clearances, frame.flowToScreenPosition, frame.screenToOverlay),
