@@ -782,6 +782,67 @@ export function duplicateItem(sequence: DraftSequence, id: string): { sequence: 
 }
 
 // ---------------------------------------------------------------------------------------------
+// Words
+// ---------------------------------------------------------------------------------------------
+
+/**
+ * Every piece of text a person typed into a sequence, passed through `change` — names, labels,
+ * conditions, notes — each with the length it is held to. What find-and-replace reaches. The same
+ * sequence back when `change` altered nothing.
+ */
+export function mapSequenceText(sequence: DraftSequence, change: (text: string, max: number) => string): DraftSequence {
+  let touched = false;
+  const swap = (text: string | undefined, max: number): string | undefined => {
+    if (!text) return text;
+    const next = change(text, max);
+    if (next !== text) touched = true;
+    return next;
+  };
+  const participants = sequence.participants.map((participant) => {
+    const name = swap(participant.name, LIMITS.maxSequenceNameLength) ?? '';
+    return name === participant.name ? participant : { ...participant, name: oneLine(name, LIMITS.maxSequenceNameLength) };
+  });
+  const groups = sequence.groups?.map((group) => {
+    const name = swap(group.name, LIMITS.maxSequenceNameLength) ?? '';
+    return name === group.name ? group : { ...group, name: oneLine(name, LIMITS.maxSequenceNameLength) };
+  });
+  const mapItems = (list: readonly SeqItem[]): SeqItem[] =>
+    rewriteItems(list, (item) => {
+      if (item.t === 'message') {
+        const label = swap(item.label, LIMITS.maxLabelLength) ?? '';
+        return label === item.label ? item : { ...item, label };
+      }
+      if (item.t === 'note') {
+        const text = swap(item.text, LIMITS.maxSequenceNoteLength) ?? '';
+        return text === item.text ? item : { ...item, text };
+      }
+      const label = swap(item.label, LIMITS.maxLabelLength);
+      let operands: SeqOperand[] | null = null;
+      item.operands.forEach((branch, index) => {
+        const guard = swap(branch.guard, LIMITS.maxConditionLength);
+        const inner = mapItems(branch.items);
+        if (guard === branch.guard && inner === branch.items) return;
+        operands ??= item.operands.slice();
+        const { guard: _old, ...rest } = branch;
+        const clean = oneLine(guard ?? '', LIMITS.maxConditionLength);
+        operands[index] = clean ? { ...rest, guard: clean, items: inner } : { ...rest, items: inner };
+      });
+      // Answering with the item itself: what it holds has been gone through just above.
+      if (label === item.label && !operands) return item;
+      const { label: _old, ...rest } = item;
+      const next: SeqFragment = { ...rest, operands: operands ?? item.operands };
+      const clean = oneLine(label ?? '', LIMITS.maxLabelLength);
+      if (clean) next.label = clean;
+      return next;
+    });
+  const items = mapItems(sequence.items);
+  if (!touched) return sequence;
+  const next: DraftSequence = { ...sequence, participants, items };
+  if (groups) next.groups = groups;
+  return next;
+}
+
+// ---------------------------------------------------------------------------------------------
 // Links to shapes on the canvas
 // ---------------------------------------------------------------------------------------------
 

@@ -114,7 +114,8 @@ function focusIsOnCanvas(): boolean {
 
 /** Shapes that open ready to be typed into when they are made — see `createAt`. A Junction has no text. */
 function hasNameToType(type: DraftNode['type']): boolean {
-  return type !== 'ellipse';
+  // Nor is a sequence named first: what it wants first is someone to take part.
+  return type !== 'ellipse' && type !== 'sequence';
 }
 
 /** Focus sits on a control that was reached from the keyboard (`:focus-visible`), not by a click. */

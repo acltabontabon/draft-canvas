@@ -170,6 +170,8 @@ const PAD_X = 20;
 const PAD_TOP = 12;
 const PAD_BOTTOM = 14;
 const TITLE_GAP = 8;
+/** A title makes its sequence this wide at most; a longer one is cut short, in full in its editor. */
+const TITLE_MAX_WIDTH = 360;
 /** Room above the heads for a technology mark (`markerRail.ts`: a 16px mark lifted 5px). */
 const MARK_HEADROOM = 24;
 const NO_MARK_HEADROOM = 4;
@@ -407,7 +409,7 @@ function solve(
 
   /* Down: the top band. */
   const titleText = input.title?.trim() ?? '';
-  const titleLayout = titleText ? words(titleText, FONTS.groupTitle, Math.max(160, naturalWidth + slackX - PAD_X * 2), 1) : null;
+  const titleLayout = titleText ? words(titleText, FONTS.groupTitle, Math.max(TITLE_MAX_WIDTH, naturalWidth + slackX - PAD_X * 2), 1) : null;
   const title: LabelLayout | null = titleLayout ? { x: PAD_X - 6, y: PAD_TOP - 2, align: 'start', layout: titleLayout, font: FONTS.groupTitle } : null;
   const anyMark = participants.some((participant) => input.hasMark?.(participant));
   const anyGroup = (sequence.groups?.length ?? 0) > 0;

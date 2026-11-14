@@ -936,7 +936,8 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
     const edge = inner.editor.connect(source.id, target.id);
     if (edge) inner.editor.setSelection({ nodes: [], edges: [edge.id] });
   });
-  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse').map((preset) => ({
+  // Not a Junction (nothing to name) and not a Sequence (a connector does not lead to one).
+  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse' && preset.id !== 'sequence').map((preset) => ({
     id: `connect-new:${preset.id}`,
     title: `New ${preset.label}`,
     keywords: PRESET_KEYWORDS[preset.id],

@@ -29,7 +29,8 @@ import {
   type DepthPath,
 } from '../depth/tree';
 import { getMeasurer } from '../render/text/measure';
-import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalTextHeight } from '../nodes/describe';
+import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight } from '../nodes/describe';
+import { fitSequences } from '../nodes/sequenceFit';
 import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
@@ -1474,7 +1475,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return;
     const state = get();
     const before = state.document;
-    const next = touch(recipe(before));
+    // A sequence is sized by what it holds, whichever edit changed that — typing a message, a paste,
+    // a renamed title — so it is done here, once, rather than remembered by every action.
+    const next = touch(fitSequences(before, recipe(before), () => describeContext(LIGHT)));
     // Structural sharing means an operation that changed nothing returns the
     // same object, so no-op commands never create a dead undo step.
     if (next === before || shallowEqualDocument(next, before)) return;
@@ -2693,7 +2696,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   resizeNode(id, box) {
-    get().apply('Resize', (doc) => reconcileAfterResize(updateNode(doc, id, box), id));
+    get().apply('Resize', (doc) => {
+      // A sequence can be given room, never less than it needs: its text does not shrink to fit.
+      const node = doc.nodes.find((candidate) => candidate.id === id);
+      const floor = node?.type === 'sequence' ? naturalSequenceSizeFor(node, describeContext(LIGHT)) : null;
+      const held = floor ? { ...box, width: Math.max(box.width, floor.width), height: Math.max(box.height, floor.height) } : box;
+      return reconcileAfterResize(updateNode(doc, id, held), id);
+    });
   },
 
   fitSelectedLabels() {

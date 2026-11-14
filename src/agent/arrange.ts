@@ -53,7 +53,9 @@ export interface ArrangeRequest {
 }
 
 const SPACINGS: LayoutSpec['spacing'][] = ['comfortable', 'spacious'];
-const isNoteLike = (n: DraftNode) => n.type === 'note' || n.type === 'text' || n.type === 'code';
+// A sequence is laid out by its own rules and is not part of the graph being arranged: like a note,
+// it keeps its size and is set down beside the shapes.
+const isNoteLike = (n: DraftNode) => n.type === 'note' || n.type === 'text' || n.type === 'code' || n.type === 'sequence';
 
 /** Reads `{op:"arrange", scope?, direction?, spacing?, connectors?, move?, primaryFlow?}` against the view. */
 export function readArrange(r: Reader, op: Json, at: string, view: DraftDocument, base: LayoutSpec): ArrangeRequest | undefined {

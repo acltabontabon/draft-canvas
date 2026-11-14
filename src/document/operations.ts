@@ -12,7 +12,7 @@ import { defaultSizeFor, maxSizeFor } from './factory';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
 import { cleanText, cleanTextFields } from './sanitize';
-import { dropParticipantLinks, repointParticipantLinks } from './sequenceOps';
+import { dropParticipantLinks, mapSequenceText, repointParticipantLinks } from './sequenceOps';
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
 import type {
@@ -943,7 +943,8 @@ export function distributeNodes(
  * ⌘A then Same height must not make every shape as tall as the boundary that holds them.
  */
 export function sizeMatchTargets<T extends Pick<DraftNode, 'type'>>(selected: readonly T[]): T[] {
-  const sized = selected.filter((node) => node.type !== 'ellipse');
+  // Nor a sequence, which is the size of what it holds.
+  const sized = selected.filter((node) => node.type !== 'ellipse' && node.type !== 'sequence');
   const shapes = sized.filter((node) => node.type !== 'group');
   return shapes.length > 0 ? shapes : sized;
 }
@@ -1699,9 +1700,16 @@ export function replaceLabels<T extends Labelled>(doc: T, find: string, replace:
   const nodes = doc.nodes.map((node) => {
     const text = swap(node.text, LIMITS.maxTextLength);
     const list = attachments(node.attachments);
-    if (text === node.text && list === node.attachments) return node;
+    // A sequence's names, messages, conditions and notes are labels too.
+    const sequence = node.sequence ? mapSequenceText(node.sequence, (words, max) => swap(words, max) ?? words) : undefined;
+    if (text === node.text && list === node.attachments && sequence === node.sequence) return node;
     changed = true;
-    return { ...node, ...(text === node.text ? {} : { text, textOrigin: 'explicit' as const }), ...(list === node.attachments ? {} : { attachments: list }) };
+    return {
+      ...node,
+      ...(text === node.text ? {} : { text, textOrigin: 'explicit' as const }),
+      ...(list === node.attachments ? {} : { attachments: list }),
+      ...(sequence === node.sequence ? {} : { sequence }),
+    };
   });
   const edges = doc.edges.map((edge) => {
     const label = swap(edge.label, LIMITS.maxLabelLength);

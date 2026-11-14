@@ -80,6 +80,16 @@ const GLYPHS: Record<string, ReactElement> = {
       <path d="M2.5 10h4.3M13.2 10h4.3M10 2.5v4.3" />
     </>
   ),
+  // A sequence: two participants, their lifelines, a call across and the reply back.
+  sequence: (
+    <>
+      <rect x="2.8" y="3.2" width="5.4" height="3.2" rx="0.9" />
+      <rect x="11.8" y="3.2" width="5.4" height="3.2" rx="0.9" />
+      <path d="M5.5 6.4V17M14.5 6.4V17" strokeDasharray="1.5 1.7" />
+      <path d="M5.5 9.8h8.6M12.2 8.2l2 1.6-2 1.6" />
+      <path d="M14.5 14.2H6.2" strokeDasharray="1.8 1.5" />
+    </>
+  ),
   // A component: the UML box with its two tabs.
   component: (
     <>

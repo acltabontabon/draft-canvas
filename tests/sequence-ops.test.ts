@@ -31,7 +31,7 @@ import {
   wrapItems,
 } from '../src/document/sequenceOps';
 import { createDocument, createNode } from '../src/document/factory';
-import { addNodes, removeElements } from '../src/document/operations';
+import { addNodes, countLabelMatches, removeElements, replaceLabels } from '../src/document/operations';
 import type { DraftSequence, SeqFragment, SeqItem, SeqMessage, SeqParticipant } from '../src/document/types';
 
 const participant = (id: string, extra: Partial<SeqParticipant> = {}): SeqParticipant => ({
@@ -324,5 +324,26 @@ describe('in a document', () => {
     const next = removeElements(doc, [shape.id]);
     expect(next.nodes[0]!.sequence!.participants.find((p) => p.id === 'api')!.ref).toBeUndefined();
     expect(dropParticipantLinks(doc, new Set(['nobody']))).toBe(doc);
+  });
+});
+
+describe('find and replace', () => {
+  it('reaches names, messages, conditions and notes, and leaves the rest untouched', () => {
+    let sequence = wrapItems(shop(), ['m2', 'r2'], { id: 'f1', operator: 'opt', guard: 'order is new' });
+    sequence = insertItem(sequence, createNote({ id: 'n1', over: ['db'], text: 'one order per row' }), { operandId: null, index: 0 });
+    const node = { ...createNode({ type: 'sequence', x: 0, y: 0, text: 'Place an order' }), sequence };
+    const doc = addNodes(createDocument(), [node]);
+
+    expect(countLabelMatches(doc, 'order')).toBe(5);
+    const { doc: next, count } = replaceLabels(doc, 'order', 'purchase');
+    expect(count).toBe(5);
+    const after = next.nodes[0]!;
+    expect(after.text).toBe('Place an purchase');
+    expect(messagesOf(after.sequence!).map((message) => message.label)).toEqual(['POST /purchases', 'insert purchase', 'ok', '201']);
+    expect(findOperand(after.sequence!, (findItem(after.sequence!, 'f1')!.item as SeqFragment).operands[0]!.id)!.operand.guard).toBe('purchase is new');
+    expect(findItem(after.sequence!, 'n1')!.item).toMatchObject({ text: 'one purchase per row' });
+    // A reply nothing matched in is the very same object.
+    expect(findItem(after.sequence!, 'r1')!.item).toBe(findItem(sequence, 'r1')!.item);
+    expect(replaceLabels(doc, 'nothing like this', 'x').doc).toBe(doc);
   });
 });

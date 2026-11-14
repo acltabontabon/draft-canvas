@@ -53,7 +53,8 @@ function attachCandidatesFor(nodes: readonly DraftNode[], excludeIds: ReadonlySe
   if (!candidates) {
     // A full host never arms: dropping there could only refuse (or, worse, lose content).
     candidates = nodes
-      .filter((node) => node.type !== 'group' && !excludeIds.has(node.id) && hasAttachmentRoom(node, 'node'))
+      // A sequence is too large a thing to drop a note "onto": it would arm wherever the note went.
+      .filter((node) => node.type !== 'group' && node.type !== 'sequence' && !excludeIds.has(node.id) && hasAttachmentRoom(node, 'node'))
       .sort((a, b) => b.z - a.z);
     byExclusion.set(key, candidates);
   }

@@ -37,7 +37,7 @@ export interface ProportionFinding {
 /** The screen a view is judged against when none is given: a laptop's (`compile.ts`'s `SCREEN`). */
 export const OVERVIEW_SCREEN: readonly [number, number] = [1440, 900];
 
-const isNoteLike = (node: DraftNode) => node.type === 'note' || node.type === 'text' || node.type === 'code';
+const isNoteLike = (node: DraftNode) => node.type === 'note' || node.type === 'text' || node.type === 'code' || node.type === 'sequence';
 
 /** A header band this much of its boundary's height, or more, outweighs what the boundary holds. */
 const HEAVY_HEADER_SHARE = 0.45;
