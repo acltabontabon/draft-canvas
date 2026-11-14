@@ -798,7 +798,14 @@ PLACEHOLDER = re.compile(r'^\s*(TODO|FIXME|TBD|XXX)\b', re.I)
 #: Fields that hold one id, and fields that hold a list of them.
 REFERENCE_FIELDS = {'id', 'from', 'to', 'group', 'parent', 'about', 'near', 'relationship', 'variantOf', 'primaryFlow'}
 REFERENCE_LISTS = {'spotlight', 'highlight'}
-COLLECTIONS = {'nodes': 'element', 'relationships': 'relationship', 'groups': 'group', 'flows': 'flow', 'notes': 'note', 'sequences': 'sequence'}
+COLLECTIONS = {
+    'nodes': 'element',
+    'relationships': 'relationship',
+    'groups': 'group',
+    'flows': 'flow',
+    'notes': 'note',
+    'sequences': 'sequence',
+}
 
 
 def plain_references(value: object, r: Report, path: str = 'top') -> object:

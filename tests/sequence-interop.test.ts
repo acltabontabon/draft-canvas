@@ -250,6 +250,16 @@ sequenceDiagram
     expect(parseMermaidSequence('sequenceDiagram\n')).toEqual({ ok: false, error: 'There is nobody in that sequence diagram.' });
   });
 
+  it('reads a dashed arrow with a single arrowhead as a reply', () => {
+    const read = parseMermaidSequence('sequenceDiagram\n  Client->>API: GET /orders\n  API-->Client: 200');
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(shape(read.sequence.items)).toEqual([
+      ['sync', 'GET /orders', false, false, false],
+      ['reply', '200', false, false, true],
+    ]);
+  });
+
   it('is recognised on paste, and arrives as one sequence the size of what it holds', async () => {
     const text = '```mermaid\nsequenceDiagram\n  Client->>API: GET /orders\n  API-->>Client: 200\n```';
     expect(looksLikeMermaid(text)).toBe(true);

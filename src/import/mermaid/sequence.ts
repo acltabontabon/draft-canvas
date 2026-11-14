@@ -51,8 +51,8 @@ const withoutComment = (line: string): string => {
 };
 
 /** `->>`, `-->>`, `-)`, `--)`, `-x`, `--x`, `->`, `-->`, `<<->>`, `<<-->>`: longest first, so `-->>` is not read as `-->`. */
-const ARROW = /(<<-->>|<<->>|-->>|--\)|--x|-->|->>|-\)|-x|->)/;
-const MESSAGE = new RegExp(`^(.+?)\\s*${ARROW.source}\\s*([+-]?)\\s*(.+?)\\s*(?::\\s*(.*))?$`);
+// Match arrows in the context of a message. A bare `-->` also ends an HTML comment.
+const MESSAGE = /^(.+?)\s*(<<-->>|<<->>|-->>|--\)|--x|-->|->>|-\)|-x|->)\s*([+-]?)\s*(.+?)\s*(?::\s*(.*))?$/;
 
 interface Block {
   kind: 'fragment' | 'box' | 'rect';
