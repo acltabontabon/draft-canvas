@@ -64,6 +64,14 @@ export interface StepStory {
 /** The words a step is told with — every one already on the canvas or in the flow. */
 export function describeFlowStep(step: FlowPlaybackStep, nodes: ReadonlyMap<string, DraftNode>): StepStory {
   const primary = step.edge;
+  // A step of a sequence: who the message is between, in the sequence's own names.
+  if (step.part) {
+    const host = nodes.get(step.part.nodeId);
+    const nameOf = (id: string) => host?.sequence?.participants.find((participant) => participant.id === id)?.name.trim() || 'Untitled';
+    const from = nameOf(step.part.message.from);
+    const to = nameOf(step.part.message.to);
+    return { headline: from === to ? from : `${from} to ${to}`, from, to, caption: step.caption };
+  }
   if (!primary) {
     const named = step.extraNodes.map((node) => displayNameFor(node)).join(', ');
     return { headline: named || 'Frame', caption: step.caption };

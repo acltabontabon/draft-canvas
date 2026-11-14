@@ -1,3 +1,4 @@
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
@@ -1555,7 +1556,7 @@ type InternalNodeLike = { internals: { positionAbsolute: { x: number; y: number 
 /** The flow being presented, if any. */
 function playingFlowOf(state: EditorStore) {
   const { active, flowId } = state.flowPlayback;
-  return active && flowId ? findFlow(state.document, flowId) : undefined;
+  return active && flowId ? playbackFlowOf(state.document, flowId) : undefined;
 }
 
 /** This connector's Presentation tier — a string, so only connectors whose tier flips re-render.

@@ -5,7 +5,8 @@
  * the step per node would be (nodes × updates) resolutions, so the answer is memoised on the two
  * objects it depends on and each node does a set lookup.
  */
-import { findFlow } from '../document/flow';
+
+import { playbackFlowOf } from '../document/sequenceFlow';
 import type { DraftDocument } from '../document/types';
 import type { FlowPlaybackState } from '../store/editorStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
@@ -41,7 +42,7 @@ export function stepContextOf(state: { document: DraftDocument; flowPlayback: Fl
 
 function compute(document: DraftDocument, playback: FlowPlaybackState): StepContext | null {
   if (!playback.active || !playback.flowId || playback.stage || playback.step < 1) return null;
-  const flow = findFlow(document, playback.flowId);
+  const flow = playbackFlowOf(document, playback.flowId);
   if (!flow) return null;
   const edgesById = edgeIndex(document.edges);
   const nodesById = nodeIndex(document.nodes);

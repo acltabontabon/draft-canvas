@@ -1,3 +1,4 @@
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { create } from 'zustand';
 import { reconnectProblem } from '../document/reconnect';
 import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
@@ -1181,7 +1182,7 @@ export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefin
   const flow =
     lensFlow(state) ??
     (state.flowPlayback.active && state.flowPlayback.flowId
-      ? findFlow(state.document, state.flowPlayback.flowId)
+      ? playbackFlowOf(state.document, state.flowPlayback.flowId)
       : undefined);
   if (!flow) return undefined;
   const ids = flowMemberNodeIds(state.document, flow);

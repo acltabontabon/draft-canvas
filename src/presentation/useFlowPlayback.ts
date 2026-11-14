@@ -1,9 +1,10 @@
+import { messageOfStep, playbackFlowOf, sequenceOfFlowId } from '../document/sequenceFlow';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useReactFlow, useStore, useStoreApi } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
-import { findFlow, flowIsPlayable } from '../document/flow';
+import { flowIsPlayable } from '../document/flow';
 import { boundsOf, type Bounds } from '../document/operations';
-import type { DraftEdge, DraftFlowStep, DraftFlow, DraftNode, DraftViewport } from '../document/types';
+import type { DraftEdge, DraftFlowStep, DraftFlow, DraftNode, DraftViewport, SeqMessage } from '../document/types';
 import { flattenPath } from '../edges/routing';
 import { clamp } from '../lib/math';
 import { nodeIndex } from '../store/selectors';
@@ -26,6 +27,12 @@ export interface FlowPlaybackStep {
   caption?: string;
   /** An explicit viewport this step shows verbatim — `focusOn` skips auto-fit when present. */
   viewport?: DraftViewport;
+  /**
+   * The message this step is about, when the flow is a sequence telling itself
+   * (`document/sequenceFlow.ts`): the step lights that one message inside the sequence, not the
+   * sequence as a whole.
+   */
+  part?: { nodeId: string; message: SeqMessage };
 }
 
 /**
@@ -51,7 +58,19 @@ export function resolveFlowStep(
     .map((id) => nodesById.get(id))
     .filter((n): n is DraftNode => Boolean(n));
   if (edges.length === 0 && extraNodes.length === 0 && !stepEntry.viewport) return null;
-  return { edge, edges, extraNodes, index, step, caption: stepEntry.caption, viewport: stepEntry.viewport };
+  // A sequence's own step is named after its message, and shows nothing but that sequence.
+  const host = edges.length === 0 && extraNodes.length === 1 ? extraNodes[0] : undefined;
+  const message = messageOfStep(host, stepEntry.id);
+  return {
+    edge,
+    edges,
+    extraNodes,
+    index,
+    step,
+    caption: stepEntry.caption,
+    viewport: stepEntry.viewport,
+    ...(host && message ? { part: { nodeId: host.id, message } } : {}),
+  };
 }
 
 /**
@@ -184,7 +203,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
   // whole-document subscription re-rendered the entire editor on every commit. Edges and nodes are
   // only watched while a flow is actually being presented; everything else reads `getState()`.
   const flow = useEditorStore((state) =>
-    flowPlayback.flowId ? (findFlow(state.document, flowPlayback.flowId) ?? null) : null,
+    flowPlayback.flowId ? (playbackFlowOf(state.document, flowPlayback.flowId) ?? null) : null,
   );
   const edges = useEditorStore((state) => (flow ? state.document.edges : NO_EDGES));
   const nodes = useEditorStore((state) => (flow ? state.document.nodes : NO_NODES));
@@ -332,7 +351,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
   const pickFlow = useCallback(
     (flowId: string) => {
       const { document } = useEditorStore.getState();
-      const chosen = findFlow(document, flowId);
+      const chosen = playbackFlowOf(document, flowId);
       if (!chosen || !flowIsPlayable(document, chosen)) return;
       // Switching to or from a named variant (e.g. a failure path) lands on the step sharing the
       // connector being left, rather than always resetting to the first step — matched by the two
@@ -341,9 +360,10 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       // opens the destination: its title over the whole path, with the story a keypress away.
       const isVariantSwitch = flow !== null && (chosen.variantOf === flow.id || flow.variantOf === chosen.id);
       const leavingEdgeId = current?.edge?.id;
-      const matchedIndex = isVariantSwitch && leavingEdgeId ? chosen.steps.findIndex((s) => s.edgeId === leavingEdgeId) : -1;
-      // Canvas step badges follow whichever flow is being presented.
-      useEditorStore.getState().setSelectedFlowId(flowId);
+      const matchedIndex = isVariantSwitch && leavingEdgeId ? chosen.steps.findIndex((entry) => entry.edgeId === leavingEdgeId) : -1;
+      // Canvas step badges follow whichever flow is being presented — a flow the file holds, that is:
+      // a sequence telling itself is not one of them, and the lens has nothing to show for it.
+      if (sequenceOfFlowId(flowId) === null) useEditorStore.getState().setSelectedFlowId(flowId);
       if (matchedIndex < 0) {
         setFlowPlayback({ active: true, flowId, step: 0, stage: 'opening' });
         frameFlow(chosen, 'guided');

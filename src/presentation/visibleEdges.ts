@@ -1,4 +1,5 @@
-import { findFlow } from '../document/flow';
+
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { isCollapsedCompensation, visibleEdges } from '../document/compensation';
 import type { DraftDocument, DraftEdge } from '../document/types';
 import type { FlowPlaybackState } from '../store/editorStore';
@@ -15,7 +16,7 @@ export function visibleEdgesForPlayback(document: DraftDocument, playback: FlowP
 
   let result = visibleEdges(document.edges);
   if (playback.active && playback.flowId && !playback.stage && playback.step >= 1) {
-    const flow = findFlow(document, playback.flowId);
+    const flow = playbackFlowOf(document, playback.flowId);
     const step = flow ? resolveFlowSteps(flow, document.edges, document.nodes)[playback.step - 1] : undefined;
     const hiddenIds = new Set(step?.edges.filter(isCollapsedCompensation).map((edge) => edge.id));
     if (hiddenIds.size > 0) result = document.edges.filter((edge) => !isCollapsedCompensation(edge) || hiddenIds.has(edge.id));

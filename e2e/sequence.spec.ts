@@ -224,6 +224,36 @@ test.describe('Sequence', () => {
     await expect(shape).toHaveCount(1);
   });
 
+  test('is presented one message at a time, through the canvas’s own presentation', async ({ page }) => {
+    await newCanvas(page, 'Told');
+    await newSequence(page, ['Client', 'API', 'Database']);
+    await draw(page, 0, 1, 'GET /orders');
+    await draw(page, 1, 2, 'SELECT orders');
+
+    // Back to the sequence as a whole: its inspector offers to present it.
+    await page.keyboard.press('Escape');
+    await page.locator(INSPECTOR).getByRole('button', { name: 'Present this sequence' }).click();
+    await expect(page.locator('.dc-explain')).toContainText('2 steps');
+
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 2');
+    await expect(page.locator(`${SEQUENCE}[data-seq-telling="true"]`)).toHaveCount(1);
+    // Only the message being told, and the two it is between, are drawn at full strength.
+    expect(await page.locator('.dc-seq-now text').allTextContents()).toEqual(expect.arrayContaining(['GET /orders', 'Client', 'API']));
+    expect(await page.locator('.dc-seq-now text').allTextContents()).not.toContain('Database');
+
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-count')).toContainText('Step 2 / 2');
+    expect(await page.locator('.dc-seq-now text').allTextContents()).toEqual(expect.arrayContaining(['SELECT orders', 'API', 'Database']));
+    expect(await page.locator('.dc-seq-told text').allTextContents()).toContain('GET /orders');
+
+    // Leaving puts everything back as it was, still editable.
+    await page.keyboard.press('Escape');
+    await expect(page.locator(`${SEQUENCE}[data-seq-telling="true"]`)).toHaveCount(0);
+    await page.locator(SEQUENCE).hover();
+    expect(await said(page)).toEqual(['Client to API: GET /orders', 'API to Database: SELECT orders']);
+  });
+
   test('is still there, and still editable, after a reload', async ({ page }) => {
     await newCanvas(page, 'Kept');
     await newSequence(page, ['Shopper', 'Storefront']);

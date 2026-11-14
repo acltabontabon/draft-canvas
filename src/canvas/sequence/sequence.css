@@ -410,3 +410,47 @@
   stroke-width: 1.2;
   stroke-linecap: round;
 }
+
+/* Presenting a sequence: the whole of it steps back, and what has been said and what is being said
+   are drawn over it from its own shapes (`SequenceStepLayer`). */
+.dc-node[data-seq-telling='true'] > .dc-node-surface {
+  opacity: 0.26;
+  transition: opacity var(--dc-dur-slow, 220ms) var(--dc-ease-out, ease-out);
+}
+
+.dc-seq-told,
+.dc-seq-now {
+  position: absolute;
+  inset: 0 auto auto 0;
+  /* As the surface they are drawn over: a mark above a head, or a sequence whose box has not caught
+     up with a font that measures wider here, is still drawn in full. */
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dc-seq-told {
+  opacity: 0.62;
+}
+
+.dc-seq-now {
+  animation: dc-seq-arrive var(--dc-dur-slow, 220ms) var(--dc-ease-out, ease-out) both;
+}
+
+@keyframes dc-seq-arrive {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-node[data-seq-telling='true'] > .dc-node-surface {
+    transition: none;
+  }
+
+  .dc-seq-now {
+    animation: none;
+  }
+}

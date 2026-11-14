@@ -4,7 +4,8 @@
  * and the inspector's quick actions all read from here, so a sequence offers the same things under
  * the same names wherever it is asked.
  */
-import { findItem, findOperand, isBranching, sequenceOf } from '../document/sequenceModel';
+import { sequenceFlowId } from '../document/sequenceFlow';
+import { findItem, findOperand, isBranching, messagesOf, sequenceOf } from '../document/sequenceModel';
 import type { DraftNode, SeqOperator } from '../document/types';
 import { isLinkable } from '../document/sequenceLinks';
 import { liveSequenceFocus } from '../sequence/focus';
@@ -34,6 +35,21 @@ export function sequenceQuickCommands(node: DraftNode): Command[] {
       shortcut: 'P',
       run: () => sequenceActions.edit(node.id, { kind: 'new-participant', index: sequence.participants.length }),
     },
+    // Presenting it is the canvas's own presentation, told one message at a time
+    // (`document/sequenceFlow.ts`): nothing is added to the diagram's flows.
+    ...(messagesOf(sequence).length > 0
+      ? [
+          {
+            id: 'seq-present',
+            title: 'Present this sequence',
+            group: 'selection' as const,
+            primary: true,
+            keywords: ['walk through', 'step through', 'play', 'explain', 'story'],
+            hint: 'One message at a time',
+            run: (inner: CommandContext) => inner.onPresent(sequenceFlowId(node.id)),
+          },
+        ]
+      : []),
     ...(sequence.participants.length > 0
       ? [
           {

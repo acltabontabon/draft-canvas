@@ -190,7 +190,7 @@ function sequenceMenu(ctx: CommandContext, node: DraftNode, commands: Command[])
   const inside = ctx.ui.sequenceFocus?.nodeId === node.id ? ctx.ui.sequenceFocus : null;
   if (!inside) {
     return grouped(nodeHeader(node), [
-      pick(commands, ['seq-add-participant', 'edit-text']),
+      pick(commands, ['seq-add-participant', 'seq-present', 'edit-text']),
       pick(commands, ATTACH),
       pick(commands, COPY_AND_ORDER),
       pick(commands, ['spotlight']),

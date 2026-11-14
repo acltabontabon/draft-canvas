@@ -10,7 +10,9 @@
  */
 import { boundsOf, type Bounds } from '../document/geometry';
 import { lensNodeTier } from '../document/flow';
-import type { DraftEdge, DraftFlow, DraftNode } from '../document/types';
+import type { DraftEdge, DraftFlow, DraftNode, SeqMessage } from '../document/types';
+import { describeContext, sequenceLayoutFor } from '../nodes/describe';
+import { LIGHT } from '../render/theme/tokens';
 import type { FlowPlaybackStep } from './useFlowPlayback';
 
 export interface StepComposition {
@@ -35,6 +37,26 @@ const MAX_ANCESTRY = 64;
 
 function rectOf(node: DraftNode): Bounds {
   return { x: node.x, y: node.y, width: node.width, height: node.height };
+}
+
+/** Room left around a message when the camera frames it: the rows either side stay in the picture. */
+const SEQUENCE_STEP_MARGIN = 36;
+
+/**
+ * What a step of a sequence puts on stage, in flow space: its message, and the heads of the two
+ * participants it runs between, so who is talking is in view with what is said. Null when the
+ * message is not drawn (a sequence changed under a step) — the whole sequence is framed instead.
+ */
+export function sequenceStepBounds(host: DraftNode | undefined, message: SeqMessage): Bounds | null {
+  if (host?.type !== 'sequence') return null;
+  const layout = sequenceLayoutFor(host, describeContext(LIGHT));
+  const boxes = [message.id, message.from, message.to].map((id) => layout.boxes.get(id)).filter((box): box is NonNullable<typeof box> => !!box);
+  if (!layout.boxes.has(message.id) || boxes.length === 0) return null;
+  const left = Math.min(...boxes.map((box) => box.x)) - SEQUENCE_STEP_MARGIN;
+  const top = Math.min(...boxes.map((box) => box.y)) - SEQUENCE_STEP_MARGIN;
+  const right = Math.max(...boxes.map((box) => box.x + box.w)) + SEQUENCE_STEP_MARGIN;
+  const bottom = Math.max(...boxes.map((box) => box.y + box.h)) + SEQUENCE_STEP_MARGIN;
+  return { x: host.x + left, y: host.y + top, width: right - left, height: bottom - top };
 }
 
 /** A node's enclosing boundaries, nearest first. Guarded against a cyclic `parentId` in a hand-edited file. */
@@ -82,7 +104,10 @@ export function stepComposition(
   nodesById: ReadonlyMap<string, DraftNode>,
   routeBoxes?: ReadonlyMap<string, Bounds>,
 ): StepComposition | null {
-  const boxes: Bounds[] = step.extraNodes.map(rectOf);
+  // A step of a sequence is framed on its message and the two heads it runs between — the part of
+  // the sequence the step is about — rather than on a sequence that may be several screens tall.
+  const part = step.part ? sequenceStepBounds(nodesById.get(step.part.nodeId), step.part.message) : null;
+  const boxes: Bounds[] = part ? [part] : step.extraNodes.map(rectOf);
   const sources: string[] = [];
   const targets: string[] = [];
   const crossed: DraftNode[] = [];

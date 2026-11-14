@@ -1,3 +1,4 @@
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { TrafficReplayProvider } from './TrafficReplayContext';
 import { TrafficScenario } from './TrafficScenario';
 import { FlowTraceBadges } from './FlowTraceBadges';
@@ -33,7 +34,7 @@ import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { centerOf, pointInBox } from '../lib/math';
 import { pathKey } from '../depth/tree';
-import { findFlow } from '../document/flow';
+
 import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
 import { accentOf } from '../render/theme/tokens';
 import { lensFlow, useEditorStore } from '../store/editorStore';
@@ -577,7 +578,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // colour — handed to every arrival ring, boundary outline and caption through a single variable.
   const explainAccent = useEditorStore((state) => {
     if (!state.flowPlayback.active || !state.flowPlayback.flowId) return undefined;
-    return findFlow(state.document, state.flowPlayback.flowId)?.accent;
+    return playbackFlowOf(state.document, state.flowPlayback.flowId)?.accent;
   });
   const focusActive = useEditorStore((state) => state.focus.active);
   // A flow merely selected (not presented) acts as a gentler lens — see
