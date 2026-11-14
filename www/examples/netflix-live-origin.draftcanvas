@@ -1,0 +1,624 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "example-netflix-live-origin",
+    "title": "Netflix Live Origin",
+    "createdAt": 1794614400000,
+    "updatedAt": 1794614400000
+  },
+  "nodes": [
+    {
+      "id": "region-a",
+      "type": "group",
+      "text": "Contribution pipeline \u00b7 AWS region A",
+      "x": 0,
+      "y": 0,
+      "width": 678,
+      "height": 168,
+      "z": 0,
+      "accent": "blue",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "region-b",
+      "type": "group",
+      "text": "Contribution pipeline \u00b7 AWS region B",
+      "x": 0,
+      "y": 195,
+      "width": 678,
+      "height": 168,
+      "z": 0,
+      "accent": "violet",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "live-origin",
+      "type": "group",
+      "text": "Netflix Live Origin \u00b7 AWS",
+      "x": 768,
+      "y": 0,
+      "width": 781,
+      "height": 629,
+      "z": 0,
+      "accent": "teal",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "open-connect",
+      "type": "group",
+      "text": "Netflix Open Connect",
+      "x": 211,
+      "y": 405,
+      "width": 467,
+      "height": 224,
+      "z": 0,
+      "accent": "violet",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "feed-a",
+      "type": "service",
+      "text": "MediaConnect",
+      "x": 26,
+      "y": 64,
+      "width": 130,
+      "height": 77,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "gateway",
+      "parentId": "region-a",
+      "description": "Acquires feed A"
+    },
+    {
+      "id": "encode-a",
+      "type": "service",
+      "text": "MediaLive",
+      "x": 238,
+      "y": 64,
+      "width": 146,
+      "height": 77,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "worker",
+      "parentId": "region-a",
+      "description": "Encodes renditions"
+    },
+    {
+      "id": "pack-a",
+      "type": "service",
+      "text": "Packager A",
+      "x": 499,
+      "y": 64,
+      "width": 150,
+      "height": 77,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "worker",
+      "parentId": "region-a",
+      "description": "Inspects segments"
+    },
+    {
+      "id": "feed-b",
+      "type": "service",
+      "text": "MediaConnect",
+      "x": 26,
+      "y": 259,
+      "width": 130,
+      "height": 77,
+      "z": 0,
+      "accent": "violet",
+      "serviceKind": "gateway",
+      "parentId": "region-b",
+      "description": "Acquires feed B"
+    },
+    {
+      "id": "encode-b",
+      "type": "service",
+      "text": "MediaLive",
+      "x": 238,
+      "y": 259,
+      "width": 146,
+      "height": 77,
+      "z": 0,
+      "accent": "violet",
+      "serviceKind": "worker",
+      "parentId": "region-b",
+      "description": "Encodes renditions"
+    },
+    {
+      "id": "pack-b",
+      "type": "service",
+      "text": "Packager B",
+      "x": 499,
+      "y": 259,
+      "width": 150,
+      "height": 77,
+      "z": 0,
+      "accent": "violet",
+      "serviceKind": "worker",
+      "parentId": "region-b",
+      "description": "Inspects segments"
+    },
+    {
+      "id": "origin-publish",
+      "type": "service",
+      "text": "Publish stack",
+      "x": 810,
+      "y": 151,
+      "width": 171,
+      "height": 98,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "api",
+      "parentId": "live-origin",
+      "technology": "Amazon EC2",
+      "description": "Accepts both pipelines"
+    },
+    {
+      "id": "kv-write",
+      "type": "service",
+      "text": "KeyValue writes",
+      "x": 1080,
+      "y": 151,
+      "width": 184,
+      "height": 98,
+      "z": 0,
+      "accent": "blue",
+      "parentId": "live-origin",
+      "description": "Splits payloads into chunks"
+    },
+    {
+      "id": "segment-store",
+      "type": "database",
+      "text": "Cassandra",
+      "x": 1352,
+      "y": 167.27272727272728,
+      "width": 166,
+      "height": 96,
+      "z": 0,
+      "accent": "blue",
+      "parentId": "live-origin",
+      "databaseKind": "nosql",
+      "technology": "Apache Cassandra",
+      "description": "Durable segment chunks"
+    },
+    {
+      "id": "peer-store",
+      "type": "database",
+      "text": "Cassandra peer",
+      "x": 1352,
+      "y": 50,
+      "width": 166,
+      "height": 96,
+      "z": 0,
+      "accent": "blue",
+      "parentId": "live-origin",
+      "databaseKind": "nosql",
+      "technology": "Apache Cassandra",
+      "description": "Another AWS region"
+    },
+    {
+      "id": "chunk-cache",
+      "type": "database",
+      "text": "EVCache",
+      "x": 1087,
+      "y": 309,
+      "width": 170,
+      "height": 110,
+      "z": 0,
+      "accent": "teal",
+      "parentId": "live-origin",
+      "databaseKind": "cache",
+      "technology": "Memcached"
+    },
+    {
+      "id": "origin-cdn",
+      "type": "service",
+      "text": "Retrieval stack",
+      "x": 810,
+      "y": 479,
+      "width": 171,
+      "height": 98,
+      "z": 0,
+      "accent": "teal",
+      "serviceKind": "api",
+      "parentId": "live-origin",
+      "technology": "Amazon EC2",
+      "description": "Selects a valid segment"
+    },
+    {
+      "id": "kv-read",
+      "type": "service",
+      "text": "KeyValue reads",
+      "x": 1080,
+      "y": 479,
+      "width": 184,
+      "height": 98,
+      "z": 0,
+      "accent": "teal",
+      "parentId": "live-origin",
+      "description": "Reassembles chunks"
+    },
+    {
+      "id": "viewer",
+      "type": "actor",
+      "text": "Netflix player",
+      "x": 17,
+      "y": 477,
+      "width": 103,
+      "height": 102,
+      "z": 0,
+      "accent": "neutral",
+      "actorKind": "device",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "edge-oca",
+      "type": "service",
+      "text": "Edge OCA",
+      "x": 229,
+      "y": 479,
+      "width": 147,
+      "height": 98,
+      "z": 0,
+      "accent": "violet",
+      "serviceKind": "gateway",
+      "parentId": "open-connect",
+      "technology": "NGINX",
+      "description": "Serves nearby"
+    },
+    {
+      "id": "fill-oca",
+      "type": "service",
+      "text": "Top-tier OCA",
+      "x": 504,
+      "y": 479,
+      "width": 151,
+      "height": 98,
+      "z": 0,
+      "accent": "violet",
+      "serviceKind": "gateway",
+      "parentId": "open-connect",
+      "description": "Fills from the origin"
+    }
+  ],
+  "edges": [
+    {
+      "id": "acquire-a",
+      "source": "feed-a",
+      "target": "encode-a",
+      "label": "live feed",
+      "semantic": "ingests",
+      "accent": "blue",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "encode-to-pack-a",
+      "source": "encode-a",
+      "target": "pack-a",
+      "label": "encoded renditions",
+      "semantic": "deliversTo",
+      "accent": "blue",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "publish-a",
+      "source": "pack-a",
+      "target": "origin-publish",
+      "label": "PUT segment A",
+      "semantic": "calls",
+      "accent": "blue",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.3
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 733,
+          "y": 102.5
+        },
+        {
+          "x": 733,
+          "y": 180.4
+        }
+      ]
+    },
+    {
+      "id": "acquire-b",
+      "source": "feed-b",
+      "target": "encode-b",
+      "label": "live feed",
+      "semantic": "ingests",
+      "accent": "violet",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "encode-to-pack-b",
+      "source": "encode-b",
+      "target": "pack-b",
+      "label": "encoded renditions",
+      "semantic": "deliversTo",
+      "accent": "violet",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "publish-b",
+      "source": "pack-b",
+      "target": "origin-publish",
+      "label": "PUT segment B",
+      "semantic": "calls",
+      "accent": "violet",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.7
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 733,
+          "y": 297.5
+        },
+        {
+          "x": 733,
+          "y": 219.6
+        }
+      ]
+    },
+    {
+      "id": "persist-segment",
+      "source": "origin-publish",
+      "target": "kv-write",
+      "label": "stores segment",
+      "semantic": "writes",
+      "accent": "blue",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "durable-write",
+      "source": "kv-write",
+      "target": "segment-store",
+      "label": "local quorum",
+      "semantic": "writes",
+      "accent": "blue",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "write-through",
+      "source": "kv-write",
+      "target": "chunk-cache",
+      "label": "write-through",
+      "semantic": "writes",
+      "accent": "blue",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "player-request",
+      "source": "viewer",
+      "target": "edge-oca",
+      "label": "GET segment",
+      "semantic": "calls",
+      "accent": "violet",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.36
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.35428571428571454
+      }
+    },
+    {
+      "id": "player-response",
+      "source": "edge-oca",
+      "target": "viewer",
+      "label": "segment bytes",
+      "semantic": "deliversTo",
+      "accent": "teal",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.6457142857142855
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.64
+      }
+    },
+    {
+      "id": "edge-miss",
+      "source": "edge-oca",
+      "target": "fill-oca",
+      "label": "on edge cache miss",
+      "semantic": "calls",
+      "accent": "violet",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "origin-request",
+      "source": "fill-oca",
+      "target": "origin-cdn",
+      "label": "GET segment",
+      "semantic": "calls",
+      "accent": "violet",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "read-segment",
+      "source": "origin-cdn",
+      "target": "kv-read",
+      "label": "reads segment",
+      "semantic": "reads",
+      "accent": "teal",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "cache-read",
+      "source": "kv-read",
+      "target": "chunk-cache",
+      "label": "reads",
+      "semantic": "reads",
+      "accent": "teal",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "store-fallback",
+      "source": "kv-read",
+      "target": "segment-store",
+      "label": "on EVCache miss",
+      "semantic": "reads",
+      "accent": "amber",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 1435,
+          "y": 528
+        }
+      ]
+    },
+    {
+      "id": "replicate-segments",
+      "source": "segment-store",
+      "target": "peer-store",
+      "label": "replicates",
+      "semantic": "replicates",
+      "accent": "blue",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      }
+    }
+  ],
+  "notes": []
+}

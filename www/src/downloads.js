@@ -2,7 +2,7 @@
  * Which desktop download to point at first.
  *
  * The download rows themselves live in index.html, with their URLs built at build time from the
- * app's own package.json version (see `versionInHtml` in vite.config.js). That is deliberate: they
+ * app's own package.json version (see `fillLandingHtml` in vite.config.js). That is deliberate: they
  * are real links in the shipped HTML, so they work with scripting off, and a release updates them
  * by being cut rather than by anyone editing this file. Nothing here invents a URL.
  *

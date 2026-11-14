@@ -1,11 +1,11 @@
 # Security
 
-Draft Canvas is local-first, with no diagram backend. Storage, sharing and network activity are in
-[Privacy](docs/reference/privacy.md).
+Draft Canvas is local-first, with no diagram backend. The public [Privacy and security](docs/reference/privacy.md)
+page covers storage, sharing, network activity, and vulnerability reporting.
 
 ## Reporting a concern
 
-Report vulnerabilities privately through this repository's **Security → Report a vulnerability**,
+Use [GitHub's private vulnerability reporting form](https://github.com/acltabontabon/draft-canvas/security/advisories/new),
 with version, platform, steps to reproduce and impact.
 
 If that is unavailable, open an issue asking for a private channel, **without the details**. No bug
@@ -58,13 +58,13 @@ It does not encrypt the Library copy, desktop file or recovery copies.
 - The **Add to …** buttons only add the connector to that agent's own configuration. Installing the
   skill copies files into the agent's skill folder.
 - Your agent may send diagram content to its AI provider. See
-  [Agent security](docs/reference/agent-integration.md#security).
+  [Optional AI agents](docs/reference/privacy.md#optional-ai-agents).
 - **Companion runs** are scoped to one diagram and use proposals unless direct changes were chosen.
   Cancellation and an agent's terminal event close tool authority before the process exits, and
   process trees are killed with the run. These boundaries depend on running the supported, trusted
   agent CLI; they do not sandbox a malicious replacement executable. Codex runs ignore the person's
-  Codex configuration. Details are in
-  [Agent integration](docs/reference/agent-integration.md#nodi-the-desktop-companion).
+  Codex configuration. See [Ask Nodi, on the canvas](docs/guides/connect-an-ai-agent.md#ask-nodi-on-the-canvas)
+  for how to use the companion.
 
 ## Live collaboration
 

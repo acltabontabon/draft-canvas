@@ -71,14 +71,13 @@ Choose **Import** on Home or in the Library, or drop the file onto the Library o
 
 An import never replaces an existing diagram. Older files upgrade; files from a newer version are
 refused until you update. Damaged files are repaired where possible, with a report of what was
-dropped. Files over 24 MB are refused; other limits are in the [schema reference](../reference/schema.md).
+dropped. Files over 24 MB are refused.
 
 ### Importing a Mermaid flowchart
 
 Import a `flowchart` or `graph` file for a new diagram, or paste Mermaid text onto a canvas (one
-undo removes it). Draft Canvas lays it out. Styling is skipped; other diagram types are refused.
-A `sequenceDiagram` becomes an editable [sequence](sequence-diagrams.md) the same way.
-See the [Mermaid import reference](../reference/mermaid-import.md).
+undo removes it). Draft Canvas lays it out and skips styling. A `sequenceDiagram` becomes an
+editable [sequence](sequence-diagrams.md) the same way. Draft Canvas refuses other diagram types.
 
 ## Share a diagram
 
@@ -162,4 +161,5 @@ also open in the reader. Starting metadata counts toward the link-size limit.
 
 For a bug report, choose **Diagnostic report…** in the **?** help menu (desktop: **Settings →
 Support**), then **Download report**. It has no diagram content or file paths and is never sent
-automatically. See [privacy](../reference/privacy.md) and [recovery limits](../reference/reliability.md).
+automatically. See [Privacy and security](../reference/privacy.md#optional-local-diagnostic-report)
+and [recovery limits](../reference/reliability.md).

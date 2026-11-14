@@ -1,0 +1,343 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "example-shopify-inventory",
+    "title": "Shopify inventory reservations",
+    "createdAt": 1794614400000,
+    "updatedAt": 1794614400000
+  },
+  "nodes": [
+    {
+      "id": "mysql",
+      "type": "group",
+      "text": "MySQL inventory tables",
+      "x": 1082,
+      "y": 0,
+      "width": 398,
+      "height": 525,
+      "z": 0,
+      "accent": "teal",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "buyer",
+      "type": "actor",
+      "text": "Buyer",
+      "x": 0,
+      "y": 215,
+      "width": 120,
+      "height": 80,
+      "z": 0,
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "checkout",
+      "type": "service",
+      "text": "Checkout",
+      "x": 253,
+      "y": 211,
+      "width": 187,
+      "height": 88,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "api",
+      "description": "Starts a purchase",
+      "attachments": [
+        {
+          "id": "connection-attribution",
+          "type": "note",
+          "noteKind": "decision",
+          "text": "Checkout tags SQL by business process. ProxySQL uses those tags to measure how long each caller holds a database connection."
+        }
+      ]
+    },
+    {
+      "id": "reserve",
+      "type": "service",
+      "text": "Reserve inventory",
+      "x": 621,
+      "y": 211,
+      "width": 214,
+      "height": 88,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "generic",
+      "description": "Holds stock during payment",
+      "attachments": [
+        {
+          "id": "skip-locked",
+          "type": "code",
+          "text": "Illustrative reservation SQL",
+          "language": "sql",
+          "code": "SELECT id\nFROM reservation_units\nWHERE shop_id = ?\n  AND inventory_item_id = ?\n  AND inventory_group_id = ?\nLIMIT ? FOR UPDATE SKIP LOCKED;"
+        },
+        {
+          "id": "lock-order",
+          "type": "note",
+          "noteKind": "decision",
+          "text": "In the reserve transaction, delete the selected unit rows before inserting the hold into reserved_quantities. Shopify also used READ COMMITTED to avoid gap locks that could block replenishment."
+        }
+      ]
+    },
+    {
+      "id": "claim",
+      "type": "service",
+      "text": "Claim inventory",
+      "x": 621,
+      "y": 381,
+      "width": 214,
+      "height": 88,
+      "z": 0,
+      "accent": "teal",
+      "serviceKind": "generic",
+      "description": "Finalizes a paid purchase"
+    },
+    {
+      "id": "refill",
+      "type": "service",
+      "text": "Replenishment",
+      "x": 621,
+      "y": 22.1,
+      "width": 214,
+      "height": 88,
+      "z": 0,
+      "accent": "amber",
+      "serviceKind": "generic",
+      "description": "Runs inline if the pool empties"
+    },
+    {
+      "id": "units",
+      "type": "database",
+      "text": "Available units",
+      "x": 1158,
+      "y": 55,
+      "width": 232,
+      "height": 88,
+      "z": 0,
+      "databaseKind": "table",
+      "accent": "teal",
+      "parentId": "mysql"
+    },
+    {
+      "id": "held",
+      "type": "database",
+      "text": "Active holds",
+      "x": 1158,
+      "y": 225,
+      "width": 232,
+      "height": 88,
+      "z": 0,
+      "databaseKind": "table",
+      "accent": "teal",
+      "parentId": "mysql"
+    },
+    {
+      "id": "ledger",
+      "type": "database",
+      "text": "Inventory ledger",
+      "x": 1158,
+      "y": 395,
+      "width": 232,
+      "height": 88,
+      "z": 0,
+      "databaseKind": "table",
+      "accent": "teal",
+      "parentId": "mysql"
+    }
+  ],
+  "edges": [
+    {
+      "id": "purchase",
+      "source": "buyer",
+      "target": "checkout",
+      "label": "completes checkout",
+      "accent": "neutral",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "request-hold",
+      "source": "checkout",
+      "target": "reserve",
+      "label": "payment starts",
+      "accent": "blue",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "request-claim",
+      "source": "checkout",
+      "target": "claim",
+      "label": "payment succeeds",
+      "accent": "teal",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 346.5,
+          "y": 425
+        }
+      ]
+    },
+    {
+      "id": "empty-pool",
+      "source": "reserve",
+      "target": "refill",
+      "label": "pool empty",
+      "accent": "amber",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "refill-units",
+      "source": "refill",
+      "target": "units",
+      "label": "repopulates pool",
+      "accent": "amber",
+      "semantic": "writes",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.05
+      }
+    },
+    {
+      "id": "pool-access",
+      "source": "reserve",
+      "target": "units",
+      "label": "locks and deletes units",
+      "accent": "blue",
+      "semantic": "readsWrites",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.12
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.96
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 951,
+          "y": 221.56
+        },
+        {
+          "x": 951,
+          "y": 104.32000000000001
+        }
+      ]
+    },
+    {
+      "id": "record-hold",
+      "source": "reserve",
+      "target": "held",
+      "label": "records hold",
+      "accent": "blue",
+      "semantic": "writes",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.33295454545454545
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.15
+      }
+    },
+    {
+      "id": "clear-hold",
+      "source": "claim",
+      "target": "held",
+      "label": "clears hold",
+      "accent": "teal",
+      "semantic": "writes",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.24
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.96
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 951,
+          "y": 402.12
+        },
+        {
+          "x": 951,
+          "y": 274.32
+        }
+      ]
+    },
+    {
+      "id": "deduct-stock",
+      "source": "claim",
+      "target": "ledger",
+      "label": "deducts stock",
+      "accent": "teal",
+      "semantic": "writes",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    }
+  ],
+  "notes": []
+}
