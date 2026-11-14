@@ -99,7 +99,7 @@ Narrow screens use an expandable guide menu.
   sidebar groups and reading order. Source code and workflow links point to GitHub.
 - **Link checks:** broken document, section and image links fail `npm run site:build`. Anchors
   use GitHub's slug rule, as in `tests/docs.test.ts`.
-- **Release timing:** pages ship from the release tag, so doc changes go live with the next release.
+- **Publishing:** docs ship with the site. A docs-only push waits for the next site deploy or release.
 
 With `npm run site:dev`, refresh `http://localhost:5280/docs/` to see an edit.
 
@@ -130,11 +130,12 @@ Triggers (all share the `pages` concurrency group):
   version that is not the latest published release; that release's deploy publishes it instead.
 - **On demand:** run it from `main` (site only, unless `release-tag` is set).
 
-Off a release tag, `pages.yml` builds the newest stable `vX.Y.Z` with this commit's `www/` and
-`scripts/assemble-web.mjs` laid over it, and tests it in Chromium, Firefox and WebKit. The relay and
-the editor's hosting (`relay*.js`, `relay.jsonc`, `app.jsonc`, `app.headers`) come from the release
-wherever it has them, and are not deployed. So the editor, docs, relay and the editor's headers change
-only on a release; a push touching `www/cloudflare/` waits for the next one.
+Off a release tag, `pages.yml` builds the editor from the newest stable `vX.Y.Z` and the site and
+docs from the workflow commit. Acceptance tests in Chromium, Firefox and WebKit use the selected
+release's offline editor tests and the site's web tests and example fixtures. The relay and the
+editor's hosting (`relay*.js`, `relay.jsonc`, `app.jsonc`, `app.headers`) come from the release
+wherever it has them. A site-only deploy publishes the site and docs, and a release or withdrawal
+also publishes the editor and relay.
 
 **Withdrawal:** run `pages.yml` from `main` with `release-tag` set to the last good tag. Follow
 [the recovery procedure](reliability.md#withdrawal-and-recovery-procedure) first.
