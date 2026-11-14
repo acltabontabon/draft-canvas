@@ -6,6 +6,7 @@ import {
   copySource,
   copySvg,
   countPlayableFlows,
+  countSequences,
   exportEveryLevel,
   exportPngFile,
   exportProjectFile,
@@ -283,7 +284,9 @@ export function ExportDialog() {
   // count spans every room, since the source does.
   const playableFlowCount = countPlayableFlows(document);
   const sourceInfo = SOURCE_FORMAT_INFO[sourceFormat];
-  const sourceEmpty = sourceInfo.family === 'sequence' && playableFlowCount === 0;
+  // A sequence drawn on the canvas is sequence source too, with or without a Flow beside it.
+  const sequenceCount = countSequences(document);
+  const sourceEmpty = sourceInfo.family === 'sequence' && playableFlowCount + sequenceCount === 0;
   // The text itself, generated on every render the Source panel shows — a few milliseconds for a
   // large canvas, and it is exactly what the file and the clipboard will get.
   const sourceText = effectiveMode === 'sequence' && !sourceEmpty ? sourceTextFor(document, sourceFormat) : null;
@@ -381,9 +384,9 @@ export function ExportDialog() {
               icon: 'code',
               badge: sourceInfo.badge,
               meta: sourceEmpty
-                ? 'No Flow yet'
+                ? 'Nothing yet'
                 : sourceInfo.family === 'sequence'
-                  ? `${count(playableFlowCount, 'Flow')} · plain text`
+                  ? `${[playableFlowCount > 0 ? count(playableFlowCount, 'Flow') : null, sequenceCount > 0 ? count(sequenceCount, 'sequence') : null].filter(Boolean).join(' · ')} · plain text`
                   : `${count(sourceText?.split('\n').length ?? 0, 'line')} · ${sourceFormat === 'drawio' ? 'XML' : 'plain text'}`,
             },
           };
@@ -628,7 +631,7 @@ export function ExportDialog() {
             <ExportSequencePanel
               format={sourceFormat}
               onFormatChange={setSourceFormatValue}
-              playableFlowCount={playableFlowCount}
+              playableFlowCount={playableFlowCount + sequenceCount}
               source={sourceText}
             />
           )}

@@ -9,7 +9,7 @@ import { FILE_MIME, fileNameFor, serializeDocument } from './project';
 // modules themselves, so a barrel import never drags a writer into a graph that didn't ask for it.
 export { fileNameFor } from './project';
 export { exportSecureProjectFile, SECURE_EXPORT_FILE_EXTENSION } from './secureProject';
-export { countPlayableFlows } from './sequence';
+export { countPlayableFlows, countSequences } from './sequence';
 export { exportSourceFile, SOURCE_FORMAT_INFO, SOURCE_FORMATS, sourceFileNameFor, sourceTextFor, type SourceFamily, type SourceFormat } from './source';
 export { copyImage, copySource, copySvg, type CopyResult } from './clipboard';
 export { collectLevels, LEVELS_EXTENSION } from './levels';

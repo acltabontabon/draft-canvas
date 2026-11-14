@@ -150,7 +150,7 @@ test.describe('Sequence Diagram export', () => {
     await expect(page.getByTitle('Sequence Diagram')).toHaveCount(0);
 
     const dialog = await openSourceExport(page);
-    await expect(dialog.getByRole('radio', { name: 'Flows', exact: true })).toBeChecked();
+    await expect(dialog.getByRole('radio', { name: 'Sequences', exact: true })).toBeChecked();
     // The preview is the generated source, read-only; the artifact is the file tile, never a drawn diagram.
     await expect(dialog.getByTestId('export-source-preview')).toContainText('sequenceDiagram');
     await expect(dialog.locator('.dc-export-file')).toBeVisible();
@@ -230,7 +230,7 @@ test.describe('Sequence Diagram export', () => {
     await importDocument(page, doc, 'no-flows.draftcanvas');
     const dialog = await openSourceExport(page);
 
-    await expect(dialog.getByText('Add a Flow to export its sequence diagram.')).toBeVisible();
+    await expect(dialog.getByText('Add a Flow or a sequence to export its sequence diagram.')).toBeVisible();
     await expect(dialog.getByRole('button', { name: /Export (Mermaid|PlantUML)/ })).toBeDisabled();
   });
 

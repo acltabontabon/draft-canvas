@@ -254,6 +254,40 @@ test.describe('Sequence', () => {
     expect(await said(page)).toEqual(['Client to API: GET /orders', 'API to Database: SELECT orders']);
   });
 
+  test('a Mermaid sequence diagram pasted in becomes a sequence that can be edited, and goes back out as text', async ({ page, browserName }) => {
+    test.skip(browserName === 'firefox', 'Firefox protects the clipboard data of synthetic paste events');
+    await newCanvas(page, 'Pasted');
+    const text = ['sequenceDiagram', '  actor Shopper', '  Shopper->>+Store: Place order', '  alt in stock', '    Store-->>-Shopper: Confirmed', '  else sold out', '    Store-->>Shopper: Sorry', '  end'].join('\n');
+    await page.evaluate((body) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', body);
+      document.querySelector('.dc-canvas')!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    }, text);
+
+    await expect(page.locator(SEQUENCE)).toHaveCount(1);
+    await page.locator(SEQUENCE).hover();
+    await expect(page.locator(HEAD)).toHaveCount(2);
+    expect(await said(page)).toEqual(['Shopper to Store: Place order', 'Store to Shopper: Confirmed', 'Store to Shopper: Sorry']);
+    await expect(page.locator(FRAME)).toHaveCount(1);
+
+    // It is an ordinary sequence now: a message can be renamed where it stands.
+    await page.locator(MESSAGE).nth(2).dblclick();
+    await expect(page.locator(LABEL)).toBeFocused();
+    await page.keyboard.type('Out of stock');
+    await page.keyboard.press('Enter');
+
+    // Exported as source, it is the same diagram with the edit in it.
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^Export/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Export & share' });
+    await dialog.locator('[data-mode="sequence"]').click();
+    const preview = dialog.getByTestId('export-source-preview');
+    await expect(preview).toContainText('sequenceDiagram');
+    await expect(preview).toContainText('Store-->>Shopper: Out of stock');
+    await expect(preview).toContainText('alt in stock');
+  });
+
   test('is still there, and still editable, after a reload', async ({ page }) => {
     await newCanvas(page, 'Kept');
     await newSequence(page, ['Shopper', 'Storefront']);

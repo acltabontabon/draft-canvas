@@ -50,6 +50,7 @@ import { isLinkable, participantFromNode } from '../document/sequenceLinks';
 import type { DraftSequence, SeqMessage, SeqMessageKind, SeqOperator, SeqParticipant } from '../document/types';
 import type { SequenceFinding } from '../sequence/check';
 import { executionsOf } from '../sequence/executions';
+import { sequenceFromFlow } from '../sequence/fromFlow';
 import { describeSequenceFocus, type SequenceEditTarget, type SequenceFocus } from '../sequence/focus';
 import { announce } from '../lib/announce';
 import { useEditorStore } from './editorStore';
@@ -180,6 +181,27 @@ export const sequenceActions = {
     const created = useEditorStore.getState().addNode({ type: 'sequence', x: Math.round(right + 120), y: Math.round(top) });
     for (const shape of shapes) sequenceActions.addParticipantFromShape(created.id, shape.id);
     useEditorStore.getState().endInteraction('Sequence from selection');
+    select(created.id, 'participant', []);
+    return created.id;
+  },
+
+  /**
+   * A Flow drawn as a sequence, beside the diagram: its steps as messages, in the Flow's own order,
+   * between participants that still stand for the Flow's shapes. One undo step. Answers the id.
+   */
+  createFromFlow(flowId: string): string | null {
+    const editor = useEditorStore.getState();
+    const made = sequenceFromFlow(editor.document, flowId);
+    if (!made) {
+      useUiStore.getState().notify('That flow has no steps to draw as a sequence yet.');
+      return null;
+    }
+    const right = Math.max(0, ...editor.document.nodes.map((node) => node.x + node.width));
+    const top = Math.min(0, ...editor.document.nodes.map((node) => node.y));
+    editor.beginInteraction('Sequence from flow');
+    const created = useEditorStore.getState().addNode({ type: 'sequence', x: Math.round(right + 120), y: Math.round(top), text: made.title });
+    run(created.id, 'Sequence from flow', () => made.sequence);
+    useEditorStore.getState().endInteraction('Sequence from flow');
     select(created.id, 'participant', []);
     return created.id;
   },

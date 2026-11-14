@@ -2,6 +2,7 @@ import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
 import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
 import { sequenceCommands, sequenceFromSelectionCommands, sequenceQuickCommands } from './sequence';
+import { sequenceActions } from '../store/sequenceActions';
 import { bridgeProblems } from '../document/splice';
 import { CONVERTIBLE_TYPES, CONVERTIBLE_TYPE_NAMES, isConvertibleType } from '../document/convert';
 import { reconnectProblem } from '../document/reconnect';
@@ -486,6 +487,29 @@ function flowCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.ui.setFlowPanelOpen(true),
     },
   );
+  // A flow is an order somebody gave: it can be drawn as a sequence without guessing at one.
+  if (ctx.playback.flows.length > 0) {
+    commands.push({
+      id: 'flow-to-sequence',
+      title: ctx.playback.flows.length === 1 ? 'Draw the flow as a sequence' : 'Draw a flow as a sequence…',
+      group: 'flow',
+      keywords: ['sequence diagram', 'lifelines', 'convert', 'messages'],
+      hint: 'A sequence beside the diagram, still linked to its shapes',
+      run: (inner) => {
+        const { flows } = inner.playback;
+        if (flows.length === 1) return void sequenceActions.createFromFlow(flows[0]!.id);
+        return {
+          prompt: 'Draw as a sequence',
+          options: flows.map((flow) => ({
+            id: `flow-to-sequence:${flow.id}`,
+            title: flow.title,
+            hint: count(flow.steps.length, 'step'),
+            run: () => void sequenceActions.createFromFlow(flow.id),
+          })),
+        };
+      },
+    });
+  }
   return commands;
 }
 
@@ -2246,6 +2270,8 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'present-flow',
   'switch-flow',
   'flow-manage',
+  // A sequence telling itself is a presentation like any other: nothing is written.
+  'seq-present',
   // Open points: the panel and Focus are views; raising or resolving one is not.
   'open-points',
   'open-points-focus',

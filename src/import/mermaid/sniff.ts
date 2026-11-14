@@ -19,7 +19,7 @@ export const FRONT_MATTER = /^\s*---\s*\n([\s\S]*?)\n---\s*\n/;
 export function unfence(text: string): string {
   const blocks = [...text.matchAll(FENCE)].map((match) => match[1]!);
   if (blocks.length === 0) return text;
-  return blocks.find(isFlowchart) ?? blocks[0]!;
+  return blocks.find(isFlowchart) ?? blocks.find(isSequenceDiagram) ?? blocks[0]!;
 }
 
 /** How many more fenced Mermaid blocks a Markdown document holds than the one `unfence` reads. */
@@ -45,8 +45,25 @@ function isFlowchart(source: string): boolean {
   return false;
 }
 
-/** Whether text reads as a Mermaid flowchart — cheap enough for every paste. */
+function isSequenceDiagram(source: string): boolean {
+  for (const line of stripFrontMatter(source).split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (trimmed === '' || trimmed.startsWith('%%')) continue;
+    return /^sequenceDiagram\s*$/i.test(firstStatement(trimmed));
+  }
+  return false;
+}
+
+/** Whether text reads as a Mermaid sequence diagram: imported as a sequence that can be edited on the canvas. */
+export function looksLikeMermaidSequence(text: string): boolean {
+  if (typeof text !== 'string' || text.length === 0 || text.length > MERMAID_TEXT_LIMIT) return false;
+  const body = unfence(text);
+  return !isFlowchart(body) && isSequenceDiagram(body);
+}
+
+/** Whether text reads as Mermaid this app imports — a flowchart or a sequence diagram — cheap enough for every paste. */
 export function looksLikeMermaid(text: string): boolean {
   if (typeof text !== 'string' || text.length === 0 || text.length > MERMAID_TEXT_LIMIT) return false;
-  return isFlowchart(unfence(text));
+  const body = unfence(text);
+  return isFlowchart(body) || isSequenceDiagram(body);
 }

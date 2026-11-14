@@ -17,7 +17,7 @@ const ARROW: Record<InteractionKind, string> = {
 
 const INDENT = '    ';
 
-function plantUmlKeyword(kind: ParticipantKind): string {
+export function plantUmlKeyword(kind: ParticipantKind): string {
   switch (kind) {
     case 'actor':
       return 'actor';
@@ -56,14 +56,14 @@ function unicodeCode(text: string): string {
  *  may contain any character except an unescaped double quote. Newlines are collapsed since a
  *  declaration is a single line. The quote is the one character `escapePlantUmlText` leaves, and
  *  the only one the quoted form itself cares about. */
-function sanitizeParticipantName(label: string): string {
+export function sanitizeParticipantName(label: string): string {
   return escapePlantUmlText(label.replace(/\r\n?|\n/g, ' ')).replace(/"/g, '<U+0022>');
 }
 
 /** A PlantUML message's text runs to the end of the line, with no delimiter character of its own
  *  to guard (unlike Mermaid's `:`) — only newlines need collapsing to keep it on one line, and
  *  the markup above needs disarming. */
-function sanitizeMessageLabel(label: string): string {
+export function sanitizeMessageLabel(label: string): string {
   const clean = escapePlantUmlText(label.replace(/\r\n?|\n/g, ' ').trim());
   return clean || 'Message';
 }
@@ -71,7 +71,7 @@ function sanitizeMessageLabel(label: string): string {
 /** A `group <label>` line is as unquoted and single-line as PlantUML gets — an embedded newline in
  *  a Flow's title would otherwise close the line early and let the rest be read as new PlantUML
  *  statements. */
-function sanitizeGroupLabel(label: string): string {
+export function sanitizeGroupLabel(label: string): string {
   const clean = escapePlantUmlText(label.replace(/\r\n?|\n/g, ' ').trim());
   return clean || 'Group';
 }
@@ -98,7 +98,7 @@ function unicodeFirst(line: string): string {
   return `${unicodeCode(line)}${line.slice(first > 0xffff ? 2 : 1)}`;
 }
 
-function noteBlock(
+export function noteBlock(
   participantIds: readonly string[],
   text: string,
   noteKind: NoteKind | undefined,

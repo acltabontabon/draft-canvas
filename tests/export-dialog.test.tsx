@@ -219,7 +219,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     renderDialog();
     await switchMode(user, /Other formats/);
 
-    expect(screen.getByText('Add a Flow to export its sequence diagram.')).toBeInTheDocument();
+    expect(screen.getByText('Add a Flow or a sequence to export its sequence diagram.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Export (Mermaid|PlantUML)/ })).toBeDisabled();
   });
 
@@ -229,7 +229,7 @@ describe('ExportDialog — Source (Sequence) panel', () => {
     renderDialog();
     await switchMode(user, /Other formats/);
 
-    expect(screen.queryByText('Add a Flow to export its sequence diagram.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Add a Flow or a sequence to export its sequence diagram.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeEnabled();
   });
 
