@@ -62,7 +62,9 @@ test('sketching over a diagram leaves the diagram alone, and survives a reload',
   await open(page);
   await page.locator('.dc-canvas').focus();
   await page.getByRole('button', { name: 'Pencil' }).click();
-  await expect(page.locator('.dc-ink-bar')).toBeVisible();
+  // The Pencil unfolds in the rail itself: its tools replace the shapes, no second bar appears.
+  await expect(page.locator('[data-family="pencil"]')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Service' })).toHaveCount(0);
 
   const api = await box(page, 'API');
   const cx = api.x + api.width / 2;
@@ -142,6 +144,7 @@ test('the wheel still pans while the Pencil is in hand, and Escape puts it down'
   await expect.poll(async () => (await box(page, 'API')).y).not.toBe(before.y);
   await expect(strokes(page)).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await expect(page.locator('.dc-ink-bar')).toHaveCount(0);
+  await expect(page.locator('[data-family="pencil"]')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Service' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Select' })).toHaveAttribute('aria-pressed', 'true');
 });

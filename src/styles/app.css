@@ -7137,102 +7137,21 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
   92%, 100% { stroke-dashoffset: 0; opacity: 0; }
 }
 
-/* ── The Pencil's tray ───────────────────────────────────────────────────────────────────────────
-   `ui/Editor/ink/InkBar.tsx`: under the toolbar while the Pencil is in hand, in the place the
-   example's banner uses — one island, the canvas's own paper, the same pill. */
-.dc-ink-bar {
-  position: absolute;
-  top: 6px;
-  left: 50%;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  max-width: calc(100% - 24px);
-  padding: 3px;
-  border: 1px solid var(--dc-border);
-  border-radius: 12px;
-  background: var(--dc-surface);
-  box-shadow: var(--dc-island-shadow);
-  transform: translateX(-50%);
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
+/* ── The Pencil in the create rail ───────────────────────────────────────────────────────────────
+   `ui/Editor/ink/PencilRail.tsx`: in hand, the Pencil unfolds into its tools in place of the shapes —
+   the same rail, the same tool idiom, never a second bar. Its families arrive with a short fade, as
+   the shapes do when it is put down. */
 @media (prefers-reduced-motion: no-preference) {
-  .dc-ink-bar {
-    animation: dc-ink-bar-in 180ms var(--dc-ease-out) both;
+  .dc-create-rail .dc-create-family {
+    animation: dc-rail-family-in 180ms var(--dc-ease-out) both;
   }
 }
 
-@keyframes dc-ink-bar-in {
+@keyframes dc-rail-family-in {
   from {
     opacity: 0;
-    transform: translate(-50%, -4px);
+    transform: translateX(-4px);
   }
-}
-
-.dc-editor-canvas:has(.dc-ink-bar) .dc-flow-lens-indicator {
-  top: 52px;
-}
-
-.dc-ink-modes {
-  display: flex;
-  gap: 1px;
-}
-
-.dc-ink-mode,
-.dc-ink-choice {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  gap: 6px;
-  height: 28px;
-  padding: 0 9px 0 7px;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: color-mix(in srgb, var(--dc-text) 62%, transparent);
-  font: inherit;
-  font-size: 12px;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background-color 120ms var(--dc-ease-out), color 120ms var(--dc-ease-out);
-}
-
-.dc-ink-mode:hover,
-.dc-ink-choice:hover {
-  background: color-mix(in srgb, var(--dc-text) 7%, transparent);
-  color: var(--dc-text);
-}
-
-.dc-ink-mode[data-active='true'],
-.dc-ink-choice[data-active='true'] {
-  background: var(--dc-selection-soft);
-  color: var(--dc-selection);
-  font-weight: 600;
-}
-
-.dc-ink-mode:focus-visible,
-.dc-ink-choice:focus-visible,
-.dc-ink-swatch:focus-visible,
-.dc-ink-size:focus-visible {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: -2px;
-}
-
-.dc-ink-sep {
-  flex: none;
-  width: 1px;
-  height: 18px;
-  background: var(--dc-border);
-}
-
-.dc-ink-swatches,
-.dc-ink-sizes {
-  display: flex;
-  align-items: center;
-  gap: 2px;
 }
 
 .dc-ink-swatch,
@@ -7241,29 +7160,37 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
   flex: none;
   place-items: center;
   width: 26px;
-  height: 28px;
+  height: 30px;
   padding: 0;
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   background: transparent;
   cursor: pointer;
 }
 
+.dc-ink-swatch:hover,
+.dc-ink-size:hover {
+  background: color-mix(in srgb, var(--dc-text) 7%, transparent);
+}
+
+.dc-ink-swatch:focus-visible,
+.dc-ink-size:focus-visible,
+.dc-ink-choice:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
+}
+
 .dc-ink-swatch::before {
   content: '';
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
   border-radius: 50%;
   background: var(--dc-ink-swatch);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dc-text) 18%, transparent);
   transition: transform 120ms var(--dc-ease-out);
 }
 
-.dc-ink-swatch:hover::before {
-  transform: scale(1.12);
-}
-
-/* The ink in hand: a ring of the canvas's own paper, then the selection colour, round the dot. */
+/* The ink in hand: a ring of the rail's own paper, then the selection colour, round the dot. */
 .dc-ink-swatch[data-active='true']::before {
   box-shadow: 0 0 0 2px var(--dc-surface), 0 0 0 3.5px var(--dc-selection);
 }
@@ -7286,11 +7213,52 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
   background: var(--dc-selection);
 }
 
-.dc-ink-hint {
-  padding: 0 10px 0 4px;
-  color: var(--dc-text-muted);
-  font-size: 12px;
+/* The eraser has no ink or width: its family says what it does, in the rail's annotation face. */
+.dc-pencil-hint {
+  padding: 0 8px 0 2px;
+  color: var(--dc-text-faint);
+  font-family: var(--dc-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   white-space: nowrap;
+}
+
+/* The suggestion strip's buttons. */
+.dc-ink-choice {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 9px 0 7px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: color-mix(in srgb, var(--dc-text) 62%, transparent);
+  font: inherit;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color 120ms var(--dc-ease-out), color 120ms var(--dc-ease-out);
+}
+
+.dc-ink-choice:hover {
+  background: color-mix(in srgb, var(--dc-text) 7%, transparent);
+  color: var(--dc-text);
+}
+
+.dc-ink-choice[data-active='true'] {
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+  font-weight: 600;
+}
+
+.dc-ink-suggestion .dc-ink-sep {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 2px;
+  background: var(--dc-border);
 }
 
 /* ── Smart Ink's offer ───────────────────────────────────────────────────────────────────────────

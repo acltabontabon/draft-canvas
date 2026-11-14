@@ -3,6 +3,7 @@ import { cancelSmartInk, flushSmartInk } from '../../../canvas/inkSession';
 import { inkColor, INK_SIZES } from '../../../render/ink';
 import { useUiStore, type InkSizeName, type PencilTool } from '../../../store/uiStore';
 import { useThemeValue } from '../../../theme/useTheme';
+import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
 import { ToolGlyph } from '../toolbar/ToolGlyph';
 
@@ -17,75 +18,83 @@ const SIZES: Array<{ id: InkSizeName; name: string }> = [
 
 type Mode = 'sketch' | 'smart' | 'highlighter' | 'eraser';
 
-const MODES: Array<{ id: Mode; label: string; glyph: string; key: string; title: string; description: string }> = [
-  { id: 'sketch', label: 'Sketch', glyph: 'pencil', key: 'P', title: 'Sketch', description: 'Freehand ink that stays exactly as drawn.' },
+const MODES: Array<{ id: Mode; label: string; glyph: string; key?: string; description: string }> = [
+  { id: 'sketch', label: 'Sketch', glyph: 'pencil', key: 'P', description: 'Freehand ink that stays exactly as drawn.' },
   {
     id: 'smart',
     label: 'Smart ink',
     glyph: 'smart',
-    key: 'P',
-    title: 'Smart Ink',
-    description: 'Rough boxes, circles, cylinders and arrows become real shapes and connectors. Anything else stays ink.',
+    description: 'Rough boxes, circles, cylinders and arrows become real shapes and connectors. Anything else stays ink. P switches between Sketch and Smart ink.',
   },
-  { id: 'highlighter', label: 'Highlight', glyph: 'highlighter', key: 'H', title: 'Highlighter', description: 'A broad, see-through marker for emphasis.' },
-  { id: 'eraser', label: 'Erase', glyph: 'eraser', key: 'E', title: 'Eraser', description: 'Drag across strokes to take them away. Shapes are never erased.' },
+  { id: 'highlighter', label: 'Highlight', glyph: 'highlighter', key: 'H', description: 'A broad, see-through marker for emphasis.' },
+  { id: 'eraser', label: 'Erase', glyph: 'eraser', key: 'E', description: 'Drag across strokes to take them away. Shapes are never erased.' },
 ];
 
 /**
- * The Pencil's few settings, under the toolbar while it is in hand — the way a whiteboard has a
- * tray, not a palette. One row: what the pencil does (sketch, Smart Ink, highlight, erase), then
- * the ink and width for that tool. Settings are a device preference (`uiStore.inkPrefs`).
+ * The Pencil, unfolded in the create rail. While it is in hand the rail holds what drawing needs —
+ * the four ways to draw, then the ink and the width for the one in hand — in place of the shapes,
+ * which come back when Select (or Esc) puts the Pencil down. One toolbar that changes with the tool,
+ * never a second bar under it.
+ *
+ * The tools are drawn exactly as the rail's shape tools are (`dc-tool`): a glyph, and the one in
+ * hand writes its name. Ink and width are device preferences (`uiStore.inkPrefs`).
  */
-export function InkBar() {
-  const pencil = useUiStore((state) => state.pencil);
+export function PencilRail({ tool }: { tool: PencilTool }) {
   const prefs = useUiStore((state) => state.inkPrefs);
   const setPencil = useUiStore((state) => state.setPencil);
   const setInkPrefs = useUiStore((state) => state.setInkPrefs);
   const theme = useThemeValue();
-  if (!pencil) return null;
 
-  const mode: Mode = pencil === 'pen' ? (prefs.smart ? 'smart' : 'sketch') : pencil;
+  const mode: Mode = tool === 'pen' ? (prefs.smart ? 'smart' : 'sketch') : tool;
   const choose = (next: Mode) => {
-    const tool: PencilTool = next === 'sketch' || next === 'smart' ? 'pen' : next;
+    const nextTool: PencilTool = next === 'sketch' || next === 'smart' ? 'pen' : next;
     if (next === 'sketch' && prefs.smart) {
       cancelSmartInk();
       setInkPrefs({ smart: false });
     } else if (next === 'smart' && !prefs.smart) setInkPrefs({ smart: true });
-    else if (tool !== 'pen') flushSmartInk();
-    setPencil(tool);
+    else if (nextTool !== 'pen') flushSmartInk();
+    setPencil(nextTool);
   };
-  const highlighting = pencil === 'highlighter';
+  const highlighting = tool === 'highlighter';
   const colors = highlighting ? HIGHLIGHTER_COLORS : PEN_COLORS;
   const color = highlighting ? prefs.highlighterColor : prefs.penColor;
   const size = highlighting ? prefs.highlighterSize : prefs.penSize;
 
   return (
-    <div className="dc-ink-bar" role="toolbar" aria-label="Pencil" data-mode={mode}>
-      <div className="dc-ink-modes" role="group" aria-label="Draw with">
+    <>
+      <div className="dc-create-family dc-pencil-family" data-family="pencil">
         {MODES.map((option) => (
-          <Tooltip key={option.id} content={{ title: option.title, description: option.description, shortcut: option.key }}>
+          <Tooltip key={option.id} content={{ title: option.label, description: option.description, shortcut: option.key }}>
             {(tip) => (
-              <button
-                type="button"
-                className="dc-ink-mode"
+              <Button
+                variant="ghost"
+                className="dc-tool"
+                active={mode === option.id}
                 aria-pressed={mode === option.id}
-                data-active={mode === option.id ? 'true' : undefined}
+                aria-label={option.label}
                 onClick={() => choose(option.id)}
                 {...tip}
               >
                 <ToolGlyph id={option.glyph} />
-                <span>{option.label}</span>
-              </button>
+                <span className="dc-tool-name">{option.label}</span>
+                {option.key && (
+                  <span className="dc-tool-key" aria-hidden="true">
+                    {option.key}
+                  </span>
+                )}
+              </Button>
             )}
           </Tooltip>
         ))}
       </div>
-      {pencil === 'eraser' ? (
-        <span className="dc-ink-hint">Drag across a stroke to erase it</span>
+      <span className="dc-rail-separator" aria-hidden="true" />
+      {tool === 'eraser' ? (
+        <div className="dc-create-family dc-pencil-family">
+          <span className="dc-pencil-hint">Drag to erase</span>
+        </div>
       ) : (
         <>
-          <span className="dc-ink-sep" aria-hidden="true" />
-          <div className="dc-ink-swatches" role="group" aria-label="Ink">
+          <div className="dc-create-family dc-pencil-family" role="group" aria-label="Ink">
             {colors.map((option) => (
               <button
                 key={option}
@@ -100,10 +109,11 @@ export function InkBar() {
               />
             ))}
           </div>
-          <span className="dc-ink-sep" aria-hidden="true" />
-          <div className="dc-ink-sizes" role="group" aria-label="Width">
+          <span className="dc-rail-separator" aria-hidden="true" />
+          <div className="dc-create-family dc-pencil-family" role="group" aria-label="Width">
             {SIZES.map((option) => {
               const px = INK_SIZES[highlighting ? 'highlighter' : 'pen'][option.id];
+              const dot = Math.min(13, Math.max(3, highlighting ? px / 2.4 : px * 1.4));
               return (
                 <button
                   key={option.id}
@@ -115,13 +125,13 @@ export function InkBar() {
                   data-active={size === option.id ? 'true' : undefined}
                   onClick={() => setInkPrefs(highlighting ? { highlighterSize: option.id } : { penSize: option.id })}
                 >
-                  <span style={{ width: Math.min(14, Math.max(3, highlighting ? px / 2.2 : px * 1.4)), height: Math.min(14, Math.max(3, highlighting ? px / 2.2 : px * 1.4)) }} />
+                  <span style={{ width: dot, height: dot }} />
                 </button>
               );
             })}
           </div>
         </>
       )}
-    </div>
+    </>
   );
 }

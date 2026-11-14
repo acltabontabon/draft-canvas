@@ -4,8 +4,8 @@ The **Pencil** draws over a diagram: circle a service, underline a risk, scribbl
 review. **Smart Ink** turns rough boxes, cylinders and arrows into real shapes and connectors as
 you draw them.
 
-Pick up the Pencil beside **Select** in the toolbar, or press `P`. Its tray appears under the
-toolbar:
+Pick up the Pencil beside **Select** in the toolbar, or press `P`. The toolbar turns into the
+Pencil's: its tools take the place of the shapes until you put it down.
 
 | Tool | For | Key |
 | --- | --- | --- |
@@ -14,7 +14,8 @@ toolbar:
 | **Highlight** | A broad, see-through marker | `H` |
 | **Erase** | Drag across a stroke to take it away | `E` |
 
-Choose an ink and a width beside them. `Esc` puts the Pencil down.
+Choose an ink and a width beside them. **Select** or `Esc` puts the Pencil down and brings the
+shapes back.
 
 Draw with a mouse, a pen or a finger. A stylus draws with pressure, and its eraser end erases. Once
 a stylus has touched the canvas, a finger pans instead of drawing, so a resting hand leaves no

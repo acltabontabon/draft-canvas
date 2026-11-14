@@ -8,9 +8,7 @@ export function ExampleBanner({ onPresent }: { onPresent: (id?: string) => void 
   // Opening never selects a flow, the example included: it dimmed the canvas under the lens and
   // turned it back on after every room change. Play explanation names the flow it presents.
   const flowId = useEditorStore((state) => state.document.flows[0]?.id);
-  // The Pencil's tray takes this place while it is in hand.
-  const drawing = useUiStore((state) => state.pencil !== null);
-  if (exampleId !== documentId || drawing) return null;
+  if (exampleId !== documentId) return null;
   return <div className="dc-read-only-banner">
     <span>This example is yours to edit.</span>
     <Button variant="quiet" disabled={!flowId} onClick={() => onPresent(flowId)}>Play explanation</Button>

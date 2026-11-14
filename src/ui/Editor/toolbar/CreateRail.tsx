@@ -5,7 +5,8 @@ import { prefersReducedMotion } from '../../../lib/motion';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
 import { ShapePicker } from './ShapePicker';
-import { pencilLabel, PENCIL_TOOLTIP } from '../ink/pencilCopy';
+import { PENCIL_TOOLTIP } from '../ink/pencilCopy';
+import { PencilRail } from '../ink/PencilRail';
 import { ToolGlyph } from './ToolGlyph';
 
 /**
@@ -126,7 +127,7 @@ export function CreateRail() {
     const active = items.findIndex((button) => button.getAttribute('aria-pressed') === 'true');
     const home = active === -1 ? 0 : active;
     for (const [index, button] of items.entries()) button.tabIndex = index === home ? 0 : -1;
-  }, [armed, pencil]);
+  }, [armed, pencil, smart]);
 
   // A rail scrolled sideways would leave the picker hanging off a button that is no longer there.
   useEffect(() => {
@@ -208,66 +209,63 @@ export function CreateRail() {
               </Button>
             )}
           </Tooltip>
-          <Tooltip content={PENCIL_TOOLTIP}>
-            {(tip) => (
-              <Button
-                variant="ghost"
-                className="dc-tool"
-                active={pencil !== null}
-                aria-pressed={pencil !== null}
-                aria-label="Pencil"
-                onClick={() => setPencil(pencil ? null : 'pen')}
-                {...tip}
-              >
-                <ToolContent
-                  id={pencil === 'highlighter' || pencil === 'eraser' ? pencil : smart ? 'smart' : 'pencil'}
-                  label={pencilLabel(pencil, smart)}
-                  shortcut="P"
-                />
-              </Button>
-            )}
-          </Tooltip>
+          {/* In hand, the Pencil unfolds into its own tools, in place of the shapes (`PencilRail`). */}
+          {pencil === null && (
+            <Tooltip content={PENCIL_TOOLTIP}>
+              {(tip) => (
+                <Button variant="ghost" className="dc-tool" aria-pressed={false} aria-label="Pencil" onClick={() => setPencil('pen')} {...tip}>
+                  <ToolContent id={smart ? 'smart' : 'pencil'} label="Pencil" shortcut="P" />
+                </Button>
+              )}
+            </Tooltip>
+          )}
         </div>
         <span className="dc-rail-separator" aria-hidden="true" />
-        <div className="dc-create-family">{PRESETS.filter(onRail).map(toolButton)}</div>
-        <span className="dc-rail-separator" aria-hidden="true" />
-        <div className="dc-create-family">{DEV_PRESETS.filter((preset) => onRail(preset) && preset.type !== 'sequence').map(toolButton)}</div>
-        <span className="dc-rail-separator" aria-hidden="true" />
-        {/* On its own: a sequence is not one more shape of an architecture but another kind of picture of it. */}
-        <div className="dc-create-family">{DEV_PRESETS.filter((preset) => onRail(preset) && preset.type === 'sequence').map(toolButton)}</div>
-        <span className="dc-rail-separator" aria-hidden="true" />
-        <div className="dc-create-family">
-          <Tooltip content={tucked ? tooltipContentFor(tucked) : SHAPES_TOOLTIP}>
-            {(tip) => (
-              <Button
-                ref={shapesRef}
-                variant="ghost"
-                className="dc-tool dc-tool-shapes"
-                active={tucked !== null}
-                aria-pressed={tucked ? true : undefined}
-                aria-haspopup="dialog"
-                aria-expanded={picker !== null}
-                aria-label={tucked ? `${tucked.label} — all shapes` : 'All shapes'}
-                data-open={picker !== null || undefined}
-                {...tip}
-                onClick={(event) => {
-                  const trigger = event.currentTarget;
-                  setPicker((open) => (open ? null : { rect: trigger.getBoundingClientRect(), trigger }));
-                }}
-              >
-                {tucked ? (
-                  // A shape picked as a technology draws as the shape it is, under the technology's name.
-                  <ToolContent id={basePresetFor(tucked).id} label={tucked.label} />
-                ) : (
-                  <span className="dc-tool-shapes-word">Shapes</span>
+        {pencil !== null ? (
+          <PencilRail tool={pencil} />
+        ) : (
+          <>
+            <div className="dc-create-family">{PRESETS.filter(onRail).map(toolButton)}</div>
+            <span className="dc-rail-separator" aria-hidden="true" />
+            <div className="dc-create-family">{DEV_PRESETS.filter((preset) => onRail(preset) && preset.type !== 'sequence').map(toolButton)}</div>
+            <span className="dc-rail-separator" aria-hidden="true" />
+            {/* On its own: a sequence is not one more shape of an architecture but another kind of picture of it. */}
+            <div className="dc-create-family">{DEV_PRESETS.filter((preset) => onRail(preset) && preset.type === 'sequence').map(toolButton)}</div>
+            <span className="dc-rail-separator" aria-hidden="true" />
+            <div className="dc-create-family">
+              <Tooltip content={tucked ? tooltipContentFor(tucked) : SHAPES_TOOLTIP}>
+                {(tip) => (
+                  <Button
+                    ref={shapesRef}
+                    variant="ghost"
+                    className="dc-tool dc-tool-shapes"
+                    active={tucked !== null}
+                    aria-pressed={tucked ? true : undefined}
+                    aria-haspopup="dialog"
+                    aria-expanded={picker !== null}
+                    aria-label={tucked ? `${tucked.label} — all shapes` : 'All shapes'}
+                    data-open={picker !== null || undefined}
+                    {...tip}
+                    onClick={(event) => {
+                      const trigger = event.currentTarget;
+                      setPicker((open) => (open ? null : { rect: trigger.getBoundingClientRect(), trigger }));
+                    }}
+                  >
+                    {tucked ? (
+                      // A shape picked as a technology draws as the shape it is, under the technology's name.
+                      <ToolContent id={basePresetFor(tucked).id} label={tucked.label} />
+                    ) : (
+                      <span className="dc-tool-shapes-word">Shapes</span>
+                    )}
+                    <svg className="dc-tool-caret" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true" focusable="false">
+                      <path d="M1.5 3 4 5.5 6.5 3" />
+                    </svg>
+                  </Button>
                 )}
-                <svg className="dc-tool-caret" viewBox="0 0 8 8" width="8" height="8" aria-hidden="true" focusable="false">
-                  <path d="M1.5 3 4 5.5 6.5 3" />
-                </svg>
-              </Button>
-            )}
-          </Tooltip>
-        </div>
+              </Tooltip>
+            </div>
+          </>
+        )}
         {more.start && (
           <button type="button" className="dc-create-rail-more" data-side="start" tabIndex={-1} aria-label="Show earlier tools" onClick={() => page(-1)}>
             ‹

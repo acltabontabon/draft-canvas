@@ -3,7 +3,6 @@
 // Flow's base styles), so its overrides keep winning.
 import '../../styles/canvas.css';
 import { ExampleBanner } from './ExampleBanner';
-import { InkBar } from './ink/InkBar';
 import { InkSuggestionPopover } from './ink/InkSuggestionPopover';
 import { cancelSmartInk, flushSmartInk } from '../../canvas/inkSession';
 import { StarterUpdateBanner } from './StarterUpdateBanner';
@@ -723,7 +722,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
             <ElementInspectorPopover buildCommandContext={buildCommandContext} />
           )}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
-          {!presenting && !tracing && !readOnly && <InkBar />}
           {!presenting && !tracing && <InkSuggestionPopover />}
           {!presenting && !tracing && <StarterUpdateBanner />}
           <StartersDialog onAdd={addStarter} />
