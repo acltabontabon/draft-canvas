@@ -62,7 +62,12 @@ be:
 Anything else stays ink, exactly as drawn. That includes a circle around shapes (pointing at them),
 a mark over or across a shape, a line ending in empty space, an underline, handwriting and
 scribbles. A drawing that is close to a shape but not clear enough is only offered: the strip
-appears with **Make it** and nothing changes until you choose.
+appears with **Make it** and nothing changes until you choose. Only shapes are offered this way: a
+line or an arrow that is not clearly one stays ink until you select it and use **Convert to shape**,
+which also reads a weaker drawing. If a selection holds a highlighter stroke as well, the pen strokes
+are converted and the highlighter stays as it is. The strip goes away when the strokes it is for do
+(undo it and **Make it** is gone, and a stale strip never makes a shape from nothing), and Esc during a
+drag moves nothing: the sketch stays where it was.
 
 Undo takes a converted shape or connector back to your strokes; undo again removes the strokes.
 Choosing a different kind in the strip doesn't add an undo step.

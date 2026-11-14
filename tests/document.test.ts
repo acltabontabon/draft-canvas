@@ -101,7 +101,7 @@ describe('document model', () => {
   });
 
   it('falls back to a placeholder for a blank title', () => {
-    expect(setTitle(createDocument(), '   ').metadata.title).toBe('Untitled canvas');
+    expect(setTitle(createDocument(), '   ').metadata.title).toBe('Untitled diagram');
   });
 
   it('copies a fragment with fresh ids and no dangling references', () => {

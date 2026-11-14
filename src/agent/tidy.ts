@@ -5,8 +5,9 @@
  * Arrange (`arrange.ts`) lays a view out again from nothing, so one new service can move every shape
  * on the canvas. This keeps every shape where it was put and fixes only what reads as untidy:
  *
- * - a connector a few pixels off level is straightened by nudging one of its shapes, never further
- *   than `STRAIGHTEN_LIMIT` (`edges/straighten.ts`);
+ * - a connector *drawn* with a small kink (a step of a few pixels, the router could not hide) is
+ *   straightened by nudging one of its shapes, never further than `STRAIGHTEN_LIMIT`
+ *   (`edges/straighten.ts`); one the router already draws straight is left as it is;
  * - a connector whose line is drawn through a shape, or across a boundary neither of its ends is
  *   in, is re-attached to sides that clear it (`repairAnchors`), and only when the whole drawing is
  *   no worse for it. A caption that sits badly is not a reason to re-attach:
@@ -49,7 +50,9 @@ export function tidyView(view: DraftDocument, scope: ReadonlySet<string> | undef
   const inScope = (edge: DraftEdge) => !scope || scope.has(edge.source) || scope.has(edge.target);
   // Asked without a caption: with one, a caption over a shape is reported first and hides a line
   // through a shape behind it.
-  const broken = (edge: DraftEdge) => routeProblem(edge, straightened.nodes, straightened.edges) !== undefined;
+  // One lookup for every connector: a map rebuilt per connector was most of what this check cost.
+  const byId = new Map(straightened.nodes.map((node) => [node.id, node]));
+  const broken = (edge: DraftEdge) => routeProblem(edge, straightened.nodes, straightened.edges, undefined, undefined, byId) !== undefined;
   const copies = new Map(straightened.edges.filter((edge) => inScope(edge) && broken(edge)).map((edge) => [edge.id, { ...edge }]));
   const drawn = straightened.edges.map((edge) => copies.get(edge.id) ?? edge);
   if (copies.size > 0) repairAnchors([...copies.values()], straightened.nodes, caption, drawn);

@@ -29,6 +29,7 @@ import type { PersonalityPreset } from '../../theme/usePersonality';
 import { SvgSurface } from '../SvgSurface';
 import { SequenceEditors } from './SequenceEditors';
 import './sequence.css';
+import { DRAG_THRESHOLD_PX } from '../gestureThresholds';
 
 /**
  * The hands of a sequence: everything that can be taken hold of inside one.
@@ -64,7 +65,6 @@ type Gesture =
   /** A participant being moved along the row. */
   | { kind: 'participant'; id: string; index: number; x: number };
 
-const DRAG_THRESHOLD_PX = 4;
 const DROP_REACH = 20;
 const NEW_PARTICIPANT_REACH = 180;
 

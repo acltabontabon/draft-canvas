@@ -166,7 +166,7 @@ The lifelines stay visible throughout.
 
 - **Images** (PNG, SVG) show sequences as drawn, including message numbers and connectors between
   frames.
-- **Share → Export → Other formats → Sequences** writes each sequence, and each flow, as
+- **Share → Export… → Other formats → Sequences** writes each sequence, and each flow, as
   standalone **Mermaid** or **PlantUML**, with its conditions, loops, work bars and groups.
   Attached cards stay in the editable Draft Canvas file. The image exports show their chips.
 - Paste or import a Mermaid `sequenceDiagram` to get an editable sequence. Anything it uses that

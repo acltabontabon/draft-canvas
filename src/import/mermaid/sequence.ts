@@ -40,7 +40,7 @@ function decode(text: string): string {
       const value = Number(code);
       return value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : whole;
     })
-    .replace(/#([a-z]+);/gi, (whole, name: string) => ENTITIES[name.toLowerCase()] ?? whole)
+    .replace(/#([a-z]+);/gi, (whole, name: string) => (Object.hasOwn(ENTITIES, name.toLowerCase()) ? ENTITIES[name.toLowerCase()]! : whole))
     .trim();
 }
 
@@ -164,16 +164,17 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
       stack.push({ kind: 'rect' });
       continue;
     }
-    if (OPERATORS[word]) {
+    // Own keys only: a line that starts `constructor` or `__proto__` is not a fragment.
+    if (Object.hasOwn(OPERATORS, word)) {
       const operand: SeqOperand = { id: createId('so'), items: [] };
       const guard = decode(rest);
       if (guard) operand.guard = guard;
-      const fragment: SeqFragment = { id: createId('sf'), t: 'fragment', operator: OPERATORS[word], operands: [operand] };
+      const fragment: SeqFragment = { id: createId('sf'), t: 'fragment', operator: OPERATORS[word]!, operands: [operand] };
       here().push(fragment);
       stack.push({ kind: 'fragment', fragment, operand, waiting: calls.slice(), answered: new Set() });
       continue;
     }
-    if (NEXT_BRANCH[word]) {
+    if (Object.hasOwn(NEXT_BRANCH, word)) {
       const open = [...stack].reverse().find((block) => block.kind === 'fragment');
       if (open?.fragment && open.fragment.operator === NEXT_BRANCH[word]) {
         const operand: SeqOperand = { id: createId('so'), items: [] };
@@ -254,7 +255,7 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
       continue;
     }
 
-    unsupported.add(`a line it could not read: “${line.length > 40 ? `${line.slice(0, 40)}…` : line}”`);
+    unsupported.add(`a line it couldn’t read: “${line.length > 40 ? `${line.slice(0, 40)}…` : line}”`);
   }
 
   const read = normalizeSequence({ participants, groups, items: root });

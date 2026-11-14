@@ -9,15 +9,12 @@
      legible on both grounds without a second definition per theme. */
   --dc-prefs-warn: color-mix(in srgb, #e0a82e 62%, var(--dc-text));
   --dc-prefs-tint: color-mix(in srgb, var(--dc-text) 3%, var(--dc-surface));
-  --dc-prefs-accent: #72bfb5;
+  /* The app's own selection teal, not a second one: Settings used to define its own accent. */
+  --dc-prefs-accent: var(--dc-selection);
   --dc-prefs-focus: color-mix(in srgb, var(--dc-prefs-accent) 16%, transparent);
   height: min(660px, calc(100dvh - 48px));
   max-height: calc(100dvh - 48px);
   background: var(--dc-canvas);
-}
-
-:root[data-theme='light'] .dc-modal-settings {
-  --dc-prefs-accent: #0d6e65;
 }
 
 .dc-modal-settings .dc-modal-header {
@@ -38,6 +35,14 @@
   grid-template-columns: 180px minmax(0, 1fr);
   padding: 0;
   overflow: hidden;
+}
+
+.dc-modal-settings-single .dc-modal-body {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.dc-modal-settings-single .dc-prefs-panel:focus-visible {
+  outline: none;
 }
 
 /* ---- the rail ---------------------------------------------------------------- */

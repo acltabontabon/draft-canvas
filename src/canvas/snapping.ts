@@ -19,11 +19,32 @@ import type { Rect } from '../edges/routing';
  * pulled two ways at once.
  */
 
-/** How close, in canvas units, before an edge, centre or spacing candidate takes hold. */
+/** How close, in screen pixels, before an edge, centre or spacing candidate takes hold. */
 export const SNAP_THRESHOLD = 6;
 
-/** How close before a connector's straight line takes hold: twice the reach of the rest. */
+/** How close, in screen pixels, before a connector's straight line takes hold: twice the reach of
+ *  the rest. */
 export const CONNECTOR_SNAP_THRESHOLD = 12;
+
+/** What `computeSnap` and `snapResize` are handed at a zoom: the same reach on screen at every zoom,
+ *  which is a different number of canvas units. */
+export interface SnapReach {
+  /** Edges, centres and spacing, in canvas units. */
+  threshold: number;
+  /** A connector's straight line, in canvas units. */
+  connectorThreshold: number;
+}
+
+/**
+ * The snap thresholds for a zoom. They are measured on screen — a person aims with a pointer, not
+ * with canvas units — so at zoom 4 a shape catches within 1.5 units, and at zoom 0.25 within 24;
+ * left in canvas units the pull was 24 px at 4x and a barely-there 1.5 px at 0.25x. A zoom that
+ * can't be divided by (zero, NaN) reads as 1.
+ */
+export function snapReach(zoom: number): SnapReach {
+  const scale = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  return { threshold: SNAP_THRESHOLD / scale, connectorThreshold: CONNECTOR_SNAP_THRESHOLD / scale };
+}
 
 export interface Guide {
   axis: 'x' | 'y';
@@ -63,6 +84,9 @@ export interface SnapLink {
 
 export interface SnapOptions {
   links?: readonly SnapLink[];
+  /** How far a connector's straight line pulls, in canvas units; `snapReach` has it for a zoom.
+   *  Absent: `CONNECTOR_SNAP_THRESHOLD`, as at zoom 1. */
+  connectorThreshold?: number;
   /** Shapes to measure even spacing against — the resting ones, less boundaries, whose own box
    *  contains the shapes it spaces. Absent: no spacing snap (a resize never takes one). */
   spacing?: readonly Rect[];
@@ -107,8 +131,9 @@ export function computeSnap(
   let bestX = nearer(edges.x, spacingX);
   let bestY = nearer(edges.y, spacingY);
 
-  const straightX = connectorCandidate(links, 'x');
-  const straightY = connectorCandidate(links, 'y');
+  const connectorThreshold = options.connectorThreshold ?? CONNECTOR_SNAP_THRESHOLD;
+  const straightX = connectorCandidate(links, 'x', connectorThreshold);
+  const straightY = connectorCandidate(links, 'y', connectorThreshold);
   if (straightX) bestX = straightX;
   if (straightY) bestY = straightY;
 
@@ -127,16 +152,31 @@ function shiftAcross(guide: Guide, by: number): Guide {
   return guide.kind === 'gap' && by !== 0 ? { ...guide, at: guide.at + by } : guide;
 }
 
+/** The three lines of a box on one axis — start, middle, end — written into scratch arrays that live
+ *  at module level: this runs for every resting shape on every frame of a drag, and a pair of fresh
+ *  arrays per shape was most of what it allocated. Safe because nothing here awaits or recurses. */
+const movingEdgesX = [0, 0, 0];
+const movingEdgesY = [0, 0, 0];
+const otherEdgesX = [0, 0, 0];
+const otherEdgesY = [0, 0, 0];
+
+function linesOf(into: number[], start: number, size: number): number[] {
+  into[0] = start;
+  into[1] = start + size / 2;
+  into[2] = start + size;
+  return into;
+}
+
 function edgeCandidates(moving: Rect, statics: readonly Rect[], threshold: number): { x: Candidate | null; y: Candidate | null } {
-  const movingEdgesX = [moving.x, moving.x + moving.width / 2, moving.x + moving.width];
-  const movingEdgesY = [moving.y, moving.y + moving.height / 2, moving.y + moving.height];
+  linesOf(movingEdgesX, moving.x, moving.width);
+  linesOf(movingEdgesY, moving.y, moving.height);
 
   let bestX: Candidate | null = null;
   let bestY: Candidate | null = null;
 
   for (const other of statics) {
-    const otherEdgesX = [other.x, other.x + other.width / 2, other.x + other.width];
-    const otherEdgesY = [other.y, other.y + other.height / 2, other.y + other.height];
+    linesOf(otherEdgesX, other.x, other.width);
+    linesOf(otherEdgesY, other.y, other.height);
 
     for (const from of movingEdgesX) {
       for (const to of otherEdgesX) {
@@ -165,12 +205,12 @@ function edgeCandidates(moving: Rect, statics: readonly Rect[], threshold: numbe
   return { x: bestX, y: bestY };
 }
 
-/** The nearest connector on `axis` within `CONNECTOR_SNAP_THRESHOLD`, with every other one the same
- *  move straightens as well. */
-function connectorCandidate(links: readonly SnapLink[], axis: 'x' | 'y'): Candidate | null {
+/** The nearest connector on `axis` within `threshold`, with every other one the same move
+ *  straightens as well. */
+function connectorCandidate(links: readonly SnapLink[], axis: 'x' | 'y', threshold: number): Candidate | null {
   let best: SnapLink | undefined;
   for (const link of links) {
-    if (link.axis !== axis || Math.abs(link.delta) > CONNECTOR_SNAP_THRESHOLD) continue;
+    if (link.axis !== axis || Math.abs(link.delta) > threshold) continue;
     if (!best || Math.abs(link.delta) < Math.abs(best.delta)) best = link;
   }
   if (!best) return null;

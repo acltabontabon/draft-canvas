@@ -3,7 +3,7 @@ import { chromium, firefox, webkit, type FullConfig } from '@playwright/test';
 /**
  * Warms a freshly started dev server before the first test runs. Vite compiles each chunk the first
  * time a browser asks for it, and the editor is a lazy chunk behind the Library: the first test to
- * press "New canvas" on a cold server waited longer for `.dc-editor` than its own expectation
+ * press "Quick Draft" on a cold server waited longer for `.dc-editor` than its own expectation
  * allowed, and failed the run for nothing. One real page load here pays that cost once, outside
  * any test's clock. A server that is already warm (reused, or a built site) costs a second.
  */
@@ -19,7 +19,7 @@ export default async function warm(config: FullConfig): Promise<void> {
     await page.goto(baseURL, { waitUntil: 'load', timeout: 120_000 });
     // The brand also renders while storage opens. Wait for the actual home screen so its
     // replacement cannot swallow the About click on a cold CI startup.
-    const newCanvas = page.getByRole('button', { name: 'New canvas' }).first();
+    const newCanvas = page.getByRole('button', { name: 'Quick Draft' }).first();
     await newCanvas.waitFor({ state: 'visible', timeout: 120_000 });
     // About is a lazy chunk too, carrying every release's notes, and the first test to open it on a
     // cold server (Firefox in CI) waited past its own expectation for the dialog.

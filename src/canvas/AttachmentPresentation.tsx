@@ -273,11 +273,13 @@ function AttachmentChip({
 
   // A click on the chip reveals the card read-only first — the earlier "click opens straight into
   // an editable textarea, cursor already blinking" behavior read as the card silently rewriting
-  // itself out from under a click that was only meant to view it. Editing is now a deliberate
-  // second step (the pencil glyph in the header), and always resets shut the moment the card
-  // itself closes, so re-opening a pinned attachment never resumes mid-edit by surprise.
+  // itself out from under a click that was only meant to view it. Editing is a deliberate second
+  // step (the pencil glyph in the header) — except when the card was just made by "Attach note" /
+  // "Attach code", which asks for exactly that (`startEditing`): a new, empty attachment you must
+  // click a pencil to type into read as the command not working. It always resets shut the moment
+  // the card itself closes, so re-opening a pinned attachment never resumes mid-edit by surprise.
   const editOnOpen = useUiStore((state) =>
-    pinned && state.openAttachmentDetail?.hostKind === 'message' && state.openAttachmentDetail.startEditing === true,
+    pinned && state.openAttachmentDetail?.startEditing === true && state.openAttachmentDetail.attachmentId === attachment.id,
   );
   const [editing, setEditing] = useState(editOnOpen);
   useEffect(() => {

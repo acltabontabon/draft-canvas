@@ -113,7 +113,7 @@ async function exportDocument(page: Page): Promise<Json> {
   const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await dialog.locator('[data-mode="document"]').click();
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export document' }).click();
+  await page.getByRole('button', { name: 'Export file' }).click();
   const file = await download;
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();

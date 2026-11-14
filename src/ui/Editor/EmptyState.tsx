@@ -139,17 +139,24 @@ function EmptyCanvas({ onAddStarter, leaving }: EmptyStateProps & { leaving: boo
     if (enabled) void useGalleryStore.getState().load();
   }, [enabled]);
   const browse = () => useGalleryStore.getState().openDialog();
+  // The double-click chooser opens on the middle of this layer; the hint under it only peeked out
+  // around the menu.
+  const chooserOpen = useUiStore((state) => state.quickConnect !== null);
 
   return (
     <div className="dc-empty" data-leaving={leaving ? 'true' : undefined}>
       <div className="dc-empty-stage">
-        <div className="dc-empty-start" aria-hidden="true">
+        {/* Read out like any other text: this is the only instruction a blank canvas carries, and a
+            screen-reader user has no other way to learn that the keys exist. A polite status, not a
+            dialog — nothing here takes focus or traps it. Out of the way (and out of the
+            accessibility tree) while the first-shape chooser is open, which is drawn over it. */}
+        <div className="dc-empty-start" role="status" data-chooser={chooserOpen ? 'true' : undefined}>
           <p className="dc-empty-title">Start <em><InkedWords>drawing.</InkedWords></em></p>
-          <p className="dc-empty-hint">Double-click anywhere to add your first shape.</p>
+          <p className="dc-empty-hint">Double-click or long-press anywhere to add your first shape, or press a key.</p>
           <p className="dc-empty-keys">
             <span className="dc-empty-key"><kbd>S</kbd> service</span>
-            <span className="dc-empty-key"><kbd>N</kbd> note</span>
-            <span className="dc-empty-key"><kbd>C</kbd> code</span>
+            <span className="dc-empty-key"><kbd>D</kbd> data store</span>
+            <span className="dc-empty-key"><kbd>Q</kbd> queue</span>
           </p>
         </div>
 

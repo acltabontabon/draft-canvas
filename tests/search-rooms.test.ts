@@ -47,7 +47,7 @@ describe('jumpCommands across rooms', () => {
     expect(worker.keywords).toContain('Orders API');
     expect(rows.find((row) => row.title === 'Place order')!.hint).toBe('Flow · 0 steps · inside Orders API');
     // The room on screen reads as it always did.
-    expect(rows.find((row) => row.title === 'Ledger')!.hint).toBe('Data store');
+    expect(rows.find((row) => row.title === 'Ledger')!.hint).toBe('Data Store');
     // Without a scope, only the room on screen — the old contract.
     expect(jumpCommands(useEditorStore.getState().document).map((row) => row.title)).toEqual(['Orders API', 'Ledger']);
   });
@@ -72,7 +72,7 @@ describe('jumpCommands across rooms', () => {
 
     // And back out again from inside: the root row climbs up.
     const fromInside = jumpCommands(useEditorStore.getState().document, scope());
-    expect(fromInside.find((row) => row.title === 'Ledger')!.hint).toBe('Data store · at the top level');
+    expect(fromInside.find((row) => row.title === 'Ledger')!.hint).toBe('Data Store · at the top level');
     fromInside.find((row) => row.title === 'Ledger')!.run(stubContext());
     await vi.waitFor(() => expect(useEditorStore.getState().path).toEqual([]));
   });

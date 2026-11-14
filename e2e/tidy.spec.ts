@@ -13,7 +13,8 @@ async function positions(page: Page): Promise<Record<string, { x: number; y: num
   });
 }
 
-/** Two connected services, the second a few pixels off level, with nothing selected. */
+/** Two connected services, the second a step off level (the router hides a slip of up to about 26
+ *  pixels itself, so this is past it), with nothing selected. */
 async function offLevel(page: Page) {
   await newCanvas(page, 'Tidy');
   await create(page, 'Service', { x: 240, y: 300 });
@@ -26,7 +27,7 @@ async function offLevel(page: Page) {
     type Placed = { id: string; x: number; y: number };
     useEditorStore.getState().apply('Nudge', (doc: { nodes: Placed[] }) => ({
       ...doc,
-      nodes: doc.nodes.map((node: Placed) => (node.id === b!.id ? { ...node, x: a!.x + 380, y: a!.y + 9 } : node)),
+      nodes: doc.nodes.map((node: Placed) => (node.id === b!.id ? { ...node, x: a!.x + 380, y: a!.y + 30 } : node)),
     }));
     useEditorStore.getState().setSelection({ nodes: [], edges: [] });
   });

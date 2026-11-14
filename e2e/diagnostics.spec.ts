@@ -3,8 +3,8 @@ import { expect, test } from '@playwright/test';
 test('a diagnostic report is previewed locally and the downloaded bytes match the preview', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Troubleshooting' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'New canvas', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: 'New canvas', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Quick Draft', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Quick Draft', exact: true }).click();
   const trigger = page.getByRole('button', { name: /^Help/ });
   await trigger.click();
   await page.getByRole('menuitem', { name: 'Diagnostic report…' }).click();
@@ -34,7 +34,7 @@ test('the editor opens diagnostics from Help while About keeps only the licences
   await expect(about.getByRole('link', { name: 'Licences' })).toHaveAttribute('href', './THIRD_PARTY_LICENSES.txt');
   await expect(about.getByRole('button', { name: 'Diagnostic report…' })).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'New canvas', exact: true }).click();
+  await page.getByRole('button', { name: 'Quick Draft', exact: true }).click();
   await page.getByRole('button', { name: /^Help/ }).click();
   await page.getByRole('menuitem', { name: 'Diagnostic report…' }).click();
   await expect(page.getByRole('textbox', { name: 'Diagnostic report contents' })).toBeVisible();

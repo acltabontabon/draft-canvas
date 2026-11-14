@@ -34,7 +34,7 @@ import { arrivalLine, updateLine, blockedFolderOf, clockLines, RUN_SALT, smallTa
 import { PointPins } from './PointPins';
 import { NodiSkillMenu, SKILL_LIST_ID, skillOptionId } from './NodiSkillMenu';
 import { matchSkills, skillQuery, skillsFor, type NodiSkill } from './nodiSkills';
-import { shapesOffScreen, withArrangeMotion } from '../../canvas/arrangeMotion';
+import { startArrange } from '../../commands/arrange';
 import { ProposalHistory } from './ProposalHistory';
 import { countsLabel, useProposalReview } from './useProposalReview';
 
@@ -480,7 +480,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   const points = useMemo(() => pointsOf(turns.at(-1) ?? null, partsHere), [turns, partsHere]);
   const [hot, setHot] = useState<number | null>(null);
   const setPointedIds = useUiStore((s) => s.setPointedIds);
-  const { setViewport, fitView } = useReactFlow();
+  const { setViewport } = useReactFlow();
   const flowStore = useStoreApi();
   const pointAt = useCallback(
     (point: number | null, parts: readonly string[]) => {
@@ -684,22 +684,15 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     }
     setSkilling(true);
     const asked = `/${skill.slash}`;
-    void withArrangeMotion(() => useEditorStore.getState().arrangeRoom(run.preset), run.preset.direction ?? 'right')
-      .then((moved) => {
-        // Laid out wider than the screen: the camera takes it all in once the shapes have landed,
-        // beside Nodi's box rather than under it.
-        if (moved && shapesOffScreen()) {
-          const box = document.querySelector('.dc-companion[data-open="true"]')?.getBoundingClientRect();
-          void fitView({ padding: { top: '48px', left: '48px', bottom: '48px', right: `${Math.round((box?.width ?? 0) + 56)}px` }, duration: prefersReducedMotion() ? 0 : 420 });
-        }
-        return moved;
-      })
-      .then((moved) =>
+    // Preview first, like Arrange from the menu or the palette: Nodi sets the layout down as a sheet over
+    // the diagram and the bar asks Apply or Cancel; nothing moves until it is pressed.
+    void startArrange({ preset: run.preset })
+      .then((outcome) =>
         companion.answer(
           diagramId,
           asked,
-          moved ? run.done : 'Already laid out that way, boss. Nothing to move.',
-          moved ? [{ kind: 'command', id: 'undo', label: 'Undo' }] : undefined,
+          outcome === 'preview' ? run.shown : outcome === 'unchanged' ? 'Already laid out that way, boss. Nothing to move.' : 'Couldn’t lay that out, boss. The diagram is as it was.',
+          undefined,
           agent?.agent,
         ),
       )

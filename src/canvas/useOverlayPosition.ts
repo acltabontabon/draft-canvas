@@ -25,6 +25,9 @@ export interface OverlayFrame {
 export interface OverlayPlacement<P extends string> {
   transform: string;
   placement: P;
+  /** The element it belongs to is entirely outside the canvas: the panel is kept in place but not
+   *  shown, since clamped to the edge it would point at nothing. */
+  hidden?: boolean;
   /** CSS custom properties for anything inside the panel that follows the anchor too (a leader
    *  line) — written alongside `transform`, so it tracks pan and zoom without a render either. */
   vars?: Record<string, string>;
@@ -106,6 +109,8 @@ export function useOverlayPosition<P extends string>(
       );
       if (!result) return;
       if (panel.style.transform !== result.transform) panel.style.transform = result.transform;
+      const visibility = result.hidden ? 'hidden' : '';
+      if (panel.style.visibility !== visibility) panel.style.visibility = visibility;
       for (const [name, value] of Object.entries(result.vars ?? {})) {
         if (panel.style.getPropertyValue(name) !== value) panel.style.setProperty(name, value);
       }

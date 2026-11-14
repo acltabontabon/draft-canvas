@@ -337,7 +337,7 @@ test.describe('editing', () => {
     await page.mouse.up();
 
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(2);
-    await expect(page.locator('.dc-inspector')).toContainText('2 elements');
+    await expect(page.locator('.dc-inspector')).toContainText('2 shapes');
 
     const first = page.locator('.dc-node').nth(0);
     const second = page.locator('.dc-node').nth(1);
@@ -517,7 +517,7 @@ test.describe('editing', () => {
     await create(page, 'Service', { x: 900, y: 480 });
 
     await page.keyboard.press('Meta+a');
-    await expect(page.locator('.dc-inspector')).toContainText('3 elements');
+    await expect(page.locator('.dc-inspector')).toContainText('3 shapes');
 
     await page.getByLabel('Align').selectOption('top');
     const afterAlign = [
@@ -529,7 +529,7 @@ test.describe('editing', () => {
     expect(Math.abs(afterAlign[1]!.y - afterAlign[0]!.y)).toBeLessThan(1.5);
     expect(Math.abs(afterAlign[2]!.y - afterAlign[0]!.y)).toBeLessThan(1.5);
 
-    await page.getByRole('button', { name: 'Distribute ↔' }).click();
+    await page.getByRole('button', { name: 'Distribute horizontally' }).click();
     const afterDistribute = [
       (await page.locator('.dc-node').nth(0).boundingBox())!,
       (await page.locator('.dc-node').nth(1).boundingBox())!,
@@ -643,7 +643,7 @@ test.describe('editing', () => {
     await create(page, 'Data Store', { x: 650, y: 280 });
 
     await page.keyboard.press('Meta+a');
-    await expect(page.locator('.dc-inspector')).toContainText('2 elements');
+    await expect(page.locator('.dc-inspector')).toContainText('2 shapes');
     await page.getByRole('button', { name: 'Group', exact: true }).click();
 
     await expect(page.locator('.dc-node[data-type="group"]')).toHaveCount(1);
@@ -864,7 +864,7 @@ test.describe('editing', () => {
     await page.locator('.dc-node[data-type="service"]').click();
     const innerBox = (await inner.boundingBox())!;
     await inner.click({ modifiers: ['Shift'], position: { x: 8, y: innerBox.height - 8 } });
-    await expect(page.locator('.dc-inspector')).toContainText('2 elements');
+    await expect(page.locator('.dc-inspector')).toContainText('2 shapes');
     await page.getByRole('button', { name: 'Group', exact: true }).click();
     const groups = page.locator('.dc-node[data-type="group"]');
     await expect(groups).toHaveCount(2);
@@ -1148,18 +1148,22 @@ test.describe('editing', () => {
     await node.click();
     const before = (await node.boundingBox())!;
 
+    // Presses are applied once a frame (`nudgeCoalescer.ts`), so each is read once its frame has run.
     await page.keyboard.press('ArrowRight');
+    await nextFrames(page);
     const afterOne = (await node.boundingBox())!;
     expect(afterOne.x - before.x).toBeCloseTo(1, 0);
 
     await page.keyboard.press('Shift+ArrowDown');
+    await nextFrames(page);
     const afterShift = (await node.boundingBox())!;
     expect(afterShift.y - afterOne.y).toBeCloseTo(10, 0);
 
-    // Five rapid taps coalesce into a single undo step.
+    // Five rapid taps coalesce into a single undo step, however many frames they land in.
     for (let i = 0; i < 5; i += 1) await page.keyboard.press('ArrowRight');
+    await nextFrames(page);
     const afterBurst = (await node.boundingBox())!;
-    expect(afterBurst.x).toBeGreaterThan(afterShift.x);
+    expect(afterBurst.x - afterShift.x).toBeCloseTo(5, 0);
 
     await page.keyboard.press('Meta+z');
     // Undo glides the shape back, so read where it comes to rest.
@@ -1459,7 +1463,7 @@ test.describe('reconnection', () => {
     await expect(select).toHaveText('Reads / writes');
   });
 
-  test('a plain click on an endpoint never reconnects it — only an actual drag does', async ({ page }) => {
+  test('a click on an endpoint never reconnects it, not even one that wobbles — only an actual drag does', async ({ page }) => {
     await newCanvas(page, 'Endpoint click is not a drag');
     await create(page, 'Service', { x: 300, y: 200 });
     await create(page, 'Data Store', { x: 600, y: 200 });
@@ -1468,16 +1472,108 @@ test.describe('reconnection', () => {
     await clickEdge(page);
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
     const pathBefore = await page.locator('.dc-edge-line').getAttribute('d');
+    const depth = await undoDepth(page);
 
-    // `page.mouse.click` moves to the point and fires down/up with no
-    // movement in between — the plain-click case a real trackpad or mouse
-    // always has a pixel or two of jitter on, which is exactly what the
-    // drag threshold in `EdgeEndpointHandle` exists to absorb.
+    // `page.mouse.click` moves to the point and fires down/up with no movement in between.
     const target = await endpointBox(page, 1);
-    await page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+    const at = { x: target.x + target.width / 2, y: target.y + target.height / 2 };
+    await page.mouse.click(at.x, at.y);
 
     await expect(page.locator('.dc-edge')).toHaveCount(1);
     await expect(page.locator('.dc-edge-line')).toHaveAttribute('d', pathBefore ?? '');
+
+    // A real trackpad or mouse always has a pixel or two of jitter in a click: down, 2px across, up.
+    // That is short of the drag threshold in `EdgeEndpointHandle` (4px), so it is still a click — the
+    // line does not move and no undo step is made.
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.mouse.move(at.x + 2, at.y + 1);
+    await nextFrames(page);
+    await page.mouse.up();
+    await nextFrames(page);
+
+    await expect(page.locator('.dc-edge-line')).toHaveAttribute('d', pathBefore ?? '');
+    expect(await undoDepth(page)).toBe(depth);
+  });
+
+  test('a copy of the diagram that cannot be edited shows no endpoint or bend handles on a selected connector', async ({ page }) => {
+    await newCanvas(page, 'Read-only handles');
+    await create(page, 'Service', { x: 300, y: 200 });
+    await create(page, 'Data Store', { x: 600, y: 200 });
+    await connect(page, 0, 1);
+
+    await clickEdge(page);
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+    await expect(page.locator('.dc-edge-endpoint')).toHaveCount(2);
+    await expect(page.locator('.dc-edge-bend')).not.toHaveCount(0);
+
+    // A viewer in a live session, or a shared link: the store refuses what they would drag, so the
+    // handles used to follow the pointer and snap back on release.
+    const setReadOnly = (collaborative: boolean | null) =>
+      page.evaluate(async (value) => {
+        const { useUiStore } = await import('/src/store/uiStore.ts');
+        useUiStore.getState().setReadOnly(value === null ? null : { sharedTitle: 'Shared', ...(value ? { collaborative: true as const } : {}) });
+      }, collaborative);
+    for (const collaborative of [true, false]) {
+      await setReadOnly(collaborative);
+      await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+      await expect(page.locator('.dc-edge-endpoint')).toHaveCount(0);
+      await expect(page.locator('.dc-edge-bend')).toHaveCount(0);
+    }
+
+    await setReadOnly(null);
+    await expect(page.locator('.dc-edge-endpoint')).toHaveCount(2);
+  });
+});
+
+test.describe('editing — a press that wobbles is a click', () => {
+  test('a click on a shape that moves 2px never moves it, snaps it, or makes an undo step', async ({ page }) => {
+    await newCanvas(page, 'Shape click jitter');
+    await create(page, 'Service', { x: 300, y: 300 });
+    // The second shape's top edge is a few units off the first's: close enough that a snap, were
+    // the press to start a drag, would pull the first shape into line with it.
+    await create(page, 'Service', { x: 700, y: 304 });
+    const first = page.locator('.dc-node').nth(0);
+    const before = (await first.boundingBox())!;
+    const depth = await undoDepth(page);
+
+    const at = { x: before.x + before.width / 2, y: before.y + before.height / 2 };
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.mouse.move(at.x + 2, at.y + 1);
+    await nextFrames(page);
+    await page.mouse.up();
+    await nextFrames(page);
+
+    const after = (await first.boundingBox())!;
+    expect(after.x).toBe(before.x);
+    expect(after.y).toBe(before.y);
+    expect(await undoDepth(page)).toBe(depth);
+    // It was a click: the shape is selected.
+    await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
+  });
+
+  test('a press that goes on past the threshold still drags the shape, and snaps it', async ({ page }) => {
+    await newCanvas(page, 'Shape drag past threshold');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Service', { x: 700, y: 304 });
+    const first = page.locator('.dc-node').nth(0);
+    const second = page.locator('.dc-node').nth(1);
+    const before = (await first.boundingBox())!;
+    const depth = await undoDepth(page);
+
+    const at = { x: before.x + before.width / 2, y: before.y + before.height / 2 };
+    await page.mouse.move(at.x, at.y);
+    await page.mouse.down();
+    await page.mouse.move(at.x + 40, at.y + 1, { steps: 6 });
+    await nextFrames(page);
+    await page.mouse.up();
+    await gestureCommitted(page, depth);
+
+    const after = (await first.boundingBox())!;
+    expect(after.x).toBeGreaterThan(before.x + 30);
+    // Snapped level with its neighbour, whose top edge was a few units lower.
+    expect(after.y).toBeCloseTo((await second.boundingBox())!.y, 0);
   });
 });
 

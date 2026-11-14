@@ -427,14 +427,15 @@ describe('the companion', () => {
     });
   });
 
-  it('offers its skills on a slash, plays a layout and says so, and puts the slash away on Escape', async () => {
-    const arrangeRoom = vi.fn(async () => true);
-    const real = useEditorStore.getState().arrangeRoom;
-    onTestFinished(() => useEditorStore.setState({ arrangeRoom: real }));
+  it('offers its skills on a slash, previews a layout and says so, and puts the slash away on Escape', async () => {
+    const real = useEditorStore.getState().planArrange;
+    const planArrange = vi.fn(real);
+    onTestFinished(() => useUiStore.getState().setArrangePreview(null));
     useEditorStore.setState({
       document: { ...doc, nodes: [...doc.nodes, createNode({ id: 'api', type: 'service', x: 300, y: 0, text: 'Orders API' })] },
-      arrangeRoom,
+      planArrange,
     });
+    onTestFinished(() => useEditorStore.setState({ planArrange: real }));
     useUiStore.setState({ companionOpen: true });
     mount();
     await settle();
@@ -451,15 +452,18 @@ describe('the companion', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(useUiStore.getState().companionOpen).toBe(true);
 
-    // Narrowed, then run: Arrange as asked, no agent run, and Nodi says what it did with an Undo.
+    // Narrowed, then run: Arrange as asked, no agent run, and Nodi says it is a preview, not a change.
     fireEvent.change(input, { target: { value: '/roo' } });
     expect(screen.getAllByRole('option')).toHaveLength(1);
     fireEvent.keyDown(input, { key: 'Enter' });
     await settle();
-    expect(arrangeRoom).toHaveBeenCalledWith({ spacing: 'spacious' });
+    await vi.waitFor(() => expect(useUiStore.getState().arrangePreview).not.toBeNull());
+    expect(planArrange).toHaveBeenCalledWith(false, expect.objectContaining({ preset: { spacing: 'spacious' } }));
     expect(controller.companionSend).not.toHaveBeenCalled();
-    expect(screen.getByText(/Gave everything some room/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+    // Nothing moved: the layout waits on the bar for Apply or Cancel.
+    expect(useEditorStore.getState().history.past).toHaveLength(0);
+    expect(useUiStore.getState().arrangePreview?.motion).toBe(true);
+    await vi.waitFor(() => expect(screen.getByText(/Here it is with some room/)).toBeTruthy());
     expect((input as HTMLInputElement).value).toBe('');
 
     // The slash button opens them too; a question skill goes to the agent.

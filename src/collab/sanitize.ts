@@ -12,7 +12,7 @@
  * changes are applied, against the file as it is then, not as the sender last saw it.
  */
 import { LIMITS } from '../document/limits';
-import { cleanText } from '../document/sanitize';
+import { cleanTitle } from '../document/sanitize';
 import { CURRENT_VERSION, DRAFT_FORMAT, VIEW_LEVELS, type DraftEdge, type DraftFlow, type DraftSettings, type OpenPoint, type ViewLevel } from '../document/types';
 import { normalizeDocument } from '../document/validate';
 import { parseInkStroke } from '../document/ink';
@@ -117,7 +117,7 @@ function sanitizeChange(candidate: unknown): Change | string {
     }
     case 'title': {
       if (typeof candidate.value !== 'string') return 'unreadable title';
-      return { kind: 'title', value: cleanText(candidate.value, LIMITS.maxTitleLength).trim() || 'Untitled canvas' };
+      return { kind: 'title', value: cleanTitle(candidate.value) };
     }
     case 'settings': {
       const value = sanitizeSettings(candidate.value);

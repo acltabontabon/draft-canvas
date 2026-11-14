@@ -104,6 +104,20 @@ export function zipFiles(entries: readonly ZipEntry[]): Uint8Array<ArrayBuffer> 
  * absurd one must fail before anything is allocated on its say-so.
  */
 export function unzipFiles(bytes: Uint8Array): UnzippedEntry[] {
+  return readArchive(bytes, false).entries;
+}
+
+/**
+ * The same reader for a caller that would rather have most of an archive than none of it (restoring
+ * a backup): an entry that cannot be read — compressed, corrupt, or pointing outside the file — is
+ * named in `unreadable` and the rest come back. Not a ZIP at all, or an archive whose entries
+ * overlap, still throws: there is nothing trustworthy to take entries from.
+ */
+export function unzipFilesLeniently(bytes: Uint8Array): { entries: UnzippedEntry[]; unreadable: string[] } {
+  return readArchive(bytes, true);
+}
+
+function readArchive(bytes: Uint8Array, lenient: boolean): { entries: UnzippedEntry[]; unreadable: string[] } {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const end = findEndRecord(bytes, view);
   if (end === -1) throw new Error('Not a ZIP archive: the end-of-central-directory record is missing.');
@@ -117,6 +131,7 @@ export function unzipFiles(bytes: Uint8Array): UnzippedEntry[] {
   if (centralStart + centralSize > end) throw new Error('Not a ZIP archive: the central directory lies outside the file.');
 
   const entries: UnzippedEntry[] = [];
+  const unreadable: string[] = [];
   let cursor = centralStart;
   // Stored entries can't legitimately add up to more than the archive holds, so entries that
   // overlap (one blob listed many times) exhaust this and a real backup of any size doesn't. A
@@ -137,27 +152,47 @@ export function unzipFiles(bytes: Uint8Array): UnzippedEntry[] {
     const name = decoder.decode(bytes.subarray(cursor + CENTRAL_HEADER_SIZE, cursor + CENTRAL_HEADER_SIZE + nameLength));
     cursor += CENTRAL_HEADER_SIZE + nameLength + extraLength + commentLength;
 
+    // One entry's own trouble: fatal to a strict reader, skipped by a lenient one.
+    const refuse = (message: string): void => {
+      if (!lenient) throw new Error(message);
+      unreadable.push(name);
+    };
+
     if (method !== METHOD_STORE) {
-      throw new Error(`"${name}" is compressed (method ${method}); Draft Canvas reads only stored ZIP entries.`);
+      refuse(`"${name}" is compressed (method ${method}); Draft Canvas reads only stored ZIP entries.`);
+      continue;
     }
-    if (compressedSize !== size) throw new Error(`"${name}" declares two different sizes for a stored entry.`);
-    if (size > LIMITS.maxFileBytes) throw new Error(`"${name}" is larger than ${LIMITS.maxFileBytes / 1024 / 1024} MB.`);
+    if (compressedSize !== size) {
+      refuse(`"${name}" declares two different sizes for a stored entry.`);
+      continue;
+    }
+    if (size > LIMITS.maxFileBytes) {
+      refuse(`"${name}" is larger than ${LIMITS.maxFileBytes / 1024 / 1024} MB.`);
+      continue;
+    }
     budget -= size;
     if (budget < 0) throw new Error('The archive unpacks to more than it holds: its entries overlap.');
 
     if (localOffset + LOCAL_HEADER_SIZE > centralStart || view.getUint32(localOffset, true) !== LOCAL_HEADER) {
-      throw new Error(`"${name}" points at a missing local header.`);
+      refuse(`"${name}" points at a missing local header.`);
+      continue;
     }
     const localNameLength = view.getUint16(localOffset + 26, true);
     const localExtraLength = view.getUint16(localOffset + 28, true);
     const dataStart = localOffset + LOCAL_HEADER_SIZE + localNameLength + localExtraLength;
-    if (dataStart + size > centralStart) throw new Error(`"${name}" runs past the end of the archive.`);
+    if (dataStart + size > centralStart) {
+      refuse(`"${name}" runs past the end of the archive.`);
+      continue;
+    }
 
     const data = bytes.slice(dataStart, dataStart + size);
-    if (crc32(data) !== crc) throw new Error(`"${name}" is corrupt: its checksum does not match.`);
+    if (crc32(data) !== crc) {
+      refuse(`"${name}" is corrupt: its checksum does not match.`);
+      continue;
+    }
     entries.push({ name, data });
   }
-  return entries;
+  return { entries, unreadable };
 }
 
 /**

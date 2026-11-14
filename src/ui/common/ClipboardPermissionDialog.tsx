@@ -58,7 +58,7 @@ export function ClipboardPermissionDialog() {
         Paste from your clipboard?
       </p>
       <p id="dc-clipboard-permission-body">Draft Canvas can read your clipboard when you paste onto the canvas — so elements copied in another Draft Canvas tab or window land here too.</p>
-      <p className="dc-clipboard-permission-note">Your clipboard stays in your browser and isn't uploaded anywhere.</p>
+      <p className="dc-clipboard-permission-note">Your clipboard stays in your browser and isn’t uploaded anywhere.</p>
       <div className="dc-clipboard-permission-actions">
         <Button variant="ghost" onClick={() => resolve(false)}>
           Not now

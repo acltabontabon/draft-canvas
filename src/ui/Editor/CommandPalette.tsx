@@ -304,7 +304,7 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
             spellCheck={false}
             autoComplete="off"
             role="combobox"
-            aria-expanded="true"
+            aria-expanded={rows.length > 0}
             aria-autocomplete="list"
             aria-label={stage ? stage.prompt : 'Search commands'}
             aria-controls="dc-palette-list"
@@ -321,7 +321,10 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
           {query.trim() ? `${rows.length} ${rows.length === 1 ? 'result' : 'results'}` : ''}
         </span>
         {rows.length === 0 && (
-          <div className="dc-palette-empty">{stage ? 'No matching options.' : 'No matching commands.'}</div>
+          <div className="dc-palette-empty">
+            {stage ? 'No matching options.' : 'No matching commands.'}
+            <span> {stage ? 'Clear the search, or press Backspace to go back.' : 'Try another word — add, export, present — or press Esc to close.'}</span>
+          </div>
         )}
         <div id="dc-palette-list" ref={listRef} className="dc-palette-list" role="listbox" hidden={rows.length === 0}>
           {rows.map(({ entry, indices }, index) => {

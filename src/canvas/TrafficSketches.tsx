@@ -1,7 +1,7 @@
 import { useTrafficReplay } from './TrafficReplayContext';
 import { MAX_REPLAY_MESSAGES, recoveryArrivals } from '../traffic/recovery';
 import { TrafficRecovery } from './TrafficRecovery';
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { useReactFlow, useStore } from '@xyflow/react';
 import { displayNameFor } from '../document/factory';
 import { familyOf } from '../render/text/fonts';
@@ -78,7 +78,7 @@ function boundsOf(nodes: readonly DraftNode[]): Bounds | null {
   };
 }
 
-export function TrafficSketches() {
+export const TrafficSketches = memo(function TrafficSketches() {
   const analysis = useEditorStore(trafficOf);
   const edges = useEditorStore((state) => state.document.edges);
   const trafficScope = useEditorStore((state) => state.traffic.flowId);
@@ -434,7 +434,7 @@ export function TrafficSketches() {
       </p>
     </>
   );
-}
+});
 
 /** Where the notes go: the finding's own few words, beside what it circles, clear of the shapes. */
 function layout(analysis: TrafficAnalysis, nodes: readonly DraftNode[], title: string) {

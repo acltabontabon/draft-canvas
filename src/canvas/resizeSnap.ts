@@ -35,6 +35,9 @@ const MOVED = 0.5;
  *
  * A snap that would take the size outside `limits` is dropped for that axis rather than clamped,
  * so the edge never lands short of the guide it shows.
+ *
+ * `threshold` is in canvas units: `snapReach(zoom).threshold`, which is the same 6 screen pixels at
+ * every zoom. The default is that at zoom 1.
  */
 export function snapResize(
   start: Rect,

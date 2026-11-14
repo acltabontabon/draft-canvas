@@ -523,6 +523,11 @@ export function mapGraphs(
  * or rewrites `nodes`, `edges` or `flows` goes through here, and `migrate.test.ts` proves each of
  * them reaches the root and all three levels below it. A migration that only touches `metadata`
  * or `settings` is document-wide and must not be wrapped.
+ *
+ * One entry reads and writes nodes without being wrapped, on purpose: the v16-to-v17 `migrateActionsToNotes`
+ * starts from a root-only field (`actions`) and walks the rooms itself to find the elements its
+ * entries point at, so running it once per room would find the same list in none of them. A
+ * migration of that shape says so in its own comment, as that one does.
  */
 function everyRoom(migration: Migration): Migration {
   return (doc) => mapGraphs(doc, migration);

@@ -1,6 +1,7 @@
 import { createId } from './ids';
 import { plainTextOfMarkdown } from './markdownText';
 import { DEFAULTS } from './limits';
+import { cleanTitle, DEFAULT_TITLE } from './sanitize';
 import {
   C4_TEXT_TYPES,
   CURRENT_VERSION,
@@ -417,7 +418,7 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
   return edge;
 }
 
-export function createDocument(title = 'Untitled canvas'): DraftDocument {
+export function createDocument(title = DEFAULT_TITLE): DraftDocument {
   const now = Date.now();
   return {
     format: DRAFT_FORMAT,
@@ -436,16 +437,21 @@ export function createDocument(title = 'Untitled canvas'): DraftDocument {
   };
 }
 
-/** A deep copy with fresh identity, used by "Duplicate" in the library. */
+/**
+ * A deep copy with fresh identity (id, title, times), used by "Duplicate" in the library and by every
+ * import that finds its id already stored. What the diagram is and where it began (`origin`: the
+ * gallery starter it came from, so its update notice still applies to the copy) stay with it.
+ */
 export function cloneDocumentAsNew(doc: DraftDocument, title: string): DraftDocument {
   const now = Date.now();
   return {
     ...structuredClone(doc),
     metadata: {
       id: createId('d'),
-      title,
+      title: cleanTitle(title),
       createdAt: now,
       updatedAt: now,
+      ...(doc.metadata.origin ? { origin: structuredClone(doc.metadata.origin) } : {}),
       // Duplicate stays in the same project, same principle as carrying over
       // the background image — see `useDocumentSession.ts`'s `duplicateDocument`.
       ...(doc.metadata.projectId ? { projectId: doc.metadata.projectId } : {}),

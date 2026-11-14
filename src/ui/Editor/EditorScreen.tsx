@@ -44,7 +44,7 @@ import type { SeqParticipant } from '../../document/types';
 import { centerOf, overlapArea } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, hasSomethingToFit, lensFlow, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
-import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
+import { pointer, pointerFlow, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
 import { useCollabStore } from '../../store/collabStore';
 import { END_MESSAGES } from '../collab/collabCopy';
 import { PresenceDock } from '../collab/PresenceDock';
@@ -56,6 +56,7 @@ import { useThemeValue } from '../../theme/useTheme';
 import { backOut, lookInside } from '../../commands/depthNavigation';
 import { OpenPointsPanel } from './OpenPointsPanel';
 import { OutlinePanel } from './OutlinePanel';
+import { createNudgeCoalescer } from './nudgeCoalescer';
 import { useSelectionAnnouncements } from './useSelectionAnnouncements';
 import { OpenPointPopover } from '../../canvas/OpenPointPopover';
 import { DepthAnnouncer, DepthStack } from './DepthStack';
@@ -67,10 +68,12 @@ import { SharedReader } from './SharedReader';
 import { FocusIndicator } from './FocusIndicator';
 import { TidyBar } from './TidyBar';
 import { ArrangeBar } from './ArrangeBar';
+import { LayoutBusyBar } from './LayoutBusyBar';
 import { FlowLensIndicator } from './FlowLensIndicator';
 import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
 import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { CommandPalette } from './CommandPalette';
+import { ContinuationAnnouncer } from './ContinuationAnnouncer';
 import { Inspector } from './Inspector';
 import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
@@ -409,7 +412,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       const { nodes: selectedNodes } = state.selection;
       const host = selectedNodes.length === 1 ? state.document.nodes.find((n) => n.id === selectedNodes[0]) : undefined;
       const size = defaultSizeFor(preset.type);
-      const atPointer = { x: pointer.x - 88, y: pointer.y - 34 };
+      const at = pointer.known ? pointerFlow() : { x: 0, y: 0 };
+      const atPointer = { x: at.x - 88, y: at.y - 34 };
       // Pressing the key again without moving the mouse put each new shape exactly on an earlier one:
       // beside the shape under the pointer instead, wherever there is room.
       const box = { x: atPointer.x + 88 - size.width / 2, y: atPointer.y + 34 - size.height / 2, ...size };
@@ -744,6 +748,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           )}
           <FlowBar playback={playback} />
           <FocusIndicator />
+          <LayoutBusyBar />
           <TidyBar />
           <ArrangeBar />
           {!presenting && !tracing && <FlowLensIndicator />}
@@ -774,6 +779,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         durable={session.durable}
         presenting={presenting}
         onResolveConflict={(choice) => void session.resolveConflict(choice)}
+        onSaveFailure={{
+          retry: () => void session.retrySave(),
+          exportCopy: () => void session.exportUnsaved(),
+          leave: () => returnHome(session.leaveWithoutSaving),
+        }}
       />
       </div>
       {sessionOver && (
@@ -814,26 +824,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   );
 }
 
-/**
- * The one screen-reader-facing signal Intent Continuation makes: a polite announcement when a new
- * offer appears — once per offer, never on a re-show — so a ghost that is only visual otherwise
- * is still discoverable without a pointer.
- */
-function ContinuationAnnouncer() {
-  const message = useUiStore((state) => {
-    const offer = state.continuation;
-    if (offer?.trigger !== 'select') return '';
-    const ids = offer.alternatives ?? [];
-    if (ids.length < 2) return `Suggested: ${offer.label}. Press Tab to add it.`;
-    const position = `${ids.indexOf(offer.id) + 1} of ${ids.length}`;
-    return `Suggested: ${offer.label}, ${position}. Press Tab to add it, or ] for the next.`;
-  });
-  return (
-    <div className="dc-sr-only" aria-live="polite">
-      {message}
-    </div>
-  );
-}
+/** The keys that nudge the selection; see `nudgeCoalescer.ts`. */
+const PLAIN_ARROWS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
 /**
  * Keyboard handling for the whole editor.
@@ -841,14 +833,15 @@ function ContinuationAnnouncer() {
  * Anything typed into a field belongs to that field, so the handler bails out
  * the moment focus is inside an input — otherwise pressing "n" while renaming a
  * node would spawn a note.
+ *
+ * Exported only for `tests/keyboard-dispatch.test.tsx`, which renders this hook directly (via
+ * `renderHook`) to fire real `keydown` events against the actual dispatch switch below — so a
+ * binding changed here can't silently drift from what `shortcutLookup.ts` tells the palette and
+ * Shortcut Sheet to display. Not part of the app's own render path otherwise; `EditorScreen`
+ * below still calls it exactly as before. The export costs this file fast refresh (edits to it
+ * reload the editor rather than patching it in place), which is a development convenience only;
+ * moving the hook out would split the dispatch from the helpers it shares with this screen.
  */
-/** Exported only for `tests/keyboard-dispatch.test.tsx`, which renders this hook directly (via
- *  `renderHook`) to fire real `keydown` events against the actual dispatch switch below — so a
- *  binding changed here can't silently drift from what `shortcutLookup.ts` tells the palette and
- *  Shortcut Sheet to display. Not part of the app's own render path otherwise; `EditorScreen`
- *  below still calls it exactly as before. The export costs this file fast refresh (edits to it
- *  reload the editor rather than patching it in place), which is a development convenience only;
- *  moving the hook out would split the dispatch from the helpers it shares with this screen. */
 // oxlint-disable-next-line react/only-export-components -- see above
 export function useKeyboard({
   createAtPointer,
@@ -902,10 +895,11 @@ export function useKeyboard({
    * The keyboard-only path into the context menu (Shift+F10 / the Menu key, standard desktop
    * convention) — anchors the menu to the current selection instead of a click point, since there's
    * no pointer position to use. A single node/edge/multi-selection each resolve their own screen
-   * anchor; nothing selected is a no-op, since there's no keyboard-native equivalent of "a point on
-   * empty canvas" — the pane menu stays mouse-only, a deliberate scope boundary, not an oversight.
-   * Presentation Mode is excluded for free: `selection` is always empty there (`setMode('present')`
-   * clears it), so this always falls through to the no-op branch without needing its own check.
+   * anchor; with nothing selected the pane menu (Add here, Paste, Tidy up, Arrange) opens at the
+   * middle of the canvas, the one point a keyboard has — it was mouse-only, which left Paste and the
+   * layout commands with no keyboard route to them from the canvas itself. Presentation Mode, a flow
+   * trace and a read-only view have no pane menu (`Canvas`'s `interactive` and `readOnly` guards),
+   * so they stay a no-op.
    */
   const openContextMenuFromKeyboard = useCallback(() => {
     const state = useEditorStore.getState();
@@ -940,6 +934,12 @@ export function useKeyboard({
         // reasonable, simple fallback; the menu's own content is correct regardless of where it opens.
         : screenToFlowPosition(canvasCenter());
       target = { kind: 'selection' };
+    } else if (nodes.length + edges.length === 0) {
+      const ui = useUiStore.getState();
+      if (state.mode !== 'edit' || ui.flowTrace || ui.readOnly !== null) return;
+      const middle = screenToFlowPosition(canvasCenter());
+      flowPoint = { x: Math.round(middle.x), y: Math.round(middle.y) };
+      target = { kind: 'pane' };
     }
 
     if (!flowPoint || !target) return;
@@ -1006,7 +1006,7 @@ export function useKeyboard({
         return;
       }
       const target = pointer.known
-        ? { x: pointer.x, y: pointer.y }
+        ? pointerFlow()
         : screenToFlowPosition(canvasCenter());
       useEditorStore.getState().paste(target);
     };
@@ -1075,7 +1075,11 @@ export function useKeyboard({
   }, []);
 
   useEffect(() => {
+    const nudges = createNudgeCoalescer((dx, dy, ids) => useEditorStore.getState().nudgeSelection(dx, dy, ids));
     const onKeyDown = (event: KeyboardEvent) => {
+      // Whatever this key does sees every nudge pressed before it: only a plain arrow goes on adding
+      // to the one waiting for its frame.
+      if (!PLAIN_ARROWS.has(event.key) || event.altKey || event.metaKey || event.ctrlKey) nudges.flush();
       const readOnly = useUiStore.getState().readOnly;
       if (isEditableTarget(event.target) || useUiStore.getState().flowTrace || (readOnly && !readOnly.collaborative)) return;
 
@@ -1407,7 +1411,8 @@ export function useKeyboard({
           if (playback.active || state.focus.active) break;
           const uiState = useUiStore.getState();
           const offer = uiState.continuation;
-          if (!offer || offer.trigger !== 'select' || uiState.quickConnect || uiState.openAttachmentDetail) break;
+          // The Pencil hides the ghost; Tab must not add a shape nobody can see.
+          if (!offer || offer.trigger !== 'select' || uiState.quickConnect || uiState.openAttachmentDetail || uiState.pencil) break;
           if (!focusIsOnCanvas()) break;
           event.preventDefault();
           state.acceptContinuation(offer);
@@ -1509,7 +1514,9 @@ export function useKeyboard({
           const magnitude = event.shiftKey ? 10 : 1;
           const dx = direction === 'left' ? -magnitude : direction === 'right' ? magnitude : 0;
           const dy = direction === 'up' ? -magnitude : direction === 'down' ? magnitude : 0;
-          state.nudgeSelection(dx, dy);
+          // Held down, the key repeats faster than a large diagram can plan its connectors: the
+          // presses of one frame are applied as one nudge (`nudgeCoalescer.ts`).
+          nudges.push(dx, dy, state.selection.nodes);
           return;
         }
         case 'Enter':
@@ -1604,7 +1611,11 @@ export function useKeyboard({
     };
 
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      // A press nobody saw applied yet must not be lost with the listener.
+      nudges.flush();
+    };
   }, [
     arm,
     createAtPointer,

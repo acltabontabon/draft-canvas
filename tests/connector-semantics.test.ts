@@ -170,7 +170,7 @@ describe('capabilityFor — the capability matrix', () => {
     const cap = capabilityFor('topic', 'deadLetter')!;
     expect(cap.defaultRelation).toBeUndefined();
     expect(cap.status).toBe('unusual');
-    expect(cap.guidance).toMatch(/consumer's own queue/);
+    expect(cap.guidance).toMatch(/consumer’s own queue/);
     expect(cap.quickFix).toBeUndefined();
     expect(cap.relations).not.toContain('deadLetters');
   });

@@ -87,6 +87,31 @@ describe('ExportDialog — protected sharing', () => {
     }
   });
 
+  it('says why Escape does nothing while a link is being made, instead of ignoring it', async () => {
+    const user = userEvent.setup();
+    const compression = vi.spyOn(shareCompression, 'compressShare').mockImplementationOnce((_json, _protected, options) => new Promise((_resolve, reject) => {
+      options!.signal!.addEventListener('abort', () => reject(new DOMException('Cancelled', 'AbortError')), { once: true });
+    }));
+    try {
+      useEditorStore.setState({ document: withFlow(), path: [], outer: null, selection: { nodes: [], edges: [] }, selectedFlowId: null });
+      useUiStore.setState({ shareFromHere: true, toasts: [] });
+      renderDialog();
+      await user.click(screen.getByRole('checkbox', { name: /Require a passphrase/ }));
+      await user.click(screen.getByRole('button', { name: 'Copy share link' }));
+      await screen.findByRole('progressbar', { name: 'Preparing share link' });
+      expect(screen.queryByText(/Cancel the link first/)).not.toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      // Still open — closing would orphan the work — and now it says so, where the actions are.
+      expect(useUiStore.getState().exportOpen).toBe(true);
+      expect(screen.getByText('Cancel the link first, or wait for it.')).toBeVisible();
+      await user.click(screen.getByRole('button', { name: 'Cancel' }));
+      // The notice belongs to that one wait.
+      expect(screen.queryByText(/Cancel the link first/)).not.toBeInTheDocument();
+    } finally {
+      compression.mockRestore();
+    }
+  });
+
   it('keeps a generated link visible after a successful clipboard write and copies the same link on retry', async () => {
     const user = userEvent.setup();
     const writeText = vi.fn(async (_text: string) => {});
@@ -181,7 +206,7 @@ describe('ExportDialog — mode picker', () => {
     renderDialog();
 
     await switchMode(user, /Save an editable file/);
-    expect(screen.getByRole('button', { name: 'Export document' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export file' })).toBeInTheDocument();
 
     await switchMode(user, /Other formats/);
     expect(screen.getByRole('button', { name: 'Export Mermaid' })).toBeInTheDocument();
@@ -195,7 +220,7 @@ describe('ExportDialog — Document panel', () => {
     renderDialog();
     await switchMode(user, /Save an editable file/);
 
-    expect(screen.getByRole('button', { name: 'Export document' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Export file' })).toBeInTheDocument();
     await user.click(screen.getByRole('radio', { name: 'Encrypted' }));
     expect(screen.getByRole('button', { name: 'Export securely…' })).toBeInTheDocument();
   });

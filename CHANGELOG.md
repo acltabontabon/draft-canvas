@@ -128,10 +128,60 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Better proportions when arranging** — A long name gets a wider, shorter box instead of a tall
   column, gaps between rows are only as long as their captions need, and neither a caption nor a
   line runs through a boundary's title. Agents' diagrams get the same.
+- **Arrange and Tidy up work in the background** — A bar says "Arranging…" or "Tidying…" with a
+  **Cancel**, and the canvas stays usable. The same diagram gives the same preview on any computer;
+  a very large one says when it stopped early, and Arrange says when only one reading direction
+  was worked out. The bars also say why shapes were nudged, how many moved, and that sketches stay
+  where they are.
+- **Tidy up leaves straight connectors alone** and straightens real steps up to 32 px, instead of
+  nudging shapes whose line already ran level.
+- **Next-shape suggestions line up** — A suggested shape sits level with the one it follows, so its
+  connector runs straight, and its caption shows in full. Suggestions wait for you to rest on a
+  shape instead of flashing on every click, a User offers a Web App, and the Worker after a Queue,
+  Topic or Stream is named for it. The setting is now "Suggest the next shape while drawing".
+- **Snapping pulls the same distance at every zoom.** Hold `⌥` (Option) while dragging or resizing
+  to turn it off.
+- **Attach note opens ready to type**, and `⌘K` tells **Attach note** (to the selection) from **Add
+  note** (on the canvas). Shift+F10 with nothing selected opens the canvas menu.
+- **A failed save says why** — browser storage full, or the storage connection lost — and offers
+  **Retry**, **Export** and **Leave without saving**, also while presenting.
+- **Mermaid import is more forgiving** — Several arrows between the same two shapes become one
+  connector with the labels joined, long file names and deeply nested subgraphs import, and errors
+  are in plain words. A diagram saved by a newer Draft Canvas says so and is left untouched.
+- **Easier on touch screens and for screen readers** — Buttons, popovers, menus and the status bar
+  are at least 40 px on touch screens, the status bar wraps on phones, the Flows panel is a tree,
+  the blank-canvas hint is read aloud and mentions long-press and `S`, `D`, `Q`, and the canvas and
+  Quick Connect rows show where focus is. Zoom, status chips and flow-bar buttons show their keys,
+  danger and faint text have more contrast, and one name is used for each thing (spotlight, shape,
+  connector, reply line).
 
 #### Fixed
 
 - A connector routed round a shape from a Queue no longer starts with a small spike at the tube.
+- A click that wobbles a few pixels no longer moves a shape or leaves an undo step, and holding an
+  arrow key no longer queues a stall on large diagrams. Dropping or moving shapes in large diagrams
+  plans connectors faster.
+- The shape popover no longer cuts off "Generic" and "Details"; Details is an icon until a
+  technology is set.
+- Typing `constructor` or `__proto__` as a technology no longer stops every save.
+- Grouping stops at 32 levels instead of being undone on reload, and undo no longer moves the saved
+  camera. Panning and zooming save less often and never show "Unsaved".
+- Shared and view-only copies no longer show draggable connector end and bend handles, and the empty
+  canvas shows the normal arrow instead of a pointing hand.
+- An Arrange no longer lays a boundary's heading text over a shape on very large diagrams.
+- Smart Ink: undo removes a stale **Make it** strip, a highlighter in a selection no longer blocks
+  **Convert**, an abandoned stroke no longer stalls a drawing, and `Esc` or a cancelled pointer
+  during a sketch drag leaves it in place.
+- Bare `Enter` on Home no longer starts a diagram, and toasts no longer cover the create rail on a
+  phone.
+- Restoring a backup skips one bad entry instead of failing, and a diagram that clashes with an
+  existing one is titled "… copy". New diagrams are named "Untitled diagram".
+
+### Desktop
+
+#### Fixed
+
+- **Arrange Diagram** in the menu, and Nodi's layout skills, now show a preview first, like `⌘K`.
 
 ## [1.19.0] - 2026-11-11
 

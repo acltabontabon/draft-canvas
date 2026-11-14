@@ -14,7 +14,9 @@
  * cannot decide — how long a state has held.
  */
 
-/** Movement before a collapse is possible at all, in screen pixels.
+/** Movement before a collapse is possible at all, in screen pixels. Wider than the allowance for a
+ *  click to become a drag (`DRAG_THRESHOLD_PX`, `gestureThresholds.ts`) on purpose: the card has
+ *  to be clearly on its way somewhere, not just picked up.
  *
  *  Without it, grabbing a note that already sits on top of a shape would collapse it before the
  *  pointer had moved at all — the card would vanish on mousedown. Measured from where the grab

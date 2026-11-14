@@ -1,6 +1,6 @@
 import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
-import { armTool, newCanvas, nextFrames, reopenAfterReload } from './canvas';
+import { armTool, cameraAtRest, newCanvas, nextFrames, reopenAfterReload } from './canvas';
 import { readFileSync, existsSync } from 'node:fs';
 
 /**
@@ -214,7 +214,7 @@ test.describe('Draft Canvas', () => {
     // Fresh session: Export opens on its first-ever default (Image/PNG) — switch to Document.
     await exportDialog.locator('[data-mode="document"]').click();
     const projectDownload = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'Export document' }).click();
+    await page.getByRole('button', { name: 'Export file' }).click();
     const projectFile = await projectDownload;
     expect(projectFile.suggestedFilename()).toBe('payment-flow.draftcanvas');
 
@@ -408,7 +408,36 @@ test.describe('Draft Canvas', () => {
     await expect(page.locator('.dc-node')).toHaveCount(3);
   });
 
-  test('the canvas is one Tab stop, with keyboard feedback on shapes and no border after deletion', async ({
+  test('a shortcut puts the shape under the cursor, even after the camera moved beneath it', async ({ page }) => {
+    await newCanvas(page, 'Shortcut at the pointer');
+    const pane = (await page.locator(CANVAS).boundingBox())!;
+    const pointer = { x: pane.x + 160, y: pane.y + 130 };
+    const contains = async (selector: string) => {
+      const box = (await page.locator(selector).boundingBox())!;
+      return pointer.x >= box.x && pointer.x <= box.x + box.width && pointer.y >= box.y && pointer.y <= box.y + box.height;
+    };
+
+    await page.mouse.move(pointer.x, pointer.y);
+    await page.keyboard.press('s');
+    await expect(page.locator('.dc-node[data-type="service"]')).toHaveCount(1);
+    expect(await contains('.dc-node[data-type="service"]'), 'the shape is where the cursor is').toBe(true);
+    await page.keyboard.press('Escape');
+
+    // Zooming out moves the camera under a cursor that has not moved: no pointer event comes, and the
+    // shape the next shortcut makes still lands where the cursor now is on the canvas — not where it
+    // was when it last moved, which is where the first shape has just left.
+    const service = page.locator('.dc-node[data-type="service"]');
+    const before = (await service.boundingBox())!.x;
+    await page.keyboard.press('ControlOrMeta+-');
+    await page.keyboard.press('ControlOrMeta+-');
+    await expect.poll(async () => (await service.boundingBox())!.x, { message: 'the camera has moved' }).not.toBe(before);
+    await cameraAtRest(page);
+    await page.keyboard.press('d');
+    await expect(page.locator('.dc-node[data-type="database"]')).toHaveCount(1);
+    expect(await contains('.dc-node[data-type="database"]'), 'the shape is under the cursor after the camera moved').toBe(true);
+  });
+
+  test('the canvas is one Tab stop, with keyboard feedback on shapes and an inset ring when nothing is selected', async ({
     page,
     browserName,
   }) => {
@@ -462,8 +491,15 @@ test.describe('Draft Canvas', () => {
     await expect(page.locator('.dc-node')).toHaveCount(0);
     const canvas = page.locator('.dc-canvas');
     await expect(canvas).toBeFocused();
+    // With nothing selected there is no shape to carry the focus signal, so the canvas carries it: an
+    // inset ring (a negative offset, so no box and no layout shift). It used to be removed because it
+    // lingered after a deletion, which left the one Tab stop with no visible indicator at all.
     await expect(canvas).toHaveCSS('box-shadow', 'none');
-    await expect(canvas).toHaveCSS('outline-style', 'none');
+    // (Where the automation did not mark the Tab-focused canvas `:focus-visible`, there is no ring to check.)
+    if (keyboardFocused) {
+      await expect(canvas).toHaveCSS('outline-style', 'solid');
+      await expect(canvas).toHaveCSS('outline-offset', '-2px');
+    }
   });
 
   test('double-clicking empty canvas opens a type picker, and choosing a type creates it', async ({ page }) => {
@@ -478,7 +514,7 @@ test.describe('Draft Canvas', () => {
     const y = pickBox ? Math.max(24, pickBox.y - paneBox.y - 40) : 320;
     await page.locator(CANVAS).dblclick({ position: { x: 240, y } });
     await expect(page.locator('.dc-node')).toHaveCount(0);
-    const menu = page.getByRole('menu', { name: 'Add element' });
+    const menu = page.getByRole('menu', { name: 'Add to canvas' });
     await expect(menu).toBeVisible();
 
     // Tiny logical nodes clipped fixed-size details (a database became half an arch). The menu

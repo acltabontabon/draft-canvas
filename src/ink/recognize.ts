@@ -28,6 +28,7 @@ import {
   type Box,
   type Pt,
 } from './geometry';
+import { CONVERT_CONFIDENCE, MIN_DIAGONAL_PX, OFFER_CONFIDENCE, RESAMPLE_STEP_PX } from './thresholds';
 
 export type InkGeometry = 'rectangle' | 'ellipse' | 'cylinder' | 'tube' | 'person' | 'line' | 'arrow';
 
@@ -47,15 +48,8 @@ export interface Recognition {
   scores: Partial<Record<InkGeometry, number>>;
 }
 
-/** At or above this, a drawing is converted as you draw. */
-export const CONVERT_CONFIDENCE = 0.6;
-/** At or above this (and below `CONVERT_CONFIDENCE`), it is only offered. */
-export const OFFER_CONFIDENCE = 0.38;
-
-/** Resampling step, in screen pixels: dense enough for coverage bins, sparse enough to be cheap. */
-const STEP = 3;
-/** Smaller than this (screen px, diagonal) is a dot or a tick, never a shape. */
-const MIN_DIAGONAL = 18;
+// Every threshold, with its unit, is in `thresholds.ts`; the two a caller reads are re-exported.
+export { CONVERT_CONFIDENCE, OFFER_CONFIDENCE };
 
 interface Prepared {
   /** Each stroke resampled, in screen pixels. */
@@ -70,7 +64,7 @@ export function recognize(strokes: readonly (readonly Pt[])[], options: { scale:
   const prepared = prepare(strokes, scale);
   const roomBox = toRoom(prepared.box, scale);
   const empty: Recognition = { geometry: null, confidence: 0, box: roomBox, scores: {} };
-  if (prepared.all.length < 2 || Math.hypot(prepared.box.width, prepared.box.height) < MIN_DIAGONAL) return empty;
+  if (prepared.all.length < 2 || Math.hypot(prepared.box.width, prepared.box.height) < MIN_DIAGONAL_PX) return empty;
 
   const scores: Partial<Record<InkGeometry, number>> = {};
   const line = lineReading(prepared);
@@ -109,7 +103,7 @@ function nested(winner: InkGeometry, other: InkGeometry): boolean {
 function prepare(strokes: readonly (readonly Pt[])[], scale: number): Prepared {
   const resampled = strokes
     .filter((stroke) => stroke.length > 0)
-    .map((stroke) => resample(stroke.map((p) => ({ x: p.x * scale, y: p.y * scale })), STEP));
+    .map((stroke) => resample(stroke.map((p) => ({ x: p.x * scale, y: p.y * scale })), RESAMPLE_STEP_PX));
   const all = resampled.flat();
   return { strokes: resampled, all, box: boxOf(all), inkLength: resampled.reduce((sum, s) => sum + pathLength(s), 0) };
 }

@@ -8,15 +8,13 @@ import { LIMITS } from '../document/limits';
 import { updateNode } from '../document/operations';
 import type { DraftDocument, DraftNode } from '../document/types';
 import type { DescribeContext } from '../nodes/describe';
-import { fitGroups, nearestShape } from './arrange';
+import { BESIDE_REACH, fitGroups, nearestShape } from './arrange';
 import { AgentError } from './errors';
 import { edgeLabelSize, sizeToFit, spacingOf } from './place';
 import type { LayoutSpec } from './input';
 import type { PlaceSpec } from './placement';
 
 const DEFAULT_GAP = 48;
-/** How far a free note may sit from a shape and still move with it — `arrange`'s own reach. */
-const BESIDE_REACH = 48;
 
 /** Explicit layout spacing leaves the same caption air as the automatic layout. A numeric gap is
  * exact; without either choice, preserve the published 48 px relative-placement default. */

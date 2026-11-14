@@ -45,13 +45,13 @@ const intersects = (a: Bounds, b: Bounds) =>
 describe('insertStarterDocument', () => {
   beforeEach(reset);
 
-  it('names a blank "Untitled canvas" after the starter, in the same undo step, and nothing else', () => {
+  it('names a blank "Untitled diagram" after the starter, in the same undo step, and nothing else', () => {
     const starter = ARCHITECTURE_STARTERS[0]!;
     store.setState({ document: createDocument() });
     insertStarter(starter, starter.name);
     expect(store.getState().document.metadata.title).toBe(starter.name);
     store.getState().undo();
-    expect(store.getState().document.metadata.title).toBe('Untitled canvas');
+    expect(store.getState().document.metadata.title).toBe('Untitled diagram');
     expect(store.getState().document.nodes).toHaveLength(0);
 
     // A name someone chose, or a canvas with drawing on it, keeps its name.
@@ -60,7 +60,12 @@ describe('insertStarterDocument', () => {
     expect(store.getState().document.metadata.title).toBe('Starters');
     store.setState({ document: addNodes(createDocument(), [createNode({ type: 'service', x: 0, y: 0 })]) });
     insertStarter(starter, starter.name);
-    expect(store.getState().document.metadata.title).toBe('Untitled canvas');
+    expect(store.getState().document.metadata.title).toBe('Untitled diagram');
+
+    // A diagram made before the default was renamed is still a blank one.
+    store.setState({ document: createDocument('Untitled canvas') });
+    insertStarter(starter, starter.name);
+    expect(store.getState().document.metadata.title).toBe(starter.name);
   });
 
   it.each(ARCHITECTURE_STARTERS.map((s) => [s.name, s] as const))(

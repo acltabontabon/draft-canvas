@@ -265,8 +265,8 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
     // label point sits close to its own source/target), and not enough screen room above the
     // label point before the toolbar — the expanded editor is tall enough to matter.
     const screenLabelPoint = flowToScreenPosition(labelPoint);
-    // Measured, not guessed: the toolbar wraps to two rows below 720px (see app.css's
-    // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
+    // Measured, not guessed: the toolbar wraps to two rows below 720px (the later `@media (max-width: 720px)`
+    // block in app.css, the one with `.dc-toolbar`'s grid areas — not the Library's), and a long diagram title can force that wrap even above
     // it — a static constant can't account for either. `TOOLBAR_CLEARANCE` stays as the fallback
     // for the (rare) frame where `.dc-toolbar` isn't in the DOM yet.
     const toolbarClearance = toolbarHeight ? toolbarHeight + 10 : TOOLBAR_CLEARANCE;
@@ -1151,6 +1151,9 @@ function RecoverySection({
                         type="button"
                         key={option.value}
                         className="dc-recovery-protocol-button"
+                        // The three-way control has no room for "Generic Call", the name the
+                        // protocol picker and the guides use for it.
+                        {...(option.value === 'calls' ? { 'aria-label': 'Generic Call', title: 'Generic Call' } : {})}
                         aria-pressed={protocol === option.value}
                         onClick={() => useEditorStore.getState().updateEdgeById(action.id, {
                           compensationProtocol: option.value as DraftEdge['compensationProtocol'],
@@ -1239,7 +1242,7 @@ function RelationshipGuidance({
   const message =
     capability?.guidance ??
     (retarget && edge.semantic
-      ? `"${EDGE_SEMANTIC_LABELS[edge.semantic]}" doesn't typically apply to this connection.`
+      ? `"${EDGE_SEMANTIC_LABELS[edge.semantic]}" doesn’t typically apply to this connector.`
       : undefined);
   if (!message) return null;
 
@@ -1544,7 +1547,7 @@ function ExpandedPanel({
           </div>
           <div className="dc-connector-drawing-row">
             <span className="dc-inspector-section-label">Style</span>
-            <Tooltip content={{ title: edge.directed ? 'Remove arrowhead' : 'Add arrowhead', description: 'Choose whether this connection points to its target.' }}>
+            <Tooltip content={{ title: edge.directed ? 'Remove arrowhead' : 'Add arrowhead', description: 'Choose whether this connector points to its target.' }}>
               {(tip) => (
                 <Button
                   variant="ghost"
@@ -1561,7 +1564,7 @@ function ExpandedPanel({
                 </Button>
               )}
             </Tooltip>
-            <Tooltip content={{ title: currentAccentChip ? 'Connector colour' : 'Automatic colour', description: currentAccentChip ? 'Choose a fixed colour or return to automatic.' : 'This connection follows its source colour. Click to choose a fixed colour.' }}>
+            <Tooltip content={{ title: currentAccentChip ? 'Connector colour' : 'Automatic colour', description: currentAccentChip ? 'Choose a fixed colour or return to automatic.' : 'This connector follows its source colour. Click to choose a fixed colour.' }}>
               {(tip) => (
                 <button
                   type="button"
@@ -1579,7 +1582,7 @@ function ExpandedPanel({
               )}
             </Tooltip>
             {showCondition && (
-              <Tooltip content={{ title: edge.condition ? `Condition: ${edge.condition}` : 'Add condition', description: 'Show when this connection should be followed.' }}>
+              <Tooltip content={{ title: edge.condition ? `Condition: ${edge.condition}` : 'Add condition', description: 'Show when this connector should be followed.' }}>
                 {(tip) => (
                   <button
                     type="button"
@@ -1679,7 +1682,7 @@ function ExpandedPanel({
             {edge.accent !== undefined && (
               <Button
                 variant="ghost"
-                title="Derive this connection's colour from its source node instead of a fixed one"
+                title="Derive this connector’s colour from its source shape instead of a fixed one"
                 onClick={() => {
                   useEditorStore.getState().updateEdgeById(edge.id, { accent: undefined }, 'Reset colour');
                   setPaletteOpen(false);

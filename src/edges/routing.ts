@@ -376,7 +376,7 @@ const LEVEL_SNAP = 1;
  * Only ever applied when neither end has an anchor of its own: an anchor is someone saying exactly
  * where the connector should meet the shape, and tidiness does not get to overrule that.
  */
-const NEAR_LEVEL = 2 * 10 + 4;
+export const NEAR_LEVEL = 2 * 10 + 4;
 
 /** How much of a shape's side to keep clear of at each end when straightening a connector onto it,
  *  so the line never slides out to a corner it would look detached from. */
@@ -2138,6 +2138,15 @@ function endsFor(
   return { from, to, sourceSide, targetSide };
 }
 
+/**
+ * `d` without a point written twice in a row: React Flow's smoothstep path draws the middle of a
+ * straight run as `…L140 30L140 30…`, a zero-length piece that every consumer of the path (the
+ * bridges' segment grid, the crossing and label checks, a bend handle) then has to guard against.
+ */
+export function withoutRepeatedPoints(d: string): string {
+  return d.replace(/(L\s?-?[\d.]+[ ,]-?[\d.]+)(?=\1(?![\d.]))/g, '');
+}
+
 function routeWith(
   sourceRect: Rect,
   targetRect: Rect,
@@ -2248,7 +2257,7 @@ function drawBetween(
           else centre.centerY = at;
         }
         const [d, lx, ly] = getSmoothStepPath({ ...params, ...centre, borderRadius: 10 });
-        path = d;
+        path = withoutRepeatedPoints(d);
         labelX = lx;
         labelY = ly;
       }

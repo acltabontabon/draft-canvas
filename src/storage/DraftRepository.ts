@@ -24,6 +24,11 @@ export interface DraftRepository {
    */
   takeRepairs?(id: string): string[] | undefined;
   /**
+   * Why the last `load(id)` that returned `null` could not open the row, handed over once and then
+   * forgotten — `null` alone means missing, damaged or never there. Optional, like `takeRepairs`.
+   */
+  takeLoadFailure?(id: string): LoadFailure | undefined;
+  /**
    * The content stamp (`DraftSummary.contentStamp`) of the row as this tab last read or wrote it, if
    * it knows one. Optional: only a store that other tabs share has stamps to compare. Synchronous, so
    * a page leaving can record it beside its reload stash.
@@ -80,6 +85,12 @@ export interface DraftRepository {
   pruneBackgroundImages(documentId: string, keep: { imageId?: string } | null): Promise<void>;
 }
 
+/**
+ * A stored diagram that is there but cannot be opened. `newer`: a later version of Draft Canvas
+ * saved it, so it is kept exactly as it is and updating is the fix. `unreadable`: anything else.
+ */
+export type LoadFailure = 'newer' | 'unreadable';
+
 export class StorageUnavailableError extends Error {
   constructor(cause?: unknown) {
     super(
@@ -116,8 +127,8 @@ export class DocumentConflictError extends Error {
   constructor(kind: 'changed' | 'deleted') {
     super(
       kind === 'deleted'
-        ? 'This canvas was deleted in another tab.'
-        : 'This canvas was changed in another tab.',
+        ? 'This diagram was deleted in another tab.'
+        : 'This diagram was changed in another tab.',
     );
     this.name = 'DocumentConflictError';
     this.kind = kind;
@@ -127,7 +138,7 @@ export class DocumentConflictError extends Error {
 export class QuotaExceededError extends Error {
   constructor(cause?: unknown) {
     super(
-      'This browser is out of local storage space. Delete a diagram you no longer need, or export this one to a file.',
+      'This browser is out of storage space. Export this diagram, then free space by deleting diagrams in the Library.',
     );
     this.name = 'QuotaExceededError';
     this.cause = cause;

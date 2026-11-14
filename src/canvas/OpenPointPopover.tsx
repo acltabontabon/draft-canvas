@@ -239,7 +239,7 @@ function OpenPointPopoverBody({ state, closing, listening }: { state: OpenPointP
         {creating && !readOnly && (
           <div className="dc-open-point-picker">
             <span className="dc-open-point-prompt">
-              {state.targets.length > 1 ? `One point about ${count(state.targets.length, 'element')} — what's still open?` : 'What’s still open?'}
+              {state.targets.length > 1 ? `One point about ${count(state.targets.length, 'element')} — what’s still open?` : 'What’s still open?'}
             </span>
             <KindPicker onPick={raise} />
           </div>

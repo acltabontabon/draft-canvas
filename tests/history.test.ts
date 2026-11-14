@@ -393,6 +393,10 @@ describe('undo and redo', () => {
 
     store.getState().updateEdgeLabel(edge.id, edge.label ?? '');
     store.getState().updateNodeById(a.id, { text: 'API' }, 'Rename');
+    // Settings too: re-picking the grid or background already in use is not an edit.
+    const { settings } = document;
+    store.getState().updateSettings({ grid: settings.grid, showSequence: settings.showSequence });
+    store.getState().updateSettings({ background: { ...settings.background } });
     expect(store.getState().document).toBe(document);
     expect(store.getState().history.past).toHaveLength(past.length);
     expect(store.getState().history.future).toHaveLength(future.length);

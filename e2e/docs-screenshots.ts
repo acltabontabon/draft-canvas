@@ -42,6 +42,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, expect, type Browser, type Locator, type Page } from '@playwright/test';
 
+/** Home's start card is "Quick Draft"; the Library's own button for the same thing is "New canvas". */
+const START_BUTTON = /^(Quick Draft|New canvas)$/;
+
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
 function flag(name: string): string | undefined {
@@ -215,7 +218,7 @@ async function collabScreenshots(browser: Browser, page: Page) {
   // The Share panel with the toolbar above it: every way the diagram reaches someone, spelled out.
   const panel = page.getByRole('menu', { name: 'Share' });
   await expect(panel).toBeVisible();
-  await page.getByRole('menuitem', { name: /^Draw together, live/ }).click();
+  await page.getByRole('menuitem', { name: /^Collaborate/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Collaborate' });
   await dialog.getByLabel('Your name').fill('Ada');
   // The dialogs are taller than the guides' usual window: show each whole, unscrolled.
@@ -276,7 +279,7 @@ async function collabScreenshots(browser: Browser, page: Page) {
 }
 
 async function technologyScreenshots(page: Page) {
-  await page.getByRole('button', { name: 'New canvas' }).first().click();
+  await page.getByRole('button', { name: START_BUTTON }).first().click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   const title = page.getByLabel('Diagram title');
   await title.fill('Technology at a glance');
@@ -325,7 +328,7 @@ async function richText(page: Page, at: { x: number; y: number }, markdown: stri
 }
 
 async function richTextScreenshots(page: Page) {
-  await page.getByRole('button', { name: 'New canvas' }).first().click();
+  await page.getByRole('button', { name: START_BUTTON }).first().click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   const title = page.getByLabel('Diagram title');
   await title.fill('Checkout notes');
@@ -437,7 +440,7 @@ async function trafficScreenshots(page: Page) {
  */
 async function sequenceScreenshots(page: Page) {
   log('sequence');
-  await page.getByRole('button', { name: 'New canvas' }).first().click();
+  await page.getByRole('button', { name: START_BUTTON }).first().click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   const title = page.getByLabel('Diagram title');
   await title.fill('Checkout');
@@ -533,7 +536,7 @@ async function sequenceScreenshots(page: Page) {
   await shot(page, 'sequence-attachment');
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: /Back to your diagrams/ }).click();
-  await page.getByRole('button', { name: 'New canvas' }).first().click();
+  await page.getByRole('button', { name: START_BUTTON }).first().click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   await title.fill('Checkout and fulfilment');
   await title.blur();
@@ -640,7 +643,7 @@ async function main() {
     }
 
     if (process.argv.includes('--empty-canvas-only')) {
-      await page.getByRole('button', { name: 'New canvas', exact: true }).click();
+      await page.getByRole('button', { name: START_BUTTON }).click();
       await expect(page.locator('.dc-editor')).toBeVisible();
       await shot(page, 'empty-canvas');
       return;
@@ -660,7 +663,7 @@ async function main() {
 
     // ── Getting started ────────────────────────────────────────────────────────────────────
     log('getting started');
-    await page.getByRole('button', { name: 'New canvas' }).first().click();
+    await page.getByRole('button', { name: START_BUTTON }).first().click();
     await expect(page.locator('.dc-editor')).toBeVisible();
     await shot(page, 'empty-canvas');
     const title = page.getByLabel('Diagram title');
@@ -784,7 +787,7 @@ async function main() {
     log('depth');
     await page.getByRole('button', { name: /Back to your diagrams/ }).click();
     await openGallery(page);
-    await page.getByRole('button', { name: 'New canvas' }).first().click();
+    await page.getByRole('button', { name: START_BUTTON }).first().click();
     await expect(page.locator('.dc-editor')).toBeVisible();
     const title2 = page.getByLabel('Diagram title');
     await title2.fill('Shop overview');

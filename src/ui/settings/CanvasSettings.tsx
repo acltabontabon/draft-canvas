@@ -45,7 +45,7 @@ export function CanvasSettings({ documentOpen = true }: { documentOpen?: boolean
   const { theme } = useTheme();
 
   return (
-    <SettingsPage title="Canvas" lead="How diagrams look and behave while you draw.">
+    <SettingsPage title="Canvas" lead="Style and suggestions are yours, on this device. The background is part of the open diagram.">
       <SettingsSection title="Drawing style" description="How shapes and connectors are drawn on this device, in every diagram." group list>
         {PERSONALITY_PRESETS.map((p) => (
           <ChoiceRow
@@ -62,13 +62,13 @@ export function CanvasSettings({ documentOpen = true }: { documentOpen?: boolean
       </SettingsSection>
 
       <SettingsSection
-        title="Intent Continuation"
-        description="Select a shape with an obvious next move — a queue after a topic, a worker after a queue — and Draft Canvas sketches it in place."
+        title="Next-shape suggestions"
+        description="Select a shape with an obvious follow-on — a queue after a topic, a worker after a queue — and Draft Canvas sketches it in place. The shape picker a dropped connector opens still lists these first."
       >
         <ChoiceRow
           type="checkbox"
           toggle
-          label="Suggest the next move while drawing"
+          label="Suggest the next shape while drawing"
           description={
             <>
               <kbd>Tab</kbd> adds it, <kbd>]</kbd> shows the alternatives, <kbd>Esc</kbd> waves it away.
@@ -121,7 +121,7 @@ function BackgroundSection() {
       updateSettings({ background: { ...current, enabled: true, imageId } });
     } catch (error) {
       // A full disk isn't the file's fault — say what actually happened.
-      notify(error instanceof QuotaExceededError ? error.message : "Couldn't use that image — try a different file.", 'error');
+      notify(error instanceof QuotaExceededError ? error.message : "Couldn’t use that image — try a different file.", 'error');
     } finally {
       setBusy(false);
     }

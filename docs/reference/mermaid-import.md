@@ -17,6 +17,7 @@ Draft Canvas accepts Mermaid `flowchart` and `graph`, and `sequenceDiagram`; it 
 | `-.->` dotted | Asynchronous connector |
 | `-->\|label\|`, `-- label -->`, `-. label .->`, `== label ==>` | Connector label |
 | `A --> B --> C`, `A & B --> C` | Each arrow in the chain or fan |
+| Two or more arrows from the same shape to the same shape | One connector: labels joined with ` / `, solid and headed if any of them was; listed in the notice |
 | `subgraph id [Title] … end`, nested | Boundary, nested |
 | `TD`/`TB` and `LR` | The reading direction of the layout |
 | `"quoted"` labels, `<br>` line breaks, `#quot;`-style entities | The text, as Mermaid shows it |
@@ -33,6 +34,10 @@ links are skipped. Arrows to subgraphs are skipped too.
 - `RL` and `BT` become left-to-right and top-to-bottom.
 - HTML tags and control characters in labels are removed.
 - An arrow from a shape to itself is left out and listed as not drawn.
+- Subgraphs nested more than 32 deep keep their shapes in the 32nd boundary; the notice says so.
+- A title longer than 200 characters (from the file name or front matter) is shortened, and a file
+  with no title is named "Imported diagram".
+- A layout that cannot be arranged readably is refused in plain words, with no element ids.
 - Other diagram kinds, including `classDiagram` and `stateDiagram`, are refused.
 
 ## Sequence diagrams

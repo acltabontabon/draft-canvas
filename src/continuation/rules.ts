@@ -114,7 +114,7 @@ const QUEUE_CONSUMER: ContinuationRule = {
 const QUEUE_DEAD_LETTER: ContinuationRule = {
   id: 'queue-dead-letter',
   tier: 'secondary',
-  label: 'Dead-letter queue',
+  label: 'Dead-Letter Queue',
   reason: 'This queue has a consumer but no dead-letter path.',
   silentAt: NOT_IN_AN_OVERVIEW,
   // The literal `queueKind === 'queue'`, not `categoryOf`, for the same reason `addDeadLetterQueue`
@@ -145,7 +145,7 @@ const QUEUE_DEAD_LETTER: ContinuationRule = {
 const STREAM_CONSUMER_DEAD_LETTER: ContinuationRule = {
   id: 'stream-consumer-dead-letter',
   tier: 'secondary',
-  label: 'Dead-letter queue',
+  label: 'Dead-Letter Queue',
   reason: 'This consumer reads a stream but has nowhere to park a record it cannot process.',
   silentAt: NOT_IN_AN_OVERVIEW,
   when: (nb) =>
@@ -162,8 +162,10 @@ const STREAM_CONSUMER_DEAD_LETTER: ContinuationRule = {
 const GATEWAY_ROUTE: ContinuationRule = {
   id: 'gateway-route',
   tier: 'primary',
-  label: 'Service',
-  reason: "This gateway doesn't route to anything yet.",
+  // What the ghost's box says: the fragment is an API, and a label that names another shape than the
+  // one drawn is how a preview stops being believable.
+  label: 'API',
+  reason: "This gateway doesn’t route to anything yet.",
   silentAt: NOT_IN_AN_OVERVIEW,
   when: (nb, trigger) => nb.category === 'gateway' && (isExplicit(trigger) || (nb.in.length > 0 && nb.out.length === 0)),
   fragment: () => ({
@@ -179,25 +181,27 @@ const GATEWAY_ROUTE: ContinuationRule = {
  * A Scheduler with nothing to trigger yet — `MATRIX['scheduler>service']` and
  * `['scheduler>worker']` both default to `'triggers'`. Unlike the fan-out families above, no
  * inbound evidence is required: a Scheduler fires on its own interval, not because something fed
- * it, so "has it triggered anything downstream" is the whole question.
+ * it, so "has it triggered anything downstream" is the whole question. What a scheduler wakes is
+ * a job, which is what a Worker is, so the Worker leads — the quiet suggestion — and a plain
+ * Service is the other thing it could be.
  */
 const SCHEDULER_TRIGGER = defineFanOut(
   ['scheduler'],
   (nb) => nb.out.length === 0,
   [
     {
-      id: 'scheduler-trigger-service',
+      id: 'scheduler-trigger-worker',
       tier: 'primary',
-      label: 'Service',
-      reason: "This scheduler doesn't trigger anything yet.",
-      node: { type: 'service' },
+      label: 'Worker',
+      reason: "This scheduler doesn’t trigger anything yet.",
+      node: { type: 'service', serviceKind: 'worker' },
     },
     {
-      id: 'scheduler-trigger-worker',
+      id: 'scheduler-trigger-service',
       tier: 'secondary',
-      label: 'Worker',
-      reason: 'A scheduled job is usually a Worker.',
-      node: { type: 'service', serviceKind: 'worker' },
+      label: 'Service',
+      reason: 'Or a service, for work that is more than a job.',
+      node: { type: 'service' },
     },
   ],
   { silentAt: NOT_IN_AN_OVERVIEW },
@@ -249,7 +253,7 @@ const PORT_IMPLEMENTATION = defineFanOut(
       id: 'port-implementation-component',
       tier: 'primary',
       label: 'Component',
-      reason: "This port isn't implemented by anything yet.",
+      reason: "This port isn’t implemented by anything yet.",
       node: { type: 'component' },
     },
     {
@@ -330,7 +334,7 @@ const WORKER_INDEXES = defineFanOut(
       id: 'worker-indexes',
       tier: 'secondary',
       label: 'Search Index',
-      reason: "This worker doesn't index anything yet.",
+      reason: "This worker doesn’t index anything yet.",
       node: { type: 'database', databaseKind: 'search-index' },
     },
   ],
@@ -425,7 +429,7 @@ const SERVICE_SEARCH_INDEX: ContinuationRule = {
   id: 'service-search-index',
   tier: 'secondary',
   label: 'Search Index',
-  reason: "Queries its data store can't answer.",
+  reason: "Queries its data store can’t answer.",
   when: (nb, trigger) => nb.category === 'service' && isExplicit(trigger) && writesToAStore(nb),
   fragment: () => ({
     nodes: [{ key: 'target', type: 'database', databaseKind: 'search-index' }],
@@ -457,6 +461,16 @@ const ACTOR_NEXT = defineFanOut(
       label: 'API',
       reason: 'Or call an API directly.',
       node: { type: 'service', serviceKind: 'api' },
+      silentAt: NOT_IN_AN_OVERVIEW,
+    },
+    {
+      // A plain Service named for what it is, like `person-system` below: a Web App is a role, not a
+      // runtime primitive, so it is a label and never a new `serviceKind`.
+      id: 'actor-web-app',
+      tier: 'secondary',
+      label: 'Web App',
+      reason: 'Or the app they use, which then calls the system.',
+      node: { type: 'service', text: 'Web App' },
       silentAt: NOT_IN_AN_OVERVIEW,
     },
   ],

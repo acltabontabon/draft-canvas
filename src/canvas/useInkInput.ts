@@ -8,7 +8,7 @@ import { INK_SIZES, inkPaint } from '../render/ink';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore, type PencilTool } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
-import { cancelSmartInk, flushSmartInk, smartStrokeKept, strokeStarted, warmSmartInk } from './inkSession';
+import { cancelSmartInk, flushSmartInk, smartStrokeKept, strokeAbandoned, strokeStarted, warmSmartInk } from './inkSession';
 import { liveInkSurface } from './liveInk';
 
 /** The eraser's reach, in screen pixels. */
@@ -155,7 +155,11 @@ export function useInkInput(paneRef: RefObject<HTMLDivElement | null>, enabled: 
       pane.removeAttribute('data-ink-drawing');
       if (pane.hasPointerCapture?.(done.pointerId)) pane.releasePointerCapture(done.pointerId);
       clearLive();
-      if (!commit) return;
+      // A pen stroke that began (and so stopped the drawing's resting clock) but is not kept.
+      if (!commit) {
+        if (done.tool === 'pen') strokeAbandoned();
+        return;
+      }
       const editor = useEditorStore.getState();
       if (done.tool === 'eraser') {
         if (done.erasing.size > 0) {
@@ -165,7 +169,10 @@ export function useInkInput(paneRef: RefObject<HTMLDivElement | null>, enabled: 
         return;
       }
       const stroke = buildStroke(done.samples, style(done.tool, done.zoom), { zoom: done.zoom, pressure: done.pressure });
-      if (!stroke || !editor.drawInk(stroke)) return;
+      if (!stroke || !editor.drawInk(stroke)) {
+        if (done.tool === 'pen') strokeAbandoned();
+        return;
+      }
       const ui = useUiStore.getState();
       if (done.tool === 'pen' && ui.inkPrefs.smart) smartStrokeKept(stroke, done.zoom);
     };

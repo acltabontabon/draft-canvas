@@ -6,6 +6,7 @@ import { libraryShapeOf } from '../src/document/shape';
 import type { GalleryStarter } from '../src/gallery';
 import { useGalleryStore } from '../src/store/galleryStore';
 import { useUiStore } from '../src/store/uiStore';
+import { ALL_PRESETS } from '../src/lib/presets';
 import { ARCHITECTURE_STARTERS, PRIMARY_STARTERS, buildStarter } from './fixtures/starters-v1';
 import { EmptyState } from '../src/ui/Editor/EmptyState';
 import { useEditorStore } from '../src/store/editorStore';
@@ -125,12 +126,26 @@ describe('EmptyState', () => {
     expect(screen.queryByRole('group', { name: 'Suggested starters' })).not.toBeInTheDocument();
   });
 
-  it('keeps the surrounding copy decorative, so nothing but the controls is announced', () => {
+  it('reads the blank-canvas hint out as a polite status, naming the keys that really exist', () => {
     const { container } = renderEmpty();
-    const paragraphs = [...container.querySelectorAll('p')];
-    expect(paragraphs.length).toBeGreaterThan(0);
-    for (const paragraph of paragraphs) {
-      expect(paragraph.closest('[aria-hidden="true"]')).not.toBeNull();
-    }
+    const hint = container.querySelector('.dc-empty-start')!;
+    // Real text for assistive technology, not hidden: it is the only instruction a blank canvas carries.
+    expect(hint.closest('[aria-hidden="true"]')).toBeNull();
+    expect(hint).toHaveAttribute('role', 'status');
+    // Mouse, touch and keyboard, with the letters the creation shortcuts actually use (S, D, Q).
+    expect(hint).toHaveTextContent(/double-click or long-press/i);
+    const keys = [...hint.querySelectorAll('kbd')].map((key) => key.textContent);
+    expect(keys).toEqual(['S', 'D', 'Q']);
+    for (const letter of keys) expect(ALL_PRESETS.some((preset) => preset.shortcut === letter)).toBe(true);
+  });
+
+  it('puts the hint away (and out of the accessibility tree) while the first-shape chooser is open', () => {
+    const { container } = renderEmpty();
+    const hint = container.querySelector('.dc-empty-start')!;
+    expect(hint).not.toHaveAttribute('data-chooser');
+    act(() => useUiStore.getState().setQuickConnect({ flowPosition: { x: 0, y: 0 }, screenPosition: { x: 300, y: 300 } }));
+    expect(hint).toHaveAttribute('data-chooser', 'true');
+    act(() => useUiStore.getState().setQuickConnect(null));
+    expect(hint).not.toHaveAttribute('data-chooser');
   });
 });

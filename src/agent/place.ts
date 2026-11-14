@@ -401,8 +401,11 @@ const JOG = { align: 72, balance: 10 } as const;
  * inside its boundary, and leaves more of that shape's connectors straight than before (a shape can
  * line up with only so many neighbours; moving it for one must not skew two others).
  */
-function snapLevelJogs(edges: DraftEdge[], elements: Map<string, DraftNode>, groups: Map<string, DraftNode>, limit: number, besideNotes: ReadonlyMap<string, DraftNode[]> = new Map()): void {
-  const all = () => [...elements.values(), ...[...besideNotes.values()].flat()];
+export function snapLevelJogs(edges: DraftEdge[], elements: Map<string, DraftNode>, groups: Map<string, DraftNode>, limit: number, besideNotes: ReadonlyMap<string, DraftNode[]> = new Map(), memberNotes: ReadonlyMap<string, DraftNode> = new Map()): void {
+  // What a nudged shape must keep clear of. A boundary's heading note (`memberNotes`) is placed by the
+  // layout like a shape and stays where it is: left out of this list, a shape nudged sideways to meet
+  // a neighbour's line ran into the heading beside it (a 200 px Text over "Query API").
+  const all = () => [...elements.values(), ...[...besideNotes.values()].flat(), ...memberNotes.values()];
   // A shape moves with the notes about it, as the one box the layout placed.
   const unit = (node: DraftNode) => [node, ...(besideNotes.get(node.id) ?? [])];
   const free = (node: DraftNode, dx: number, dy: number) => {
@@ -508,7 +511,7 @@ export interface RoomParts {
 const COMPANION_GAP = 72;
 /** Between a shape and a note about it, and between two notes about one shape. No connector runs
  *  there (the side is reserved, see `assignAnchors`), so it only has to read as "this one's". */
-const NOTE_GAP = 20;
+export const NOTE_GAP = 20;
 
 /**
  * Loop companions, by host: a shape joined to exactly one other, by connectors both ways — a retry
@@ -733,7 +736,7 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
       edge.targetAnchor = a.targetAnchor;
     }
   }
-  snapLevelJogs(edges, elements, groups, JOG[layout.ties ?? 'align'], besideNotes);
+  snapLevelJogs(edges, elements, groups, JOG[layout.ties ?? 'align'], besideNotes, memberNotes);
   return { width: placed.width, height: placed.height };
 }
 

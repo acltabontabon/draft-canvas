@@ -96,6 +96,11 @@ export const COLLAB_AT_REST: CollabState = {
 
 export const useCollabStore = create<CollabState>(() => COLLAB_AT_REST);
 
+/** Starts or stops this collaborator's camera following the presenter — the one session setting a command flips. */
+export function setFollowing(following: boolean): void {
+  useCollabStore.setState({ following });
+}
+
 /** Whether this copy's edits are shared with anyone right now — the one question the editor asks. */
 export function isSharedEditing(): boolean {
   const { role, status } = useCollabStore.getState();

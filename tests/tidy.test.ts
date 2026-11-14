@@ -4,7 +4,7 @@ import { measureContext } from '../src/agent/place';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
-import { useUiStore } from '../src/store/uiStore';
+import { useUiStore, type TidyPreview } from '../src/store/uiStore';
 import { tidySummary } from '../src/ui/Editor/tidySummary';
 import { stubContext } from './commandStubs';
 import { canvasCommands } from '../src/commands/registry';
@@ -14,10 +14,11 @@ import { canvasCommands } from '../src/commands/registry';
  * untidy, and changes nothing until its preview is applied.
  */
 
-/** Two services side by side, the second a few pixels low: a connector that just misses level. */
-function offLevel() {
+/** Two services side by side, the second a step low: a connector drawn with a kink. (A few pixels
+ *  fewer and the router draws it straight on its own: see `tidyView` below.) */
+function offLevel(dy = 28) {
   const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'A' });
-  const b = createNode({ id: 'b', type: 'service', x: 320, y: 9, text: 'B' });
+  const b = createNode({ id: 'b', type: 'service', x: 320, y: dy, text: 'B' });
   const c = createNode({ id: 'c', type: 'service', x: 640, y: 400, text: 'C' });
   return addEdges(addNodes(createDocument('Tidy'), [a, b, c]), [createEdge({ id: 'ab', source: 'a', target: 'b' })]);
 }
@@ -32,11 +33,29 @@ describe('tidyView', () => {
     expect(at('a').y + at('a').height / 2).toBe(at('b').y + at('b').height / 2);
     const moved = at(tidied.moved[0]!);
     const was = doc.nodes.find((node) => node.id === moved.id)!;
-    expect(Math.abs(moved.y - was.y)).toBe(9);
+    expect(Math.abs(moved.y - was.y)).toBe(28);
     expect(moved.x).toBe(was.x);
     // A shape with nothing to straighten is the same object: untouched, not merely equal.
     expect(at('c')).toBe(doc.nodes.find((node) => node.id === 'c'));
     expect(tidied.view.edges).toBe(doc.edges);
+  });
+
+  it('leaves alone a connector the router already draws straight, however few pixels its shapes are out', () => {
+    for (const dy of [3, 9, 16, 26]) {
+      const doc = offLevel(dy);
+      const tidied = tidyView(doc, undefined, measureContext());
+      expect(tidied.view, `dy ${dy}`).toBe(doc);
+      expect(tidied.moved, `dy ${dy}`).toEqual([]);
+    }
+  });
+
+  it('straightens a kink the router draws as a step, even a little past the old 16 px', () => {
+    for (const dy of [27, 30, 32]) {
+      const doc = offLevel(dy);
+      const tidied = tidyView(doc, undefined, measureContext());
+      expect(tidied.moved, `dy ${dy}`).toHaveLength(1);
+    }
+    expect(tidyView(offLevel(40), undefined, measureContext()).moved).toEqual([]);
   });
 
   it('hands back the very same view when there is nothing to tidy', () => {
@@ -94,7 +113,7 @@ describe('Tidy up in the editor', () => {
 
   it('plans without changing anything, then applies as one undo step', async () => {
     const before = useEditorStore.getState().document;
-    const preview = (await useEditorStore.getState().planTidy())!;
+    const preview = (await useEditorStore.getState().planTidy()) as TidyPreview;
     expect(preview).toMatchObject({ moved: 1, reattached: 0, scoped: false });
     expect(preview.base).toBe(before);
     // A plan is only a plan: the document and its history are exactly as they were.
@@ -111,13 +130,13 @@ describe('Tidy up in the editor', () => {
   });
 
   it('has nothing to offer a room that is already tidy', async () => {
-    const preview = (await useEditorStore.getState().planTidy())!;
+    const preview = (await useEditorStore.getState().planTidy()) as TidyPreview;
     useEditorStore.getState().commitTidy(preview);
-    expect(await useEditorStore.getState().planTidy()).toBeNull();
+    expect(await useEditorStore.getState().planTidy()).toMatchObject({ nothing: true, stopped: false });
   });
 
   it('refuses a preview of a room that has changed since', async () => {
-    const preview = (await useEditorStore.getState().planTidy())!;
+    const preview = (await useEditorStore.getState().planTidy()) as TidyPreview;
     useEditorStore.getState().addNode({ type: 'service', x: 900, y: 0, text: 'Late' });
     const steps = useEditorStore.getState().history.past.length;
     expect(useEditorStore.getState().commitTidy(preview)).toBe(false);
@@ -127,7 +146,7 @@ describe('Tidy up in the editor', () => {
 
   it('tidies only the selection when there is one, and offers nothing to a shared diagram', async () => {
     useEditorStore.getState().setSelection({ nodes: ['b'], edges: [] });
-    const preview = (await useEditorStore.getState().planTidy())!;
+    const preview = (await useEditorStore.getState().planTidy()) as TidyPreview;
     expect(preview.scoped).toBe(true);
     expect(preview.view.nodes.find((node) => node.id === 'a')).toBe(preview.base.nodes.find((node) => node.id === 'a'));
     useUiStore.setState({ readOnly: { sharedTitle: 'Shared' } });
@@ -165,16 +184,18 @@ describe('Tidy up in the editor', () => {
     const stacked = { ...a, text: 'Customer-Facing Public API Gateway and Edge Routing Layer for Web and Mobile', width: 150, height: 190, y: -61 };
     useEditorStore.getState().setDocument(addEdges(addNodes(createDocument('Tidy'), [stacked, b]), [edge]));
     const [message, , fix] = await run();
-    expect(message).toBe('Already tidy. Rearranging would fix 1 stacked name.');
+    expect(message).toBe('Already tidy. Rearranging may fix 1 stacked name.');
     expect(fix.label).toBe('Show fix');
     fix.run();
+    // The button works the arrangement out (off the page's thread) and opens it on the direction that fixes.
+    await vi.waitFor(() => expect(useUiStore.getState().arrangePreview).not.toBeNull());
     expect(useUiStore.getState().arrangePreview?.fixes?.[useUiStore.getState().arrangePreview!.direction]).toContainEqual({ kind: 'stacked-name', id: 'a' });
     useUiStore.getState().setArrangePreview(null);
   });
 
   it('says what a preview changes in plain words', () => {
-    expect(tidySummary({ moved: 3, reattached: 0 })).toBe('3 shapes nudged');
-    expect(tidySummary({ moved: 1, reattached: 2 })).toBe('1 shape nudged, 2 connectors re-attached');
-    expect(tidySummary({ moved: 0, reattached: 1 })).toBe('1 connector re-attached');
+    expect(tidySummary({ moved: 3, reattached: 0 })).toBe('3 shapes nudged to straighten connectors');
+    expect(tidySummary({ moved: 1, reattached: 2 })).toBe('1 shape nudged to straighten a connector, 2 connectors re-attached to clear shapes');
+    expect(tidySummary({ moved: 0, reattached: 1 })).toBe('1 connector re-attached to clear shapes');
   });
 });

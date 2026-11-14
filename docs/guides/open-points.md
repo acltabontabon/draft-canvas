@@ -24,7 +24,7 @@ or delete it. On a shared point,
 ## Review them
 
 Click the open-point count in the status bar to list points from every room. Choose a row to go to
-its element. **Focus open points** dims everything else; **Exit focus** or `Esc` undoes it.
+its element. **Spotlight open points** dims everything else; **Exit spotlight** or `Esc` undoes it.
 
 ![The Open points list.](../media/guides/open-point-review.png)
 

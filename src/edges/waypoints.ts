@@ -18,10 +18,12 @@ type Point = DraftPoint;
  *  `routing.ts`'s detours and React Flow's own smoothstep use. */
 export const STUB_LEG = 20;
 
-/** Coordinates closer than this are the same line — a stored point is rounded, a live one is not. */
+/** Coordinates this close or closer are the same line — a stored point is rounded, a live one is not.
+ *  Inclusive: a half pixel apart is what two rounded points on one line can be, and with a strict `<`
+ *  it drew a step of half a pixel (two hairline bends) where one straight run was meant. */
 const EPSILON = 0.5;
 
-const near = (a: number, b: number) => Math.abs(a - b) < EPSILON;
+const near = (a: number, b: number) => Math.abs(a - b) <= EPSILON;
 const samePoint = (a: Point, b: Point) => near(a.x, b.x) && near(a.y, b.y);
 
 export const OUTWARD: Record<Side, Point> = {
