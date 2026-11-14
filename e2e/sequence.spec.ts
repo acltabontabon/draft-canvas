@@ -474,12 +474,13 @@ test.describe('Sequence', () => {
     await page.mouse.down();
     await page.mouse.move(destination.x + 80, destination.y + 64, { steps: 12 });
     await expect(right.locator(`${LIFELINE}[data-endpoint-target="true"]`)).toHaveCount(1);
+    // The target's interactive overlay can unmount as soon as the drag ends.
+    const destinationHead = (await right.locator(HEAD).boundingBox())!;
     await page.mouse.up();
     const edge = page.locator('.react-flow__edge');
     await expect(edge).toHaveCount(1);
     await expect(edge).toHaveAttribute('aria-label', /Sender.*Participant 1/);
     const route = edge.locator('.dc-edge-line');
-    const destinationHead = (await right.locator(HEAD).boundingBox())!;
     const landed = await route.evaluate((path: SVGPathElement) => {
       const point = path.getPointAtLength(path.getTotalLength()).matrixTransform(path.getScreenCTM()!);
       return { x: point.x, y: point.y };
