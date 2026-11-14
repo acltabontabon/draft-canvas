@@ -30,7 +30,7 @@ import { hasPeerCalls } from '../layout/layered';
 import type { DescribeContext } from '../nodes/describe';
 import type { Problems } from './errors';
 import type { LayoutSpec, Reader } from './input';
-import { anchorRectOf, arrangedSize, arrangeParts, captionSizer, placeBlock } from './place';
+import { anchorRectOf, arrangedSize, arrangeParts, captionSizer, placeBlock, titlesOf } from './place';
 import { clearlyBetterDirection, fitsClearlyBetter, hasLabelledTrunk, hasSharedSideTrunk, JOG_COST, type Proportioned } from './compile';
 import { legibilityCost, legibilityOf } from './legibility';
 import { checkFit, checkQuality, isBetterCandidate, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityReport } from './quality';
@@ -375,7 +375,7 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   const innerById = new Map(inner.map((e) => [e.id, e]));
   const crossing = view.edges.filter((e) => !innerById.has(e.id) && (elements.has(e.source) || elements.has(e.target))).map((e) => restyled(e, request.connectors));
   const rects = new Map(next.nodes.map((n) => [n.id, anchorRectOf(n)]));
-  const anchors = assignAnchors(crossing, rects, layout.direction, undefined, undefined, { ...(layout.fans ? { fans: layout.fans } : {}) });
+  const anchors = assignAnchors(crossing, rects, layout.direction, undefined, undefined, { titles: titlesOf(next.nodes, ctx), ...(layout.fans ? { fans: layout.fans } : {}) });
   for (const e of crossing) Object.assign(e, anchors.get(e.id) ?? {});
   const changed = new Map([...inner, ...crossing].map((e) => [e.id, e]));
   next = { ...next, edges: next.edges.map((e) => changed.get(e.id) ?? e) };
@@ -435,7 +435,7 @@ function routeOnly(view: DraftDocument, inScope: ReadonlySet<string>, request: A
   const neighbours = view.edges.filter((e) => !touchedIds.has(e.id) && (affectedNodes.has(e.source) || affectedNodes.has(e.target)) && e.sourceAnchor && e.targetAnchor);
   const rects = new Map(view.nodes.map((n) => [n.id, anchorRectOf(n)]));
   const pinned = new Map<string, Anchors>(neighbours.map((e) => [e.id, { sourceAnchor: e.sourceAnchor as NonNullable<DraftEdge['sourceAnchor']>, targetAnchor: e.targetAnchor as NonNullable<DraftEdge['targetAnchor']> }]));
-  const anchors = assignAnchors([...touched, ...neighbours], rects, request.layout.direction, pinned);
+  const anchors = assignAnchors([...touched, ...neighbours], rects, request.layout.direction, pinned, undefined, { titles: titlesOf(view.nodes, ctx) });
   for (const e of touched) Object.assign(e, anchors.get(e.id) ?? {});
   const changed = new Map(touched.map((e) => [e.id, e]));
   const next: DraftDocument = { ...view, edges: view.edges.map((e) => changed.get(e.id) ?? e) };

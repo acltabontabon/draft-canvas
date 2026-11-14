@@ -2,14 +2,16 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { arrangeView } from '../src/agent/arrange';
 import { compose, fillOf, fitsClearlyBetter } from '../src/agent/compile';
 import { Problems } from '../src/agent/errors';
-import { arrangedSize, measureContext } from '../src/agent/place';
+import { arrangedSize, captionSizer, measureContext } from '../src/agent/place';
+import { othersOf, segmentHitsBox } from '../src/agent/route';
 import { checkQuality } from '../src/agent/quality';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
 import type { DraftDocument, DraftNode } from '../src/document/types';
 import { deserializeDocument } from '../src/export/project';
+import { assignAnchors } from '../src/layout/anchors';
 import { layoutGraph } from '../src/layout/layered';
-import { nameLineCount, naturalArchitectureSize } from '../src/nodes/describe';
+import { boundaryHeaderTextBox, nameLineCount, naturalArchitectureSize } from '../src/nodes/describe';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
 import { directionNote } from '../src/ui/Editor/arrangeSummary';
@@ -124,6 +126,77 @@ describe('gaps and captions', () => {
     const errors = checkQuality(doc.nodes, doc.edges, measureContext()).errors;
     const header = errors.find((issue) => issue.ids.includes('g') && issue.kind === 'label-over-node');
     expect(header?.message).toContain('header');
+  });
+});
+
+describe('boundary titles', () => {
+  /** Connectors whose drawn line runs through a boundary's title, as `source>boundary`. */
+  const throughTitles = (doc: DraftDocument) => {
+    const ctx = measureContext();
+    const titles = doc.nodes.flatMap((group) => {
+      const text = group.type === 'group' ? boundaryHeaderTextBox(group, ctx) : undefined;
+      return text ? [{ id: group.id, box: { x: group.x + text.x, y: group.y + text.y, width: text.width, height: text.height } }] : [];
+    });
+    return othersOf(doc.nodes, doc.edges, captionSizer(doc.nodes, ctx)).flatMap((route) =>
+      titles.filter((title) => route.points.some((p, k) => k > 0 && segmentHitsBox(route.points[k - 1]!, p, title.box))).map((title) => `${route.id}>${title.id}`),
+    );
+  };
+
+  it('lands a connector from outside a boundary clear of its title', () => {
+    // The shape sits under the title's first two handles; its caller is up and to the left.
+    const rects = new Map([
+      ['a', { x: 0, y: 0, width: 176, height: 68 }],
+      ['b', { x: 300, y: 200, width: 176, height: 68 }],
+    ]);
+    const edges = [createEdge({ id: 'e', source: 'a', target: 'b' })];
+    expect(assignAnchors(edges, rects, 'down').get('e')?.targetAnchor).toEqual({ side: 'top', offset: 0.25 });
+    const titles = new Map([['b', [{ from: 276, to: 400, inside: new Set(['b']) }]]]);
+    expect(assignAnchors(edges, rects, 'down', undefined, undefined, { titles }).get('e')?.targetAnchor).toEqual({ side: 'top', offset: 0.75 });
+    // A connector from inside the same boundary never rises through its header.
+    const inside = new Map([['b', [{ from: 276, to: 400, inside: new Set(['a', 'b']) }]]]);
+    expect(assignAnchors(edges, rects, 'down', undefined, undefined, { titles: inside }).get('e')?.targetAnchor).toEqual({ side: 'top', offset: 0.25 });
+  });
+
+  it('reports a line through a boundary’s title', () => {
+    const group = createNode({ id: 'g', type: 'group', x: 0, y: 200, width: 400, height: 240, text: 'Catalog capabilities and search' });
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'A' });
+    const b = { ...createNode({ id: 'b', type: 'service', x: 36, y: 256, text: 'B' }), parentId: 'g' };
+    const edge = { ...createEdge({ id: 'e', source: 'a', target: 'b' }), sourceAnchor: { side: 'bottom' as const, offset: 0.5 }, targetAnchor: { side: 'top' as const, offset: 0.5 } };
+    const doc = addEdges(addNodes(createDocument('Title'), [group, a, b]), [edge]);
+    expect(throughTitles(doc)).toEqual(['e>g']);
+    const errors = checkQuality(doc.nodes, doc.edges, measureContext()).errors;
+    expect(errors.find((issue) => issue.ids.includes('g'))?.message).toContain('title of g');
+  });
+
+  it('keeps a fan reaching boundaries from above clear of their titles, in a new diagram and arranged', () => {
+    const drawn = build({
+      layout: { direction: 'down' },
+      groups: [
+        { id: 'orders', label: 'Order capabilities' },
+        { id: 'billing', label: 'Billing capabilities' },
+        { id: 'catalog', label: 'Catalog capabilities' },
+      ],
+      nodes: [
+        { id: 'gateway', type: 'gateway', label: LONG_NAME },
+        { id: 'o1', type: 'service', label: 'Order Placement', group: 'orders' },
+        { id: 'o2', type: 'database', label: 'Orders', group: 'orders' },
+        { id: 'b1', type: 'service', label: 'Invoicing', group: 'billing' },
+        { id: 'b2', type: 'database', label: 'Ledger', group: 'billing' },
+        { id: 'c1', type: 'service', label: 'Product Search', group: 'catalog' },
+        { id: 'c2', type: 'database', label: 'Products', group: 'catalog' },
+      ],
+      relationships: [
+        { id: 'g1', from: 'gateway', to: 'o1', label: 'Routes orders' },
+        { id: 'g2', from: 'gateway', to: 'b1', label: 'Routes billing' },
+        { id: 'g3', from: 'gateway', to: 'c1', label: 'Routes search' },
+        { id: 'o', from: 'o1', to: 'o2' },
+        { id: 'b', from: 'b1', to: 'b2' },
+        { id: 'c', from: 'c1', to: 'c2' },
+      ],
+    });
+    expect(throughTitles(drawn)).toEqual([]);
+    expect(throughTitles(arrange(drawn).view)).toEqual([]);
+    expect(throughTitles(arrange(capabilities()).view)).toEqual([]);
   });
 });
 

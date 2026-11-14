@@ -20,6 +20,9 @@ import { labelChipBox, labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
 import { connectorRoutes } from '../edges/connectorRoutes';
 import { stepPolyline } from '../edges/waypoints';
+import { boundaryHeaderTextBox, describeContext } from '../nodes/describe';
+import { getMeasurer } from '../render/text/measure';
+import { LIGHT } from '../render/theme/tokens';
 import { anchorsHold, labelChipSide, labelLaneOffset, labelSideAwayFromResponse, laneIndex, responseAwayAt, routeEdge } from '../edges/routing';
 
 export interface Box {
@@ -317,8 +320,8 @@ function endsOf(edge: DraftEdge, byId: Map<string, DraftNode>): Set<string> {
 }
 
 export interface RouteProblem {
-  kind: 'through-node' | 'label-over-node' | 'label-collision' | 'label-crossed' | 'shared-run' | 'through-boundary';
-  /** The shape, or (for a collision) the other connector, in the way. */
+  kind: 'through-node' | 'through-title' | 'label-over-node' | 'label-collision' | 'label-crossed' | 'shared-run' | 'through-boundary';
+  /** The shape (for `through-title`, the boundary), or (for a collision) the other connector, in the way. */
   node: string;
 }
 
@@ -359,8 +362,15 @@ function problemOf(edge: DraftEdge, drawn: Drawn, nodes: readonly DraftNode[], o
       if (segmentHitsBox(drawn.points[k]!, drawn.points[k + 1]!, box)) return { kind: 'through-node', node: node.id };
     }
   }
+  // A line through a boundary's title strikes its words out, as one through a shape does its name —
+  // where a connector reaching a shape inside from above lands under the title.
+  for (const title of titlesIn(nodes)) {
+    for (let k = 0; k + 1 < drawn.points.length; k += 1) {
+      if (segmentHitsBox(drawn.points[k]!, drawn.points[k + 1]!, title.box)) return { kind: 'through-title', node: title.id };
+    }
+  }
   // Last, and never an error on its own: a line cutting through a boundary neither end is in (or
-  // along its title) reads as belonging to it. Worth another anchoring when one avoids it; often none
+  // along its outline) reads as belonging to it. Worth another anchoring when one avoids it; often none
   // does, and then the line stays as it is.
   for (const node of nodes) {
     if (ends.has(node.id) || node.type !== 'group') continue;
@@ -370,6 +380,26 @@ function problemOf(edge: DraftEdge, drawn: Drawn, nodes: readonly DraftNode[], o
     }
   }
   return undefined;
+}
+
+/** How near either end of a boundary's title a line may pass before it runs through the words. */
+const TITLE_GRAZE = 4;
+
+/** Every boundary's title, where it is drawn — once per arrangement (the routing caches' key). */
+const titleCache = new WeakMap<readonly DraftNode[], { id: string; box: Box }[]>();
+function titlesIn(nodes: readonly DraftNode[]): { id: string; box: Box }[] {
+  let titles = titleCache.get(nodes);
+  if (titles) return titles;
+  titles = [];
+  const groups = nodes.filter((n) => n.type === 'group');
+  // Colour never changes where text goes; the light theme measures as well as any.
+  const ctx = groups.length ? { ...describeContext(LIGHT), measurer: getMeasurer() } : undefined;
+  for (const group of groups) {
+    const text = boundaryHeaderTextBox(group, ctx!);
+    if (text) titles.push({ id: group.id, box: { x: group.x + text.x - TITLE_GRAZE, y: group.y + text.y, width: text.width + TITLE_GRAZE * 2, height: text.height } });
+  }
+  titleCache.set(nodes, titles);
+  return titles;
 }
 
 /** How much longer (in `routeCost` terms) a route may get to keep out of a boundary it isn't in. */

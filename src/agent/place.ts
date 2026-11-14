@@ -16,9 +16,9 @@ import { hasAttachmentRoom } from '../document/operations';
 import { anchorBandOf } from '../document/queueGeometry';
 import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
-import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect } from '../layout/anchors';
+import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect, type TitleSpan } from '../layout/anchors';
 import { compatibilityKey } from '../edges/bundles';
-import { describeContext, nameLineCount, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext } from '../nodes/describe';
+import { boundaryHeaderTextBox, describeContext, nameLineCount, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext } from '../nodes/describe';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { getMeasurer } from '../render/text/measure';
@@ -47,6 +47,34 @@ export interface PlacedRoom {
 export function measureContext(): DescribeContext {
   // Colour never changes where text goes; the light theme is as good as any for measuring.
   return { ...describeContext(LIGHT), measurer: getMeasurer() };
+}
+
+/**
+ * By shape, the titles of the boundaries around it, where they sit now: a connector reaching a shape's
+ * top from outside its boundary keeps its line out of the title's words (`assignAnchors`).
+ */
+export function titlesOf(nodes: readonly DraftNode[], ctx: DescribeContext): Map<string, TitleSpan[]> {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const inside = new Map<string, Set<string>>();
+  for (const node of nodes) {
+    const seen = new Set<string>();
+    for (let at = node.parentId; at && !seen.has(at); at = byId.get(at)?.parentId) {
+      seen.add(at);
+      if (byId.get(at)?.type !== 'group') continue;
+      const members = inside.get(at) ?? new Set<string>();
+      members.add(node.id);
+      inside.set(at, members);
+    }
+  }
+  const out = new Map<string, TitleSpan[]>();
+  for (const [id, members] of inside) {
+    const group = byId.get(id)!;
+    const box = boundaryHeaderTextBox(group, ctx);
+    if (!box) continue;
+    const span: TitleSpan = { from: group.x + box.x, to: group.x + box.x + box.width, inside: members };
+    for (const member of members) out.set(member, [...(out.get(member) ?? []), span]);
+  }
+  return out;
 }
 
 export function spacingOf(layout: Pick<LayoutSpec, 'spacing'>) {
@@ -691,7 +719,12 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
   // A shape's note side is taken: no connector may leave or arrive there, or it would run through the note.
   const noteSide: Side = right ? 'top' : 'left';
   const reserved = new Map([...besideNotes.keys()].filter((id) => besideNotes.get(id)?.length).map((id) => [id, noteSide]));
-  const anchors = assignAnchors(edges, rects, layout.direction, undefined, reserved, { keepApart: primaryEdges, sides: placed.sides, ...(layout.fans ? { fans: layout.fans } : {}) });
+  const anchors = assignAnchors(edges, rects, layout.direction, undefined, reserved, {
+    keepApart: primaryEdges,
+    sides: placed.sides,
+    titles: titlesOf([...elements.values(), ...groups.values()], ctx),
+    ...(layout.fans ? { fans: layout.fans } : {}),
+  });
   for (const edge of edges) {
     const a = anchors.get(edge.id);
     if (a) {
