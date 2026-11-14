@@ -403,7 +403,7 @@ export function describeEdge(
             y: top + h / 2 - responseLayout.height / 2,
             layout: responseLayout,
             font: FONTS.edgeLabel,
-            fill: ctx.theme.textFaint,
+            fill: ctx.theme.edgeText,
             align: 'start',
             opacity: 0.8,
           },
@@ -499,7 +499,7 @@ export function describeEdge(
           y: caption.y,
           layout: captionLayout,
           font: FONTS.connectorCaption,
-          fill: isUnusual ? ctx.theme.accents.amber.text : ctx.theme.textFaint,
+          fill: isUnusual ? ctx.theme.accents.amber.text : ctx.theme.edgeText,
           align: caption.align,
         });
         boxes.words.push(boxOf(captionLeft, caption.y, captionLayout.width, captionLayout.height));
@@ -610,12 +610,12 @@ export function describeEdge(
       overlay.push(
         {
           t: 'text', x: textX, y: textTop, layout: recoveryLayout.primary,
-          font: FONTS.recoveryName, fill: ctx.theme.textFaint, align: 'middle',
+          font: FONTS.recoveryName, fill: ctx.theme.edgeText, align: 'middle',
         },
         {
           t: 'text', x: textX, y: textTop + recoveryLayout.primary.height + RECOVERY_LABEL_GAP,
           layout: recoveryLayout.secondary, font: FONTS.connectorCaption,
-          fill: ctx.theme.textFaint, opacity: 0.75, align: 'middle',
+          fill: ctx.theme.edgeText, opacity: 0.75, align: 'middle',
         },
       );
     } else {
@@ -623,7 +623,7 @@ export function describeEdge(
         t: 'text', x: textX, y: centerY - layout.height / 2, layout,
         font: FONTS.edgeLabel,
         // The caption's own tone, as on screen (full-strength only while hovered or edited).
-        fill: ctx.theme.textFaint, align: 'middle',
+        fill: ctx.theme.edgeText, align: 'middle',
       });
     }
   } else if (hasStep) {

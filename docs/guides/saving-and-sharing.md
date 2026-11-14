@@ -46,6 +46,10 @@ Open **Share → Export** (`⌘⇧E`).
 - **Copy** puts an image or source on the clipboard; `⌘K` has **Copy as image**, **Copy as SVG**
   and **Copy source as…**. If the clipboard refuses, the file downloads instead.
 
+Click the preview to inspect the image before exporting. It opens large; **100%** shows it at
+actual size, so you can read its smallest text as a reader will, and **200%** doubles it. Drag to
+move around.
+
 Image options:
 
 - **Light** or **Dark**, **Transparent**, **Selection only**; PNG at 1×, 2× or 3×.

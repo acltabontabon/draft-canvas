@@ -731,6 +731,14 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       hint: 'Preview this view laid out again from scratch, and choose which way it reads',
       run: (inner) => rearrange(inner),
     });
+    commands.push({
+      id: 'check-layout',
+      title: 'Check layout',
+      group: 'canvas',
+      keywords: ['check', 'review', 'quality', 'readable', 'legible', 'problems', 'issues', 'lint', 'names', 'captions', 'spacing'],
+      hint: 'Find names, captions, boundaries and spacing that read badly, and preview the fix',
+      run: (inner) => checkLayout(inner),
+    });
   }
   if (!ctx.ui.readOnly && ctx.editor.selection.nodes.some((id) => {
     const node = ctx.editor.document.nodes.find((item) => item.id === id);
@@ -2022,6 +2030,28 @@ function rearrange(inner: CommandContext, selection = false): void {
       if (plan === 'no-room') inner.ui.notify('There is not enough room. Arrange a larger selection or the whole diagram.');
       else if (plan === 'unchanged') inner.ui.notify('Already arranged.');
       else inner.ui.setArrangePreview(plan);
+    })
+    .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
+}
+
+/**
+ * Check layout: what reads badly as the diagram stands (names stacked into columns, captions with no
+ * room, top-heavy boundaries, an overview too small to read), reported only where laying the view out
+ * again fixes it — and then as that arrangement's own preview, the fixes named in its bar and inked
+ * on the sheet. Nothing to fix says so, rather than opening a preview of a change nobody needs.
+ */
+function checkLayout(inner: CommandContext): void {
+  void inner.editor.planArrange()
+    .then((plan) => {
+      if (plan === null) return;
+      const fixes = typeof plan === 'object' ? Object.values(plan.fixes ?? {}).some((found) => found.length > 0) : false;
+      if (typeof plan !== 'object' || !fixes) {
+        inner.ui.notify('Nothing to fix: names, captions and spacing read well.');
+        return;
+      }
+      // The direction that fixes something, the suggested one first.
+      const direction = plan.fixes?.[plan.direction]?.length ? plan.direction : plan.direction === 'right' ? 'down' : 'right';
+      inner.ui.setArrangePreview({ ...plan, direction });
     })
     .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
 }

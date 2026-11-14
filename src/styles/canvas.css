@@ -743,8 +743,8 @@
   back to full strength while hovered or being edited, so reaching for one still reads. Keep
      `font-size` equal to `TEXT_SIZES.edgeLabel` — the export lays the label out with it, and
      `tests/connector-text.test.ts` holds the two together. */
-  color: var(--dc-text-faint);
-  font-size: 9.5px;
+  color: var(--dc-edge-text);
+  font-size: 10.5px;
   font-weight: 500;
   line-height: 1.35;
   white-space: nowrap;
@@ -986,8 +986,8 @@
   padding: 1px 3px;
   border-radius: 3px;
   background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
-  color: var(--dc-text-faint);
-  font-size: 9.5px;
+  color: var(--dc-edge-text);
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
@@ -6227,6 +6227,18 @@
 
 .dc-agent-preview[data-many='true'] .dc-preview-trails circle {
   opacity: 0.3;
+}
+
+/* Arrange's result, where a shape's move is shown on request: a moved shape answers the pointer (the
+   pane still pans from it), and the one whose trail is kept up wears the selection ring. */
+.dc-agent-preview[data-pick='true'] .dc-preview-ink[data-moved='true'] .dc-ghost-node {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.dc-agent-preview[data-pick='true'] .dc-preview-ink[data-moved='true'] .dc-ghost-node:hover .dc-ghost-node-body::after,
+.dc-agent-preview[data-pick='true'] .dc-preview-ink[data-picked='true'] .dc-ghost-node-body::after {
+  border: 1.5px solid var(--dc-selection);
 }
 
 /* The ghost: an offer drawn in flow space (inside the viewport portal, so it pans and zooms

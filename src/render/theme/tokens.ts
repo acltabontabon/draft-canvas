@@ -32,6 +32,9 @@ export interface Theme {
   text: string;
   textMuted: string;
   textFaint: string;
+  /** A connector's words: its label, relationship caption and reply. Stronger than `textFaint` on
+   *  the dark canvas, where small text at overview zoom was the first thing to stop being readable. */
+  edgeText: string;
   selection: string;
   selectionSoft: string;
   edge: string;
@@ -58,6 +61,7 @@ export const DARK: Theme = {
   text: '#e6e9ee',
   textMuted: '#98a1b0',
   textFaint: '#808998',
+  edgeText: '#a0a8b6',
   selection: '#6cb3aa',
   selectionSoft: 'rgba(108, 179, 170, 0.16)',
   edge: '#6d7885',
@@ -102,6 +106,7 @@ export const LIGHT: Theme = {
   text: '#1a1d23',
   textMuted: '#59606d',
   textFaint: '#6a7280',
+  edgeText: '#6a7280',
   selection: '#2c6f68',
   selectionSoft: 'rgba(44, 111, 104, 0.12)',
   edge: '#7c8492',
@@ -163,6 +168,7 @@ export function applyThemeVariables(theme: Theme, root: HTMLElement): void {
   set('text', theme.text);
   set('text-muted', theme.textMuted);
   set('text-faint', theme.textFaint);
+  set('edge-text', theme.edgeText);
   set('selection', theme.selection);
   set('selection-soft', theme.selectionSoft);
   set('edge', theme.edge);

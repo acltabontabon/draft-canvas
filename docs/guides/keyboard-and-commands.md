@@ -70,7 +70,7 @@ Press `⌘K`, type part of a command or name, then `Enter`.
 
 It runs editor actions, inserts [starters](examples.md) once the starters gallery is loaded (**Browse starters…** opens it), jumps to named shapes, connectors and flows
 in any room, and tidies up. **Tidy up** previews a gentle cleanup before applying it; **Straighten
-connectors**, **Arrange diagram**, **Tidy connectors**, **Auto attach all connectors** and **Fit
+connectors**, **Arrange diagram**, **Check layout**, **Tidy connectors**, **Auto attach all connectors** and **Fit
 shapes to text** each do one thing. With shapes selected it also aligns,
 distributes and matches sizes (**Same width**, **Same height**).
 

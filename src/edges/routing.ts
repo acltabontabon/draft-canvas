@@ -885,8 +885,11 @@ function clampToBoundary(
  * whichever axis the lanes actually fan out on. Not clamped to a node's own
  * side, unlike `laneNudge`: a label lives in open canvas space between the
  * nodes, not on either node's boundary.
+ *
+ * A chip's own height and a hair: 20 held a 9.5-unit label's chip (18.8) and left the 10.5-unit one
+ * (20.2) touching its neighbour on the next lane.
  */
-const LABEL_LANE_SPACING = 20;
+const LABEL_LANE_SPACING = 22;
 
 export function labelLaneOffset(sourceSide: Side, targetSide: Side, lane: number): { x: number; y: number } {
   if (!lane) return { x: 0, y: 0 };

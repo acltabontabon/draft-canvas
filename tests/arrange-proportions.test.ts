@@ -279,6 +279,15 @@ describe('Arrange in the editor', () => {
     expect(useEditorStore.getState().commitArrange(fresh)).toBe(false);
   });
 
+  it('names what each arrangement fixes: the gateway’s stacked name, in both directions', async () => {
+    const plan = await useEditorStore.getState().planArrange();
+    if (!plan || typeof plan === 'string') throw new Error('no preview');
+    expect(plan.show).toBe('result');
+    for (const direction of ['down', 'right'] as const) {
+      expect(plan.fixes?.[direction], direction).toContainEqual({ kind: 'stacked-name', id: 'gateway' });
+    }
+  });
+
   it('arranges only the selection when asked, in the view’s own direction', async () => {
     useEditorStore.getState().setSelection({ nodes: ['o1', 'b1'], edges: [] });
     const plan = await useEditorStore.getState().planArrange(true);
@@ -290,7 +299,7 @@ describe('Arrange in the editor', () => {
 
   it('keeps one cleanup preview at a time', () => {
     const doc = useEditorStore.getState().document;
-    useUiStore.getState().setArrangePreview({ path: [], base: doc, options: { down: doc }, direction: 'down', suggested: 'down', current: 'down', scoped: false });
+    useUiStore.getState().setArrangePreview({ path: [], base: doc, options: { down: doc }, direction: 'down', suggested: 'down', current: 'down', scoped: false, show: 'result' });
     useUiStore.getState().setTidyPreview({ path: [], base: doc, view: doc, moved: 0, reattached: 0, scoped: false });
     expect(useUiStore.getState().arrangePreview).toBeNull();
   });

@@ -702,7 +702,7 @@
     }
   },
   "gallery/07-long-labels-unicode": {
-    "obstruction": 0,
+    "obstruction": 1,
     "overlap": 0,
     "crossings": 0,
     "cost": 1390,
@@ -723,7 +723,7 @@
       "arrowhead": 0,
       "corner": 0,
       "junction": 0,
-      "words": 0,
+      "words": 1,
       "marks": 0
     }
   },
@@ -1144,7 +1144,7 @@
     }
   },
   "gallery/23-credit-card-batch-ungrouped": {
-    "obstruction": 0,
+    "obstruction": 2,
     "overlap": 0,
     "crossings": 0,
     "cost": 6839,
@@ -1945,7 +1945,7 @@
       "arrowhead": 0,
       "corner": 0,
       "junction": 0,
-      "words": 0,
+      "words": 1,
       "marks": 0
     }
   },
@@ -1997,7 +1997,7 @@
       "arrowhead": 0,
       "corner": 0,
       "junction": 0,
-      "words": 0,
+      "words": 7,
       "marks": 0
     }
   },
@@ -2023,7 +2023,7 @@
       "arrowhead": 0,
       "corner": 0,
       "junction": 0,
-      "words": 0,
+      "words": 1,
       "marks": 0
     }
   }

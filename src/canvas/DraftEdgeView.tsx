@@ -1096,7 +1096,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             title={captionLayout.truncated ? (captionText ?? undefined) : undefined}
             style={{
               transform: `translate(${captionBox.left - CAPTION_PADDING_X}px, ${captionBox.top - CAPTION_PADDING_Y}px)`,
-              color: captionIsUnusual ? theme.accents.amber.text : theme.textFaint,
+              color: captionIsUnusual ? theme.accents.amber.text : theme.edgeText,
               font: cssFont(FONTS.connectorCaption),
               lineHeight: `${captionLayout.lineHeight}px`,
             }}

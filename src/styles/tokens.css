@@ -19,6 +19,7 @@
   --dc-text: #e6e9ee;
   --dc-text-muted: #98a1b0;
   --dc-text-faint: #808998;
+  --dc-edge-text: #a0a8b6;
   --dc-selection: #5fd6c9;
   --dc-selection-soft: rgba(95, 214, 201, 0.16);
   --dc-edge: #6d7885;
@@ -99,6 +100,7 @@
     --dc-text: #1a1d23;
     --dc-text-muted: #59606d;
     --dc-text-faint: #6a7280;
+    --dc-edge-text: #6a7280;
     --dc-selection: #0a746b;
     --dc-selection-soft: rgba(15, 143, 132, 0.12);
     --dc-edge: #7c8492;
