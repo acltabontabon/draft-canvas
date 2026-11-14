@@ -567,14 +567,13 @@ test('attaches note and code to a message, saves them, and reads them during pre
   const popover = page.getByRole('toolbar', { name: 'Message attachments' });
   await inspector.getByRole('button', { name: 'Attach', exact: true }).click();
   await inspector.getByRole('button', { name: 'Attach note' }).click();
-  await popover.getByRole('button', { name: 'Edit attached detail' }).click();
+  await expect(popover.getByRole('textbox', { name: 'Attached note' })).toBeFocused();
   await popover.getByRole('textbox', { name: 'Attached note' }).fill('Only paid orders');
   await page.locator(CANVAS).click({ position: { x: 30, y: 70 } });
   await page.locator(SEQUENCE).hover({ position: { x: 30, y: 12 } });
   await page.locator(MESSAGE).first().click();
   await inspector.getByRole('button', { name: 'Attach', exact: true }).click();
   await inspector.getByRole('button', { name: 'Attach code' }).click();
-  await popover.getByRole('button', { name: 'Edit attached detail' }).click();
   await popover.getByRole('textbox', { name: 'Attached code' }).fill('return paidOrders;');
   await popover.getByRole('combobox', { name: 'Code language' }).selectOption('javascript');
   await page.locator(CANVAS).click({ position: { x: 30, y: 70 } });
@@ -583,17 +582,16 @@ test('attaches note and code to a message, saves them, and reads them during pre
 
   await page.locator(SEQUENCE).hover({ position: { x: 30, y: 12 } });
   await page.locator(MESSAGE).first().click();
-  await page.getByRole('button', { name: 'Attachments for message 1' }).click();
-  await popover.getByRole('button', { name: 'View attached note' }).click();
+  await page.getByRole('button', { name: 'View attached note for message 1' }).click();
   await expect(popover.getByText('Only paid orders')).toBeVisible();
-  await popover.getByRole('button', { name: 'View attached code' }).click();
+  await expect(popover.getByRole('button', { name: 'View attached code' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'View attached code for message 1' }).click();
   await expect(popover.locator('pre')).toHaveText('return paidOrders;');
   await page.keyboard.press('Escape');
   await page.keyboard.press('Escape');
   await inspector.getByRole('button', { name: 'Present this sequence' }).click();
   await page.keyboard.press('ArrowRight');
-  await page.getByRole('button', { name: 'View current message attachments' }).click();
-  await popover.getByRole('button', { name: 'View attached note' }).click();
+  await page.getByRole('button', { name: 'View attached note for current message' }).click();
   await expect(popover.getByText('Only paid orders')).toBeVisible();
   await expect(popover.getByRole('button', { name: 'Edit attached detail' })).toHaveCount(0);
   await page.getByRole('button', { name: 'Step 2: API to Client' }).click();
@@ -629,3 +627,32 @@ test('keeps participant shape and kind labels readable even on a narrow canvas',
   expect(box.x).toBeGreaterThanOrEqual(0);
   expect(box.x + box.width).toBeLessThanOrEqual(375);
 });
+
+for (const tool of ['Note', 'Code'] as const) {
+  test(`drags a canvas ${tool} onto a sequence message and restores it with undo`, async ({ page }) => {
+    await newCanvas(page, 'Drag onto message');
+    await newSequence(page, ['Client', 'API'], { x: 240, y: 160 });
+    await draw(page, 0, 1, 'Get orders');
+    await create(page, tool, { x: 800, y: 180 });
+    const node = page.locator(`.dc-node[data-type="${tool.toLowerCase()}"]`);
+    const chip = page.getByRole('button', { name: `View attached ${tool.toLowerCase()} for message 1` });
+    const label = tool === 'Note' ? 'Note attachment' : 'JSON attachment';
+    await page.locator(SEQUENCE).hover({ position: { x: 30, y: 12 } });
+    const row = (await page.locator(MESSAGE).first().boundingBox())!;
+    const card = (await node.boundingBox())!;
+    await page.mouse.move(card.x + card.width / 2, card.y + card.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(row.x + row.width / 2, row.y + row.height / 2, { steps: 14 });
+    await expect(page.locator('[data-message-attach-target]')).toHaveText('Attach to message');
+    await page.mouse.up();
+    await expect(node).toHaveCount(0);
+    await chip.click();
+    const attachment = page.getByRole('toolbar', { name: 'Message attachments' }).getByRole('group', { name: label });
+    await expect(attachment).toBeVisible();
+    if (tool === 'Code') await expect(attachment.locator('pre')).toContainText('CANCELLED');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(node).toHaveCount(1);
+    await expect(chip).toHaveCount(0);
+  });
+}

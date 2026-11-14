@@ -12,11 +12,10 @@
  * dashed line with an open one; a created participant's head sits on the message that creates it,
  * and a destroyed one's lifeline ends in a cross.
  */
-import { attachmentTabWidth, RAIL_SIZE } from '../document/markerRail';
-import { describeAttachmentTab } from '../edges/attachmentChips';
+import { ATTACHMENT_CHIP_GAP, ATTACHMENT_CHIP_HEIGHT, attachmentChipRowWidth, describeAttachmentChips, namedAttachmentChipWidths } from '../edges/attachmentChips';
 import { minSizeFor } from '../document/factory';
 import { messagesOf, sequenceOf } from '../document/sequenceModel';
-import type { DraftNode, DraftSequence, SeqParticipant } from '../document/types';
+import type { Attachment, DraftNode, DraftSequence, SeqParticipant } from '../document/types';
 import type { DisplayList, Shape, Stroke } from '../render/displayList';
 import { connectorHead, connectorStrokePath } from '../render/connectorStyle';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
@@ -25,7 +24,7 @@ import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { checkSequence } from '../sequence/check';
-import { layoutSequence, type LabelLayout, type MessageLayout, type Rect, type SequenceLayout } from '../sequence/layout';
+import { ATTACHMENT_ROW_INSET, layoutSequence, type LabelLayout, type MessageLayout, type Rect, type SequenceLayout } from '../sequence/layout';
 import type { DescribeContext } from './describe';
 import { nodeTechnologyIcon, type TechnologyIconSnapshot } from './technology';
 
@@ -295,10 +294,19 @@ export function sequenceLifelines(layout: SequenceLayout, theme: Theme): Shape[]
   }));
 }
 
-export function sequenceAttachmentTab(message: MessageLayout, count: number): Rect {
-  const w = attachmentTabWidth(count);
+export function sequenceAttachmentChips(
+  message: MessageLayout, attachments: readonly Attachment[], width: number, measurer: TextMeasurer,
+): Rect[] {
+  const widths = namedAttachmentChipWidths(attachments, measurer);
+  if (widths.length === 0) return [];
   const center = message.self ? message.x1 + message.reach + 12 : (message.x1 + message.x2) / 2;
-  return { x: center - w / 2, y: message.yEnd + 5, w, h: RAIL_SIZE };
+  const total = attachmentChipRowWidth(widths);
+  let x = Math.max(ATTACHMENT_ROW_INSET, Math.min(center - total / 2, width - total - ATTACHMENT_ROW_INSET));
+  return widths.map((w) => {
+    const rect = { x, y: message.yEnd + 5, w, h: ATTACHMENT_CHIP_HEIGHT };
+    x += w + ATTACHMENT_CHIP_GAP;
+    return rect;
+  });
 }
 
 export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: SequenceKit, options: DescribeSequenceOptions = {}): Shape[] {
@@ -377,7 +385,7 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
 
   const findings = only ? [] : checkSequence(sequence);
   const flagged = new Set(findings.map((finding) => finding.itemIds[0]));
-  const attachments = new Map(messagesOf(sequence).filter((message) => message.attachments?.length).map((message) => [message.id, message.attachments!.length]));
+  const attachments = new Map(messagesOf(sequence).flatMap((message) => message.attachments?.length ? [[message.id, message.attachments] as const] : []));
   const lit = new Set<string>();
   for (const message of layout.messages) {
     if (only && !only.has(message.id)) continue;
@@ -390,10 +398,10 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
       const x = layout.columns.find((column) => column.id === message.to)?.x ?? message.x2;
       shapes.push({ t: 'path', d: crossAt(x, message.yEnd), fill: 'none', stroke: { color, width: LINE_WIDTH + 0.4, linecap: 'round' } });
     }
-    const count = attachments.get(message.id);
-    if (count) {
-      const tab = sequenceAttachmentTab(message, count);
-      shapes.push({ t: 'group', translate: { x: tab.x, y: tab.y }, children: describeAttachmentTab(count, ctx) });
+    const cards = attachments.get(message.id);
+    if (cards) {
+      const [first] = sequenceAttachmentChips(message, cards, layout.width, ctx.measurer);
+      if (first) shapes.push(...describeAttachmentChips(cards, first.x, first.y, ctx, false));
     }
     const label = message.label;
     if (label) shapes.push(...(only ? [text(label, theme.edgeText)] : patched(label, theme.edgeText)));

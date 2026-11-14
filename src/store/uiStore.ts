@@ -298,7 +298,7 @@ export interface OpenPointPopoverState {
 export type AttachmentDetail = (
   | { hostKind: 'node'; hostId: string }
   | { hostKind: 'edge'; hostId: string }
-  | { hostKind: 'message'; hostId: string; messageId: string }
+  | { hostKind: 'message'; hostId: string; messageId: string; startEditing?: boolean }
 ) & { attachmentId: string | null };
 
 export interface UiStore {
@@ -421,6 +421,8 @@ export interface UiStore {
   sequenceEdit: SequenceEdit | null;
   /** Which of the offered next messages is showing, for the selection inside a sequence. Back to the first whenever that selection changes. */
   sequenceGhost: number;
+  /** The message under a dragged note or code card. */
+  sequenceAttachmentTarget: { nodeId: string; messageId: string } | null;
   /**
    * Where a shape being dragged over a sequence would join it as a participant. `stays`: the shape
    * is part of a diagram (it has connectors, notes or an inside), so it stays where it is and the
@@ -688,6 +690,7 @@ export interface UiStore {
   setSequenceFocus: (focus: SequenceFocus | null) => void;
   setSequenceEdit: (edit: SequenceEdit | null) => void;
   setSequenceGhost: (index: number) => void;
+  setSequenceAttachmentTarget: (target: UiStore['sequenceAttachmentTarget']) => void;
   setSequenceDropTarget: (target: { nodeId: string; index: number; stays: boolean } | null) => void;
   setSequenceLinkTarget: (target: { nodeId: string; participantId: string } | null) => void;
   requestRecovery: (edgeId: string | null, actionId?: string | null) => void;
@@ -820,6 +823,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   sequenceFocus: null,
   sequenceEdit: null,
   sequenceGhost: 0,
+  sequenceAttachmentTarget: null,
   sequenceDropTarget: null,
   sequenceLinkTarget: null,
   presentationReveal: null,
@@ -936,6 +940,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
     }),
   setSequenceGhost: (sequenceGhost) => set({ sequenceGhost }),
   setSequenceEdit: (sequenceEdit) => set({ sequenceEdit }),
+  setSequenceAttachmentTarget: (sequenceAttachmentTarget) =>
+    set((state) => state.sequenceAttachmentTarget?.nodeId === sequenceAttachmentTarget?.nodeId &&
+      state.sequenceAttachmentTarget?.messageId === sequenceAttachmentTarget?.messageId ? state : { sequenceAttachmentTarget }),
   setSequenceDropTarget: (sequenceDropTarget) =>
     set((state) =>
       state.sequenceDropTarget?.nodeId === sequenceDropTarget?.nodeId &&

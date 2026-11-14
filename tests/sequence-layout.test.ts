@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { createNode } from '../src/document/factory';
+import { createAttachment, createNode } from '../src/document/factory';
 import { LIMITS } from '../src/document/limits';
 import { findItem, messagesOf } from '../src/document/sequenceModel';
 import { addOperand, createFragment, createMessage, createNote, createReply, groupParticipants, insertItem, moveItem, wrapItems } from '../src/document/sequenceOps';
 import type { DraftSequence, SeqFragment, SeqItem, SeqMessage, SeqParticipant } from '../src/document/types';
 import { describeContext, describeNode, naturalSequenceSizeFor, sequenceLayoutFor } from '../src/nodes/describe';
-import { UNNAMED_HEAD_WIDTH } from '../src/nodes/sequence';
+import { sequenceAttachmentChips, UNNAMED_HEAD_WIDTH } from '../src/nodes/sequence';
 import { LIGHT } from '../src/render/theme/tokens';
 import {
   columnNear,
@@ -65,6 +65,17 @@ describe('columns', () => {
       const span = Math.abs(layout.columns.find((c) => c.id === message.to)!.x - layout.columns.find((c) => c.id === message.from)!.x);
       expect(message.label!.layout.width).toBeLessThanOrEqual(span);
     }
+  });
+
+  it('keeps all four named attachments inside a single-participant frame', () => {
+    const attachments = Array.from({ length: 4 }, (_, at) =>
+      createAttachment({ id: `a${at}`, type: 'code', language: 'javascript' }),
+    );
+    const layout = lay({ participants: [who('a')], items: [{ ...call('m', 'a', 'a', ''), attachments }] });
+    const chips = sequenceAttachmentChips(layout.messages[0]!, attachments, layout.width, describeContext(LIGHT).measurer);
+    const frame = { x: 0, y: 0, w: layout.width, h: layout.height };
+    expect(chips).toHaveLength(4);
+    expect(chips.every((chip) => within(chip, frame))).toBe(true);
   });
 
   it('a wider box spreads the lifelines and changes nothing else about what is needed', () => {

@@ -112,6 +112,7 @@ export function AttachmentChipRow({
   explainTier,
   revealed,
   anchor,
+  onlyAttachmentId,
   style,
 }: {
   hostKind: 'node' | 'edge' | 'message';
@@ -130,6 +131,7 @@ export function AttachmentChipRow({
   /** Where an edge's row is pinned (`connectorMarkRow`), named on the element so Presentation Mode's
    *  callout can find the row's box without working the layout out again. */
   anchor?: { anchor: 'start' | 'middle' | 'end'; anchorX: number; box: { y: number } };
+  onlyAttachmentId?: string;
   style?: CSSProperties;
 }) {
   if (!attachments.length) return null;
@@ -138,6 +140,7 @@ export function AttachmentChipRow({
       className="dc-attachment-chip-row"
       // Presentation Mode's callout measures the row it threads back to (`presentationAnchor.ts`).
       data-host-id={hostId}
+      data-direct-card={onlyAttachmentId ? true : undefined}
       data-flip={cardSide === 'below' ? 'below' : undefined}
       data-lens-dimmed={dimmed ? 'true' : undefined}
       data-explain-tier={explainTier}
@@ -163,6 +166,7 @@ export function AttachmentChipRow({
           hostId={hostId}
           messageId={messageId}
           attachment={attachment}
+          hidden={Boolean(onlyAttachmentId && attachment.id !== onlyAttachmentId)}
           editable={editable}
           actions={actions}
           canMoveUp={index > 0}
@@ -199,6 +203,7 @@ function AttachmentChip({
   attachment,
   editable,
   actions,
+  hidden,
   canMoveUp,
   canMoveDown,
 }: {
@@ -208,6 +213,7 @@ function AttachmentChip({
   attachment: Attachment;
   editable: boolean;
   actions: AttachmentActions;
+  hidden: boolean;
   canMoveUp?: boolean;
   canMoveDown?: boolean;
 }) {
@@ -270,7 +276,13 @@ function AttachmentChip({
   // itself out from under a click that was only meant to view it. Editing is now a deliberate
   // second step (the pencil glyph in the header), and always resets shut the moment the card
   // itself closes, so re-opening a pinned attachment never resumes mid-edit by surprise.
-  const [editing, setEditing] = useState(false);
+  const editOnOpen = useUiStore((state) =>
+    pinned && state.openAttachmentDetail?.hostKind === 'message' && state.openAttachmentDetail.startEditing === true,
+  );
+  const [editing, setEditing] = useState(editOnOpen);
+  useEffect(() => {
+    if (editOnOpen) setEditing(true);
+  }, [editOnOpen]);
   useEffect(() => {
     if (!pinned) setEditing(false);
   }, [pinned]);
@@ -382,7 +394,7 @@ function AttachmentChip({
     // The slot, not the chip, is what the outside-pointerdown check above measures against and what
     // the card is positioned from. The chip is a real button and the card its *sibling*: nested
     // inside a button, the card's own buttons and textarea were presentational to assistive tech.
-    <div ref={chipRef} className="dc-attachment-slot" data-open={cardMounted ? 'true' : undefined}>
+    <div ref={chipRef} className="dc-attachment-slot" hidden={hidden} data-open={cardMounted ? 'true' : undefined}>
       <button
         type="button"
         className="dc-attachment-chip"

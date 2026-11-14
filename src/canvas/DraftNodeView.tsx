@@ -164,7 +164,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // with something inside it selected, being typed or being dropped onto.
   const [hovered, setHovered] = useState(false);
   const sequenceBusy = useUiStore(
-    (state) => state.sequenceFocus?.nodeId === id || state.sequenceEdit?.nodeId === id || state.sequenceDropTarget?.nodeId === id || state.sequenceLinkTarget?.nodeId === id,
+    (state) => state.sequenceFocus?.nodeId === id || state.sequenceEdit?.nodeId === id || state.sequenceDropTarget?.nodeId === id || state.sequenceAttachmentTarget?.nodeId === id || state.sequenceLinkTarget?.nodeId === id,
   );
   const sequenceEditing = useUiStore((state) => state.sequenceEdit?.nodeId === id);
   // Which of its messages is being told, while this sequence is the one being presented: a number

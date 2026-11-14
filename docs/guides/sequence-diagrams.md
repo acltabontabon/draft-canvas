@@ -105,9 +105,11 @@ both.
 **Timeline note** draws a note over one or two participants on its own row.
 
 To keep supporting details on the arrow, select a message and choose **Attach** → **Attach note**
-or **Attach code**. Use the pencil to edit the card. The paperclip on the arrow or **Attach** → **View attachments** reopens it. Cards stay with the message as you move it, and can be reordered,
-deleted or detached onto the canvas. During a presentation, the current message’s paperclip opens
-its cards for reading.
+or **Attach code** to start typing. You can also drag an existing canvas note or code card onto
+the arrow and release when **Attach to message** appears. Click a note or code chip below the arrow
+to reopen its card. Cards stay with the message as you move it, and can be reordered, deleted or
+detached onto the canvas. During a presentation, the current message’s chips open its cards for
+reading.
 
 ![A code card attached to a checkout message.](../media/guides/sequence-attachment.png)
 
@@ -165,7 +167,7 @@ The lifelines stay visible throughout.
   frames.
 - **Share → Export → Other formats → Sequences** writes each sequence, and each flow, as
   standalone **Mermaid** or **PlantUML**, with its conditions, loops, work bars and groups.
-  Attached cards stay in the editable Draft Canvas file. The image exports show their paperclips.
+  Attached cards stay in the editable Draft Canvas file. The image exports show their chips.
 - Paste or import a Mermaid `sequenceDiagram` to get an editable sequence. Anything it uses that
   is not drawn is listed. See the [Mermaid import reference](../reference/mermaid-import.md#sequence-diagrams).
 - An [AI agent](connect-an-ai-agent.md) can add, read and change sequences when asked.

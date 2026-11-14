@@ -1181,6 +1181,17 @@
   top: calc(100% + 6px);
 }
 
+/* The sequence already provides the chip. Measure and place its card directly. */
+.dc-attachment-slot[hidden],
+.dc-attachment-chip-row[data-direct-card] .dc-attachment-chip {
+  display: none;
+}
+
+.dc-attachment-chip-row[data-direct-card] .dc-attachment-card {
+  position: static;
+  transform: none;
+}
+
 /* The animation lives here, separate from the positioned outer element above — see the matching
    comment in `DraftEdgeView.tsx`: a CSS animation replaces the whole `transform` property for its
    duration, so animating scale on the same element as the positioning translate would clobber it. */

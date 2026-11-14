@@ -1118,6 +1118,7 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     openAttachmentDetail: null,
     sequenceFocus: null,
     sequenceEdit: null,
+    sequenceAttachmentTarget: null,
     sequenceDropTarget: null,
     sequenceLinkTarget: null,
     quickConnect: null,

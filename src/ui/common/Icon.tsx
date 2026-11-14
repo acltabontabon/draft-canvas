@@ -8,7 +8,6 @@ const PATHS = {
   back: 'M15 19l-7-7 7-7',
   reply: 'M10 5l-6 6 6 6 M4 11h9a6 6 0 0 1 6 6v2',
   swap: 'M4 8h16l-4-4 M20 16H4l4 4',
-  clip: 'M8 13l6-6a3 3 0 0 1 4 4l-8 8a4.5 4.5 0 0 1-6-6l8-8 M9 15l7-7',
   arrowLeft: 'M19 12H5 M11 6l-6 6 6 6',
   forward: 'M9 5l7 7-7 7',
   up: 'M5 15l7-7 7 7',

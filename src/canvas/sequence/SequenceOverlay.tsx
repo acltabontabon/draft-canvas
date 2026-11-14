@@ -2,9 +2,10 @@ import { memo, useEffect, useRef, useState, type CSSProperties, type MouseEvent,
 import { useReactFlow } from '@xyflow/react';
 import { findItem, messagesOf, sequenceOf, type SeqSlot } from '../../document/sequenceModel';
 import type { DraftNode, SeqItem } from '../../document/types';
-import { sequenceArrowShapes, sequenceAttachmentTab } from '../../nodes/sequence';
+import { sequenceArrowShapes, sequenceAttachmentChips } from '../../nodes/sequence';
 import { describeContext, sequenceLayoutFor } from '../../nodes/describe';
 import { emitDisplayList } from '../../render/svg/emit';
+import { getMeasurer } from '../../render/text/measure';
 import { LIGHT } from '../../render/theme/tokens';
 import { moveProblem } from '../../sequence/check';
 import { itemRange, type SequenceEditTarget, type SequenceFocus } from '../../sequence/focus';
@@ -94,6 +95,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   const editing = useUiStore((state) => (state.sequenceEdit?.nodeId === nodeId ? state.sequenceEdit.target : null));
   const dropIndex = useUiStore((state) => (state.sequenceDropTarget?.nodeId === nodeId ? state.sequenceDropTarget.index : null));
   const dropStays = useUiStore((state) => state.sequenceDropTarget?.nodeId === nodeId && state.sequenceDropTarget.stays);
+  const attachmentTarget = useUiStore((state) => state.sequenceAttachmentTarget?.nodeId === nodeId ? state.sequenceAttachmentTarget.messageId : null);
   const externalTarget = useUiStore((state) => state.sequenceLinkTarget?.nodeId === nodeId ? state.sequenceLinkTarget.participantId : null);
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -331,7 +333,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   const offers = !readOnly && ghostsOn && focus && !gesture && !editing ? nextFor(sequence, focus) : [];
   const offer = offers.length > 0 ? offers[ghostIndex % offers.length]! : null;
   const offerSlot = offer ? slotFor(layout, offer.slot.operandId, offer.slot.index) : null;
-  const attachments = new Map(messagesOf(sequence).filter((message) => message.attachments?.length).map((message) => [message.id, message.attachments!.length]));
+  const attachments = new Map(messagesOf(sequence).flatMap((message) => message.attachments?.length ? [[message.id, message.attachments] as const] : []));
   const heads = layout.columns.filter((column) => !column.created);
   const headRowMiddle = heads.length > 0 ? Math.max(...heads.map((column) => column.head.y + column.head.h)) - 22 : layout.bodyTop;
   const quiet = gesture !== null || editing !== null;
@@ -342,6 +344,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   const reconnecting = gesture?.kind === 'endpoint' ? gesture : null;
   const targetParticipant = externalTarget ?? reconnecting?.participant ?? (gesture?.kind === 'draw' && gesture.slot ? gesture.to : null);
   const reordering = gesture?.kind === 'item' ? layout.messages.find((message) => message.id === gesture.id) : undefined;
+  const attachmentArrow = attachmentTarget ? layout.messages.find((message) => message.id === attachmentTarget) : undefined;
   const highlightedArrows = selectedArrows.filter((message) => reconnecting?.id !== message.id && reordering?.id !== message.id);
 
   const targetOnLifeline = (event: MouseEvent) => {
@@ -633,21 +636,35 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
         </div>
       )}
 
-      {!editing && layout.messages.map((message) => {
-        const count = attachments.get(message.id);
-        if (!count) return null;
-        return <button
-          key={message.id}
-          type="button"
-          className="dc-seq-attachment-hit nodrag nopan"
-          style={box(sequenceAttachmentTab(message, count))}
-          aria-label={`Attachments for message ${message.number}`}
-          tabIndex={focus?.kind === 'item' && focus.ids.includes(message.id) ? 0 : -1}
-          onClick={(event) => {
-            event.stopPropagation();
-            sequenceActions.showAttachments(nodeId, message.id);
-          }}
-        />;
+      {attachmentArrow && (
+        <>
+          <SvgSurface className="dc-seq-selected-arrows" width={node.width} height={node.height}>
+            {emitDisplayList({ width: node.width, height: node.height, shapes: sequenceArrowShapes(attachmentArrow, 'currentColor', `${nodeId}:${attachmentArrow.id}`, preset) })}
+          </SvgSurface>
+          <div className="dc-seq-add-target" style={{ left: (attachmentArrow.x1 + attachmentArrow.x2) / 2, top: attachmentArrow.yEnd }} data-message-attach-target="">
+            Attach to message
+          </div>
+        </>
+      )}
+
+      {!editing && layout.messages.flatMap((message) => {
+        const cards = attachments.get(message.id);
+        if (!cards) return [];
+        return sequenceAttachmentChips(message, cards, layout.width, getMeasurer()).map((chip, index) => {
+          const attachment = cards[index]!;
+          return <button
+            key={attachment.id}
+            type="button"
+            className="dc-seq-attachment-hit nodrag nopan"
+            style={box(chip)}
+            aria-label={`View attached ${attachment.type === 'code' ? 'code' : 'note'} for message ${message.number}`}
+            tabIndex={focus?.kind === 'item' && focus.ids.includes(message.id) ? 0 : -1}
+            onClick={(event) => {
+              event.stopPropagation();
+              sequenceActions.showAttachments(nodeId, message.id, attachment.id);
+            }}
+          />;
+        });
       })}
       {editing && <SequenceEditors node={node} layout={layout} target={editing} />}
     </div>

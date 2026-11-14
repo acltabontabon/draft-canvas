@@ -51,7 +51,7 @@ import {
   updateSequence,
   wrapItems,
 } from '../document/sequenceOps';
-import { addEdges, addNodes, removeElements, removeParticipantEdges } from '../document/operations';
+import { addEdges, addNodes, hasAttachmentRoom, removeElements, removeParticipantEdges } from '../document/operations';
 import { isLinkable, participantFromNode } from '../document/sequenceLinks';
 import type { Attachment, DraftNode, DraftSequence, SeqMessage, SeqMessageKind, SeqOperator, SeqParticipant } from '../document/types';
 import { describeContext, sequenceLayoutFor } from '../nodes/describe';
@@ -64,7 +64,7 @@ import { defaultMessageLabel } from '../sequence/suggest';
 import { describeSequenceFocus, type SequenceEditTarget, type SequenceFocus } from '../sequence/focus';
 import { announce } from '../lib/announce';
 import { roomFor, useEditorStore } from './editorStore';
-import { nodeIndex } from './selectors';
+import { nodeIndex, selectSequenceMessage } from './selectors';
 import { useUiStore } from './uiStore';
 
 type Recipe = (sequence: DraftSequence) => DraftSequence;
@@ -215,8 +215,8 @@ export const sequenceActions = {
     useUiStore.getState().setQuietEdge(edge.id);
   },
 
-  showAttachments(nodeId: string, messageId: string): void {
-    useUiStore.getState().setOpenAttachmentDetail({ hostKind: 'message', hostId: nodeId, messageId, attachmentId: null });
+  showAttachments(nodeId: string, messageId: string, attachmentId: string | null = null): void {
+    useUiStore.getState().setOpenAttachmentDetail({ hostKind: 'message', hostId: nodeId, messageId, attachmentId });
   },
 
   detachAttachment(nodeId: string, messageId: string, attachmentId: string): void {
@@ -233,12 +233,33 @@ export const sequenceActions = {
     ), [detached]), { selection: { nodes: [detached.id], edges: [] } });
   },
 
+  attachExistingNode(nodeId: string, messageId: string, cardId: string): string | null {
+    const editor = useEditorStore.getState();
+    const card = nodeIndex(editor.document.nodes).get(cardId);
+    const host = selectSequenceMessage(editor.document, nodeId, messageId);
+    if (!host || !hasAttachmentRoom(host, 'edge') || !card ||
+        (card.type !== 'note' && card.type !== 'code') || card.attachments?.length) return null;
+    const { id: _id, type, ...content } = card;
+    const attachment = createAttachment({ ...content, type });
+    editor.apply('Attach to message', (doc) => {
+      const attached = updateSequence(doc, nodeId, (sequence) =>
+        editMessageAttachments(sequence, messageId, (list) => [...list, attachment]),
+      );
+      return attached === doc ? doc : removeElements(attached, [cardId]);
+    }, { selection: { nodes: [nodeId], edges: [] } });
+    if (selectSequenceMessage(useEditorStore.getState().document, nodeId, messageId)?.attachments?.includes(attachment)) {
+      selectMade(nodeId, 'item', messageId);
+      return attachment.id;
+    }
+    return null;
+  },
+
   addAttachment(nodeId: string, messageId: string, type: 'note' | 'code'): void {
     const attachment = createAttachment({ type });
     const added = run(nodeId, type === 'note' ? 'Attach note' : 'Attach code', (sequence) =>
       editMessageAttachments(sequence, messageId, (list) => [...list, attachment]),
     );
-    if (added) useUiStore.getState().setOpenAttachmentDetail({ hostKind: 'message', hostId: nodeId, messageId, attachmentId: attachment.id });
+    if (added) useUiStore.getState().setOpenAttachmentDetail({ hostKind: 'message', hostId: nodeId, messageId, attachmentId: attachment.id, startEditing: true });
   },
 
   updateAttachment(nodeId: string, messageId: string, attachmentId: string, patch: Partial<Omit<Attachment, 'id'>>): void {

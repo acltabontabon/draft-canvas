@@ -14,7 +14,7 @@
  * presentation frames it — all from this one answer.
  */
 import { heightOf, participantsIn } from '../document/sequenceModel';
-import { RAIL_SIZE } from '../document/markerRail';
+import { ATTACHMENT_CHIP_HEIGHT, attachmentChipRowWidth, namedAttachmentChipWidths } from '../edges/attachmentChips';
 import type {
   DraftSequence,
   SeqFragment,
@@ -169,6 +169,7 @@ export interface SequenceLayout {
 /* ------------------------------------------------------------------ measures -- */
 
 /** From the frame to the outermost thing in it: room for the frame's own handles and a place to add a participant. */
+export const ATTACHMENT_ROW_INSET = 6;
 const PAD_X = 30;
 const PAD_TOP = 12;
 const PAD_BOTTOM = 14;
@@ -442,12 +443,20 @@ function solve(
   const createdAt = new Map<string, number>();
   const destroyedAt = new Map<string, number>();
   let cursor = bodyTop;
+  let attachmentWidth = 0;
 
   const placeMessage = (item: SeqMessage): Extent => {
     const from = xOf(item.from);
     const to = xOf(item.to);
     const top = cursor;
-    const rowAfter = item.attachments?.length ? ROW_AFTER + RAIL_SIZE : ROW_AFTER;
+    let rowAfter = ROW_AFTER;
+    if (item.attachments?.length) {
+      rowAfter += ATTACHMENT_CHIP_HEIGHT;
+      if (!known) {
+        const rowWidth = attachmentChipRowWidth(namedAttachmentChipWidths(item.attachments, measurer));
+        attachmentWidth = Math.max(attachmentWidth, rowWidth + ATTACHMENT_ROW_INSET * 2);
+      }
+    }
     if (item.from === item.to) {
       const layout = item.label.trim() ? words(item.label, FONTS.sequenceMessage, SELF_LABEL_MAX) : null;
       const labelHeight = layout?.height ?? 0;
@@ -635,7 +644,7 @@ function solve(
     title ? title.x + title.layout.width : 0,
   );
   const natural = known ?? {
-    width: Math.ceil(Math.max(naturalWidth, reach + PAD_X)),
+    width: Math.ceil(Math.max(naturalWidth, reach + PAD_X, attachmentWidth)),
     height: Math.ceil(contentBottom + LIFELINE_TAIL + PAD_BOTTOM),
   };
   const width = Math.max(natural.width, input.box?.width ?? 0);

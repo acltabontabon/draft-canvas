@@ -39,7 +39,7 @@ import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
 import { accentOf } from '../render/theme/tokens';
 import { lensFlow, useEditorStore } from '../store/editorStore';
 import { PresentationPointer } from './presentation/PresentationPointer';
-import { edgeIndex, nodeIndex } from '../store/selectors';
+import { edgeIndex, nodeIndex, selectSequenceMessage } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
 import { CanvasBackground } from './CanvasBackground';
@@ -48,7 +48,7 @@ import { isLinkable, isPartOfDiagram } from '../document/sequenceLinks';
 import { LIMITS } from '../document/limits';
 import { describeContext, sequenceLayoutFor } from '../nodes/describe';
 import { LIGHT } from '../render/theme/tokens';
-import { participantIndexAt } from '../sequence/layout';
+import { hitSequence, participantIndexAt } from '../sequence/layout';
 import { sequenceActions } from '../store/sequenceActions';
 import {
   CAPSULE_MOVE_THRESHOLD_PX,
@@ -827,6 +827,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     grabOrigin.current = null;
     clearPathCache();
     useUiStore.getState().setDragCapsule(null);
+    useUiStore.getState().setSequenceAttachmentTarget(null);
   }, []);
   useEffect(() => clearCapsule, [clearCapsule]);
 
@@ -1045,6 +1046,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           clearDwell();
           useUiStore.getState().setAttachArmedTarget(null);
           useUiStore.getState().setAttachArmedEdgeTarget(null);
+          useUiStore.getState().setSequenceAttachmentTarget(null);
         } else if (draggedDoc && livePosition) {
           const liveRect: Rect = { ...livePosition, width: draggedDoc.width, height: draggedDoc.height };
           const collapsible = draggedDoc.type === 'note' || draggedDoc.type === 'code';
@@ -1082,7 +1084,30 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             exclude,
           );
 
-          if (overlapId) {
+          // The message under the cursor is more specific than its sequence frame. Outside its
+          // hit area, the usual shape/connector drop behavior still applies.
+          const host = collapsible && movedFar && !centerHitId && !overlapId
+            ? state.document.nodes.reduce<DraftNode | undefined>((top, node) => {
+              if (node.type !== 'sequence' || !pointInBox(aim, node)) return top;
+              return !top || node.z >= top.z ? node : top;
+            }, undefined)
+            : undefined;
+          const hit = host?.type === 'sequence'
+            ? hitSequence(sequenceLayoutFor(host, describeContext(LIGHT)), aim.x - host.x, aim.y - host.y)
+            : null;
+          const message = hit?.kind === 'message' && host?.sequence
+            ? selectSequenceMessage(state.document, host.id, hit.id)
+            : undefined;
+          const messageTarget = message && host && hasAttachmentRoom(message, 'edge') ? { nodeId: host.id, messageId: message.id } : null;
+          useUiStore.getState().setSequenceAttachmentTarget(messageTarget);
+          if (messageTarget) {
+            clearDwell();
+            capsuleInside = true;
+            capsuleHostRect.current = null;
+            nudge.current = { x: 0, y: 0 };
+            useUiStore.getState().setAttachArmedTarget(null);
+            useUiStore.getState().setAttachArmedEdgeTarget(null);
+          } else if (overlapId) {
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(overlapId);
             useUiStore.getState().setAttachArmedEdgeTarget(null);
@@ -1176,6 +1201,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         clearDwell();
         useUiStore.getState().setAttachArmedTarget(null);
         useUiStore.getState().setAttachArmedEdgeTarget(null);
+        useUiStore.getState().setSequenceAttachmentTarget(null);
       }
       if (!probingEdges) useUiStore.getState().setSpliceArmedEdgeTarget(null);
       if (!probingEdges) lastEdgeProbe.current = null;
@@ -1584,9 +1610,18 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     const armedEdge = useUiStore.getState().attachArmedEdgeTarget;
     const armedSplice = useUiStore.getState().spliceArmedEdgeTarget;
     const armedSequence = useUiStore.getState().sequenceDropTarget;
+    const armedMessage = useUiStore.getState().sequenceAttachmentTarget;
     let label: string | undefined;
 
-    if (singleId && armedSequence) {
+    if (singleId && armedMessage) {
+      const attachment = sequenceActions.attachExistingNode(armedMessage.nodeId, armedMessage.messageId, singleId);
+      if (attachment) {
+        markArrived(attachment);
+        label = 'Attach to message';
+      } else {
+        state.commitMove(positions, draggedIds);
+      }
+    } else if (singleId && armedSequence) {
       // Either way the shape is put back where it was before anything is written: a refused drop
       // would otherwise leave it lying on the sequence. One undo step, and no move in it.
       positions.delete(singleId);

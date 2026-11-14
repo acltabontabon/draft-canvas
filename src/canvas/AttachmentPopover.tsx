@@ -1,5 +1,5 @@
 import { describeContext, sequenceLayoutFor } from '../nodes/describe';
-import { sequenceAttachmentTab } from '../nodes/sequence';
+import { sequenceAttachmentChips } from '../nodes/sequence';
 import { LIGHT } from '../render/theme/tokens';
 import { sequenceActions } from '../store/sequenceActions';
 import { useEffect, useRef } from 'react';
@@ -136,12 +136,17 @@ function AttachmentPopoverBody({ detail, closing, listening, editable }: { detai
 
   const displayHost = shown?.host;
   const attachments = (messageId ? shown?.message?.attachments : displayHost?.attachments) ?? [];
+  const directAttachmentId = messageId && attachments.some((attachment) => attachment.id === detail.attachmentId)
+    ? detail.attachmentId ?? undefined : undefined;
   let rect = shown ? rectOfInternal(shown.internal) : null;
   if (rect && messageId && displayHost) {
-    const drawn = sequenceLayoutFor(displayHost, describeContext(LIGHT)).messages.find((message) => message.id === messageId);
+    const context = describeContext(LIGHT);
+    const layout = sequenceLayoutFor(displayHost, context);
+    const drawn = layout.messages.find((message) => message.id === messageId);
     if (drawn) {
-      const tab = sequenceAttachmentTab(drawn, attachments.length);
-      rect = { x: rect.x + tab.x, y: rect.y + tab.y, width: tab.w, height: tab.h };
+      const index = Math.max(0, attachments.findIndex((attachment) => attachment.id === detail.attachmentId));
+      const chip = sequenceAttachmentChips(drawn, attachments, layout.width, context.measurer)[index];
+      if (chip) rect = { x: rect.x + chip.x, y: rect.y + chip.y, width: chip.w, height: chip.h };
     }
   }
 
@@ -208,8 +213,9 @@ function AttachmentPopoverBody({ detail, closing, listening, editable }: { detai
             scale here would otherwise clobber the outer div's own positioning translate. */}
         <div className="dc-attachment-popover-inner">
           <AttachmentChipRow
-            hostKind={messageId ? "message" : "node"}
+            hostKind={messageId ? 'message' : 'node'}
             messageId={messageId}
+            onlyAttachmentId={directAttachmentId}
             hostId={displayHost.id}
             attachments={attachments}
             cardSide={cardSide}

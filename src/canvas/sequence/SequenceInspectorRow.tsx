@@ -102,7 +102,7 @@ function Action({ label, description, onClick, shortcut }: { label: string; desc
 }
 
 function MessageAction({ icon, label, description, onClick, expanded }: {
-  icon: IconName;
+  icon?: IconName;
   label: string;
   description: string;
   onClick: () => void;
@@ -518,7 +518,7 @@ function MessageRow({
             setWrapping(!wrapping);
           }} />
           {(hasAttachmentRoom(message, 'edge') || Boolean(message.attachments?.length)) && (
-            <MessageAction icon="clip" label="Attach" description="Add or open supporting notes and code." expanded={attaching} onClick={() => {
+            <MessageAction label="Attach" description="Add or open supporting notes and code." expanded={attaching} onClick={() => {
               setWrapping(false);
               setAttaching(!attaching);
             }} />
@@ -528,7 +528,7 @@ function MessageRow({
       {attaching && (
         <div className="dc-seq-message-actions dc-seq-attachment-actions" role="group" aria-label="Attachment actions">
           <TooltipGroup>
-            {Boolean(message.attachments?.length) && <MessageAction icon="clip" label="View attachments" description="Open the cards on this message." onClick={() => sequenceActions.showAttachments(node.id, message.id)} />}
+            {Boolean(message.attachments?.length) && <MessageAction label="View attachments" description="Open the cards on this message." onClick={() => sequenceActions.showAttachments(node.id, message.id)} />}
             {hasAttachmentRoom(message, 'edge') && <>
               <MessageAction icon="file" label="Attach note" description="Add a note that stays with the arrow." onClick={() => sequenceActions.addAttachment(node.id, message.id, 'note')} />
               <MessageAction icon="code" label="Attach code" description="Add an example payload or code snippet." onClick={() => sequenceActions.addAttachment(node.id, message.id, 'code')} />

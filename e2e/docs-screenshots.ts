@@ -522,14 +522,12 @@ async function sequenceScreenshots(page: Page) {
   await inspector.getByRole('button', { name: 'Attach', exact: true }).click();
   await inspector.getByRole('button', { name: 'Attach code' }).click();
   const attachment = page.getByRole('toolbar', { name: 'Message attachments' });
-  await attachment.getByRole('button', { name: 'Edit attached detail' }).click();
   await attachment.getByRole('combobox', { name: 'Code language' }).selectOption('json');
   await attachment.getByRole('textbox', { name: 'Attached code' }).fill('{\n  "cartId": "cart_123",\n  "currency": "USD"\n}');
   await page.mouse.click(50, 116);
   await page.locator('.dc-node[data-type="sequence"]').hover({ position: { x: 28, y: 15 } });
   await messages.nth(1).click();
-  await page.getByRole('button', { name: 'Attachments for message 2' }).click();
-  await attachment.getByRole('button', { name: 'View attached code' }).click();
+  await page.getByRole('button', { name: 'View attached code for message 2' }).click();
   await expect(attachment.getByText(/cart_123/)).toBeVisible();
   await page.mouse.move(20, 85);
   await shot(page, 'sequence-attachment');

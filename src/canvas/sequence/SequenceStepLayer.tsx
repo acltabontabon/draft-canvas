@@ -2,7 +2,8 @@ import { memo, useEffect, useMemo } from 'react';
 import { sequenceFlow } from '../../document/sequenceFlow';
 import type { DraftNode } from '../../document/types';
 import { describeContext, describeSequenceMessages, sequenceLayoutFor } from '../../nodes/describe';
-import { sequenceAttachmentTab, sequenceLifelines } from '../../nodes/sequence';
+import { sequenceAttachmentChips, sequenceLifelines } from '../../nodes/sequence';
+import { getMeasurer } from '../../render/text/measure';
 import { beginClipScope, emitDisplayList } from '../../render/svg/emit';
 import type { Theme } from '../../render/theme/tokens';
 import type { PersonalityPreset } from '../../theme/usePersonality';
@@ -42,7 +43,7 @@ export const SequenceStepLayer = memo(function SequenceStepLayer({
   const count = message?.attachments?.length ?? 0;
   const layout = sequenceLayoutFor(node, describeContext(theme, preset));
   const row = count ? layout.messages.find((entry) => entry.id === messageId) : undefined;
-  const tab = row ? sequenceAttachmentTab(row, count) : undefined;
+  const chips = row && message?.attachments ? sequenceAttachmentChips(row, message.attachments, layout.width, getMeasurer()) : [];
   useEffect(() => () => {
     const ui = useUiStore.getState();
     const open = ui.openAttachmentDetail;
@@ -76,13 +77,17 @@ export const SequenceStepLayer = memo(function SequenceStepLayer({
           {layers.told}
         </SvgSurface>
       )}
-      {tab && messageId && <button
-        type="button"
-        className="dc-seq-attachment-hit nodrag nopan"
-        style={{ left: tab.x, top: tab.y, width: tab.w, height: tab.h }}
-        aria-label="View current message attachments"
-        onClick={(event) => { event.stopPropagation(); sequenceActions.showAttachments(node.id, messageId); }}
-      />}
+      {messageId && chips.map((chip, index) => {
+        const attachment = message!.attachments![index]!;
+        return <button
+          key={attachment.id}
+          type="button"
+          className="dc-seq-attachment-hit nodrag nopan"
+          style={{ left: chip.x, top: chip.y, width: chip.w, height: chip.h }}
+          aria-label={`View attached ${attachment.type === 'code' ? 'code' : 'note'} for current message`}
+          onClick={(event) => { event.stopPropagation(); sequenceActions.showAttachments(node.id, messageId, attachment.id); }}
+        />;
+      })}
       {layers.now && (
         // Remounted for each step, so its arrival plays once per message and never again.
         <SvgSurface key={step} className="dc-seq-now" width={node.width} height={node.height}>
