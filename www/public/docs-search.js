@@ -75,6 +75,8 @@ input.addEventListener('keydown', (event) => {
 
 trigger.hidden = false;
 trigger.addEventListener('click', () => {
+  // WebKit may leave the button unfocused on click. The dialog restores the opener's focus.
+  trigger.focus({ preventScroll: true });
   dialog.showModal();
   input.focus();
   input.select();
