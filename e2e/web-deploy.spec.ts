@@ -722,7 +722,10 @@ test('the exhibits link back to the feature overview', async ({ page }) => {
   await expect(features.getByRole('heading', { name: 'Bring your own agent' })).toBeInViewport();
   await expect(features.getByRole('heading', { name: 'Keep your files on your device' })).toBeInViewport();
 
-  const audit = await new AxeBuilder({ page }).include('#features').withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
+  // The page has no iframes. Run the same rules in one pass because Firefox can crash in
+  // axe's partial scan after the gallery-to-overview navigation.
+  const audit = await new AxeBuilder({ page }).setLegacyMode().include('#features')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21aa']).analyze();
   expect(audit.violations).toEqual([]);
 });
 
