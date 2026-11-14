@@ -158,9 +158,14 @@ test.describe('context menu — a single node', () => {
     await page.keyboard.type('Retries three times');
     // A click elsewhere keeps what was typed (Escape discards it, like every inline editor).
     await page.locator('.react-flow__pane').click({ position: { x: 60, y: 500 } });
-    await expect(page.locator('.dc-attachment-card[data-pinned="true"]')).toHaveCount(0);
-    // With the card shut, the attachment is the shape's "1 attachment" badge; clicking it reopens the card.
+    // Gone, not just unpinned: a closed card lingers for its exit animation, and a locator that still
+    // matched it would pass below on a fast machine and miss on a slow one.
+    await expect(page.locator('.dc-attachment-card')).toHaveCount(0);
+    // With the card shut, the attachment is the shape's "1 attachment" badge. It opens the row of
+    // chips, and a click on the chip opens the card.
     await page.getByRole('button', { name: '1 attachment' }).click();
+    await expect(page.locator('.dc-attachment-card')).toHaveCount(0);
+    await page.getByRole('button', { name: 'View attached note' }).click();
     await expect(page.locator('.dc-attachment-card')).toContainText('Retries three times');
     // A click on the existing chip only reads: the card opens without the editor.
     await expect(page.locator('.dc-attachment-card textarea')).toHaveCount(0);

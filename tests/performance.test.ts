@@ -34,7 +34,7 @@ import { diffFile } from '../src/collab/diff';
 import { freeOriginFor } from '../src/document/operations';
 import { buildStarter, starterSize } from './fixtures/starters-v1/build';
 import { buildDocumentForNodeCount } from '../benchmark/workloads/generator';
-import { ARRANGE_WORK_UNITS, planArrange, planTidy, TIDY_WORK_PER_CONNECTOR, TIDY_WORK_UNITS } from '../src/agent/layoutPlan';
+import { ARRANGE_WORK_UNITS, LAYOUT_BACKSTOP_MS, planArrange, planTidy, TIDY_WORK_PER_CONNECTOR, TIDY_WORK_UNITS } from '../src/agent/layoutPlan';
 
 // Counts the work `evaluateAttachCandidates` does to prepare a frame's candidates, which is the thing
 // a drag must not repeat: a pass over every shape asking whether it has room.
@@ -878,12 +878,15 @@ describe('Arrange and Tidy up are bounded by work, at 100, 300 and 1000 shapes',
     const budget = TIDY_WORK_UNITS + TIDY_WORK_PER_CONNECTOR * doc.edges.length;
     const started = performance.now();
     const result = planTidy(doc);
+    const elapsed = performance.now() - started;
     const used = result.kind === 'plan' ? result.plan.used : result.used;
     const partial = result.kind === 'plan' ? result.plan.partial : result.partial;
-    record('tidy', doc.nodes.length, performance.now() - started, `${used} units of ${budget}${partial ? ', stopped early' : ''}`);
+    record('tidy', doc.nodes.length, elapsed, `${used} units of ${budget}${partial ? ', stopped early' : ''}`);
     expect(used).toBeLessThanOrEqual(budget * 1.5);
-    // Stopping early is said, and only ever because the budget was reached.
-    if (partial) expect(used).toBeGreaterThanOrEqual(budget);
+    // Stopping early is said, and only ever because the budget was reached — or, on a machine too slow
+    // to spend it (a shared CI runner took the whole backstop to spend 43,645 of 60,120 units), the
+    // wall-clock net behind it, which is what that net is for.
+    if (partial && elapsed < LAYOUT_BACKSTOP_MS) expect(used).toBeGreaterThanOrEqual(budget);
   }, 120_000);
 
   it.each([100, 300] as const)('Arrange on %i shapes spends a bounded amount of work and says when it stopped early', (size) => {

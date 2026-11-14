@@ -149,7 +149,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   connector with the labels joined, long file names and deeply nested subgraphs import, and errors
   are in plain words. A diagram saved by a newer Draft Canvas says so and is left untouched.
 - **Easier on touch screens and for screen readers** — Buttons, popovers, menus and the status bar
-  are at least 40 px on touch screens, the status bar wraps on phones, the Flows panel is a tree,
+  are at least 40 px on touch screens, the status bar wraps on phones and whenever a save needs
+  attention (a narrow desktop window keeps its one row), the Flows panel is a tree,
   the blank-canvas hint is read aloud and mentions long-press and `S`, `D`, `Q`, and the canvas and
   Quick Connect rows show where focus is. Zoom, status chips and flow-bar buttons show their keys,
   danger and faint text have more contrast, and one name is used for each thing (spotlight, shape,

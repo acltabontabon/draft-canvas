@@ -67,10 +67,13 @@ test.describe('keyboard and assistive technology', () => {
   test('Tab onto the canvas shows where focus is, as an inset ring that moves nothing', async ({ page }) => {
     await newCanvas(page, 'Canvas focus ring');
     const canvas = page.locator('.dc-canvas');
-    const before = await canvas.boundingBox();
     // From the title field, so the last input was the keyboard and `:focus-visible` applies.
     await page.getByLabel('Diagram title').focus();
     await page.keyboard.press('Shift+Tab');
+    // Measured here, with the title field settled and just before the canvas takes focus: the ring is
+    // what must move nothing. Taken any earlier it caught the toolbar still settling by 0.015px on
+    // Firefox, which is not the ring's doing.
+    const before = await canvas.boundingBox();
     await canvas.focus();
     await expect(canvas).toBeFocused();
     // The ring keys on `:focus-visible`, and whether an engine treats scripted focus after a key press
@@ -82,7 +85,9 @@ test.describe('keyboard and assistive technology', () => {
     } else {
       test.info().annotations.push({ type: 'note', description: 'This engine did not mark the script-focused canvas :focus-visible.' });
     }
-    expect(await canvas.boundingBox()).toEqual(before);
+    // Within half a pixel, not exactly: a ring that took room would move the box by its own width (2px).
+    const after = (await canvas.boundingBox())!;
+    for (const key of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(after[key] - before![key]), key).toBeLessThan(0.5);
   });
 
   test('Shift+F10 with nothing selected opens the canvas menu, reachable and usable by keyboard', async ({ page }) => {

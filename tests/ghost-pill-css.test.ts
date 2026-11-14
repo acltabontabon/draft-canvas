@@ -23,7 +23,7 @@ function keyframes(name: string): string {
 
 /** The declaration block of the first rule whose selector is exactly `selector` (indented or not). */
 function block(selector: string): string {
-  const match = new RegExp(`(?:^|\\n)\\s*${selector.replace(/[.[\]()]/g, '\\$&')} \\{([^}]*)\\}`).exec(css);
+  const match = new RegExp(`(?:^|\\n)\\s*${selector.replace(/[\\.[\]()]/g, '\\$&')} \\{([^}]*)\\}`).exec(css);
   if (!match) throw new Error(`no rule for ${selector}`);
   return match[1]!;
 }

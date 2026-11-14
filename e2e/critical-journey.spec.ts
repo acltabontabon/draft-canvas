@@ -462,8 +462,10 @@ test.describe('Draft Canvas', () => {
     expect(afterMouseClick).toBe('none');
 
     // Tabbing onto the canvas does show it — a real, visible keyboard-focus signal, distinct from
-    // a plain mouse-selected look.
-    await page.evaluate(() => document.body.focus());
+    // a plain mouse-selected look. Set out from the title field, ahead of the canvas in the Tab order:
+    // `body.focus()` does not move Firefox's starting point off the shape just clicked, so Tab went on
+    // from there to the inspector and never came round to the canvas.
+    await page.getByLabel('Diagram title').focus();
     for (let i = 0; i < 60; i++) {
       await page.keyboard.press('Tab');
       if (await page.evaluate(() => document.activeElement?.classList.contains('dc-canvas'))) break;

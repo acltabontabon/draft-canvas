@@ -6367,23 +6367,27 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   max-width: 42vw;
   }
 
-  /* The undo, zoom and help cluster is nearly a phone's whole bar (more so under a finger, where each
-     control is 40px), so a save message that is longer than "Saved locally" — "Storage full — not
-     saved" — would run under Undo. The bar wraps instead: the message keeps a line when it needs one,
-     and the cluster sits at the end of its own. */
   .dc-status {
   height: auto;
-  flex-wrap: wrap;
-  row-gap: 2px;
   padding: 6px 10px;
   }
 
-  .dc-status-left {
+  /* The undo, zoom and help cluster is nearly a phone's whole bar, so a save message that is longer than
+     "Saved locally" — "Storage full — not saved", a choice of copies — would run under Undo. In those
+     states the bar wraps instead: the message keeps a line when it needs one, and the cluster sits at
+     the end of its own. Only in those states: wrapping always cost every narrow window a second row
+     (20px of canvas) for a message that fits beside the cluster. */
+  .dc-status:has(.dc-save[data-status='error'], .dc-save-conflict) {
+  flex-wrap: wrap;
+  row-gap: 2px;
+  }
+
+  .dc-status:has(.dc-save[data-status='error'], .dc-save-conflict) .dc-status-left {
   flex: 1 1 auto;
   flex-wrap: wrap;
   }
 
-  .dc-status-right {
+  .dc-status:has(.dc-save[data-status='error'], .dc-save-conflict) .dc-status-right {
   margin-left: auto;
   }
 
@@ -7435,5 +7439,24 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
 
   .dc-save-conflict .dc-button {
     height: 40px;
+  }
+}
+
+/* Under a finger the cluster's 40px controls leave no room beside even "Saved locally" on a phone, so
+   the bar wraps there whatever the save says: the message on its own line, the cluster at the end of
+   the next. */
+@media (pointer: coarse) and (max-width: 720px) {
+  .dc-status {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .dc-status-left {
+    flex: 1 1 auto;
+    flex-wrap: wrap;
+  }
+
+  .dc-status-right {
+    margin-left: auto;
   }
 }
