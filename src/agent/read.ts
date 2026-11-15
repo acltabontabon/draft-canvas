@@ -91,6 +91,11 @@ function viewsOutline(file: DraftDocument) {
   };
 }
 
+/** The Depth map and a current revision, without reading or reviewing the room contents. */
+export function readOutline(file: DraftDocument, revision: string, diagramId: string): Record<string, unknown> {
+  return { diagramId, title: file.metadata.title, revision, format: 'outline', ...viewsOutline(file) };
+}
+
 /**
  * A flow step as `update_diagram` takes it back: a bare relationship id; the object form when it says
  * more (a caption, extra highlights, a camera a person pinned); or, for a step with no relationship,

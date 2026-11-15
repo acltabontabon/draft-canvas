@@ -22,6 +22,19 @@ const STARTER_ID_PATTERN = '^[a-z0-9]+(?:-[a-z0-9]+)*$';
 
 type Schema = Record<string, unknown>;
 
+/**
+ * A room's item schemas are defined once per tool, under its `inputSchema.$defs`, and referenced
+ * from wherever a room appears (`ref`). An element's `inside` is a room of the same shape, typed out
+ * level by level down to `AGENT_LIMITS.insideDepth` (where `readRoom` stops accepting one) — so a
+ * client that validates against the schema catches a misspelt field three levels down the same way
+ * it does at the top — and that is exactly what makes `$defs` necessary: written out inline, the
+ * nested rooms are a triangle (one copy at depth 1, two at depth 2, three at depth 3) that put the
+ * tool list, sent to the model on every turn, at three times its size. The references are plain
+ * local `#/$defs/…` pointers and never recursive: `element0` holds `element1`, which holds
+ * `element2`, which holds `element3`, which holds nothing — the depth limit, visible in the schema.
+ */
+const ref = (name: string): Schema => ({ $ref: `#/$defs/${name}` });
+
 const id = (what: string): Schema => ({ type: 'string', pattern: '^[A-Za-z][A-Za-z0-9_.-]{0,63}$', description: `Your id for this ${what}; reuse it to refer to it later.` });
 const text = (max: number, description?: string): Schema => ({ type: 'string', maxLength: max, ...(description ? { description } : {}) });
 
@@ -41,25 +54,12 @@ const attachment: Schema = {
     kind: { enum: ['note', 'code'] },
     text: text(AGENT_LIMITS.noteLength),
     noteKind: { enum: NOTE_KIND_NAMES },
-    language: { enum: CODE_LANGUAGES },
+    language: ref('codeLanguage'),
     code: text(AGENT_LIMITS.codeLength, 'Shown as code, never run.'),
   },
   required: ['kind'],
   additionalProperties: false,
 };
-
-/**
- * A room's item schemas are defined once per tool, under its `inputSchema.$defs`, and referenced
- * from wherever a room appears (`ref`). An element's `inside` is a room of the same shape, typed out
- * level by level down to `AGENT_LIMITS.insideDepth` (where `readRoom` stops accepting one) — so a
- * client that validates against the schema catches a misspelt field three levels down the same way
- * it does at the top — and that is exactly what makes `$defs` necessary: written out inline, the
- * nested rooms are a triangle (one copy at depth 1, two at depth 2, three at depth 3) that put the
- * tool list, sent to the model on every turn, at three times its size. The references are plain
- * local `#/$defs/…` pointers and never recursive: `element0` holds `element1`, which holds
- * `element2`, which holds `element3`, which holds nothing — the depth limit, visible in the schema.
- */
-const ref = (name: string): Schema => ({ $ref: `#/$defs/${name}` });
 
 /**
  * `schema` without its descriptions, at every level. A nested room is "the same shape as the top
@@ -92,13 +92,13 @@ const element = (depth: number): Schema => ({
   type: 'object',
   properties: {
     id: id('element'),
-    type: { anyOf: [{ enum: ELEMENT_TYPE_NAMES }, { type: 'string', maxLength: 64 }], description: 'Unknown names require create_diagram.fallbackType. What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component.' },
+    type: { anyOf: [ref('elementType'), { type: 'string', maxLength: 64 }], description: 'Element type or alias. Unknown names require create_diagram.fallbackType.' },
     label: text(AGENT_LIMITS.labelLength, 'Its name.'),
     description: text(AGENT_LIMITS.descriptionLength, 'C4 description: its responsibility, in a sentence.'),
     technology: text(AGENT_LIMITS.technologyLength, 'One product, as named, e.g. "Spring Boot 3": shows its logo.'),
     replicas: replicasSchema,
     group: { type: 'string', description: 'Id of the group/boundary it sits in.' },
-    color: { enum: ACCENTS },
+    color: ref('accent'),
     evidence: ref('evidence'),
     attachments: { type: 'array', maxItems: AGENT_LIMITS.attachmentsPerElement, items: ref('attachment') },
     place: ref('place'),
@@ -129,7 +129,7 @@ const relationship: Schema = {
     directed: { type: 'boolean', description: 'false for an undirected line. Default true.' },
     async: { type: 'boolean' },
     condition: text(120, 'A short guard shown under the label.'),
-    color: { enum: ACCENTS },
+    color: ref('accent'),
     lineStyle: { enum: LINE_STYLE_NAMES, description: 'stepped (default), curved or straight.' },
     response: { anyOf: [text(AGENT_LIMITS.responseLength), { type: 'boolean' }], description: 'A synchronous call\'s reply line: true (unlabelled), or its label ("200 Order").' },
     deliveryAttempts: { type: 'integer', minimum: AGENT_LIMITS.deliveryAttempts.min, maximum: AGENT_LIMITS.deliveryAttempts.max, description: 'On a deadLetters route: attempts first.' },
@@ -153,7 +153,7 @@ const group: Schema = {
     label: text(AGENT_LIMITS.groupLabelLength),
     kind: { enum: Object.keys(GROUP_KINDS), description: '"system" is a C4 software-system boundary; "group" is purely visual. Default "boundary". Laid out as one block: never group external systems just to tidy them.' },
     parent: { type: 'string', description: 'Id of the group it nests in.' },
-    color: { enum: ACCENTS },
+    color: ref('accent'),
   },
   required: ['id', 'label'],
   additionalProperties: false,
@@ -193,7 +193,7 @@ const flow: Schema = {
   properties: {
     id: id('flow'),
     title: text(AGENT_LIMITS.flowTitleLength),
-    color: { enum: ACCENTS },
+    color: ref('accent'),
     variantOf: { type: 'string', description: 'Id of the flow this is a named alternative telling of (e.g. a failure path) — that flow itself must not also be a variant.' },
     steps: ref('steps'),
   },
@@ -211,7 +211,7 @@ const labelStyle: Schema = {
     align: { enum: TEXT_ALIGNS },
     bold: { type: 'boolean' },
     italic: { type: 'boolean' },
-    color: { enum: ACCENTS },
+    color: ref('accent'),
   },
   additionalProperties: false,
 };
@@ -224,7 +224,7 @@ const note: Schema = {
     text: text(AGENT_LIMITS.noteLength, 'The words; not for kind "code". Markdown for kind "label".'),
     kind: { enum: NOTE_FORM_NAMES, description: 'note (default), question, warning, decision — or code, or label.' },
     code: text(AGENT_LIMITS.codeLength, 'kind "code" only. Indentation is kept.'),
-    language: { enum: CODE_LANGUAGES, description: 'kind "code" only. Default plaintext.' },
+    language: { ...ref('codeLanguage'), description: 'kind "code" only. Default plaintext.' },
     about: {
       type: 'string',
       description:
@@ -233,7 +233,7 @@ const note: Schema = {
     attach: { type: 'boolean', description: 'Default true for an element: a native attachment (moves, exports and is removed with it). false: a free card beside it, for a callout meant to be read at a glance. true about a group: attached to the boundary.' },
     near: { type: 'string', description: 'Older name for about.' },
     style: ref('labelStyle'),
-    color: { enum: ACCENTS },
+    color: ref('accent'),
   },
   required: ['id'],
   additionalProperties: false,
@@ -338,6 +338,9 @@ const room = (depth = 0): Record<string, Schema> => ({
 
 /** What `room()`'s references resolve to — the same object on every tool that takes a room. */
 const roomDefs: Record<string, Schema> = {
+  elementType: { enum: ELEMENT_TYPE_NAMES },
+  accent: { enum: ACCENTS },
+  codeLanguage: { enum: CODE_LANGUAGES },
   evidence,
   place,
   route,
@@ -382,8 +385,8 @@ const opAdd: Schema = {
 
 const nullable = (schema: Schema): Schema => ({ anyOf: [schema, { type: 'null' }] });
 const setProperties: Record<string, Schema> = {
-  label: nullable(text(1000)), text: text(1000), type: { anyOf: [{ enum: ELEMENT_TYPE_NAMES }, { type: 'string', maxLength: 64 }] },
-  description: nullable(text(280)), technology: nullable(text(60)), replicas: nullable(replicasSchema), color: nullable({ enum: ACCENTS }),
+  label: nullable(text(1000)), text: text(1000), type: { anyOf: [ref('elementType'), { type: 'string', maxLength: 64 }] },
+  description: nullable(text(280)), technology: nullable(text(60)), replicas: nullable(replicasSchema), color: nullable(ref('accent')),
   group: nullable({ type: 'string' }), kind: nullable({ enum: [...new Set([...Object.keys(GROUP_KINDS), ...NOTE_FORM_NAMES, ...CONNECTOR_KINDS])] }),
   semantic: nullable({ enum: EDGE_SEMANTICS }), directed: { type: 'boolean' }, async: { type: 'boolean' },
   condition: nullable(text(120)), title: text(100),
@@ -396,7 +399,7 @@ const setProperties: Record<string, Schema> = {
   from: { type: 'string', description: 'Re-points a relationship (swap with to to reverse it), keeping its id and flows.' },
   to: { type: 'string' },
   steps: ref('steps'), variantOf: nullable({ type: 'string' }),
-  code: text(4000), language: { enum: CODE_LANGUAGES },
+  code: text(4000), language: ref('codeLanguage'),
   mermaid: text(AGENT_LIMITS.sequenceSourceLength), links: nullable(sequenceLinks),
   style: nullable(ref('labelStyle')),
   about: { anyOf: [{ type: 'string' }, { type: 'array', minItems: 1, maxItems: 40, items: { type: 'string' } }] },
@@ -489,6 +492,8 @@ const ops: Schema = {
   items: op,
 };
 
+export const READ_FORMATS = ['draft', 'outline', 'mermaid', 'plantuml', 'c4'] as const;
+
 const TOOL_INPUTS = [
   {
     name: 'get_capabilities',
@@ -534,9 +539,9 @@ const TOOL_INPUTS = [
         include: { type: 'array', items: { enum: ['geometry', 'attachments', 'suggestions', 'fullText', 'views'] }, description: 'views: an outline of every inside view in the file (path, owner, level, size) — the Depth map.' },
         cursor: { type: 'string' },
         format: {
-          enum: ['draft', 'mermaid', 'plantuml', 'c4'],
+          enum: READ_FORMATS,
           description:
-            'draft (default): the structured read. mermaid/plantuml: every view\'s flows as sequence-diagram source, with the revision. c4: every view\'s architecture (containers, components, boundaries, relationships) as C4-PlantUML. Source formats ignore focus, include and cursor.',
+            'draft: semantic view (default). outline: nested view paths and counts only. mermaid/plantuml: all flows as sequence source. c4: all views as C4-PlantUML. Only draft uses view, focus, include and cursor.',
         },
       },
       required: ['diagramId'],
@@ -612,7 +617,7 @@ const TOOL_INPUTS = [
     name: 'create_diagram',
     title: 'Create a diagram',
     description:
-      'Creates a new file: only for the conversation\'s first diagram or one the person asks for as new/separate; follow-ups are update_diagram on the returned diagramId. Send the graph, notes and flows together. Sizing, layout and routing are automatic and readability-checked; place/route set exact geometry. List elements in reading order, entry point first; name the main path in layout.primaryFlow; put detail beyond ~15 elements in an element\'s inside view (get_capabilities readability). The receipt\'s legibility (top view; inside views under legibility.views) and advisories say what to change next. Saved in an enabled folder; an existing title is DUPLICATE_TITLE unless allowDuplicateTitle. open: true when the person wants to see or watch it (opens only if that loses nothing).',
+      'Create a new file in an enabled folder. Use update_diagram for follow-ups. Send the graph, notes and flows together in reading order, entry point first. Set layout.primaryFlow for the main path; put detail in inside views. Automatic layout returns legibility (including inside views) and advisories. Duplicate titles require allowDuplicateTitle.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -634,7 +639,7 @@ const TOOL_INPUTS = [
         layout,
         open: { type: 'boolean', description: 'Show it in Draft Canvas (only when that loses nothing).' },
         allowDuplicateTitle: { type: 'boolean', description: 'The person asked for a separate diagram with a title that already exists.' },
-        fallbackType: { enum: ELEMENT_TYPE_NAMES, description: 'Draw unknown types as this instead of refusing them.' },
+        fallbackType: { ...ref('elementType'), description: 'Draw unknown types as this instead of refusing them.' },
       },
       required: ['requestId', 'title'],
       additionalProperties: false,
@@ -646,7 +651,7 @@ const TOOL_INPUTS = [
     name: 'update_diagram',
     title: 'Update a diagram',
     description:
-      'Every follow-up to a diagram (add, rename, remove, notes, flows, cleanup) goes here on its diagramId; never recreate it, even after a failure. Pass the revision from your latest read or receipt. Unnamed content (ids, positions, notes, flows) stays. Works open (one undo step on screen) or closed (changes its file without switching the person\'s view). Ops run in order as one change: add {nodes?,relationships?,groups?,flows?,notes?,openPoints?}; update {id,set} (null clears optional fields); remove {ids,cascade?}; setLevel {level}; arrange {scope?} cleans up the view or a group, keeping ids, notes and flows; moveInside {owner,ids} / moveOutside {ids} move one C4 level down/up. New elements sit beside their connections; existing shapes move only by arrange or set.place (set.route bends a connector). If content cannot fit, add the error\'s suggestedOp. On REVISION_CONFLICT, read again and rebuild the change.',
+      'Apply ordered ops as one change to an open or closed diagram. Use the latest revision. Existing positions stay unless explicitly moved or arranged. On REVISION_CONFLICT, reread and rebuild the change.',
     inputSchema: {
       type: 'object',
       properties: {

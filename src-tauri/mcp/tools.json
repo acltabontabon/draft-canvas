@@ -220,11 +220,12 @@
         "format": {
           "enum": [
             "draft",
+            "outline",
             "mermaid",
             "plantuml",
             "c4"
           ],
-          "description": "draft (default): the structured read. mermaid/plantuml: every view's flows as sequence-diagram source, with the revision. c4: every view's architecture (containers, components, boundaries, relationships) as C4-PlantUML. Source formats ignore focus, include and cursor."
+          "description": "draft: semantic view (default). outline: nested view paths and counts only. mermaid/plantuml: all flows as sequence source. c4: all views as C4-PlantUML. Only draft uses view, focus, include and cursor."
         }
       },
       "required": [
@@ -303,6 +304,39 @@
                 "relationships",
                 "flows",
                 "completeness"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "diagramId": {
+                  "type": "string"
+                },
+                "revision": {
+                  "type": "string"
+                },
+                "title": {
+                  "type": "string"
+                },
+                "format": {
+                  "const": "outline"
+                },
+                "views": {
+                  "type": "array",
+                  "items": {
+                    "type": "object"
+                  }
+                },
+                "viewsTruncated": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "diagramId",
+                "revision",
+                "title",
+                "format",
+                "views"
               ]
             },
             {
@@ -821,7 +855,7 @@
   {
     "name": "create_diagram",
     "title": "Create a diagram",
-    "description": "Creates a new file: only for the conversation's first diagram or one the person asks for as new/separate; follow-ups are update_diagram on the returned diagramId. Send the graph, notes and flows together. Sizing, layout and routing are automatic and readability-checked; place/route set exact geometry. List elements in reading order, entry point first; name the main path in layout.primaryFlow; put detail beyond ~15 elements in an element's inside view (get_capabilities readability). The receipt's legibility (top view; inside views under legibility.views) and advisories say what to change next. Saved in an enabled folder; an existing title is DUPLICATE_TITLE unless allowDuplicateTitle. open: true when the person wants to see or watch it (opens only if that loses nothing).",
+    "description": "Create a new file in an enabled folder. Use update_diagram for follow-ups. Send the graph, notes and flows together in reading order, entry point first. Set layout.primaryFlow for the main path; put detail in inside views. Automatic layout returns legibility (including inside views) and advisories. Duplicate titles require allowDuplicateTitle.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -979,6 +1013,17 @@
           "description": "The person asked for a separate diagram with a title that already exists."
         },
         "fallbackType": {
+          "$ref": "#/$defs/elementType",
+          "description": "Draw unknown types as this instead of refusing them."
+        }
+      },
+      "required": [
+        "requestId",
+        "title"
+      ],
+      "additionalProperties": false,
+      "$defs": {
+        "elementType": {
           "enum": [
             "service",
             "api",
@@ -1009,16 +1054,35 @@
             "adapter",
             "port",
             "junction"
-          ],
-          "description": "Draw unknown types as this instead of refusing them."
-        }
-      },
-      "required": [
-        "requestId",
-        "title"
-      ],
-      "additionalProperties": false,
-      "$defs": {
+          ]
+        },
+        "accent": {
+          "enum": [
+            "neutral",
+            "teal",
+            "blue",
+            "violet",
+            "amber",
+            "rose",
+            "green"
+          ]
+        },
+        "codeLanguage": {
+          "enum": [
+            "plaintext",
+            "java",
+            "javascript",
+            "typescript",
+            "json",
+            "yaml",
+            "xml",
+            "sql",
+            "bash",
+            "http",
+            "log",
+            "diff"
+          ]
+        },
         "evidence": {
           "type": "array",
           "maxItems": 8,
@@ -1319,20 +1383,7 @@
               ]
             },
             "language": {
-              "enum": [
-                "plaintext",
-                "java",
-                "javascript",
-                "typescript",
-                "json",
-                "yaml",
-                "xml",
-                "sql",
-                "bash",
-                "http",
-                "log",
-                "diff"
-              ]
+              "$ref": "#/$defs/codeLanguage"
             },
             "code": {
               "type": "string",
@@ -1429,15 +1480,7 @@
               "description": "A short guard shown under the label."
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "lineStyle": {
               "enum": [
@@ -1540,15 +1583,7 @@
               "description": "Id of the group it nests in."
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             }
           },
           "required": [
@@ -1570,15 +1605,7 @@
               "maxLength": 100
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "variantOf": {
               "type": "string",
@@ -1626,20 +1653,7 @@
               "description": "kind \"code\" only. Indentation is kept."
             },
             "language": {
-              "enum": [
-                "plaintext",
-                "java",
-                "javascript",
-                "typescript",
-                "json",
-                "yaml",
-                "xml",
-                "sql",
-                "bash",
-                "http",
-                "log",
-                "diff"
-              ],
+              "$ref": "#/$defs/codeLanguage",
               "description": "kind \"code\" only. Default plaintext."
             },
             "about": {
@@ -1658,15 +1672,7 @@
               "$ref": "#/$defs/labelStyle"
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             }
           },
           "required": [
@@ -1749,15 +1755,7 @@
               "type": "boolean"
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             }
           },
           "additionalProperties": false
@@ -1773,44 +1771,14 @@
             "type": {
               "anyOf": [
                 {
-                  "enum": [
-                    "service",
-                    "api",
-                    "worker",
-                    "scheduler",
-                    "gateway",
-                    "external-system",
-                    "database",
-                    "sql-database",
-                    "nosql-database",
-                    "cache",
-                    "file-system",
-                    "object-storage",
-                    "search-index",
-                    "table",
-                    "queue",
-                    "topic",
-                    "stream",
-                    "dead-letter-queue",
-                    "person",
-                    "user-group",
-                    "external-actor",
-                    "system-actor",
-                    "device",
-                    "ai-agent",
-                    "component",
-                    "module",
-                    "adapter",
-                    "port",
-                    "junction"
-                  ]
+                  "$ref": "#/$defs/elementType"
                 },
                 {
                   "type": "string",
                   "maxLength": 64
                 }
               ],
-              "description": "Unknown names require create_diagram.fallbackType. What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component."
+              "description": "Element type or alias. Unknown names require create_diagram.fallbackType."
             },
             "label": {
               "type": "string",
@@ -1837,15 +1805,7 @@
               "description": "Id of the group/boundary it sits in."
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "evidence": {
               "$ref": "#/$defs/evidence"
@@ -1935,37 +1895,7 @@
             "type": {
               "anyOf": [
                 {
-                  "enum": [
-                    "service",
-                    "api",
-                    "worker",
-                    "scheduler",
-                    "gateway",
-                    "external-system",
-                    "database",
-                    "sql-database",
-                    "nosql-database",
-                    "cache",
-                    "file-system",
-                    "object-storage",
-                    "search-index",
-                    "table",
-                    "queue",
-                    "topic",
-                    "stream",
-                    "dead-letter-queue",
-                    "person",
-                    "user-group",
-                    "external-actor",
-                    "system-actor",
-                    "device",
-                    "ai-agent",
-                    "component",
-                    "module",
-                    "adapter",
-                    "port",
-                    "junction"
-                  ]
+                  "$ref": "#/$defs/elementType"
                 },
                 {
                   "type": "string",
@@ -1994,15 +1924,7 @@
               "type": "string"
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "evidence": {
               "$ref": "#/$defs/evidence"
@@ -2090,37 +2012,7 @@
             "type": {
               "anyOf": [
                 {
-                  "enum": [
-                    "service",
-                    "api",
-                    "worker",
-                    "scheduler",
-                    "gateway",
-                    "external-system",
-                    "database",
-                    "sql-database",
-                    "nosql-database",
-                    "cache",
-                    "file-system",
-                    "object-storage",
-                    "search-index",
-                    "table",
-                    "queue",
-                    "topic",
-                    "stream",
-                    "dead-letter-queue",
-                    "person",
-                    "user-group",
-                    "external-actor",
-                    "system-actor",
-                    "device",
-                    "ai-agent",
-                    "component",
-                    "module",
-                    "adapter",
-                    "port",
-                    "junction"
-                  ]
+                  "$ref": "#/$defs/elementType"
                 },
                 {
                   "type": "string",
@@ -2149,15 +2041,7 @@
               "type": "string"
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "evidence": {
               "$ref": "#/$defs/evidence"
@@ -2245,37 +2129,7 @@
             "type": {
               "anyOf": [
                 {
-                  "enum": [
-                    "service",
-                    "api",
-                    "worker",
-                    "scheduler",
-                    "gateway",
-                    "external-system",
-                    "database",
-                    "sql-database",
-                    "nosql-database",
-                    "cache",
-                    "file-system",
-                    "object-storage",
-                    "search-index",
-                    "table",
-                    "queue",
-                    "topic",
-                    "stream",
-                    "dead-letter-queue",
-                    "person",
-                    "user-group",
-                    "external-actor",
-                    "system-actor",
-                    "device",
-                    "ai-agent",
-                    "component",
-                    "module",
-                    "adapter",
-                    "port",
-                    "junction"
-                  ]
+                  "$ref": "#/$defs/elementType"
                 },
                 {
                   "type": "string",
@@ -2304,15 +2158,7 @@
               "type": "string"
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "evidence": {
               "$ref": "#/$defs/evidence"
@@ -2398,7 +2244,7 @@
   {
     "name": "update_diagram",
     "title": "Update a diagram",
-    "description": "Every follow-up to a diagram (add, rename, remove, notes, flows, cleanup) goes here on its diagramId; never recreate it, even after a failure. Pass the revision from your latest read or receipt. Unnamed content (ids, positions, notes, flows) stays. Works open (one undo step on screen) or closed (changes its file without switching the person's view). Ops run in order as one change: add {nodes?,relationships?,groups?,flows?,notes?,openPoints?}; update {id,set} (null clears optional fields); remove {ids,cascade?}; setLevel {level}; arrange {scope?} cleans up the view or a group, keeping ids, notes and flows; moveInside {owner,ids} / moveOutside {ids} move one C4 level down/up. New elements sit beside their connections; existing shapes move only by arrange or set.place (set.route bends a connector). If content cannot fit, add the error's suggestedOp. On REVISION_CONFLICT, read again and rebuild the change.",
+    "description": "Apply ordered ops as one change to an open or closed diagram. Use the latest revision. Existing positions stay unless explicitly moved or arranged. On REVISION_CONFLICT, reread and rebuild the change.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -2603,37 +2449,7 @@
                       "type": {
                         "anyOf": [
                           {
-                            "enum": [
-                              "service",
-                              "api",
-                              "worker",
-                              "scheduler",
-                              "gateway",
-                              "external-system",
-                              "database",
-                              "sql-database",
-                              "nosql-database",
-                              "cache",
-                              "file-system",
-                              "object-storage",
-                              "search-index",
-                              "table",
-                              "queue",
-                              "topic",
-                              "stream",
-                              "dead-letter-queue",
-                              "person",
-                              "user-group",
-                              "external-actor",
-                              "system-actor",
-                              "device",
-                              "ai-agent",
-                              "component",
-                              "module",
-                              "adapter",
-                              "port",
-                              "junction"
-                            ]
+                            "$ref": "#/$defs/elementType"
                           },
                           {
                             "type": "string",
@@ -2678,15 +2494,7 @@
                       "color": {
                         "anyOf": [
                           {
-                            "enum": [
-                              "neutral",
-                              "teal",
-                              "blue",
-                              "violet",
-                              "amber",
-                              "rose",
-                              "green"
-                            ]
+                            "$ref": "#/$defs/accent"
                           },
                           {
                             "type": "null"
@@ -2778,20 +2586,7 @@
                         "maxLength": 4000
                       },
                       "language": {
-                        "enum": [
-                          "plaintext",
-                          "java",
-                          "javascript",
-                          "typescript",
-                          "json",
-                          "yaml",
-                          "xml",
-                          "sql",
-                          "bash",
-                          "http",
-                          "log",
-                          "diff"
-                        ]
+                        "$ref": "#/$defs/codeLanguage"
                       },
                       "style": {
                         "anyOf": [
@@ -3288,6 +3083,66 @@
       ],
       "additionalProperties": false,
       "$defs": {
+        "elementType": {
+          "enum": [
+            "service",
+            "api",
+            "worker",
+            "scheduler",
+            "gateway",
+            "external-system",
+            "database",
+            "sql-database",
+            "nosql-database",
+            "cache",
+            "file-system",
+            "object-storage",
+            "search-index",
+            "table",
+            "queue",
+            "topic",
+            "stream",
+            "dead-letter-queue",
+            "person",
+            "user-group",
+            "external-actor",
+            "system-actor",
+            "device",
+            "ai-agent",
+            "component",
+            "module",
+            "adapter",
+            "port",
+            "junction"
+          ]
+        },
+        "accent": {
+          "enum": [
+            "neutral",
+            "teal",
+            "blue",
+            "violet",
+            "amber",
+            "rose",
+            "green"
+          ]
+        },
+        "codeLanguage": {
+          "enum": [
+            "plaintext",
+            "java",
+            "javascript",
+            "typescript",
+            "json",
+            "yaml",
+            "xml",
+            "sql",
+            "bash",
+            "http",
+            "log",
+            "diff"
+          ]
+        },
         "evidence": {
           "type": "array",
           "maxItems": 8,
@@ -3588,20 +3443,7 @@
               ]
             },
             "language": {
-              "enum": [
-                "plaintext",
-                "java",
-                "javascript",
-                "typescript",
-                "json",
-                "yaml",
-                "xml",
-                "sql",
-                "bash",
-                "http",
-                "log",
-                "diff"
-              ]
+              "$ref": "#/$defs/codeLanguage"
             },
             "code": {
               "type": "string",
@@ -3698,15 +3540,7 @@
               "description": "A short guard shown under the label."
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "lineStyle": {
               "enum": [
@@ -3809,15 +3643,7 @@
               "description": "Id of the group it nests in."
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             }
           },
           "required": [
@@ -3839,15 +3665,7 @@
               "maxLength": 100
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "variantOf": {
               "type": "string",
@@ -3895,20 +3713,7 @@
               "description": "kind \"code\" only. Indentation is kept."
             },
             "language": {
-              "enum": [
-                "plaintext",
-                "java",
-                "javascript",
-                "typescript",
-                "json",
-                "yaml",
-                "xml",
-                "sql",
-                "bash",
-                "http",
-                "log",
-                "diff"
-              ],
+              "$ref": "#/$defs/codeLanguage",
               "description": "kind \"code\" only. Default plaintext."
             },
             "about": {
@@ -3927,15 +3732,7 @@
               "$ref": "#/$defs/labelStyle"
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             }
           },
           "required": [
@@ -4018,15 +3815,7 @@
               "type": "boolean"
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             }
           },
           "additionalProperties": false
@@ -4042,44 +3831,14 @@
             "type": {
               "anyOf": [
                 {
-                  "enum": [
-                    "service",
-                    "api",
-                    "worker",
-                    "scheduler",
-                    "gateway",
-                    "external-system",
-                    "database",
-                    "sql-database",
-                    "nosql-database",
-                    "cache",
-                    "file-system",
-                    "object-storage",
-                    "search-index",
-                    "table",
-                    "queue",
-                    "topic",
-                    "stream",
-                    "dead-letter-queue",
-                    "person",
-                    "user-group",
-                    "external-actor",
-                    "system-actor",
-                    "device",
-                    "ai-agent",
-                    "component",
-                    "module",
-                    "adapter",
-                    "port",
-                    "junction"
-                  ]
+                  "$ref": "#/$defs/elementType"
                 },
                 {
                   "type": "string",
                   "maxLength": 64
                 }
               ],
-              "description": "Unknown names require create_diagram.fallbackType. What it is. Common: service, api, worker, gateway, external-system, database, cache, queue, topic, stream, person, component."
+              "description": "Element type or alias. Unknown names require create_diagram.fallbackType."
             },
             "label": {
               "type": "string",
@@ -4106,15 +3865,7 @@
               "description": "Id of the group/boundary it sits in."
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "evidence": {
               "$ref": "#/$defs/evidence"
@@ -4204,37 +3955,7 @@
             "type": {
               "anyOf": [
                 {
-                  "enum": [
-                    "service",
-                    "api",
-                    "worker",
-                    "scheduler",
-                    "gateway",
-                    "external-system",
-                    "database",
-                    "sql-database",
-                    "nosql-database",
-                    "cache",
-                    "file-system",
-                    "object-storage",
-                    "search-index",
-                    "table",
-                    "queue",
-                    "topic",
-                    "stream",
-                    "dead-letter-queue",
-                    "person",
-                    "user-group",
-                    "external-actor",
-                    "system-actor",
-                    "device",
-                    "ai-agent",
-                    "component",
-                    "module",
-                    "adapter",
-                    "port",
-                    "junction"
-                  ]
+                  "$ref": "#/$defs/elementType"
                 },
                 {
                   "type": "string",
@@ -4263,15 +3984,7 @@
               "type": "string"
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "evidence": {
               "$ref": "#/$defs/evidence"
@@ -4359,37 +4072,7 @@
             "type": {
               "anyOf": [
                 {
-                  "enum": [
-                    "service",
-                    "api",
-                    "worker",
-                    "scheduler",
-                    "gateway",
-                    "external-system",
-                    "database",
-                    "sql-database",
-                    "nosql-database",
-                    "cache",
-                    "file-system",
-                    "object-storage",
-                    "search-index",
-                    "table",
-                    "queue",
-                    "topic",
-                    "stream",
-                    "dead-letter-queue",
-                    "person",
-                    "user-group",
-                    "external-actor",
-                    "system-actor",
-                    "device",
-                    "ai-agent",
-                    "component",
-                    "module",
-                    "adapter",
-                    "port",
-                    "junction"
-                  ]
+                  "$ref": "#/$defs/elementType"
                 },
                 {
                   "type": "string",
@@ -4418,15 +4101,7 @@
               "type": "string"
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "evidence": {
               "$ref": "#/$defs/evidence"
@@ -4514,37 +4189,7 @@
             "type": {
               "anyOf": [
                 {
-                  "enum": [
-                    "service",
-                    "api",
-                    "worker",
-                    "scheduler",
-                    "gateway",
-                    "external-system",
-                    "database",
-                    "sql-database",
-                    "nosql-database",
-                    "cache",
-                    "file-system",
-                    "object-storage",
-                    "search-index",
-                    "table",
-                    "queue",
-                    "topic",
-                    "stream",
-                    "dead-letter-queue",
-                    "person",
-                    "user-group",
-                    "external-actor",
-                    "system-actor",
-                    "device",
-                    "ai-agent",
-                    "component",
-                    "module",
-                    "adapter",
-                    "port",
-                    "junction"
-                  ]
+                  "$ref": "#/$defs/elementType"
                 },
                 {
                   "type": "string",
@@ -4573,15 +4218,7 @@
               "type": "string"
             },
             "color": {
-              "enum": [
-                "neutral",
-                "teal",
-                "blue",
-                "violet",
-                "amber",
-                "rose",
-                "green"
-              ]
+              "$ref": "#/$defs/accent"
             },
             "evidence": {
               "$ref": "#/$defs/evidence"

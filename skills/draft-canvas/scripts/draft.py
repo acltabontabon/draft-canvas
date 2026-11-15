@@ -41,6 +41,7 @@ MAX_CONTAINER_VIEW = 8
 #: Survey types that are code libraries, not running parts: drawn through the units that use them.
 LIBRARY_KEYS = {'celery', 'sidekiq', 'rq', 'bullmq'}
 CHANNEL_SUFFIX = re.compile(r'[-_.:](exchange|queue|topic|stream|q|ex)$', re.I)
+READ_NEXT_LIMIT = 5
 ORDER = {'person': 0, 'gateway': 1, 'service': 2, 'api': 3, 'worker': 4, 'scheduler': 5}
 ACRONYMS = {'api': 'API', 'db': 'DB', 'ui': 'UI', 'grpc': 'gRPC', 'http': 'HTTP', 'sql': 'SQL', 'bff': 'BFF', 'cdn': 'CDN', 'id': 'ID'}
 #: Survey names whose product, as Draft Canvas names its logo, is shorter. A technology the app shows
@@ -532,7 +533,8 @@ def main(argv: list[str] | None = None) -> int:
         fh.write('\n')
 
     if args.json:
-        print(json.dumps({'survey': os.path.join(out, 'survey.md'), 'request': request_path, **summary}))
+        read_next = [entry['path'] for entry in data['read_next'][:READ_NEXT_LIMIT]]
+        print(json.dumps({'survey': os.path.join(out, 'survey.md'), 'request': request_path, 'readNext': read_next, **summary}, separators=(',', ':')))
         return 0
 
     print(survey_text)

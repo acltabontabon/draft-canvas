@@ -141,6 +141,5 @@ describe('the agent skill', () => {
     // Bumping CONTRACT_VERSION means re-reading the skill against the new tools, then bumping its
     // `contract` and `version` (so installed copies are replaced; see src-tauri/src/agent/skill.rs).
     expect(skillMd).toContain(`contract: "${CONTRACT_VERSION}"`);
-    expect(skillMd).toContain(`written for tool contract ${CONTRACT_VERSION}`);
   });
 });

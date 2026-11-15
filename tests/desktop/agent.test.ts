@@ -235,6 +235,14 @@ describe('collaborator provenance in agent reads', () => {
     const context = { handle, open: true, diagramId: 'd_orders000001' };
     const root = await request('read_diagram', {}, context);
     expect(root.value).not.toHaveProperty('fromCollaborators');
+    const outline = await request('read_diagram', { format: 'outline' }, context);
+    expect(outline.value).toEqual({
+      diagramId: context.diagramId,
+      title: 'Orders',
+      revision: root.value!.revision,
+      format: 'outline',
+      views: [{ inside: ['api'], owner: { id: 'api', label: 'Orders API', type: 'api' }, level: null, elements: 1, relationships: 0, flows: 0 }],
+    });
     const inner = await request('read_diagram', { view: { inside: ['api'] } }, context);
     expect(inner.value!.fromCollaborators).toMatchObject({ elements: [{ id: 'inner', kind: 'node', by: 'peer-a' }] });
     const focused = await request('get_implementation_context', { focus: { nodes: ['db'] } }, context);

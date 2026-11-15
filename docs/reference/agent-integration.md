@@ -84,7 +84,12 @@ attachments and flows with their ids. Elements, boundaries, notes, relationships
 | `include: ["attachments"]` / `["fullText"]` | Attachment previews, or complete text. |
 | `include: ["suggestions"]` | Up to 5 next-step suggestions per element. Never applied. |
 | `include: ["views"]` | An outline of every inside view. |
+| `format: "outline"` | File title and revision, plus paths, owners, levels and counts for up to 100 inside views. `viewsTruncated` marks a longer outline. |
 | `format: "mermaid"` / `"plantuml"` / `"c4"` | Flows as sequence-diagram source, or the architecture as C4-PlantUML, as Export writes them. |
+
+Use the outline to find a room, then read that room with `view.inside`. For a known group, flow or
+set of nodes, pass `focus` directly. The outline and source formats cover the file and ignore
+`view`, `focus`, `include` and `cursor`.
 
 Pages hold at most 200 elements, 400 relationships, 20 flows, 50 open points and 96 KB. A `cursor` is
 bound to the revision and read options; a change answers `CURSOR_STALE`.
@@ -271,8 +276,8 @@ and calls are kept few:
   generation, sub-agents, plugins, apps, skill search, `unified_exec`; only those `codex features list`
   reports) and web search off.
 - The view comes with the turn, so a question is one call.
-- The brief: no read when the view came with the turn, `get_capabilities` only when a change is refused
-  for an unknown type, no preview before a proposal, no read after a change.
+- The brief directs the agent to reuse the supplied view, look up individual capability topics as
+  needed, use previews to compare alternatives, and take revisions and advisories from receipts.
 - Small talk (a whole message of only "hello", "thanks", "bye", "how are you") is answered by Nodi
   itself (`nodiLines.ts`'s `smallTalkOf`): no run, no tokens. Confirmations such as "yes" and "ok"
   reach the selected agent, including its resumed session after an app restart.

@@ -1,7 +1,7 @@
 # Author a repository diagram
 
-Read the survey’s **read next** files, then follow the entry point through the main request and its
-handled failures. Stop when the requested scope is supported by evidence. Edit `request.json`:
+Start with the draft manifest’s ranked `readNext` paths. Use the full survey’s **read next** section
+for more leads. Follow the entry point through the main request and its handled failures. Stop when the requested scope is supported by evidence. Edit `request.json`:
 
 - **Confirm every element** in code. Delete false positives and details outside the requested scope;
   add what the survey missed. A survey finding is a hint, not a fact.
