@@ -1,5 +1,5 @@
-//! One literal rename through the normal authenticated bridge, then a receipt-generated reply.
-//! No model or MCP tool-result loop is started. The native broker still owns every safety check.
+//! Execute one host-authorized final edit through the normal bridge, then confirm its receipt.
+//! The model has already exited. The native broker still owns every safety check.
 use crate::{bridge, dispatch, served, Bridge, Dispatch, RUN_VAR};
 use serde_json::{json, Value};
 use std::io::{Read, Write};
@@ -11,20 +11,20 @@ fn emit(event: Value) {
 
 fn stopped(reason: Value) {
     emit(
-        json!({"type":"stopped", "reason":reason, "summary":null, "costMicroUsd":0,
-        "usage":{"input":0,"cached":0,"output":0}}),
+        json!({"type":"stopped", "reason":reason, "summary":null, "costMicroUsd":null,
+        "usage":null}),
     );
 }
 
 fn failure(error: &Value) {
     let message = error["message"].as_str().unwrap_or(
-        "The rename could not be confirmed. Do not repeat it without checking the diagram.",
+        "The edit could not be confirmed. Do not repeat it without checking the diagram.",
     );
     let message = match error["hint"].as_str().filter(|hint| !hint.is_empty()) {
         Some(hint) => format!("{message}\n\n{hint}"),
         None => message.to_string(),
     };
-    emit(json!({"type":"tool-call-update","id":"rename","status":"failed","error":message}));
+    emit(json!({"type":"tool-call-update","id":"final-edit","status":"failed","error":message}));
     stopped(if error["code"] == "CANCELLED" {
         json!({"kind":"cancelled"})
     } else {
@@ -40,37 +40,54 @@ pub async fn run() {
     }
     let mut input = String::new();
     if std::io::stdin()
-        .take(32_001)
+        .take(300_001)
         .read_to_string(&mut input)
         .is_err()
-        || input.len() > 32_000
+        || input.len() > 300_000
     {
-        failure(&json!({"message":"The rename request is too large or unreadable."}));
+        failure(&json!({"message":"The edit request is too large or unreadable."}));
         return;
     }
-    let args = serde_json::from_str(&input).unwrap_or(Value::Null);
-    let (tool, args) = match dispatch("rename_element", args, &served(true, false)) {
+    let envelope: Value = serde_json::from_str(&input).unwrap_or(Value::Null);
+    let name = envelope["tool"].as_str().unwrap_or("");
+    let args = envelope["args"].clone();
+    let notes = envelope["text"].as_str().unwrap_or("");
+    if !matches!(name, "update_diagram" | "submit_proposal")
+        || !args.is_object()
+        || notes.len() > 20_000
+    {
+        failure(&json!({"message":"Invalid final edit."}));
+        return;
+    }
+    let (tool, args) = match dispatch(name, args, &served(true, false)) {
         Ok(Dispatch::Call(tool, args)) => (tool, args),
         _ => {
-            failure(&json!({"message":"Invalid rename request."}));
+            failure(&json!({"message":"Invalid final edit."}));
             return;
         }
     };
-    emit(json!({"type":"tool-call","id":"rename","tool":tool,"status":"in-progress"}));
+    let rename = args.get("rename").is_some();
+    emit(json!({"type":"tool-call","id":"final-edit","tool":tool,"status":"in-progress"}));
     match Bridge::new(crate::version())
         .call(&tool, args, |_| {}, None)
         .await
     {
-        Ok(receipt) => match confirmation(&receipt) {
-            Some(text) => {
+        Ok(receipt) => match confirmation(&receipt, &tool, rename) {
+            Some(mut text) => {
+                // Agent explanations were prepared before execution, so never let them obscure a
+                // failed save or imply a pending proposal was applied.
+                if !notes.is_empty() && receipt["persisted"] == true && receipt["replayed"] != true
+                {
+                    text.push_str(&format!("\n\nAgent notes:\n\n{notes}"));
+                }
                 emit(
-                    json!({"type":"tool-call-update","id":"rename","status":"completed","error":null}),
+                    json!({"type":"tool-call-update","id":"final-edit","status":"completed","error":null}),
                 );
                 emit(json!({"type":"message-chunk","text":text}));
                 stopped(json!({"kind":"end-turn"}));
             }
             None => failure(
-                &json!({"message":"The rename returned an unrecognized receipt. Check the diagram before repeating it."}),
+                &json!({"message":"The edit returned an unrecognized receipt. Check the diagram before repeating it."}),
             ),
         },
         Err(error) => failure(&error),
@@ -79,7 +96,22 @@ pub async fn run() {
 
 /// Never infer saving from a successful transport result. Applied-but-unsaved and save failure
 /// are real outcomes; acknowledge them without retrying a mutation that may already have landed.
-fn confirmation(receipt: &Value) -> Option<String> {
+fn confirmation(receipt: &Value, tool: &str, rename: bool) -> Option<String> {
+    let mut text = if tool == "submit_proposal" {
+        receipt["proposalId"].as_str().filter(|id| !id.is_empty())?;
+        match receipt["status"].as_str()? {
+            "pending" => "Prepared a proposal for review. No diagram changes have been applied. Accept or reject it in the proposal panel.".to_string(),
+            "accepted" if ["added", "updated", "removed"].iter().all(|key| receipt["counts"][key] == 0) => "No change was needed.".to_string(),
+            _ => return None,
+        }
+    } else {
+        update_confirmation(receipt, rename)?
+    };
+    advisories(receipt, &mut text);
+    Some(text)
+}
+
+fn update_confirmation(receipt: &Value, rename: bool) -> Option<String> {
     let applied = receipt["applied"].as_bool()?;
     let persisted = receipt["persisted"].as_bool()?;
     receipt["revision"]
@@ -104,11 +136,20 @@ fn confirmation(receipt: &Value) -> Option<String> {
     } else if receipt["durability"] == "unverified" {
         return None;
     }
+    if !rename {
+        text = text
+            .replace("Renamed the shape", "Applied the change")
+            .replace("rename", "change");
+    }
     if receipt["undo"] == "editor" && receipt["replayed"] != true {
         text.push_str(" You can undo it in the editor.");
     } else if receipt["undo"] == "on-open" && receipt["replayed"] != true {
         text.push_str(" Open the diagram to undo it.");
     }
+    Some(text)
+}
+
+fn advisories(receipt: &Value, text: &mut String) {
     if let Some(note) = receipt["note"].as_str() {
         text.push_str(&format!("\n\n{note}"));
     }
@@ -138,12 +179,30 @@ fn confirmation(receipt: &Value) -> Option<String> {
             }
         }
     }
-    Some(text)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn updates_and_review_only_proposals_have_distinct_confirmations() {
+        let update = json!({"state":"saved","applied":true,"persisted":true,"revision":"f:2"});
+        assert_eq!(
+            confirmation(&update, "update_diagram", false).unwrap(),
+            "Applied the change and saved the diagram."
+        );
+        let mut proposal = json!({"proposalId":"p_1","status":"pending","counts":{"added":0,"updated":1,"removed":0},"advisories":["Check labels"]});
+        let text = confirmation(&proposal, "submit_proposal", false).unwrap();
+        assert!(text.contains("No diagram changes have been applied"));
+        assert!(text.contains("Check labels"));
+        proposal["status"] = json!("accepted");
+        assert!(confirmation(&proposal, "submit_proposal", false).is_none());
+        proposal["counts"]["updated"] = json!(0);
+        assert!(confirmation(&proposal, "submit_proposal", false)
+            .unwrap()
+            .contains("No change was needed"));
+    }
 
     #[test]
     fn receipt_states_never_confuse_applied_with_saved() {
@@ -155,21 +214,23 @@ mod tests {
             ("unchanged", false, false, "still has unsaved changes"),
         ] {
             let receipt = json!({"state":state,"applied":applied,"persisted":persisted,"revision":"o:2","undo":"editor"});
-            assert!(confirmation(&receipt).unwrap().contains(expected));
+            assert!(confirmation(&receipt, "update_diagram", true)
+                .unwrap()
+                .contains(expected));
         }
         for receipt in [
             json!({}),
             json!({"state":"saved","applied":true,"persisted":false,"revision":"f:2"}),
             json!({"state":"pending","applied":false,"persisted":false,"revision":"f:2"}),
         ] {
-            assert!(confirmation(&receipt).is_none());
+            assert!(confirmation(&receipt, "update_diagram", true).is_none());
         }
     }
 
     #[test]
     fn warnings_recovery_and_unverified_replays_are_visible() {
         let receipt = json!({"state":"applied-unsaved","applied":true,"persisted":false,"revision":"o:2","replayed":true,"durability":"unverified","note":"A recovery copy exists.","advisories":["Long label"],"advisoriesDropped":2,"quality":{"warnings":3,"warningProblems":[{"message":"Crowded shapes"}]}});
-        let text = confirmation(&receipt).unwrap();
+        let text = confirmation(&receipt, "update_diagram", true).unwrap();
         for expected in [
             "not repeated",
             "save state is unverified",

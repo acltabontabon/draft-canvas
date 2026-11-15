@@ -206,48 +206,9 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         let agent = app.state::<Arc<Agent>>();
         let diagram = open_diagram(state, &agent, &request.diagram_id)?;
 
-        if let Some(args) = companion::local::rename(&request) {
-            let sidecar = connectable_sidecar()?;
-            let work_dir = companion.work_dir()?;
-            let dir = companion.run_dir(&request.run_id)?;
-            let mut command = std::process::Command::new(sidecar);
-            command
-                .arg("--local-rename")
-                .current_dir(work_dir)
-                .envs(companion::server_env(&request.run_id, agent.dir(), false));
-            let started = companion.start_prepared(
-                Launch {
-                    run_id: request.run_id.clone(),
-                    diagram_id: request.diagram_id.clone(),
-                    agent: request.agent,
-                    local: true,
-                    text: request.text.clone(),
-                    command,
-                    stdin: args.to_string(),
-                    dir: dir.clone(),
-                },
-                preparation,
-                || {
-                    agent.runs.open(
-                        &request.run_id,
-                        RunPolicy {
-                            diagram_id: request.diagram_id.clone(),
-                            direct: true,
-                            code: None,
-                        },
-                    )
-                },
-            );
-            if started.is_err() {
-                agent.end_run(&request.run_id);
-                let _ = std::fs::remove_dir_all(&dir);
-            }
-            return started;
-        }
-
-        let local_context = companion.local_context(&request.diagram_id, request.agent);
+        let receipt_context = companion.receipt_context(&request.diagram_id, request.agent);
         let mut request = request;
-        if !local_context.is_empty() {
+        if !receipt_context.is_empty() {
             request.unchanged = Some(false);
         }
         let backend = companion::backend(request.agent);
@@ -295,7 +256,14 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         // The brief as a file too, for an agent that reads its instructions from one (Codex).
         let brief_file = run_dir.join("brief.md");
         let written = written
-            .and_then(|()| write_private(&brief_file, BRIEF.as_bytes(), Subject::Preferences));
+            .and_then(|()| write_private(&brief_file, BRIEF.as_bytes(), Subject::Preferences))
+            .and_then(|()| {
+                write_private(
+                    &run_dir.join("reply.schema.json"),
+                    companion::decision::SCHEMA.as_bytes(),
+                    Subject::Preferences,
+                )
+            });
         if let Err(error) = written {
             let _ = std::fs::remove_dir_all(&run_dir);
             return Err(error);
@@ -333,9 +301,21 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
                     .map(|p| (p.id.clone(), p.version, p.summary.clone()))
             })
             .flatten();
+        let final_agent = agent.inner().clone();
+        let final_run = request.run_id.clone();
+        let finalizer = companion::decision::Finalizer {
+            sidecar: sidecar.clone(),
+            env: server_env.clone(),
+            request: request.clone(),
+            authorize: Arc::new(move |tool, args| {
+                final_agent.runs.authorize(&final_run, tool, args)
+            }),
+        };
         let started = companion.start_prepared(
             Launch {
-                stdin: local_context
+                stdin: receipt_context
+                    + companion::decision::INSTRUCTIONS
+                    + "\n\n"
                     + &companion::turn_prompt(
                         &request,
                         &diagram.title,
@@ -351,14 +331,14 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
                 run_id: request.run_id.clone(),
                 diagram_id: request.diagram_id.clone(),
                 agent: request.agent,
-                local: false,
+                finalizer: Some(finalizer),
                 text: request.text.clone(),
                 command,
                 dir: run_dir.clone(),
             },
             preparation,
             || {
-                agent.runs.open(
+                agent.runs.open_deferred(
                     &request.run_id,
                     RunPolicy {
                         diagram_id: request.diagram_id.clone(),

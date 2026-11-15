@@ -102,6 +102,7 @@ fn args(spec: &RunSpec) -> Vec<String> {
     // call of a turn 2,300 tokens more (measured, 2.1.310).
     args.push("--system-prompt".into());
     args.push(spec.brief.to_string());
+    args.extend(["--json-schema".into(), super::decision::SCHEMA.into()]);
     match spec.session {
         SessionArg::New(id) => args.extend(["--session-id".into(), id.to_string()]),
         SessionArg::Resume(id) => args.extend(["--resume".into(), id.to_string()]),
@@ -605,6 +606,7 @@ pub(crate) mod tests {
         assert_eq!(after("--mcp-config"), Some("/tmp/runs/r/mcp.json"));
         assert_eq!(after("--session-id"), Some("s-new"));
         assert_eq!(after("--system-prompt"), Some("BRIEF"));
+        assert_eq!(after("--json-schema"), Some(super::super::decision::SCHEMA));
         assert!(args.contains(&"--strict-mcp-config".to_string()));
         assert!(after("--resume").is_none());
         let resumed = super::args(&RunSpec {
@@ -612,6 +614,9 @@ pub(crate) mod tests {
             ..spec
         });
         assert!(resumed.windows(2).any(|w| w == ["--resume", "s-old"]));
+        assert!(resumed
+            .windows(2)
+            .any(|w| w == ["--json-schema", super::super::decision::SCHEMA]));
         assert!(!resumed.contains(&"--session-id".to_string()));
     }
 

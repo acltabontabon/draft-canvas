@@ -28,6 +28,14 @@ pub struct RunPolicy {
 struct Open {
     policy: RunPolicy,
     calls: Vec<Weak<CallRegistry>>,
+    writes: Writes,
+}
+
+enum Writes {
+    #[cfg(test)]
+    Normal,
+    Deferred,
+    Final(String, Value),
 }
 
 #[derive(Default)]
@@ -36,14 +44,59 @@ pub struct Runs {
 }
 
 impl Runs {
+    #[cfg(test)]
     pub fn open(&self, run: &str, policy: RunPolicy) {
         lock(&self.open).insert(
             run.to_string(),
             Open {
                 policy,
                 calls: Vec::new(),
+                writes: Writes::Normal,
             },
         );
+    }
+
+    pub fn open_deferred(&self, run: &str, policy: RunPolicy) {
+        lock(&self.open).insert(
+            run.into(),
+            Open {
+                policy,
+                calls: Vec::new(),
+                writes: Writes::Deferred,
+            },
+        );
+    }
+
+    /// Called by the host only after the model and its children have exited. Admit precisely one
+    /// payload; normal broker policy, validation, journal and commit gates still run afterwards.
+    pub fn authorize(&self, run: &str, tool: &str, args: &Value) -> Result<(), String> {
+        if !matches!(tool, "update_diagram" | "submit_proposal") {
+            return Err("Only a final edit can be authorized.".into());
+        }
+        let mut open = lock(&self.open);
+        let entry = open
+            .get_mut(run)
+            .ok_or("The request was stopped before its edit could run.")?;
+        if !matches!(entry.writes, Writes::Deferred) {
+            return Err("The final edit was already authorized.".into());
+        }
+        constrain(&entry.policy, tool, args.clone(), |_| None).map_err(|error| error.message)?;
+        entry.writes = Writes::Final(tool.into(), args.clone());
+        Ok(())
+    }
+
+    pub fn check_write(&self, run: &str, tool: &str, args: &Value) -> Result<(), ToolError> {
+        if !matches!(tool, "update_diagram" | "submit_proposal") {
+            return Ok(());
+        }
+        let open = lock(&self.open);
+        let entry = open.get(run).ok_or_else(ended)?;
+        match &entry.writes {
+            #[cfg(test)]
+            Writes::Normal => Ok(()),
+            Writes::Final(expected_tool, expected_args) if tool == expected_tool && args == expected_args => Ok(()),
+            _ => Err(ToolError::new("DEFERRED_EDIT", "Return this edit as your final structured response; only the host may apply it after your turn ends.")),
+        }
     }
 
     pub fn policy(&self, run: &str) -> Option<RunPolicy> {
@@ -194,6 +247,32 @@ mod tests {
             direct,
             code: None,
         }
+    }
+
+    #[test]
+    fn deferred_writes_require_the_exact_host_authorized_payload() {
+        let runs = Runs::default();
+        let args = json!({"diagramId":"d_1","requestId":"host","rename":{"from":"A","to":"B"}});
+        runs.open_deferred("r", policy(true));
+        assert!(runs.check_write("r", "update_diagram", &args).is_err());
+        assert!(runs
+            .check_write("r", "read_diagram", &json!({"diagramId":"d_1"}))
+            .is_ok());
+        runs.authorize("r", "update_diagram", &args).unwrap();
+        assert!(runs.check_write("r", "update_diagram", &args).is_ok());
+        for changed in [
+            json!({"diagramId":"d_1","requestId":"other","rename":{"from":"A","to":"B"}}),
+            json!({"diagramId":"d_1","requestId":"host","rename":{"from":"A","to":"C"}}),
+        ] {
+            assert!(runs.check_write("r", "update_diagram", &changed).is_err());
+        }
+        assert!(runs.check_write("r", "submit_proposal", &args).is_err());
+        assert!(runs.authorize("r", "update_diagram", &args).is_err());
+        runs.close("r");
+        assert!(runs.authorize("r", "update_diagram", &args).is_err());
+        assert!(runs.check_write("r", "update_diagram", &args).is_err());
+        runs.open_deferred("review", policy(false));
+        assert!(runs.authorize("review", "update_diagram", &args).is_err());
     }
 
     fn code(result: Result<Value, ToolError>) -> String {

@@ -312,19 +312,25 @@ agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 **Tokens.** Every model call of a turn resends the agent's instructions and tools, so each is kept small
 and calls are kept few:
 
-- In Nodi's direct mode, a complete literal command such as `Rename "Orders API" to "Checkout API"`
-  runs locally: no model call, including for confirmation. Straight or curly double quotes are
-  required; optional `Please` and a final period are accepted. The rename uses the current room and
-  submitted selection scope. Questions, conditions, additional instructions, other syntax and
-  review-only mode use the agent as usual. This optimization is specific to Nodi; external MCP
-  clients still control their own model loop.
-- Local renames launch the bundled sidecar for one authenticated native `update_diagram` call.
-  They keep the same access checks, run policy, full validation, exact-label ambiguity refusal,
-  journal, revision checks, cancellation, save behavior and undo. The reply is generated only from
-  the receipt: saved, unchanged, applied-but-unsaved and save-failed are distinct; warnings and
-  recovery notes remain visible. Failures are not retried or automatically sent to a model.
-  Existing agent sessions are retained; recent local receipts are supplied as data on the next
-  Nodi agent turn, with a fresh diagram view instead of an "unchanged" hint.
+- Nodi's agent interprets natural-language requests and returns a structured final decision: a
+  chat answer, exact-label rename, ordinary update or proposal. Reads, help and previews remain
+  available while it plans. Native run policy refuses mutations during this phase, even through
+  legacy tool names. The literal quoted-command shortcut is no longer used.
+- Only after a successful model turn **and clean process exit** does the host authorize the exact
+  final payload and launch the bundled executor. The host pins diagram id, request id and the
+  submitted selection scope; review mode still requires a proposal. The normal broker performs
+  access checks, full validation, ambiguity refusal, journaling, revision/concurrency checks,
+  cancellation, persistence and undo. No model runs after this operation to confirm it.
+- The receipt supplies the outcome: saved, unchanged, applied-but-unsaved, save-failed or proposal
+  awaiting review. Warnings and recovery notes remain visible. Malformed decisions, failed or
+  cancelled model runs, denied edits and unknown receipts cannot produce a success confirmation.
+  Errors are not automatically retried. Token usage stays attached to the model turn, including
+  cached input; the deterministic executor does not report it as zero.
+- Agent sessions end normally and remain resumable. Recent native outcomes are supplied as data
+  on the next agent turn, with the "unchanged" hint cleared, because the model's transcript contains
+  its plan but not that plan's execution result. This receipt context is bounded and transient.
+  Reads and previews can still require additional inferences before an edit; this removes the
+  **post-edit confirmation** inference. External MCP clients retain control of their own loops.
 - Connections discover one dispatcher; operation schemas are fetched on demand. Exact-label renames
   need one call. A companion run can dispatch only its permitted operations, without `render_diagram`
   or `read_selection`.

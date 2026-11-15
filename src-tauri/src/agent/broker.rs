@@ -183,6 +183,9 @@ pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) 
         })?,
         None => args,
     };
+    if let Some(run) = &calls.run {
+        agent.runs.check_write(run, tool, &args)?;
+    }
     if runs::RUN_ONLY.contains(&tool) {
         return read_code(tool, policy.and_then(|p| p.code), args).await;
     }

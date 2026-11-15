@@ -142,10 +142,10 @@ for (const local of [false, true]) {
       if (local) {
         const events = await connection.localRename(args);
         expect(events).toEqual([
-          { type: 'tool-call', id: 'rename', tool: 'update_diagram', status: 'in-progress' },
-          { type: 'tool-call-update', id: 'rename', status: 'completed', error: null },
+          { type: 'tool-call', id: 'final-edit', tool: 'update_diagram', status: 'in-progress' },
+          { type: 'tool-call-update', id: 'final-edit', status: 'completed', error: null },
           { type: 'message-chunk', text: 'Renamed the shape and saved the diagram. You can undo it in the editor.' },
-          { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: 0, usage: { input: 0, cached: 0, output: 0 } },
+          { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null },
         ]);
         expect(connection.client.records).toEqual([]);
       } else {

@@ -259,6 +259,13 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
         "model_instructions_file={}",
         toml_string(&spec.brief_file.to_string_lossy())
     ));
+    args.extend([
+        "--output-schema".into(),
+        spec.brief_file
+            .with_file_name("reply.schema.json")
+            .to_string_lossy()
+            .into_owned(),
+    ]);
     if let SessionArg::Resume(thread) = spec.session {
         args.push(thread.to_string());
     }
@@ -862,6 +869,9 @@ mod tests {
     fn new_and_resumed_turns_keep_user_config_skills_and_side_effects_out() {
         for session in [SessionArg::New("fresh"), SessionArg::Resume("existing")] {
             let args = spec_args(session);
+            assert!(args
+                .windows(2)
+                .any(|pair| pair == ["--output-schema", "/run/reply.schema.json"]));
             assert!(args.contains(&"--ignore-user-config".to_string()));
             for setting in [
                 "agents.enabled=false",

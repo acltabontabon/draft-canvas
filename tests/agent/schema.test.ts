@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { ENTRY_TOOLS, FULL_TOOLS, RUN_TOOLS, TOOLS } from '../../src/agent/schema';
+import { ENTRY_TOOLS, FULL_TOOLS, PLANNING_ENTRY_TOOLS, RUN_TOOLS, TOOLS } from '../../src/agent/schema';
 
 const toolsJson = () => readFileSync(join(process.cwd(), 'src-tauri/mcp/tools.json'), 'utf8');
 
@@ -68,6 +68,7 @@ function refsIn(schema: unknown, out: string[] = []): string[] {
 describe('MCP tool definitions', () => {
   it('are the ones the sidecar compiles in', () => {
     expect(readFileSync(join(process.cwd(), 'src-tauri/mcp/entry-tools.json'), 'utf8')).toBe(`${JSON.stringify(ENTRY_TOOLS, null, 2)}\n`);
+    expect(readFileSync(join(process.cwd(), 'src-tauri/mcp/planning-entry-tools.json'), 'utf8')).toBe(`${JSON.stringify(PLANNING_ENTRY_TOOLS, null, 2)}\n`);
     expect(toolsJson()).toBe(`${JSON.stringify(TOOLS, null, 2)}\n`);
     const runTools = readFileSync(join(process.cwd(), 'src-tauri/mcp/run-tools.json'), 'utf8');
     expect(runTools).toBe(`${JSON.stringify(RUN_TOOLS, null, 2)}\n`);

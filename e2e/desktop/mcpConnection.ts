@@ -70,7 +70,7 @@ export async function connect(page: Page, handle: string) {
   const client = new McpSession('browser-mcp', binary, dir);
   await client.start();
   const localRename = (args: Record<string, unknown>) => new Promise<RunEvent[]>((resolve, reject) => {
-    const child = execFile(binary, ['--local-rename'], {
+    const child = execFile(binary, ['--apply-edit'], {
       env: { ...process.env, DRAFT_CANVAS_AGENT_DIR: dir, DRAFT_CANVAS_RUN: randomUUID() },
       timeout: 20_000,
     }, (error, stdout) => {
@@ -78,7 +78,8 @@ export async function connect(page: Page, handle: string) {
       try { resolve(stdout.trim().split('\n').map(line => JSON.parse(line) as RunEvent)); }
       catch (error) { reject(error); }
     });
-    child.stdin!.end(JSON.stringify(args));
+    const { from, to, ...rest } = args;
+    child.stdin!.end(JSON.stringify({ tool: 'update_diagram', args: { ...rest, rename: { from, to } }, text: '' }));
   });
   return { client, localRename, file: () => page.evaluate((handle) => window.__shell.file(handle), handle), close: async () => {
     client.stop();

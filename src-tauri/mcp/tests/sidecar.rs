@@ -18,9 +18,9 @@ fn sidecar() -> PathBuf {
     PathBuf::from(env!("CARGO_BIN_EXE_draft-canvas-mcp"))
 }
 
-async fn local_rename(dir: &Path) -> Vec<Value> {
+async fn final_rename(dir: &Path) -> Vec<Value> {
     let mut child = Command::new(sidecar())
-        .arg("--local-rename")
+        .arg("--apply-edit")
         .env("DRAFT_CANVAS_AGENT_DIR", dir)
         .env("DRAFT_CANVAS_RUN", "12345678-1234-1234-1234-123456789abc")
         .stdin(Stdio::piped())
@@ -28,7 +28,7 @@ async fn local_rename(dir: &Path) -> Vec<Value> {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child.stdin.take().unwrap().write_all(json!({"diagramId":"d_1","requestId":"one-edit","from":"API","to":"Gateway","view":{"inside":["system"]},"scope":{"nodes":["api"]}}).to_string().as_bytes()).await.unwrap();
+    child.stdin.take().unwrap().write_all(json!({"tool":"update_diagram","args":{"diagramId":"d_1","requestId":"one-edit","rename":{"from":"API","to":"Gateway"},"view":{"inside":["system"]},"scope":{"nodes":["api"]}},"text":""}).to_string().as_bytes()).await.unwrap();
     let output = tokio::time::timeout(std::time::Duration::from_secs(10), child.wait_with_output())
         .await
         .unwrap()
@@ -46,7 +46,7 @@ async fn local_rename(dir: &Path) -> Vec<Value> {
 }
 
 #[tokio::test]
-async fn local_rename_confirms_one_authenticated_native_call_without_a_model() {
+async fn final_rename_confirms_one_authenticated_native_call_without_a_confirmation_model() {
     let dir = tempfile::tempdir().unwrap();
     let app = fake_app(dir.path(), |tool, args| {
         assert_eq!(tool, "update_diagram");
@@ -56,7 +56,7 @@ async fn local_rename_confirms_one_authenticated_native_call_without_a_model() {
         );
         json!({"state":"saved","applied":true,"persisted":true,"revision":"f:2","undo":"editor"})
     });
-    let events = local_rename(dir.path()).await;
+    let events = final_rename(dir.path()).await;
     let frames = app.await.unwrap();
     assert_eq!(frames[0]["run"], "12345678-1234-1234-1234-123456789abc");
     assert_eq!(
@@ -72,7 +72,7 @@ async fn local_rename_confirms_one_authenticated_native_call_without_a_model() {
         "Renamed the shape and saved the diagram. You can undo it in the editor."
     );
     assert_eq!(events[3]["reason"]["kind"], "end-turn");
-    assert_eq!(events[3]["usage"], json!({"input":0,"cached":0,"output":0}));
+    assert_eq!(events[3]["usage"], Value::Null);
     assert!(
         events.iter().all(|event| event["type"] != "started"),
         "no invented model session"
@@ -80,13 +80,13 @@ async fn local_rename_confirms_one_authenticated_native_call_without_a_model() {
 }
 
 #[tokio::test]
-async fn local_rename_preserves_native_refusals_without_retrying_or_confirming() {
+async fn final_rename_preserves_native_refusals_without_retrying_or_confirming() {
     let dir = tempfile::tempdir().unwrap();
     let app = fake_app(
         dir.path(),
         |_, _| json!({"error":{"code":"PROPOSAL_ONLY","message":"Review is required.","hint":"Submit a proposal."}}),
     );
-    let events = local_rename(dir.path()).await;
+    let events = final_rename(dir.path()).await;
     let frames = app.await.unwrap();
     assert_eq!(
         frames

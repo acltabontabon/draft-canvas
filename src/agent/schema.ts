@@ -852,6 +852,12 @@ export const ENTRY_TOOLS = [
   },
 ] as const;
 
+/** Companion turns plan changes; only the host executes their final response. */
+export const PLANNING_ENTRY_TOOLS = ENTRY_TOOLS.map(tool => ({
+  ...tool,
+  description: 'Planning only. tool=help,args={} lists operations; args={tool:NAME} gives arguments (read_diagram, preview_diagram, update_diagram, submit_proposal). Return edits in your final response for host execution. Simple direct renames need no tools.',
+}));
+
 /**
  * Tools only a companion run (Nodi) is offered, served by the app itself rather than the page: an
  * agent the person connected has files of its own, and never sees these. A run that may not read
