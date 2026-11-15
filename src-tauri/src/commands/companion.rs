@@ -206,6 +206,50 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         let agent = app.state::<Arc<Agent>>();
         let diagram = open_diagram(state, &agent, &request.diagram_id)?;
 
+        if let Some(args) = companion::local::rename(&request) {
+            let sidecar = connectable_sidecar()?;
+            let work_dir = companion.work_dir()?;
+            let dir = companion.run_dir(&request.run_id)?;
+            let mut command = std::process::Command::new(sidecar);
+            command
+                .arg("--local-rename")
+                .current_dir(work_dir)
+                .envs(companion::server_env(&request.run_id, agent.dir(), false));
+            let started = companion.start_prepared(
+                Launch {
+                    run_id: request.run_id.clone(),
+                    diagram_id: request.diagram_id.clone(),
+                    agent: request.agent,
+                    local: true,
+                    text: request.text.clone(),
+                    command,
+                    stdin: args.to_string(),
+                    dir: dir.clone(),
+                },
+                preparation,
+                || {
+                    agent.runs.open(
+                        &request.run_id,
+                        RunPolicy {
+                            diagram_id: request.diagram_id.clone(),
+                            direct: true,
+                            code: None,
+                        },
+                    )
+                },
+            );
+            if started.is_err() {
+                agent.end_run(&request.run_id);
+                let _ = std::fs::remove_dir_all(&dir);
+            }
+            return started;
+        }
+
+        let local_context = companion.local_context(&request.diagram_id, request.agent);
+        let mut request = request;
+        if !local_context.is_empty() {
+            request.unchanged = Some(false);
+        }
         let backend = companion::backend(request.agent);
         let located = backend.locate();
         let program = match (located.availability, located.program) {
@@ -291,21 +335,23 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
             .flatten();
         let started = companion.start_prepared(
             Launch {
-                stdin: companion::turn_prompt(
-                    &request,
-                    &diagram.title,
-                    waiting
-                        .as_ref()
-                        .map(|(proposal_id, version, summary)| companion::Waiting {
-                            proposal_id,
-                            version: *version,
-                            summary,
+                stdin: local_context
+                    + &companion::turn_prompt(
+                        &request,
+                        &diagram.title,
+                        waiting.as_ref().map(|(proposal_id, version, summary)| {
+                            companion::Waiting {
+                                proposal_id,
+                                version: *version,
+                                summary,
+                            }
                         }),
-                    code_name.as_deref(),
-                ),
+                        code_name.as_deref(),
+                    ),
                 run_id: request.run_id.clone(),
                 diagram_id: request.diagram_id.clone(),
                 agent: request.agent,
+                local: false,
                 text: request.text.clone(),
                 command,
                 dir: run_dir.clone(),

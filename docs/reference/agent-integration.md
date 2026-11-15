@@ -312,6 +312,19 @@ agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 **Tokens.** Every model call of a turn resends the agent's instructions and tools, so each is kept small
 and calls are kept few:
 
+- In Nodi's direct mode, a complete literal command such as `Rename "Orders API" to "Checkout API"`
+  runs locally: no model call, including for confirmation. Straight or curly double quotes are
+  required; optional `Please` and a final period are accepted. The rename uses the current room and
+  submitted selection scope. Questions, conditions, additional instructions, other syntax and
+  review-only mode use the agent as usual. This optimization is specific to Nodi; external MCP
+  clients still control their own model loop.
+- Local renames launch the bundled sidecar for one authenticated native `update_diagram` call.
+  They keep the same access checks, run policy, full validation, exact-label ambiguity refusal,
+  journal, revision checks, cancellation, save behavior and undo. The reply is generated only from
+  the receipt: saved, unchanged, applied-but-unsaved and save-failed are distinct; warnings and
+  recovery notes remain visible. Failures are not retried or automatically sent to a model.
+  Existing agent sessions are retained; recent local receipts are supplied as data on the next
+  Nodi agent turn, with a fresh diagram view instead of an "unchanged" hint.
 - Connections discover one dispatcher; operation schemas are fetched on demand. Exact-label renames
   need one call. A companion run can dispatch only its permitted operations, without `render_diagram`
   or `read_selection`.

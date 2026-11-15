@@ -3,6 +3,9 @@ import { createServer } from 'node:net';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { execFile } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
+import type { RunEvent } from '../../src/desktop/api';
 import { McpSession } from '../agent-conversations';
 import type {} from './mockShell';
 
@@ -63,9 +66,21 @@ export async function connect(page: Page, handle: string) {
     });
   });
   await new Promise<void>((resolve) => server.listen(endpoint, resolve));
-  const client = new McpSession('browser-mcp', process.env.DRAFT_CANVAS_MCP_BINARY ?? join(process.cwd(), 'src-tauri/target/debug/draft-canvas-mcp'), dir);
+  const binary = process.env.DRAFT_CANVAS_MCP_BINARY ?? join(process.cwd(), 'src-tauri/target/debug/draft-canvas-mcp');
+  const client = new McpSession('browser-mcp', binary, dir);
   await client.start();
-  return { client, file: () => page.evaluate((handle) => window.__shell.file(handle), handle), close: async () => {
+  const localRename = (args: Record<string, unknown>) => new Promise<RunEvent[]>((resolve, reject) => {
+    const child = execFile(binary, ['--local-rename'], {
+      env: { ...process.env, DRAFT_CANVAS_AGENT_DIR: dir, DRAFT_CANVAS_RUN: randomUUID() },
+      timeout: 20_000,
+    }, (error, stdout) => {
+      if (error) { reject(error); return; }
+      try { resolve(stdout.trim().split('\n').map(line => JSON.parse(line) as RunEvent)); }
+      catch (error) { reject(error); }
+    });
+    child.stdin!.end(JSON.stringify(args));
+  });
+  return { client, localRename, file: () => page.evaluate((handle) => window.__shell.file(handle), handle), close: async () => {
     client.stop();
     sockets.forEach((socket) => socket.destroy());
     await new Promise<void>((resolve) => server.close(() => resolve()));

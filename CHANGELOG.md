@@ -185,6 +185,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - AI agents can rename a shape in one call without reading whole rooms. A small default tool
   interface loads other schemas on demand, and Codex avoids unused dispatch instructions.
   Exact-label renames preserve the existing approval, revision, save and undo checks.
+- In Nodi's direct mode, `Rename "Orders API" to "Checkout API"` now uses no model tokens.
+  The normal tool performs the edit and its receipt supplies the confirmation, including unsaved
+  changes, save failures and warnings. Requests needing interpretation still go to your agent.
 
 #### Fixed
 

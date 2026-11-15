@@ -68,7 +68,7 @@ pub struct PromptRequest {
     pub snapshot: Option<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum ToolStatus {
     InProgress,
@@ -77,7 +77,7 @@ pub enum ToolStatus {
 }
 
 /// Why a run ended (ACP's stop reasons, plus a failure worded for the person).
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(
     tag = "kind",
     rename_all = "kebab-case",
@@ -92,7 +92,7 @@ pub enum StopReason {
 }
 
 /// What happened in a run (ACP `session/update`). Sent to the page as it happens.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]
 #[serde(
     tag = "type",
     rename_all = "kebab-case",
@@ -131,7 +131,7 @@ pub enum RunEvent {
 /// the tools, the diagram), not the words exchanged: `input` counts all of that, and `cached` is the
 /// part of `input` the provider served from its cache, which costs less and counts for less against a
 /// subscription's limits. A turn's total is `input + output`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, ts_rs::TS)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, ts_rs::TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Usage {
     #[ts(type = "number")]

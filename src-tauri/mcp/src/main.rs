@@ -12,6 +12,7 @@
 
 mod bridge;
 mod endpoint;
+mod local;
 
 use bridge::{Bridge, RUN_VAR};
 use rmcp::model::{
@@ -406,6 +407,10 @@ impl ServerHandler for Server {
 #[tokio::main(flavor = "current_thread")]
 async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
+    if args == ["--local-rename"] {
+        local::run().await;
+        return;
+    }
     if args.iter().any(|a| a == "--version" || a == "-V") {
         // The one time anything is printed to stdout outside the protocol: when asked, with no session.
         println!("draft-canvas-mcp {}", version());

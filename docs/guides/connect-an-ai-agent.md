@@ -105,6 +105,12 @@ into view. Ask Nodi to adjust it ("keep the cache, but use Redis") and it revise
 the same proposal; the chip lists earlier versions. **Review changes first** under the message box
 switches to **Apply changes directly**, where changes land at once and Undo takes them back.
 
+In direct mode, a literal command such as `Rename "Orders API" to "Checkout API"` uses no model
+tokens. Use straight or curly double quotes around both labels. Nodi runs the normal rename tool
+in the current view and confirms from its receipt, including whether the edit was saved. Duplicate
+labels are refused; your selection scope and Undo still apply. Questions, compound requests and
+other wording continue through your agent, as do changes in review mode.
+
 Ask for all shapes in one horizontal row or vertical column when you want them aligned; automatic
 layout's reading direction can put several shapes in the same layer. Nodi can place and route shapes
 exactly for a specific arrangement. Short replies such as **yes** or
