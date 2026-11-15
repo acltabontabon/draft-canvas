@@ -582,7 +582,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
       if (isStage(next)) useUiStore.getState().openCommandPaletteAt(command.title.replace(/…$/, ''));
     }
   };
-  // Between Send and the turn starting (its view is read first): a second Enter is not a second turn.
+  // Between Send and the turn starting: a second Enter is not a second turn.
   const sending = useRef(false);
   const send = (text = draft) => {
     const prompt = text.trim();
@@ -624,10 +624,9 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     sending.current = true;
     void (async () => {
       try {
-        // The view up front, so the agent's first call is its answer rather than a read; not when it
-        // has the view from last turn already.
-        const snapshot = request.unchanged ? null : await controller.companionSnapshot(diagramId, room).catch(() => null);
-        await controller.companionSend(snapshot ? { ...request, snapshot } : request, scoped ? about : null);
+        // Let the agent request context when it needs it. An exact-label rename resolves against
+        // the live file inside the checked update; sending every shape first adds no protection.
+        await controller.companionSend(request, scoped ? about : null);
       } finally {
         sending.current = false;
       }

@@ -283,10 +283,11 @@ their own configuration.
 The brief (`BRIEF`) goes in as the agent's whole system prompt, replacing its coding one: Claude Code's
 `--system-prompt`, Codex's `model_instructions_file` (the run folder's `brief.md`). Each turn's prompt
 starts with a `<draft-canvas-context>` block: the diagram, the view, the selection, which tool makes
-changes, a proposal of this conversation still waiting for review, the view itself as `read_diagram`
-answers it (read by the page through the agent host as the turn is sent, up to 40,000 characters, `<`
-escaped), and on a follow-up whether the diagram is unchanged since the last turn (then neither the view
-nor a read is needed). Each run's
+changes, a proposal of this conversation still waiting for review, and on a follow-up whether the
+diagram is unchanged since the last turn. The page does not eagerly read or attach the diagram.
+The agent requests needed context through targeted reads; an unchanged hint permits reuse only of
+views it actually read. The protocol still accepts a bounded, escaped snapshot from callers that
+already have one. Each run's
 connector carries `DRAFT_CANVAS_RUN` (the run id) and `DRAFT_CANVAS_AGENT_DIR` (the starting app's own
 agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 
@@ -312,6 +313,13 @@ agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 **Tokens.** Every model call of a turn resends the agent's instructions and tools, so each is kept small
 and calls are kept few:
 
+- Turns start with identity, room, selection and review mode, without a full diagram snapshot or
+  a local natural-language classifier. An exact-label rename resolves its target and current
+  revision locally inside the ordinary checked update transaction. Missing/ambiguous labels,
+  scope restrictions and concurrent edits still refuse. Requests needing interpretation of the
+  diagram use targeted reads with the usual revision checks; review mode still uses a proposal.
+  Planning instructions are specific to the selected mode, so the direct-rename recipe is not
+  supplied in review mode. The native policy still refuses a direct edit if an agent returns one.
 - Nodi's agent interprets natural-language requests and returns a structured final decision: a
   chat answer, exact-label rename, ordinary update or proposal. Reads, help and previews remain
   available while it plans. Native run policy refuses mutations during this phase, even through

@@ -314,7 +314,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         let started = companion.start_prepared(
             Launch {
                 stdin: receipt_context
-                    + companion::decision::INSTRUCTIONS
+                    + &companion::decision::instructions(request.mode)
                     + "\n\n"
                     + &companion::turn_prompt(
                         &request,

@@ -112,6 +112,10 @@ saved edit from an unsaved change or a failed save, and keeps warnings visible. 
 creates a proposal for you to accept; selection scope and Undo still apply. More involved requests
 may need reads or previews before the final edit.
 
+Nodi loads diagram context only when the agent needs it. A rename that supplies both exact labels
+does not send the whole diagram first. Ambiguous labels are refused; requests referring to “this
+box” or other diagram details can still trigger a targeted read.
+
 Ask for all shapes in one horizontal row or vertical column when you want them aligned; automatic
 layout's reading direction can put several shapes in the same layer. Nodi can place and route shapes
 exactly for a specific arrangement. Short replies such as **yes** or

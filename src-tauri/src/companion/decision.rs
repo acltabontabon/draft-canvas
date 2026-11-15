@@ -9,7 +9,20 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 pub const SCHEMA: &str = r#"{"type":"object","additionalProperties":false,"properties":{"tool":{"type":"string","enum":["reply","rename_element","update_diagram","submit_proposal"]},"args":{"type":"string","description":"JSON object of operation arguments; {} for reply"},"text":{"type":"string","description":"Answer for reply; optional explanation for an edit, never a claim it was applied or saved"}},"required":["tool","args","text"]}"#;
-pub const INSTRUCTIONS: &str = "Return your final answer using the response schema. For an edit, set tool to rename_element, update_diagram, or submit_proposal and args to its JSON arguments. This is a plan, not an applied change: do NOT call mutation tools through MCP. The host applies the final edit after your turn ends and confirms from its receipt. For a simple direct rename with both labels supplied, return rename_element immediately: no tool discovery, read or preview is needed. Reads, help and previews remain available for other tasks. Batch all requested changes into one update/proposal. Preserve the requested review mode. The host supplies diagramId, requestId and selection scope. A rename needs only from and to (plus view when needed); other updates still need expectedRevision. For advice or clarification use tool=reply, args={}, text=your answer. For edits text may explain your reasoning, but leave outcome confirmation to the host.";
+pub const INSTRUCTIONS: &str = "Return the response schema: tool, args (JSON object encoded as a string), text. Read only needed context; batch edits into one final operation. Never call mutation tools: the host pins diagramId/requestId/selection scope, executes after your clean exit and confirms the receipt. For advice/clarification use reply, args={}, text=answer. For edits text is optional reasoning, never an outcome claim.";
+const DIRECT: &str = "Mode: apply directly. For a rename with both exact labels supplied, return rename_element, args={from:exactLabel,to:newLabel}; no discovery/read/preview needed. Omit view unless targeting another room; its shape is {inside:[ids]}, never a string. Other edits use update_diagram with expectedRevision.";
+const REVIEW: &str = "Mode: review first. Every edit, INCLUDING RENAMES, must return submit_proposal with expectedRevision and ops after reading the target. Never return rename_element or update_diagram in this mode. Use help for submit_proposal arguments; preserve the pending proposal's revises when adjusting it.";
+
+pub fn instructions(mode: ApplyMode) -> String {
+    format!(
+        "{} {}",
+        match mode {
+            ApplyMode::Direct => DIRECT,
+            ApplyMode::Proposal => REVIEW,
+        },
+        INSTRUCTIONS
+    )
+}
 
 type Authorize = Arc<dyn Fn(&str, &Value) -> Result<(), String> + Send + Sync>;
 

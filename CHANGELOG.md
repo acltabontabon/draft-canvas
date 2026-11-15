@@ -188,6 +188,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - Nodi confirms agent-planned edits from the native tool receipt, without an extra model call.
   Natural-language requests keep the same review, scope, validation, save and undo checks;
   confirmations distinguish saved, unsaved and failed-save outcomes and preserve warnings.
+- Nodi reads diagram context on demand instead of attaching the whole view to every request.
+  Natural-language exact-label renames need no diagram snapshot; other edits can request targeted
+  reads, with the same scope, revision and review checks.
 
 #### Fixed
 

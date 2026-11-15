@@ -132,20 +132,26 @@ describe('the companion', () => {
     expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'Explain this diagram' });
   });
 
-  it('sends the view with the turn, read as it was sent, so the agent needn’t read it first', async () => {
+  it.each([
+    'Could you call Orders database Orders store instead?',
+    'The Orders database box should be called Orders store. Keep everything else as it is.',
+    'What breaks first?',
+  ])('sends %s without eagerly reading or attaching the diagram', async (text) => {
     controller.companionSnapshot.mockResolvedValue('{"revision":"o:1.1","elements":[]}');
     useUiStore.setState({ companionOpen: true });
     mount();
     await settle();
     const input = screen.getByLabelText('Message Claude Code');
-    fireEvent.change(input, { target: { value: 'What breaks first?' } });
+    fireEvent.change(input, { target: { value: text } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    // A second Enter while it is read is not a second turn.
+    // A second Enter while Send is in progress is not a second turn.
     fireEvent.keyDown(input, { key: 'Enter' });
     await settle();
-    expect(controller.companionSnapshot).toHaveBeenCalledWith(doc.metadata.id, []);
+    expect(controller.companionSnapshot).not.toHaveBeenCalled();
     expect(controller.companionSend).toHaveBeenCalledTimes(1);
-    expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'What breaks first?', snapshot: '{"revision":"o:1.1","elements":[]}' });
+    const request = controller.companionSend.mock.calls[0]![0];
+    expect(request).toMatchObject({ text, diagramId: doc.metadata.id, room: [], mode: 'proposal' });
+    expect(request).not.toHaveProperty('snapshot');
   });
 
   it('offers its suggestions the first time, about a selection, and otherwise only when asked', async () => {
