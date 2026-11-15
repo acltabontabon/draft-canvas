@@ -1,6 +1,6 @@
-import { readFileSync, writeFileSync, mkdirSync, mkdtempSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, mkdtempSync, globSync } from 'node:fs';
 import { stripTypeScriptTypes } from 'node:module';
-import { tmpdir } from 'node:os';
+import { homedir, tmpdir } from 'node:os';
 import { isDeepStrictEqual } from 'node:util';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
@@ -35,7 +35,8 @@ writeFileSync(join(dir, 'run.json'), JSON.stringify({
   clients: Object.fromEntries(['codex', 'claude'].map(client => [client, execFileSync(client, ['--version'], { encoding: 'utf8' }).trim()])),
   source: Object.fromEntries(['src/agent/read.ts', 'src/agent/schema.ts', 'src-tauri/src/companion/mod.rs', 'src-tauri/src/companion/decision.rs', 'src-tauri/mcp/src/main.rs', 'tests/fixtures/agent/draft-canvas.request.json'].map(path => [path, createHash('sha256').update(readFileSync(join(root, path))).digest('hex')])),
 }, null, 2));
-const servers = await Promise.all(variants.map(v => createServer({ root: v.tree, cacheDir: join(dir, 'cache-' + v.name), mode: 'desktop', server: {host: '127.0.0.1', port: v.port, strictPort:true, fs:{allow:[v.tree, root, dir]}}, logLevel: 'error' })));
+// A dev-server reload discards the synthetic shell while a paid model call is in flight.
+const servers = await Promise.all(variants.map(v => createServer({ root: v.tree, cacheDir: join(dir, 'cache-' + v.name), mode: 'desktop', server: {host: '127.0.0.1', port: v.port, strictPort:true, watch:null, fs:{allow:[v.tree, root, dir]}}, logLevel: 'error' })));
 await Promise.all(servers.map(s => s.listen()));
 const browser = await chromium.launch();
 function measure(client, events) {
@@ -49,6 +50,18 @@ function measure(client, events) {
   if (!result?.usage || result.is_error) return null;
   const u = result.usage;
   return { input: u.input_tokens + u.cache_read_input_tokens + u.cache_creation_input_tokens, cached:u.cache_read_input_tokens, cacheWrite:u.cache_creation_input_tokens, output:u.output_tokens, reportedCost:result.total_cost_usd, model:Object.keys(result.modelUsage ?? {}).join(',') };
+}
+function modelCalls(client, events) {
+  if (client !== 'codex') return events.flatMap(e => e.type === 'assistant' ? e.message.content.filter(c => c.type === 'tool_use' && c.name !== 'StructuredOutput').map(c => c.name) : []);
+  // exec discovery can consume a whole inference yet be omitted from `codex exec --json`.
+  // Read only this synthetic run's transcript, retaining tool names rather than personal context.
+  const thread = events.find(e => e.type === 'thread.started')?.thread_id;
+  if (!thread || !/^[a-f0-9-]+$/.test(thread)) throw new Error('Missing Codex thread for tool-call audit.');
+  const home = process.env.CODEX_HOME ?? join(homedir(), '.codex');
+  const paths = globSync(join(home, 'sessions', '*', '*', '*', `*${thread}.jsonl`));
+  if (paths.length !== 1) throw new Error('Cannot audit this Codex transcript for hidden tool calls.');
+  return readFileSync(paths[0], 'utf8').trim().split('\n').map(line => JSON.parse(line))
+    .filter(e => e.type === 'response_item' && ['custom_tool_call', 'function_call'].includes(e.payload.type)).map(e => e.payload.name);
 }
 async function run(client, task, v) {
   const name = [client, task, v.name].join('-');
@@ -77,6 +90,7 @@ async function run(client, task, v) {
     const expectedTools = JSON.parse(readFileSync(join(root, 'src-tauri/mcp/planning-entry-tools.json'), 'utf8'));
     if (!isDeepStrictEqual(offered, expectedTools)) throw new Error('Sidecar tools do not match source: rebuild before benchmarking.');
     const pre = await connection.file();
+    const capturedRevision = await page.evaluate(async () => (await import('/src/host/agentBridge.ts')).currentRevision());
     writeFileSync(join(caseDir, 'before.draftcanvas'), pre.text);
     const mcp = { command: v.sidecar, args: [], env: { DRAFT_CANVAS_AGENT_DIR: connection.dir, DRAFT_CANVAS_RUN: '12345678-1234-1234-1234-123456789abc' } };
     const contract = readFileSync(join(root, 'src-tauri/src/companion/decision.rs'), 'utf8');
@@ -112,7 +126,8 @@ async function run(client, task, v) {
     child.stdin.on('error', ()=>{});
     const userText = actions[task];
     const template = JSON.parse(companion.match(/("<draft-canvas-context>.*?"),\n/s)[1]);
-    const change = process.env.BENCH_REVIEW ? 'submit_proposal (the person reviews it before it is saved)' : 'update_diagram (the person can undo it)';
+    const changeContext = companion.split('let change = match request.mode {')[1].split('};')[0];
+    const change = JSON.parse(changeContext.match(new RegExp('ApplyMode::' + (process.env.BENCH_REVIEW ? 'Proposal' : 'Direct') + ' =>\\s*(?:\\{\\s*)?("[^"\\n]*")'))[1]);
     const prompt = template.replace('{}', JSON.stringify(title)).replace('{}', JSON.stringify(id))
       .replace('{view}', 'the top level').replace('{selection}', 'nothing; the message is about the whole view')
       .replace('{change}', change).replace('{code}{unchanged}{snapshot}{waiting}', '').replace('{}', userText);
@@ -131,9 +146,16 @@ async function run(client, task, v) {
     if (exit !== 0 || !decision) throw new Error('no successful final decision');
     let executionError;
     try {
-      const planned = JSON.parse(decision.args);
+      let planned = JSON.parse(decision.args);
       let tool = decision.tool;
       const isRename = tool === 'rename_element';
+      const isIntent = tool === 'edit' || (planned.kind !== undefined && tool === (process.env.BENCH_REVIEW ? 'submit_proposal' : 'update_diagram'));
+      if (isIntent) {
+        const { view, revises, ...intent } = planned;
+        planned = { intent, expectedRevision: capturedRevision, ...(view === undefined ? {} : { view }), ...(revises === undefined ? {} : { revises }) };
+        if (process.env.BENCH_REVIEW) planned.summary = intent.kind + ': ' + [...(intent.target ?? intent.label ?? intent.from ?? '')].slice(0, 150).join('');
+        tool = process.env.BENCH_REVIEW ? 'submit_proposal' : 'update_diagram';
+      }
       if (isRename) {
         planned.rename={from:planned.from,to:planned.to};
         if (process.env.BENCH_REVIEW) planned.summary = 'Rename “' + [...planned.from].slice(0,150).join('') + '” to “' + [...planned.to].slice(0,150).join('') + '”';
@@ -141,7 +163,7 @@ async function run(client, task, v) {
       }
       if (tool !== (process.env.BENCH_REVIEW ? 'submit_proposal' : 'update_diagram')) throw new Error('Unexpected final action: ' + tool);
       planned.diagramId=id;planned.requestId='deferred-benchmark-'+repeat;
-      if (!isRename) planned.view ??= {inside:[]};
+      if (!isRename && (!isIntent || planned.intent.kind === 'add')) planned.view ??= {inside:[]};
       connection.authorize(tool, planned);
       const executor = spawn(v.sidecar, ['--apply-edit'], {env:{...process.env,DRAFT_CANVAS_AGENT_DIR:connection.dir,DRAFT_CANVAS_RUN:'12345678-1234-1234-1234-123456789abc'},stdio:['pipe','pipe','pipe']});
       let receipt='';executor.stdout.on('data',d=>receipt+=d);executor.stdin.end(JSON.stringify({tool,args:planned,text:decision.text}));
@@ -149,6 +171,7 @@ async function run(client, task, v) {
       writeFileSync(join(caseDir,'receipt.jsonl'),receipt);
     } catch (error) { executionError = String(error); }
     const after = await connection.file();
+    if (!after) throw new Error('Synthetic fixture disappeared before verification; inspect page reloads and receipt.jsonl.');
     const beforeDoc = JSON.parse(pre.text);
     let file = JSON.parse(after.text);
     let unchangedBeforeAccept = null;
@@ -169,7 +192,7 @@ async function run(client, task, v) {
     if (after) writeFileSync(join(caseDir,'result.draftcanvas'), after.text);
     const init = events.find(e=>e.type==='system'&&e.subtype==='init');
     const calls = connection.calls;
-    const modelTools = events.flatMap(e => e.type === 'item.completed' && e.item.type === 'mcp_tool_call' ? [e.item.tool] : e.type === 'assistant' ? e.message.content.filter(c => c.type === 'tool_use' && c.name !== 'StructuredOutput').map(c => c.name) : []);
+    const modelTools = modelCalls(client, events);
     const result = {name, client, task, variant:v.name, exit, model:init?.model ?? (client==='codex'?'gpt-6-luna':null),
       usage:measure(client,events), calls, modelTools, unchangedBeforeAccept, verified:!!verified, otherFieldsSame, ms:Date.now()-started,
       planningSchemaBytes:Buffer.byteLength(JSON.stringify(JSON.parse(readFileSync(join(root,'src-tauri/mcp/planning-entry-tools.json'),'utf8')))),
@@ -177,7 +200,9 @@ async function run(client, task, v) {
       error:events.find(e=>e.type==='error'||e.type==='turn.failed')?.message ?? (exit ? stderr.trim().split('\n').at(-1) : undefined)};
     writeFileSync(join(caseDir,'result.json'), JSON.stringify(result,null,2));
     console.log(name, JSON.stringify({...result,calls:calls.map(c=>c.tool)}));
-    if (!verified || !otherFieldsSame || unchangedBeforeAccept === false || executionError) process.exitCode = 1;
+    if (!verified || !otherFieldsSame || unchangedBeforeAccept === false || executionError
+      || (process.env.BENCH_MAX_INPUT && !(result.usage?.input < Number(process.env.BENCH_MAX_INPUT)))
+      || (process.env.BENCH_NO_READS && modelTools.length !== 0)) process.exitCode = 1;
   } catch(error) {
     writeFileSync(join(caseDir,'harness-error.log'), String(error));
     console.error(name, String(error));

@@ -1,3 +1,4 @@
+import { currentRevision } from '../../src/host/agentBridge';
 import { ReactFlowProvider } from '@xyflow/react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
@@ -495,6 +496,7 @@ describe('the companion', () => {
     expect(request).toMatchObject({
       diagramId: doc.metadata.id,
       text: 'Put a cache in front of this',
+      revision: currentRevision(),
       selection: { nodes: ['db'], edges: [] },
       agent: 'claude-code',
       mode: 'proposal',

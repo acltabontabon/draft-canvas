@@ -239,3 +239,58 @@ for (const outcome of ['accept', 'reject', 'conflict'] as const) {
     } finally { await connection.close(); }
   });
 }
+
+for (const outcome of ['accept', 'reject', 'conflict'] as const) {
+  test(`local connection intent: ${outcome} preserves review gates`, async ({ page }) => {
+    test.skip(process.platform === 'win32', 'The fixture broker uses a Unix socket.');
+    await installMockShell(page);
+    await page.goto('/');
+    const handle = await page.evaluate(async () => {
+      // oxlint-disable-next-line typescript/no-explicit-any -- dev-server module imports are runtime URLs
+      const load = (path: string) => import(/* @vite-ignore */ path) as Promise<any>;
+      const { compose } = await load('/src/agent/compile.ts');
+      return window.__shell.addFile('Intent review', compose({ title: 'Intent review', nodes: [{ id: 'api', type: 'api', label: 'Orders API' }, { id: 'db', type: 'database', label: 'Orders DB' }], relationships: [{ id: 'r', from: 'api', to: 'db', label: 'Writes' }] }, 'd_mcp00000001').text);
+    });
+    await page.getByRole('button', { name: 'Open file…' }).click();
+    await chooseWorkFile(page, 'Intent review');
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    const revision = () => page.evaluate(async () => {
+      // oxlint-disable-next-line typescript/no-explicit-any -- dev-server module imports are runtime URLs
+      const load = (path: string) => import(/* @vite-ignore */ path) as Promise<any>;
+      return (await load('/src/host/agentBridge.ts')).currentRevision() as string;
+    });
+    const connection = await connect(page, handle);
+    try {
+      const before = (await connection.file())!.text;
+      const args = { requestId: randomUUID(), diagramId: 'd_mcp00000001', expectedRevision: await revision(), summary: 'Relabel connection', intent: { kind: 'connection', from: 'Orders API', to: 'Orders DB', set: { label: 'Saves locally' } } };
+      const proposed = await connection.client.call('submit_proposal', args);
+      expect(proposed.ok).toBe(true);
+      expect((await connection.file())!.text).toBe(before);
+      const stored = await connection.client.call('get_proposal', { proposalId: proposed.value.proposalId });
+      expect(stored.value.ops).toEqual([{ op: 'update', id: 'r', set: { label: 'Saves locally' } }]);
+      expect(stored.value).not.toHaveProperty('intent');
+      if (outcome === 'conflict') {
+        const { summary: _summary, ...change } = args;
+        expect((await connection.client.call('update_diagram', { ...change, requestId: randomUUID(), intent: { ...args.intent, set: { label: 'My label' } } })).ok).toBe(true);
+      }
+      await page.getByRole('button', { name: '1 proposal to review' }).click();
+      const panel = page.getByRole('region', { name: 'Proposal review' });
+      await expect(panel).toContainText('Saves locally');
+      if (outcome === 'conflict') {
+        await expect(panel.getByRole('button', { name: 'Accept', exact: true })).toBeDisabled();
+        expect(JSON.parse((await connection.file())!.text).edges[0].label).toBe('My label');
+      } else {
+        await panel.getByRole('button', { name: outcome === 'accept' ? 'Accept' : 'Reject', exact: true }).click();
+        if (outcome === 'reject') expect((await connection.file())!.text).toBe(before);
+        else {
+          await page.keyboard.press('Escape');
+          await page.keyboard.press('ControlOrMeta+s');
+          await expect.poll(async () => JSON.parse((await connection.file())!.text).edges[0].label).toBe('Saves locally');
+          await page.keyboard.press('ControlOrMeta+z');
+          await page.keyboard.press('ControlOrMeta+s');
+          await expect.poll(async () => JSON.parse((await connection.file())!.text).edges[0].label).toBe('Writes');
+        }
+      }
+    } finally { await connection.close(); }
+  });
+}

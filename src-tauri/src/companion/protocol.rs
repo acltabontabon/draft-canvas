@@ -66,6 +66,11 @@ pub struct PromptRequest {
     #[serde(default)]
     #[ts(optional)]
     pub snapshot: Option<String>,
+    /// Opaque editor revision captured at Send. Never placed in model context; the host pins it
+    /// on locally resolved intents so planning cannot overwrite intervening edits.
+    #[serde(default)]
+    #[ts(optional)]
+    pub revision: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ts_rs::TS)]

@@ -11,6 +11,7 @@ import { categoryOf } from '../../document/connectorSemantics';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import { isInteracting, useEditorStore } from '../../store/editorStore';
+import { currentRevision } from '../../host/agentBridge';
 import { selectNode } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
 import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, CodeFolder, CodeGrant, PromptRequest, Proposal } from '../api';
@@ -611,6 +612,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     const kind = agent?.agent ?? 'claude-code';
     const request: PromptRequest = {
       runId: crypto.randomUUID(),
+      revision: currentRevision(),
       diagramId,
       text: prompt,
       selection: scoped ? { nodes: selection.nodes, edges: selection.edges } : null,
@@ -624,8 +626,8 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     sending.current = true;
     void (async () => {
       try {
-        // Let the agent request context when it needs it. An exact-label rename resolves against
-        // the live file inside the checked update; sending every shape first adds no protection.
+        // The revision stays local to the host. Simple intents resolve names without sending
+        // the graph to the model, and refuse intervening edits before resolution.
         await controller.companionSend(request, scoped ? about : null);
       } finally {
         sending.current = false;

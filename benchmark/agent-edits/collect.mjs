@@ -9,11 +9,14 @@ import { verify } from './verify.mjs';
 const [output, ...inputs] = process.argv.slice(2);
 if (!output || !inputs.length) throw new Error('Supply output.json and sample-label=artifact-directory entries.');
 const samples = [];
+const runs = [];
 for (const input of inputs) {
   const at = input.indexOf('=');
   if (at < 1) throw new Error('Each input must be sample-label=artifact-directory.');
   const sample = input.slice(0, at);
   const directory = input.slice(at + 1);
+  const metadata = join(directory, 'run.json');
+  if (existsSync(metadata)) runs.push({ sample, ...JSON.parse(readFileSync(metadata, 'utf8')) });
   for (const batch of readdirSync(directory).filter(name => name.startsWith('results-deferred-'))) {
     for (const name of readdirSync(join(directory, batch)).sort()) {
       const path = join(directory, batch, name);
@@ -46,6 +49,7 @@ writeFileSync(output, JSON.stringify({
   clients: Object.fromEntries(['codex', 'claude'].map(client => [client, execFileSync(client, ['--version'], { encoding: 'utf8' }).trim()])),
   effort: 'low',
   method: 'Fresh synthetic diagrams/conversations. Total reported input includes cached/cache-write tokens. No overhead subtracted. Serialized content is reverified with verify.mjs; review originals stay byte-identical. Failed attempts are retained, never counted as savings. Native broker/filesystem are mocked; native gates are separately tested.',
+  runs,
   samples,
 }, null, 2) + '\n');
 console.log(`${samples.filter(sample => sample.completed).length}/${samples.length} samples completed and preserved unrelated content.`);

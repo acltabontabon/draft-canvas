@@ -11,6 +11,8 @@ describe('compact editing reads', () => {
     const doc = file();
     const before = JSON.stringify(doc);
     const read = readEdit(doc, { query: 'API' }, 'r1', 'd');
+    expect(read.layout).toContain('spacing-only feedback keeps alignment/order');
+    expect(read.layout).toContain('reset affected connectors with set.route: null');
     expect(read).toMatchObject({ revision: 'r1', total: 3, truncated: false, matches: [
       { id: 'outer', label: 'API', view: { inside: [] } },
       { id: 'r', type: 'relationship', from: { id: 'outer', label: 'API' }, to: { id: 'owner', label: 'Container' } },

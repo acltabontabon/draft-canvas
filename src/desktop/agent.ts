@@ -41,6 +41,7 @@ import { loadGallery, starterFile } from '../gallery';
 import { STAGE_TEXT } from '../agent/progress';
 import { readAttachment, readDiagram, readEdit, readLookup, readOutline, viewPathOf } from '../agent/read';
 import { renamePatch } from '../agent/rename';
+import { intentPatch, type EditIntent } from '../agent/intent';
 import { READ_FORMATS } from '../agent/schema';
 import { buildImplementationContext } from '../agent/context';
 import type { PreparedProposal } from '../agent/proposal';
@@ -233,14 +234,15 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
       });
     case 'update_diagram':
       return host.inTurn(async () => {
-        if (args.rename === undefined) return update(api, host, event);
+        if (args.rename === undefined && args.intent === undefined) return update(api, host, event);
         // Resolve locally, inside the same controller turn. The ordinary update below still checks
         // this snapshot's revision again and passes the review/commit/save gates. The broker has
-        // already journaled the ORIGINAL rename request, so a lost response replays its receipt.
+        // already journaled the ORIGINAL selector request, so a lost response replays its receipt.
         const snapshot = await fileForInTurn(host, context);
-        const { rename: _rename, ...rest } = args;
-        const resolved = renamePatch(snapshot.file, args.rename as { from: string; to: string }, args.view);
-        const normalized = { ...rest, ...resolved, expectedRevision: snapshot.revision };
+        if (args.intent !== undefined && currentAs(snapshot, args.expectedRevision) !== snapshot.revision) throw conflict(snapshot.revision);
+        const { rename: _rename, intent: _intent, ...rest } = args;
+        const resolved = args.intent !== undefined ? intentPatch(snapshot.file, args.intent as EditIntent, args.view) : renamePatch(snapshot.file, args.rename as { from: string; to: string }, args.view);
+        const normalized = { ...rest, ...resolved, expectedRevision: args.intent !== undefined ? args.expectedRevision : snapshot.revision };
         validateToolInput('update_diagram', { diagramId: context.diagramId, ...normalized });
         return update(api, host, { ...event, args: normalized });
       });
@@ -904,9 +906,11 @@ async function submitProposal(host: AgentHost, event: Request) {
   // concrete ids/ops/preconditions: Accept must never resolve the label again against later work.
   // This handler already owns the turn; queuing fileFor here would wait behind itself forever.
   const snapshot = await fileForInTurn(host, context);
-  if (args.rename !== undefined) {
-    const { rename, ...rest } = args;
-    args = { ...rest, ...renamePatch(snapshot.file, rename as { from: string; to: string }, args.view), expectedRevision: snapshot.revision };
+  if (args.rename !== undefined || args.intent !== undefined) {
+    if (args.intent !== undefined && currentAs(snapshot, args.expectedRevision) !== snapshot.revision) throw conflict(snapshot.revision);
+    const { rename, intent, ...rest } = args;
+    const resolved = intent !== undefined ? intentPatch(snapshot.file, intent as EditIntent, args.view) : renamePatch(snapshot.file, rename as { from: string; to: string }, args.view);
+    args = { ...rest, ...resolved, expectedRevision: intent !== undefined ? args.expectedRevision : snapshot.revision };
     validateToolInput('submit_proposal', { diagramId: context.diagramId, ...args });
   }
   const expected = typeof args.expectedRevision === 'string' ? args.expectedRevision : undefined;

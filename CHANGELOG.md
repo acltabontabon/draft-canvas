@@ -194,9 +194,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - Review-mode renames also resolve exact labels locally, creating a proposal without a model read.
   The diagram changes only after acceptance; ambiguity, scope and changed-target conflicts still
   refuse unsafe edits, and retries do not create duplicate proposals.
-- Nodi reads a compact editing index for descriptions, added shapes and connection changes, with
-  revisions and common patch syntax in one response. Direct and review modes keep the same safety
-  checks; a reproducible benchmark covers these prompts and connection rewiring with both agents.
+- Nodi resolves descriptions, added shapes and connection edits locally from the agent's final
+  intent, without a model read or confirmation call. The host pins the revision captured at Send;
+  intervening edits, ambiguous targets and out-of-scope changes are refused. Review mode keeps
+  its normal acceptance and conflict checks. A reproducible benchmark covers both modes and agents.
 
 #### Fixed
 

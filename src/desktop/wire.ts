@@ -119,7 +119,12 @@ unchanged?: boolean,
  * The view as read_diagram would answer it, read by the page as the turn was sent, so the agent's
  * first call needn't be a read. JSON text; left out when it was too big or couldn't be read.
  */
-snapshot?: string, };
+snapshot?: string,
+/**
+ * Opaque editor revision captured at Send. Never placed in model context; the host pins it
+ * on locally resolved intents so planning cannot overwrite intervening edits.
+ */
+revision?: string, };
 export type CodeGrant = "now" | "always";
 export type CodeFolder = { name: string, displayPath: string,
 /**

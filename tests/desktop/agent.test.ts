@@ -1211,3 +1211,74 @@ describe('compact reads keep common edits on the guarded pipeline', () => {
     }
   }
 });
+
+describe('local intents pin the Send revision without a model read', () => {
+  const intents = [
+    { kind: 'shape', target: 'Orders API', set: { description: 'Handles orders' } },
+    { kind: 'add', type: 'service', label: 'Audit worker', description: 'Records events' },
+    { kind: 'connection', from: 'Orders API', to: 'Orders DB', set: { label: 'Saves locally' } },
+    { kind: 'connection', from: 'Orders API', to: 'Orders DB', set: { from: 'Orders DB', to: 'Orders API' } },
+  ];
+  for (const tool of ['update_diagram', 'submit_proposal']) {
+    it.each(intents)(`${tool} validates and preserves the guarded pipeline for %j`, async intent => {
+      const handle = await openOrders();
+      const before = fileOf(useEditorStore.getState());
+      const history = useEditorStore.getState().history;
+      const disk = h.files.get(handle)!.text;
+      const context = { handle, open: true, diagramId: 'd_orders000001' };
+      const args = { diagramId: context.diagramId, requestId: `intent-${nextId}`, expectedRevision: currentRevision(), intent, ...(tool === 'submit_proposal' ? { summary: 'Requested edit' } : {}) };
+      expect((await request(tool, { ...args, expectedRevision: 'o:stale' }, context)).error?.code).toBe('REVISION_CONFLICT');
+      if (intent.kind !== 'add') {
+        expect((await request(tool, { ...args, scope: { nodes: ['db'], edges: [] } }, context)).error?.code).toBe('OUT_OF_SCOPE');
+      }
+      expect(fileOf(useEditorStore.getState())).toBe(before);
+      const out = await request(tool, args, context);
+      expect(out.ok).toBe(true);
+      if (tool === 'submit_proposal') {
+        expect(out.value!.ops).toBeInstanceOf(Array);
+        expect(out.value).not.toHaveProperty('intent');
+        expect(out.value).toMatchObject({ path: [], baseRevision: expect.any(String), noImpact: false });
+        expect(fileOf(useEditorStore.getState())).toBe(before);
+        expect(useEditorStore.getState().history).toBe(history);
+        expect(h.files.get(handle)!.text).toBe(disk);
+        expect(h.agent.gates).not.toContain(nextId - 1);
+      } else {
+        expect(out.value).toMatchObject({ applied: true, persisted: true });
+        const after = fileOf(useEditorStore.getState());
+        if (intent.kind === 'shape') expect(after.nodes.find(n => n.id === 'api')!.description).toBe('Handles orders');
+        if (intent.kind === 'add') expect(after.nodes.find(n => n.text === 'Audit worker')!.description).toBe('Records events');
+        if (intent.set?.label) expect(after.edges[0]!.label).toBe('Saves locally');
+        if (intent.set?.to) expect(after.edges[0]).toMatchObject({ source: 'db', target: 'api' });
+        useEditorStore.getState().undo();
+        expect(fileOf(useEditorStore.getState()).nodes).toEqual(before.nodes);
+        expect(fileOf(useEditorStore.getState()).edges).toEqual(before.edges);
+      }
+    });
+  }
+
+  it('refuses a user edit made while the model was thinking, before resolving names', async () => {
+    const handle = await openOrders();
+    const expectedRevision = currentRevision();
+    useEditorStore.getState().apply('Human edit', doc => ({ ...doc, nodes: doc.nodes.map(n => n.id === 'api' ? { ...n, description: 'My description' } : n) }));
+    for (const tool of ['update_diagram', 'submit_proposal']) {
+      const out = await request(tool, { diagramId: 'd_orders000001', requestId: `intent-${nextId}`, expectedRevision, intent: { kind: 'shape', target: 'Orders API', set: { description: 'Agent description' } }, ...(tool === 'submit_proposal' ? { summary: 'Edit' } : {}) }, { handle, open: true });
+      expect(out.error?.code).toBe('REVISION_CONFLICT');
+      expect(fileOf(useEditorStore.getState()).nodes.find(n => n.id === 'api')!.description).toBe('My description');
+    }
+  });
+
+  it('rechecks after native approval and honours cancellation for a resolved intent', async () => {
+    const handle = await openOrders();
+    const args = () => ({ diagramId: 'd_orders000001', requestId: `intent-${nextId}`, expectedRevision: currentRevision(), intent: { kind: 'shape', target: 'Orders API', set: { description: 'Agent description' } } });
+    h.agent.gateOpen = false;
+    expect((await request('update_diagram', args(), { handle, open: true })).ok).toBe(false);
+    h.agent.gateOpen = true;
+    h.api.agentGate.mockImplementationOnce(async () => {
+      useEditorStore.getState().apply('Human edit', doc => ({ ...doc, nodes: doc.nodes.map(n => n.id === 'api' ? { ...n, description: 'My description' } : n) }));
+      return true;
+    });
+    const out = await request('update_diagram', args(), { handle, open: true });
+    expect(out.error?.code).toBe('REVISION_CONFLICT');
+    expect(fileOf(useEditorStore.getState()).nodes.find(n => n.id === 'api')!.description).toBe('My description');
+  });
+});

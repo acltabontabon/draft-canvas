@@ -2364,12 +2364,22 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_rename_retry_replays_before_resolving_the_old_label_again() {
-        for tool in ["update_diagram", "submit_proposal"] {
+    async fn a_local_edit_retry_replays_before_resolving_names_again() {
+        for (tool, intent) in [
+            ("update_diagram", false),
+            ("submit_proposal", false),
+            ("update_diagram", true),
+            ("submit_proposal", true),
+        ] {
             let dir = tempfile::tempdir().unwrap();
             let agent = Agent::new(dir.path());
             agent.ensure_ledger().unwrap();
             let mut args = json!({"diagramId":"d_1", "requestId":"rename", "rename":{"from":"API","to":"Gateway"}});
+            if intent {
+                args.as_object_mut().unwrap().remove("rename");
+                args["expectedRevision"] = json!("o:captured.1");
+                args["intent"] = json!({"kind":"add","type":"service","label":"Audit"});
+            }
             if tool == "submit_proposal" {
                 args["summary"] = json!("Rename API");
             }
@@ -2401,7 +2411,11 @@ mod tests {
             assert_eq!(receipt["revision"], "f:2");
             assert_eq!(receipt["replayed"], true);
             let mut changed = args.clone();
-            changed["rename"]["to"] = json!("Different");
+            if intent {
+                changed["intent"]["label"] = json!("Different");
+            } else {
+                changed["rename"]["to"] = json!("Different");
+            }
             assert!(
                 matches!(admit(&agent, tool, &changed, &[], &calls, |_| None).await, Err(error) if error.code == "REQUEST_ID_MISMATCH")
             );
