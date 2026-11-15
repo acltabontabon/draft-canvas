@@ -200,6 +200,15 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
             r#"sandbox_mode="read-only""#,
             "-c",
             r#"approval_policy="never""#,
+            // Feature flags alone leave multi-agent tools/instructions on some models.
+            "-c",
+            "agents.enabled=false",
+            // Nodi has no CLI planning mode or structured-question UI. Clarifications use chat;
+            // diagram approvals still go through the native broker, not these CLI helpers.
+            "-c",
+            "include_collaboration_mode_instructions=false",
+            "-c",
+            "tools.experimental_request_user_input.enabled=false",
         ]
         .map(String::from),
     );
@@ -207,10 +216,11 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
         args.push("--disable".into());
         args.push((*feature).to_string());
     }
-    // Canvas operations are ordinary JSON tools. Direct dispatch avoids shipping the general
-    // JavaScript execution interface on every inference; keep its host below for model compatibility.
+    // Canvas operations are ordinary JSON tools. Dispatch them directly and exclude unused
+    // native file/resource tools from the nested surface on every inference. Keep the host
+    // below for model compatibility; permissions instructions and sandbox enforcement stay intact.
     if available.contains("code_mode") {
-        args.extend(["-c".to_string(), r#"features.code_mode={enabled=false,direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()]);
+        args.extend(["-c".to_string(), r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()]);
     }
     // Some models expose MCP tools through exec even with the code_mode feature off. Its host is
     // the tool dispatcher, not an extra tool: disabling it leaves that exec visible but every call
@@ -840,7 +850,7 @@ mod tests {
         assert!(!args
             .windows(2)
             .any(|w| w == ["--disable", "code_mode_host"]));
-        assert!(args.contains(&r#"features.code_mode={enabled=false,direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()));
+        assert!(args.contains(&r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()));
         assert!(args.contains(&"skills.include_instructions=false".to_string()));
         assert!(args.contains(&"skills.max_context_tokens=1".to_string()));
         assert!(args.contains(&r#"web_search="disabled""#.to_string()));
@@ -853,6 +863,25 @@ mod tests {
         for session in [SessionArg::New("fresh"), SessionArg::Resume("existing")] {
             let args = spec_args(session);
             assert!(args.contains(&"--ignore-user-config".to_string()));
+            for setting in [
+                "agents.enabled=false",
+                "include_collaboration_mode_instructions=false",
+                "tools.experimental_request_user_input.enabled=false",
+                r#"sandbox_mode="read-only""#,
+                r#"approval_policy="never""#,
+                r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#,
+            ] {
+                assert!(
+                    args.windows(2).any(|pair| pair == ["-c", setting]),
+                    "{setting}"
+                );
+            }
+            assert!(!args
+                .iter()
+                .any(|arg| arg.starts_with("include_permissions_instructions=")));
+            assert!(!args
+                .iter()
+                .any(|arg| arg.starts_with("include_environment_context=")));
             for feature in [
                 "shell_tool",
                 "hooks",

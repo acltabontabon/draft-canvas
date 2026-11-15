@@ -320,9 +320,13 @@ and calls are kept few:
   generation, sub-agents, plugins, apps, skill search, `unified_exec`; only those `codex features list`
   reports) and web search off. Its canvas brief supplies workflow guidance, so automatic skill
   instructions are omitted with `skills.include_instructions=false` and the unused skill catalog is
-  capped with `skills.max_context_tokens=1`. Draft Canvas namespaces use
-  `features.code_mode.direct_only_tool_namespaces`, avoiding the general JavaScript dispatch
-  instructions. The code-mode host stays enabled for model compatibility.
+  capped with `skills.max_context_tokens=1`. `agents.enabled=false` also removes multi-agent tools
+  and instructions that feature flags alone can leave enabled. Draft Canvas namespaces use
+  `features.code_mode.direct_only_tool_namespaces`; `excluded_tool_namespaces=["functions"]` omits
+  unused native file/resource tools from the nested execution surface. The code-mode host stays
+  enabled for model compatibility. CLI planning-mode instructions and the structured-question tool
+  are disabled; Nodi asks clarifying questions in chat. Permission instructions, the read-only
+  sandbox, and native diagram approval, validation, revision, save and undo checks remain intact.
 - The view comes with the turn, so a question is one call.
 - The brief directs the agent to reuse the supplied view, look up individual capability topics as
   needed, use previews to compare alternatives, and take revisions and advisories from receipts.
