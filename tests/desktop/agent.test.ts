@@ -1035,3 +1035,78 @@ describe('revisions a clean open diagram answers to', () => {
     expect(proposalStale('f:0123456789abcdef', true)).toBe(true);
   });
 });
+
+describe('one-call rename through the existing edit pipeline', () => {
+  const args = () => ({ diagramId: 'd_orders000001', requestId: `rename-${nextId}`, rename: { from: 'Orders API', to: 'Gateway' } });
+
+  it('saves a clean diagram with one undo step and preserves unrelated content and placement', async () => {
+    const handle = await openOrders();
+    const before = structuredClone(fileOf(useEditorStore.getState()));
+    const out = await request('update_diagram', args(), { handle, open: true, diagramId: 'd_orders000001' });
+    expect(out.value).toMatchObject({ applied: true, persisted: true, state: 'saved', updated: 1 });
+    const expected = structuredClone(before.nodes);
+    expected.find((n) => n.id === 'api')!.text = 'Gateway';
+    expect(fileOf(useEditorStore.getState()).nodes).toEqual(expected);
+    expect(fileOf(useEditorStore.getState()).edges).toEqual(before.edges);
+    expect(h.agent.gates).toContain(nextId - 1);
+    useEditorStore.getState().undo();
+    expect(fileOf(useEditorStore.getState()).nodes).toEqual(before.nodes);
+  });
+
+  it('refuses ambiguity and missing old labels without opening a commit gate', async () => {
+    const handle = await openOrders();
+    useEditorStore.getState().apply('Duplicate label', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => ({ ...n, text: 'Orders API' })) }));
+    const before = currentRevision();
+    const out = await request('update_diagram', args(), { handle, open: true });
+    expect(out.error?.code).toBe('INVALID_INPUT');
+    expect(currentRevision()).toBe(before);
+    expect(h.agent.gates).not.toContain(nextId - 1);
+    const missing = await request('update_diagram', { ...args(), rename: { from: 'Missing', to: 'Gateway' } }, { handle, open: true });
+    expect(missing.error?.code).toBe('NOT_FOUND');
+  });
+
+  it('still refuses changes outside an imposed selection scope', async () => {
+    const handle = await openOrders();
+    const out = await request('update_diagram', { ...args(), scope: { nodes: ['db'] } }, { handle, open: true });
+    expect(out.error?.code).toBe('OUT_OF_SCOPE');
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'api')!.text).toBe('Orders API');
+  });
+
+  it('does not overwrite a target changed during approval', async () => {
+    const handle = await openOrders();
+    h.api.agentGate.mockImplementationOnce(async () => {
+      useEditorStore.getState().apply('My rename', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => n.id === 'api' ? { ...n, text: 'Mine' } : n) }));
+      return true;
+    });
+    const out = await request('update_diagram', args(), { handle, open: true });
+    expect(out.error?.code).toBe('REVISION_CONFLICT');
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'api')!.text).toBe('Mine');
+  });
+
+  it('honours cancellation and preserves the person’s unsaved changes', async () => {
+    const handle = await openOrders();
+    h.agent.gateOpen = false;
+    const cancelled = await request('update_diagram', args(), { handle, open: true });
+    expect(cancelled.error?.code).toBe('CANCELLED');
+    h.agent.gateOpen = true;
+    useEditorStore.getState().apply('My note', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => n.id === 'db' ? { ...n, text: 'My database' } : n) }));
+    h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+    const saves = h.api.saveDocument.mock.calls.length;
+    const renamed = await request('update_diagram', args(), { handle, open: true });
+    expect(renamed.value).toMatchObject({ applied: true, persisted: false, state: 'applied-unsaved' });
+    expect(h.api.saveDocument.mock.calls.length).toBe(saves);
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'db')!.text).toBe('My database');
+  });
+
+  it('prepares a closed-file rename under the broker’s original stamp without switching the editor', async () => {
+    await openOrders();
+    const before = fileOf(useEditorStore.getState());
+    const handle = h.addFile('Other', diagramText());
+    const file = h.files.get(handle)!;
+    const out = await request('update_diagram', args(), { handle, open: false, text: file.text, stamp: `v1:${file.version}`, diagramId: 'd_orders000001' });
+    expect(out.value).toMatchObject({ applied: true, where: 'file', undo: 'on-open' });
+    const parsed = deserializeDocument((out.value!.write as { text: string }).text);
+    expect(parsed.ok && parsed.document.nodes.find((n) => n.id === 'api')!.text).toBe('Gateway');
+    expect(fileOf(useEditorStore.getState())).toBe(before);
+  });
+});

@@ -94,34 +94,32 @@ async fn a_real_client_lists_the_tools_and_round_trips_a_call() {
     );
     let tools = client.list_all_tools().await.unwrap();
     let names: Vec<_> = tools.iter().map(|t| t.name.to_string()).collect();
+    assert_eq!(names, ["diagram_tool"]);
+    assert!(serde_json::to_vec(&tools).unwrap().len() <= 450);
     assert_eq!(
-        names,
-        [
-            "get_capabilities",
-            "list_diagrams",
-            "read_diagram",
-            "read_attachment",
-            "read_selection",
-            "get_implementation_context",
-            "render_diagram",
-            "create_diagram",
-            "update_diagram",
-            "preview_diagram",
-            "submit_proposal",
-            "get_proposal",
-            "list_proposals"
-        ]
+        tools[0].annotations.as_ref().and_then(|a| a.read_only_hint),
+        Some(false)
     );
-    let create = tools.iter().find(|t| t.name == "create_diagram").unwrap();
+    let help = client
+        .call_tool(
+            CallToolRequestParams::new("diagram_tool").with_arguments(
+                json!({"tool":"help","args":{"tool":"create_diagram"}})
+                    .as_object()
+                    .unwrap()
+                    .clone(),
+            ),
+        )
+        .await
+        .unwrap();
     assert_eq!(
-        create.annotations.as_ref().and_then(|a| a.idempotent_hint),
-        Some(true)
+        help.structured_content.as_ref().unwrap()["annotations"]["idempotentHint"],
+        true
     );
 
     let ok = client
         .call_tool(
-            CallToolRequestParams::new("create_diagram").with_arguments(
-                json!({"requestId": "r", "title": "Hello"})
+            CallToolRequestParams::new("diagram_tool").with_arguments(
+                json!({"tool":"create_diagram","args":{"requestId": "r", "title": "Hello"}})
                     .as_object()
                     .unwrap()
                     .clone(),
@@ -179,6 +177,48 @@ async fn a_real_client_lists_the_tools_and_round_trips_a_call() {
         seen[0].get("run").is_none(),
         "an agent the person connected is no run"
     );
+}
+
+#[tokio::test]
+async fn full_tools_keeps_individual_annotations_available() {
+    let client = ()
+        .serve(
+            TokioChildProcess::new(Command::new(sidecar()).configure(|c| {
+                c.arg("--full-tools");
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let tools = client.list_all_tools().await.unwrap();
+    let names: Vec<_> = tools.iter().map(|tool| tool.name.as_ref()).collect();
+    assert_eq!(
+        names,
+        [
+            "get_capabilities",
+            "list_diagrams",
+            "read_diagram",
+            "read_attachment",
+            "read_selection",
+            "get_implementation_context",
+            "render_diagram",
+            "create_diagram",
+            "update_diagram",
+            "preview_diagram",
+            "submit_proposal",
+            "get_proposal",
+            "list_proposals"
+        ]
+    );
+    let create = tools
+        .iter()
+        .find(|tool| tool.name == "create_diagram")
+        .unwrap();
+    assert_eq!(
+        create.annotations.as_ref().and_then(|a| a.idempotent_hint),
+        Some(true)
+    );
+    client.cancel().await.unwrap();
 }
 
 #[tokio::test]

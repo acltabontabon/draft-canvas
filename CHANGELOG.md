@@ -182,8 +182,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Improved
 
-- AI agents use a compact tool catalog and can look up shapes across nested views without reading
-  whole rooms. Simple edits need less context; detailed authoring schemas are available on demand.
+- AI agents can rename a shape in one call without reading whole rooms. A small default tool
+  interface loads other schemas on demand, and Codex avoids unused dispatch instructions.
+  Exact-label renames preserve the existing approval, revision, save and undo checks.
 
 #### Fixed
 

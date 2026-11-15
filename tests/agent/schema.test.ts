@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { FULL_TOOLS, RUN_TOOLS, TOOLS } from '../../src/agent/schema';
+import { ENTRY_TOOLS, FULL_TOOLS, RUN_TOOLS, TOOLS } from '../../src/agent/schema';
 
 const toolsJson = () => readFileSync(join(process.cwd(), 'src-tauri/mcp/tools.json'), 'utf8');
 
@@ -67,14 +67,16 @@ function refsIn(schema: unknown, out: string[] = []): string[] {
 
 describe('MCP tool definitions', () => {
   it('are the ones the sidecar compiles in', () => {
+    expect(readFileSync(join(process.cwd(), 'src-tauri/mcp/entry-tools.json'), 'utf8')).toBe(`${JSON.stringify(ENTRY_TOOLS, null, 2)}\n`);
     expect(toolsJson()).toBe(`${JSON.stringify(TOOLS, null, 2)}\n`);
     const runTools = readFileSync(join(process.cwd(), 'src-tauri/mcp/run-tools.json'), 'utf8');
     expect(runTools).toBe(`${JSON.stringify(RUN_TOOLS, null, 2)}\n`);
   });
 
   it('keeps the connected tool catalog within its compact JSON size budget', () => {
+    expect(Buffer.byteLength(JSON.stringify(ENTRY_TOOLS))).toBeLessThanOrEqual(450);
     // The checked-in file is indented; tools/list serializes compact JSON for clients.
-    expect(Buffer.byteLength(JSON.stringify(TOOLS))).toBeLessThanOrEqual(15_000);
+    expect(Buffer.byteLength(JSON.stringify(TOOLS))).toBeLessThanOrEqual(16_000);
   });
 
   it('keep the companion’s own tools apart from the published ones', () => {

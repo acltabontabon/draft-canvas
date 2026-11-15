@@ -2360,6 +2360,45 @@ mod tests {
         );
     }
 
+    #[tokio::test]
+    async fn a_rename_retry_replays_before_resolving_the_old_label_again() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent.ensure_ledger().unwrap();
+        let args = json!({"diagramId":"d_1", "requestId":"rename", "rename":{"from":"API","to":"Gateway"}});
+        record(
+            &agent,
+            Entry {
+                key: "update_diagram:rename".into(),
+                tool: "update_diagram".into(),
+                fingerprint: fingerprint("update_diagram", &args),
+                stage: Stage::Committed,
+                at: now_ms(),
+                diagram_id: Some("d_1".into()),
+                path: None,
+                receipt: Some(
+                    json!({"applied":true,"persisted":true,"state":"saved","revision":"f:2"}),
+                ),
+            },
+        )
+        .unwrap();
+        let calls = CallRegistry::new("external".into());
+        let Admission::Replay(receipt) =
+            admit(&agent, "update_diagram", &args, &[], &calls, |_| None)
+                .await
+                .unwrap()
+        else {
+            panic!("a completed rename must never enter the page again");
+        };
+        assert_eq!(receipt["revision"], "f:2");
+        assert_eq!(receipt["replayed"], true);
+        let mut changed = args.clone();
+        changed["rename"]["to"] = json!("Different");
+        assert!(
+            matches!(admit(&agent, "update_diagram", &changed, &[], &calls, |_| None).await, Err(error) if error.code == "REQUEST_ID_MISMATCH")
+        );
+    }
+
     #[test]
     fn a_replayed_unsaved_receipt_says_its_durability_is_unverified() {
         let entry = Entry {

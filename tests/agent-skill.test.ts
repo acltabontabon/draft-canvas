@@ -51,6 +51,10 @@ function pythonSet(name: string): string[] {
 }
 
 describe('the agent skill', () => {
+  it('keeps the always-loaded instructions within the rename context budget', () => {
+    expect(Buffer.byteLength(skillMd)).toBeLessThanOrEqual(300);
+  });
+
   it('names exactly the element types, meanings, behaviours and colours the app accepts', () => {
     expect(pythonSet('TYPES')).toEqual([...ELEMENT_TYPE_NAMES].sort());
     expect(pythonSet('SEMANTICS')).toEqual([...EDGE_SEMANTICS].sort());

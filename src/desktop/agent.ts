@@ -40,6 +40,7 @@ import type { AgentStarter } from '../agent/starter';
 import { loadGallery, starterFile } from '../gallery';
 import { STAGE_TEXT } from '../agent/progress';
 import { readAttachment, readDiagram, readLookup, readOutline, viewPathOf } from '../agent/read';
+import { renamePatch } from '../agent/rename';
 import { READ_FORMATS } from '../agent/schema';
 import { buildImplementationContext } from '../agent/context';
 import type { PreparedProposal } from '../agent/proposal';
@@ -231,7 +232,18 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
         return { opened: true };
       });
     case 'update_diagram':
-      return host.inTurn(() => update(api, host, event));
+      return host.inTurn(async () => {
+        if (args.rename === undefined) return update(api, host, event);
+        // Resolve locally, inside the same controller turn. The ordinary update below still checks
+        // this snapshot's revision again and passes the review/commit/save gates. The broker has
+        // already journaled the ORIGINAL rename request, so a lost response replays its receipt.
+        const snapshot = await fileForInTurn(host, context);
+        const { rename: _rename, ...rest } = args;
+        const resolved = renamePatch(snapshot.file, args.rename as { from: string; to: string }, args.view);
+        const normalized = { ...rest, ...resolved, expectedRevision: snapshot.revision };
+        validateToolInput('update_diagram', { diagramId: context.diagramId, ...normalized });
+        return update(api, host, { ...event, args: normalized });
+      });
     case 'submit_proposal':
       return host.inTurn(() => submitProposal(host, event));
     default:

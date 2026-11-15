@@ -269,6 +269,17 @@ mod tests {
         );
         assert!(constrain(&policy(true), "update_diagram", args.clone(), |_| None).is_ok());
         assert!(constrain(&policy(false), "submit_proposal", args, |_| None).is_ok());
+        let rename = json!({"diagramId":"d_1", "requestId":"rename", "rename":{"from":"API","to":"Gateway"}});
+        assert_eq!(
+            code(constrain(
+                &policy(false),
+                "update_diagram",
+                rename.clone(),
+                |_| None
+            )),
+            "PROPOSAL_ONLY"
+        );
+        assert!(constrain(&policy(true), "update_diagram", rename, |_| None).is_ok());
     }
 
     #[test]

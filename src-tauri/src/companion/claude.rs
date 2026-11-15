@@ -250,7 +250,11 @@ impl StreamJson {
                     let prefix = tool_prefix();
                     events.push(RunEvent::ToolCall {
                         id: id.to_string(),
-                        tool: name.strip_prefix(&prefix).unwrap_or(name).to_string(),
+                        tool: super::operation_name(
+                            name.strip_prefix(&prefix).unwrap_or(name),
+                            &block["input"],
+                        )
+                        .to_string(),
                         status: ToolStatus::InProgress,
                     });
                 }

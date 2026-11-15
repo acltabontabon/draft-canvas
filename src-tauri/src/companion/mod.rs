@@ -100,9 +100,24 @@ pub fn backend(kind: AgentKind) -> &'static dyn Backend {
     }
 }
 
+/// Keep the person's activity labels semantic when a client reports the MCP dispatcher name.
+fn operation_name<'a>(name: &'a str, args: &'a serde_json::Value) -> &'a str {
+    if name != "diagram_tool" {
+        return name;
+    }
+    match args.get("tool").and_then(serde_json::Value::as_str) {
+        Some("rename_element") => "update_diagram",
+        Some("help") => "get_capabilities",
+        Some(operation) => operation,
+        None => name,
+    }
+}
+
 /// The standing instructions, the same for every turn: an agent records its system prompt once per
 /// conversation and reuses it when resumed, so anything that changes per turn goes in the prompt.
 pub const BRIEF: &str = "You are Nodi, the design partner for the one diagram in <draft-canvas-context>. \
+Call operations through diagram_tool({tool, args}); help lists operations or gives arguments for args={tool:NAME}. \
+For an exact-label rename in direct mode, use rename_element with diagramId, requestId, from, to, view and selection scope. \
 Use its snapshot or the previous view if unchanged. Otherwise read the named view only when the request \
 needs it. Use receipts for the new revision and advisories. Look up unfamiliar capability topics only as \
 needed. A proposal validates its changes itself; preview when comparing alternatives. An add addressed \
@@ -1109,6 +1124,29 @@ mod tests {
                 events: VecDeque::new(),
                 dir: PathBuf::new(),
             },
+        );
+    }
+
+    #[test]
+    fn dispatcher_activity_uses_the_underlying_operation() {
+        assert_eq!(
+            operation_name(
+                "diagram_tool",
+                &serde_json::json!({"tool":"rename_element"})
+            ),
+            "update_diagram"
+        );
+        assert_eq!(
+            operation_name("diagram_tool", &serde_json::json!({"tool":"help"})),
+            "get_capabilities"
+        );
+        assert_eq!(
+            operation_name("diagram_tool", &serde_json::json!({"tool":"read_diagram"})),
+            "read_diagram"
+        );
+        assert_eq!(
+            operation_name("read_diagram", &serde_json::json!({})),
+            "read_diagram"
         );
     }
 

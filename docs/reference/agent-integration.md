@@ -39,11 +39,43 @@ Setup is in [Connect an AI agent](../guides/connect-an-ai-agent.md).
 
 ## Tools
 
-Schemas live in `src/agent/schema.ts`. `npm run agent:schemas` regenerates `src-tauri/mcp/tools.json`,
-which the sidecar compiles in; `tests/agent/schema.test.ts` fails if they drift. `get_capabilities`
-reports `contract: 3`. Tool discovery contains common inputs and short examples, with no output
-schemas. `get_capabilities({tool: "update_diagram"})` (or another tool name) returns its complete
-input schema on demand. All requests still pass the complete server validation contract.
+Schemas live in `src/agent/schema.ts`. `npm run agent:schemas` generates the default
+`src-tauri/mcp/entry-tools.json` and the operation catalogs compiled into the sidecar.
+`tests/agent/schema.test.ts` checks their contents and size budgets. Discovery advertises one small
+`diagram_tool({tool, args})` dispatcher. `tool: "help", args: {}` lists the operations available in
+this session; `args: {tool: "update_diagram"}` returns that operation's common arguments.
+`get_capabilities({tool: "update_diagram"})`, dispatched the same way, returns its complete schema.
+All requests still pass the complete server validation contract (`contract: 3`).
+
+The dispatcher is conservatively annotated as mutating. The native broker checks permissions,
+review-only restrictions and idempotency against the resolved operation, never the wrapper.
+Clients requiring individual read/write annotations or tool allowlists can launch the sidecar with
+`--full-tools`. Previously discovered operation names remain callable. The operations below are
+passed as `tool`, with their arguments in `args`.
+
+An exact-label rename takes one call, without reading the diagram or its schema:
+
+```json
+{
+  "tool": "rename_element",
+  "args": {
+    "diagramId": "d_example",
+    "requestId": "a-new-uuid",
+    "from": "Orders API",
+    "to": "Checkout API"
+  }
+}
+```
+
+Labels match exactly, including case. Search covers architecture shapes and boundaries across all
+rooms; optional `view: {inside: [ids]}` restricts it to one room, and `scope` preserves selection
+limits. Missing or duplicate labels refuse
+without changing anything. The app resolves the id and revision locally, then uses the normal
+validated update, approval, revision, save and undo path. Ordinary patches still require a client
+revision. The original rename is journaled before resolution, so an identical retry replays its
+receipt even after the old label is gone. The compact receipt retains durability, revision, undo,
+warnings and recovery instructions; it omits repeated request context and graph metrics.
+Use proposals instead when the person requested review before application.
 
 | Tool | Kind | Purpose |
 | --- | --- | --- |
@@ -89,7 +121,7 @@ attachments and flows with their ids. Elements, boundaries, notes, relationships
 | `format: "outline"` | File title and revision, plus paths, owners, levels and counts for up to 100 inside views. `viewsTruncated` marks a longer outline. |
 | `format: "mermaid"` / `"plantuml"` / `"c4"` | Flows as sequence-diagram source, or the architecture as C4-PlantUML, as Export writes them. |
 
-For a named edit, use `read_diagram({diagramId, query: "name"})`. It matches ids and labels
+For a named edit beyond the exact-label rename above, use `read_diagram({diagramId, query: "name"})`. It matches ids and labels
 (case-insensitive substring) across every room, returning at most 20 matches with their ids,
 types, labels and `view.inside` paths, plus the file revision. `total` counts all matches;
 `truncated` means refine the query. Labels over 200 characters have `labelTruncated: true`.
@@ -280,13 +312,17 @@ agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 **Tokens.** Every model call of a turn resends the agent's instructions and tools, so each is kept small
 and calls are kept few:
 
-- Every connection receives the compact discovery catalog; advanced schemas are fetched on demand.
-  A companion run sees only its permitted tools, without `render_diagram` or `read_selection`.
+- Connections discover one dispatcher; operation schemas are fetched on demand. Exact-label renames
+  need one call. A companion run can dispatch only its permitted operations, without `render_diagram`
+  or `read_selection`.
   The app validates the full contract regardless of what discovery exposes.
 - Codex runs with the features that bring tools of their own turned off (browser, computer use, image
   generation, sub-agents, plugins, apps, skill search, `unified_exec`; only those `codex features list`
   reports) and web search off. Its canvas brief supplies workflow guidance, so automatic skill
-  instructions are omitted with `skills.include_instructions=false` as well.
+  instructions are omitted with `skills.include_instructions=false` and the unused skill catalog is
+  capped with `skills.max_context_tokens=1`. Draft Canvas namespaces use
+  `features.code_mode.direct_only_tool_namespaces`, avoiding the general JavaScript dispatch
+  instructions. The code-mode host stays enabled for model compatibility.
 - The view comes with the turn, so a question is one call.
 - The brief directs the agent to reuse the supplied view, look up individual capability topics as
   needed, use previews to compare alternatives, and take revisions and advisories from receipts.

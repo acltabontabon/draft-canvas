@@ -99,7 +99,6 @@ const NOT_FOR_A_CANVAS: &[&str] = &[
     "browser_use",
     "browser_use_external",
     "computer_use",
-    "code_mode",
     "goals",
     "hooks",
     "image_generation",
@@ -208,6 +207,11 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
         args.push("--disable".into());
         args.push((*feature).to_string());
     }
+    // Canvas operations are ordinary JSON tools. Direct dispatch avoids shipping the general
+    // JavaScript execution interface on every inference; keep its host below for model compatibility.
+    if available.contains("code_mode") {
+        args.extend(["-c".to_string(), r#"features.code_mode={enabled=false,direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()]);
+    }
     // Some models expose MCP tools through exec even with the code_mode feature off. Its host is
     // the tool dispatcher, not an extra tool: disabling it leaves that exec visible but every call
     // fails with "code-mode host is disabled". The flags above still restrict what it can dispatch.
@@ -225,6 +229,8 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
     args.extend([
         "-c".to_string(),
         "skills.include_instructions=false".to_string(),
+        "-c".to_string(),
+        "skills.max_context_tokens=1".to_string(),
     ]);
     // No web search: its tool goes with every call, and a canvas run answers from the diagram.
     args.push("-c".into());
@@ -449,7 +455,11 @@ impl Jsonl {
                 if self.calls.insert(id.to_string()) {
                     events.push(RunEvent::ToolCall {
                         id: id.to_string(),
-                        tool: item["tool"].as_str().unwrap_or("tool").to_string(),
+                        tool: super::operation_name(
+                            item["tool"].as_str().unwrap_or("tool"),
+                            &item["arguments"],
+                        )
+                        .to_string(),
                         status: ToolStatus::InProgress,
                     });
                 }
@@ -728,7 +738,7 @@ mod tests {
 
     fn spec_args(session: SessionArg) -> Vec<String> {
         let env = vec![("DRAFT_CANVAS_RUN", "run-1".to_string())];
-        let available = features_of("browser_use stable true\nunified_exec stable true\nshell_tool stable true\nhooks stable true\nskill_mcp_dependency_install stable true\nworkspace_dependencies stable true\nin_app_local_automation stable true\nmemories stable false\nshell_snapshot stable true\ncode_mode_host stable true\nskip_host_skill_discovery under development false\n");
+        let available = features_of("browser_use stable true\nunified_exec stable true\nshell_tool stable true\nhooks stable true\nskill_mcp_dependency_install stable true\nworkspace_dependencies stable true\nin_app_local_automation stable true\nmemories stable false\nshell_snapshot stable true\ncode_mode stable false\ncode_mode_host stable true\nskip_host_skill_discovery under development false\n");
         args(
             &RunSpec {
                 program: Path::new("/bin/codex"),
@@ -830,7 +840,9 @@ mod tests {
         assert!(!args
             .windows(2)
             .any(|w| w == ["--disable", "code_mode_host"]));
+        assert!(args.contains(&r#"features.code_mode={enabled=false,direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()));
         assert!(args.contains(&"skills.include_instructions=false".to_string()));
+        assert!(args.contains(&"skills.max_context_tokens=1".to_string()));
         assert!(args.contains(&r#"web_search="disabled""#.to_string()));
         assert_eq!(args.last().map(String::as_str), Some("-"));
         assert!(!args.contains(&"--ephemeral".to_string()));

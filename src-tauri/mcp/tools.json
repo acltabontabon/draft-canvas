@@ -583,7 +583,7 @@
   {
     "name": "update_diagram",
     "title": "Update a diagram",
-    "description": "Apply ops as one change, preserving positions unless moved/arranged. Rename: ops:[{op:\"update\",id:\"element-id\",set:{label:\"New name\"}}]. Use latest expectedRevision and a fresh UUID requestId. Nested match: pass its view. On REVISION_CONFLICT reread/rebuild. Receipt verifies routine edits. previewId applies an exact preview instead of ops.",
+    "description": "Apply ops as one change, preserving positions unless moved/arranged. Set label or description: ops:[{op:\"update\",id:\"element-id\",set:{description:\"New description\"}}]. A unique lookup suffices; no room read needed. Use latest expectedRevision and a fresh UUID requestId. Nested match: pass its view. On REVISION_CONFLICT reread/rebuild. Receipt verifies routine edits. previewId applies an exact preview instead of ops.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -644,6 +644,22 @@
           },
           "description": "Ordered ops: {op:\"update\",id,set:{label:\"New name\"}} (also description, technology, etc.; null clears optional fields); {op:\"add\",nodes:[{id,type,label}],relationships:[{id,from,to}],flows:[{id,title,steps:[relationshipId]}]}; {op:\"remove\",ids:[id],cascade?}; {op:\"arrange\",scope?,move?,connectors?,direction?,spacing?,primaryFlow?}; {op:\"setLevel\",level}; {op:\"moveInside\",owner,ids}; {op:\"moveOutside\",ids}. Full fields: get_capabilities({tool:\"update_diagram\"})."
         },
+        "rename": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
+          "additionalProperties": false
+        },
         "previewId": {
           "type": "string"
         },
@@ -654,22 +670,32 @@
       },
       "required": [
         "requestId",
-        "diagramId",
-        "expectedRevision"
+        "diagramId"
       ],
       "oneOf": [
         {
           "required": [
+            "expectedRevision",
             "ops"
           ],
           "not": {
-            "required": [
-              "previewId"
+            "anyOf": [
+              {
+                "required": [
+                  "previewId"
+                ]
+              },
+              {
+                "required": [
+                  "rename"
+                ]
+              }
             ]
           }
         },
         {
           "required": [
+            "expectedRevision",
             "previewId"
           ],
           "not": {
@@ -692,6 +718,45 @@
               {
                 "required": [
                   "onConflict"
+                ]
+              },
+              {
+                "required": [
+                  "rename"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "required": [
+            "rename"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "expectedRevision"
+                ]
+              },
+              {
+                "required": [
+                  "ops"
+                ]
+              },
+              {
+                "required": [
+                  "layout"
+                ]
+              },
+              {
+                "required": [
+                  "onConflict"
+                ]
+              },
+              {
+                "required": [
+                  "previewId"
                 ]
               }
             ]
