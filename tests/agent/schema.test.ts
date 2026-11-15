@@ -131,6 +131,7 @@ describe('MCP tool definitions', () => {
     type Loose = { inputSchema: { properties: Record<string, unknown> } };
     const by = new Map<string, Loose>(FULL_TOOLS.map((t) => [t.name, t as unknown as Loose]));
     expect(by.get('submit_proposal')?.inputSchema.properties.layout).toBe(by.get('update_diagram')?.inputSchema.properties.layout);
+    expect(by.get('submit_proposal')?.inputSchema.properties.rename).toBe(by.get('update_diagram')?.inputSchema.properties.rename);
   });
 
   it('describe update_diagram ops as one closed schema per op, shared with submit_proposal', () => {

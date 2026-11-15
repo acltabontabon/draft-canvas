@@ -844,7 +844,7 @@
   {
     "name": "submit_proposal",
     "title": "Submit a change proposal",
-    "description": "Propose changes for the person to review; never applies them. Same ops as update_diagram. ops:[] means no impact. revises replaces a pending proposal. Report proposalId and stop; only the person accepts.",
+    "description": "Propose changes for the person to review; never applies them. Same ops or exact-label rename as update_diagram. ops:[] means no impact. revises replaces a pending proposal. Report proposalId and stop; only the person accepts.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -886,6 +886,22 @@
               }
             }
           },
+          "additionalProperties": false
+        },
+        "rename": {
+          "type": "object",
+          "properties": {
+            "from": {
+              "type": "string"
+            },
+            "to": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "from",
+            "to"
+          ],
           "additionalProperties": false
         },
         "ops": {
@@ -942,8 +958,43 @@
       "required": [
         "requestId",
         "diagramId",
-        "expectedRevision",
         "summary"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "expectedRevision"
+          ],
+          "not": {
+            "required": [
+              "rename"
+            ]
+          }
+        },
+        {
+          "required": [
+            "rename"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "expectedRevision"
+                ]
+              },
+              {
+                "required": [
+                  "ops"
+                ]
+              },
+              {
+                "required": [
+                  "layout"
+                ]
+              }
+            ]
+          }
+        }
       ],
       "additionalProperties": false
     },

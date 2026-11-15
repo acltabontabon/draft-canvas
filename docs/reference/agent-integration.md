@@ -317,9 +317,16 @@ and calls are kept few:
   a local natural-language classifier. An exact-label rename resolves its target and current
   revision locally inside the ordinary checked update transaction. Missing/ambiguous labels,
   scope restrictions and concurrent edits still refuse. Requests needing interpretation of the
-  diagram use targeted reads with the usual revision checks; review mode still uses a proposal.
-  Planning instructions are specific to the selected mode, so the direct-rename recipe is not
-  supplied in review mode. The native policy still refuses a direct edit if an agent returns one.
+  diagram use targeted reads with the usual revision checks. In review mode the host routes the
+  same final `rename_element` decision to `submit_proposal`, with a bounded generated summary.
+  The native policy still refuses `update_diagram` in review mode.
+- `submit_proposal` accepts either the usual revision/ops or an isolated `rename:{from,to}` with
+  summary, optional view/scope and `revises`. Rename cannot be mixed with ops, layout or a caller
+  revision. The page resolves it from one local snapshot, validates the ordinary proposal and
+  persists concrete ids, ops, base revision and preconditions. Acceptance never resolves the label
+  again. No diagram/history/save mutation happens at submission; normal review, conflicts and
+  undo apply at acceptance. The original request is journaled, so retries do not duplicate or
+  revise the proposal twice; replay confirmation refers to the panel for its current status.
 - Nodi's agent interprets natural-language requests and returns a structured final decision: a
   chat answer, exact-label rename, ordinary update or proposal. Reads, help and previews remain
   available while it plans. Native run policy refuses mutations during this phase, even through

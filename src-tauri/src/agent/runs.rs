@@ -273,6 +273,13 @@ mod tests {
         assert!(runs.check_write("r", "update_diagram", &args).is_err());
         runs.open_deferred("review", policy(false));
         assert!(runs.authorize("review", "update_diagram", &args).is_err());
+        runs.authorize("review", "submit_proposal", &args).unwrap();
+        assert!(runs.check_write("review", "submit_proposal", &args).is_ok());
+        assert!(runs.check_write("review", "update_diagram", &args).is_err());
+        runs.close("review");
+        assert!(runs
+            .check_write("review", "submit_proposal", &args)
+            .is_err());
     }
 
     fn code(result: Result<Value, ToolError>) -> String {

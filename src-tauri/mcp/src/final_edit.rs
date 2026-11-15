@@ -100,6 +100,7 @@ fn confirmation(receipt: &Value, tool: &str, rename: bool) -> Option<String> {
     let mut text = if tool == "submit_proposal" {
         receipt["proposalId"].as_str().filter(|id| !id.is_empty())?;
         match receipt["status"].as_str()? {
+            "pending" if receipt["replayed"] == true => "This proposal request was already recorded; it was not submitted again. Check the proposal panel for its current status.".to_string(),
             "pending" => "Prepared a proposal for review. No diagram changes have been applied. Accept or reject it in the proposal panel.".to_string(),
             "accepted" if ["added", "updated", "removed"].iter().all(|key| receipt["counts"][key] == 0) => "No change was needed.".to_string(),
             _ => return None,
@@ -196,6 +197,10 @@ mod tests {
         let text = confirmation(&proposal, "submit_proposal", false).unwrap();
         assert!(text.contains("No diagram changes have been applied"));
         assert!(text.contains("Check labels"));
+        proposal["replayed"] = json!(true);
+        let replay = confirmation(&proposal, "submit_proposal", false).unwrap();
+        assert!(replay.contains("current status"));
+        assert!(!replay.contains("No diagram changes have been applied"));
         proposal["status"] = json!("accepted");
         assert!(confirmation(&proposal, "submit_proposal", false).is_none());
         proposal["counts"]["updated"] = json!(0);

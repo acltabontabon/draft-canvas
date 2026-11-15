@@ -7,6 +7,17 @@ const node = (id: string, text = 'API') => createNode({ id, text, type: 'service
 const file = () => ({ ...createDocument(), nodes: [node('outer', 'System'), { ...node('owner', 'Container'), inside: { nodes: [node('api')], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } }] });
 
 describe('one-call rename resolution', () => {
+  it('accepts isolated proposal renames but cannot mix them with caller revisions or other changes', () => {
+    const args = { requestId: 'rename', diagramId: 'd', summary: 'Rename API', rename: { from: 'API', to: 'Gateway' } };
+    expect(() => validateToolInput('submit_proposal', args)).not.toThrow();
+    expect(() => validateToolInput('submit_proposal', { ...args, revises: 'p_1', scope: { nodes: ['api'] } })).not.toThrow();
+    for (const extra of [{ expectedRevision: 'old' }, { ops: [] }, { layout: {} }]) {
+      expect(() => validateToolInput('submit_proposal', { ...args, ...extra })).toThrow();
+    }
+    const { rename: _rename, ...ordinary } = args;
+    expect(() => validateToolInput('submit_proposal', { ...ordinary, ops: [] })).toThrow();
+    expect(() => validateToolInput('submit_proposal', { ...ordinary, expectedRevision: 'current', ops: [] })).not.toThrow();
+  });
   it('resolves an exact nested label into the existing patch contract', () => {
     const doc = file();
     const before = JSON.stringify(doc);

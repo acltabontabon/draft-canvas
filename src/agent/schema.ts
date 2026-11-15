@@ -19,6 +19,8 @@ const STARTER_ID_PATTERN = '^[a-z0-9]+(?:-[a-z0-9]+)*$';
 
 type Schema = Record<string, unknown>;
 
+const exactRename = { type: 'object', properties: { from: { type: 'string', minLength: 1, maxLength: 1000 }, to: { type: 'string', minLength: 1, maxLength: 1000 } }, required: ['from', 'to'], additionalProperties: false, description: 'Rename exactly one shape with this exact current label across rooms (or within view). No client read needed: the app resolves an id and revision, then uses the normal guarded update or proposal pipeline. Ambiguity refuses the change.' };
+
 /**
  * A room's item schemas are defined once per tool, under its `inputSchema.$defs`, and referenced
  * from wherever a room appears (`ref`). An element's `inside` is a room of the same shape, typed out
@@ -667,7 +669,7 @@ const TOOL_INPUTS = [
         },
         scope,
         ops,
-        rename: { type: 'object', properties: { from: { type: 'string', minLength: 1, maxLength: 1000 }, to: { type: 'string', minLength: 1, maxLength: 1000 } }, required: ['from', 'to'], additionalProperties: false, description: 'Rename exactly one shape with this exact current label across rooms (or within view). No client read needed: the app resolves an id and revision, then uses the normal guarded update. Ambiguity refuses the change.' },
+        rename: exactRename,
         previewId: { type: 'string', description: 'Apply the exact candidate returned by preview_diagram. Do not combine with ops, layout, scope or onConflict.' },
         layout: layoutBrief,
       },
@@ -705,6 +707,7 @@ const TOOL_INPUTS = [
         expectedRevision: { type: 'string', description: "The revision from your last read or receipt; it must still match at submission. Later unrelated edits mark a stored proposal stale without blocking its review." },
         view: { type: 'object', properties: { inside: { type: 'array', items: { type: 'string' }, maxItems: 3 } }, additionalProperties: false },
         scope,
+        rename: exactRename,
         // The very same op schema update_diagram uses (one object, so the two can't drift); the one
         // difference is that an empty list is allowed here — it is a "no impact" finding.
         ops: { type: 'array', maxItems: AGENT_LIMITS.opsPerRequest, items: op, description: "Same shape as update_diagram's ops. Empty means no architectural impact." },
@@ -721,7 +724,11 @@ const TOOL_INPUTS = [
         },
         revises: { type: 'string', description: 'An existing pending proposalId to revise in place, instead of creating a new one.' },
       },
-      required: ['requestId', 'diagramId', 'expectedRevision', 'summary'],
+      required: ['requestId', 'diagramId', 'summary'],
+      oneOf: [
+        { required: ['expectedRevision'], not: { required: ['rename'] } },
+        { required: ['rename'], not: { anyOf: ['expectedRevision', 'ops', 'layout'].map((field) => ({ required: [field] })) } },
+      ],
       additionalProperties: false,
       $defs: roomDefs,
     },
@@ -828,7 +835,7 @@ const DISCOVERY_DESCRIPTIONS: Record<string, string> = {
   create_diagram: 'Create a new diagram. Supply nodes and relationships in reading order, plus flows. Let the app lay out; layout.primaryFlow names the main path. Common fields below; advanced fields: get_capabilities({tool:"create_diagram"}). Keep receipt id/revision for follow-ups.',
   update_diagram: 'Apply ops as one change, preserving positions unless moved/arranged. Set label or description: ops:[{op:"update",id:"element-id",set:{description:"New description"}}]. A unique lookup suffices; no room read needed. Use latest expectedRevision and a fresh UUID requestId. Nested match: pass its view. On REVISION_CONFLICT reread/rebuild. Receipt verifies routine edits. previewId applies an exact preview instead of ops.',
   preview_diagram: 'Unsaved candidate, never a write. Same ops as update_diagram. Render by previewId; apply with update_diagram and previewId within 10 minutes at the same revision/session.',
-  submit_proposal: 'Propose changes for the person to review; never applies them. Same ops as update_diagram. ops:[] means no impact. revises replaces a pending proposal. Report proposalId and stop; only the person accepts.',
+  submit_proposal: 'Propose changes for the person to review; never applies them. Same ops or exact-label rename as update_diagram. ops:[] means no impact. revises replaces a pending proposal. Report proposalId and stop; only the person accepts.',
   get_proposal: 'Read proposal status and whether its source revision changed. Acceptance is human-only.',
   list_proposals: 'List proposals newest first, optionally for one diagram. Check before revising a proposal.',
 };
@@ -855,7 +862,7 @@ export const ENTRY_TOOLS = [
 /** Companion turns plan changes; only the host executes their final response. */
 export const PLANNING_ENTRY_TOOLS = ENTRY_TOOLS.map(tool => ({
   ...tool,
-  description: 'Planning only. tool=help,args={} lists operations; args={tool:NAME} gives arguments (read_diagram, preview_diagram, update_diagram, submit_proposal). Return edits in your final response for host execution. Simple direct renames need no tools.',
+  description: 'Planning only. tool=help,args={} lists operations; args={tool:NAME} gives arguments (read_diagram, preview_diagram, update_diagram, submit_proposal). Return edits in your final response for host execution. Exact-label renames need no tools.',
 }));
 
 /**

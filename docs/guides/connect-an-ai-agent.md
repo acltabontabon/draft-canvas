@@ -116,6 +116,10 @@ Nodi loads diagram context only when the agent needs it. A rename that supplies 
 does not send the whole diagram first. Ambiguous labels are refused; requests referring to “this
 box” or other diagram details can still trigger a targeted read.
 
+Exact-label renames work this way in **Review changes first** too: Draft Canvas resolves the target
+locally and creates a proposal. The diagram stays unchanged until you accept it. If the target
+changes while the proposal waits, review reports a conflict instead of renaming a different shape.
+
 Ask for all shapes in one horizontal row or vertical column when you want them aligned; automatic
 layout's reading direction can put several shapes in the same layer. Nodi can place and route shapes
 exactly for a specific arrangement. Short replies such as **yes** or

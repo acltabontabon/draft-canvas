@@ -191,6 +191,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - Nodi reads diagram context on demand instead of attaching the whole view to every request.
   Natural-language exact-label renames need no diagram snapshot; other edits can request targeted
   reads, with the same scope, revision and review checks.
+- Review-mode renames also resolve exact labels locally, creating a proposal without a model read.
+  The diagram changes only after acceptance; ambiguity, scope and changed-target conflicts still
+  refuse unsafe edits, and retries do not create duplicate proposals.
 
 #### Fixed
 

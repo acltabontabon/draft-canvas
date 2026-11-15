@@ -167,3 +167,69 @@ for (const local of [false, true]) {
     } finally { await connection.close(); }
   });
 }
+
+for (const outcome of ['accept', 'reject', 'conflict'] as const) {
+  test(`one-call rename proposal: ${outcome} still goes through the review panel`, async ({ page }) => {
+    test.skip(process.platform === 'win32', 'The fixture broker uses a Unix socket.');
+    test.skip(!existsSync(process.env.DRAFT_CANVAS_MCP_BINARY ?? join(process.cwd(), 'src-tauri/target/debug/draft-canvas-mcp')), 'Build the real MCP sidecar first.');
+    await installMockShell(page);
+    await page.goto('/');
+    const handle = await page.evaluate(async () => {
+      // oxlint-disable-next-line typescript/no-explicit-any -- dev-server module imports are runtime URLs
+      const load = (path: string) => import(/* @vite-ignore */ path) as Promise<any>;
+      const { compose } = await load('/src/agent/compile.ts');
+      const { text } = compose({ title: 'Rename review', nodes: [{ id: 'api', type: 'api', label: 'Orders API' }, { id: 'db', type: 'database', label: 'Orders DB' }], relationships: [{ id: 'r', from: 'api', to: 'db' }] }, 'd_mcp00000001');
+      return window.__shell.addFile('Rename review', text);
+    });
+    await page.getByRole('button', { name: 'Open file…' }).click();
+    await chooseWorkFile(page, 'Rename review');
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    const connection = await connect(page, handle);
+    const { client } = connection;
+    try {
+      const before = (await connection.file())!.text;
+      const proposed = await client.call('submit_proposal', { requestId: randomUUID(), diagramId: 'd_mcp00000001', summary: 'Rename Orders API', rename: { from: 'Orders API', to: 'Checkout API' } });
+      expect(proposed.ok).toBe(true);
+      expect(proposed.value.status).toBe('pending');
+      expect((await connection.file())!.text).toBe(before);
+      await expect(page.locator('.react-flow__node[data-id="api"]')).toContainText('Orders API');
+      const stored = await client.call('get_proposal', { proposalId: proposed.value.proposalId });
+      expect(stored.value.ops).toEqual([{ op: 'update', id: 'api', set: { label: 'Checkout API' } }]);
+      expect(stored.value.preconditions).toMatchObject({ nodes: { api: { label: 'Orders API' } } });
+      expect(stored.value).not.toHaveProperty('rename');
+      if (outcome === 'conflict') {
+        const edited = await client.call('update_diagram', { requestId: randomUUID(), diagramId: 'd_mcp00000001', rename: { from: 'Orders API', to: 'My API' } });
+        expect(edited.ok).toBe(true);
+      }
+      await page.getByRole('button', { name: '1 proposal to review' }).click();
+      const panel = page.getByRole('region', { name: 'Proposal review' });
+      await expect(panel).toContainText('Checkout API');
+      if (outcome === 'conflict') {
+        await expect(panel).toContainText('changed since it was written');
+        await expect(panel.getByRole('button', { name: 'Accept', exact: true })).toBeDisabled();
+        await expect(page.locator('.react-flow__node[data-id="api"]')).toContainText('My API');
+        expect((await client.call('get_proposal', { proposalId: proposed.value.proposalId })).value.status).toBe('pending');
+      } else {
+        await panel.getByRole('button', { name: outcome === 'accept' ? 'Accept' : 'Reject', exact: true }).click();
+        await expect.poll(async () => (await client.call('get_proposal', { proposalId: proposed.value.proposalId })).value.status).toBe(outcome === 'accept' ? 'accepted' : 'rejected');
+        if (outcome === 'reject') {
+          expect((await connection.file())!.text).toBe(before);
+        } else {
+          await expect(page.locator('.react-flow__node[data-id="api"]')).toContainText('Checkout API');
+          // Accept is the ordinary editor edit; saving remains the person's existing workflow.
+          await page.keyboard.press('Escape');
+          await page.keyboard.press('ControlOrMeta+s');
+          await expect.poll(async () => JSON.parse((await connection.file())!.text).nodes.find((n: { id: string }) => n.id === 'api').text).toBe('Checkout API');
+          const after = JSON.parse((await connection.file())!.text);
+          after.nodes.find((n: { id: string }) => n.id === 'api').text = 'Orders API';
+          const original = JSON.parse(before);
+          expect(after.nodes).toEqual(original.nodes);
+          expect(after.edges).toEqual(original.edges);
+          await page.keyboard.press('Escape');
+          await page.keyboard.press('ControlOrMeta+z');
+          await expect(page.locator('.react-flow__node[data-id="api"]')).toContainText('Orders API');
+        }
+      }
+    } finally { await connection.close(); }
+  });
+}

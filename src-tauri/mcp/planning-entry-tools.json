@@ -1,7 +1,7 @@
 [
   {
     "name": "diagram_tool",
-    "description": "Planning only. tool=help,args={} lists operations; args={tool:NAME} gives arguments (read_diagram, preview_diagram, update_diagram, submit_proposal). Return edits in your final response for host execution. Simple direct renames need no tools.",
+    "description": "Planning only. tool=help,args={} lists operations; args={tool:NAME} gives arguments (read_diagram, preview_diagram, update_diagram, submit_proposal). Return edits in your final response for host execution. Exact-label renames need no tools.",
     "inputSchema": {
       "type": "object",
       "properties": {

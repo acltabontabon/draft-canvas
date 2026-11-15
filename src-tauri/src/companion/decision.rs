@@ -11,7 +11,7 @@ use std::sync::Arc;
 pub const SCHEMA: &str = r#"{"type":"object","additionalProperties":false,"properties":{"tool":{"type":"string","enum":["reply","rename_element","update_diagram","submit_proposal"]},"args":{"type":"string","description":"JSON object of operation arguments; {} for reply"},"text":{"type":"string","description":"Answer for reply; optional explanation for an edit, never a claim it was applied or saved"}},"required":["tool","args","text"]}"#;
 pub const INSTRUCTIONS: &str = "Return the response schema: tool, args (JSON object encoded as a string), text. Read only needed context; batch edits into one final operation. Never call mutation tools: the host pins diagramId/requestId/selection scope, executes after your clean exit and confirms the receipt. For advice/clarification use reply, args={}, text=answer. For edits text is optional reasoning, never an outcome claim.";
 const DIRECT: &str = "Mode: apply directly. For a rename with both exact labels supplied, return rename_element, args={from:exactLabel,to:newLabel}; no discovery/read/preview needed. Omit view unless targeting another room; its shape is {inside:[ids]}, never a string. Other edits use update_diagram with expectedRevision.";
-const REVIEW: &str = "Mode: review first. Every edit, INCLUDING RENAMES, must return submit_proposal with expectedRevision and ops after reading the target. Never return rename_element or update_diagram in this mode. Use help for submit_proposal arguments; preserve the pending proposal's revises when adjusting it.";
+const REVIEW: &str = "Mode: review first. For a rename with both exact labels supplied, return rename_element, args={from:exactLabel,to:newLabel}; no discovery/read/preview needed. The host creates a proposal, never applies it. Omit view unless targeting another room; its shape is {inside:[ids]}. Other edits use submit_proposal with expectedRevision. Use revises to amend a pending proposal; never return update_diagram.";
 
 pub fn instructions(mode: ApplyMode) -> String {
     format!(
@@ -51,10 +51,11 @@ impl Decision {
         let map = args.as_object_mut().ok_or_else(invalid)?;
         let tool =
             match self.tool.as_str() {
-                "rename_element" if request.mode == ApplyMode::Direct => {
+                "rename_element" => {
                     if map.keys().any(|key| {
                         !["from", "to", "diagramId", "requestId", "view", "scope"]
                             .contains(&key.as_str())
+                            && !(key == "revises" && request.mode == ApplyMode::Proposal)
                     }) {
                         return Err(invalid());
                     }
@@ -66,8 +67,26 @@ impl Decision {
                         .remove("to")
                         .filter(Value::is_string)
                         .ok_or_else(invalid)?;
+                    if request.mode == ApplyMode::Proposal {
+                        // Bounded host text; the complete labels remain in the concrete proposal ops.
+                        let label = |value: &Value| {
+                            value
+                                .as_str()
+                                .unwrap_or_default()
+                                .chars()
+                                .take(150)
+                                .collect::<String>()
+                        };
+                        map.insert(
+                            "summary".into(),
+                            json!(format!("Rename “{}” to “{}”", label(&from), label(&to))),
+                        );
+                    }
                     map.insert("rename".into(), json!({"from":from,"to":to}));
-                    "update_diagram"
+                    match request.mode {
+                        ApplyMode::Direct => "update_diagram",
+                        ApplyMode::Proposal => "submit_proposal",
+                    }
                 }
                 "update_diagram" if request.mode == ApplyMode::Direct => "update_diagram",
                 "submit_proposal" => "submit_proposal",
@@ -218,7 +237,25 @@ mod tests {
         );
         let mut review = request();
         review.mode = ApplyMode::Proposal;
-        assert!(d.edit(&review).is_err());
+        let (tool, args) = d.edit(&review).unwrap();
+        assert_eq!(tool, "submit_proposal");
+        assert_eq!(args["rename"], json!({"from":"API","to":"Gateway"}));
+        assert_eq!(args["summary"], "Rename “API” to “Gateway”");
+        assert_eq!(args["scope"], json!({"nodes":["api"],"edges":[]}));
+        assert!(Decision {
+            tool: "update_diagram".into(),
+            args: "{}".into(),
+            text: String::new()
+        }
+        .edit(&review)
+        .is_err());
+        let revision = Decision {
+            args: json!({"from":"API","to":"Gateway","revises":"p_1"}).to_string(),
+            tool: "rename_element".into(),
+            text: String::new(),
+        };
+        assert_eq!(revision.edit(&review).unwrap().1["revises"], "p_1");
+        assert!(revision.edit(&request()).is_err());
         let proposal = Decision {
             tool: "submit_proposal".into(),
             ..d

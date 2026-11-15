@@ -894,14 +894,22 @@ async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expe
  * An empty `ops` is a "no architectural impact" finding, not an error.
  */
 async function submitProposal(host: AgentHost, event: Request) {
-  const { args, context } = event;
+  const { context } = event;
+  let args = event.args;
+  // Resolve against one local snapshot and prepare the usual proposal from it. Persist only its
+  // concrete ids/ops/preconditions: Accept must never resolve the label again against later work.
+  // This handler already owns the turn; queuing fileFor here would wait behind itself forever.
+  const snapshot = await fileForInTurn(host, context);
+  if (args.rename !== undefined) {
+    const { rename, ...rest } = args;
+    args = { ...rest, ...renamePatch(snapshot.file, rename as { from: string; to: string }, args.view), expectedRevision: snapshot.revision };
+    validateToolInput('submit_proposal', { diagramId: context.diagramId, ...args });
+  }
   const expected = typeof args.expectedRevision === 'string' ? args.expectedRevision : undefined;
   if (!expected) throw new AgentError('INVALID_INPUT', 'expectedRevision is required: the revision from your last read or receipt.', { path: '/expectedRevision' });
   const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
   if (!summary) throw new AgentError('INVALID_INPUT', 'summary is required: what this proposal does, or why it has no architectural impact.', { path: '/summary' });
 
-  // This handler already owns the turn; queuing fileFor here would wait behind itself forever.
-  const snapshot = await fileForInTurn(host, context);
   const { file, revision } = snapshot;
   if (currentAs(snapshot, expected) !== revision) throw conflict(revision);
 

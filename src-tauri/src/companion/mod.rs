@@ -2478,13 +2478,19 @@ mod tests {
         r.mode = ApplyMode::Direct;
         let prompt = turn_prompt(&r, "Orders", None, None);
         // A byte budget pins app-owned overhead; live benchmarks include the CLI's own context too.
-        assert!(
-            BRIEF.len()
-                + decision::instructions(r.mode).len()
-                + decision::SCHEMA.len()
-                + prompt.len()
-                <= 3_600
-        );
+        let review = PromptRequest {
+            mode: ApplyMode::Proposal,
+            ..r.clone()
+        };
+        for request in [&r, &review] {
+            assert!(
+                BRIEF.len()
+                    + decision::instructions(request.mode).len()
+                    + decision::SCHEMA.len()
+                    + turn_prompt(request, "Orders", None, None).len()
+                    <= 3_600
+            );
+        }
         assert!(prompt.contains("update_diagram"));
         assert!(prompt.contains(&r.diagram_id));
         assert!(!prompt.contains("The view now"));
