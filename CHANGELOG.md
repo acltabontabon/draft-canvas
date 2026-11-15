@@ -180,6 +180,11 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Desktop
 
+#### Improved
+
+- AI agents use a compact tool catalog and can look up shapes across nested views without reading
+  whole rooms. Simple edits need less context; detailed authoring schemas are available on demand.
+
 #### Fixed
 
 - **Arrange Diagram** in the menu, and Nodi's layout skills, now show a preview first, like `⌘K`.

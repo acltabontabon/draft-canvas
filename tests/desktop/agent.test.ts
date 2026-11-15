@@ -243,6 +243,8 @@ describe('collaborator provenance in agent reads', () => {
       format: 'outline',
       views: [{ inside: ['api'], owner: { id: 'api', label: 'Orders API', type: 'api' }, level: null, elements: 1, relationships: 0, flows: 0 }],
     });
+    const lookup = await request('read_diagram', { query: 'Untrusted inner' }, context);
+    expect(lookup.value!.fromCollaborators).toMatchObject({ elements: [{ id: 'inner', kind: 'node', by: 'peer-a' }] });
     const inner = await request('read_diagram', { view: { inside: ['api'] } }, context);
     expect(inner.value!.fromCollaborators).toMatchObject({ elements: [{ id: 'inner', kind: 'node', by: 'peer-a' }] });
     const focused = await request('get_implementation_context', { focus: { nodes: ['db'] } }, context);

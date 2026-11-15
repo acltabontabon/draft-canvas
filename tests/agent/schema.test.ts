@@ -74,7 +74,7 @@ describe('MCP tool definitions', () => {
 
   it('keeps the connected tool catalog within its compact JSON size budget', () => {
     // The checked-in file is indented; tools/list serializes compact JSON for clients.
-    expect(Buffer.byteLength(JSON.stringify(TOOLS))).toBeLessThanOrEqual(67_000);
+    expect(Buffer.byteLength(JSON.stringify(TOOLS))).toBeLessThanOrEqual(15_000);
   });
 
   it('keep the companion’s own tools apart from the published ones', () => {
@@ -126,12 +126,12 @@ describe('MCP tool definitions', () => {
     // fell behind it when `viewport`/`normalizePeerSizes` were added there — this pins them to the
     // same object so that class of drift can't recur.
     type Loose = { inputSchema: { properties: Record<string, unknown> } };
-    const by = new Map<string, Loose>(TOOLS.map((t) => [t.name, t as unknown as Loose]));
+    const by = new Map<string, Loose>(FULL_TOOLS.map((t) => [t.name, t as unknown as Loose]));
     expect(by.get('submit_proposal')?.inputSchema.properties.layout).toBe(by.get('update_diagram')?.inputSchema.properties.layout);
   });
 
   it('describe update_diagram ops as one closed schema per op, shared with submit_proposal', () => {
-    const update = tool('update_diagram').inputSchema;
+    const update = fullTool('update_diagram').inputSchema;
     const variants: Loose[] = update.properties.ops.items.oneOf;
     expect(variants.map((v) => v.properties.op.enum)).toEqual([['add'], ['update'], ['remove'], ['setLevel'], ['arrange'], ['moveInside'], ['moveOutside']]);
     for (const variant of variants) {
@@ -146,23 +146,23 @@ describe('MCP tool definitions', () => {
     expect(update.properties.ops.minItems).toBe(1);
   });
 
-  it('list previews and proposals without a second copy of the ops and room definitions', () => {
-    // MCP tools cannot share $defs, so a copy costs ~17 KB per tool on every turn; update_diagram
-    // carries the shapes and the app still validates against them.
-    for (const name of ['preview_diagram', 'submit_proposal']) {
-      const published = tool(name).inputSchema;
-      expect(published.$defs, name).toBeUndefined();
-      expect(published.properties.ops.items).toEqual({ type: 'object' });
-      expect(published.properties.ops.description).toMatch(/update_diagram/);
-      expect(refsIn(published), name).toEqual([]);
-      expect(fullTool(name).inputSchema.$defs, name).toBeDefined();
+  it('defers detailed authoring schemas without narrowing accepted requests', () => {
+    for (const t of TOOLS) {
+      const full = fullTool(t.name).inputSchema;
+      expect(Object.keys((t.inputSchema as Loose).properties)).toEqual(Object.keys(full.properties));
+      expect(t.inputSchema.required).toEqual(full.required);
+      expect(refsIn(t.inputSchema)).toEqual([]);
+      expect('outputSchema' in t).toBe(false);
     }
-    expect(tool('preview_diagram').inputSchema.properties.ops.minItems).toBe(1);
-    expect(tool('submit_proposal').inputSchema.properties.ops.minItems).toBeUndefined();
+    for (const name of ['update_diagram', 'preview_diagram', 'submit_proposal']) {
+      expect(tool(name).inputSchema.properties.ops.items).toEqual({ type: 'object' });
+      expect(tool(name).inputSchema.properties.ops.description).toContain('op:"update"');
+      expect(fullTool(name).inputSchema.$defs).toBeDefined();
+    }
   });
 
   it('refuses, in every op, a field that belongs to another op or to no op', () => {
-    const root = tool('update_diagram').inputSchema;
+    const root = fullTool('update_diagram').inputSchema;
     const op = root.properties.ops.items;
     const accepted = [
       { op: 'add', nodes: [{ id: 'a', type: 'service', label: 'A' }], relationships: [{ id: 'r', from: 'a', to: 'a', kind: 'async' }], openPoints: [{ kind: 'awaiting', about: ['a'] }] },
@@ -210,7 +210,7 @@ describe('MCP tool definitions', () => {
     for (const t of TOOLS) if (!(t.inputSchema as Loose).$defs) expect(refsIn(t.inputSchema)).toEqual([]);
 
     // A misspelt field three rooms down is caught like one at the top; a fourth room is not a room.
-    const root = tool('create_diagram').inputSchema;
+    const root = fullTool('create_diagram').inputSchema;
     const nested = (leaf: Loose) => ({
       requestId: 'r',
       title: 'T',
@@ -231,17 +231,4 @@ describe('MCP tool definitions', () => {
     expect(tool('render_diagram').annotations).toMatchObject({ readOnlyHint: true, openWorldHint: false });
   });
 
-  it('stay compact enough to sit in an agent\'s context', () => {
-    // Typed patches, output contracts and a fourth graph-taking tool add schema, but repeated
-    // proposal/preview vocabulary prose is removed. Presentation steps (highlight, spotlight), code
-    // and label notes, connector options and moveOutside added ~9 KB on 87 KB, with the step schema
-    // shared through $defs. Explicit placement and routing (place, route) added ~4 KB, both shared
-    // through $defs too. The ai-agent element type and the asks/delegates/escalates/notifies
-    // relationships added ~0.3 KB. Linked compensation fields add ~1.7 KB across the create and
-    // update tools, because each tool's schema stands alone. Pinned and automatic route ends add ~0.6 KB. Tightening the longest descriptions
-    // took ~1.5 KB back (68.6 KB). Native sequences (the `sequence` definition, the room field and
-    // set.mermaid/links) add ~2 KB across the tools that take a graph, each of whose schemas stands
-    // alone (71.0 KB). Keep a measured ceiling on growth.
-    expect(JSON.stringify(TOOLS).length).toBeLessThan(71_200);
-  });
 });

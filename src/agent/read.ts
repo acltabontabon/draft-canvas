@@ -96,6 +96,33 @@ export function readOutline(file: DraftDocument, revision: string, diagramId: st
   return { diagramId, title: file.metadata.title, revision, format: 'outline', ...viewsOutline(file) };
 }
 
+/** Locate a named edit without sending whole rooms, reviews or annotation bodies to the model.
+ * Counts include omitted matches so an agent cannot mistake a bounded answer for a unique hit. */
+export function readLookup(file: DraftDocument, args: Record<string, unknown>, revision: string, diagramId: string): Record<string, unknown> {
+  if (typeof args.query !== 'string' || !args.query.trim() || [...args.query].length > 200) {
+    throw new AgentError('INVALID_INPUT', 'query must contain 1–200 characters.', { path: '/query' });
+  }
+  if (['view', 'focus', 'include', 'cursor', 'format'].some((key) => args[key] !== undefined)) {
+    throw new AgentError('INVALID_INPUT', 'Use query alone with diagramId; lookup searches every room.');
+  }
+  const query = args.query.trim().toLowerCase();
+  const matches: Record<string, unknown>[] = [];
+  let total = 0;
+  const add = (id: string, label: string, type: string, path: DepthPath) => {
+    if (!id.toLowerCase().includes(query) && !label.toLowerCase().includes(query)) return;
+    total += 1;
+    if (matches.length === 20) return;
+    const shown = truncated(label, 200);
+    matches.push({ id, label: shown.text, type, view: { inside: [...path] }, ...(shown.truncated ? { labelTruncated: true } : {}) });
+  };
+  for (const room of roomsOf(file)) {
+    for (const node of room.graph.nodes) add(node.id, node.text ?? '', typeWordOf(node), room.path);
+    for (const edge of room.graph.edges) add(edge.id, edge.label ?? '', 'relationship', room.path);
+    for (const flow of room.graph.flows) add(flow.id, flow.title, 'flow', room.path);
+  }
+  return { diagramId, revision, format: 'lookup', matches, total, truncated: total > matches.length };
+}
+
 /**
  * A flow step as `update_diagram` takes it back: a bare relationship id; the object form when it says
  * more (a caption, extra highlights, a camera a person pinned); or, for a step with no relationship,

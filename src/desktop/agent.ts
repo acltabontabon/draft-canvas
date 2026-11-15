@@ -39,7 +39,7 @@ import { runOffThread, type Progress } from '../agent/offThread';
 import type { AgentStarter } from '../agent/starter';
 import { loadGallery, starterFile } from '../gallery';
 import { STAGE_TEXT } from '../agent/progress';
-import { readAttachment, readDiagram, readOutline, viewPathOf } from '../agent/read';
+import { readAttachment, readDiagram, readLookup, readOutline, viewPathOf } from '../agent/read';
 import { READ_FORMATS } from '../agent/schema';
 import { buildImplementationContext } from '../agent/context';
 import type { PreparedProposal } from '../agent/proposal';
@@ -189,7 +189,7 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
   validateToolInput(event.tool, event.tool !== 'create_diagram' && context.diagramId ? { diagramId: context.diagramId, ...args } : args);
   switch (event.tool) {
     case 'get_capabilities': {
-      const wantsStarters = typeof args.starter === 'string' || !Array.isArray(args.topics) || args.topics.includes('starters');
+      const wantsStarters = args.tool === undefined && (typeof args.starter === 'string' || !Array.isArray(args.topics) || args.topics.includes('starters'));
       return capabilities(args, wantsStarters ? await downloadedStarters() : []);
     }
     case 'read_attachment': {
@@ -309,6 +309,7 @@ async function read(host: AgentHost, args: Record<string, unknown>, context: Age
   const format = oneOf(args.format, READ_FORMATS, 'draft', '/format');
   const snapshot = await fileFor(host, context);
   const { file, revision } = snapshot;
+  if (args.query !== undefined) return withCollaborators(readLookup(file, args, revision, diagramId), snapshot);
   if (format === 'draft') return withCollaborators(readDiagram(file, args, revision, diagramId), snapshot);
   if (format === 'outline') return withCollaborators(readOutline(file, revision, diagramId), snapshot);
   // The architecture itself as C4-PlantUML — the same text the Source export writes.
@@ -410,6 +411,7 @@ function withCollaborators(result: Record<string, unknown>, snapshot: ReadSnapsh
       }
     }
   } else {
+    for (const item of items('matches')) show(item.type === 'relationship' ? 'edge' : item.type === 'flow' ? 'flow' : 'node', item.id);
     const view = result.view as { path: string[]; owner?: { id: string } } | undefined;
     const edges = new Set(view && viewOf(snapshot.file, view.path)?.edges.map((edge) => edge.id));
     for (const name of ['elements', 'groups', 'boundaries', 'outsideEndpoints']) for (const item of items(name)) showItem('node', item);

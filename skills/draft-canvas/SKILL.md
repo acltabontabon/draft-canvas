@@ -2,7 +2,7 @@
 name: draft-canvas
 description: Create, read, refresh or propose changes to editable architecture diagrams in Draft Canvas using its desktop MCP tools. Covers repository maps, C4 views and request flows.
 metadata:
-  version: "25"
+  version: "26"
   contract: "3"
   requires: Draft Canvas Desktop with agent access on (MCP server draft-canvas)
 ---
@@ -11,7 +11,8 @@ metadata:
 
 Use an explicit or known `diagramId`, `list_diagrams.active` for the open diagram, or a title query
 for an existing diagram. Ask when the target is ambiguous. Discover the tools before concluding
-they are unavailable. Use the live schemas and call `get_capabilities` only for topics you need.
+they are unavailable. Common fields are in the tool catalog; use `get_capabilities({tool: "create_diagram"})` or
+`{tool: "update_diagram"}` for advanced fields, and `topics` for unfamiliar vocabulary.
 If disconnected, guide the person to **Settings → AI agents → Allow agent access**, enable the
 destination folder, then **Add to …** and start a new session. Local requests are drafts until sent.
 
@@ -35,6 +36,11 @@ multiple folders make the destination ambiguous. Keep the returned id and revisi
 
 ## Existing diagram
 
+- For a named edit, use `read_diagram({diagramId, query: "name"})`: compact matches across all
+  rooms with ids, view paths and revision. Refine ambiguous/truncated matches before editing.
+  Rename with `ops: [{op: "update", id, set: {label: "New name"}}]`; pass the match’s `view`.
+  For an exact label or description replacement, a unique lookup match and its revision suffice;
+  skip full schema/room reads, outlines and renders.
 - Locate a room with `read_diagram` and `format: "outline"`; use `view.inside` to read it.
   Limit reads with `focus` or `read_selection` when scoped, and follow relevant pagination.
   Request geometry for placement or routing. Use `read_attachment` for truncated attachments.

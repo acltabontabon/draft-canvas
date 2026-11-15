@@ -13,6 +13,7 @@ export function outputFor(name: string): Schema {
     case 'list_diagrams': success = object({ diagrams: array, cursor: string, complete: { type: 'boolean' } }, ['diagrams']); break;
     case 'read_diagram': success = { anyOf: [
       object({ ...identity, elements: array, relationships: array, flows: array, cursor: string, completeness: { type: 'object', properties: Object.fromEntries(['elements', 'relationships', 'flows', 'openPoints'].map((key) => [key, { type: 'boolean' }])), required: ['elements', 'relationships', 'flows', 'openPoints'] } }, ['diagramId', 'revision', 'elements', 'relationships', 'flows', 'completeness']),
+      object({ ...identity, format: { const: 'lookup' }, matches: array, total: { type: 'integer' }, truncated: { type: 'boolean' } }, ['diagramId', 'revision', 'format', 'matches', 'total', 'truncated']),
       object({ ...identity, title: string, format: { const: 'outline' }, views: array, viewsTruncated: { type: 'boolean' } }, ['diagramId', 'revision', 'title', 'format', 'views']),
       object({ ...identity, format: { enum: ['mermaid', 'plantuml', 'c4'] }, source: string }, ['diagramId', 'revision', 'format', 'source']),
     ] }; break;

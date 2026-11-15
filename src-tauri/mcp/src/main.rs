@@ -6,8 +6,8 @@
 //! itself and every access decision are the app's.
 //!
 //! The tool definitions are generated from the app's own source (`src/agent/schema.ts`, via
-//! `npm run agent:schemas`) into `tools.json`, and compiled in, so the schema an agent sees is the one
-//! the app validates against.
+//! `npm run agent:schemas`) into `tools.json`, and compiled in. Discovery carries common fields;
+//! the app validates against the complete contract and serves it on demand through get_capabilities.
 
 mod bridge;
 mod endpoint;
@@ -69,56 +69,12 @@ const RUN_OFFERED: &[&str] = &[
     "list_proposals",
 ];
 
-/// Bounds the server checks on every call anyway: a model writing a change doesn't need them read
-/// out to it on every request.
-const CHECKED_HERE: &[&str] = &["maxLength", "minLength", "maxItems", "minItems"];
-
-/// A tool as a companion run sees it, for fewer tokens on every model call of the run: its whole
-/// list is sent with each one, and the full set cost an agent 30k tokens before it did anything
-/// (measured with Claude Code, 2.1.310). No output schema; no bounds the server checks itself; and
-/// no nested inside views in an element (a run reaches one with `view.inside`), which repeated the
-/// element schema three more times. Every call is still validated in full by the app.
-fn lean(tool: Tool) -> Tool {
-    fn strip(value: &mut Value) {
-        match value {
-            Value::Object(map) => {
-                for key in CHECKED_HERE {
-                    map.remove(*key);
-                }
-                map.values_mut().for_each(strip);
-            }
-            Value::Array(items) => items.iter_mut().for_each(strip),
-            _ => {}
-        }
-    }
-    let mut value = serde_json::to_value(&tool).expect("a tool serializes");
-    if let Some(map) = value.as_object_mut() {
-        map.remove("outputSchema");
-    }
-    if let Some(schema) = value.get_mut("inputSchema") {
-        strip(schema);
-        if let Some(defs) = schema.get_mut("$defs").and_then(Value::as_object_mut) {
-            if let Some(props) = defs
-                .get_mut("element0")
-                .and_then(|e| e.get_mut("properties"))
-                .and_then(Value::as_object_mut)
-            {
-                props.remove("inside");
-            }
-            for nested in ["element1", "element2", "element3"] {
-                defs.remove(nested);
-            }
-        }
-    }
-    serde_json::from_value(value).expect("a lean tool is still a tool")
-}
-
 fn run_tools() -> Vec<Tool> {
     serde_json::from_str(RUN_TOOLS_JSON)
         .expect("run-tools.json is generated from src/agent/schema.ts")
 }
 
-/// The tools this session serves: everything for an agent the person connected, the lean run set
+/// The tools this session serves: everything for an agent the person connected, the permitted run set
 /// for a companion run, with the project's readers when it may read the project (`code`) or the
 /// one way to ask for them.
 fn served(run: bool, code: bool) -> Vec<Tool> {
@@ -131,8 +87,7 @@ fn served(run: bool, code: bool) -> Vec<Tool> {
         .filter(|t| (t.name == "ask_to_read_code") != code);
     all.into_iter()
         .filter(|t| RUN_OFFERED.contains(&t.name.as_ref()))
-        .map(lean)
-        .chain(readers.map(lean))
+        .chain(readers)
         .collect()
 }
 
@@ -346,7 +301,7 @@ async fn main() {
         );
         return;
     }
-    // A companion run gets the lean set and short instructions (`lean`); its brief says the rest.
+    // A companion run gets the permitted set and short instructions; its brief says the rest.
     let run = std::env::var(RUN_VAR).is_ok_and(|v| !v.trim().is_empty());
     let code = std::env::var(CODE_VAR).is_ok_and(|v| v == "1");
     let server = Server {
@@ -399,17 +354,11 @@ mod tests {
             );
         }
         let text = serde_json::to_string(&lean).unwrap();
-        for gone in [
-            "\"maxLength\"",
-            "\"maxItems\"",
-            "\"outputSchema\"",
-            "element1",
-            "element3",
-        ] {
+        for gone in ["\"outputSchema\"", "element1", "element3"] {
             assert!(!text.contains(gone), "{gone} is still offered");
         }
-        // Less than half of what a connected agent is offered.
-        assert!(text.len() * 2 < serde_json::to_string(&served(false, false)).unwrap().len());
+        // A smaller catalog than the already compact connected set.
+        assert!(text.len() < serde_json::to_string(&served(false, false)).unwrap().len());
         // And the full set for anyone else, unchanged, with none of the run's own.
         assert_eq!(served(false, true).len(), tools().len());
         assert!(!served(false, true)

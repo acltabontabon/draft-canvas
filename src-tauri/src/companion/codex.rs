@@ -220,6 +220,12 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
             "skip_host_skill_discovery".to_string(),
         ]);
     }
+    // The run already has its canvas brief and cannot use filesystem skills. Suppress the
+    // automatic skill catalog too: skip_host_skill_discovery only skips the host's discovery.
+    args.extend([
+        "-c".to_string(),
+        "skills.include_instructions=false".to_string(),
+    ]);
     // No web search: its tool goes with every call, and a canvas run answers from the diagram.
     args.push("-c".into());
     args.push(r#"web_search="disabled""#.into());
@@ -824,6 +830,7 @@ mod tests {
         assert!(!args
             .windows(2)
             .any(|w| w == ["--disable", "code_mode_host"]));
+        assert!(args.contains(&"skills.include_instructions=false".to_string()));
         assert!(args.contains(&r#"web_search="disabled""#.to_string()));
         assert_eq!(args.last().map(String::as_str), Some("-"));
         assert!(!args.contains(&"--ephemeral".to_string()));

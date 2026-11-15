@@ -41,13 +41,15 @@ Setup is in [Connect an AI agent](../guides/connect-an-ai-agent.md).
 
 Schemas live in `src/agent/schema.ts`. `npm run agent:schemas` regenerates `src-tauri/mcp/tools.json`,
 which the sidecar compiles in; `tests/agent/schema.test.ts` fails if they drift. `get_capabilities`
-reports `contract: 3`.
+reports `contract: 3`. Tool discovery contains common inputs and short examples, with no output
+schemas. `get_capabilities({tool: "update_diagram"})` (or another tool name) returns its complete
+input schema on demand. All requests still pass the complete server validation contract.
 
 | Tool | Kind | Purpose |
 | --- | --- | --- |
-| `get_capabilities({topics?, starter?})` | read | Vocabulary and rules. Without `topics`, an index of the topics and the common word lists; each topic in full on request: `types`, `relationships`, `c4`, `flows`, `notes`, `starters`, `limits`, `layout`, `readability`. `starters` lists only what the person has downloaded from the [starters gallery](../guides/examples.md); with the gallery off there are none. |
+| `get_capabilities({tool?, topics?, starter?})` | read | `tool` alone returns that tool’s complete input schema. Otherwise, vocabulary and rules: without `topics`, an index of the topics and the common word lists; each topic in full on request: `types`, `relationships`, `c4`, `flows`, `notes`, `starters`, `limits`, `layout`, `readability`. `starters` lists only what the person has downloaded from the [starters gallery](../guides/examples.md); with the gallery off there are none. |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read | Diagrams in allowed folders, plus `active` (the open one) and `thisSession` (ones this session changed). |
-| `read_diagram({diagramId, view?, focus?, include?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
+| `read_diagram({diagramId, query?, view?, focus?, include?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read | Full note or code text in 8,192-character chunks. |
 | `read_selection({diagramId})` | read | The current selection. See [Selection-aware editing](#selection-aware-editing). |
 | `get_implementation_context({diagramId, view?, focus?})` | read | Flow steps as stored, notes, decisions, code and boundaries, for implementing a design. |
@@ -86,6 +88,15 @@ attachments and flows with their ids. Elements, boundaries, notes, relationships
 | `include: ["views"]` | An outline of every inside view. |
 | `format: "outline"` | File title and revision, plus paths, owners, levels and counts for up to 100 inside views. `viewsTruncated` marks a longer outline. |
 | `format: "mermaid"` / `"plantuml"` / `"c4"` | Flows as sequence-diagram source, or the architecture as C4-PlantUML, as Export writes them. |
+
+For a named edit, use `read_diagram({diagramId, query: "name"})`. It matches ids and labels
+(case-insensitive substring) across every room, returning at most 20 matches with their ids,
+types, labels and `view.inside` paths, plus the file revision. `total` counts all matches;
+`truncated` means refine the query. Labels over 200 characters have `labelTruncated: true`.
+Search covers shapes, free notes, groups, relationships and flows, not attachment bodies or ink.
+Do not combine `query` with other read options. Resolve ambiguity before editing. For a rename,
+send `ops: [{op: "update", id, set: {label: "New name"}}]` with the match’s view and revision;
+the receipt verifies it without another read or render.
 
 Use the outline to find a room, then read that room with `view.inside`. For a known group, flow or
 set of nodes, pass `focus` directly. The outline and source formats cover the file and ignore
@@ -269,12 +280,13 @@ agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 **Tokens.** Every model call of a turn resends the agent's instructions and tools, so each is kept small
 and calls are kept few:
 
-- A run's connector serves a lean tool set (`src-tauri/mcp/src/main.rs`'s `lean`): only the tools the
-  run may call, without `render_diagram` or `read_selection`, output schemas, the bounds the app checks
-  anyway, or nested inside views in an element.
+- Every connection receives the compact discovery catalog; advanced schemas are fetched on demand.
+  A companion run sees only its permitted tools, without `render_diagram` or `read_selection`.
+  The app validates the full contract regardless of what discovery exposes.
 - Codex runs with the features that bring tools of their own turned off (browser, computer use, image
   generation, sub-agents, plugins, apps, skill search, `unified_exec`; only those `codex features list`
-  reports) and web search off.
+  reports) and web search off. Its canvas brief supplies workflow guidance, so automatic skill
+  instructions are omitted with `skills.include_instructions=false` as well.
 - The view comes with the turn, so a question is one call.
 - The brief directs the agent to reuse the supplied view, look up individual capability topics as
   needed, use previews to compare alternatives, and take revisions and advisories from receipts.

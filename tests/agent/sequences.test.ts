@@ -9,7 +9,7 @@ import { AgentError } from '../../src/agent/errors';
 import { applyUpdate } from '../../src/agent/patch';
 import { readDiagram } from '../../src/agent/read';
 import { readSelectionContext } from '../../src/agent/selection';
-import { TOOLS } from '../../src/agent/schema';
+import { FULL_TOOLS as TOOLS } from '../../src/agent/schema';
 import { checkSequence } from '../../src/sequence/check';
 import { messagesOf, sequenceOf } from '../../src/document/sequenceModel';
 import { deserializeDocument } from '../../src/export/project';
