@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createAttachment, createDocument } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { LAYOUT_BACKSTOP_MS } from '../src/agent/layoutPlan';
 import { startArrange, startTidy } from '../src/commands/arrange';
 import { useUiStore, type ArrangePreview } from '../src/store/uiStore';
 
@@ -289,8 +290,11 @@ describe('arrange under a work budget', () => {
     expect(Object.keys(plan.options)).toHaveLength(1);
     expect(plan.alternativeSkipped).toBe(true);
     expect(useEditorStore.getState().commitArrange(plan)).toBe(true);
-    // Unbounded, this took over ten times as long.
-    expect(performance.now() - started).toBeLessThan(20_000);
+    // The budget counts work, not time, so how long this takes is the machine's business: about 2 s on
+    // a laptop, 21 s on a loaded CI runner (which failed a 20 s limit). What `partial` and the single
+    // option above prove is that the work was bounded; this only catches a run that never stops, so
+    // it holds to the wall-clock backstop the product itself uses, not to a speed.
+    expect(performance.now() - started).toBeLessThan(LAYOUT_BACKSTOP_MS);
     expect(overlapping()).toBe(0);
   }, 60_000);
 });
