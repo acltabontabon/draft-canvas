@@ -50,7 +50,7 @@ export function SecureExportPrompt({
     >
       <p className="dc-muted">
         Anyone who wants to open this file will need this passphrase. Draft Canvas does not store
-        it and cannot recover it — if it's lost, the file is unreadable.
+        it and cannot recover it — if it’s lost, the file is unreadable.
       </p>
       <label className="dc-field">
         <span>Passphrase</span>
@@ -86,7 +86,7 @@ export function SecureExportPrompt({
       </label>
       {mismatch && (
         <p id={mismatchId} className="dc-export-note" data-invalid="true">
-          Passphrases don't match.
+          Passphrases don’t match.
         </p>
       )}
     </Modal>

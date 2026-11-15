@@ -2,9 +2,9 @@
 
 | Input | How |
 | --- | --- |
-| Keyboard | `⌘K` runs any command, `?` lists shortcuts, `Shift+F10` opens the context menu. See [keyboard shortcuts](keyboard-and-commands.md). |
-| Screen reader | **Outline** (`⌥O`) shows the view as a tree of shapes, boundaries and connectors, in sync with the canvas. Names, kinds, relationships and selection changes are announced. |
-| Touch and pen | Tap to select, press and hold for the context menu, pinch to zoom. Handles are larger on touch screens. |
+| Keyboard | `⌘K` runs any command, `?` lists shortcuts, `Shift+F10` opens the context menu (the canvas menu, when nothing is selected). See [keyboard shortcuts](keyboard-and-commands.md). |
+| Screen reader | **Outline** (`⌥O`) shows the view as a tree of shapes, boundaries and connectors, in sync with the canvas. Names, kinds, relationships and selection changes are announced. The **Flows** panel is a tree too: arrows move between flows, `→` and `←` open and close one onto its steps. |
+| Touch and pen | Tap to select, press and hold for the context menu, pinch to zoom. Handles, buttons, menu rows and the status bar controls are larger on touch screens (at least 40 px). |
 
 On Windows and Linux, use `Ctrl` for `⌘` and `Alt` for `⌥`.
 

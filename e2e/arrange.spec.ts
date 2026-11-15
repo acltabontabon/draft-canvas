@@ -108,3 +108,56 @@ test('the preview frames the result, and Cancel puts the view back exactly where
   await expect(bar).toBeHidden();
   await expect.poll(camera).toBe(before);
 });
+
+test('says it is arranging a large diagram, and Cancel stops it with nothing changed', async ({ page, browserName }) => {
+  await newCanvas(page, 'Arrange busy');
+  // Sixty shapes in a tangle: enough for the layout to take a moment, with a Cancel to press.
+  await page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    const store = useEditorStore.getState();
+    let seed = 7;
+    const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const ids: string[] = [];
+    for (let i = 0; i < 60; i += 1) ids.push(store.addNode({ type: i % 3 ? 'service' : 'database', x: (i % 10) * 200, y: Math.floor(i / 10) * 150, text: `N${i}` }).id);
+    let edges = 0;
+    for (let i = 1; i < 60; i += 1) if (useEditorStore.getState().connect(ids[Math.floor(rnd() * i)]!, ids[i]!)) edges += 1;
+    while (edges < 88) {
+      const a = ids[Math.floor(rnd() * 60)]!;
+      const b = ids[Math.floor(rnd() * 60)]!;
+      if (a !== b && useEditorStore.getState().connect(a, b)) edges += 1;
+    }
+  });
+  const before = await positions(page);
+
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('Arrange diagram');
+  await expect(page.getByRole('option', { selected: true })).toContainText('Arrange diagram');
+  await page.keyboard.press('Enter');
+
+  // Said, with a Cancel, while the layout is worked out away from the page.
+  const busy = page.getByRole('region', { name: 'Arranging progress' });
+  await expect(busy).toBeVisible();
+  if (browserName === 'chromium') {
+    // The page is free meanwhile: two frames paint in well under the second the layout takes. (A browser
+    // whose worker cannot measure text runs it on the page, after one yield, and is not held to this.)
+    const started = Date.now();
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    expect(Date.now() - started).toBeLessThan(1000);
+    await expect(busy).toBeVisible();
+  }
+  await busy.getByRole('button', { name: 'Cancel' }).click();
+  await expect(busy).toBeHidden();
+  // No preview, no change, and Arrange can be asked for again.
+  await expect(page.getByRole('region', { name: 'Arrange preview' })).toHaveCount(0);
+  expect(await positions(page)).toEqual(before);
+
+  await page.keyboard.press('ControlOrMeta+k');
+  await page.keyboard.type('Arrange diagram');
+  await page.keyboard.press('Enter');
+  const bar = page.getByRole('region', { name: 'Arrange preview' });
+  await expect(bar).toBeVisible({ timeout: 60_000 });
+  // A diagram this size says why it stopped early.
+  await expect(page.getByText('Stopped early on a large diagram.')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(bar).toBeHidden();
+});

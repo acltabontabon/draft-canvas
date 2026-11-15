@@ -32,9 +32,9 @@ import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
 import { fileOf, fileWithLiveViewport, lensFlow, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
-import { pointer, type ArrangeDirection, type ArrangePreview, type UiStore } from '../store/uiStore';
+import { pointer, pointerFlow, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
-import { useCollabStore } from '../store/collabStore';
+import { setFollowing, useCollabStore } from '../store/collabStore';
 import { leaveSessionKeepingView, stopHosting } from '../store/collabBridge';
 import { SOURCE_FORMAT_INFO, SOURCE_FORMATS } from '../export/source/formats';
 import type { CopyResult } from '../export/clipboard';
@@ -42,6 +42,7 @@ import type { CopyResult } from '../export/clipboard';
 import type { ContextMenuEntry } from './contextMenu';
 import { inkOf } from '../document/ink';
 import { cancelSmartInk, convertStrokes } from '../canvas/inkSession';
+import { startArrange, startCheckLayout, startTidy } from './arrange';
 import type { PencilTool } from '../store/uiStore';
 
 // The exporters (rasterizer, Structurizr, draw.io, sequence engine) load when a copy command runs, not with the editor.
@@ -60,13 +61,11 @@ export function warmCopyExports(): void {
 import { readEditableImagePreference } from '../export/exportPreferences';
 import { systemTheme } from '../theme/systemTheme';
 import { copyText } from '../ui/collab/clipboard';
-import { ARRANGE_FAILED, notifyLoadFailure } from '../ui/common/notifyLoadFailure';
 import { focusBounds, focusNodes } from './search';
 import type { GalleryCategory } from '../gallery';
 import { useGalleryStore } from '../store/galleryStore';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
-import { count } from '../lib/plural';
-import { fixesList } from '../lib/arrangeFixes';
+import { count, selectionCount } from '../lib/plural';
 import { openPointsOverview, unresolvedTargetsIn } from '../openPoints/collect';
 import type { OpenPointTarget } from '../document/types';
 
@@ -390,14 +389,16 @@ export function openPointCommands(ctx: CommandContext): Command[] {
 
   const here = unresolvedTargetsIn(document);
   const marked = here.nodeIds.length + here.edgeIds.length;
-  if (marked > 0 && mode !== 'present') {
+  // Leaving it is `focus-exit`'s ("Exit spotlight"): the same state however it was entered, so a
+  // second row for it here only listed two names for one action.
+  if (marked > 0 && mode !== 'present' && !focus.active) {
     commands.push({
       id: 'open-points-focus',
-      title: focus.active ? 'Exit focus' : 'Focus open points',
+      title: 'Spotlight open points',
       group: 'openPoints',
-      keywords: ['spotlight', 'dim others', 'unresolved', 'review'],
-      hint: focus.active ? undefined : count(marked, 'element'),
-      run: (inner) => (inner.editor.focus.active ? inner.editor.exitFocus() : inner.editor.enterFocus(here.nodeIds, here.edgeIds)),
+      keywords: ['focus', 'dim others', 'unresolved', 'review'],
+      hint: count(marked, 'element'),
+      run: (inner) => inner.editor.enterFocus(here.nodeIds, here.edgeIds),
     });
   }
   return commands;
@@ -425,7 +426,7 @@ function flowCommands(ctx: CommandContext): Command[] {
     if (flows.length > 1) {
       commands.push({
         id: 'present-flow',
-        title: 'Present flow…',
+        title: 'Present a flow…',
         group: 'flow',
         keywords: ['walkthrough', 'play'],
         run: presentFlowStage,
@@ -433,11 +434,11 @@ function flowCommands(ctx: CommandContext): Command[] {
     }
     commands.push({
       id: 'switch-flow',
-      title: 'Switch to flow…',
+      title: 'Switch flow…',
       group: 'flow',
       keywords: ['lens', 'view', 'select flow', 'whole diagram', 'leave flow'],
       run: (inner) => ({
-        prompt: 'Switch to',
+        prompt: 'Switch flow',
         options: [
           {
             id: 'switch-flow:diagram',
@@ -483,11 +484,12 @@ function flowCommands(ctx: CommandContext): Command[] {
   commands.push(
     {
       id: 'flow-manage',
-      title: 'Show flows',
+      // `F` toggles the panel, so the row says which way it goes now.
+      title: ctx.ui.flowPanelOpen ? 'Hide flows' : 'Show flows',
       group: 'flow',
       keywords: ['manage', 'rename', 'reorder', 'steps', 'panel'],
       shortcut: 'F',
-      run: (inner) => inner.ui.setFlowPanelOpen(true),
+      run: (inner) => inner.ui.setFlowPanelOpen(!inner.ui.flowPanelOpen),
     },
   );
   // A flow is an order somebody gave: it can be drawn as a sequence without guessing at one.
@@ -592,9 +594,9 @@ export function viewCommands(ctx: CommandContext): Command[] {
   }
   commands.push({
     id: 'continuation-toggle',
-    title: ctx.ui.continuationsEnabled ? 'Turn off Intent Continuation' : 'Turn on Intent Continuation',
+    title: ctx.ui.continuationsEnabled ? 'Turn off next-shape suggestions' : 'Turn on next-shape suggestions',
     group: 'view',
-    keywords: ['suggest', 'suggestion', 'ghost', 'next', 'continue', 'assist', 'autocomplete'],
+    keywords: ['suggest', 'suggestion', 'suggestions', 'next-shape', 'ghost', 'next', 'continue', 'continuation', 'intent', 'assist', 'autocomplete'],
     run: (inner) => inner.ui.setContinuationsEnabled(!inner.ui.continuationsEnabled),
   });
   return commands;
@@ -703,16 +705,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       hint: scoped
         ? 'Preview a gentle cleanup of the selected shapes — nothing else moves'
         : 'Preview a gentle cleanup — shapes stay where you put them',
-      run: (inner) => {
-        void inner.editor.planTidy()
-          .then((preview) => {
-            if (preview) inner.ui.setTidyPreview(preview);
-            // Said, so the command doesn't look like it did nothing; and the stronger tool is one
-            // click away for a diagram that is tidy as drawn but wants laying out again.
-            else if (!inner.ui.readOnly) alreadyTidy(inner, scoped);
-          })
-          .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
-      },
+      run: (inner) => void startTidy(scoped, inner),
     });
   }
   if (!ctx.ui.readOnly && ctx.editor.document.edges.some((edge) => edge.routeMode || edge.waypoints)) {
@@ -758,7 +751,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       group: 'canvas',
       keywords: ['layout', 'auto layout', 'tidy', 'clean up', 'organize', 'rearrange', 'align'],
       hint: 'Preview this view laid out again from scratch, and choose which way it reads',
-      run: (inner) => rearrange(inner),
+      run: (inner) => void startArrange({}, inner),
     });
     commands.push({
       id: 'check-layout',
@@ -766,7 +759,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       group: 'canvas',
       keywords: ['check', 'review', 'quality', 'readable', 'legible', 'problems', 'issues', 'lint', 'names', 'captions', 'spacing'],
       hint: 'Find names, captions, boundaries and spacing that read badly, and preview the fix',
-      run: (inner) => checkLayout(inner),
+      run: (inner) => void startCheckLayout(inner),
     });
   }
   if (!ctx.ui.readOnly && ctx.editor.selection.nodes.some((id) => {
@@ -817,7 +810,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
     run: (inner) => {
       void (async () => {
         await requestClipboardRead(inner.editor, inner.ui);
-        const target = pointer.known ? { x: pointer.x, y: pointer.y } : undefined;
+        const target = pointer.known ? pointerFlow() : undefined;
         inner.editor.paste(target);
       })();
     },
@@ -929,7 +922,7 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   note: 'Note',
   code: 'Code',
   service: 'Service',
-  database: 'Data store',
+  database: 'Data Store',
   queue: 'Queue',
   actor: 'Actor',
   component: 'Component',
@@ -999,7 +992,11 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
       }
     },
   }));
-  return { prompt: 'Connect to', options: [...existing, ...fresh] };
+  // A shape with nothing attached yet is the start of a chain, and what comes next is usually a new
+  // shape, not one already drawn: leading with "New Service / Data Store / Queue" makes the
+  // keyboard-only chain S, ⌘K, Enter, Enter. Once it has connectors, the existing shapes lead again.
+  const attached = ctx.editor.document.edges.some((edge) => edge.source === source.id || edge.target === source.id);
+  return { prompt: 'Connect to', options: attached ? [...existing, ...fresh] : [...fresh, ...existing] };
 }
 
 /**
@@ -1095,19 +1092,19 @@ function cutCommand(): Command {
   };
 }
 
-/** "Add Note"/"Add Code" on a node's own menu — creates a brand-new, empty attachment directly
- *  (`attachToNode`/`createAttachment` already existed with zero UI call sites; every attachment
- *  before this was created by dragging an existing standalone Note/Code node onto a host and
- *  folding it in). Opens the new attachment's card immediately (pinned via `openAttachmentDetail`,
- *  same as clicking its chip) instead of leaving the user to go find and click the new chip
- *  themselves. Deliberately does not also force `AttachmentPresentation.tsx`'s own local `editing`
- *  state open — that pin→edit split is that component's own established, tested safety behavior
- *  (view before you commit to editing), and reaching past its public interface to bypass it for
- *  this one entry point would be a bigger change than this menu warrants; one more click (the
- *  card's own pencil icon) reaches the textarea. Id is `attach-*`, not `add-*` — `add-note`/
- *  `add-code` are already taken by the "create a standalone Note/Code node" preset commands, and
- *  sharing an id would corrupt `commands/history.ts`'s by-id "Recent" lookup in the palette (two
- *  different commands silently shadowing each other under one key). */
+/** "Attach note"/"Attach code" on a shape's or connector's own menu — creates a brand-new, empty
+ *  attachment directly (`attachToNode`/`createAttachment` already existed with zero UI call sites;
+ *  every attachment before this was created by dragging an existing standalone Note/Code node onto
+ *  a host and folding it in). Opens the new attachment's card immediately, ready to type
+ *  (`startEditing`): asking to attach a note is asking to write one, and a card that waited for a
+ *  click on its pencil read as the command not working — the guide's "Type, then press Esc" is
+ *  true because of it. (Clicking an existing chip still opens read-only first.) The title is
+ *  "Attach …", the menu's own wording, so the palette's two note rows are told apart by their verb:
+ *  "Attach note" to the selection, "Add Note" for a standalone Note on the canvas. Id is
+ *  `attach-*`, not `add-*` — `add-note`/`add-code` are already taken by the "create a standalone
+ *  Note/Code node" preset commands, and sharing an id would corrupt `commands/history.ts`'s by-id
+ *  "Recent" lookup in the palette (two different commands silently shadowing each other under one
+ *  key). */
 function addAttachmentCommand(
   host: { hostKind: 'node'; node: DraftNode } | { hostKind: 'edge'; edge: DraftEdge },
   type: AttachableType,
@@ -1116,14 +1113,14 @@ function addAttachmentCommand(
   const hostId = host.hostKind === 'node' ? host.node.id : host.edge.id;
   return {
     id: `attach-${type}`,
-    title: type === 'note' ? 'Add Note' : 'Add Code',
+    title: type === 'note' ? 'Attach note' : 'Attach code',
     group,
-    keywords: ['attach', 'context', 'detail'],
+    keywords: ['add', 'attach', 'context', 'detail'],
     run: (inner) => {
       const attachment = createAttachment({ type });
       if (host.hostKind === 'node') inner.editor.attachToNode(hostId, attachment);
       else inner.editor.attachToEdge(hostId, attachment);
-      inner.ui.setOpenAttachmentDetail({ hostKind: host.hostKind, hostId, attachmentId: attachment.id });
+      inner.ui.setOpenAttachmentDetail({ hostKind: host.hostKind, hostId, attachmentId: attachment.id, startEditing: true });
     },
   };
 }
@@ -1176,7 +1173,7 @@ function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
   if (category === 'queue' || category === 'stream' || category === 'deadLetter') {
     commands.push({
       id: 'add-consumer',
-      title: 'Add Consumer',
+      title: 'Add consumer',
       group: 'selection',
       keywords: ['worker', 'subscriber', 'consume'],
       primary: true,
@@ -1217,7 +1214,7 @@ function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
   if (category === 'topic') {
     commands.push({
       id: 'add-subscriber',
-      title: 'Add Subscriber',
+      title: 'Add subscriber',
       group: 'selection',
       keywords: ['queue', 'fan out', 'subscribe'],
       primary: true,
@@ -1559,7 +1556,7 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       const descendantSet = new Set(descendantIds);
       commands.push({
         id: 'select-contents',
-        title: 'Select Contents',
+        title: 'Select contents',
         group: 'selection',
         keywords: ['children', 'members', 'inside'],
         hint: count(descendantIds.length, 'element'),
@@ -1589,7 +1586,7 @@ function groupCommand(members: number): Command {
     group: 'selection',
     keywords: ['boundary', 'system', 'domain', 'container', 'wrap'],
     shortcut: `${MOD_SYMBOL} G`,
-    hint: members === 1 ? '1 element' : `${members} elements`,
+    hint: count(members, 'shape'),
     run: (inner) => inner.editor.groupSelection(),
   };
 }
@@ -1807,9 +1804,9 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
     },
     ...(!serviceCall || !asyncMode ? [{
       id: 'edge-response',
-      title: edge.hasResponse ? 'Remove response line' : 'Add response line',
+      title: edge.hasResponse ? 'Remove reply line' : 'Add reply line',
       group: 'connector' as const,
-      keywords: ['reply', 'return', 'request response', '200'],
+      keywords: ['response', 'return', 'request response', '200'],
       run: (inner: CommandContext) => inner.editor.setEdgeHasResponse(edge.id, !edge.hasResponse),
     }] : []),
     {
@@ -1958,8 +1955,8 @@ export function multiCommands(ctx: CommandContext): Command[] {
       ['align-right', 'Align right', 'right'],
       ['align-top', 'Align top', 'top'],
       ['align-bottom', 'Align bottom', 'bottom'],
-      ['align-center-x', 'Align centers horizontally', 'centerX'],
-      ['align-center-y', 'Align centers vertically', 'centerY'],
+      ['align-center-x', 'Align centres horizontally', 'centerX'],
+      ['align-center-y', 'Align centres vertically', 'centerY'],
     ];
     for (const [id, title, edge] of aligns) {
       commands.push({
@@ -2014,7 +2011,7 @@ export function multiCommands(ctx: CommandContext): Command[] {
     title: 'Spotlight selection',
     group: 'selection',
     keywords: ['focus', 'highlight', 'dim others'],
-    hint: `${selection.nodes.length + selection.edges.length} elements`,
+    hint: selectionCount(selection.nodes.length, selection.edges.length),
     run: (inner) => inner.editor.enterFocus(inner.editor.selection.nodes, inner.editor.selection.edges),
   });
   if (nodes.length > 0) {
@@ -2053,82 +2050,6 @@ export function multiCommands(ctx: CommandContext): Command[] {
   return commands;
 }
 
-/**
- * Arrange diagram (and, with `selection`, Arrange selection): the view laid out again from scratch,
- * shown first as a preview with its reading direction to choose (`ArrangeBar`), applied only on
- * Apply. Also what Tidy up offers when it finds nothing to do.
- */
-function rearrange(inner: CommandContext, selection = false): void {
-  void inner.editor.planArrange(selection)
-    .then((plan) => {
-      if (plan === null) return;
-      if (plan === 'no-room') inner.ui.notify('There is not enough room. Arrange a larger selection or the whole diagram.');
-      else if (plan === 'unchanged') inner.ui.notify('Already arranged.');
-      else inner.ui.setArrangePreview(plan);
-    })
-    .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
-}
-
-/**
- * Check layout: what reads badly as the diagram stands (names stacked into columns, captions with no
- * room, top-heavy boundaries, an overview too small to read), reported only where laying the view out
- * again fixes it — and then as that arrangement's own preview, the fixes named in its bar and inked
- * on the sheet. Nothing to fix says so, rather than opening a preview of a change nobody needs.
- */
-function checkLayout(inner: CommandContext): void {
-  void inner.editor.planArrange()
-    .then((plan) => {
-      if (plan === null) return;
-      const fixing = fixingPlan(plan);
-      if (fixing) inner.ui.setArrangePreview(fixing);
-      else inner.ui.notify('Nothing to fix: names, captions and spacing read well.');
-    })
-    .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
-}
-
-/** An Arrange plan that fixes something `agent/proportion.ts` checks, opened on the direction that
- *  does (the suggested one first); `null` for a plan that fixes none of it, or no plan at all. */
-function fixingPlan(plan: ArrangePreview | 'unchanged' | 'no-room' | null): ArrangePreview | null {
-  if (plan === null || typeof plan !== 'object') return null;
-  const fixes = (direction: ArrangeDirection) => plan.fixes?.[direction]?.length ?? 0;
-  if (fixes(plan.direction)) return plan;
-  const other: ArrangeDirection = plan.direction === 'right' ? 'down' : 'right';
-  return fixes(other) ? { ...plan, direction: other } : null;
-}
-
-/**
- * Tidy up found nothing to do. Tidy as drawn is not the same as easy to read: when laying the view
- * out again would fix a stacked name, a cut-off caption, a top-heavy boundary or a small overview,
- * the toast says which and offers that preview. Otherwise it offers Rearrange as it always has. A
- * tidied selection is told only that it is tidy: the findings are about the whole view.
- */
-function alreadyTidy(inner: CommandContext, scoped: boolean): void {
-  const plain = () => inner.ui.notify('Already tidy.', 'info', { label: 'Rearrange', run: () => rearrange(inner) });
-  if (scoped) {
-    plain();
-    return;
-  }
-  void inner.editor.planArrange()
-    .then((plan) => {
-      const fixing = fixingPlan(plan);
-      if (!fixing) {
-        plain();
-        return;
-      }
-      inner.ui.notify(`Already tidy. Rearranging would fix ${fixesList(fixing.fixes?.[fixing.direction])}.`, 'info', {
-        label: 'Show fix',
-        // Only while the view is still the one the fix was worked out for.
-        run: () => {
-          const latest = useEditorStore.getState();
-          if (latest.document === fixing.base && latest.path === fixing.path) inner.ui.setArrangePreview(fixing);
-          else rearrange(inner);
-        },
-      });
-    })
-    // The check is a courtesy on top of the answer already known: never an error of its own.
-    .catch(plain);
-}
-
 export function arrangeSelectionCommands(ctx: CommandContext): Command[] {
   if (ctx.ui.readOnly || !ctx.editor.selection.nodes.some((id) => {
     const node = ctx.editor.document.nodes.find((item) => item.id === id);
@@ -2138,7 +2059,7 @@ export function arrangeSelectionCommands(ctx: CommandContext): Command[] {
     });
     return node && !['note', 'text', 'code'].includes(node.type);
   })) return [];
-  return [{ id: 'arrange-selection', title: 'Arrange selection', group: 'selection', keywords: ['layout', 'tidy'], run: (inner) => rearrange(inner, true) }];
+  return [{ id: 'arrange-selection', title: 'Arrange selection', group: 'selection', keywords: ['layout', 'tidy'], run: (inner) => void startArrange({ selection: true }, inner) }];
 }
 
 function selectionCommands(ctx: CommandContext): Command[] {
@@ -2191,7 +2112,7 @@ export function starterCommands(): Command[] {
       group: STARTER_CATEGORY_GROUP[starter.category],
       keywords: starter.aliases,
       hint: starter.summary,
-      // On the web a blank "Untitled canvas" takes the starter's name; elsewhere the name is the file's.
+      // On the web a blank "Untitled diagram" takes the starter's name; elsewhere the name is the file's.
       run: (inner) =>
         void useGalleryStore
           .getState()
@@ -2251,7 +2172,7 @@ function collabCommands(): Command[] {
         title: collab.following ? 'Stop following the presenter' : 'Follow the presenter',
         group: 'canvas',
         keywords: ['presentation', 'camera', 'live', 'follow'],
-        run: () => useCollabStore.setState({ following: !useCollabStore.getState().following }),
+        run: () => setFollowing(!useCollabStore.getState().following),
       });
     }
   }

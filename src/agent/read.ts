@@ -350,7 +350,8 @@ function project(
     }
   }
 
-  const suggestions: Record<string, string[]> = {};
+  // No prototype: a shape id is text the file supplied, and `__proto__` on a plain object is not a key.
+  const suggestions = Object.create(null) as Record<string, string[]>;
   if (includes.has('suggestions')) {
     for (const node of page.slice(0, READ_LIMITS.suggestionElements)) {
       try {

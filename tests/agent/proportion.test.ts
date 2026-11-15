@@ -83,7 +83,7 @@ describe('what an arrangement fixes', () => {
 
   it('is named in the bar, and not at all when there is nothing', () => {
     expect(fixesNote([{ kind: 'stacked-name', id: 'a' }, { kind: 'stacked-name', id: 'b' }, { kind: 'hidden-caption', id: 'e' }, { kind: 'sparse', id: '' }]))
-      .toBe('Fixes 2 stacked names, 1 cut-off caption, a small overview');
+      .toBe('Fixes 2 stacked names, 1 cut-off caption, an overview too small to read');
     expect(fixesNote([])).toBe('');
     expect(fixesNote(undefined)).toBe('');
   });

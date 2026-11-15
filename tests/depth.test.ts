@@ -4,7 +4,7 @@ import { serializeDocument } from '../src/export/project';
 import { parseDocument } from '../src/document/validate';
 import { embed, hasInside, resolvePath, totals, viewOf } from '../src/depth/tree';
 import { looksLikeSystemOverview } from '../src/depth/level';
-import { __resetInteraction, fileOf, useEditorStore, viewLevel } from '../src/store/editorStore';
+import { __resetInteraction, fileOf, fileWithLiveViewport, useEditorStore, viewLevel } from '../src/store/editorStore';
 import { useUiStore } from '../src/store/uiStore';
 import type { DraftDocument } from '../src/document/types';
 
@@ -674,5 +674,56 @@ describe('asking whether a canvas is a system overview', () => {
     store.getState().setOuterViewLevel(5, 'context');
     expect(store.getState().history.past).toHaveLength(0);
     expect(file().level).toBeUndefined();
+  });
+});
+
+/** The camera is where a person is looking, not something they did: undo and redo never move it. */
+describe('undo leaves the camera where the person is looking', () => {
+  const looking = { x: 300, y: 200, zoom: 1.5 };
+
+  it('pan, step into a shape, step out, undo: the next save keeps the camera on screen', () => {
+    const { platform } = withPlatform();
+    store.getState().addNode({ type: 'note', x: 900, y: 900, text: 'Edit' });
+    store.getState().persistViewport(looking);
+    store.getState().enterInside(platform.id);
+    store.getState().exitTo(0);
+    expect(store.getState().document.viewport).toEqual(looking);
+
+    store.getState().undo();
+    expect(store.getState().document.nodes.map((n) => n.text)).not.toContain('Edit');
+    expect(fileWithLiveViewport(store.getState()).viewport).toEqual(looking);
+    store.getState().redo();
+    expect(fileWithLiveViewport(store.getState()).viewport).toEqual(looking);
+  });
+
+  it('a camera panned since the edit survives undoing it', () => {
+    withPlatform();
+    store.getState().addNode({ type: 'note', x: 900, y: 900, text: 'Edit' });
+    store.getState().persistViewport(looking);
+    expect(store.getState().liveViewport).toEqual(looking);
+    store.getState().undo();
+    expect(fileWithLiveViewport(store.getState()).viewport).toEqual(looking);
+  });
+
+  it('every room keeps its own camera when an edit made inside is undone from outside', () => {
+    const { platform } = withPlatform();
+    store.getState().enterInside(platform.id);
+    store.getState().addNode({ type: 'service', x: 0, y: 0, text: 'Inner' });
+    store.getState().addNode({ type: 'service', x: 200, y: 0, text: 'Inner two' });
+    store.getState().persistViewport({ x: 30, y: 60, zoom: 1.25 });
+    store.getState().exitTo(0);
+    store.getState().persistViewport(looking);
+    // Undo takes you back in to see what it undid; the room's camera is the one it was left at, not
+    // the one it had when the shape was drawn, and the room outside keeps the one it was left at too.
+    store.getState().undo();
+    expect(store.getState().path).toEqual([platform.id]);
+    expect(store.getState().document.nodes.map((n) => n.text)).toEqual(['Inner']);
+    expect(fileWithLiveViewport(store.getState()).viewport).toEqual(looking);
+    expect(store.getState().document.viewport).toEqual({ x: 30, y: 60, zoom: 1.25 });
+    store.getState().redo();
+    expect(store.getState().document.nodes).toHaveLength(2);
+    expect(store.getState().document.viewport).toEqual({ x: 30, y: 60, zoom: 1.25 });
+    store.getState().exitTo(0);
+    expect(store.getState().document.viewport).toEqual(looking);
   });
 });

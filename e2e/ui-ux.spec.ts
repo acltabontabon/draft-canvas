@@ -88,14 +88,15 @@ test('the status bar opens Settings at Canvas, which tabs through every visible 
   await newCanvas(page, 'Settings focus');
   await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
   const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-  // Focus starts on the page it opened at.
-  await expect(settings.getByRole('tab', { name: 'Canvas', exact: true })).toBeFocused();
+  // One page, so no rail of one; focus starts on the page itself and the first Tab reaches its first control.
+  await expect(settings.getByRole('tab')).toHaveCount(0);
+  await expect(settings.getByRole('region', { name: 'Canvas', exact: true })).toBeFocused();
   // One stop for the drawing styles (a radio group), then the suggestions switch, then the image
   // chooser — never the hidden file input behind it.
   await page.keyboard.press('Tab');
   await expect(settings.getByRole('radio', { name: /^Clean/ })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(settings.getByRole('switch', { name: 'Suggest the next move while drawing' })).toBeFocused();
+  await expect(settings.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(settings.getByRole('button', { name: 'Choose image…', exact: true })).toBeFocused();
 });

@@ -148,3 +148,45 @@ test('the wheel still pans while the Pencil is in hand, and Escape puts it down'
   await expect(page.getByRole('button', { name: 'Service' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Select' })).toHaveAttribute('aria-pressed', 'true');
 });
+
+test('Escape during a drag leaves a sketch where it was, and releasing the pointer afterwards moves nothing', async ({ page }) => {
+  await open(page);
+  await page.locator('.dc-canvas').focus();
+  await page.keyboard.press('p');
+  // A long stroke under the API, drawn with the Pencil and left as ink (a plain line is only ever ink).
+  const api = await box(page, 'API');
+  const y = api.y + api.height + 60;
+  await stroke(page, [[api.x, y], [api.x + 120, y + 3], [api.x + 240, y]]);
+  await expect(strokes(page)).toHaveCount(1);
+  await page.keyboard.press('Escape');
+  const at = () => page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    return (useEditorStore.getState().document.ink ?? []).map((s: { x: number; y: number }) => [s.x, s.y]);
+  });
+  const before = await at();
+  const steps = await page.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().history.past.length);
+
+  const hit = strokes(page).first().locator('path').last();
+  const box0 = (await hit.boundingBox())!;
+  const from = { x: box0.x + box0.width / 2, y: box0.y + box0.height / 2 };
+  const history = () => page.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().history.past.length);
+
+  // Control: dragged and let go, the sketch moves, as one step.
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 80, from.y + 70, { steps: 8 });
+  await page.mouse.up();
+  expect(await at()).not.toEqual(before);
+  expect(await history()).toBe(steps + 1);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect.poll(at).toEqual(before);
+
+  // Pick it up and drag it a long way, then Escape before letting go: it stays where it was.
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  await page.mouse.move(from.x + 80, from.y + 70, { steps: 8 });
+  await page.keyboard.press('Escape');
+  await page.mouse.up();
+  expect(await at()).toEqual(before);
+  expect(await history()).toBe(steps);
+});

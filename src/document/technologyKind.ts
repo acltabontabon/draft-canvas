@@ -13,12 +13,15 @@ type KindPatch =
   | { type: 'database'; databaseKind: DatabaseKind }
   | { type: 'queue'; queueKind: QueueKind };
 
-const DATABASE: Record<string, DatabaseKind> = {};
-const QUEUE: Record<string, QueueKind> = {};
-const SERVICE: Record<string, ServiceKind> = {};
+// Maps, not plain objects: the key is text the person typed, and "constructor", "__proto__" or
+// "toString" on a plain `{}` table finds Object.prototype's function, which then lands in
+// `databaseKind` and makes the file impossible to structured-clone (every autosave failed).
+const DATABASE = new Map<string, DatabaseKind>();
+const QUEUE = new Map<string, QueueKind>();
+const SERVICE = new Map<string, ServiceKind>();
 
-function add<K extends string>(table: Record<string, K>, kind: K, names: string[]) {
-  for (const name of names) table[name] = kind;
+function add<K extends string>(table: Map<string, K>, kind: K, names: string[]) {
+  for (const name of names) table.set(name, kind);
 }
 
 add(DATABASE, 'cache', ['redis', 'memcached', 'valkey', 'keydb', 'elasticache', 'amazon elasticache', 'aws elasticache']);
@@ -72,9 +75,18 @@ export function kindForTechnology(type: DraftNode['type'], technology: string | 
   if (!technology) return null;
   const product = productOf(technology);
   if (!product) return null;
-  if (type === 'database' && DATABASE[product]) return { type, databaseKind: DATABASE[product] };
-  if (type === 'queue' && QUEUE[product]) return { type, queueKind: QUEUE[product] };
-  if (type === 'service' && SERVICE[product]) return { type, serviceKind: SERVICE[product] };
+  if (type === 'database') {
+    const databaseKind = DATABASE.get(product);
+    if (databaseKind) return { type, databaseKind };
+  }
+  if (type === 'queue') {
+    const queueKind = QUEUE.get(product);
+    if (queueKind) return { type, queueKind };
+  }
+  if (type === 'service') {
+    const serviceKind = SERVICE.get(product);
+    if (serviceKind) return { type, serviceKind };
+  }
   return null;
 }
 

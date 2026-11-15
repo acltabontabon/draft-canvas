@@ -1,5 +1,6 @@
 import { useUiStore } from '../store/uiStore';
 import { createDocument } from '../document/factory';
+import { DEFAULT_TITLE } from '../document/sanitize';
 import type { DraftDocument } from '../document/types';
 import { deserializeDocument, fileNameFor, serializeDocument } from '../export/project';
 import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
@@ -515,7 +516,7 @@ export class DesktopController {
     if (this.dirty) return { opened: false, reason: `${this.displayName} has unsaved changes.` };
     const opened = await this.api.openHandle(handle);
     const parsed = deserializeDocument(opened.text);
-    if (!parsed.ok) return { opened: false, reason: `${opened.name}.draftcanvas can't be opened: ${parsed.error}` };
+    if (!parsed.ok) return { opened: false, reason: `${opened.name}.draftcanvas can’t be opened: ${parsed.error}` };
     const pending = (await this.api.recoveryList()).some((entry) => entry.origin.kind === 'file' && entry.origin.displayPath === opened.displayPath);
     if (pending) {
       return { opened: false, reason: `Draft Canvas kept unsaved changes to ${opened.name}.draftcanvas from an earlier session; the person should open it and decide what to keep.` };
@@ -935,7 +936,7 @@ export class DesktopController {
     await this.swap('Couldn’t create the canvas', async () => {
       if (!(await this.settleBeforeLeaving())) return;
       const blank = encoder.encode(serializeDocument(createDocument()));
-      const saved = await this.api.saveAs('Untitled canvas', blank);
+      const saved = await this.api.saveAs(DEFAULT_TITLE, blank);
       if (!saved) {
         // Whatever was open stays open; its snapshot was settled above and is only rewritten on the next edit.
         if (this.dirty) this.scheduleSnapshot();

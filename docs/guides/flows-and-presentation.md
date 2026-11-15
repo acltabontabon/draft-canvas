@@ -74,6 +74,6 @@ Add replies, conditions and loops there. The flow itself is not changed.
 
 ## Export a flow
 
-**Share → Export → Other formats → Sequences** (`⌘⇧E`) turns each flow, and each sequence on the
+**Share → Export… → Other formats → Sequences** (`⌘⇧E`) turns each flow, and each sequence on the
 canvas, into a **Mermaid** or **PlantUML** sequence diagram, nested levels included. With a flow selected, an image export numbers its
 connectors. See [Saving and sharing](saving-and-sharing.md).

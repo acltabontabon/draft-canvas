@@ -341,8 +341,8 @@ function ElementInspectorBody({
     return out;
   };
 
-  // Measured, not guessed: the toolbar wraps to two rows below 720px (see app.css's
-  // `@media (max-width: 720px)` block), and a long diagram title can force that wrap even above
+  // Measured, not guessed: the toolbar wraps to two rows below 720px (the later `@media (max-width: 720px)`
+  // block in app.css, the one with `.dc-toolbar`'s grid areas — not the Library's), and a long diagram title can force that wrap even above
   // it — a static constant can't account for either. `TOP_CLEARANCE` stays as the fallback for
   // the (rare) frame where `.dc-toolbar` isn't in the DOM yet.
   const measuredToolbarHeight = useToolbarHeight(true);
@@ -371,7 +371,7 @@ function ElementInspectorBody({
   // `frozen` while hidden mid-gesture: no layout read, no transform write per frame for a popover
   // nobody can see — it re-places on the render that ends the gesture.
   const { target, placement } = useOverlayPosition<Placement>(panelRef, beside || displayNode?.type === 'ellipse' ? 'right' : 'above', (frame, current) => {
-    if (!anchors) return null;
+    if (!anchors || !rect) return null;
     // Read at placement time, not render time: a docked panel changes where the canvas ends
     // after this rendered (see `useOverlayPosition`'s canvas observer) — plus the Flows panel while
     // it's open. See `canvasFrame.ts`.
@@ -379,8 +379,15 @@ function ElementInspectorBody({
     const next = interactionActive
       ? current
       : resolvePlacement(current, anchors, frame.flowToScreenPosition, frame.size, clearances, connectedRects());
+    // Clamped on screen, a popover whose shape is wholly out of view (the window was made smaller, or
+    // the camera panned away) floats over empty canvas pointing at nothing. Hidden then, in place —
+    // it returns, state and all, when the shape does.
+    const from = frame.flowToScreenPosition({ x: rect.x, y: rect.y });
+    const to = frame.flowToScreenPosition({ x: rect.x + rect.width, y: rect.y + rect.height });
+    const hidden = to.x < frame.root.left || from.x > frame.root.right || to.y < frame.root.top || from.y > frame.root.bottom;
     return {
       placement: next,
+      hidden,
       transform: placementTransform(next, anchors, frame.size, clearances, frame.flowToScreenPosition, frame.screenToOverlay),
     };
   }, interactionActive || dragControl.moved);
@@ -711,6 +718,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
               <Button
                 variant="quiet"
                 className="dc-element-technology"
+                data-empty={node.technology ? undefined : 'true'}
                 aria-label={node.technology ? `Technology: ${node.technology}, edit` : 'Details'}
                 aria-expanded={openPanel === 'details'}
                 {...tip}
@@ -719,7 +727,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
                 <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
                   <path d={technologyIcon.path} fill="currentColor" />
                 </svg>
-                <span>{node.technology || 'Details'}</span>
+                {node.technology && <span>{node.technology}</span>}
               </Button>
             )}
           </Tooltip>
@@ -729,7 +737,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           {directCommands.map((command) => {
             const action = command.id === 'edit-text'
               ? { icon: 'pencil' as const, label: node.type === 'group' ? 'Edit caption' : 'Edit text', description: 'Change the name shown on the canvas.' }
-              : { icon: 'trash' as const, label: 'Delete', description: 'Remove this shape and its connections.' };
+              : { icon: 'trash' as const, label: 'Delete', description: 'Remove this shape and its connectors.' };
             return (
               <Tooltip key={command.id} content={{ title: action.label, description: action.description }}>
                 {(tip) => (

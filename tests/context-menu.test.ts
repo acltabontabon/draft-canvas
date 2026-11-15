@@ -433,7 +433,7 @@ describe('contextMenuCommandsFor — a multi-selection', () => {
     state.setSelection({ nodes: [a.id, b.id, c.id], edges: [] });
     ids = idsOf(selectionMenu());
     // Align and distribute share one row of icons under a header that counts the selection.
-    expect(selectionMenu()[0]).toEqual({ type: 'header', title: '3 elements' });
+    expect(selectionMenu()[0]).toEqual({ type: 'header', title: '3 shapes' });
     expect(selectionMenu().find((entry) => entry.type === 'icons')?.items).toHaveLength(8);
     expect(ids).toContain('align-left');
     expect(ids).toContain('distribute-x');

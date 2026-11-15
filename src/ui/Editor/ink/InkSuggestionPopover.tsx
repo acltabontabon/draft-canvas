@@ -6,7 +6,7 @@ import { clamp } from '../../../lib/math';
 import { useEditorStore } from '../../../store/editorStore';
 import { useUiStore } from '../../../store/uiStore';
 import { ToolGlyph } from '../toolbar/ToolGlyph';
-import { chooseSuggestion, keepAsSketch } from '../../../canvas/inkSession';
+import { chooseSuggestion, keepAsSketch, offerStale } from '../../../canvas/inkSession';
 import { useOverlayPosition } from '../../../canvas/useOverlayPosition';
 
 const GAP = 10;
@@ -37,10 +37,12 @@ export function InkSuggestionPopover() {
   const room = useEditorStore((state) => pathKey(state.path));
   const node = useEditorStore((state) => (suggestion?.nodeId ? state.document.nodes.find((n) => n.id === suggestion.nodeId) : undefined));
   const presenting = useEditorStore((state) => state.mode === 'present');
+  // An offer whose strokes are gone (undone, erased): a boolean, so nothing re-renders per edit.
+  const strokesGone = useEditorStore((state) => suggestion?.mode === 'offer' && offerStale(suggestion, state.document, pathKey(state.path)));
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // Its drawing is gone (undone, deleted, another room, another canvas): nothing left to offer.
-  const stale = suggestion !== null && (suggestion.room !== room || presenting || (suggestion.mode === 'converted' && !node));
+  // Its drawing is gone (undone, erased, deleted, another room, another canvas): nothing left to offer.
+  const stale = suggestion !== null && (suggestion.room !== room || presenting || strokesGone || (suggestion.mode === 'converted' && !node));
   useEffect(() => {
     if (stale) useUiStore.getState().setInkSuggestion(null);
   }, [stale]);

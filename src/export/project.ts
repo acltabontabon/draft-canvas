@@ -80,7 +80,7 @@ export async function readImportText(file: File): Promise<{ ok: true; text: stri
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : 'That file could not be read.',
+      error: error instanceof Error ? error.message : 'That file couldn’t be read.',
     };
   }
 }

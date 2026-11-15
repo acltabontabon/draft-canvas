@@ -91,7 +91,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
     if (first === undefined) continue;
     const base = { severity: 'unknown' as const, basis: 'structural' as const, nodeIds: diagnostic.nodeIds, edgeIds: diagnostic.edgeIds };
     if (diagnostic.kind === 'undirected') {
-      add({ ...base, kind: 'undirected', text: `The line between ${name(first)} and ${name(second!)} has no direction, so it isn't read as traffic.` });
+      add({ ...base, kind: 'undirected', text: `The line between ${name(first)} and ${name(second!)} has no direction, so it isn’t read as traffic.` });
     } else if (diagnostic.kind === 'unsupported-hop') {
       const middle = nodes.get(first)!;
       add({
@@ -116,7 +116,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       add({
         ...base,
         kind: 'conflicting-semantics',
-        text: `The connectors through ${name(first)} between ${name(second!)} and ${name(rest[0]!)} say different things, so that route isn't counted.`,
+        text: `The connectors through ${name(first)} between ${name(second!)} and ${name(rest[0]!)} say different things, so that route isn’t counted.`,
       });
     } else {
       add({
@@ -124,7 +124,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
         kind: 'dangling-junction',
         text:
           second === undefined
-            ? `Nothing leads into ${name(first)}, so what leaves it isn't counted.`
+            ? `Nothing leads into ${name(first)}, so what leaves it isn’t counted.`
             : `Traffic from ${name(first)} ends at ${name(second)} — nothing leads on from it.`,
       });
     }
@@ -245,7 +245,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       focus: externals,
       text: fallback
         ? `${name(caller)} waits on ${names(externals)} synchronously. A fallback is drawn from ${name(caller)}, but not which of its calls it covers — check that ${externals.length === 1 ? 'this one is' : 'these are'} among them.`
-        : `${name(caller)} waits on ${names(externals)} synchronously and no fallback is drawn — slowdowns or failures could affect ${name(caller)}. Timeouts and error handling are not shown. If a fallback exists, draw what ${name(caller)} falls back to — another provider, a cached answer, a queue to retry from — and set that connector's behaviour to Fallback.`,
+        : `${name(caller)} waits on ${names(externals)} synchronously and no fallback is drawn — slowdowns or failures could affect ${name(caller)}. Timeouts and error handling are not shown. If a fallback exists, draw what ${name(caller)} falls back to — another provider, a cached answer, a queue to retry from — and set that connector’s behaviour to Fallback.`,
     });
   }
   for (const node of analysis.nodes.values()) {
@@ -260,7 +260,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       basis: 'modeled',
       nodeIds: [node.id, ...callers],
       edgeIds: [],
-      text: `${names(callers)} all depend on ${name(node.id)}, which you don't run: its outages and limits could affect them. Check their timeouts, fallbacks and provider guarantees.`,
+      text: `${names(callers)} all depend on ${name(node.id)}, which you don’t run: its outages and limits could affect them. Check their timeouts, fallbacks and provider guarantees.`,
     });
   }
 
@@ -309,7 +309,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       edgeIds: [],
       note: 'around the gateway?',
       focus: [node.id],
-      text: `${name(node.id)} sits behind ${names(gateways)}, and ${names(around)} also ${around.length === 1 ? 'calls' : 'call'} it directly. Whether that path is meant to skip what the gateway does — authentication, throttling, routing — isn't shown; worth confirming it is intentional.`,
+      text: `${name(node.id)} sits behind ${names(gateways)}, and ${names(around)} also ${around.length === 1 ? 'calls' : 'call'} it directly. Whether that path is meant to skip what the gateway does — authentication, throttling, routing — isn’t shown; worth confirming it is intentional.`,
     });
   }
 
@@ -638,7 +638,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       text:
         component.members.length === 1
           ? `${name(component.members[0]!)} sends traffic back to itself — if that repeats unchecked it feeds on its own load. Counted once here.`
-          : `${names(component.members)} call each other in a loop — under a retry or a failure it can feed itself and spread between them. Counted once here; how often it repeats isn't drawn.`,
+          : `${names(component.members)} call each other in a loop — under a retry or a failure it can feed itself and spread between them. Counted once here; how often it repeats isn’t drawn.`,
     });
   }
 
@@ -669,7 +669,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       basis: 'structural',
       nodeIds: [id, ...routed.map((interaction) => interaction.to)],
       edgeIds: routed.flatMap((interaction) => interaction.edgeIds),
-      text: `${name(id)} routes each request to one of ${names(routed.map((interaction) => interaction.to))}, so they are counted as possibly reached; which routes carry most of the traffic isn't drawn.`,
+      text: `${name(id)} routes each request to one of ${names(routed.map((interaction) => interaction.to))}, so they are counted as possibly reached; which routes carry most of the traffic isn’t drawn.`,
     });
   }
 
@@ -702,7 +702,7 @@ export function buildInsights(analysis: TrafficAnalysis, context: AnalysisContex
       basis: 'structural',
       nodeIds: [],
       edgeIds: leftEdges,
-      text: `${joinNames(pieces)} ${total === 1 ? "isn't" : "aren't"} part of baseline traffic.`,
+      text: `${joinNames(pieces)} ${total === 1 ? "isn’t" : "aren’t"} part of baseline traffic.`,
     });
   }
 

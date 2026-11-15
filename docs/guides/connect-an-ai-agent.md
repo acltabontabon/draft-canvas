@@ -105,8 +105,8 @@ into view. Ask Nodi to adjust it ("keep the cache, but use Redis") and it revise
 the same proposal; the chip lists earlier versions. **Review changes first** under the message box
 switches to **Apply changes directly**, where changes land at once and Undo takes them back.
 
-Ask for all nodes in one horizontal row or vertical column when you want them aligned; automatic
-layout's reading direction can put several nodes in the same layer. Nodi can place and route shapes
+Ask for all shapes in one horizontal row or vertical column when you want them aligned; automatic
+layout's reading direction can put several shapes in the same layer. Nodi can place and route shapes
 exactly for a specific arrangement. Short replies such as **yes** or
 **okay** continue the agent's conversation, including when it asks you to confirm a change.
 To insert a starter directly, name it or use its alias (for example, **start Change Data Capture** or

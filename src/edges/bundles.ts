@@ -72,7 +72,7 @@ export const MIN_FAN_SPREAD = 32;
 const TRUNK_BIAS = 0.62;
 
 /** Clearance kept between the trunk and any node it would otherwise run through. */
-const TRUNK_OBSTACLE_MARGIN = 20;
+export const TRUNK_OBSTACLE_MARGIN = 20;
 
 /**
  * Total obstacle-rect checks a single `computePlan` call may spend across every

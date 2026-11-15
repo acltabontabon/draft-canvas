@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { ReactFlowProvider } from '@xyflow/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { FlowPanel } from '../src/ui/Editor/FlowPanel';
@@ -210,6 +210,42 @@ describe('FlowPanel', () => {
     });
     act(() => stale.action!.run());
     expect(useEditorStore.getState().document.flows.map((flow) => flow.title)).toEqual(['Refunds']);
+  });
+
+  it('is a tree, as the Outline is: treeitems with aria-expanded, steps in a nested group, one row in the Tab order', () => {
+    const edge = addConnectedPair();
+    const state = useEditorStore.getState();
+    const checkout = state.createFlow('Checkout')!;
+    state.addEdgeToFlow(checkout, edge.id);
+    state.createFlow('Refund');
+    mount();
+    const tree = screen.getByRole('tree', { name: 'Flows' });
+    // The old listbox made its options' buttons and step list presentational; a tree keeps them.
+    expect(screen.queryByRole('listbox')).toBeNull();
+    const items = screen.getAllByRole('treeitem', { name: /./ }).filter((item) => item.getAttribute('aria-level') === '1');
+    expect(items.map((item) => item.getAttribute('aria-label'))).toEqual([
+      'Whole diagram, everything, nothing dimmed',
+      'Checkout, 1 step',
+      'Refund, no steps',
+    ]);
+    expect(items[1]!.getAttribute('aria-expanded')).toBe('false');
+    expect(items[0]!.hasAttribute('aria-expanded')).toBe(false); // nothing to open under "Whole diagram"
+    // Roving tabindex: the chosen row, or "Whole diagram" while none is.
+    expect(items.map((item) => item.tabIndex)).toEqual([0, -1, -1]);
+
+    fireEvent.click(within(items[1]!).getByRole('button', { name: 'Expand' }));
+    const group = within(tree).getByRole('group');
+    const steps = within(group).getAllByRole('treeitem');
+    expect(steps).toHaveLength(1);
+    expect(steps[0]!.getAttribute('aria-level')).toBe('2');
+    expect(steps[0]!.getAttribute('aria-label')).toBe('Step 1: A to B, calls');
+    expect(within(steps[0]!).getByRole('button', { name: 'Remove step 1' })).toBeTruthy();
+
+    // Focus moves the tab stop with it; arrows still walk the rows.
+    act(() => items[2]!.focus());
+    expect(items.map((item) => item.tabIndex)).toEqual([-1, -1, 0]);
+    fireEvent.keyDown(items[2]!, { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(items[1]);
   });
 
   it('Right and Left expand and collapse a focused flow row', () => {

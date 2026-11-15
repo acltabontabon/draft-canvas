@@ -25,7 +25,7 @@ export async function backUpLibrary(repository: DraftRepository, notify: Notify)
     // Written once the download was handed over, not when it was asked for: a Save dialog that
     // was cancelled (the desktop app rejects with `AbortError`) must not count as a backup.
     if (skipped.length) {
-      notify(`Partial backup: saved ${count === 1 ? '1 diagram' : `${count} diagrams`}; ${skipped.length} could not be read. Keep your earlier backup.`, 'error');
+      notify(`Partial backup: saved ${count === 1 ? '1 diagram' : `${count} diagrams`}; ${skipped.length} couldn’t be read. Keep your earlier backup.`, 'error');
       return;
     }
     writePreference(LAST_BACKUP_PREFERENCE, new Date().toISOString());
@@ -33,7 +33,7 @@ export async function backUpLibrary(repository: DraftRepository, notify: Notify)
     notify(`Backed up ${count === 1 ? '1 diagram' : `${count} diagrams`}.`);
   } catch (error) {
     if ((error instanceof Error || error instanceof DOMException) && error.name === 'AbortError') return;
-    notify(error instanceof Error ? error.message : 'The backup could not be written.', 'error');
+    notify(error instanceof Error ? error.message : 'The backup couldn’t be written.', 'error');
   }
 }
 

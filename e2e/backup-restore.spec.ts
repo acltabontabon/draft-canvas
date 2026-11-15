@@ -40,7 +40,7 @@ test('two diagrams survive Back up → fresh storage → Restore', async ({ page
   await expect(other.locator('.dc-library-item')).toHaveCount(0);
   // The first run has no Restore button in its action row; a stored diagram brings the Library
   // back, so one is made and the backup restored beside it — never over it.
-  await other.getByRole('button', { name: 'New canvas' }).click();
+  await other.getByRole('button', { name: 'Quick Draft' }).click();
   await expect(other.locator('.dc-editor')).toBeVisible();
   await other.getByRole('button', { name: 'Back to your diagrams' }).click();
   await openGallery(other);

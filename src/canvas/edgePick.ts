@@ -42,9 +42,9 @@ const TIE_PX = 1;
 
 const EDGE_SELECTOR = '.react-flow__edge[data-id]';
 const OVERLAY_SELECTOR = '[data-edge-overlay]';
-/** Canvas surfaces with nothing of their own to click: looked through, never a reason to stop. */
 /** The bottom of the canvas's stack: nothing that can be clicked lies beneath it. */
 const PANE_SELECTOR = '.react-flow__pane, .react-flow__background';
+/** Canvas surfaces with nothing of their own to click: looked through, never a reason to stop. */
 const BACKDROP_SELECTOR = '.react-flow__pane, .react-flow__renderer, .react-flow__viewport, .react-flow__edges, .react-flow__edgelabel-renderer, .react-flow__nodes, .react-flow__background';
 
 function insideRect(clientX: number, clientY: number, element: Element): boolean {

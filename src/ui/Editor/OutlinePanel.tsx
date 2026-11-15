@@ -229,8 +229,15 @@ function OutlineTree({ buildCommandContext }: { buildCommandContext: () => Comma
     event.stopPropagation();
   };
 
+  // An empty tree is not a tree (it has no items for its role to own), and a bare panel says nothing:
+  // say what to do. The keys are the real ones — S makes a Service, a double-click opens the chooser.
   if (rows.length === 0) {
-    return <p className="dc-outline-empty dc-muted">Nothing in this view yet. Shapes appear here as they are added.</p>;
+    return (
+      <p className="dc-outline-empty dc-muted">
+        Nothing in this view yet. Press <kbd>S</kbd> to add a Service, or double-click the canvas to choose a shape. Shapes and
+        their connectors list here as you draw.
+      </p>
+    );
   }
 
   const selectedIds = new Set([...selection.nodes, ...selection.edges]);

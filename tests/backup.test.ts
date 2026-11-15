@@ -135,7 +135,7 @@ describe('restoreBackup', () => {
     expect(list).toHaveLength(4);
     // The newer local copy is untouched; the restored one sits beside it, in the same project.
     expect((await repository.load(orders.metadata.id))!.nodes).toHaveLength(0);
-    const copy = list.find((entry) => entry.title === 'Orders' && entry.id !== orders.metadata.id)!;
+    const copy = list.find((entry) => entry.title === 'Orders copy' && entry.id !== orders.metadata.id)!;
     expect((await repository.load(copy.id))!.nodes[0]!.text).toBe('Orders API');
     expect(copy.projectId).toBe('p_shop');
     expect((await repository.listProjects())[0]!.name).toBe('Shop (renamed)');
@@ -173,7 +173,7 @@ describe('restoreBackup', () => {
     const result = await restoreBackup(fresh, tampered);
     expect(result.restored).toBe(2);
     expect(result.skipped).toEqual(['junk-d_x.draftcanvas']);
-    expect(describeRestore(result)).toBe("Restored 2 diagrams; 1 file couldn't be read.");
+    expect(describeRestore(result)).toBe('Restored 2 diagrams; 1 file couldn’t be read.');
     await expect(restoreBackup(fresh, broken)).rejects.toThrow(/ZIP/);
   });
 
@@ -191,6 +191,32 @@ describe('restoreBackup', () => {
     const result = await restoreBackup(fresh, zipFiles(files));
     expect(result).toEqual({ restored: 3, renamed: 0, skipped: [] });
     expect((await fresh.list()).map((entry) => entry.title).sort()).toEqual(['A', 'B', 'C']);
+  });
+
+  it('restores the rest of an archive when one entry is compressed or corrupt, and names it', async () => {
+    const { repository } = await seeded();
+    const { bytes } = await buildBackup(repository);
+    const damaged = new Uint8Array(bytes);
+    const view = new DataView(damaged.buffer);
+    // The first diagram's central directory entry claims Deflate — what another tool's re-zip writes.
+    const centralStart = view.getUint32(damaged.length - 22 + 16, true);
+    view.setUint16(centralStart + 10, 8, true);
+    const fresh = new MemoryRepository();
+    const result = await restoreBackup(fresh, damaged);
+    expect(result.restored).toBe(1);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0]).toMatch(/\.draftcanvas$/);
+    expect(describeRestore(result)).toBe('Restored 1 diagram; 1 file couldn’t be read.');
+    expect(await fresh.list()).toHaveLength(1);
+  });
+
+  it('gives a diagram restored beside its twin a title that tells the two apart', async () => {
+    const { repository } = await seeded();
+    const { bytes } = await buildBackup(repository);
+    const result = await restoreBackup(repository, bytes);
+    expect(result.renamed).toBe(2);
+    const titles = (await repository.list()).map((entry) => entry.title).sort();
+    expect(titles).toEqual(['Billing', 'Billing copy', 'Orders', 'Orders copy']);
   });
 
   it('reports one failing entry as skipped and still restores the rest', async () => {

@@ -3,18 +3,20 @@ import { logDiagnostic } from '../lib/diagnostics';
 import { clamp } from '../lib/math';
 import {
   DocumentConflictError,
-  QuotaExceededError,
   reconcileMetadata,
   sharedMetadataOf,
   type DraftRepository,
   type SharedMetadata,
 } from './DraftRepository';
+import { saveFailureMessage, saveFailureOf, type SaveFailure } from './saveFailure';
 
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 export interface SaveState {
   status: SaveStatus;
   message?: string;
+  /** Why the last write failed, when it did and it was not a conflict — see `saveFailure.ts`. */
+  failure?: SaveFailure;
   lastSavedAt?: number;
   /** Saving is paused until the user picks a copy — see `Autosave.resolveConflict`. */
   conflict?: DocumentConflictError['kind'];
@@ -27,6 +29,10 @@ export interface AutosaveOptions {
   debounceMs?: number;
   /** Upper bound on how long continuous editing can defer a write. */
   maxWaitMs?: number;
+  /** Quiet period before a write that only moves the camera (pan, zoom). Default: `CAMERA_PATIENCE` times `debounceMs`. */
+  cameraDebounceMs?: number;
+  /** Upper bound on how long continuous panning and zooming can defer that write. Default: `CAMERA_PATIENCE / 2` times `maxWaitMs`. */
+  cameraMaxWaitMs?: number;
   /** A save kept a rename or move made elsewhere; the open document should take it on too. */
   onMetadataAdopted?: (documentId: string, metadata: SharedMetadata) => void;
   /** A save found the stored copy deleted or changed elsewhere; saving waits for `resolveConflict`. */
@@ -50,6 +56,13 @@ export interface Unsaved {
 
 const DEBOUNCE_MS = 700;
 const MAX_WAIT_MS = 4000;
+/**
+ * A write of only the camera still rewrites the whole body (about 1 MB at 3000 shapes), and a pan or
+ * zoom produces a new camera every frame. It waits five times as long as an edit does for the person
+ * to stop (3.5 s), and when they never do still lands every 10 s — rarely enough to be cheap, often
+ * enough that a crash loses little more than where they were looking.
+ */
+const CAMERA_PATIENCE = 5;
 /** Below this, a write is too quick to be worth showing — it would only flicker. */
 const SHOW_SAVING_AFTER_MS = 300;
 /** Long enough for "Saved locally" to actually be read. */
@@ -80,6 +93,8 @@ export class Autosave {
   private readonly onStateChange: (state: SaveState) => void;
   private readonly debounceMs: number;
   private readonly maxWaitMs: number;
+  private readonly cameraDebounceMs: number;
+  private readonly cameraMaxWaitMs: number;
   private readonly onMetadataAdopted: AutosaveOptions['onMetadataAdopted'];
   private readonly onConflict: AutosaveOptions['onConflict'];
   private readonly onSaved: AutosaveOptions['onSaved'];
@@ -105,6 +120,8 @@ export class Autosave {
   private savingIndicator: ReturnType<typeof setTimeout> | null = null;
   private savedHold: ReturnType<typeof setTimeout> | null = null;
   private firstDirtyAt = 0;
+  /** The write waiting on `timer` carries nothing but the camera — see `schedule`. */
+  private waitingOnCamera = false;
   private disposed = false;
   /** Set while the stored copy was deleted or changed elsewhere: nothing is written until resolved. */
   private conflict: DocumentConflictError['kind'] | null = null;
@@ -119,6 +136,8 @@ export class Autosave {
     this.onStateChange = options.onStateChange;
     this.debounceMs = options.debounceMs ?? DEBOUNCE_MS;
     this.maxWaitMs = options.maxWaitMs ?? MAX_WAIT_MS;
+    this.cameraDebounceMs = options.cameraDebounceMs ?? this.debounceMs * CAMERA_PATIENCE;
+    this.cameraMaxWaitMs = options.cameraMaxWaitMs ?? this.maxWaitMs * (CAMERA_PATIENCE / 2);
     this.onMetadataAdopted = options.onMetadataAdopted;
     this.onConflict = options.onConflict;
     this.onSaved = options.onSaved;
@@ -207,7 +226,7 @@ export class Autosave {
         if (!this.conflict) {
           this.lastFailed = false;
           if (this.state.status === 'dirty' || this.state.status === 'error') {
-            this.emit({ status: 'idle', message: undefined });
+            this.emit({ status: 'idle', message: undefined, failure: undefined });
           }
         }
       }
@@ -217,11 +236,21 @@ export class Autosave {
     this.queue.set(id, { document, cameraOnly: options?.cameraOnly === true && (queued === undefined || queued.cameraOnly) });
     // Kept, not written: the conflict (and its message) stays up until the user resolves it.
     if (this.conflict) return;
-    if (this.firstDirtyAt === 0) this.firstDirtyAt = Date.now();
-    this.emit({ status: 'dirty' });
+    // The last write failed, and the status bar is asking what to do about it: moving the camera is
+    // not an answer, and retrying the whole body on every frame of a pan would only fail again.
+    if (this.lastFailed && options?.cameraOnly === true) return;
+    // Looking around is not unsaved work: the status stays as it was (a failed save keeps asking for
+    // its Retry and Export), and the write waits longer — see `CAMERA_PATIENCE`. The first real
+    // edit starts the ordinary clock over, so a long pan before it does not make it write at once.
+    const cameraOnly = [...this.queue.values()].every((entry) => entry.cameraOnly);
+    if (this.firstDirtyAt === 0 || (this.waitingOnCamera && !cameraOnly)) this.firstDirtyAt = Date.now();
+    this.waitingOnCamera = cameraOnly;
+    if (!cameraOnly) this.emit({ status: 'dirty' });
 
     const waited = Date.now() - this.firstDirtyAt;
-    const delay = clamp(this.maxWaitMs - waited, 0, this.debounceMs);
+    const delay = cameraOnly
+      ? clamp(this.cameraMaxWaitMs - waited, 0, this.cameraDebounceMs)
+      : clamp(this.maxWaitMs - waited, 0, this.debounceMs);
 
     if (this.timer) clearTimeout(this.timer);
     this.timer = setTimeout(() => void this.flush(), delay);
@@ -265,10 +294,14 @@ export class Autosave {
     this.writing = document;
     this.writingCameraOnly = cameraOnly && !this.overwriteNext;
     this.firstDirtyAt = 0;
+    this.waitingOnCamera = false;
 
-    this.savingIndicator = setTimeout(() => {
-      if (this.inFlight) this.emit({ status: 'saving' });
-    }, SHOW_SAVING_AFTER_MS);
+    // Not for a camera move: nobody asked for that write, so it has no business flickering the bar.
+    if (!this.writingCameraOnly) {
+      this.savingIndicator = setTimeout(() => {
+        if (this.inFlight) this.emit({ status: 'saving' });
+      }, SHOW_SAVING_AFTER_MS);
+    }
 
     const trackedAtStart = this.loaded.get(id);
     try {
@@ -297,9 +330,9 @@ export class Autosave {
       if (this.queue.size > 0) {
         // Edits queued during this write are still unsaved; "Saved" now would be a claim the next
         // write might fail to keep. The status stays dirty until that one lands.
-        this.emit({ status: 'dirty', lastSavedAt: Date.now(), message: undefined, conflict: undefined });
+        this.emit({ status: 'dirty', lastSavedAt: Date.now(), message: undefined, failure: undefined, conflict: undefined });
       } else {
-        this.emit({ status: 'saved', lastSavedAt: Date.now(), message: undefined, conflict: undefined });
+        this.emit({ status: 'saved', lastSavedAt: Date.now(), message: undefined, failure: undefined, conflict: undefined });
         if (this.savedHold) clearTimeout(this.savedHold);
         this.savedHold = setTimeout(() => {
           if (this.state.status === 'saved') this.emit({ status: 'idle', lastSavedAt: Date.now() });
@@ -325,13 +358,8 @@ export class Autosave {
         return;
       }
       // The in-memory document is untouched, so the user can still export it.
-      this.emit({
-        status: 'error',
-        message:
-          error instanceof QuotaExceededError
-            ? error.message
-            : 'Could not save to this browser. Export your diagram to keep a copy.',
-      });
+      const failure = saveFailureOf(error);
+      this.emit({ status: 'error', failure, message: saveFailureMessage(failure) });
       logDiagnostic(error, { operation: 'autosave' });
     } finally {
       this.inFlight = false;
@@ -357,7 +385,7 @@ export class Autosave {
       this.queue.delete(id);
       // Anything queued for another canvas meanwhile is still owed.
       if (this.queue.size > 0) return this.flush();
-      this.emit({ status: 'idle', message: undefined, conflict: undefined });
+      this.emit({ status: 'idle', message: undefined, failure: undefined, conflict: undefined });
       return true;
     }
     if (!this.queue.has(id) && document?.metadata.id === id) this.queue.set(id, { document, cameraOnly: false });
@@ -369,6 +397,27 @@ export class Autosave {
     }
     this.overwriteNext = true;
     return this.flush();
+  }
+
+  /**
+   * Gives up what was queued for one document — the person chose to leave without saving it (after a
+   * failed save, with the copy exported or not wanted). Nothing else is touched: another document's
+   * pending write is still owed.
+   */
+  discardPending(documentId: string): void {
+    this.queue.delete(documentId);
+    this.lastFailed = false;
+    if (this.queue.size === 0) {
+      if (this.timer) {
+        clearTimeout(this.timer);
+        this.timer = null;
+      }
+      this.firstDirtyAt = 0;
+      this.waitingOnCamera = false;
+      if (!this.conflict) this.emit({ status: 'idle', message: undefined, failure: undefined });
+    } else if (!this.timer && !this.disposed) {
+      this.timer = setTimeout(() => void this.flush(), 0);
+    }
   }
 
   dispose(): void {

@@ -10,13 +10,19 @@ import { createId } from './ids';
 import { INK_ID_PREFIX } from './ink';
 import { OPEN_POINT_ID_PREFIX, pruneOpenPoints } from './openPoints';
 import { defaultSizeFor, maxSizeFor } from './factory';
+import { anchorBandOf } from './queueGeometry';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
-import { cleanText, cleanTextFields } from './sanitize';
+import { cleanDescription, cleanEdgeLabel, cleanText, cleanTextFields, cleanTitle, cleanTechnology } from './sanitize';
+import { replicasField } from './replicas';
+import { finite, oneOf, safeId } from './validationValues';
 import { dropParticipantLinks, mapSequenceText, repointParticipantLinks } from './sequenceOps';
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
+import { BACKGROUND_FITS, GRID_MODES } from './types';
 import type {
+  BackgroundFit,
+  BackgroundSettings,
   DraftInk,
   Attachment,
   DraftDocument,
@@ -29,6 +35,7 @@ import type {
   EdgeAnchor,
   DraftViewport,
   DraftSettings,
+  GridMode,
   Side,
   OpenPoint,
   OpenPointTarget,
@@ -114,13 +121,44 @@ export function addEdges(doc: DraftDocument, edges: DraftEdge[]): DraftDocument 
   return withEdges(doc, [...doc.edges, ...accepted]);
 }
 
+/**
+ * What a patch to a node is held to, so a save never holds what the next open would change: the C4
+ * text kept the way `normalizeDocument` keeps it (trimmed, a technology on one line, nothing left
+ * means no field), `z` and `replicas` within what a load accepts. The editor used to store a patch
+ * as given and a reload then clamped it, with nothing said.
+ */
+function heldToWhatALoadKeeps(patch: Partial<Omit<DraftNode, 'id'>>): Partial<Omit<DraftNode, 'id'>> {
+  let next = patch;
+  const set = <K extends Exclude<keyof DraftNode, 'id'>>(key: K, value: DraftNode[K]) => {
+    if (next === patch) next = { ...patch };
+    (next as Partial<DraftNode>)[key] = value;
+  };
+  if (typeof patch.technology === 'string') {
+    const technology = cleanTechnology(patch.technology);
+    if (technology !== patch.technology) set('technology', technology);
+  }
+  if (typeof patch.description === 'string') {
+    const description = cleanDescription(patch.description);
+    if (description !== patch.description) set('description', description);
+  }
+  if (typeof patch.z === 'number') {
+    const z = Math.round(clamp(finite(patch.z, 0), -LIMITS.maxZ, LIMITS.maxZ));
+    if (z !== patch.z) set('z', z);
+  }
+  if (typeof patch.replicas === 'number') {
+    const replicas = replicasField(patch.replicas);
+    if (replicas !== patch.replicas) set('replicas', replicas);
+  }
+  return next;
+}
+
 export function updateNode(
   doc: DraftDocument,
   id: string,
   patch: Partial<Omit<DraftNode, 'id'>>,
 ): DraftDocument {
   let changed = false;
-  patch = cleanTextFields(patch).patch;
+  patch = heldToWhatALoadKeeps(cleanTextFields(patch).patch);
   const nodes = doc.nodes.map((node) => {
     if (node.id !== id) return node;
     const next: DraftNode = applyPatch<DraftNode>(node, patch);
@@ -136,13 +174,20 @@ export function updateNode(
   return changed ? withNodes(doc, nodes) : doc;
 }
 
+/** A connector's label as a load keeps it: trimmed, and none at all when nothing is left. */
+function trimmedLabel(patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>): Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> {
+  if (typeof patch.label !== 'string') return patch;
+  const label = cleanEdgeLabel(patch.label);
+  return label === patch.label ? patch : { ...patch, label };
+}
+
 export function updateEdge(
   doc: DraftDocument,
   id: string,
   patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>,
 ): DraftDocument {
   let changed = false;
-  patch = cleanTextFields(patch).patch;
+  patch = trimmedLabel(cleanTextFields(patch).patch);
   const edges = doc.edges.map((edge) => {
     if (edge.id !== id) return edge;
     const next = applyPatch<DraftEdge>(edge, patch);
@@ -161,7 +206,7 @@ export function updateEdges(
 ): DraftDocument {
   if (ids.size === 0) return doc;
   let changed = false;
-  patch = cleanTextFields(patch).patch;
+  patch = trimmedLabel(cleanTextFields(patch).patch);
   const edges = doc.edges.map((edge) => {
     if (!ids.has(edge.id)) return edge;
     const next = applyPatch<DraftEdge>(edge, patch);
@@ -1290,6 +1335,34 @@ export interface PlaceNearOptions {
    * suggestion disappears.
    */
   avoid?: readonly Bounds[];
+  /**
+   * Level the connector the new node will be joined to the host by: a candidate to the right is set
+   * at the height that puts the two ends of that line on one level, and one below at the x that
+   * puts them one over the other — instead of top-to-top and left-to-left, which jogs the line
+   * whenever the two shapes' anchors are not at their boxes' centres (a Queue's anchor is its tube,
+   * a Data Store's its glyph). Without it, the candidates are exactly the fixed offsets they always
+   * were: `addConsumer` and `addDeadLetterQueue` want those, since `horizontalAnchorsFor` pins their
+   * connector only between shapes at the same `y`.
+   */
+  align?: PlaceAlignment;
+}
+
+/** Where each end of a left/right connector meets its shape, down from the shape's own top — see
+ *  `anchorOffsetY`. Only the vertical offsets are needed: a top/bottom connector meets every shape at
+ *  the middle of its width. */
+export interface PlaceAlignment {
+  host: number;
+  self: number;
+}
+
+/**
+ * How far down a shape a left/right connector meets it: the middle of its anchor band — a Queue's
+ * tube, a Data Store's glyph (`anchorBandOf`) — or of its height when the whole side is the anchor.
+ * What `edges/routing.ts` resolves a centred (offset `0.5`) left or right anchor to, minus the top.
+ */
+export function anchorOffsetY(shape: Pick<DraftNode, 'type' | 'width' | 'height'>): number {
+  const band = anchorBandOf({ type: shape.type, x: 0, y: 0, width: shape.width, height: shape.height });
+  return band ? (band.top + band.bottom) / 2 : shape.height / 2;
 }
 
 /**
@@ -1318,7 +1391,11 @@ export function tryPlaceNear(
   const foreignBoundaries = doc.nodes.filter(
     (n) => n.type === 'group' && n.id !== host.id && n !== options.parent && !containsRect(n, host),
   );
-  const candidates = orderCandidates(companionCandidates(host, size, gap, options.direction), options.parent, options.avoid);
+  const candidates = orderCandidates(
+    companionCandidates(host, size, gap, options.direction, options.align),
+    options.parent,
+    options.avoid,
+  );
   const chosen = candidates.find(
     (rect) => !obstacles.some((n) => rectsOverlap(rect, n)) && !foreignBoundaries.some((n) => rectsOverlap(rect, n)),
   );
@@ -1340,19 +1417,20 @@ export function placeNear(
 ): { x: number; y: number } {
   return (
     tryPlaceNear(doc, host, size, gap, options) ??
-    clampCompanion(companionCandidates(host, size, gap, options.direction)[0]!, host, size)
+    clampCompanion(companionCandidates(host, size, gap, options.direction, options.align)[0]!, host, size)
   );
 }
 
-/** Boundary-contained candidates first (their relative order otherwise preserved), then the rest —
- *  a no-op when `parent` is absent or nothing fits inside it. */
 /**
  * The candidate list, best first. Two preferences, in strict order of importance:
  *
- * 1. **Staying inside the host's boundary**, when any candidate can — membership is meaning, and a
- *    companion that leaves the boundary says something the diagram didn't.
- * 2. **Staying off the connectors already drawn here** — cosmetic, so it only ever reorders
- *    candidates that agree on the first question.
+ * 1. **Where it sits against the host's boundary** — membership is meaning, and a companion that
+ *    leaves the boundary says something the diagram didn't. Fully inside is best (it becomes a
+ *    member); fully outside is clean (it is visibly not one); a candidate that crosses the
+ *    boundary's edge is worst, since it looks like a member while not being one and stays behind
+ *    when the boundary moves. That last ranking applies even when no candidate fits inside.
+ * 2. **Staying off the connectors already drawn here** (and a boundary's title row) — cosmetic, so
+ *    it only ever reorders candidates that agree on the first question.
  *
  * Stable within each group, so with neither preference in play the order is exactly the authored
  * one. Neither preference can reject a candidate: that is `tryPlaceNear`'s own obstacle test.
@@ -1362,11 +1440,10 @@ function orderCandidates(
   parent?: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>,
   avoid?: readonly Bounds[],
 ): Bounds[] {
-  const insideAny = parent !== undefined && candidates.some((c) => containsRect(parent, c));
   const crowded = avoid !== undefined && avoid.length > 0;
-  if (!insideAny && !crowded) return candidates;
-  const rank = (c: Bounds) =>
-    (insideAny && !containsRect(parent!, c) ? 2 : 0) + (crowded && avoid!.some((a) => rectsOverlap(c, a)) ? 1 : 0);
+  if (parent === undefined && !crowded) return candidates;
+  const against = (c: Bounds) => (parent === undefined || containsRect(parent, c) ? 0 : rectsOverlap(c, parent) ? 4 : 2);
+  const rank = (c: Bounds) => against(c) + (crowded && avoid!.some((a) => rectsOverlap(c, a)) ? 1 : 0);
   return candidates
     .map((candidate, index) => ({ candidate, index }))
     .sort((a, b) => rank(a.candidate) - rank(b.candidate) || a.index - b.index)
@@ -1383,8 +1460,9 @@ export function companionRegion(
   size: { width: number; height: number },
   gap: number = COMPANION_GAP,
   direction: CompanionDirection = 'right',
+  align?: PlaceAlignment,
 ): Bounds {
-  return boundsOf(companionCandidates(host, size, gap, direction))!;
+  return boundsOf(companionCandidates(host, size, gap, direction, align))!;
 }
 
 function companionCandidates(
@@ -1392,12 +1470,18 @@ function companionCandidates(
   size: { width: number; height: number },
   gap: number,
   direction: CompanionDirection = 'right',
+  align?: PlaceAlignment,
 ): Bounds[] {
-  const right = { x: host.x + host.width + gap, y: host.y, ...size };
-  const below = { x: host.x, y: host.y + host.height + COMPANION_GAP, ...size };
+  // Levelled, the two ends of the line between host and companion meet at one height (beside) or one
+  // x (above and below); see `PlaceNearOptions.align`. The diagonal candidates are not on a shared
+  // axis with the host, so they keep their fixed offsets.
+  const rightY = align ? host.y + align.host - align.self : host.y;
+  const columnX = align ? host.x + (host.width - size.width) / 2 : host.x;
+  const right = { x: host.x + host.width + gap, y: rightY, ...size };
+  const below = { x: columnX, y: host.y + host.height + COMPANION_GAP, ...size };
   const belowRight = { x: host.x + host.width + gap, y: host.y + host.height + COMPANION_GAP, ...size };
   const aboveRight = { x: host.x + host.width + gap, y: host.y - size.height - COMPANION_GAP, ...size };
-  const furtherBelow = { x: host.x, y: host.y + host.height + COMPANION_GAP * 2 + size.height, ...size };
+  const furtherBelow = { x: columnX, y: host.y + host.height + COMPANION_GAP * 2 + size.height, ...size };
   return direction === 'below'
     ? [below, right, belowRight, aboveRight, furtherBelow]
     : [right, below, belowRight, aboveRight, furtherBelow];
@@ -1587,6 +1671,56 @@ export function reconcileAfterResize(doc: DraftDocument, id: string): DraftDocum
   return reconcileMembership(reconcileMembership(doc, [id]), affected);
 }
 
+/**
+ * A test of whether one node — carrying everything inside it — can sit under `parentId` without any
+ * boundary chain passing `LIMITS.maxGroupDepth` (what `validate` keeps, and what it repairs away on
+ * the next open, naming "invalid grouping links"). Built once for a parent so a group of hundreds
+ * costs one pass over the document. Without a parent there is nothing to exceed.
+ */
+function groupDepthCheck(doc: DraftDocument, parentId: string | undefined): (id: string) => boolean {
+  if (parentId === undefined) return () => true;
+  const byId = new Map(doc.nodes.map((node) => [node.id, node]));
+  // Boundaries above the node once moved: the parent and each of its own.
+  let above = 0;
+  const seen = new Set<string>();
+  for (let at = byId.get(parentId); at && !seen.has(at.id); at = at.parentId ? byId.get(at.parentId) : undefined) {
+    seen.add(at.id);
+    above += 1;
+  }
+  const below = new Map<string, string[]>();
+  for (const node of doc.nodes) {
+    if (!node.parentId) continue;
+    const list = below.get(node.parentId);
+    if (list) list.push(node.id);
+    else below.set(node.parentId, [node.id]);
+  }
+  return (id) => {
+    // The deepest descendant, level by level, with a guard against a loop in a damaged file.
+    let levels = 0;
+    const visited = new Set<string>([id]);
+    for (let level = [id]; level.length > 0; levels += 1) {
+      const next: string[] = [];
+      for (const at of level) {
+        for (const child of below.get(at) ?? []) {
+          if (visited.has(child)) continue;
+          visited.add(child);
+          next.push(child);
+        }
+      }
+      level = next;
+    }
+    // `levels` counts the node's own level too: a node with nothing inside it adds none.
+    return above + (levels - 1) <= LIMITS.maxGroupDepth;
+  };
+}
+
+/** `groupDepthCheck` for several nodes at once: whether every one of `childIds` fits under `parentId`. */
+export function fitsGroupDepth(doc: DraftDocument, childIds: Iterable<string>, parentId: string | undefined): boolean {
+  const fits = groupDepthCheck(doc, parentId);
+  for (const id of childIds) if (!fits(id)) return false;
+  return true;
+}
+
 export function setParent(
   doc: DraftDocument,
   childIds: Iterable<string>,
@@ -1600,6 +1734,7 @@ export function setParent(
   // Only a boundary can hold children — anything else would make a delete cascade into nodes the
   // user never saw as contained, and a reload drops the link anyway.
   if (byId && byId.get(parentId!)?.type !== 'group') return doc;
+  const fitsDepth = groupDepthCheck(doc, parentId);
   const isAncestorOfParent = (id: string) => {
     const seen = new Set<string>();
     for (let at = byId?.get(parentId!); at && !seen.has(at.id); at = at.parentId ? byId!.get(at.parentId) : undefined) {
@@ -1624,6 +1759,8 @@ export function setParent(
     // guard lives here too so correctness doesn't depend on every future
     // caller remembering to pre-filter the same way.
     if (isAncestorOfParent(node.id)) return node;
+    // Nor so deep that the next open would repair it away: it stays where it was.
+    if (!fitsDepth(node.id)) return node;
     changed = true;
     return { ...node, parentId };
   });
@@ -1632,19 +1769,61 @@ export function setParent(
 
 /* ------------------------------------------------------------- document ---- */
 
+/**
+ * A camera as a load keeps it: finite, and within the range the maths stays well-conditioned. A
+ * value that is not a number (a NaN from a gesture that divided by nothing) leaves that part of the
+ * camera where it was, rather than saving a position no file can hold.
+ */
 export function setViewport(doc: DraftDocument, viewport: DraftViewport): DraftDocument {
-  const zoom = clamp(viewport.zoom, LIMITS.minZoom, LIMITS.maxZoom);
-  return { ...doc, viewport: { x: viewport.x, y: viewport.y, zoom } };
+  const zoom = clamp(finite(viewport.zoom, doc.viewport.zoom), LIMITS.minZoom, LIMITS.maxZoom);
+  const x = clamp(finite(viewport.x, doc.viewport.x), -LIMITS.maxCoordinate, LIMITS.maxCoordinate);
+  const y = clamp(finite(viewport.y, doc.viewport.y), -LIMITS.maxCoordinate, LIMITS.maxCoordinate);
+  return { ...doc, viewport: { x, y, zoom } };
 }
 
 export function setTitle(doc: DraftDocument, title: string): DraftDocument {
-  const trimmed = title.trim().slice(0, LIMITS.maxTitleLength) || 'Untitled canvas';
-  if (trimmed === doc.metadata.title) return doc;
-  return { ...doc, metadata: { ...doc.metadata, title: trimmed } };
+  const clean = cleanTitle(title);
+  if (clean === doc.metadata.title) return doc;
+  return { ...doc, metadata: { ...doc.metadata, title: clean } };
 }
 
+/**
+ * Canvas settings as a load keeps them: a grid mode that exists, a scrim and a blur between 0 and 1
+ * (clamped without a word, as a load clamps them), a fit that exists. A value that is none of those
+ * leaves what was there. A patch that changes nothing is no change: the same document comes back, so
+ * re-picking what is already picked never becomes an undo step.
+ */
 export function setSettings(doc: DraftDocument, patch: Partial<DraftSettings>): DraftDocument {
-  return { ...doc, settings: { ...doc.settings, ...patch } };
+  const was = doc.settings;
+  const background = patch.background === undefined ? was.background : heldBackground(patch.background, was.background);
+  const next: DraftSettings = {
+    showSequence: patch.showSequence === undefined ? was.showSequence : patch.showSequence !== false,
+    grid: oneOf<GridMode>(patch.grid, GRID_MODES, was.grid),
+    background,
+  };
+  const same =
+    next.showSequence === was.showSequence &&
+    next.grid === was.grid &&
+    (background === was.background ||
+      (background.enabled === was.background.enabled &&
+        background.fit === was.background.fit &&
+        background.dim === was.background.dim &&
+        background.blur === was.background.blur &&
+        background.imageId === was.background.imageId &&
+        background.image === was.background.image));
+  return same ? doc : { ...doc, settings: next };
+}
+
+function heldBackground(patch: BackgroundSettings, was: BackgroundSettings): BackgroundSettings {
+  const imageId = safeId(patch.imageId);
+  return {
+    enabled: patch.enabled === true,
+    fit: oneOf<BackgroundFit>(patch.fit, BACKGROUND_FITS, was.fit),
+    dim: clamp(finite(patch.dim, was.dim), 0, 1),
+    blur: clamp(finite(patch.blur, was.blur), 0, 1),
+    ...(imageId ? { imageId } : {}),
+    ...(patch.image ? { image: patch.image } : {}),
+  };
 }
 
 export function touch(doc: DraftDocument, at = Date.now()): DraftDocument {

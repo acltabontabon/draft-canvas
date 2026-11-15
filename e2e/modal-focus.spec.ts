@@ -64,9 +64,9 @@ test.describe('Modal focus behavior', () => {
     // registry via `shortcutLookup.ts`, so they can't go missing again without a failing test.
     await expect(dialog).toContainText('Group into boundary');
     await expect(dialog).toContainText('Ungroup');
-    await expect(dialog).toContainText('Rename or edit the selected element');
-    await expect(dialog).toContainText('Accept the suggested next element');
-    await expect(dialog).toContainText('Select the nearest element in that direction');
+    await expect(dialog).toContainText('Rename or edit the selected shape');
+    await expect(dialog).toContainText('Accept the next-shape suggestion');
+    await expect(dialog).toContainText('Select the nearest shape in that direction');
 
     await page.getByRole('searchbox', { name: 'Filter shortcuts' }).fill('zoom');
     await expect(dialog).toContainText('Zoom in');

@@ -118,20 +118,26 @@ const CLUSTER_RADIUS = BRIDGE_RADIUS * 2;
  *  down because a connector segment is a good deal smaller than a diagram. */
 const CELL = 256;
 
-/** Past this many segment-pair visits the plan gives up and draws no bridges at all. Readability
- *  help is worth a bounded cost a commit and not more; "no bridges" is a correct diagram, exactly as
- *  "route independently" is the correct fallback when bundle planning gets too large. A visit is a
- *  couple of integer compares now (`cx0`/`cy0` pick the one cell a pair is tested in), which is why
- *  this is ten times what it once was: a diagram of 800 connectors used to hit the old limit and
- *  lose every bridge at once. */
+/** Past this many segment-pair visits the plan stops looking: the crossings found so far get their
+ *  bridges and the rest do not, in the order the grid is walked, which is the same on every machine.
+ *  Readability help is worth a bounded cost a commit and not more. A visit is a couple of integer
+ *  compares now (`cx0`/`cy0` pick the one cell a pair is tested in), which is why this is ten times
+ *  what it once was: a diagram of 800 connectors used to hit the old limit and lose every bridge at
+ *  once — and, until it stopped throwing the work away, so did one that went a little over. */
 const MAX_CROSSING_OPS = 4_000_000;
 
-/** And past this many connectors, don't even route. A diagram this dense has bigger problems than
- *  crossings. Set above the benchmark's Stress fixture (1,500 connectors, about 110 ms a commit once
- *  corner pieces stopped being tested) so the published figures include this pass rather than
- *  quietly skipping it — it was 1,200, and a diagram just under that paid a quarter of a second a
- *  commit that no published number showed. */
+/** And past this many connectors, don't even route: no bridges at all, a cliff, kept because the
+ *  pass itself is what costs (a diagram this dense has bigger problems than crossings, and "no
+ *  bridges" is a correct diagram, exactly as "route independently" is the correct fallback when
+ *  bundle planning gets too large). Set above the benchmark's Stress fixture (1,500 connectors,
+ *  about 110 ms a commit once corner pieces stopped being tested) so the published figures include
+ *  this pass rather than quietly skipping it — it was 1,200, and a diagram just under that paid a
+ *  quarter of a second a commit that no published number showed. */
 const MAX_CROSSING_EDGES = 1600;
+
+/** What the two limits are, so a test can set them low and put them back: both are costs, and a
+ *  diagram big enough to meet them is too slow to build in a test. */
+export const crossingLimits = { ops: MAX_CROSSING_OPS, edges: MAX_CROSSING_EDGES };
 
 interface Vertex {
   x: number;
@@ -383,7 +389,7 @@ function compute(
   scope: PlanScope,
   previous?: ReadonlyMap<string, readonly Crossing[]>,
 ): ComputedPlan {
-  if (edges.length < 2 || edges.length > MAX_CROSSING_EDGES) return EMPTY_PLAN;
+  if (edges.length < 2 || edges.length > crossingLimits.edges) return EMPTY_PLAN;
   // `previous` is passed only by the canvas's own cached path — the one pass worth remembering routes for.
   const lines = linesOf(nodes, edges, obstacleNodes, scope, previous !== undefined);
   if (lines.length < 2) return EMPTY_PLAN;
@@ -428,7 +434,7 @@ function compute(
 
   /** Tests one segment pair in `cell`. `false` once the plan is over its budget. */
   const test = (cell: Cell, refA: SegmentRef, refB: SegmentRef): boolean => {
-    if ((ops += 1) > MAX_CROSSING_OPS) return false;
+    if ((ops += 1) > crossingLimits.ops) return false;
     // A segment pair is tested in the first cell both cover, and skipped in the others — the
     // same pair is reached from every cell the two boxes share.
     if (cell.cx !== (refA.cx0 > refB.cx0 ? refA.cx0 : refB.cx0)) return true;
@@ -484,21 +490,22 @@ function compute(
     else if (!list.some((existing) => near(existing, entry, 0.5))) list.push(entry);
   };
 
-  for (const cell of cells.values()) {
+  // Over its budget the walk stops and keeps what it has found (`MAX_CROSSING_OPS`).
+  walk: for (const cell of cells.values()) {
     const { h, v, d } = cell;
     for (const a of h) {
       for (const b of v) {
         // A horizontal and a vertical segment share exactly one cell, so they are never reached twice;
         // most pairs in a crowded cell simply don't touch, and are rejected here without `test`.
-        if ((ops += 1) > MAX_CROSSING_OPS) return EMPTY_PLAN;
+        if ((ops += 1) > crossingLimits.ops) break walk;
         if (b.at < a.lo || b.at > a.hi || a.at < b.lo || a.at > b.hi) continue;
-        if (!test(cell, a, b)) return EMPTY_PLAN;
+        if (!test(cell, a, b)) break walk;
       }
-      for (const b of d) if (!test(cell, a, b)) return EMPTY_PLAN;
+      for (const b of d) if (!test(cell, a, b)) break walk;
     }
-    for (const a of v) for (const b of d) if (!test(cell, a, b)) return EMPTY_PLAN;
+    for (const a of v) for (const b of d) if (!test(cell, a, b)) break walk;
     for (let i = 0; i < d.length; i += 1) {
-      for (let j = i + 1; j < d.length; j += 1) if (!test(cell, d[i]!, d[j]!)) return EMPTY_PLAN;
+      for (let j = i + 1; j < d.length; j += 1) if (!test(cell, d[i]!, d[j]!)) break walk;
     }
   }
 

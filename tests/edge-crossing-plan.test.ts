@@ -419,3 +419,48 @@ describe('a connector crossing a bundle\'s shared trunk', () => {
     expect(plan.crossingsFor('h2')).toHaveLength(0);
   });
 });
+
+describe('what a diagram too big for the plan loses', () => {
+  /** Eight pairs, each crossed by the same long connector: eight crossings, in a deterministic order. */
+  const ladder = () => {
+    const nodes: DraftNode[] = [box('top', 0, -300), box('bottom', 0, 1500)];
+    const edges: DraftEdge[] = [createEdge({ id: 'down', source: 'top', target: 'bottom' })];
+    for (let i = 0; i < 8; i += 1) {
+      nodes.push(box(`l${i}`, -700, i * 160), box(`r${i}`, 700, i * 160));
+      edges.push(createEdge({ id: `row${i}`, source: `l${i}`, target: `r${i}` }));
+    }
+    return { nodes, edges };
+  };
+  const bridges = (plan: ReturnType<typeof crossingPlan>, edges: DraftEdge[]) => edges.reduce((sum, edge) => sum + plan.crossingsFor(edge.id).length, 0);
+  const limits = { ...crossings.crossingLimits };
+  const restore = () => Object.assign(crossings.crossingLimits, limits);
+
+  it('keeps the bridges it found when it runs out of work, instead of drawing none of them', () => {
+    try {
+      const whole = ladder();
+      const all = bridges(crossingPlan(whole.nodes, whole.edges), whole.edges);
+      expect(all).toBeGreaterThan(2);
+      // Another array each time: the plan is memoised per edges array.
+      const some = ladder();
+      crossings.crossingLimits.ops = 10;
+      const partial = bridges(crossingPlan(some.nodes, some.edges), some.edges);
+      expect(partial).toBeGreaterThan(0);
+      expect(partial).toBeLessThan(all);
+      // The same limit gives the same bridges: which ones survive is not a matter of timing.
+      const again = ladder();
+      expect(bridges(crossingPlan(again.nodes, again.edges), again.edges)).toBe(partial);
+    } finally {
+      restore();
+    }
+  });
+
+  it('draws none at all past the connector limit: the one cliff, for a diagram this dense', () => {
+    try {
+      const { nodes, edges } = ladder();
+      crossings.crossingLimits.edges = edges.length - 1;
+      expect(bridges(crossingPlan(nodes, edges), edges)).toBe(0);
+    } finally {
+      restore();
+    }
+  });
+});

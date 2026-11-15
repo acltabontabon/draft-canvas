@@ -40,17 +40,34 @@ export interface ReloadStash extends ReloadStashContext {
 }
 
 export function stashForReload(document: DraftDocument, { base, stamp, writing, conflict }: ReloadStashContext = {}): void {
+  const id = document.metadata.id;
+  const documentKey = PREFIX + id;
+  const contextKey = CONTEXT_PREFIX + id;
+  const storage = window.sessionStorage;
+  let before: { document: string | null; context: string | null } | null = null;
   try {
-    const id = document.metadata.id;
-    window.sessionStorage.setItem(PREFIX + id, JSON.stringify(document));
+    before = { document: storage.getItem(documentKey), context: storage.getItem(contextKey) };
+    storage.setItem(documentKey, JSON.stringify(document));
     // Picked field by field: a whole `ReloadStash` passed back in would store its document twice.
     if (base || stamp !== undefined || writing !== undefined || conflict) {
-      window.sessionStorage.setItem(CONTEXT_PREFIX + id, JSON.stringify({ base, stamp, writing, conflict }));
+      storage.setItem(contextKey, JSON.stringify({ base, stamp, writing, conflict }));
     } else {
-      window.sessionStorage.removeItem(CONTEXT_PREFIX + id);
+      storage.removeItem(contextKey);
     }
   } catch {
-    // Quota, or storage blocked: the write in flight is all there is.
+    // Quota, or storage blocked: the write in flight is all there is. Two entries are written, and
+    // the second can be refused after the first landed — the new document would then wait under the
+    // stamp and conflict mark of an older stash, and the reopen would judge it against the wrong
+    // copy. So what was there before goes back: the older pair whole, never a mixture.
+    if (!before) return;
+    try {
+      for (const [key, value] of [[documentKey, before.document], [contextKey, before.context]] as const) {
+        if (value === null) storage.removeItem(key);
+        else storage.setItem(key, value);
+      }
+    } catch {
+      // Nothing more can be done from here; `takeReloadStash` reads defensively.
+    }
   }
 }
 

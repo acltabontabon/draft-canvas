@@ -72,6 +72,8 @@ describe('readings', () => {
     expect(selectionAnnouncement(document, { nodes: ['topic'], edges: [] }, none)).toBe('Topic, topic, 0 connectors');
     expect(selectionAnnouncement(document, { nodes: [], edges: ['e1'] }, none)).toBe('Orders API writes to Orders');
     expect(selectionAnnouncement(document, { nodes: ['api', 'orders'], edges: ['e1'] }, none)).toBe('3 elements selected');
+    // Said in the canvas's own words when the selection is only one kind of thing.
+    expect(selectionAnnouncement(document, { nodes: ['api', 'orders'], edges: [] }, none)).toBe('2 shapes selected');
     expect(selectionAnnouncement(document, none, { nodes: ['api'], edges: [] })).toBe('Selection cleared');
     expect(selectionAnnouncement(document, none, none)).toBeNull();
   });

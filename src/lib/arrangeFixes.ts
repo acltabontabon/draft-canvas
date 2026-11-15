@@ -9,7 +9,8 @@ const FIX_WORDS: Record<ArrangeFix['kind'], [one: string, many: string]> = {
   'stacked-name': ['stacked name', 'stacked names'],
   'hidden-caption': ['cut-off caption', 'cut-off captions'],
   'heavy-header': ['top-heavy boundary', 'top-heavy boundaries'],
-  sparse: ['small overview', 'small overview'],
+  // About the whole view, so never counted: one phrase that says what is wrong with it.
+  sparse: ['an overview too small to read', 'an overview too small to read'],
 };
 
 /** What is fixed, counted in words: "2 stacked names, 1 cut-off caption". Empty for nothing. */
@@ -20,7 +21,7 @@ export function fixesList(fixes: readonly ArrangeFix[] | undefined): string {
     const count = fixes.filter((fix) => fix.kind === kind).length;
     if (!count) continue;
     const [one, many] = FIX_WORDS[kind];
-    parts.push(kind === 'sparse' ? `a ${one}` : `${count} ${count === 1 ? one : many}`);
+    parts.push(kind === 'sparse' ? one : `${count} ${count === 1 ? one : many}`);
   }
   return parts.join(', ');
 }

@@ -5,7 +5,7 @@ import { expect, test } from '@playwright/test';
 
 test('a refresh reopens the canvas you were on, and Back returns to the Library', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
+  await page.getByRole('button', { name: 'Quick Draft' }).click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   const title = page.getByLabel('Diagram title');
   await title.fill('Checkout flow');
@@ -26,7 +26,7 @@ test('a refresh reopens the canvas you were on, and Back returns to the Library'
 
 test('closing the canvas from inside the app clears the address', async ({ page }) => {
   await page.goto('/');
-  await page.getByRole('button', { name: 'New canvas' }).click();
+  await page.getByRole('button', { name: 'Quick Draft' }).click();
   await expect(page).toHaveURL(/#doc=/);
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
   await openGallery(page);

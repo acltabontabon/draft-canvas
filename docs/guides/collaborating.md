@@ -9,7 +9,7 @@ Edit one canvas together and see each other's changes, pointers and selections a
 
 ## Start a session
 
-1. Choose **Share → Draw together, live**, or run **Collaborate…** in `⌘K`.
+1. Choose **Share → Collaborate…**, or run **Collaborate…** in `⌘K`.
 2. Write your name on the name tag. Others see it beside your pointer.
 3. Choose who can join:
    - **Anyone with the link** (default): works across different networks. You get a session link,

@@ -39,7 +39,7 @@ test('context Async and inspector Sync agree, including response visibility and 
   await expect(page.locator('.react-flow__edge[data-id="edge"] .dc-edge-async-marker')).toBeVisible();
   await page.keyboard.press('Shift+F10');
   await expect(page.getByRole('menuitem', { name: 'Make synchronous', exact: true })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Add response line', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('menuitem', { name: 'Add reply line', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   // Undo restores selection quietly; click the edge to show its inspector again.

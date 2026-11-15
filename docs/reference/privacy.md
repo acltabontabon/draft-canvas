@@ -157,7 +157,7 @@ unless you enable direct edits. Run a trusted agent CLI, since these controls de
 
 - Clearing site data, or closing a private window, can delete browser diagrams.
 - The app requests persistent storage; browsers may refuse, so eviction stays possible.
-- A full quota stops saving, and the app says so. Keep backups.
+- A full quota stops saving, and the app says so, with **Export** beside the message. Keep backups.
 
 ## Optional local diagnostic report
 

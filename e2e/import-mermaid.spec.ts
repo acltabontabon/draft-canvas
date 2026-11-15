@@ -47,7 +47,7 @@ test.describe('importing a Mermaid flowchart', () => {
       await expect(shape(page, label)).toHaveCount(1);
     }
     await expect(page.locator('.dc-edge-line')).toHaveCount(4);
-    await expect(page.locator('.dc-toast-message')).toContainText("1 thing Mermaid said that Draft Canvas doesn't draw: classDef");
+    await expect(page.locator('.dc-toast-message')).toContainText('1 thing Mermaid said that Draft Canvas doesn’t draw: classDef');
 
     // One step: the whole flowchart, not shape by shape.
     await page.keyboard.press('ControlOrMeta+z');
@@ -102,7 +102,7 @@ test.describe('importing a Mermaid flowchart', () => {
     await page.goto('/');
     // Dropped on the one control both the first-run screen and the Library proper have, so the
     // event bubbles up through whichever of the two is the drop zone.
-    await page.getByRole('button', { name: 'New canvas' }).evaluate((target, text) => {
+    await page.getByRole('button', { name: 'Quick Draft' }).evaluate((target, text) => {
       const data = new DataTransfer();
       data.items.add(new File([text], 'dropped.mmd', { type: 'text/plain' }));
       target.dispatchEvent(new DragEvent('dragover', { dataTransfer: data, bubbles: true, cancelable: true }));

@@ -87,8 +87,10 @@ const COALESCE_WINDOW_MS = 900;
  *
  * Every document operation returns a new document that shares structure with
  * the previous one, so an entry costs roughly the objects that actually
- * changed — on the order of a kilobyte for a node move, even in a document with
- * a hundred nodes. Storing whole snapshots avoids maintaining a second, inverse
+ * changed plus the new array that holds them. Measured for a node move: about 2.6 KB an entry at
+ * 300 shapes, 8 KB at 1,000 and 24 KB at 3,000 — 0.4, 1.2 and 3.5 MB at the 150-entry cap. (The id
+ * indexes `store/selectors.ts` builds are not kept per entry: once they were, and cost ten times
+ * that.) Storing whole snapshots avoids maintaining a second, inverse
  * implementation of every operation, where a bug would silently corrupt a
  * user's diagram rather than merely being wrong on screen.
  */
@@ -105,6 +107,9 @@ export function pushEntry(
     // Coalesced, it would span someone else's edit: `before` predates it, so undoing an element both
     // of you touched (a nudge, their rename, another nudge) would put theirs back out too.
     !top.crossed &&
+    // Within the window and not before it: a clock that stepped backwards (a sync, a manual change)
+    // gives a negative difference, which is "less than" any window and merged edits made apart.
+    entry.at - top.at >= 0 &&
     entry.at - top.at < COALESCE_WINDOW_MS;
   const canAmend =
     top !== undefined &&

@@ -15,6 +15,7 @@ import { languageForFence, tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import { BOUNDARY_HEADER_HEIGHT } from '../document/boundaryHeader';
 import { DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreGlyphTop, dataStoreScale } from '../document/dataStoreGeometry';
 import { queueTubeSpan } from '../document/queueGeometry';
 import { roughenPath } from '../render/roughness/roughPath';
@@ -2989,7 +2990,6 @@ const BOUNDARY_BOOST: Record<PersonalityPreset, number> = { clean: 1, draft: 1.4
  *   and the plate's glyph all share one optical centre line whatever is or isn't there.
  */
 const BOUNDARY_RADIUS = 12;
-const BOUNDARY_HEADER_HEIGHT = 32;
 const BOUNDARY_ROW_MID = 1 + BOUNDARY_HEADER_HEIGHT / 2;
 const BOUNDARY_PLATE = 20;
 const BOUNDARY_PLATE_GAP = (BOUNDARY_HEADER_HEIGHT - BOUNDARY_PLATE) / 2;

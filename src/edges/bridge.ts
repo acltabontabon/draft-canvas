@@ -32,7 +32,8 @@ export const BRIDGE_RADIUS = 7;
 
 /**
  * How far the hump rises off the line. Deliberately well under `BRIDGE_RADIUS`, so the hump is
- * twice as wide as it is tall. Two reasons: a taller hump on one lane of a parallel pair would
+ * nearly three times as wide as it is tall (a span of `2 * BRIDGE_RADIUS` = 14 against a rise of 5:
+ * 2.8 to 1). Two reasons: a taller hump on one lane of a parallel pair would
  * reach its sibling, which sits only `LANE_SPACING` (10) away; and width is what actually makes a
  * hump legible at 100% zoom — the eye reads the long soft shoulders, not the height.
  */

@@ -16,7 +16,8 @@ shortcuts.
 The back arrow beside the diagram title returns to your diagrams. In the web app, each recent
 diagram on Home has **Rename**, **Duplicate** and **Delete** buttons.
 
-On a blank canvas, double-click anywhere to choose your first shape. For a starting point,
+On a blank canvas, double-click (or long-press, on a touch screen) anywhere to choose your first shape, or
+point at the canvas and press `S`, `D` or `Q` for a Service, Data Store or Queue. For a starting point,
 **Browse the starters gallery** offers ready-made architectures; once you load it, the blank canvas
 shows five of them. See [architecture examples](examples.md). `⌘K` searches for a command by name.
 
@@ -26,8 +27,8 @@ shows five of them. See [architecture examples](examples.md). `⌘K` searches fo
 
 1. Point at the canvas and press `S`. Type `Orders API`, then `Enter`.
 2. Drag from a dot on the service's edge into empty space and choose **Queue**. Name it `orders`.
-3. A faint Worker suggestion appears beside the queue. Press `Tab` to accept it and name it
-   `Fulfilment worker`. No suggestion? Press `]`.
+3. A faint Worker suggestion appears beside the queue a moment after you select it. Press `Tab`
+   to accept it, then `Enter` to name it `Fulfilment worker`. No suggestion? Press `]`.
 
 [Preview the result.](../media/guides/service-queue-worker.png)
 
@@ -35,7 +36,8 @@ Connectors label themselves; click one to change it.
 
 ## Add a note
 
-Right-click the queue and choose **Attach note**. Type, then press `Esc`. Click the chip to reopen it.
+Right-click the queue and choose **Attach note**. The note opens ready to type; click the canvas to keep
+it (`Esc` throws it away). Click the chip to reopen it.
 
 ## Draw a boundary
 
@@ -54,7 +56,7 @@ More in [Flows and presenting](flows-and-presentation.md).
 
 ## Export
 
-Open **Share → Export** (`⌘⇧E`):
+Open **Share → Export…** (`⌘⇧E`):
 
 | Choose | For |
 | --- | --- |

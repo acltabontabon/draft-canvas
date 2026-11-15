@@ -115,9 +115,14 @@ every run. They include boundaries three deep, crossing connectors, notes and co
 These are investigation sizes, not capacity claims.
 
 Scenarios (`benchmark/interaction/scenarios.ts`): `pan-drag`, `pan-wheel`, `zoom-wheel`,
-`drag-single`, `drag-multi`, `drag-boundary`, `drag-note`, `connect`, `hover-sweep`,
+`drag-single`, `drag-commit`, `drag-multi`, `drag-boundary`, `drag-note`, `connect`, `hover-sweep`,
 `select-clicks`, `type-label`, `panels`, `depth-enter`, `depth-exit`. Each has an unmeasured prepare,
 a measured run, and a tail that captures debounced work such as autosave.
+
+`drag-commit` drops one shape and reports the worst frame and longest long task after the pointer is
+released, which is when a drop plans every connector again; the drag's own percentiles never include
+it. It prints on its own line under the table, and `--compare` and `--against` runs show before and
+after.
 
 Reported (`benchmark/interaction/stats.ts`): frame-time p50/p95/p99/max, share of frames over 20 ms
 and 33 ms, frames over 50 ms, input latency, long tasks and Long Animation Frames, main-thread busy

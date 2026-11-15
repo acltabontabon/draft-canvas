@@ -382,7 +382,7 @@ export const MATRIX: Record<string, ConnectionCapability> = {
   // one-click way to make the implied worker explicit instead of just accepting the arrow.
   'queue>topic': capability(['dependsOn', 'event'], undefined, [], undefined, {
     status: 'unusual',
-    guidance: "A queue doesn't typically publish to a topic — something usually consumes it and forwards the message.",
+    guidance: "A queue doesn’t typically publish to a topic — something usually consumes it and forwards the message.",
     quickFix: { id: 'insert-worker', label: 'Insert Worker' },
   }),
   // A queue parking a message it has given up delivering — the same edge `addDeadLetterQueue`
@@ -411,13 +411,13 @@ export const MATRIX: Record<string, ConnectionCapability> = {
   // connector someone draws by hand rather than a dead end.
   'topic>deadLetter': capability(['dependsOn'], undefined, [], undefined, {
     status: 'unusual',
-    guidance: "A topic doesn't dead-letter — retries and a DLQ belong to each consumer's own queue.",
+    guidance: "A topic doesn’t dead-letter — retries and a DLQ belong to each consumer’s own queue.",
   }),
   // Its own row only for its own words: it would fold to `topic>deadLetter` otherwise, and a stream
   // has no subscriber queue to point at — its consumer parks what it can't process.
   'stream>deadLetter': capability(['dependsOn'], undefined, [], undefined, {
     status: 'unusual',
-    guidance: "A stream doesn't dead-letter — it keeps every record; the consumer that can't process one parks it.",
+    guidance: "A stream doesn’t dead-letter — it keeps every record; the consumer that can’t process one parks it.",
   }),
   // Deliberately not JDBC/synchronous-request-shaped — see `defaultsToResponse`, which this
   // pairing is intentionally absent from. "Ingests" is the default because it's the most

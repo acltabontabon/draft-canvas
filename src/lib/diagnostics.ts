@@ -15,9 +15,9 @@ export interface DiagnosticContext {
 const OPERATIONS = new Set([
   'about-panel', 'adopt-document', 'app-shell', 'autosave', 'canvas-render', 'collab-invite', 'collab-knock',
   'collab-open', 'collab-panel', 'collab-relay', 'collab-session', 'create-project',
-  'delete-document', 'delete-project', 'delete-project-refresh', 'duplicate-document', 'export-panel',
+  'delete-document', 'delete-project', 'delete-project-refresh', 'duplicate-document', 'export-panel', 'export-unsaved',
   'file-explorer', 'library-backfill', 'library-dialog', 'library-startup', 'library-visibility-refresh',
-  'load-editor', 'load-starters', 'load-technology-icon', 'load-technology-icons', 'move-document-to-project',
+  'import-mermaid', 'load-editor', 'load-starters', 'load-technology-icon', 'load-technology-icons', 'move-document-to-project',
   'open-document', 'open-document-refresh', 'open-document-stash', 'open-share-link', 'refresh-library',
   'release-notes', 'remove-background-image', 'rename-document', 'rename-project',
   'host-agent', 'host-background-report', 'host-background-restore', 'host-change', 'host-flush-ack', 'host-forget', 'host-load', 'host-save-request',

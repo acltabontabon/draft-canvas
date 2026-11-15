@@ -12,7 +12,7 @@ test.describe('Home screen', () => {
       for (const width of [1200, 760, 375, 320]) {
         await page.setViewportSize({ width, height: 800 });
         const scene = page.getByRole('region', { name: 'Start drawing' });
-        await expect(scene.getByRole('button', { name: 'New canvas' })).toBeVisible();
+        await expect(scene.getByRole('button', { name: 'Quick Draft' })).toBeVisible();
         await expect(scene.getByRole('button', { name: 'Import a file' })).toBeVisible();
         expect(await page.locator('.dc-home').evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
         // A theme switch eases colours over a few frames. Measured mid-ease, a grey sits between its
@@ -42,7 +42,7 @@ test.describe('Home screen', () => {
 
   test('a browser project can be created before any diagrams, and its single view has no tab or search', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'New canvas' }).focus();
+    await page.getByRole('button', { name: 'Quick Draft' }).focus();
     await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('button', { name: 'New project' })).toBeFocused();
     await page.keyboard.press('Enter');
@@ -66,7 +66,7 @@ test.describe('Home screen', () => {
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();
     await expect(page.getByRole('tab')).toHaveText(['Drafts', 'Recent', 'Projects']);
     await expect(page.getByRole('button', { name: 'Find a diagram' })).toBeVisible();
-    await page.getByRole('button', { name: 'New canvas' }).focus();
+    await page.getByRole('button', { name: 'Quick Draft' }).focus();
     await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('tab', { name: 'Drafts' })).toBeFocused();
     await page.keyboard.press('ArrowRight');
@@ -132,7 +132,7 @@ test.describe('Home screen', () => {
 
   test('deleting the last draft returns to an empty Home without search or tabs', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'New canvas' }).click();
+    await page.getByRole('button', { name: 'Quick Draft' }).click();
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();
     await openGallery(page);
     await page.getByRole('button', { name: /^Delete Untitled/ }).click();
@@ -145,7 +145,7 @@ test.describe('Home screen', () => {
 
   test('a diagram is renamed, duplicated and deleted from the Home shelf', async ({ page }) => {
     await page.goto('/');
-    await page.getByRole('button', { name: 'New canvas' }).click();
+    await page.getByRole('button', { name: 'Quick Draft' }).click();
     await page.getByRole('button', { name: 'Back to your diagrams' }).click();
     const names = page.locator('.dc-home-draft-name');
     await page.locator('.dc-home-card').hover();

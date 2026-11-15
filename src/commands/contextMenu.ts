@@ -2,7 +2,7 @@ import { ALL_PRESETS } from '../lib/presets';
 import { categoryOf, edgeRelationLabel } from '../document/connectorSemantics';
 import { displayNameFor } from '../document/factory';
 import type { DraftEdge, DraftNode } from '../document/types';
-import { count } from '../lib/plural';
+import { count, selectionCount } from '../lib/plural';
 import { QUEUE_KIND_OPTION_LABELS } from '../lib/nodeKindLabels';
 import {
   canvasCommands,
@@ -63,19 +63,15 @@ export type ContextMenuEntry =
   | { type: 'icons'; label: string; items: (ContextMenuItem & { icon: AlignIcon })[] };
 
 /** Menu and toolbar wording where it differs from the palette's: the header already names the
- *  target, so "Spotlight selection" is just "Spotlight"; an attachment reads as attaching, not adding
- *  a shape; and short action labels use sentence case. */
+ *  target, so "Spotlight selection" is just "Spotlight", and a message's attachment reads as
+ *  "Attach note" rather than "Attach note to message". Casing is not one of the differences: both
+ *  surfaces use the palette's titles, sentence case with a shape's own name capitalised ("Connect
+ *  Data Store", "Add consumer"). */
 const MENU_LABELS: Record<string, string> = {
-  'attach-note': 'Attach note',
-  'attach-code': 'Attach code',
   'seq-attach-note': 'Attach note',
   'seq-attach-code': 'Attach code',
   'open-point-add': 'Add open point…',
   spotlight: 'Spotlight',
-  'add-consumer': 'Add consumer',
-  'add-subscriber': 'Add subscriber',
-  'add-data-store': 'Connect data store',
-  'add-routed-service': 'Route to service',
   // "Tidy up" is the gentle, previewed cleanup (`tidy`); Arrange lays things out again from scratch,
   // and says so, now that the two sit side by side.
   'arrange-selection': 'Rearrange selection',
@@ -309,7 +305,7 @@ const ALIGN_IDS: AlignIcon[] = [
 function selectionMenu(ctx: CommandContext, commands: Command[]): ContextMenuEntry[] {
   const { nodes, edges } = ctx.editor.selection;
   const align = pick(commands, ALIGN_IDS).map((command) => ({ ...itemOf(command), icon: command.id as AlignIcon }));
-  return grouped({ type: 'header', title: count(nodes.length + edges.length, 'element') }, [
+  return grouped({ type: 'header', title: selectionCount(nodes.length, edges.length) }, [
     // One shared point for everything selected — the header already says how many.
     pick(commands, ['group', 'ungroup', 'tidy', 'arrange-selection', 'open-point-add']),
     pick(commands, ['sequence-from-selection']),

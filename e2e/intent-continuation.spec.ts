@@ -37,7 +37,16 @@ async function connect(page: Page, fromIndex: number, toIndex: number) {
   await dragHandleTo(page, fromIndex, { x: target.x + target.width / 2, y: target.y + target.height / 2 });
 }
 
-/** Service → Topic, with the Topic left selected: the state every ghost test starts from. */
+/**
+ * A suggestion waits for the selection to hold still (`CONTINUATION_DWELL_MS`, 250 ms), so a test
+ * that expects *no* ghost has to wait that out first or it passes before one could have shown.
+ * Tests that expect one just assert it: those polls already outlast the wait.
+ */
+async function settled(page: Page) {
+  await page.waitForTimeout(450);
+}
+
+/** Service → Topic, with the Topic left selected and its suggestion showing: the state every ghost test starts from. */
 async function publisherAndTopic(page: Page) {
   await create(page, 'Service', { x: 200, y: 300 });
   await create(page, 'Queue', { x: 520, y: 300 });
@@ -47,6 +56,7 @@ async function publisherAndTopic(page: Page) {
   await page.keyboard.press('Escape');
   await expect(page.locator('.dc-edge-inspector')).toHaveCount(0);
   await page.locator('.dc-node').nth(1).click();
+  await expect(page.locator('.dc-ghost')).toHaveCount(1);
 }
 
 // Captions are drawn in the label layer above every line, not inside the connector's SVG.
@@ -151,6 +161,7 @@ test.describe('Intent Continuation', () => {
     await page.locator(CANVAS).click({ position: { x: 700, y: 600 } });
     await page.locator('.dc-node').nth(1).click();
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
+    await settled(page);
     await expect(page.locator('.dc-ghost')).toHaveCount(0);
   });
 
@@ -170,6 +181,7 @@ test.describe('Intent Continuation', () => {
     await connect(page, 0, 1);
     await page.locator('.dc-node').nth(0).click();
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(1);
+    await settled(page);
     await expect(page.locator('.dc-ghost')).toHaveCount(0);
   });
 
@@ -348,6 +360,7 @@ test.describe('Intent Continuation', () => {
     await newCanvas(page, 'Continuation ask');
     await create(page, 'Service', { x: 300, y: 300 });
     await page.locator('.dc-node').nth(0).click();
+    await settled(page);
     await expect(page.locator('.dc-ghost')).toHaveCount(0);
 
     await page.keyboard.press(']');
@@ -369,10 +382,11 @@ test.describe('Intent Continuation', () => {
     await chooseInspectorOption(page, 'Data Store type', 'Table');
     await page.keyboard.press('Escape');
     await page.locator('.dc-node').nth(0).click();
+    await settled(page);
     await expect(page.locator('.dc-ghost')).toHaveCount(0);
 
     await page.keyboard.press(']');
-    const picker = page.getByRole('menu', { name: 'Add element' });
+    const picker = page.getByRole('menu', { name: 'Add to canvas' });
     await expect(picker).toBeVisible();
     await expect(page.locator('.dc-quick-connect-note')).toContainText('outbox');
     await expect(picker).toHaveAccessibleDescription(/outbox, a read model or plain business data/);
@@ -397,6 +411,95 @@ test.describe('Intent Continuation', () => {
     await expect(page.locator('.dc-quick-connect')).toBeHidden();
     await expect(page.locator('.dc-ghost')).toHaveCount(0);
     await expect(page.locator('.dc-node')).toHaveCount(2);
+  });
+
+  test("the pill's position is never animated: it sits beside its ghost from its first frame, not at the layer's origin", async ({
+    page,
+  }) => {
+    // The pill is placed by an inline `transform`, and a running CSS animation replaces the whole
+    // `transform` property — so a fade written with `transform` in its keyframes parked the pill at the
+    // layer's origin for the 120 ms it ran, then jumped it into place. The same hazard the ghost's own
+    // body is kept clear of (above), checked two ways: structurally, and by sampling every frame.
+    await newCanvas(page, 'Continuation pill position');
+    await publisherAndTopic(page);
+    const pill = page.locator('.dc-ghost-pill');
+    const { name, touchesTransform } = await pill.evaluate((el) => {
+      const name = getComputedStyle(el).animationName;
+      const rule = [...document.styleSheets]
+        .flatMap((sheet) => [...sheet.cssRules])
+        .flatMap((rule) => (rule instanceof CSSKeyframesRule && rule.name === name ? [...rule.cssRules] : []));
+      return { name, touchesTransform: rule.some((frame) => (frame as CSSKeyframeRule).style.getPropertyValue('transform') !== '') };
+    });
+    expect(name === 'none' || !touchesTransform, `animation ${name} must not touch transform`).toBe(true);
+
+    // Reselect, sampling the pill's box on every frame from before it mounts until well after it has faded in.
+    await page.locator(CANVAS).click({ position: { x: 700, y: 600 } });
+    await expect(page.locator('.dc-ghost')).toHaveCount(0);
+    await page.evaluate(() => {
+      const seen: { x: number; y: number }[] = [];
+      (window as unknown as { __pillBoxes: typeof seen }).__pillBoxes = seen;
+      const until = performance.now() + 1500;
+      const sample = () => {
+        const el = document.querySelector('.dc-ghost-pill');
+        if (el) {
+          const box = el.getBoundingClientRect();
+          seen.push({ x: Math.round(box.x), y: Math.round(box.y) });
+        }
+        if (performance.now() < until) requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+    await page.locator('.dc-node').nth(1).click();
+    await expect(pill).toHaveCount(1);
+    await page.waitForTimeout(1600);
+    const boxes = await page.evaluate(() => (window as unknown as { __pillBoxes: { x: number; y: number }[] }).__pillBoxes);
+    expect(boxes.length).toBeGreaterThan(4);
+    const last = boxes.at(-1)!;
+    for (const box of boxes) {
+      expect(Math.abs(box.x - last.x), `x ${box.x} vs settled ${last.x}`).toBeLessThanOrEqual(2);
+      expect(Math.abs(box.y - last.y), `y ${box.y} vs settled ${last.y}`).toBeLessThanOrEqual(2);
+    }
+  });
+
+  test('the pill says why it is offered and how to wave it away, and its count names both numbers', async ({ page }) => {
+    await newCanvas(page, 'Continuation pill words');
+    await publisherAndTopic(page);
+    const pill = page.locator('.dc-ghost-pill');
+    await expect(pill).toHaveAttribute('title', /This topic has a publisher but no delivery path\.\nEsc to dismiss/);
+    await expect(page.getByRole('button', { name: 'Next suggestion, 1 of 3 (])' })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Add Queue after .* \(Tab\)$/ })).toBeVisible();
+    // A hover-free, keyboard-free person has a dismiss button on touch; with a mouse there is none.
+    await expect(page.locator('.dc-ghost-pill-dismiss')).toBeHidden();
+  });
+
+  test('] with nothing else to step to says so, without a toast', async ({ page }) => {
+    await newCanvas(page, 'Continuation no other');
+    await create(page, 'Service', { x: 200, y: 300 });
+    await create(page, 'Queue', { x: 520, y: 300 });
+    await connect(page, 0, 1);
+    await page.keyboard.press('Escape');
+    await page.locator('.dc-node').nth(1).click();
+    await expect(page.locator('.dc-ghost-pill')).toContainText('Worker');
+    // One suggestion, so no count to step through.
+    await expect(page.locator('.dc-ghost-pill-next')).toHaveCount(0);
+
+    await page.keyboard.press(']');
+    await expect(page.locator('.dc-ghost-pill-note')).toHaveText('No other suggestions');
+    await expect(page.getByText('No other suggestions')).toHaveCount(2); // the pill, and the live region
+    await expect(page.locator('.dc-toast')).toHaveCount(0);
+    await expect(page.locator('.dc-ghost-pill-note')).toHaveCount(0); // and it clears itself
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+  });
+
+  test('a suggestion appears only once the selection has settled: arrowing past a shape shows none', async ({ page }) => {
+    await newCanvas(page, 'Continuation dwell');
+    await publisherAndTopic(page);
+    // Select the publisher and the topic again in quick succession: no ghost for the one passed over,
+    // and the topic's own arrives after it.
+    await page.locator('.dc-node').nth(0).click();
+    await page.locator('.dc-node').nth(1).click();
+    await expect(page.locator('.dc-ghost')).toHaveCount(1);
+    await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');
   });
 
   test("Escape with the node's colour panel open closes only the panel, and the ghost stays", async ({ page }) => {

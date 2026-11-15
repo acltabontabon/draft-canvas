@@ -125,9 +125,9 @@ function OpenPointsBody({ buildCommandContext }: { buildCommandContext: () => Co
       </div>
       {(inRoom > 0 || focusActive) && (
         <div className="dc-points-foot">
-          <span className="dc-muted dc-points-hint">{focusActive ? 'Focused on what is still open' : count(inRoom, 'element')} in this view</span>
+          <span className="dc-muted dc-points-hint">{focusActive ? 'Spotlight on what is still open' : count(inRoom, 'element')} in this view</span>
           <Button variant="quiet" onClick={focusAll} title={focusActive ? 'Show everything again' : 'Dim everything that has no open point'}>
-            {focusActive ? 'Exit focus' : 'Focus open points'}
+            {focusActive ? 'Exit spotlight' : 'Spotlight open points'}
           </Button>
         </div>
       )}

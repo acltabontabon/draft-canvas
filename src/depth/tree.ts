@@ -180,6 +180,21 @@ export function mapRooms(file: DraftDocument, fn: <G extends Graph>(graph: G, pa
 }
 
 /**
+ * `file` with the camera `from` has in every room both hold, content as `file` has it. The camera is
+ * where a person is looking, not part of what they did: a snapshot taken earlier (undo, redo) carries
+ * the camera of its moment, and putting it back moved the stored camera away from the one on screen.
+ * `file` itself, by identity, when every camera already agrees.
+ */
+export function withCamerasOf(file: DraftDocument, from: DraftDocument): DraftDocument {
+  const cameras = new Map<string, DraftViewport>();
+  walkGraphs(from, (graph, path) => cameras.set(keyOf(path), graph.viewport));
+  return mapRooms(file, (graph, path) => {
+    const camera = cameras.get(keyOf(path));
+    return camera && camera !== graph.viewport ? { ...graph, viewport: camera } : graph;
+  });
+}
+
+/**
  * The room at `path`, as an ordinary document the whole app can edit.
  *
  * At the root this is the file itself — by identity, so a canvas that never goes inside anything

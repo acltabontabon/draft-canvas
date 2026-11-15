@@ -203,7 +203,7 @@ function ParticipantRow({ node, sequence, focus, openPanel, setOpenPanel, menuDi
         <div className="dc-seq-participant-actions">
           <span className="dc-popover-divider" aria-hidden="true" />
           <TooltipGroup>
-            <Direct icon="pencil" label="Rename" description="Change the participant's name." onClick={() => sequenceActions.edit(node.id, { kind: 'participant', id: first.id })} />
+            <Direct icon="pencil" label="Rename" description="Change the participant’s name." onClick={() => sequenceActions.edit(node.id, { kind: 'participant', id: first.id })} />
             <Direct icon="trash" danger label="Delete" description="Remove this participant and its messages." onClick={() => sequenceActions.removeParticipants(node.id, [first.id])} />
           </TooltipGroup>
         </div>
@@ -273,7 +273,7 @@ function GroupRow({ node, sequence, focus }: RowProps) {
       <span className="dc-seq-count">Group of {group.participantIds.length}</span>
       <span className="dc-popover-divider" aria-hidden="true" />
       <TooltipGroup>
-        <Direct icon="pencil" label="Rename" description="Change the group's name." onClick={() => sequenceActions.edit(node.id, { kind: 'group', id: group.id })} />
+        <Direct icon="pencil" label="Rename" description="Change the group’s name." onClick={() => sequenceActions.edit(node.id, { kind: 'group', id: group.id })} />
         <Action label="Ungroup" description="Stop drawing these together. They stay where they are." onClick={() => sequenceActions.ungroup(node.id, group.id)} />
       </TooltipGroup>
     </div>

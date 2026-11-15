@@ -352,7 +352,7 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
               ) : (
                 <>
                   {dryRunProblem && <p className="dc-proposal-banner dc-proposal-banner-conflict">{dryRunProblem}</p>}
-                  {proposal.status === 'accepting' && <p className="dc-proposal-banner dc-proposal-banner-stale">Recovering from an interrupted accept — click Accept to finish, or Dismiss if you'd rather inspect the diagram yourself.</p>}
+                  {proposal.status === 'accepting' && <p className="dc-proposal-banner dc-proposal-banner-stale">Recovering from an interrupted accept — click Accept to finish, or Dismiss if you’d rather inspect the diagram yourself.</p>}
                 </>
               )}
               {decided && <p className="dc-muted">{decidedNote(proposal.status)}</p>}

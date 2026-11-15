@@ -220,6 +220,7 @@ export function together(a: { id?: string; spine?: string }, b: Other): boolean 
  *  `repairAnchors`'s per-candidate loop, up to `MAX_CHECKS` times per problem connector. */
 export function drawnRoute(edge: DraftEdge, nodes: readonly DraftNode[], edges: readonly DraftEdge[], caption?: CaptionSize, byId?: Map<string, DraftNode>): Drawn | null {
   if (isCollapsedCompensation(edge)) return null;
+  charge(1);
   edges = visibleEdges(edges);
   const nodeMap = byId ?? new Map(nodes.map((n) => [n.id, n]));
   const spine = routingPlan(nodes, edges, 'transient').spineFor(edge.id);
@@ -408,11 +409,36 @@ const BOUNDARY_DETOUR = 320;
 /** A line may run this close inside a boundary's outline before it counts as going through it. */
 const BOUNDARY_INSET = 2;
 
-/** How many alternative anchorings are drawn in full for one connector before it is left as it is. */
+/**
+ * How many alternative anchorings are drawn in full for one connector before it is left as it is.
+ * Each is a whole-view redraw, so this is what bounds a repair on a large diagram.
+ */
 const MAX_CHECKS = 24;
 
-/** The time (`performance.now()`) repairs stop by, set around a whole request by `withDeadline`. */
+/**
+ * The same, inside a work budget (`withBudget`: the editor's Arrange and Tidy up). A budget is spent in
+ * the order connectors are repaired, so the other eighteen checks on one connector are paid for by
+ * the connectors after it, which then go unrepaired: six lets the budget reach more of them. On the
+ * gallery's starters (every Arrange and Tidy up of all fourteen, measured both ways) six and twenty-four
+ * leave the same problems and the same crossings. An agent's request, bounded by time, keeps all
+ * twenty-four: its layouts are what `tests/agent/gallery.test.ts` and `routing-quality.test.ts` pin.
+ */
+const BUDGETED_CHECKS = 6;
+
+/**
+ * Where a request's repairs stop: a deterministic count of work and a wall-clock time.
+ *
+ * `work` is what the editor's Arrange and Tidy up are bounded by (`withBudget`): units of drawing
+ * (one connector drawn is one unit, `charge`), counted rather than timed, so the same diagram gives the
+ * same arrangement on any machine, at any load. `deadline` (a `performance.now()` time) is what an
+ * agent request is bounded by (`withDeadline`), and the editor's absolute safety net behind its work
+ * budget — never the thing that decides a result on a machine that is merely slow.
+ */
+let workLimit = Number.POSITIVE_INFINITY;
+let workUsed = 0;
 let activeDeadline = Number.POSITIVE_INFINITY;
+/** Set the first time a check finds the request out of time, so a result can say it stopped early. */
+let cutShort = false;
 
 /**
  * Runs `work` with repairs bounded by `deadline`: past it, `repairAnchors` leaves the rest as they are
@@ -429,8 +455,70 @@ export function withDeadline<T>(deadline: number, work: () => T): T {
   }
 }
 
-/** Whether the request's time is up (see `withDeadline`). */
-export const pastDeadline = () => performance.now() > activeDeadline;
+/** What a bounded run did: its result, the units of work it spent, and whether it stopped early. */
+export interface Bounded<T> {
+  value: T;
+  used: number;
+  /** A repair or an alternative was skipped because the budget was spent: the result is the best
+   *  found so far, and running the same request again on it may find more. */
+  partial: boolean;
+}
+
+/**
+ * Runs `work` bounded by `limit` units of work (see `charge`), and, as a backstop only, by `backstopMs`
+ * of wall-clock time. Which repairs run depends on the units spent so far and never on the clock, unless
+ * the backstop trips; so a result is the same on any machine.
+ */
+export function withBudget<T>(limit: { work: number; backstopMs?: number }, work: () => T): Bounded<T> {
+  const outer = { limit: workLimit, used: workUsed, deadline: activeDeadline, cutShort };
+  workLimit = limit.work;
+  workUsed = 0;
+  cutShort = false;
+  if (limit.backstopMs !== undefined) activeDeadline = Math.min(outer.deadline, performance.now() + limit.backstopMs);
+  try {
+    const value = work();
+    return { value, used: workUsed, partial: cutShort };
+  } finally {
+    workLimit = outer.limit;
+    workUsed = outer.used;
+    activeDeadline = outer.deadline;
+    cutShort = outer.cutShort;
+  }
+}
+
+/**
+ * Runs `work` with at most `units` more units of the budget (and no more than what is left): the
+ * request's budget split between parts that must each get some, such as the two reading directions
+ * of an Arrange. A slice that runs out leaves the rest of the budget as it was.
+ */
+export function withinWork<T>(units: number, work: () => T): T {
+  const outer = workLimit;
+  workLimit = Math.min(outer, workUsed + units);
+  try {
+    return work();
+  } finally {
+    workLimit = outer;
+  }
+}
+
+/** The units of work left in the budget; infinite outside one. */
+export function workLeft(): number {
+  return workLimit - workUsed;
+}
+
+/** Spends `units` of the budget (see `withBudget`); free outside one. */
+export function charge(units: number): void {
+  workUsed += units;
+}
+
+/** Whether the request's budget or time is up (see `withBudget`, `withDeadline`). */
+export function pastDeadline(): boolean {
+  if (workUsed > workLimit || performance.now() > activeDeadline) {
+    cutShort = true;
+    return true;
+  }
+  return false;
+}
 
 function skewed(edge: Pick<DraftEdge, 'sourceAnchor' | 'targetAnchor'>, points: readonly Point[]): boolean {
   const from = edge.sourceAnchor?.side;
@@ -459,6 +547,12 @@ function nearMiss(edge: Pick<DraftEdge, 'sourceAnchor' | 'targetAnchor'>, points
   return Math.abs(horizontal ? start.y - end.y : start.x - end.x) < NEAR_MISS;
 }
 
+/** What routing one candidate on its own (`roughCost`: an obstacle search, no plans) costs, in connectors drawn. */
+const ROUGH_ROUTE_UNITS = 2;
+
+/** How many pairs of drawn lines compare as cheaply as one connector is drawn (see `charge`). */
+const PAIRS_PER_UNIT = 64;
+
 interface RouteAssessment {
   problems: Map<string, RouteProblem>;
   unresolved: Set<string>;
@@ -480,6 +574,8 @@ function assessRoutes(nodes: readonly DraftNode[], edges: readonly DraftEdge[], 
   const places = new Set<string>();
   const edgeMap = new Map(edges.map((e) => [e.id, e]));
   const runs = drawn.map((d) => runsOf(d.points));
+  // Every pair of lines is compared for shared runs and crossings: counted like the draws are.
+  charge(Math.ceil((drawn.length * (drawn.length - 1)) / 2 / PAIRS_PER_UNIT));
   let cost = 0;
   let obstruction = 0;
   let overlap = 0;
@@ -534,20 +630,20 @@ function preservesReadability(before: RouteAssessment, after: RouteAssessment): 
  * sharing an end with the one being moved as a cheap screen. Surviving candidates are checked
  * against the whole view, including unrelated connectors sharing a corridor. Candidates are
  * ranked by a route drawn without trunks or lanes — cheap, and close enough to order them — and at
- * most `MAX_CHECKS` are drawn in full. `deadline` (a `performance.now()` time) stops the search
- * early; what is left unrepaired, the quality check then reports.
+ * most `MAX_CHECKS` (`BUDGETED_CHECKS` inside a work budget) are drawn in full. The request's budget (`withBudget`, `withDeadline`) stops the
+ * search early, between candidates and inside a connector's candidate loop, not only between
+ * connectors; what is left unrepaired, the quality check then reports.
  */
 export function repairAnchors(
   targets: DraftEdge[],
   nodes: readonly DraftNode[],
   caption?: CaptionSize,
   all: readonly DraftEdge[] = targets,
-  deadline = activeDeadline,
   polish = false,
 ): void {
   targets = targets.filter((e) => !isCollapsedCompensation(e));
   all = visibleEdges(all);
-  if (!targets.length || performance.now() > deadline) return;
+  if (!targets.length || pastDeadline()) return;
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const moving = new Map(targets.map((t) => [t.id, t]));
   const current = () => all.map((e) => moving.get(e.id) ?? e);
@@ -589,7 +685,8 @@ export function repairAnchors(
     offsets: for (const [sourceOffset, targetOffset] of OFFSET_PAIRS) {
       for (const source of SIDES) {
         for (const target of SIDES) {
-          if (performance.now() > deadline) break offsets;
+          if (pastDeadline()) break offsets;
+          charge(ROUGH_ROUTE_UNITS);
           if (original.sourceAnchor?.participantId && (source !== original.sourceAnchor.side || sourceOffset !== 0.5)) continue;
           if (original.targetAnchor?.participantId && (target !== original.targetAnchor.side || targetOffset !== 0.5)) continue;
           const sourceAnchor = original.sourceAnchor?.participantId ? original.sourceAnchor : { side: source, offset: sourceOffset };
@@ -614,8 +711,8 @@ export function repairAnchors(
       seenSides.add(key);
     }
     let fixed = false;
-    for (const candidate of [...firsts, ...rest].slice(0, MAX_CHECKS)) {
-      if (performance.now() > deadline) break;
+    for (const candidate of [...firsts, ...rest].slice(0, Number.isFinite(workLimit) ? BUDGETED_CHECKS : MAX_CHECKS)) {
+      if (pastDeadline()) break;
       if (why === 'tidiness' && (occupied(mover.source, candidate.source?.side) || occupied(mover.target, candidate.target?.side))) continue;
       // A readable but skewed connector can often lose an elbow simply by meeting the adjacent
       // side. Keep the current anchors unless the saving is substantial, not a pixel-level tie.
@@ -651,7 +748,7 @@ export function repairAnchors(
       if (problems.some((p) => p && p.kind !== 'through-boundary')) continue;
       const full = othersOf(nodes, next, caption, undefined, byId);
       const after = assessRoutes(nodes, next, full, byId);
-      if (performance.now() > deadline || !preservesReadability(before, after)) continue;
+      if (pastDeadline() || !preservesReadability(before, after)) continue;
       if (why === 'unresolved' && after.unresolved.has(mover.id)) continue;
       if (soft) {
         if (after.obstruction > before.obstruction || after.overlap > before.overlap + 1 || after.bundled < before.bundled || after.crossings > before.crossings || after.detours.size > before.detours.size) continue;
@@ -687,7 +784,7 @@ export function repairAnchors(
   };
 
   for (const edge of targets) {
-    if (performance.now() > deadline) return;
+    if (pastDeadline()) return;
     if (edge.waypoints?.length || edge.routeMode === 'direct') continue;
     const problem = assessment.problems.get(edge.id);
     if (!problem && assessment.unresolved.has(edge.id)) {

@@ -969,7 +969,7 @@ test('exports go through the shell’s Save dialog, and cancelling one is not a 
   await expect(dialog).toBeVisible();
   // A first-ever Export opens on Image; the document is what carries the diagram itself.
   await dialog.locator('[data-mode="document"]').click();
-  await page.getByRole('button', { name: 'Export document' }).click();
+  await page.getByRole('button', { name: 'Export file' }).click();
 
   await expect.poll(() => page.evaluate(() => window.__shell.exports().length)).toBe(1);
   const [exported] = await page.evaluate(() => window.__shell.exports());
@@ -991,7 +991,7 @@ test('cancelling an export’s Save dialog leaves the export dialog as it was, w
   await page.getByRole('menuitem', { name: /^Export/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Export & share' });
   await dialog.locator('[data-mode="document"]').click();
-  await page.getByRole('button', { name: 'Export document' }).click();
+  await page.getByRole('button', { name: 'Export file' }).click();
 
   await expect.poll(() => page.evaluate(() => window.__shell.calls().filter((call) => call.command === 'export_file').length)).toBe(1);
   await expect(dialog).toBeVisible();
@@ -1013,6 +1013,46 @@ test('the native Edit menu undoes what was drawn', async ({ page }) => {
 
   await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'redo' }));
   await expect(page.locator('.dc-node')).toHaveCount(1);
+});
+
+test('the native Arrange Diagram menu previews the layout first, like Arrange from ⌘K', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New Quick Draft' }).click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await drawService(page);
+  await page.keyboard.press('Escape');
+  await drawService(page, { x: 560, y: 220 });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.dc-node')).toHaveCount(2);
+  const positions = (): Promise<string[]> =>
+    page.evaluate(async () => {
+      const { useEditorStore } = await import('/src/store/editorStore.ts');
+      return useEditorStore.getState().document.nodes.map((node: { id: string; x: number; y: number }) => `${node.id}:${node.x},${node.y}`);
+    });
+  // Stacked on one spot, so that arranging has something to do.
+  await page.evaluate(async () => {
+    const { useEditorStore } = await import('/src/store/editorStore.ts');
+    type Placed = { x: number; y: number };
+    useEditorStore.getState().apply('Stack', (doc: { nodes: Placed[] }) => ({ ...doc, nodes: doc.nodes.map((node: Placed) => ({ ...node, x: 300, y: 300 })) }));
+  });
+  const stacked = await positions();
+  expect(stacked).toHaveLength(2);
+
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'arrange' }));
+  // A preview with its direction to choose and a Cancel: nothing has moved until Apply.
+  const bar = page.getByRole('region', { name: 'Arrange preview' });
+  await expect(bar).toBeVisible();
+  await expect(bar.getByRole('button', { name: 'Cancel' })).toBeVisible();
+  expect(await positions()).toEqual(stacked);
+  await bar.getByRole('button', { name: 'Cancel' }).click();
+  await expect(bar).toBeHidden();
+  expect(await positions()).toEqual(stacked);
+
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'arrange' }));
+  await expect(bar).toBeVisible();
+  await bar.getByRole('button', { name: 'Apply' }).click();
+  await expect(bar).toBeHidden();
+  await expect.poll(async () => new Set((await positions()).map((p: string) => p.split(':')[1])).size).toBe(2);
 });
 
 test('a file that is not a diagram is refused without leaving Home', async ({ page }) => {
@@ -1142,7 +1182,7 @@ test('Canvas settings is a page of Settings, however it is asked for', async ({ 
   let panel = settings.getByRole('tabpanel', { name: 'Canvas', exact: true });
   await panel.getByRole('radio', { name: /^Sketch/ }).check();
   await expect(page.locator(':root')).toHaveAttribute('data-personality', 'sketch');
-  await expect(panel.getByRole('switch', { name: 'Suggest the next move while drawing' })).toBeChecked();
+  await expect(panel.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeChecked();
   await expect(panel.getByText('Open a diagram to give it a background.')).toBeVisible();
   await settings.getByRole('button', { name: 'Close', exact: true }).click();
 

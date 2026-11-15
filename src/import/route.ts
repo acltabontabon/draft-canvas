@@ -10,7 +10,8 @@
 import type { NormalizeResult } from '../document/validate';
 import { deserializeDocument, readImportText, readProjectFile } from '../export/project';
 import { looksLikeSecureExport } from '../export/secureProject';
-import { looksLikeMermaid } from './mermaid/sniff';
+import { cleanTitle } from '../document/sanitize';
+import { DEFAULT_IMPORT_TITLE, looksLikeMermaid } from './mermaid/sniff';
 
 export type RoutedImport =
   /** An encrypted export: it needs a passphrase, which only the Library's prompt can ask for. */
@@ -27,8 +28,7 @@ const extensionOf = (name: string): string => {
 
 /** A document's title from the file it came in: the name without its extension. */
 export function titleFromFileName(name: string): string {
-  const base = name.replace(/\.[^.]+$/, '').trim();
-  return base || 'Imported diagram';
+  return cleanTitle(name.replace(/\.[^.]+$/, ''), DEFAULT_IMPORT_TITLE);
 }
 
 export async function routeImportFile(file: File): Promise<RoutedImport> {
@@ -67,5 +67,5 @@ export function unsupportedNotice(unsupported: readonly string[]): string | null
   if (unsupported.length === 0) return null;
   const shown = unsupported.slice(0, 4).join(', ');
   const more = unsupported.length > 4 ? `, and ${unsupported.length - 4} more` : '';
-  return `Imported — ${unsupported.length} thing${unsupported.length === 1 ? '' : 's'} Mermaid said that Draft Canvas doesn't draw: ${shown}${more}.`;
+  return `Imported — ${unsupported.length} thing${unsupported.length === 1 ? '' : 's'} Mermaid said that Draft Canvas doesn’t draw: ${shown}${more}.`;
 }

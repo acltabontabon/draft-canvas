@@ -28,6 +28,7 @@ Dependencies point toward `src/document/`, which is plain data with no React or 
 | `depth/`, `gallery/` | `document/` |
 | `layout/` | `document/`, `edges/bundles` |
 | `collab/` | `document/`, `depth/`, `lib/`, its own `transport/` |
+| `history/` | `document/`, `depth/`, and `collab/selective`'s `changeKeys` (which elements an edit touched, kept on an entry while a session is live) |
 | `continuation/` | `document/`, `edges/routing`, `edges/clearance`, `edges/compensationMarker`, `render/text` |
 | `openPoints/` | `document/`, `depth/`, `render/` |
 | `ink/` | `document/` |
@@ -158,7 +159,7 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
   only, and every file is hashed against `catalog.json` and opened through `parseDocument` before it
   is kept in its own IndexedDB database. Adding one is a paste of the whole file (`pasteDocument`),
   flows included, as one undo step. The Order processing example ships in `gallery/example/`.
-- **Continuation** ranks next shapes from the selection's neighborhood; only high confidence shows unprompted.
+- **Next-shape suggestions** (`continuation/`) rank next shapes from the selection's neighborhood; only high confidence shows unprompted.
 - **Open points** attach to element ids; they never affect geometry, routing or semantics.
 - **Sketches** (`DraftInk`) are per-room annotation over the shapes: compact relative points, one
   SVG layer in the viewport, one paint description (`render/ink.ts`) shared with export. They are

@@ -7,16 +7,13 @@ import { bendsOf, isLevel, simplifyPolyline, slideSegment, stepPolyline } from '
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { markBendDragEnded } from './bendDrag';
+import { DRAG_THRESHOLD_PX } from './gestureThresholds';
 
 /** A drag's bends, drawn before they are committed. `waypoints` absent: the drag has straightened
  *  the line out, and it is being drawn by the router again. */
 export interface BendPreview {
   waypoints: DraftPoint[] | undefined;
 }
-
-/** Screen pixels a pointer must travel before a press on a handle counts as a drag — the same
- *  allowance the endpoint handles give a click. */
-const DRAG_THRESHOLD_PX = 4;
 
 /** Screen pixels within which a dragged run or bend snaps level with what it can line up with. */
 const SNAP_PX = 6;

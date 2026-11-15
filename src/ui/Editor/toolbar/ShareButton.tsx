@@ -1,12 +1,14 @@
 import { useCallback, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { useCollabStore } from '../../../store/collabStore';
+import { DEFAULT_TITLE } from '../../../document/sanitize';
 import { useEditorStore } from '../../../store/editorStore';
 import { useUiStore } from '../../../store/uiStore';
 import { Button } from '../../common/Button';
 import { Tooltip } from '../../common/Tooltip';
 import { ToolbarMenu, type ToolbarMenuItem } from './ToolbarMenu';
 import { toolbarLabel, toolbarTooltip } from './toolbarTooltips';
+import { shortcutFor } from '../../../commands/shortcutLookup';
 
 /**
  * Every way the diagram reaches someone else, behind one word everybody already knows. Before, that
@@ -42,8 +44,8 @@ export function ShareButton({ onExport }: { onExport: () => void }) {
           {
             id: 'live',
             icon: 'people' as const,
-            label: live ? `Live session · ${people} ${people === 1 ? 'person' : 'people'}` : 'Draw together, live',
-            detail: live ? 'Who’s here, invites, and what each person can do' : 'Invite people to edit with you in real time',
+            label: live ? `Live session · ${people} ${people === 1 ? 'person' : 'people'}` : 'Collaborate…',
+            detail: live ? 'Who’s here, invites, and what each person can do' : 'Draw together, live — invite people to edit with you in real time',
             onSelect: choose(() => useUiStore.getState().setCollabOpen(true)),
           },
         ]
@@ -51,14 +53,16 @@ export function ShareButton({ onExport }: { onExport: () => void }) {
     {
       id: 'export',
       icon: 'export' as const,
-      label: 'Export',
+      // Named and keyed as the palette names them: a row that opens a dialog says so with its "…".
+      label: 'Export…',
+      shortcut: shortcutFor('export'),
       detail: 'An image, an editable file, a picture for your README, or another format',
       onSelect: choose(onExport),
     },
     {
       id: 'link',
       icon: 'link' as const,
-      label: 'Share read-only link',
+      label: 'Share read-only link…',
       detail: 'Create a protected snapshot for Guided reader or Focus view',
       onSelect: choose(() => useUiStore.getState().requestShareFromHere()),
     },
@@ -88,7 +92,7 @@ export function ShareButton({ onExport }: { onExport: () => void }) {
       {menu && (
         <ToolbarMenu
           label="Share"
-          heading={`Share “${title.trim() || 'Untitled canvas'}”`}
+          heading={`Share “${title.trim() || DEFAULT_TITLE}”`}
           className="dc-share-menu"
           anchorRect={menu.rect}
           trigger={menu.trigger}

@@ -20,7 +20,7 @@ export async function openGallery(page: Page) {
 export async function openStarter(page: Page, name: string) {
   await serveStarterGallery(page);
   await page.reload();
-  await page.getByRole('button', { name: 'New canvas', exact: true }).click();
+  await page.getByRole('button', { name: 'Quick Draft', exact: true }).click();
   await expect(page.locator('.dc-editor')).toBeVisible();
   await page.getByRole('group', { name: 'Suggested starters', exact: true }).getByRole('button', { name: `Start from ${name}`, exact: true }).click();
   await page.getByLabel('Diagram title').fill(name);

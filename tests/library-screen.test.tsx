@@ -29,6 +29,9 @@ function stubSession(overrides: Partial<DocumentSession> = {}): DocumentSession 
     makeEditableCopy: async () => {},
     closeDocument: async () => true,
     resolveConflict: async () => {},
+    retrySave: async () => true,
+    exportUnsaved: async () => {},
+    leaveWithoutSaving: async () => {},
     renameDocument: async () => {},
     duplicateDocument: async () => {},
     deleteDocument: async () => {},
@@ -83,14 +86,19 @@ describe('LibraryScreen — Home', () => {
     expect(container.querySelectorAll('input[type="file"]')).toHaveLength(1);
   });
 
-  it('starts a blank canvas on Enter and ignores held, modified, or focused Enter', async () => {
+  it('starts a blank canvas from Quick Draft by keyboard, and a stray Enter with nothing focused starts nothing', async () => {
     const session = stubSession();
     render(<LibraryScreen session={session} />);
-    fireEvent.keyDown(document.body, { key: 'Enter', repeat: true });
-    fireEvent.keyDown(document.body, { key: 'Enter', metaKey: true });
-    fireEvent.keyDown(screen.getByRole('button', { name: 'About Draft Canvas' }), { key: 'Enter' });
-    expect(session.newDocument).not.toHaveBeenCalled();
+    // Nothing focused: a key left over from another window must not add an "Untitled diagram".
     await userEvent.keyboard('{Enter}');
+    fireEvent.keyDown(document.body, { key: 'Enter', metaKey: true });
+    expect(session.newDocument).not.toHaveBeenCalled();
+    // The accessible name contains the visible text, and the hint is its description.
+    const start = screen.getByRole('button', { name: 'Quick Draft' });
+    expect(start).toHaveAccessibleDescription('No title needed. Just begin.');
+    start.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(session.newDocument).toHaveBeenCalledTimes(1);
     expect(session.newDocument).toHaveBeenCalledWith();
   });
 
@@ -105,7 +113,7 @@ describe('LibraryScreen — Home', () => {
     const { rerender } = render(<LibraryScreen session={stubSession()} />);
     rerender(<LibraryScreen session={stubSession({ library: [shaped()] })} />);
     expect(screen.getAllByRole('tab').map(tab => tab.textContent)).toEqual(['Drafts', 'Recent', 'Projects']);
-    screen.getByRole('button', { name: 'New canvas' }).focus();
+    screen.getByRole('button', { name: 'Quick Draft' }).focus();
     await userEvent.keyboard('{ArrowDown}');
     expect(screen.getByRole('tab', { name: 'Drafts' })).toHaveFocus();
     await userEvent.keyboard('{ArrowRight}{ArrowDown}');
@@ -126,7 +134,7 @@ describe('LibraryScreen — Home', () => {
   it('creates a browser project from the empty invitation', async () => {
     const session = stubSession();
     render(<LibraryScreen session={session} />);
-    screen.getByRole('button', { name: 'New canvas' }).focus();
+    screen.getByRole('button', { name: 'Quick Draft' }).focus();
     await userEvent.keyboard('{ArrowDown}');
     expect(screen.getByRole('button', { name: 'New project' })).toHaveFocus();
     await userEvent.keyboard('{Enter}');

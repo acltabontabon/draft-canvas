@@ -122,7 +122,9 @@ export const ELEMENT_TYPE_ALIASES: readonly string[] = Object.keys(ALIASES);
 
 export function resolveType(word: string): NativeShape | undefined {
   const key = word.trim().toLowerCase().replace(/[\s_]+/g, '-');
-  const direct = ELEMENT_TYPES[key] ?? ELEMENT_TYPES[ALIASES[key] ?? ''];
+  // Own keys only: "constructor" or "__proto__" from an agent is not a type.
+  const named = Object.hasOwn(ELEMENT_TYPES, key) ? key : Object.hasOwn(ALIASES, key) ? ALIASES[key]! : undefined;
+  const direct = named === undefined ? undefined : ELEMENT_TYPES[named];
   if (!direct) return undefined;
   const { summary: _summary, ...shape } = direct;
   return shape;

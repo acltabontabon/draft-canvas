@@ -1,13 +1,15 @@
 import { useReactFlow, useStore as useReactFlowStore, type Viewport } from '@xyflow/react';
-import { useEffect, useRef } from 'react';
+import { Fragment, useEffect, useMemo, useRef } from 'react';
+import { withArrangeMotion } from '../../canvas/arrangeMotion';
 import { focusBoundsInView } from '../../commands/search';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument } from '../../document/types';
-import { useEditorStore } from '../../store/editorStore';
+import { gestureInProgress, useEditorStore } from '../../store/editorStore';
 import { useUiStore, type ArrangeDirection, type ArrangePreview, type ArrangeShow } from '../../store/uiStore';
 import { Button } from '../common/Button';
+import { LayoutNotes } from './LayoutBusyBar';
 import { SegmentedControl } from '../common/SegmentedControl';
-import { directionNote, fixesNote, readsAs } from './arrangeSummary';
+import { directionNote, fixesNote, layoutNotes, movesNote, readsAs } from './arrangeSummary';
 
 const DIRECTIONS: { value: ArrangeDirection; label: string; name: string }[] = [
   { value: 'right', label: 'Across →', name: 'Across, left to right' },
@@ -55,6 +57,9 @@ export function ArrangeBar() {
   const viewWidth = useReactFlowStore((state) => state.width);
   const viewHeight = useReactFlowStore((state) => state.height);
   const shown = preview && !stale ? preview.options[preview.direction] : undefined;
+  // What the arrangement shown moves, worked out once per arrangement and not on every render.
+  const base = preview?.base;
+  const moves = useMemo(() => (shown && base ? movesNote(base, shown) : ''), [shown, base]);
 
   const show = preview?.show;
   const camera = { viewWidth, viewHeight, setViewport };
@@ -66,8 +71,22 @@ export function ArrangeBar() {
     useUiStore.getState().setArrangePreview(null);
   };
   const apply = (latest: ArrangePreview) => {
-    if (applyArrange(latest)) focusBoundsInView(camera, boundsOf(latest.options[latest.direction]?.nodes ?? []));
-    else goBack();
+    // A drag or resize in progress holds the diagram: nothing is wrong with the preview, it just
+    // cannot go in yet. It stays up (and the camera where it is), rather than being thrown away with
+    // a message about the diagram having changed.
+    if (gestureInProgress()) {
+      useUiStore.getState().notify('Finish what you are dragging first, then apply the arrangement.');
+      return;
+    }
+    const run = (): boolean => {
+      const applied = applyArrange(latest);
+      if (applied) focusBoundsInView(camera, boundsOf(latest.options[latest.direction]?.nodes ?? []));
+      else goBack();
+      return applied;
+    };
+    // Nodi's layout skills play the rearrangement; the document has changed before any of it plays.
+    if (latest.motion) void withArrangeMotion(async () => run(), latest.direction);
+    else run();
   };
 
   useEffect(() => {
@@ -119,49 +138,54 @@ export function ArrangeBar() {
   if (!preview || stale) return null;
   const choices = DIRECTIONS.filter((d) => preview.options[d.value]);
   const fixed = fixesNote(preview.fixes?.[preview.direction]);
+  const notes = layoutNotes(preview, 'arrange');
 
   return (
-    <div className="dc-tidy-bar dc-arrange-bar" role="region" aria-label="Arrange preview">
-      <span className="dc-tidy-bar-text" role="status">
-        <strong>{preview.scoped ? 'Arrange selection' : 'Arrange'}</strong>
-        {choices.length < 2 && <span className="dc-tidy-bar-summary">{readsAs(preview.direction)}</span>}
-        {/* Only what this arrangement resolves, marked in teal on the sheet. */}
-        {fixed && <span className="dc-tidy-bar-summary dc-arrange-bar-fixes" title={fixed}>{fixed}</span>}
-      </span>
-      {choices.length > 1 && (
-        <span className="dc-arrange-bar-direction">
-          <SegmentedControl
-            name="arrange-direction"
-            legend="Reading direction"
-            value={preview.direction}
-            options={choices}
-            onChange={(direction) => {
-              const latest = useUiStore.getState().arrangePreview;
-              if (latest) useUiStore.getState().setArrangePreview({ ...latest, direction });
-            }}
-          />
-          <span className="dc-tidy-bar-summary">{directionNote(preview)}</span>
+    <Fragment>
+      <div className="dc-tidy-bar dc-arrange-bar" role="region" aria-label="Arrange preview">
+        <span className="dc-tidy-bar-text" role="status">
+          <strong>{preview.scoped ? 'Arrange selection' : 'Arrange'}</strong>
+          {choices.length < 2 && <span className="dc-tidy-bar-summary">{readsAs(preview.direction)}</span>}
+          {moves && <span className="dc-tidy-bar-summary">{moves}</span>}
+          {/* Only what this arrangement resolves, marked in teal on the sheet. */}
+          {fixed && <span className="dc-tidy-bar-summary dc-arrange-bar-fixes" title={fixed}>{fixed}</span>}
         </span>
-      )}
-      <SegmentedControl
-        name="arrange-show"
-        legend="Show"
-        value={preview.show}
-        options={SHOWS}
-        onChange={(next) => {
-          const latest = useUiStore.getState().arrangePreview;
-          if (latest) useUiStore.getState().setArrangePreview({ ...latest, show: next });
-        }}
-      />
-      <span className="dc-tidy-bar-actions">
-        <Button variant="quiet" title="Keep the diagram and the view as they were (Esc)" onClick={cancel}>
-          Cancel
-        </Button>
-        <Button variant="solid" title="Apply this arrangement as one undo step (Enter)" onClick={() => apply(preview)}>
-          Apply
-        </Button>
-      </span>
-    </div>
+        {choices.length > 1 && (
+          <span className="dc-arrange-bar-direction">
+            <SegmentedControl
+              name="arrange-direction"
+              legend="Reading direction"
+              value={preview.direction}
+              options={choices}
+              onChange={(direction) => {
+                const latest = useUiStore.getState().arrangePreview;
+                if (latest) useUiStore.getState().setArrangePreview({ ...latest, direction });
+              }}
+            />
+            <span className="dc-tidy-bar-summary">{directionNote(preview)}</span>
+          </span>
+        )}
+        <SegmentedControl
+          name="arrange-show"
+          legend="Show"
+          value={preview.show}
+          options={SHOWS}
+          onChange={(next) => {
+            const latest = useUiStore.getState().arrangePreview;
+            if (latest) useUiStore.getState().setArrangePreview({ ...latest, show: next });
+          }}
+        />
+        <span className="dc-tidy-bar-actions">
+          <Button variant="quiet" title="Keep the diagram and the view as they were (Esc)" onClick={cancel}>
+            Cancel
+          </Button>
+          <Button variant="solid" title="Apply this arrangement as one undo step (Enter)" onClick={() => apply(preview)}>
+            Apply
+          </Button>
+        </span>
+      </div>
+      {notes.length > 0 && <LayoutNotes notes={notes} />}
+    </Fragment>
   );
 }
 

@@ -118,6 +118,11 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Arrange's proportion rules (wider boxes for long names, gaps sized to their captions, a reading
   direction weighed by how it fits a screen) belong to Arrange and new layouts, never Tidy up. Its
   preview lives in `uiStore.arrangePreview`; only `editorStore.commitArrange` applies it.
+- Every way into Arrange or Tidy up (palette, menus, the desktop menu, Nodi's skills) goes through
+  `commands/arrange.ts`, which shows a preview first. The work runs on the agent worker
+  (`agent/layoutPlan.ts` through `offThread.ts`, Cancel included) and is bounded by a deterministic
+  work budget (`route.ts`'s `withBudget`), never a wall-clock deadline: the same diagram gives the
+  same preview on any machine, and a result that ran out says `partial`.
 
 ### Sketches and Smart Ink
 
@@ -167,8 +172,9 @@ labels and presets in `lib/`.
 Library and editor are states of `src/App.tsx`, with no router. Keep the editor's Vite `base: './'`.
 
 `depth/`, `gallery/` and `traffic/` import only `document/`; `layout/` also imports `edges/bundles`. `collab/`
-imports `document/`, `depth/` and `lib/`. `continuation/` also imports `render/text` and `edges/` routing
-helpers; `openPoints/` also imports `depth/` and `render/` types. None of these import UI, canvas or
+imports `document/`, `depth/` and `lib/`. `history/` imports `document/` and `depth/`, plus `collab/selective`'s
+`changeKeys`, which records what an edit touched while a session is live. `continuation/` also imports
+`render/text` and `edges/` routing helpers; `openPoints/` also imports `depth/` and `render/` types. None of these import UI, canvas or
 store modules. `agent/` may consume these and rendering/export helpers, never UI or store modules. `depth/c4.ts` shares C4 role and scope derivation with the editor and agent.
 
 `www/` is a separate Vite project with its own lockfile and no shared app dependencies. Web assembly

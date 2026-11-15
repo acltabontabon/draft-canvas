@@ -4,7 +4,7 @@ import { createDocument, createEdge, createNode } from '../src/document/factory'
 import { parseDocument } from '../src/document/validate';
 import { mermaidFlowchartSource } from '../src/export/source/mermaidFlowchart';
 import { importMermaid, looksLikeMermaid, MERMAID_LIMITS, parseMermaidFlowchart } from '../src/import/mermaid';
-import { unsupportedNotice } from '../src/import/route';
+import { titleFromFileName, unsupportedNotice } from '../src/import/route';
 
 /**
  * The Mermaid reader: every shape bracket, every arrow, labels in both spellings, subgraphs, the
@@ -319,9 +319,16 @@ describe('parseMermaidFlowchart — refusals', () => {
   });
 
   it('refuses more arrows than one request may carry', () => {
-    const lines = Array.from({ length: 700 }, (_, i) => `a${i % 10} --> b${i % 20}`);
+    // 700 different pairs: a repeated pair is one connector now, and counts once.
+    const lines = Array.from({ length: 700 }, (_, i) => `a${i % 25} --> b${Math.floor(i / 25)}`);
     const result = parseMermaidFlowchart(`flowchart LR\n${lines.join('\n')}`);
     expect(result).toMatchObject({ ok: false, error: expect.stringContaining('more than 600 arrows') });
+  });
+
+  it('counts a repeated pair once, so a chart of repeats is not refused for its length', () => {
+    const lines = Array.from({ length: 700 }, (_, i) => `a${i % 10} --> b${i % 20}`);
+    const result = parseMermaidFlowchart(`flowchart LR\n${lines.join('\n')}`);
+    expect(result.ok).toBe(true);
   });
 
   it('refuses text past the size cap before reading a line of it', () => {
@@ -402,8 +409,8 @@ describe('importMermaid', () => {
 describe('unsupportedNotice', () => {
   it('names what was left out, in one sentence, and nothing when nothing was', () => {
     expect(unsupportedNotice([])).toBeNull();
-    expect(unsupportedNotice(['classDef'])).toBe("Imported — 1 thing Mermaid said that Draft Canvas doesn't draw: classDef.");
-    expect(unsupportedNotice(['a', 'b', 'c', 'd', 'e', 'f'])).toBe("Imported — 6 things Mermaid said that Draft Canvas doesn't draw: a, b, c, d, and 2 more.");
+    expect(unsupportedNotice(['classDef'])).toBe('Imported — 1 thing Mermaid said that Draft Canvas doesn’t draw: classDef.');
+    expect(unsupportedNotice(['a', 'b', 'c', 'd', 'e', 'f'])).toBe('Imported — 6 things Mermaid said that Draft Canvas doesn’t draw: a, b, c, d, and 2 more.');
   });
 });
 
@@ -466,4 +473,78 @@ describe('hostile text', () => {
     const imported = await importMermaid(text, 'controls');
     expect(imported.ok, imported.ok ? '' : imported.error).toBe(true);
   });
+});
+
+describe('valid Mermaid is never refused in the agent’s words', () => {
+  it('merges parallel arrows into one connector, joins the labels, and says so', async () => {
+    const result = parsed('flowchart LR\n Orders -->|read| Store\n Orders -->|write| Store\n');
+    expect(result.create.relationships).toHaveLength(1);
+    expect(edge(result, 'Orders', 'Store').label).toBe('read / write');
+    expect(result.unsupported).toEqual(['more than one arrow from Orders to Store (drawn as one connector, labels joined)']);
+    const imported = await importMermaid('flowchart LR\n Orders -->|read| Store\n Orders -->|write| Store\n', 'x');
+    expect(imported.ok, imported.ok ? '' : imported.error).toBe(true);
+    if (!imported.ok) return;
+    expect(imported.document.edges).toHaveLength(1);
+    expect(imported.document.edges[0]!.label).toBe('read / write');
+    expect(unsupportedNotice(imported.unsupported)).toMatch(/more than one arrow from Orders to Store/);
+  });
+
+  it('keeps the stronger arrow when a solid one and a dotted one meet, and says each label once', () => {
+    const result = parsed('flowchart LR\n A --> B\n A -.->|poll| B\n A -->|poll| B\n');
+    const merged = edge(result, 'A', 'B');
+    expect(merged.async).toBeUndefined();
+    expect(merged.label).toBe('poll');
+    const dotted = parsed('flowchart LR\n A -.->|x| B\n A -.->|y| B\n');
+    expect(edge(dotted, 'A', 'B')).toMatchObject({ async: true, label: 'x / y' });
+    // The reverse direction is its own connector.
+    expect(parsed('flowchart LR\n A --> B\n B --> A\n').create.relationships).toHaveLength(2);
+  });
+
+  it('imports `-->` beside `-.->` on the same pair', async () => {
+    const imported = await importMermaid('flowchart LR\n A --> B\n A -.-> B\n', 'x');
+    expect(imported.ok, imported.ok ? '' : imported.error).toBe(true);
+  });
+
+  it('caps a title taken from a file name, whatever its length', async () => {
+    const title = titleFromFileName(`${'x'.repeat(300)}.mmd`);
+    expect(title).toHaveLength(200);
+    const imported = await importMermaid('flowchart LR\n A --> B\n', title);
+    expect(imported.ok, imported.ok ? '' : imported.error).toBe(true);
+    if (imported.ok) expect(imported.document.metadata.title).toHaveLength(200);
+    // Whitespace, control characters and a missing name fall back the same way.
+    expect(titleFromFileName('   .mmd')).toBe('Imported diagram');
+    expect(titleFromFileName('a\u0007b.mmd')).toBe('ab');
+    expect(titleFromFileName('plain')).toBe('plain');
+  });
+
+  it('caps a title written in the front matter, and names the cut', () => {
+    const result = parsed(`---\ntitle: ${'y'.repeat(260)}\n---\nflowchart LR\n A --> B\n`);
+    expect(result.create.title).toHaveLength(200);
+    expect(result.unsupported).toContain('a title longer than 200 characters (shortened)');
+  });
+
+  it('keeps 50 nested subgraphs, flattening what is deeper than a file keeps', async () => {
+    const text = `flowchart TD\n${Array.from({ length: 50 }, (_, i) => `subgraph s${i}\n`).join('')}a --> b\n${'end\n'.repeat(50)}c --> d\n`;
+    const result = parsed(text);
+    expect(result.create.groups).toHaveLength(MERMAID_LIMITS.groupDepth);
+    expect(result.unsupported).toContain(`subgraphs nested more than ${MERMAID_LIMITS.groupDepth} deep (the shapes inside are kept in the ${MERMAID_LIMITS.groupDepth}th)`);
+    const deepest = result.create.groups.at(-1)!;
+    expect(byLabel(result, 'a').group).toBe(deepest.id);
+    expect(byLabel(result, 'c').group).toBeUndefined();
+    const imported = await importMermaid(text, 'deep');
+    expect(imported.ok, imported.ok ? '' : imported.error).toBe(true);
+    if (!imported.ok) return;
+    // Opens back exactly as it was imported: nothing for the loader to repair.
+    const reopened = parseDocument(JSON.stringify({ ...imported.document, format: 'draft-canvas' }));
+    expect(reopened.ok).toBe(true);
+    if (reopened.ok) expect(reopened.repairs).toEqual([]);
+  });
+
+  it('a subgraph below the depth limit is no shape to draw an arrow to', () => {
+    const text = `flowchart TD\n${Array.from({ length: 34 }, (_, i) => `subgraph s${i}\n`).join('')}a\n${'end\n'.repeat(34)}a --> s33\n`;
+    const result = parsed(text);
+    expect(result.unsupported).toContain('arrows to or from a subgraph');
+    expect(result.create.nodes).toHaveLength(1);
+  });
+
 });

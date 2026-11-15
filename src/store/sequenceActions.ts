@@ -356,6 +356,8 @@ export const sequenceActions = {
       .filter((node): node is NonNullable<typeof node> => !!node && isLinkable(node))
       .sort((a, b) => a.x + a.width / 2 - (b.x + b.width / 2) || a.y - b.y);
     if (shapes.length === 0) return null;
+    // Past the cap the new sequence is the node a reload drops (the file would hold the newest five over).
+    if (!roomFor(1, 0)) return null;
     // To the right of everything on the canvas, level with the top of the chosen shapes: clear of
     // whatever the architecture already is.
     const right = Math.max(...editor.document.nodes.map((node) => node.x + node.width));
@@ -379,6 +381,7 @@ export const sequenceActions = {
       useUiStore.getState().notify('That flow has no steps to draw as a sequence yet.');
       return null;
     }
+    if (!roomFor(1, 0)) return null;
     const right = Math.max(0, ...editor.document.nodes.map((node) => node.x + node.width));
     const top = Math.min(0, ...editor.document.nodes.map((node) => node.y));
     editor.beginInteraction('Sequence from flow');

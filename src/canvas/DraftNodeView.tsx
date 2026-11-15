@@ -578,7 +578,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           onClick={(event) => {
             event.stopPropagation();
             const failed = () =>
-              useUiStore.getState().notify("Couldn't copy — the browser blocked clipboard access.", 'error');
+              useUiStore.getState().notify("Couldn’t copy — the browser blocked clipboard access.", 'error');
             // Absent outside a secure context (a self-hosted copy served over plain HTTP on a LAN).
             if (!navigator.clipboard?.writeText) {
               failed();

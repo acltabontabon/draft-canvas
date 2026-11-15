@@ -139,6 +139,20 @@ export interface TidyPreview {
   reattached: number;
   /** Whether only the selection was tidied. */
   scoped: boolean;
+  /** The work budget was spent before every repair was tried (a large diagram): running Tidy up
+   *  again on the result continues. */
+  partial?: boolean;
+  /** How many sketches the room holds: they stay where they are, which the bar says. */
+  sketches?: number;
+}
+
+/** Tidy up found nothing to change. */
+export interface TidyNothing {
+  nothing: true;
+  /** It ran out of its work budget on a large diagram before it could tell. */
+  stopped: boolean;
+  /** What reads badly all the same (`agent/proportion.ts`): laying the room out again may fix it. */
+  reads: ArrangeFix[];
 }
 
 /**
@@ -169,9 +183,27 @@ export interface ArrangePreview {
    *  columns, captions with no room, header-heavy boundaries, an overview too small to read. Only
    *  what that arrangement resolves, so nothing is reported that Apply would not change. */
   fixes?: Partial<Record<ArrangeDirection, ArrangeFix[]>>;
+  /** The work budget was spent before every repair was tried (a large diagram). */
+  partial?: boolean;
+  /** Only one direction is offered because the budget was spent on the first, not because the other
+   *  adds nothing: the bar says why the choice is missing. */
+  alternativeSkipped?: boolean;
+  /** How many sketches the room holds: they stay where they are, which the bar says. */
+  sketches?: number;
+  /** Asked for by a layout skill of Nodi's: Apply plays the rearrangement (`canvas/arrangeMotion.ts`)
+   *  instead of cutting to it. */
+  motion?: boolean;
 }
 
 export type { ArrangeFix };
+
+/** A layout job in flight (see `UiStore.layoutBusy`). */
+export interface LayoutBusy {
+  kind: 'arrange' | 'tidy';
+  /** Whether only the selection is being worked on. */
+  scoped: boolean;
+  cancel: () => void;
+}
 
 export type ArrangeDirection = 'right' | 'down';
 
@@ -231,6 +263,9 @@ const RECENT_LIMIT = 12;
 /** How long accepted nodes keep their one-shot settle marker — just past the 180 ms animation. */
 const SETTLE_MS = 240;
 let settleTimer: ReturnType<typeof setTimeout> | undefined;
+/** How long a continuation notice ("No other suggestions") stays up — long enough to read, and to be announced once. */
+const CONTINUATION_NOTICE_MS = 1800;
+let continuationNoticeTimer: ReturnType<typeof setTimeout> | undefined;
 /** Long enough for the slowest change animation in `canvas.css` (a connector drawing itself, ~420 ms). */
 const CHANGE_MARK_MS = 560;
 let changeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -299,11 +334,13 @@ export interface OpenPointPopoverState {
   pointId?: string;
 }
 
+/** `startEditing` opens the card ready to type — for an attachment that was just made on purpose
+ *  ("Attach note" is a request to write one), never for a click on an existing chip, which only reads. */
 export type AttachmentDetail = (
   | { hostKind: 'node'; hostId: string }
   | { hostKind: 'edge'; hostId: string }
-  | { hostKind: 'message'; hostId: string; messageId: string; startEditing?: boolean }
-) & { attachmentId: string | null };
+  | { hostKind: 'message'; hostId: string; messageId: string }
+) & { attachmentId: string | null; startEditing?: boolean };
 /** What the Pencil draws with: a pen, a highlighter, or the eraser that takes whole strokes away. */
 export type PencilTool = 'pen' | 'highlighter' | 'eraser';
 export type InkSizeName = 's' | 'm' | 'l';
@@ -621,6 +658,10 @@ export interface UiStore {
   tidyPreview: TidyPreview | null;
   /** What Arrange would change, while the person decides: see `ArrangePreview`. */
   arrangePreview: ArrangePreview | null;
+  /** Arrange or Tidy up is being worked out, off the page's thread: what `LayoutBusyBar` says, and the
+   *  Cancel that stops it. Transient like the previews it leads to. */
+  layoutBusy: LayoutBusy | null;
+  setLayoutBusy: (busy: LayoutBusy | null) => void;
   /**
    * Offers the user has waved away this session, pinned to the exact neighborhood they were made
    * in (`dismissalKey`): Escape on a ghost keeps it away for that node until something about that
@@ -632,6 +673,12 @@ export interface UiStore {
   continuationsEnabled: boolean;
   /** The alternative the user cycled to at the selected node, if they did. */
   continuationCycle: ContinuationCycle | null;
+  /**
+   * A line the suggestion has for the person who just pressed `]` or `[` when nothing came of it
+   * ("No other suggestions" — one alternative has nothing to step to). Read out by the screen-reader
+   * announcer and echoed in the pill; expires on its own, and is never a toast.
+   */
+  continuationNotice: string | null;
   /**
    * Rule ids of recently accepted continuations, newest last — a light ranking hint ("you keep
    * adding Data Stores") and nothing more. Session-only: cleared on document switch, never saved.
@@ -801,6 +848,8 @@ export interface UiStore {
   cycleContinuation: (delta: 1 | -1) => void;
   /** Pins a chosen candidate (or clears the choice with `null`). */
   setContinuationCycle: (cycle: ContinuationCycle | null) => void;
+  /** Says `text` through the pill and the live region for a moment; `null` takes it back at once. */
+  noteContinuation: (text: string | null) => void;
   /** Remembers an accepted continuation's rule for ranking. */
   recordContinuationAccepted: (ruleId: string) => void;
   /** On document switch: nothing about the previous diagram's offers applies to the next. */
@@ -960,9 +1009,12 @@ export const useUiStore = create<UiStore>((set, get) => ({
   proposalPreview: null,
   tidyPreview: null,
   arrangePreview: null,
+  layoutBusy: null,
+  setLayoutBusy: (layoutBusy) => set({ layoutBusy }),
   continuationDismissals: new Set<DismissalKey>(),
   continuationsEnabled: initialContinuationsEnabled(),
   continuationCycle: null,
+  continuationNotice: null,
   continuationRecent: [],
   settleNodeIds: [],
   arrivingIds: NO_IDS,
@@ -1171,7 +1223,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => {
       const previous = state.continuation;
       if (previous === next) return state;
-      if (!sameOffer(previous, next)) return { continuation: next };
+      // A different suggestion has no use for a line said about the last one.
+      if (!sameOffer(previous, next)) return { continuation: next, ...(state.continuationNotice !== null ? { continuationNotice: null } : {}) };
       if (!previous || !next) return { continuation: next };
       return { continuation: reidentify(previous, next) };
     }),
@@ -1196,14 +1249,22 @@ export const useUiStore = create<UiStore>((set, get) => ({
     }),
   setContinuationCycle: (continuationCycle) =>
     set((state) => (sameCycle(state.continuationCycle, continuationCycle) ? state : { continuationCycle })),
+  noteContinuation: (text) => {
+    clearTimeout(continuationNoticeTimer);
+    set({ continuationNotice: text });
+    if (text === null) return;
+    continuationNoticeTimer = setTimeout(() => set({ continuationNotice: null }), CONTINUATION_NOTICE_MS);
+  },
   recordContinuationAccepted: (ruleId) =>
     set((state) => ({ continuationRecent: [...state.continuationRecent, ruleId].slice(-RECENT_LIMIT) })),
   resetContinuation: () => {
     clearTimeout(settleTimer);
+    clearTimeout(continuationNoticeTimer);
     set({
       continuation: null,
       continuationDismissals: new Set<DismissalKey>(),
       continuationCycle: null,
+      continuationNotice: null,
       continuationRecent: [],
       settleNodeIds: [],
     });
@@ -1331,16 +1392,30 @@ function reidentify(previous: ContinuationOffer, next: ContinuationOffer): Conti
 }
 
 /**
- * The last pointer position over the canvas: `x`/`y` in canvas coordinates, `screenX`/`screenY` where
- * it is on screen. `known` is false while the pointer is off the canvas.
+ * The last pointer position over the canvas, in screen pixels. `known` is false while the pointer is
+ * off the canvas.
  *
  * Kept outside React deliberately: keyboard shortcuts need to know where the
  * cursor is so a new note appears under it, and re-rendering the canvas on
- * every mouse move to track that would be absurd. The canvas re-derives `x`/`y` whenever the camera
- * moves: kept from the last mouse move, a zoom, fit, trackpad pan or step inside left them pointing
- * at a spot the cursor no longer covers, often off screen.
+ * every mouse move to track that would be absurd. Only the screen point is stored per move: where
+ * it is on the canvas (`pointerFlow`) is worked out when a shortcut asks, from the camera as it is
+ * then — a zoom, fit, trackpad pan or step inside moves the canvas under a cursor that has not,
+ * and converting on every move (a layout read each) and again on every camera frame to keep a
+ * flow-space copy fresh was work for a question asked a few times a minute.
  */
-export const pointer = { x: 0, y: 0, screenX: 0, screenY: 0, known: false };
+export const pointer = {
+  screenX: 0,
+  screenY: 0,
+  known: false,
+  /** The canvas's own screen → canvas conversion, set while it is mounted. */
+  toFlow: null as ((point: { x: number; y: number }) => { x: number; y: number }) | null,
+};
+
+/** Where the pointer is on the canvas, in canvas coordinates, as the camera stands now. */
+export function pointerFlow(): { x: number; y: number } {
+  const screen = { x: pointer.screenX, y: pointer.screenY };
+  return pointer.toFlow ? pointer.toFlow(screen) : screen;
+}
 
 function sameBox(
   a: PresentationState['focus'] | undefined,

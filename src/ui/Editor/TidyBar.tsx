@@ -1,7 +1,9 @@
-import { useEffect } from 'react';
-import { useEditorStore } from '../../store/editorStore';
+import { Fragment, useEffect } from 'react';
+import { gestureInProgress, useEditorStore } from '../../store/editorStore';
 import { useUiStore, type TidyPreview } from '../../store/uiStore';
 import { Button } from '../common/Button';
+import { layoutNotes } from './arrangeSummary';
+import { LayoutNotes } from './LayoutBusyBar';
 import { tidySummary } from './tidySummary';
 
 /**
@@ -53,22 +55,26 @@ export function TidyBar() {
 
   if (!preview || stale) return null;
   const summary = tidySummary(preview);
+  const notes = layoutNotes(preview, 'tidy');
 
   return (
-    <div className="dc-tidy-bar" role="region" aria-label="Tidy up preview">
-      <span className="dc-tidy-bar-text" role="status">
-        <strong>{preview.scoped ? 'Tidy up selection' : 'Tidy up'}</strong>
-        {summary && <span className="dc-tidy-bar-summary">{summary}</span>}
-      </span>
-      <span className="dc-tidy-bar-actions">
-        <Button variant="quiet" title="Keep the diagram as it is (Esc)" onClick={() => useUiStore.getState().setTidyPreview(null)}>
-          Cancel
-        </Button>
-        <Button variant="solid" title="Apply this cleanup as one undo step (Enter)" onClick={() => applyTidy(preview)}>
-          Apply
-        </Button>
-      </span>
-    </div>
+    <Fragment>
+      <div className="dc-tidy-bar" role="region" aria-label="Tidy up preview">
+        <span className="dc-tidy-bar-text" role="status">
+          <strong>{preview.scoped ? 'Tidy up selection' : 'Tidy up'}</strong>
+          {summary && <span className="dc-tidy-bar-summary">{summary}</span>}
+        </span>
+        <span className="dc-tidy-bar-actions">
+          <Button variant="quiet" title="Keep the diagram as it is (Esc)" onClick={() => useUiStore.getState().setTidyPreview(null)}>
+            Cancel
+          </Button>
+          <Button variant="solid" title="Apply this cleanup as one undo step (Enter)" onClick={() => applyTidy(preview)}>
+            Apply
+          </Button>
+        </span>
+      </div>
+      {notes.length > 0 && <LayoutNotes notes={notes} />}
+    </Fragment>
   );
 }
 
@@ -76,6 +82,11 @@ function applyTidy(preview: TidyPreview) {
   const ui = useUiStore.getState();
   const editor = useEditorStore.getState();
   const before = editor.history.past.at(-1);
+  // A drag in progress holds the diagram; the preview stays up for when it ends (see `applyArrange`).
+  if (gestureInProgress()) {
+    ui.notify('Finish what you are dragging first, then apply the cleanup.');
+    return;
+  }
   const applied = editor.commitTidy(preview);
   ui.setTidyPreview(null);
   if (!applied) {

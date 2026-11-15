@@ -152,8 +152,8 @@ export const DEV_PRESETS: Preset[] = [
     label: 'Junction',
     type: 'ellipse',
     shortcut: 'J',
-    hint: 'Where connections branch or converge',
-    description: 'A visual routing point for organizing connections.',
+    hint: 'Where connectors branch or converge',
+    description: 'A visual routing point for organizing connectors.',
     usageHint: 'Use for fan-in, fan-out, or cleaner paths — not a runtime component.',
   },
   {
@@ -166,7 +166,7 @@ export const DEV_PRESETS: Preset[] = [
     shortcut: 'M',
     hint: 'A logical building block inside a boundary — not independently deployable',
     description: 'A logical part inside a larger system or service.',
-    usageHint: "Use instead of Service when it isn't independently deployable.",
+    usageHint: "Use instead of Service when it isn’t independently deployable.",
     accent: 'neutral',
   },
   {

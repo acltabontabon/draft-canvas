@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import type { BackgroundSettings } from '../document/types';
 import { blurRadiusFor } from '../render/backgroundAnchor';
 import { getRepository } from '../storage';
@@ -27,7 +27,7 @@ const BACKGROUND_SIZE_CSS: Record<BackgroundSettings['fit'], string> = {
  * grouping/routing/keyboard shortcuts — it never appears in `document.nodes`
  * or any node/selection code path.
  */
-export function CanvasBackground({ settings, documentId, extraDim = 0 }: CanvasBackgroundProps) {
+export const CanvasBackground = memo(function CanvasBackground({ settings, documentId, extraDim = 0 }: CanvasBackgroundProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -80,4 +80,4 @@ export function CanvasBackground({ settings, documentId, extraDim = 0 }: CanvasB
       <div className="dc-canvas-background-scrim" style={{ opacity: dim }} />
     </div>
   );
-}
+});

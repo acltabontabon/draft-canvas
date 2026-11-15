@@ -210,7 +210,7 @@ function AttachmentPopoverBody({ detail, closing, listening, editable }: { detai
         ref={panelRef}
         className="dc-attachment-popover"
         role="toolbar"
-        aria-label={messageId ? 'Message attachments' : `Attachments for ${displayHost.text || 'this node'}`}
+        aria-label={messageId ? 'Message attachments' : `Attachments for ${displayHost.text || 'this shape'}`}
         data-closing={closing ? 'true' : undefined}
         data-placement={placement}
         onPointerDown={(event) => event.stopPropagation()}

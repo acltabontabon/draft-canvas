@@ -9,6 +9,7 @@ import {
   type SaveOptions,
   type SharedMetadata,
 } from './DraftRepository';
+import { cleanTitle } from '../document/sanitize';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 
 /**
@@ -67,7 +68,7 @@ export class MemoryRepository implements DraftRepository {
   async rename(id: string, title: string): Promise<void> {
     const found = this.documents.get(id);
     if (!found) return;
-    found.metadata = { ...found.metadata, title, updatedAt: Date.now() };
+    found.metadata = { ...found.metadata, title: cleanTitle(title), updatedAt: Date.now() };
   }
 
   async listProjects(): Promise<Project[]> {

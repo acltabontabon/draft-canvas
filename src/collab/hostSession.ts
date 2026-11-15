@@ -595,10 +595,11 @@ export class HostSession {
   commitLocal(): Commit | null {
     if (this.ended) return null;
     let file = this.env.readFile();
-    // Held to the rules every collaborator checks each commit by (`Replica.receiveCommit`). The
-    // editor can make what they refuse — boundaries nested past `maxGroupDepth` — and each copy then
-    // asked for a fresh one, which dropped what the owner kept. Repaired here, the owner's own canvas
-    // included; mid-gesture, it waits for the gesture to end.
+    // Held to the rules every collaborator checks each commit by (`Replica.receiveCommit`). Group and
+    // `setParent` refuse boundaries nested past `maxGroupDepth` (`fitsGroupDepth`), so this is the net
+    // under whatever else could still make what they refuse: each copy would ask for a fresh one,
+    // which dropped what the owner kept. Repaired here, the owner's own canvas included; mid-gesture,
+    // it waits for the gesture to end.
     const repaired = repairReferences(file);
     if (repaired !== file) {
       if (this.env.isBusy() || !this.env.applyRemote(repaired)) return null;

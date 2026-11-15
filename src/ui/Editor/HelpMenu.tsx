@@ -19,21 +19,26 @@ export function HistoryControls() {
   const past = useEditorStore((state) => state.history.past.length);
   const future = useEditorStore((state) => state.history.future.length);
   // The store refuses both while a flow is traced or the copy is read-only; say so, don't no-op.
-  const held = useUiStore((state) => state.flowTrace !== null || state.readOnly !== null);
+  const tracing = useUiStore((state) => state.flowTrace !== null);
+  const readOnly = useUiStore((state) => state.readOnly !== null);
+  const held = tracing || readOnly;
+  // A disabled button gets no hover events, so the shared tooltip never opens on it; the reason is
+  // its native title, which browsers do show on a disabled control.
+  const why = readOnly ? 'This diagram is read-only.' : tracing ? 'Finish or cancel tracing the flow first.' : undefined;
   return (
     <span className="dc-status-history">
       <Tooltip content={toolbarTooltip('undo')}>
-        {(tip) => <Button icon="undo" variant="quiet" disabled={held || past === 0} onClick={undo} aria-label={toolbarLabel('undo')} {...tip} />}
+        {(tip) => <Button icon="undo" variant="quiet" disabled={held || past === 0} onClick={undo} aria-label={toolbarLabel('undo')} {...tip} title={held ? why : undefined} />}
       </Tooltip>
       <Tooltip content={toolbarTooltip('redo')}>
-        {(tip) => <Button icon="redo" variant="quiet" disabled={held || future === 0} onClick={redo} aria-label={toolbarLabel('redo')} {...tip} />}
+        {(tip) => <Button icon="redo" variant="quiet" disabled={held || future === 0} onClick={redo} aria-label={toolbarLabel('redo')} {...tip} title={held ? why : undefined} />}
       </Tooltip>
     </span>
   );
 }
 
 /**
- * Canvas settings — drawing style, Intent Continuation and the diagram's background — one click from
+ * Canvas settings — drawing style, next-shape suggestions and the diagram's background — one click from
  * the corner where the app's other controls are; on the desktop, Settings opens at its Canvas page.
  * A right-click on the canvas and ⌘K reach it too, but neither is where anyone looks for settings.
  */
@@ -87,7 +92,7 @@ export function HelpMenu() {
     { id: 'about', label: toolbarLabel('about'), ...(dot ? { dot } : {}), onSelect: choose(() => ui().setAboutOpen(true)) },
     ...(!__DESKTOP__ ? [{ id: 'diagnostics', label: 'Diagnostic report…', onSelect: choose(() => ui().setDiagnosticsOpen(true)) }] : []),
   ];
-  const state = dot === 'update' ? 'update ready' : dot === 'new' ? "what's new" : undefined;
+  const state = dot === 'update' ? 'update ready' : dot === 'new' ? "what’s new" : undefined;
 
   return (
     <span className="dc-badge-anchor dc-help">

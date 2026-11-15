@@ -7,7 +7,7 @@ vi.mock('../../src/lib/preferences', () => ({
   removePreference: (key: string) => void preferences.delete(key),
 }));
 
-import { __resetInkSession, convertStrokes, flushSmartInk, smartStrokeKept } from '../../src/canvas/inkSession';
+import { __resetInkSession, chooseSuggestion, convertStrokes, flushSmartInk, offerStale, smartStrokeKept, strokeAbandoned, strokeStarted } from '../../src/canvas/inkSession';
 import { inkOf } from '../../src/document/ink';
 import { createDocument, createNode } from '../../src/document/factory';
 import type { DraftInk } from '../../src/document/types';
@@ -289,6 +289,15 @@ describe('the Smart Ink session', () => {
     expect(strokes()).toBe(0);
   });
 
+  it('converts the pen strokes of a selection that also holds a highlighter, and leaves the highlighter', async () => {
+    const parts = c.cylinder(0, 300, 120, 150, c.hand(19)).map((points) => draw(points));
+    const marker = buildStroke(c.line({ x: 0, y: 500 }, { x: 200, y: 500 }, c.hand(20))[0]!.map((p) => ({ ...p, pressure: 0.5 })), { tool: 'highlighter', color: 'yellow', size: 12 }, { zoom: 1, pressure: false })!;
+    expect(store.getState().drawInk(marker)).toBe(true);
+    await convertStrokes([...parts.map((s) => s.id), marker.id], 1);
+    await vi.waitFor(() => expect(useUiStore.getState().inkSuggestion?.choices[0]).toBe('database'));
+    expect(inkOf(store.getState().document).map((s) => s.id)).toEqual([marker.id]);
+  });
+
   it('says so, and changes nothing, when asked to convert something unreadable', async () => {
     const scribble = draw(c.scribble(0, 300, 200, 120, c.hand(18))[0]!);
     const original = useUiStore.getState().notify;
@@ -301,5 +310,71 @@ describe('the Smart Ink session', () => {
     } finally {
       useUiStore.setState({ notify: original });
     }
+  });
+});
+
+describe('an offer and the strokes it is for', () => {
+  beforeEach(() => reset());
+
+  /** An offer for `stroke`, as the session would make for a drawing it was not sure of. */
+  function offerFor(stroke: DraftInk) {
+    useUiStore.setState({
+      inkSuggestion: {
+        token: 1,
+        mode: 'offer',
+        strokeIds: [stroke.id],
+        strokes: [stroke],
+        drawn: { x: 0, y: 300, width: 220, height: 110 },
+        choices: ['component', 'service'],
+        chosen: -1,
+        encloses: [],
+        room: '',
+      },
+    });
+    return useUiStore.getState().inkSuggestion!;
+  }
+
+  it('is stale once its strokes are undone, and choosing it makes nothing', () => {
+    const stroke = draw(c.rectangle(0, 300, 220, 110, c.hand(30))[0]!);
+    const offer = offerFor(stroke);
+    expect(offerStale(offer, store.getState().document, '')).toBe(false);
+    store.getState().undo();
+    expect(strokes()).toBe(0);
+    expect(offerStale(offer, store.getState().document, '')).toBe(true);
+    const steps = store.getState().history.past.length;
+    chooseSuggestion(0);
+    expect(nodeIds()).toEqual(['n_api', 'n_db']);
+    expect(store.getState().history.past).toHaveLength(steps);
+    expect(useUiStore.getState().inkSuggestion).toBeNull();
+  });
+
+  it('is stale when only one of its strokes is gone', () => {
+    const a = draw(c.line({ x: 0, y: 300 }, { x: 200, y: 300 }, c.hand(31))[0]!);
+    const b = draw(c.line({ x: 0, y: 400 }, { x: 200, y: 400 }, c.hand(32))[0]!);
+    const offer = { ...offerFor(a), strokeIds: [a.id, b.id], strokes: [a, b] };
+    expect(offerStale(offer, store.getState().document, '')).toBe(false);
+    store.getState().eraseInk([b.id]);
+    expect(offerStale(offer, store.getState().document, '')).toBe(true);
+  });
+
+  it('is applied while its strokes are still there', () => {
+    const stroke = draw(c.rectangle(0, 300, 220, 110, c.hand(33))[0]!);
+    offerFor(stroke);
+    chooseSuggestion(0);
+    expect(nodeIds()).toHaveLength(3);
+    expect(strokes()).toBe(0);
+  });
+});
+
+describe('a stroke thrown away mid-drawing', () => {
+  beforeEach(() => reset());
+
+  it('lets the drawing in progress be read once the pen rests, rather than waiting for another stroke', async () => {
+    for (const side of c.rectangleFourStrokes(0, 300, 220, 120, c.hand(34))) smartStrokeKept(draw(side), 1);
+    // The next stroke starts beside the drawing (its clock stops) and is then abandoned.
+    strokeStarted({ x: 100, y: 310 }, 1);
+    strokeAbandoned();
+    await vi.waitFor(() => expect(useUiStore.getState().inkSuggestion?.mode).toBe('converted'), { timeout: 3000 });
+    expect(strokes()).toBe(0);
   });
 });

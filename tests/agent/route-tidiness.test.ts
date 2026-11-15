@@ -3,7 +3,7 @@ import { legibilityOf } from '../../src/agent/legibility';
 import { routingCorpus } from '../fixtures/routing/corpus';
 import { measure, noWorse } from '../fixtures/routing/measure';
 import { createEdge, createNode } from '../../src/document/factory';
-import { bendsOf, drawnRoute, repairAnchors, routeCost, routeProblem } from '../../src/agent/route';
+import { bendsOf, drawnRoute, repairAnchors, routeCost, routeProblem, withDeadline } from '../../src/agent/route';
 
 const example = () => {
   const nodes = [
@@ -55,12 +55,12 @@ describe('conservative routing repair', () => {
     const before = structuredClone({ nodes, other: edges[1] });
     const quality = measure(nodes, edges).tiers;
     expect(legibilityOf(nodes, edges).crossings).toBe(1);
-    repairAnchors([edges[0]!], nodes, undefined, edges, undefined, true);
+    repairAnchors([edges[0]!], nodes, undefined, edges, true);
     expect(legibilityOf(nodes, edges).crossings).toBe(0);
     expect(noWorse(measure(nodes, edges).tiers, quality)).toBe(true);
     expect({ nodes, other: edges[1] }).toEqual(before);
     const once = structuredClone(edges);
-    repairAnchors([edges[0]!], nodes, undefined, edges, undefined, true);
+    repairAnchors([edges[0]!], nodes, undefined, edges, true);
     expect(edges).toEqual(once);
   });
 
@@ -72,7 +72,7 @@ describe('conservative routing repair', () => {
     const edges = [createEdge({ id: 'ab', source: 'a', target: 'b', sourceAnchor: { side: 'left', offset: 0.5 }, targetAnchor: { side: 'right', offset: 0.5 } })];
     expect(legibilityOf(nodes, edges).detours).toEqual(['ab']);
     const before = structuredClone(nodes);
-    repairAnchors(edges, nodes, undefined, edges, undefined, true);
+    repairAnchors(edges, nodes, undefined, edges, true);
     expect(legibilityOf(nodes, edges)).toMatchObject({ detours: [], unresolved: [], crossings: 0 });
     expect(legibilityOf(nodes, edges).length).toBeLessThan(300);
     expect(nodes).toEqual(before);
@@ -115,7 +115,7 @@ describe('conservative routing repair', () => {
   it('leaves anchors untouched when the request deadline has passed', () => {
     const { nodes, edge } = example();
     const before = structuredClone(edge);
-    repairAnchors([edge], nodes, undefined, [edge], 0);
+    withDeadline(0, () => repairAnchors([edge], nodes, undefined, [edge]));
     expect(edge).toEqual(before);
   });
 
@@ -125,7 +125,7 @@ describe('conservative routing repair', () => {
       const edges = structuredClone(fixture.edges);
       const before = measure(nodes, edges).tiers;
       const untouched = structuredClone(edges.slice(1));
-      repairAnchors([edges[0]!], nodes, undefined, edges, undefined, true);
+      repairAnchors([edges[0]!], nodes, undefined, edges, true);
       expect(noWorse(measure(nodes, edges).tiers, before), fixture.id).toBe(true);
       expect(edges.slice(1), fixture.id).toEqual(untouched);
     }
