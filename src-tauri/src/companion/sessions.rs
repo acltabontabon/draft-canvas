@@ -35,6 +35,15 @@ struct Entry {
     agent: AgentKind,
     session: String,
     updated_at: u64,
+    #[serde(default = "legacy_history")]
+    history: super::history::History,
+}
+
+fn legacy_history() -> super::history::History {
+    super::history::History {
+        turns: Vec::new(),
+        omitted: true,
+    }
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -115,11 +124,17 @@ impl Sessions {
         }
         self.dirty = true;
         let entries = self.entries.entry(diagram.to_string()).or_default();
+        let history = entries
+            .iter()
+            .find(|e| e.agent == agent && now.saturating_sub(e.updated_at) < MAX_AGE_MS)
+            .map(|e| e.history.clone())
+            .unwrap_or_default();
         entries.retain(|entry| entry.agent != agent);
         entries.push(Entry {
             agent,
             session: session.to_string(),
             updated_at: now,
+            history,
         });
         self.entries.retain(|_, entries| {
             entries.retain(|e| now.saturating_sub(e.updated_at) < MAX_AGE_MS);
@@ -137,6 +152,38 @@ impl Sessions {
             };
         }
         self.save()
+    }
+
+    pub fn history(&self, diagram: &str, agent: AgentKind, now: u64) -> super::history::History {
+        self.entries
+            .get(diagram)
+            .and_then(|entries| entries.iter().find(|e| e.agent == agent))
+            .map(|e| {
+                if now.saturating_sub(e.updated_at) < MAX_AGE_MS {
+                    e.history.clone()
+                } else {
+                    legacy_history()
+                }
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn record_turn(
+        &mut self,
+        diagram: &str,
+        agent: AgentKind,
+        turn: super::history::Turn,
+    ) -> Result<(), AppError> {
+        if let Some(entry) = self
+            .entries
+            .get_mut(diagram)
+            .and_then(|entries| entries.iter_mut().find(|e| e.agent == agent))
+        {
+            entry.history.push(turn);
+            self.dirty = true;
+            self.save()?;
+        }
+        Ok(())
     }
 
     pub fn forget(&mut self, diagram: &str, agent: Option<AgentKind>) -> Result<(), AppError> {
@@ -174,6 +221,45 @@ mod tests {
     use tempfile::tempdir;
 
     const DAY: u64 = 24 * 60 * 60 * 1000;
+
+    #[test]
+    fn fresh_sessions_keep_scoped_history_across_restart_and_forget() {
+        let dir = tempdir().unwrap();
+        let mut sessions = Sessions::open(dir.path());
+        for i in 0..30 {
+            sessions
+                .remember("d1", AgentKind::Codex, &format!("session-{i}"), i)
+                .unwrap();
+            sessions
+                .record_turn(
+                    "d1",
+                    AgentKind::Codex,
+                    super::super::history::Turn {
+                        request: format!("Edit {i}"),
+                        response: "Proposal pending; not applied".into(),
+                        outcome: "end-turn".into(),
+                    },
+                )
+                .unwrap();
+        }
+        let mut sessions = Sessions::open(dir.path());
+        assert_eq!(sessions.history("d1", AgentKind::Codex, 30).turns.len(), 30);
+        let expired = sessions.history("d1", AgentKind::Codex, MAX_AGE_MS + 30);
+        assert!(expired.omitted && expired.turns.is_empty());
+        assert!(sessions
+            .history("d2", AgentKind::Codex, 30)
+            .turns
+            .is_empty());
+        assert!(sessions
+            .history("d1", AgentKind::ClaudeCode, 30)
+            .turns
+            .is_empty());
+        sessions.forget("d1", Some(AgentKind::Codex)).unwrap();
+        assert!(Sessions::open(dir.path())
+            .history("d1", AgentKind::Codex, 30)
+            .turns
+            .is_empty());
+    }
 
     #[test]
     fn a_remembered_session_is_resumed_and_survives_a_restart() {
@@ -223,6 +309,11 @@ mod tests {
         let dir = tempdir().unwrap();
         std::fs::write(dir.path().join(FILE), br#"{"v":1,"entries":{"d_1":{"agent":"claude-code","session":"legacy","updatedAt":1000}}}"#).unwrap();
         let mut sessions = Sessions::open(dir.path());
+        assert!(
+            sessions
+                .history("d_1", AgentKind::ClaudeCode, 2_000)
+                .omitted
+        );
         assert_eq!(
             sessions.get("d_1", AgentKind::ClaudeCode, 2_000).as_deref(),
             Some("legacy")

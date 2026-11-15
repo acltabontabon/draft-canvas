@@ -29,6 +29,7 @@ struct Open {
     policy: RunPolicy,
     calls: Vec<Weak<CallRegistry>>,
     writes: Writes,
+    history: crate::companion::history::History,
 }
 
 enum Writes {
@@ -52,6 +53,7 @@ impl Runs {
                 policy,
                 calls: Vec::new(),
                 writes: Writes::Normal,
+                history: Default::default(),
             },
         );
     }
@@ -63,8 +65,23 @@ impl Runs {
                 policy,
                 calls: Vec::new(),
                 writes: Writes::Deferred,
+                history: Default::default(),
             },
         );
+    }
+
+    pub fn set_history(&self, run: &str, history: crate::companion::history::History) {
+        if let Some(entry) = lock(&self.open).get_mut(run) {
+            entry.history = history;
+        }
+    }
+
+    pub fn history(&self, run: &str, args: &Value) -> Result<Value, ToolError> {
+        lock(&self.open)
+            .get(run)
+            .ok_or_else(ended)?
+            .history
+            .read(args)
     }
 
     /// Called by the host only after the model and its children have exited. Admit precisely one
@@ -139,6 +156,7 @@ const RUN_TOOLS: &[&str] = &[
     "submit_proposal",
     "get_proposal",
     "list_proposals",
+    "read_conversation",
     "ask_to_read_code",
     "list_code",
     "search_code",
@@ -147,7 +165,13 @@ const RUN_TOOLS: &[&str] = &[
 
 /// Tools no agent but a companion run is ever offered: an agent the person connected has files of
 /// its own.
-pub const RUN_ONLY: &[&str] = &["ask_to_read_code", "list_code", "search_code", "read_code"];
+pub const RUN_ONLY: &[&str] = &[
+    "read_conversation",
+    "ask_to_read_code",
+    "list_code",
+    "search_code",
+    "read_code",
+];
 
 pub fn ended() -> ToolError {
     ToolError::new(
@@ -183,7 +207,7 @@ pub fn constrain(
     }
     let named = args.get("diagramId").and_then(Value::as_str);
     match tool {
-        "get_capabilities" | "ask_to_read_code" => {}
+        "get_capabilities" | "ask_to_read_code" | "read_conversation" => {}
         reader if super::code::CODE_TOOLS.contains(&reader) => {
             if policy.code.is_none() {
                 return Err(ToolError::new(
@@ -247,6 +271,37 @@ mod tests {
             direct,
             code: None,
         }
+    }
+
+    #[test]
+    fn history_is_an_immutable_run_scoped_read_and_ends_with_the_run() {
+        let runs = Runs::default();
+        let p = RunPolicy {
+            diagram_id: "d1".into(),
+            direct: false,
+            code: None,
+        };
+        runs.open_deferred("a", p.clone());
+        runs.open_deferred("b", p);
+        let mut history = crate::companion::history::History::default();
+        history.push(crate::companion::history::Turn {
+            request: "Use Checkout API".into(),
+            response: "Pending proposal".into(),
+            outcome: "end-turn".into(),
+        });
+        runs.set_history("a", history.clone());
+        history.turns.clear();
+        assert_eq!(
+            runs.history("a", &json!({})).unwrap()["turns"][0]["request"],
+            "Use Checkout API"
+        );
+        assert_eq!(runs.history("b", &json!({})).unwrap()["total"], 0);
+        assert!(runs.history("a", &json!({"diagramId":"d2"})).is_err());
+        assert!(runs
+            .check_write("a", "submit_proposal", &json!({}))
+            .is_err());
+        runs.close("a");
+        assert_eq!(runs.history("a", &json!({})).unwrap_err().code, "CANCELLED");
     }
 
     #[test]

@@ -88,6 +88,7 @@ const TOOLS: &[&str] = &[
     "submit_proposal",
     "get_proposal",
     "list_proposals",
+    "read_conversation",
     "ask_to_read_code",
     "list_code",
     "search_code",
@@ -185,6 +186,11 @@ pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) 
     };
     if let Some(run) = &calls.run {
         agent.runs.check_write(run, tool, &args)?;
+    }
+    if tool == "read_conversation" {
+        return agent
+            .runs
+            .history(calls.run.as_deref().ok_or_else(runs::ended)?, &args);
     }
     if runs::RUN_ONLY.contains(&tool) {
         return read_code(tool, policy.and_then(|p| p.code), args).await;

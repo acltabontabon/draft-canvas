@@ -220,7 +220,7 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
     // native file/resource tools from the nested surface on every inference. Keep the host
     // below for model compatibility; permissions instructions and sandbox enforcement stay intact.
     if available.contains("code_mode") {
-        args.extend(["-c".to_string(), r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()]);
+        args.extend(["-c".to_string(), r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions","clock"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()]);
     }
     // Some models expose MCP tools through exec even with the code_mode feature off. Its host is
     // the tool dispatcher, not an extra tool: disabling it leaves that exec visible but every call
@@ -857,7 +857,7 @@ mod tests {
         assert!(!args
             .windows(2)
             .any(|w| w == ["--disable", "code_mode_host"]));
-        assert!(args.contains(&r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()));
+        assert!(args.contains(&r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions","clock"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()));
         assert!(args.contains(&"skills.include_instructions=false".to_string()));
         assert!(args.contains(&"skills.max_context_tokens=1".to_string()));
         assert!(args.contains(&r#"web_search="disabled""#.to_string()));
@@ -879,7 +879,7 @@ mod tests {
                 "tools.experimental_request_user_input.enabled=false",
                 r#"sandbox_mode="read-only""#,
                 r#"approval_policy="never""#,
-                r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#,
+                r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions","clock"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#,
             ] {
                 assert!(
                     args.windows(2).any(|pair| pair == ["-c", setting]),

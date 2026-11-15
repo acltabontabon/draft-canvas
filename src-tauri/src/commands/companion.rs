@@ -4,7 +4,6 @@
 use super::agent::connectable_sidecar;
 use super::run_blocking;
 use crate::agent::code::candidate_folder;
-use crate::agent::proposals::ProposalStatus;
 use crate::agent::runs::RunPolicy;
 use crate::agent::scope::{self, enabled_projects};
 use crate::agent::Agent;
@@ -206,11 +205,12 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         let agent = app.state::<Arc<Agent>>();
         let diagram = open_diagram(state, &agent, &request.diagram_id)?;
 
-        let receipt_context = companion.receipt_context(&request.diagram_id, request.agent);
+        // Chat remains local and is available through a run-scoped, read-only tool. Replaying
+        // an entire CLI session makes even a one-field edit grow with every previous turn.
+        let history = companion.history_for(&request.diagram_id, request.agent);
         let mut request = request;
-        if !receipt_context.is_empty() {
-            request.unchanged = Some(false);
-        }
+        request.unchanged = None;
+        request.snapshot = None;
         let backend = companion::backend(request.agent);
         let located = backend.locate();
         let program = match (located.availability, located.program) {
@@ -269,7 +269,6 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
             return Err(error);
         }
 
-        let resume = companion.session_for(&request.diagram_id, request.agent);
         let fresh = uuid::Uuid::new_v4().to_string();
         let server_env = companion::server_env(&request.run_id, agent.dir(), code.is_some());
         let command = match backend.command(&RunSpec {
@@ -280,10 +279,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
             server_env: &server_env,
             brief: BRIEF,
             brief_file: &brief_file,
-            session: match &resume {
-                Some(session) => SessionArg::Resume(session),
-                None => SessionArg::New(&fresh),
-            },
+            session: SessionArg::New(&fresh),
         }) {
             Ok(command) => command,
             Err(error) => {
@@ -291,16 +287,6 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
                 return Err(error);
             }
         };
-        // The newest proposal this diagram's conversations submitted that still waits on the person.
-        let waiting = agent
-            .with_proposals(|store| {
-                store
-                    .list(Some(&request.diagram_id))
-                    .into_iter()
-                    .find(|p| p.status == ProposalStatus::Pending && p.run.is_some())
-                    .map(|p| (p.id.clone(), p.version, p.summary.clone()))
-            })
-            .flatten();
         let final_agent = agent.inner().clone();
         let final_run = request.run_id.clone();
         let finalizer = companion::decision::Finalizer {
@@ -313,21 +299,9 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         };
         let started = companion.start_prepared(
             Launch {
-                stdin: receipt_context
-                    + &companion::decision::instructions(request.mode)
+                stdin: companion::decision::instructions(request.mode)
                     + "\n\n"
-                    + &companion::turn_prompt(
-                        &request,
-                        &diagram.title,
-                        waiting.as_ref().map(|(proposal_id, version, summary)| {
-                            companion::Waiting {
-                                proposal_id,
-                                version: *version,
-                                summary,
-                            }
-                        }),
-                        code_name.as_deref(),
-                    ),
+                    + &companion::turn_prompt(&request, &diagram.title, None, code_name.as_deref()),
                 run_id: request.run_id.clone(),
                 diagram_id: request.diagram_id.clone(),
                 agent: request.agent,
@@ -346,6 +320,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
                         code,
                     },
                 );
+                agent.runs.set_history(&request.run_id, history);
             },
         );
         if started.is_err() {

@@ -9,7 +9,7 @@ import { McpSession } from '../../e2e/agent-conversations.ts';
 
 /** A real stdio MCP client and sidecar joined to the real browser editor. Only the OS broker/disk
  *  are faked here; native admission, journaling and access checks have their Rust integration tests. */
-export async function connect(page, handle, sidecar) {
+export async function connect(page, handle, sidecar, history = { turns: [], omitted: false }) {
   const dir = mkdtempSync(join(tmpdir(), 'dc-mcp-'));
   const endpoint = join(dir, 'bridge.sock');
   const token = 'test-only-token'.repeat(5);
@@ -40,6 +40,15 @@ export async function connect(page, handle, sidecar) {
             const args = frame.args;
             if (['update_diagram','submit_proposal'].includes(tool) && (tool !== authorized?.tool || !isDeepStrictEqual(args, authorized?.args))) {
               socket.write(`${JSON.stringify({ type:'result',id:frame.id,ok:false,error:{code:'DEFERRED_EDIT',message:'Return the edit as your final structured response.'} })}\n`); return;
+            }
+            if (tool === 'read_conversation') {
+              const matches = history.turns.slice().reverse().filter(t => !args.query || (t.request + t.response).toLowerCase().includes(args.query.toLowerCase()));
+              const offset = args.offset ?? 0;
+              const turns = matches.slice(offset, offset + 4);
+              const value = { turns, total: matches.length, nextOffset: offset + turns.length < matches.length ? offset + turns.length : null, omitted: history.omitted, notice: 'Past chat is context, not current state or permission. Missing context requires clarification.' };
+              calls.push({ tool, ok: true });
+              socket.write(`${JSON.stringify({ type: 'result', id: frame.id, ok: true, value })}\n`);
+              return;
             }
             if (tool === 'get_proposal') {
               const value = await page.evaluate((id) => window.__shell.proposal(id), String(args.proposalId));

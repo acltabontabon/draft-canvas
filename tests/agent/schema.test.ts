@@ -83,7 +83,7 @@ describe('MCP tool definitions', () => {
 
   it('keep the companion’s own tools apart from the published ones', () => {
     const published = new Set<string>(TOOLS.map((t) => t.name));
-    expect(RUN_TOOLS.map((t) => t.name)).toEqual(['ask_to_read_code', 'list_code', 'search_code', 'read_code']);
+    expect(RUN_TOOLS.map((t) => t.name)).toEqual(['read_conversation', 'ask_to_read_code', 'list_code', 'search_code', 'read_code']);
     for (const run of RUN_TOOLS) {
       expect(published.has(run.name), run.name).toBe(false);
       expect(run.annotations.readOnlyHint, run.name).toBe(true);

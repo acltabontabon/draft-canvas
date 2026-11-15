@@ -198,6 +198,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   intent, without a model read or confirmation call. The host pins the revision captured at Send;
   intervening edits, ambiguous targets and out-of-scope changes are refused. Review mode keeps
   its normal acceptance and conflict checks. A reproducible benchmark covers both modes and agents.
+- Nodi starts each turn with a small context and reads earlier chat only when needed, keeping
+  simple edits inexpensive in long conversations. Bounded local history retains requests and
+  actual outcomes across restart; context-dependent follow-ups retrieve it or ask for clarification.
 
 #### Fixed
 

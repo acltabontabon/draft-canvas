@@ -9,12 +9,30 @@ BENCH_REVIEW=1 BENCH_MAX_INPUT=3000 BENCH_NO_READS=1 node --import tsx benchmark
 ```
 
 These are live, paid model calls, intentionally outside CI. Each prompt in [prompts.json](prompts.json)
-starts with a fresh synthetic architecture fixture and conversation. Both clients run at low effort:
+starts with a fresh synthetic architecture fixture. Requests and actual outcomes accumulate in one
+logical chat per client; as in Nodi, each model turn starts fresh and can read that local history.
+The fixture resets between edits to isolate content verification; chat history does not reset.
+Both clients run at low effort:
 Codex `gpt-6-luna`, Claude `sonnet` (the result records the actual model). An optional positional
 substring filters cases, for example `codex-description`. `BENCH_OUTPUT` sets the artifact directory;
 otherwise the runner prints a new temporary directory. `BENCH_RUN` labels repeated samples.
 `BENCH_MAX_INPUT` requires strictly fewer input tokens than its value; `BENCH_NO_READS` requires
 zero model tool calls. Omit these guards when measuring a baseline that needs reads.
+
+For long chats, set `BENCH_TURNS=30` to cycle through the five prompts six times. Run both direct
+and `BENCH_REVIEW=1` modes. `BENCH_RESUME=1 BENCH_PROMPT_REF=b5d45e2` measures the preceding
+strategy with actual CLI session resumption and its frozen prompt; Codex's cumulative session
+usage is differenced per turn, while cached tokens still count. This comparison uses the current
+checked editor/sidecar, not a frozen desktop build. The extra history operation is never advertised
+up front and the preceding prompt does not use it.
+
+To test a context-dependent follow-up, set `BENCH_TURNS=1 BENCH_FOLLOWUP=1` and
+`BENCH_HISTORY_DIR` to an earlier run's artifact directory. It asks for a description used earlier,
+without supplying the value. These cases intentionally allow history reads and are reported
+separately from the under-3k self-contained edits. With no history, add `BENCH_EXPECT_REPLY=1`:
+the model must clarify and leave the file untouched. The native history implementation's bounds,
+expiry, persistence, isolation and cancellation are tested separately; the broker fixture supplies
+an immutable copy of this synthetic chat to each run.
 
 The runner reads Nodi's brief, mode instructions, response schema and turn template from Rust source.
 It verifies the sidecar's advertised planning tools against the generated source before spending
@@ -43,6 +61,14 @@ binary even when a build reports it fresh. Mismatched tool catalogs are a harnes
 benchmark sample. Repeat both modes before drawing conclusions; model choices and client overhead
 vary, so these samples are not universal token caps. Review the JSON results, including failures,
 alongside the PR's comparison table.
+
+[history-results.json](history-results.json) contains 40 resumed-session baseline cases, 240 tuning
+cases (including refusals, budget misses and interrupted fixtures), 120 final cases across four
+30-turn chats, and eight history-dependent/clarification checks. All 120 final edits succeeded;
+119 stayed below 3,000 input tokens. The budget guard correctly fails the remaining Codex redirect
+at 5,791 tokens because it made an unnecessary `exec` discovery call. This is not a strict 3k cap.
+Context-dependent follow-ups retrieved the correct value but used 10,597–15,696 tokens; requests
+with missing history asked for clarification without changing the diagram or creating a proposal.
 
 [intent-results.json](intent-results.json) compares local intents to the preceding compact-read
 implementation, with two final samples per client/mode/prompt: all 40 completed below 3,000 input

@@ -85,7 +85,7 @@ fn served(run: bool, code: bool) -> Vec<Tool> {
     }
     let readers = run_tools()
         .into_iter()
-        .filter(|t| (t.name == "ask_to_read_code") != code);
+        .filter(|t| t.name == "read_conversation" || (t.name == "ask_to_read_code") != code);
     all.into_iter()
         .filter(|t| RUN_OFFERED.contains(&t.name.as_ref()))
         .chain(readers)
@@ -634,22 +634,30 @@ mod tests {
         let names: Vec<&str> = lean.iter().map(|t| t.name.as_ref()).collect();
         assert_eq!(names[..RUN_OFFERED.len()], *RUN_OFFERED);
         // The way to ask to read the project, and none of its readers until the person says.
-        assert_eq!(names[RUN_OFFERED.len()..], ["ask_to_read_code"]);
+        assert_eq!(
+            names[RUN_OFFERED.len()..],
+            ["read_conversation", "ask_to_read_code"]
+        );
         let reading = served(true, true);
         let readers: Vec<&str> = reading[RUN_OFFERED.len()..]
             .iter()
             .map(|t| t.name.as_ref())
             .collect();
-        assert_eq!(readers, ["list_code", "search_code", "read_code"]);
+        assert_eq!(
+            readers,
+            ["read_conversation", "list_code", "search_code", "read_code"]
+        );
         // Every one of them a tool the run policy lets a run call.
         let policy = include_str!("../../src/agent/runs.rs");
         let allowed = &policy[policy.find("const RUN_TOOLS").unwrap()..];
         let allowed = &allowed[..allowed.find("];").unwrap()];
-        for name in
-            RUN_OFFERED
-                .iter()
-                .chain(&["ask_to_read_code", "list_code", "search_code", "read_code"])
-        {
+        for name in RUN_OFFERED.iter().chain(&[
+            "read_conversation",
+            "ask_to_read_code",
+            "list_code",
+            "search_code",
+            "read_code",
+        ]) {
             assert!(
                 allowed.contains(&format!("\"{name}\"")),
                 "{name} isn't in RUN_TOOLS"

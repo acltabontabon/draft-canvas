@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { createHash } from 'node:crypto';
+import { isDeepStrictEqual } from 'node:util';
 import { execFileSync } from 'node:child_process';
 import { verify } from './verify.mjs';
 
@@ -23,12 +24,17 @@ for (const input of inputs) {
       const read = file => JSON.parse(readFileSync(join(path, file), 'utf8'));
       try {
         const result = read('result.json');
-        const checked = verify(read('before.draftcanvas'), read('candidate.draftcanvas'), result.task);
+        const before = read('before.draftcanvas');
+        const candidate = read('candidate.draftcanvas');
+        const checked = result.expected === 'clarification'
+          ? { verified: Boolean(result.reply?.trim()) && !result.calls.some(call => ['update_diagram', 'submit_proposal'].includes(call.tool)), otherFieldsSame: isDeepStrictEqual(before, candidate) }
+          : verify(before, candidate, result.task);
         const receipt = existsSync(join(path, 'receipt.jsonl')) ? readFileSync(join(path, 'receipt.jsonl'), 'utf8').trim().split('\n').map(line => JSON.parse(line)) : [];
         const failure = receipt.find(event => event.type === 'stopped' && event.reason?.kind === 'failed')?.reason.message;
         const completed = checked.verified && checked.otherFieldsSame && result.unchangedBeforeAccept !== false && !result.executionError;
         samples.push({ sample, client: result.client, model: result.model, prompt: result.task,
-          input: result.usage?.input, cached: result.usage?.cached, cacheWrite: result.usage?.cacheWrite ?? 0, output: result.usage?.output,
+          ...(result.expected ? { expected: result.expected, reply: result.reply } : {}),
+          turn: result.turn, priorTurns: result.priorTurns, input: result.usage?.input, cached: result.usage?.cached, cacheWrite: result.usage?.cacheWrite ?? 0, output: result.usage?.output,
           completed, ...checked, unchangedBeforeAccept: result.unchangedBeforeAccept,
           modelTools: result.modelTools, nativeTools: result.calls.map(call => ({ tool: call.tool, ok: call.ok })),
           planningSchemaBytes: result.planningSchemaBytes,
@@ -48,7 +54,7 @@ writeFileSync(output, JSON.stringify({
   prompts: 'benchmark/agent-edits/prompts.json',
   clients: Object.fromEntries(['codex', 'claude'].map(client => [client, execFileSync(client, ['--version'], { encoding: 'utf8' }).trim()])),
   effort: 'low',
-  method: 'Fresh synthetic diagrams/conversations. Total reported input includes cached/cache-write tokens. No overhead subtracted. Serialized content is reverified with verify.mjs; review originals stay byte-identical. Failed attempts are retained, never counted as savings. Native broker/filesystem are mocked; native gates are separately tested.',
+  method: 'Fresh synthetic diagrams; run metadata identifies conversation strategy and turn count. Total reported input includes cached/cache-write tokens. No overhead subtracted. Serialized content is reverified with verify.mjs; review originals stay byte-identical. Failed attempts are retained, never counted as savings. Native broker/filesystem are mocked; native gates are separately tested.',
   runs,
   samples,
 }, null, 2) + '\n');
