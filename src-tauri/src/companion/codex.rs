@@ -869,9 +869,11 @@ mod tests {
     fn new_and_resumed_turns_keep_user_config_skills_and_side_effects_out() {
         for session in [SessionArg::New("fresh"), SessionArg::Resume("existing")] {
             let args = spec_args(session);
-            assert!(args
-                .windows(2)
-                .any(|pair| pair == ["--output-schema", "/run/reply.schema.json"]));
+            // with_file_name uses native separators on Windows; compare the path, not its spelling.
+            assert!(args.windows(2).any(|pair| {
+                pair[0] == "--output-schema"
+                    && Path::new(&pair[1]) == Path::new("/run/reply.schema.json")
+            }));
             assert!(args.contains(&"--ignore-user-config".to_string()));
             for setting in [
                 "agents.enabled=false",

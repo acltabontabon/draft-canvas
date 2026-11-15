@@ -7,9 +7,13 @@ import { installMockShell } from './mockShell';
 import { chooseWorkFile } from './explorer';
 import { nearbyServicesRequest } from '../../tests/fixtures/connectors/nearby';
 
+// The frontend-only jobs have no Rust binary; the native CI job requires it before this suite.
+test.beforeEach(() => {
+  test.skip(process.platform === 'win32', 'The fixture broker uses a Unix socket; the Windows bridge has native tests.');
+  test.skip(!existsSync(process.env.DRAFT_CANVAS_MCP_BINARY ?? join(process.cwd(), 'src-tauri/target/debug/draft-canvas-mcp')), 'Build the real sidecar with npm run desktop:check; the macOS Rust CI lane runs this journey.');
+});
+
 test('real MCP sidecar: create smart attachments, render them, and accept a proposal that moves a shape', async ({ page }) => {
-  test.skip(process.platform === 'win32', 'The fixture broker uses a Unix socket.');
-  test.skip(!existsSync(process.env.DRAFT_CANVAS_MCP_BINARY ?? join(process.cwd(), 'src-tauri/target/debug/draft-canvas-mcp')), 'Build the real MCP sidecar first.');
   await installMockShell(page);
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
@@ -56,8 +60,6 @@ test('real MCP sidecar: create smart attachments, render them, and accept a prop
 });
 
 test('real MCP sidecar: inspect a candidate, commit, submit a semantic proposal, review and accept', async ({ page }) => {
-  test.skip(process.platform === 'win32', 'The fixture broker uses a Unix socket; the Windows bridge has native tests.');
-  test.skip(!existsSync(process.env.DRAFT_CANVAS_MCP_BINARY ?? join(process.cwd(), 'src-tauri/target/debug/draft-canvas-mcp')), 'Build the real sidecar with npm run desktop:check; the macOS Rust CI lane runs this journey.');
   await installMockShell(page);
   await page.goto('/');
   const handle = await page.evaluate(async () => {
@@ -126,8 +128,6 @@ test('real MCP sidecar: inspect a candidate, commit, submit a semantic proposal,
 
 for (const local of [false, true]) {
   test(`real ${local ? 'local receipt confirmation' : 'MCP dispatcher'} renames without a read, preserves the file and supports undo`, async ({ page }) => {
-    test.skip(process.platform === 'win32', 'The fixture broker uses a Unix socket.');
-    test.skip(!existsSync(process.env.DRAFT_CANVAS_MCP_BINARY ?? join(process.cwd(), 'src-tauri/target/debug/draft-canvas-mcp')), 'Build the real MCP sidecar first.');
     await installMockShell(page);
     await page.goto('/');
     const handle = await page.evaluate(async () => {
@@ -176,8 +176,6 @@ for (const local of [false, true]) {
 
 for (const outcome of ['accept', 'reject', 'conflict'] as const) {
   test(`one-call rename proposal: ${outcome} still goes through the review panel`, async ({ page }) => {
-    test.skip(process.platform === 'win32', 'The fixture broker uses a Unix socket.');
-    test.skip(!existsSync(process.env.DRAFT_CANVAS_MCP_BINARY ?? join(process.cwd(), 'src-tauri/target/debug/draft-canvas-mcp')), 'Build the real MCP sidecar first.');
     await installMockShell(page);
     await page.goto('/');
     const handle = await page.evaluate(async () => {
@@ -242,7 +240,6 @@ for (const outcome of ['accept', 'reject', 'conflict'] as const) {
 
 for (const outcome of ['accept', 'reject', 'conflict'] as const) {
   test(`local connection intent: ${outcome} preserves review gates`, async ({ page }) => {
-    test.skip(process.platform === 'win32', 'The fixture broker uses a Unix socket.');
     await installMockShell(page);
     await page.goto('/');
     const handle = await page.evaluate(async () => {

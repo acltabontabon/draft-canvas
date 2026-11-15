@@ -534,7 +534,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.json:
         read_next = [entry['path'] for entry in data['read_next'][:READ_NEXT_LIMIT]]
-        print(json.dumps({'survey': os.path.join(out, 'survey.md'), 'request': request_path, 'readNext': read_next, **summary}, separators=(',', ':')))
+        print(
+            json.dumps(
+                {'survey': os.path.join(out, 'survey.md'), 'request': request_path, 'readNext': read_next, **summary}, separators=(',', ':')
+            )
+        )
         return 0
 
     print(survey_text)
