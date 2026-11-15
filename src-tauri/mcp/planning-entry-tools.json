@@ -1,7 +1,7 @@
 [
   {
     "name": "diagram_tool",
-    "description": "Planning only. tool=help,args={} lists operations; args={tool:NAME} gives arguments (read_diagram, preview_diagram, update_diagram, submit_proposal). Return edits in your final response for host execution. Exact-label renames need no tools.",
+    "description": "Never call edits; return them in your final response. Exact shape renames skip all tools. Other simple edits use read_edit. help: {} lists operations; {tool:NAME} gives arguments.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -21,6 +21,42 @@
     "annotations": {
       "readOnlyHint": false,
       "destructiveHint": true,
+      "openWorldHint": false
+    }
+  },
+  {
+    "name": "read_edit",
+    "description": "Named edits: query=[every referenced name] finds targets across ALL rooms in one read, including new connection endpoints. For adds use inside:[room ids] (root []). Never combine query and inside. Returns ids, revision, paths and patch syntax. Read missing ids; never guess. For architecture reasoning use read_diagram.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          ]
+        },
+        "inside": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cursor": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": true,
       "openWorldHint": false
     }
   }

@@ -120,6 +120,11 @@ Exact-label renames work this way in **Review changes first** too: Draft Canvas 
 locally and creates a proposal. The diagram stays unchanged until you accept it. If the target
 changes while the proposal waits, review reports a conflict instead of renaming a different shape.
 
+For descriptions, new shapes and connection edits, Nodi can read a compact index with the target
+ids, view paths, revision and common edit syntax together. This avoids loading whole room
+descriptions or discovering each operation separately. Larger design questions still use detailed
+reads. Both edit modes keep the same validation and revision checks; review still requires acceptance.
+
 Ask for all shapes in one horizontal row or vertical column when you want them aligned; automatic
 layout's reading direction can put several shapes in the same layer. Nodi can place and route shapes
 exactly for a specific arrangement. Short replies such as **yes** or

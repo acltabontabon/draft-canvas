@@ -39,7 +39,7 @@ import { runOffThread, type Progress } from '../agent/offThread';
 import type { AgentStarter } from '../agent/starter';
 import { loadGallery, starterFile } from '../gallery';
 import { STAGE_TEXT } from '../agent/progress';
-import { readAttachment, readDiagram, readLookup, readOutline, viewPathOf } from '../agent/read';
+import { readAttachment, readDiagram, readEdit, readLookup, readOutline, viewPathOf } from '../agent/read';
 import { renamePatch } from '../agent/rename';
 import { READ_FORMATS } from '../agent/schema';
 import { buildImplementationContext } from '../agent/context';
@@ -321,6 +321,7 @@ async function read(host: AgentHost, args: Record<string, unknown>, context: Age
   const format = oneOf(args.format, READ_FORMATS, 'draft', '/format');
   const snapshot = await fileFor(host, context);
   const { file, revision } = snapshot;
+  if (format === 'edit') return withCollaborators(readEdit(file, args, revision, diagramId), snapshot);
   if (args.query !== undefined) return withCollaborators(readLookup(file, args, revision, diagramId), snapshot);
   if (format === 'draft') return withCollaborators(readDiagram(file, args, revision, diagramId), snapshot);
   if (format === 'outline') return withCollaborators(readOutline(file, revision, diagramId), snapshot);
@@ -423,7 +424,10 @@ function withCollaborators(result: Record<string, unknown>, snapshot: ReadSnapsh
       }
     }
   } else {
-    for (const item of items('matches')) show(item.type === 'relationship' ? 'edge' : item.type === 'flow' ? 'flow' : 'node', item.id);
+    for (const item of items('matches')) {
+      show(item.type === 'relationship' ? 'edge' : item.type === 'flow' ? 'flow' : 'node', item.id);
+      for (const end of ['from', 'to']) show('node', (item[end] as { id?: string } | undefined)?.id);
+    }
     const view = result.view as { path: string[]; owner?: { id: string } } | undefined;
     const edges = new Set(view && viewOf(snapshot.file, view.path)?.edges.map((edge) => edge.id));
     for (const name of ['elements', 'groups', 'boundaries', 'outsideEndpoints']) for (const item of items(name)) showItem('node', item);

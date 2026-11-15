@@ -113,6 +113,20 @@ fn dispatch(name: &str, mut args: Value, allowed: &[Tool]) -> Result<Dispatch, V
         )
     };
     let target = match name {
+        "read_edit" => {
+            let map = args.as_object_mut().ok_or_else(invalid)?;
+            if map
+                .keys()
+                .any(|key| !["query", "inside", "cursor"].contains(&key.as_str()))
+            {
+                return Err(invalid());
+            }
+            if let Some(inside) = map.remove("inside") {
+                map.insert("view".into(), serde_json::json!({"inside":inside}));
+            }
+            map.insert("format".into(), serde_json::json!("edit"));
+            "read_diagram".to_string()
+        }
         "rename_element" => {
             let map = args.as_object_mut().ok_or_else(invalid)?;
             if map.keys().any(|key| {
@@ -479,6 +493,40 @@ mod tests {
         assert_eq!(
             args, retry,
             "the ledger fingerprints the same original payload, not a freshly read revision"
+        );
+    }
+
+    #[test]
+    fn compact_read_alias_still_requires_the_underlying_read_permission() {
+        let args = serde_json::json!({"query":"API","cursor":"page"});
+        let Dispatch::Call(name, resolved) =
+            dispatch("read_edit", args.clone(), &served(true, false)).unwrap()
+        else {
+            panic!("read call")
+        };
+        assert_eq!(name, "read_diagram");
+        assert_eq!(
+            resolved,
+            serde_json::json!({"format":"edit","query":"API","cursor":"page"})
+        );
+        assert!(dispatch("read_edit", args, &[]).is_err());
+        assert!(dispatch(
+            "read_edit",
+            serde_json::json!({"tool":"update_diagram","ops":[]}),
+            &tools()
+        )
+        .is_err());
+        let Dispatch::Call(_, resolved) = dispatch(
+            "read_edit",
+            serde_json::json!({"inside":["owner"]}),
+            &tools(),
+        )
+        .unwrap() else {
+            panic!("read call")
+        };
+        assert_eq!(
+            resolved,
+            serde_json::json!({"format":"edit","view":{"inside":["owner"]}})
         );
     }
 

@@ -76,6 +76,7 @@ describe('MCP tool definitions', () => {
 
   it('keeps the connected tool catalog within its compact JSON size budget', () => {
     expect(Buffer.byteLength(JSON.stringify(ENTRY_TOOLS))).toBeLessThanOrEqual(450);
+    expect(Buffer.byteLength(JSON.stringify(PLANNING_ENTRY_TOOLS))).toBeLessThanOrEqual(1_200);
     // The checked-in file is indented; tools/list serializes compact JSON for clients.
     expect(Buffer.byteLength(JSON.stringify(TOOLS))).toBeLessThanOrEqual(16_000);
   });
@@ -226,7 +227,7 @@ describe('MCP tool definitions', () => {
   });
 
   it('offer read_diagram as source text, and render_diagram as a picture, with the formats the app has', () => {
-    expect(tool('read_diagram').inputSchema.properties.format.enum).toEqual(['draft', 'outline', 'mermaid', 'plantuml', 'c4']);
+    expect(tool('read_diagram').inputSchema.properties.format.enum).toEqual(['draft', 'edit', 'outline', 'mermaid', 'plantuml', 'c4']);
     const render = tool('render_diagram').inputSchema;
     expect(render.properties.format.enum).toEqual(['png', 'svg']);
     expect(render.properties.scale.enum).toEqual([1, 2, 3]);

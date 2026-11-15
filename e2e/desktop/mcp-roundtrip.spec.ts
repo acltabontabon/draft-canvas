@@ -23,6 +23,12 @@ test('real MCP sidecar: create smart attachments, render them, and accept a prop
     await expect(page.locator('.dc-editor')).toBeVisible();
     const initial = await client.call('read_diagram', { diagramId: 'd_mcp00000001', include: ['geometry'] });
     expect(initial.ok).toBe(true);
+    const compact = await client.call('read_diagram', { diagramId: 'd_mcp00000001', format: 'edit', query: ['nearby', 'through'] });
+    expect(compact.ok).toBe(true);
+    expect(compact.value.revision).toBe(initial.value.revision);
+    expect(compact.value.matches).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'nearby', type: 'relationship', view: { inside: [] }, from: expect.objectContaining({ id: expect.any(String) }), to: expect.objectContaining({ id: expect.any(String) }) }),
+    ]));
     expect(initial.value.relationships).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: 'nearby', geometry: { from: 'right', to: 'left', path: [[350, 75], [410, 75]] } }),
       expect.objectContaining({ id: 'through', geometry: expect.not.objectContaining({ pins: expect.anything() }) }),

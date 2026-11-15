@@ -221,6 +221,11 @@ describe('collaborator provenance in agent reads', () => {
       { id: 'd', kind: 'edge', by: 'Alice' },
       { id: 'flow-a', kind: 'flow', by: 'Alice' },
     ]) });
+    const edit = await request('read_diagram', { format: 'edit', query: 'Collaborator connector' }, context);
+    expect(edit.value!.matches).toMatchObject([{ id: 'd', from: { id: 'api', label: 'Collaborator label' } }]);
+    expect(edit.value!.fromCollaborators).toMatchObject({ elements: expect.arrayContaining([
+      { id: 'api', kind: 'node', by: 'Alice' }, { id: 'api', kind: 'node', by: 'peer-b' }, { id: 'd', kind: 'edge', by: 'Alice' },
+    ]) });
     expect(fileOf(useEditorStore.getState())).not.toHaveProperty('fromCollaborators');
   });
 
@@ -246,6 +251,8 @@ describe('collaborator provenance in agent reads', () => {
     });
     const lookup = await request('read_diagram', { query: 'Untrusted inner' }, context);
     expect(lookup.value!.fromCollaborators).toMatchObject({ elements: [{ id: 'inner', kind: 'node', by: 'peer-a' }] });
+    const edit = await request('read_diagram', { format: 'edit', query: 'Untrusted inner' }, context);
+    expect(edit.value!.fromCollaborators).toMatchObject({ elements: [{ id: 'inner', kind: 'node', by: 'peer-a' }] });
     const inner = await request('read_diagram', { view: { inside: ['api'] } }, context);
     expect(inner.value!.fromCollaborators).toMatchObject({ elements: [{ id: 'inner', kind: 'node', by: 'peer-a' }] });
     const focused = await request('get_implementation_context', { focus: { nodes: ['db'] } }, context);
@@ -1162,4 +1169,45 @@ describe('one-call rename through the existing edit pipeline', () => {
     expect(parsed.ok && parsed.document.nodes.find((n) => n.id === 'api')!.text).toBe('Gateway');
     expect(fileOf(useEditorStore.getState())).toBe(before);
   });
+});
+
+describe('compact reads keep common edits on the guarded pipeline', () => {
+  const edits = [
+    { name: 'description', ops: [{ op: 'update', id: 'api', set: { description: 'Handles orders' } }] },
+    { name: 'shape', ops: [{ op: 'add', nodes: [{ id: 'worker', type: 'service', label: 'Worker' }] }] },
+    { name: 'connection', ops: [{ op: 'update', id: 'd', set: { label: 'Saves locally' } }] },
+  ];
+  for (const tool of ['update_diagram', 'submit_proposal']) {
+    for (const { name, ops } of edits) {
+      it(`${tool}: ${name} retains revision/scope checks and proposal isolation`, async () => {
+        const handle = await openOrders();
+        const context = { handle, open: true, diagramId: 'd_orders000001' };
+        const read = await request('read_diagram', { format: 'edit' }, context);
+        expect(read.ok).toBe(true);
+        const before = fileOf(useEditorStore.getState());
+        const history = useEditorStore.getState().history;
+        const disk = h.files.get(handle)!.text;
+        const args = { diagramId: context.diagramId, requestId: `edit-${nextId}`, expectedRevision: read.value!.revision, view: { inside: [] }, ops, ...(tool === 'submit_proposal' ? { summary: name } : {}) };
+        expect((await request(tool, { ...args, expectedRevision: 'f:stale' }, context)).error?.code).toBe('REVISION_CONFLICT');
+        expect((await request(tool, { ...args, ops: name === 'shape' ? [...ops, { op: 'update', id: 'api', set: { label: 'Outside scope' } }] : ops, scope: { nodes: ['db'], edges: [] } }, context)).error?.code).toBe('OUT_OF_SCOPE');
+        expect(fileOf(useEditorStore.getState())).toBe(before);
+        expect(h.files.get(handle)!.text).toBe(disk);
+        const result = await request(tool, args, context);
+        expect(result.ok).toBe(true);
+        if (tool === 'submit_proposal') {
+          expect(result.value).toMatchObject({ ops, baseRevision: read.value!.revision, path: [], noImpact: false });
+          expect(fileOf(useEditorStore.getState())).toBe(before);
+          expect(useEditorStore.getState().history).toBe(history);
+          expect(h.files.get(handle)!.text).toBe(disk);
+          expect(h.agent.gates).not.toContain(nextId - 1);
+        } else {
+          expect(result.value).toMatchObject({ applied: true, persisted: true });
+          useEditorStore.getState().undo();
+          const restored = fileOf(useEditorStore.getState());
+          expect(restored.nodes).toEqual(before.nodes);
+          expect(restored.edges).toEqual(before.edges);
+        }
+      });
+    }
+  }
 });
