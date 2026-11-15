@@ -151,7 +151,7 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Easier on touch screens and for screen readers** — Buttons, popovers, menus and the status bar
   are at least 40 px on touch screens, the status bar wraps on phones and whenever a save needs
   attention (a narrow desktop window keeps its one row), the Flows panel is a tree,
-  the blank-canvas hint is read aloud and mentions long-press and `S`, `D`, `Q`, and the canvas and
+  the blank canvas reads its `S`, `D`, `Q` keys aloud, and the canvas and
   Quick Connect rows show where focus is. Zoom, status chips and flow-bar buttons show their keys,
   danger and faint text have more contrast, and one name is used for each thing (spotlight, shape,
   connector, reply line).

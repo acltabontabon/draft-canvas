@@ -152,10 +152,11 @@ function EmptyCanvas({ onAddStarter, leaving }: EmptyStateProps & { leaving: boo
             accessibility tree) while the first-shape chooser is open, which is drawn over it. */}
         <div className="dc-empty-start" role="status" data-chooser={chooserOpen ? 'true' : undefined}>
           <p className="dc-empty-title">Start <em><InkedWords>drawing.</InkedWords></em></p>
-          <p className="dc-empty-hint">Double-click or long-press anywhere to add your first shape, or press a key.</p>
           <p className="dc-empty-keys">
             <span className="dc-empty-key"><kbd>S</kbd> service</span>
+            <span className="dc-empty-dot" aria-hidden="true" />
             <span className="dc-empty-key"><kbd>D</kbd> data store</span>
+            <span className="dc-empty-dot" aria-hidden="true" />
             <span className="dc-empty-key"><kbd>Q</kbd> queue</span>
           </p>
         </div>

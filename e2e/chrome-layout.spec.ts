@@ -108,9 +108,9 @@ test.describe('keyboard and assistive technology', () => {
     await expect(page.locator('.dc-node')).toHaveCount(1);
   });
 
-  test('the blank-canvas hint is read out, and gets out of the way of the chooser it leads to', async ({ page }) => {
+  test('the blank-canvas keys are read out, and get out of the way of the chooser they lead to', async ({ page }) => {
     await newCanvas(page, 'Blank canvas hint');
-    const hint = page.getByRole('status').filter({ hasText: 'Double-click or long-press' });
+    const hint = page.getByRole('status').filter({ hasText: 'Start drawing' });
     await expect(hint).toBeVisible();
     await expect(hint).toContainText('S');
     await expect(hint).toContainText('D');

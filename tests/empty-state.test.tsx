@@ -126,14 +126,15 @@ describe('EmptyState', () => {
     expect(screen.queryByRole('group', { name: 'Suggested starters' })).not.toBeInTheDocument();
   });
 
-  it('reads the blank-canvas hint out as a polite status, naming the keys that really exist', () => {
+  it('reads the blank-canvas keys out as a polite status, naming the keys that really exist', () => {
     const { container } = renderEmpty();
     const hint = container.querySelector('.dc-empty-start')!;
     // Real text for assistive technology, not hidden: it is the only instruction a blank canvas carries.
     expect(hint.closest('[aria-hidden="true"]')).toBeNull();
     expect(hint).toHaveAttribute('role', 'status');
-    // Mouse, touch and keyboard, with the letters the creation shortcuts actually use (S, D, Q).
-    expect(hint).toHaveTextContent(/double-click or long-press/i);
+    // The sentence about double-click and long-press is gone from the canvas on purpose (the Getting
+    // started guide teaches those gestures); what stays are the letters the creation shortcuts use.
+    expect(hint).not.toHaveTextContent(/double-click|long-press/i);
     const keys = [...hint.querySelectorAll('kbd')].map((key) => key.textContent);
     expect(keys).toEqual(['S', 'D', 'Q']);
     for (const letter of keys) expect(ALL_PRESETS.some((preset) => preset.shortcut === letter)).toBe(true);
