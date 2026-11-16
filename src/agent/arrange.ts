@@ -23,17 +23,20 @@
  */
 
 import { updateNode } from '../document/operations';
+import { count } from '../lib/plural';
+import { connectorRoutes } from '../edges/connectorRoutes';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { assignAnchors, type Anchors } from '../layout/anchors';
 import { hasPeerCalls } from '../layout/layered';
 import type { DescribeContext } from '../nodes/describe';
 import type { Problems } from './errors';
 import type { LayoutSpec, Reader } from './input';
-import { anchorRectOf, arrangeParts, captionSizer, placeBlock, sizeToFit } from './place';
-import { clearlyBetterDirection, hasLabelledTrunk, hasSharedSideTrunk, JOG_COST } from './compile';
+import { BOUNDARY_HEADER, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD } from './compose';
+import { anchorRectOf, arrangedSize, arrangeParts, captionSizer, placeBlock, titlesOf } from './place';
+import { clearlyBetterDirection, fitsClearlyBetter, hasLabelledTrunk, hasSharedSideTrunk, JOG_COST, type Proportioned } from './compile';
 import { legibilityCost, legibilityOf } from './legibility';
 import { checkFit, checkQuality, isBetterCandidate, isCleanCandidate, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityReport } from './quality';
-import { drawnRoute, overlaps, pastDeadline, relaxLayoutAnchors, repairAnchors, segmentHitsBox } from './route';
+import { drawnRoute, overlaps, pastDeadline, relaxLayoutAnchors, repairAnchors, segmentHitsBox, withinWork, workLeft } from './route';
 
 type Json = Record<string, unknown>;
 
@@ -46,10 +49,15 @@ export interface ArrangeRequest {
    *  shape — a cheaper "just clean up the arrows" pass. Default `true` (the full placement pass). */
   move: boolean;
   layout: LayoutSpec;
+  /** A whole-view arrange also hands back its best arrangement reading the other way
+   *  (`Arranged.alternative`), so a person can choose the reading direction before anything moves. */
+  bothDirections?: boolean;
 }
 
 const SPACINGS: LayoutSpec['spacing'][] = ['comfortable', 'spacious'];
-const isNoteLike = (n: DraftNode) => n.type === 'note' || n.type === 'text' || n.type === 'code';
+// A sequence is laid out by its own rules and is not part of the graph being arranged: like a note,
+// it keeps its size and is set down beside the shapes.
+const isNoteLike = (n: DraftNode) => n.type === 'note' || n.type === 'text' || n.type === 'code' || n.type === 'sequence';
 
 /** Reads `{op:"arrange", scope?, direction?, spacing?, connectors?, move?, primaryFlow?}` against the view. */
 export function readArrange(r: Reader, op: Json, at: string, view: DraftDocument, base: LayoutSpec): ArrangeRequest | undefined {
@@ -96,18 +104,29 @@ export function readArrange(r: Reader, op: Json, at: string, view: DraftDocument
   };
 }
 
-/** Which way a view already reads: the way most of its connectors run. A cleanup keeps it. */
+/**
+ * Which way a view already reads: the way most of its connectors run. A cleanup keeps it. First by
+ * the sides they are drawn between — bottom to top reads down, side to side reads across, however
+ * far apart a fan spreads its shapes — and by how far they run only when that doesn't decide it.
+ */
 export function readingDirectionOf(view: DraftDocument): 'right' | 'down' {
   const byId = new Map(view.nodes.map((n) => [n.id, n]));
   let across = 0;
   let down = 0;
+  let sidesAcross = 0;
+  let sidesDown = 0;
   for (const edge of view.edges) {
     const s = byId.get(edge.source);
     const t = byId.get(edge.target);
-    if (!s || !t) continue;
+    if (!s || !t || s === t) continue;
     across += Math.abs(t.x + t.width / 2 - (s.x + s.width / 2));
     down += Math.abs(t.y + t.height / 2 - (s.y + s.height / 2));
+    const drawn = connectorRoutes(edge, view, 'transient', byId)?.request;
+    const sides = `${drawn?.source.side}>${drawn?.target.side}`;
+    if (sides === 'bottom>top' || sides === 'top>bottom') sidesDown += 1;
+    else if (sides === 'right>left' || sides === 'left>right') sidesAcross += 1;
   }
+  if (sidesDown !== sidesAcross) return sidesDown > sidesAcross ? 'down' : 'right';
   return down > across * 1.2 ? 'down' : 'right';
 }
 
@@ -135,6 +154,13 @@ export interface Arranged {
   touched: Set<string>;
   /** What the arrangement found that the request could change (see `arrangeView`). */
   advisories?: string[];
+  /** The way it reads: what a moving arrangement was laid out in. */
+  direction?: LayoutSpec['direction'];
+  /** With `ArrangeRequest.bothDirections`: the best arrangement reading the other way. */
+  alternative?: Arranged;
+  /** With `ArrangeRequest.bothDirections`, and no `alternative`: the work budget was spent before the
+   *  other reading direction could be worked out (a diagram this size), not that it was refused. */
+  alternativeSkipped?: boolean;
 }
 
 /** One candidate arrangement with what was found wrong with it, and the layout that made it. */
@@ -180,27 +206,37 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
     const fit = layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, arranged.view.edges, ctx), smallestFontPresent(arranged.view.nodes, arranged.view.edges), layout.viewport) : undefined;
     return { arranged, report, fit, layout };
   };
-  for (const layout of attempts) {
-    if (best && pastDeadline()) break;
-    const candidate = judge(layout);
-    if (!candidate) {
-      lastRefusal = true;
-      continue;
+  // A whole-view arrange that hands back both directions splits its work budget between the parts, so
+  // that a diagram where the first one is dear still leaves the other its share — or, when it can't,
+  // says so (`alternativeSkipped`) instead of quietly offering one direction. Without a budget (an
+  // agent's request is bounded by time instead) the shares are infinite and change nothing.
+  const bothWays = Boolean(request.bothDirections) && !request.scope && request.move !== false;
+  const total = workLeft();
+  const share = <T,>(fraction: number, work: () => T): T => (bothWays && Number.isFinite(total) ? withinWork(Math.floor(total * fraction), work) : work());
+  let alternativeSkipped = false;
+  share(FIRST_DIRECTION_SHARE, () => {
+    for (const layout of attempts) {
+      if (best && pastDeadline()) break;
+      const candidate = judge(layout);
+      if (!candidate) {
+        lastRefusal = true;
+        continue;
+      }
+      if (!best || isBetterCandidate(candidate, best)) best = candidate;
+      if (isCleanCandidate(candidate)) break;
+      // Route-only never moves a shape, so a roomier spacing changes nothing — one attempt is enough.
+      if (request.move === false) break;
     }
-    if (!best || isBetterCandidate(candidate, best)) best = candidate;
-    if (isCleanCandidate(candidate)) break;
-    // Route-only never moves a shape, so a roomier spacing changes nothing — one attempt is enough.
-    if (request.move === false) break;
-  }
-  // A trunk shared by labelled connectors is kept only when it reads better than separate lines
-  // (`compile.ts` does the same for a new diagram): errors decide first, then legibility.
-  if (best && request.move !== false && !pastDeadline() && hasLabelledTrunk(best.arranged.view)) {
-    const alone = judge({ ...best.layout, fans: 'unlabelled' });
-    const shared = hasSharedSideTrunk(best.arranged.view);
-    if (alone && (betterByErrors(alone, best) || (tied(alone, best) && cost(alone) < cost(best)))) best = alone;
-    const unshared = shared && !pastDeadline() ? judge({ ...best.layout, fans: 'unshared' }) : undefined;
-    if (unshared && (betterByErrors(unshared, best) || (tied(unshared, best) && cost(unshared) < cost(best)))) best = unshared;
-  }
+    // A trunk shared by labelled connectors is kept only when it reads better than separate lines
+    // (`compile.ts` does the same for a new diagram): errors decide first, then legibility.
+    if (best && request.move !== false && !pastDeadline() && hasLabelledTrunk(best.arranged.view)) {
+      const alone = judge({ ...best.layout, fans: 'unlabelled' });
+      const shared = hasSharedSideTrunk(best.arranged.view);
+      if (alone && (betterByErrors(alone, best) || (tied(alone, best) && cost(alone) < cost(best)))) best = alone;
+      const unshared = shared && !pastDeadline() ? judge({ ...best.layout, fans: 'unshared' }) : undefined;
+      if (unshared && (betterByErrors(unshared, best) || (tied(unshared, best) && cost(unshared) < cost(best)))) best = unshared;
+    }
+  });
   // Peers that call each other: one row or a staircase, whichever reads better (see `chooseArrangement`).
   const peers = hasPeerCalls(view.edges.filter((e) => inScope.has(e.source) && inScope.has(e.target)));
   if (best && request.move !== false && !pastDeadline() && peers) {
@@ -212,9 +248,18 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
   // when it reads clearly better, never over a few pixels — the diagram a person is looking at
   // doesn't turn on its side for nothing. A scoped arrange keeps the view's direction: the part it
   // moves has to read the way the rest still does.
-  if (best && !request.scope && request.move !== false && !request.layout.directionChosen && !pastDeadline()) {
-    const other = otherDirection(best, judge, peers);
-    if (other && (betterByErrors(other, best) || (tied(other, best) && clearlyBetterDirection(cost(other), cost(best), crossingsOf(other) < crossingsOf(best))))) best = other;
+  // Or when it reads as well and fits a screen clearly better: a tall diagram on a wide screen is
+  // drawn small with most of the view empty, and turning it is what makes it readable at a glance.
+  let alternative: Judged | undefined;
+  if (best && !request.scope && request.move !== false && !request.layout.directionChosen) {
+    if (pastDeadline()) alternativeSkipped = bothWays;
+    else share(OTHER_DIRECTION_SHARE, () => {
+      const other = otherDirection(best!, judge, peers);
+      if (other && (betterByErrors(other, best!) || (tied(other, best!) && (clearlyBetterDirection(cost(other), cost(best!), crossingsOf(other) < crossingsOf(best!)) || fitsClearlyBetter(measure(other), measure(best!)))))) {
+        alternative = best;
+        best = other;
+      } else alternative = other;
+    });
   }
   // A direction the request chose is kept, but measured against the other: an agent that asked for
   // "down" and got five crossings otherwise tries spacings, captions and hand placement in turn
@@ -224,27 +269,58 @@ export function arrangeView(view: DraftDocument, request: ArrangeRequest, ctx: D
     const other = otherDirection(best, judge, peers);
     if (other && (betterByErrors(other, best) || (tied(other, best) && clearlyBetterDirection(cost(other), cost(best), crossingsOf(other) < crossingsOf(best))))) {
       const op = { op: 'arrange', direction, ...(request.layout.primaryFlow ? { primaryFlow: request.layout.primaryFlow } : {}) };
-      best = { ...best, arranged: { ...best.arranged, advisories: [`Arranged reading "${best.layout.direction}" as asked, with ${crossingsOf(best)} crossing(s); reading "${direction}" it has ${crossingsOf(other)} and reads clearly better: ${JSON.stringify(op)}, or leave direction out and the layout picks.`] } };
+      best = { ...best, arranged: { ...best.arranged, advisories: [`Arranged reading "${best.layout.direction}" as asked, with ${count(crossingsOf(best), 'crossing')}; reading "${direction}" it has ${crossingsOf(other)} and reads clearly better: ${JSON.stringify(op)}, or leave direction out and the layout picks.`] } };
     }
   }
   if (!best && lastRefusal) {
     problems.add('LAYOUT_CONSTRAINED', at, 'the arranged part would run into shapes outside the scope, and there is no free space beside it; arrange the whole view instead ({op:"arrange"})');
     return undefined;
   }
-  if (best && !pastDeadline()) {
-    const edges = best.arranged.view.edges.map((e) => ({ ...e }));
-    const targets = edges.filter((e) => best!.arranged.touched.has(e.id));
-    repairAnchors(targets, best.arranged.view.nodes, captionSizer(best.arranged.view.nodes, ctx), edges, undefined, true);
-    const arranged = { ...best.arranged, view: { ...best.arranged.view, edges } };
-    const polished: Judged = {
-      ...best,
-      arranged,
-      report: checkQuality(arranged.view.nodes, edges, ctx, arranged.touched),
-      fit: best.layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, edges, ctx), smallestFontPresent(arranged.view.nodes, edges), best.layout.viewport) : undefined,
-    };
-    if (betterByErrors(polished, best) || (tied(polished, best) && cost(polished) < cost(best))) best = polished;
-  }
-  return best && relaxArranged(view, best.arranged);
+  if (!best) return undefined;
+  const polish = (chosen: Judged): Arranged => {
+    let kept = chosen;
+    if (!pastDeadline()) {
+      const edges = chosen.arranged.view.edges.map((e) => ({ ...e }));
+      const targets = edges.filter((e) => chosen.arranged.touched.has(e.id));
+      repairAnchors(targets, chosen.arranged.view.nodes, captionSizer(chosen.arranged.view.nodes, ctx), edges, true);
+      const arranged = { ...chosen.arranged, view: { ...chosen.arranged.view, edges } };
+      const polished: Judged = {
+        ...chosen,
+        arranged,
+        report: checkQuality(arranged.view.nodes, edges, ctx, arranged.touched),
+        fit: chosen.layout.viewport ? checkFit(renderedBoundsOf(arranged.view.nodes, edges, ctx), smallestFontPresent(arranged.view.nodes, edges), chosen.layout.viewport) : undefined,
+      };
+      if (betterByErrors(polished, chosen) || (tied(polished, chosen) && cost(polished) < cost(chosen))) kept = polished;
+    }
+    return { ...relaxArranged(view, kept.arranged), ...(request.move !== false ? { direction: kept.layout.direction } : {}) };
+  };
+  const chosen = share(POLISH_SHARE, () => polish(best!));
+  if (!request.bothDirections || request.scope || request.move === false) return chosen;
+  // The other way too, for a person choosing; laid out now if the engine never got to it.
+  const other = alternative ?? (pastDeadline() ? undefined : share(OTHER_DIRECTION_SHARE, () => otherDirection(best!, judge, peers)));
+  if (!other && pastDeadline()) alternativeSkipped = true;
+  if (other) return { ...chosen, alternative: share(POLISH_SHARE, () => polish(other)) };
+  return alternativeSkipped ? { ...chosen, alternativeSkipped } : chosen;
+}
+
+/**
+ * How a whole-view Arrange that hands back both directions splits its work budget (`share`): the
+ * first direction's candidates, the other direction's, and the final anchor polish of each. Fractions
+ * of what was left when the arrange began; the polish of the first is taken from what remains.
+ */
+const FIRST_DIRECTION_SHARE = 0.4;
+const OTHER_DIRECTION_SHARE = 0.3;
+const POLISH_SHARE = 0.1;
+
+/** What `fitsClearlyBetter` weighs of a candidate. */
+function measure(c: Judged): Proportioned {
+  return { ...boundsOfView(c.arranged.view.nodes), cost: cost(c), crossings: crossingsOf(c), viewport: c.layout.viewport };
+}
+
+function boundsOfView(nodes: readonly DraftNode[]): { width: number; height: number } {
+  if (!nodes.length) return { width: 1, height: 1 };
+  const box = boxOf(nodes);
+  return { width: Math.max(1, box.width), height: Math.max(1, box.height) };
 }
 
 /**
@@ -312,11 +388,11 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   const outside = view.nodes.filter((n) => !inScope.has(n.id) && !followers.has(n.id) && !containsScope(n, before, byId));
   let origin = { x: oldBox.x, y: oldBox.y };
   const collides = (o: { x: number; y: number }) =>
-    outside.some((n) => o.x - 24 < n.x + n.width && n.x < o.x + newBox.width + 24 && o.y - 24 < n.y + n.height && n.y < o.y + newBox.height + 24);
+    outside.some((n) => o.x - SCOPE_CLEARANCE < n.x + n.width && n.x < o.x + newBox.width + SCOPE_CLEARANCE && o.y - SCOPE_CLEARANCE < n.y + n.height && n.y < o.y + newBox.height + SCOPE_CLEARANCE);
   if (outside.length && collides(origin)) {
     const pseudo: DraftNode = { id: '__scope', type: 'service', x: oldBox.x, y: oldBox.y, width: oldBox.width, height: oldBox.height, z: 0 };
     const rest: DraftDocument = { ...view, nodes: outside };
-    const found = placeBlock(rest, pseudo, { width: newBox.width, height: newBox.height }, layout.direction, undefined, 48);
+    const found = placeBlock(rest, pseudo, { width: newBox.width, height: newBox.height }, layout.direction, undefined, SCOPE_FIRST_GAP);
     if (!found) return undefined;
     origin = found;
   }
@@ -330,8 +406,8 @@ function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request:
   const innerById = new Map(inner.map((e) => [e.id, e]));
   const crossing = view.edges.filter((e) => !innerById.has(e.id) && (elements.has(e.source) || elements.has(e.target))).map((e) => restyled(e, request.connectors));
   const rects = new Map(next.nodes.map((n) => [n.id, anchorRectOf(n)]));
-  const anchors = assignAnchors(crossing, rects, layout.direction, undefined, undefined, { ...(layout.fans ? { fans: layout.fans } : {}) });
-  for (const e of crossing) Object.assign(e, anchors.get(e.id) ?? {});
+  const anchors = assignAnchors(crossing, rects, layout.direction, undefined, undefined, { titles: titlesOf(next.nodes, ctx), ...(layout.fans ? { fans: layout.fans } : {}) });
+  for (const e of crossing) applyLayoutAnchors(e, anchors.get(e.id));
   const changed = new Map([...inner, ...crossing].map((e) => [e.id, e]));
   next = { ...next, edges: next.edges.map((e) => changed.get(e.id) ?? e) };
   const touchedEdges = next.edges.filter((e) => changed.has(e.id));
@@ -390,22 +466,23 @@ function routeOnly(view: DraftDocument, inScope: ReadonlySet<string>, request: A
   const neighbours = view.edges.filter((e) => !touchedIds.has(e.id) && (affectedNodes.has(e.source) || affectedNodes.has(e.target)) && e.sourceAnchor && e.targetAnchor);
   const rects = new Map(view.nodes.map((n) => [n.id, anchorRectOf(n)]));
   const pinned = new Map<string, Anchors>(neighbours.map((e) => [e.id, { sourceAnchor: e.sourceAnchor as NonNullable<DraftEdge['sourceAnchor']>, targetAnchor: e.targetAnchor as NonNullable<DraftEdge['targetAnchor']> }]));
-  const anchors = assignAnchors([...touched, ...neighbours], rects, request.layout.direction, pinned);
-  for (const e of touched) Object.assign(e, anchors.get(e.id) ?? {});
+  const anchors = assignAnchors([...touched, ...neighbours], rects, request.layout.direction, pinned, undefined, { titles: titlesOf(view.nodes, ctx) });
+  for (const e of touched) applyLayoutAnchors(e, anchors.get(e.id));
   const changed = new Map(touched.map((e) => [e.id, e]));
   const next: DraftDocument = { ...view, edges: view.edges.map((e) => changed.get(e.id) ?? e) };
   repairAnchors(touched, next.nodes, captionSizer(next.nodes, ctx), next.edges);
   return { view: next, touched: new Set(changed.keys()) };
 }
 
-/** A shape at least as big as it was, and big enough for its text. */
+/** A shape big enough for its text, and a long name given a wider box (`arrangedSize`). */
 function grown(node: DraftNode, ctx: DescribeContext): DraftNode {
-  try {
-    const sized = sizeToFit(node, ctx);
-    return { ...node, width: Math.max(node.width, sized.width), height: Math.max(node.height, sized.height) };
-  } catch {
-    return { ...node };
-  }
+  return { ...node, ...arrangedSize(node, ctx) };
+}
+
+function applyLayoutAnchors(edge: DraftEdge, anchors: Anchors | undefined): void {
+  if (!anchors) return;
+  if (!edge.sourceAnchor?.participantId) edge.sourceAnchor = anchors.sourceAnchor;
+  if (!edge.targetAnchor?.participantId) edge.targetAnchor = anchors.targetAnchor;
 }
 
 function restyled(edge: DraftEdge, connectors: ArrangeRequest['connectors']): DraftEdge {
@@ -441,8 +518,17 @@ function containsScope(node: DraftNode, scope: readonly DraftNode[], byId: Map<s
 }
 
 /** How close a note inside a boundary must sit to a shape to count as that shape's rather than the
- *  boundary's own: a note laid out beside its shape sits `NOTE_GAP` (20) from it. */
-const BESIDE_REACH = 48;
+ *  boundary's own: a note laid out beside its shape sits `NOTE_GAP` (`place.ts`) from it. */
+export const BESIDE_REACH = 48;
+
+/** Clear space a partial scope keeps from what it was not asked to move, before it is set beside
+ *  where it was instead. */
+const SCOPE_CLEARANCE = 24;
+/** How far from its old place a refused scope first looks for room (`placeBlock`'s first gap). */
+const SCOPE_FIRST_GAP = 48;
+/** How far from its host a free note first looks for a spot (`placeBlock`'s first gap): enough for a
+ *  connector's caption between them. */
+const BESIDE_FIRST_GAP = 32;
 
 /** The shape a note sits closest to (edge to edge), within a short reach. */
 export function nearestShape(note: DraftNode, nodes: readonly DraftNode[], reach = 160): DraftNode | undefined {
@@ -468,8 +554,8 @@ export function fitGroups(view: DraftDocument, id: string): DraftDocument {
     if (!group) break;
     const inside = doc.nodes.filter((n) => n.parentId === group.id);
     if (inside.length) {
-      const pad = 36;
-      const header = group.boundaryPreset === 'boundary' ? 44 : 56;
+      const pad = BOUNDARY_PAD;
+      const header = group.boundaryPreset === 'boundary' ? BOUNDARY_HEADER_TITLE_ONLY : BOUNDARY_HEADER;
       const minX = Math.min(group.x, ...inside.map((n) => n.x - pad));
       const minY = Math.min(group.y, ...inside.map((n) => n.y - header));
       const maxX = Math.max(group.x + group.width, ...inside.map((n) => n.x + n.width + pad));
@@ -516,20 +602,23 @@ export function placeBeside(view: DraftDocument, noteId: string, host: DraftNode
     const drawn = drawnRoute(edge, others.nodes, view.edges, undefined, byId);
     return drawn ? [drawn.points] : [];
   });
-  const at = placeBlock(others, host, { width: note.width, height: note.height }, direction, undefined, 32, false, lines.length ? lines : [[]]);
+  const at = placeBlock(others, host, { width: note.width, height: note.height }, direction, undefined, BESIDE_FIRST_GAP, false, lines.length ? lines : [[]]);
   return at ? updateNode(view, noteId, { x: at.x, y: at.y, parentId: undefined }) : undefined;
 }
 
-const NOTE_GAP = 24;
+/** Between the last shape a boundary holds and a note put under it. More than `NOTE_GAP` (the gap
+ *  beside a shape, where no connector runs): under a boundary's members the note reads as another
+ *  row, and a connector may run to the shape above it. */
+const IN_GROUP_NOTE_GAP = 24;
 
 /** Puts a free note inside a boundary, under what it already holds, and grows the boundary to fit. */
 export function placeInGroup(view: DraftDocument, noteId: string, groupId: string): DraftDocument {
   const group = view.nodes.find((n) => n.id === groupId);
   if (!group) return view;
   const members = view.nodes.filter((n) => n.parentId === groupId && n.id !== noteId);
-  const pad = 36;
-  const header = group.boundaryPreset === 'boundary' ? 44 : 56;
+  const pad = BOUNDARY_PAD;
+  const header = group.boundaryPreset === 'boundary' ? BOUNDARY_HEADER_TITLE_ONLY : BOUNDARY_HEADER;
   const x = members.length ? Math.min(...members.map((m) => m.x)) : group.x + pad;
-  const y = members.length ? Math.max(...members.map((m) => m.y + m.height)) + NOTE_GAP : group.y + header;
+  const y = members.length ? Math.max(...members.map((m) => m.y + m.height)) + IN_GROUP_NOTE_GAP : group.y + header;
   return fitGroups(updateNode(view, noteId, { x: Math.round(x), y: Math.round(y), parentId: groupId }), noteId);
 }

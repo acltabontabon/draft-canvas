@@ -93,7 +93,7 @@ impl<T> Drop for Registration<T> {
 pub const RUN_VAR: &str = "DRAFT_CANVAS_RUN";
 
 /// A run id as the app makes them (a UUID); anything else is not sent.
-fn run_from(value: Option<String>) -> Option<String> {
+pub(crate) fn run_from(value: Option<String>) -> Option<String> {
     value.filter(|v| {
         !v.is_empty() && v.len() <= 64 && v.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
     })

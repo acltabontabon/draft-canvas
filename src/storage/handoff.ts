@@ -198,7 +198,7 @@ export function sendDiagrams(options: SendOptions): Promise<SendOutcome> {
       const { buildBackup } = await import('./backup');
       backup = await buildBackup(repository);
     } catch (error) {
-      return { kind: 'failed', message: error instanceof Error ? error.message : 'Your diagrams could not be read.' };
+      return { kind: 'failed', message: error instanceof Error ? error.message : 'Your diagrams couldn’t be read.' };
     }
     const { bytes, count, skipped } = backup;
     // Transferred, not copied: a Library can be tens of megabytes. Only a view over the whole
@@ -215,7 +215,7 @@ export function sendDiagrams(options: SendOptions): Promise<SendOutcome> {
     } catch (error) {
       // Nobody will answer a message that was never sent: release the listener, timer and poll now.
       answer.cancel();
-      return { kind: 'failed', message: error instanceof Error ? error.message : 'Your diagrams could not be sent.' };
+      return { kind: 'failed', message: error instanceof Error ? error.message : 'Your diagrams couldn’t be sent.' };
     }
     const ack = await answer.promise;
     if ('kind' in ack) return ack;
@@ -328,7 +328,7 @@ async function receive(host: ReceiverHost, options: ReceiveOptions & { appOrigin
       const { restoreBackup } = await import('./backup');
       outcome = { kind: 'received', result: await restoreBackup(repository, new Uint8Array(payload.bytes)) };
     } catch (error) {
-      outcome = { kind: 'failed', message: error instanceof Error ? error.message : 'The diagrams could not be read.' };
+      outcome = { kind: 'failed', message: error instanceof Error ? error.message : 'The diagrams couldn’t be read.' };
     }
   }
   if (outcome.kind === 'received') {

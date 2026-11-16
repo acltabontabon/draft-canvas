@@ -1,7 +1,7 @@
 {
   "name": "draft-canvas",
   "private": true,
-  "version": "1.18.1",
+  "version": "1.20.0",
   "type": "module",
   "description": "A local-first canvas for developers to explain software visually.",
   "license": "Apache-2.0",
@@ -59,6 +59,7 @@
     "desktop:rust": "cargo fmt --manifest-path src-tauri/Cargo.toml --all --check && cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets -- -D warnings && cargo test --manifest-path src-tauri/Cargo.toml --workspace",
     "desktop:version": "node scripts/check-desktop-version.mjs",
     "agent:schemas": "tsx scripts/agent-schemas.ts",
+    "starters:fixtures": "node scripts/starters/fixtures.mjs",
     "agent:sidecar": "node scripts/build-sidecar.mjs",
     "release:notes": "node scripts/release-notes.mjs",
     "release:whats-new": "node scripts/whats-new.mjs",

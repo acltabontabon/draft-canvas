@@ -7,8 +7,8 @@ import { drawioSource } from '../src/export/source/drawio';
 import { SOURCE_FORMAT_INFO, SOURCE_FORMATS, sourceFileNameFor, sourceTextFor } from '../src/export/source';
 import { mermaidFlowchartSource } from '../src/export/source/mermaidFlowchart';
 import { structurizrSource } from '../src/export/source/structurizr';
-import { ARCHITECTURE_STARTERS } from '../src/starters/catalog';
-import { starterDocument } from '../src/starters/document';
+import { ARCHITECTURE_STARTERS } from './fixtures/starters-v1/catalog';
+import { starterDocument } from './fixtures/starters-v1/document';
 
 /**
  * The architecture source formats are checked against what reads them where a reader is at hand

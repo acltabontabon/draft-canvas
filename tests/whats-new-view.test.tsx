@@ -10,9 +10,9 @@ import { AboutDialog } from '../src/ui/common/AboutDialog';
 const escapeRegExp = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /**
- * About → What's New → Release History → Release Detail: one modal, four internal views, never
+ * About → What’s New → Release History → Release Detail: one modal, four internal views, never
  * a modal on a modal. `back` retraces the path actually taken to get there — Detail returns to
- * whichever of What's New or Release History it was opened from, then History → What's New →
+ * whichever of What’s New or Release History it was opened from, then History → What’s New →
  * About — these tests drive it the way a keyboard user would.
  */
 describe('AboutDialog — What\'s New', () => {
@@ -26,7 +26,7 @@ describe('AboutDialog — What\'s New', () => {
 
   it('shows a "What\'s New" action in the version row when no update is pending', () => {
     render(<AboutDialog />);
-    expect(screen.getByRole('button', { name: /What's New/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /What’s New/i })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Reload to update/i })).not.toBeInTheDocument();
   });
 
@@ -34,13 +34,13 @@ describe('AboutDialog — What\'s New', () => {
     useUiStore.setState({ updateReady: true });
     render(<AboutDialog />);
     expect(screen.getByRole('button', { name: /Reload to update/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /What's New/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /What’s New/i })).not.toBeInTheDocument();
   });
 
   it('opening What\'s New leads with the latest applicable release, and never a future one', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
 
     const latest = applicableReleases(PRODUCT.version)[0]!;
     expect(screen.getByRole('heading', { name: `v${latest.version}` })).toBeInTheDocument();
@@ -58,7 +58,7 @@ describe('AboutDialog — What\'s New', () => {
   it('moves focus to the latest applicable release heading when opening What\'s New', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     const latest = applicableReleases(PRODUCT.version)[0]!;
     expect(screen.getByRole('heading', { name: `v${latest.version}` })).toHaveFocus();
   });
@@ -66,21 +66,21 @@ describe('AboutDialog — What\'s New', () => {
   it('marks the release as seen on open, clearing the unread state', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     expect(useUiStore.getState().lastSeenProductRelease).toBe(PRODUCT.version);
   });
 
   it('does not render an accordion anywhere — no <details> in the modal', async () => {
     const user = userEvent.setup();
     const { baseElement: container } = render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     expect(container.querySelectorAll('details')).toHaveLength(0);
   });
 
   it('"Back" (in the modal header) returns to About and focuses its heading', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     await user.click(screen.getByRole('button', { name: 'Back to About' }));
 
     expect(screen.getByText(PRODUCT.tagline)).toBeInTheDocument();
@@ -90,7 +90,7 @@ describe('AboutDialog — What\'s New', () => {
   it('Escape closes the whole dialog from inside What\'s New, rather than navigating back', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     await user.keyboard('{Escape}');
     expect(useUiStore.getState().aboutOpen).toBe(false);
   });
@@ -98,7 +98,7 @@ describe('AboutDialog — What\'s New', () => {
   it('shows up to 3 previous releases as plain rows, plus a link to the full history', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
 
     const recent = applicableReleases(PRODUCT.version).slice(1, 4);
     for (const release of recent) {
@@ -110,7 +110,7 @@ describe('AboutDialog — What\'s New', () => {
   it('selecting a recent release row jumps straight to its detail view, not an inline expansion', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
 
     const recent = applicableReleases(PRODUCT.version)[1]!;
     await user.click(screen.getByRole('button', { name: new RegExp(`v${escapeRegExp(recent.version)}`) }));
@@ -123,21 +123,21 @@ describe('AboutDialog — What\'s New', () => {
   it('a release reached directly from What\'s New backs up into What\'s New, not Release History', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
 
     const latest = applicableReleases(PRODUCT.version)[0]!;
     const recent = applicableReleases(PRODUCT.version)[1]!;
     await user.click(screen.getByRole('button', { name: new RegExp(`v${escapeRegExp(recent.version)}`) }));
-    await user.click(screen.getByRole('button', { name: "Back to What's New" }));
+    await user.click(screen.getByRole('button', { name: "Back to What’s New" }));
 
-    // Back to the top-level What's New view for the CURRENT release, not the row just visited.
+    // Back to the top-level What’s New view for the CURRENT release, not the row just visited.
     expect(screen.getByRole('heading', { name: `v${latest.version}` })).toBeInTheDocument();
   });
 
   it('"View release history" opens a dense index of every applicable release', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     await user.click(screen.getByRole('button', { name: /View release history/i }));
 
     const all = applicableReleases(PRODUCT.version);
@@ -152,7 +152,7 @@ describe('AboutDialog — What\'s New', () => {
   it('selecting a release from history shows its detail, and back returns to history', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     await user.click(screen.getByRole('button', { name: /View release history/i }));
 
     const target = applicableReleases(PRODUCT.version).at(-1)!; // the oldest one, only reachable via history
@@ -166,7 +166,7 @@ describe('AboutDialog — What\'s New', () => {
   it('Release History groups by year only once more than one year is present', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     await user.click(screen.getByRole('button', { name: /View release history/i }));
 
     // Every curated release currently ships in 2026 — a single year heading would be pure noise.
@@ -179,7 +179,7 @@ describe('AboutDialog — What\'s New', () => {
     const panel = () => container.querySelector<HTMLElement>('.dc-modal')!;
     expect(panel().style.width).toBe('480px');
 
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     expect(panel().style.width).toBe('600px');
 
     await user.click(screen.getByRole('button', { name: /View release history/i }));
@@ -192,7 +192,7 @@ describe('AboutDialog — What\'s New', () => {
     if (!patch) return; // nothing to exercise if the catalog ever stops carrying a compact release
 
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     await user.click(screen.getByRole('button', { name: /View release history/i }));
     await user.click(screen.getByRole('button', { name: new RegExp(`v${escapeRegExp(patch.version)}`) }));
 
@@ -211,8 +211,8 @@ describe('AboutDialog navigation labels stay oriented', () => {
     render(<AboutDialog />);
     expect(screen.getByRole('dialog', { name: 'About' })).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
-    expect(screen.getByRole('dialog', { name: "What's New" })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
+    expect(screen.getByRole('dialog', { name: "What’s New" })).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /View release history/i }));
     expect(screen.getByRole('dialog', { name: 'Release History' })).toBeInTheDocument();
@@ -221,9 +221,9 @@ describe('AboutDialog navigation labels stay oriented', () => {
   it('does not repeat the section name as a second, content-level heading', async () => {
     const user = userEvent.setup();
     render(<AboutDialog />);
-    await user.click(screen.getByRole('button', { name: /What's New/i }));
+    await user.click(screen.getByRole('button', { name: /What’s New/i }));
     const dialog = screen.getByRole('dialog');
     // Exactly one — the modal's own chrome title (h2). The content heading is the version itself.
-    expect(within(dialog).getAllByRole('heading', { name: "What's New" })).toHaveLength(1);
+    expect(within(dialog).getAllByRole('heading', { name: "What’s New" })).toHaveLength(1);
   });
 });

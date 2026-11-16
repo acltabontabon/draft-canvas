@@ -83,8 +83,14 @@ export interface LayoutEdge {
 }
 
 export interface LayoutSpacing {
-  /** Between layers (the reading direction). */
+  /** Between layers (the reading direction), where a caption crosses the gap. */
   layer: number;
+  /**
+   * Between layers where nothing in the gap needs room of its own — no caption, no shared trunk
+   * with captions on its branches. A plain connector reads at this length; the full `layer` there
+   * only stretched the diagram along its reading direction. Defaults to `layer`.
+   */
+  tight?: number;
   /** Between siblings within a layer. */
   sibling: number;
   /** Inside a boundary: its padding on three sides. */
@@ -843,7 +849,9 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
     }
     // A caption sits in the first gap the edge crosses; the widest one there sets that gap.
     const label = direction === 'right' ? e.labelWidth : e.labelHeight;
-    const trunk = label > 0 && ((fanOut.get(e.source) ?? 0) > 1 || (fanIn.get(e.target) ?? 0) > 1) ? FAN_TRUNK : 0;
+    // Only for a connector that really shares one: captioned connectors drawn apart (`fans`) have
+    // their captions at their own middles, and the trunk's run was only a longer gap.
+    const trunk = label > 0 && e.bundled && ((fanOut.get(e.source) ?? 0) > 1 || (fanIn.get(e.target) ?? 0) > 1) ? FAN_TRUNK : 0;
     // A branch off a shared trunk carries its caption at the branch's middle, and the trunk takes
     // `TRUNK_SHARE` of the gap: the branch must be as long as the caption and its clearance.
     const branch = e.bundled && label > 0 ? Math.ceil((label + BRANCH_AIR) / (1 - TRUNK_SHARE)) : 0;
@@ -1120,8 +1128,10 @@ function layerComponent(ids: string[], edges: LiftedEdge[], env: Env): Block {
   let cursor = 0;
   for (let r = 0; r < layerCount; r += 1) {
     layerStart.push(cursor);
+    // A gap is as long as what crosses it needs: a caption (and a shared trunk before its branch)
+    // with clear air, or, with no caption at all, the plain connector's length.
     const captionRoom = at(gapLabel, r) > 0 ? at(gapLabel, r) + CAPTION_AIR : 0;
-    cursor += at(depth, r) + Math.max(spacing.layer, captionRoom);
+    cursor += at(depth, r) + Math.max(spacing.tight ?? spacing.layer, captionRoom);
   }
 
   let minAcross = Infinity;

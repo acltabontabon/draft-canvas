@@ -11,6 +11,7 @@ import { categoryOf } from '../../document/connectorSemantics';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import { isInteracting, useEditorStore } from '../../store/editorStore';
+import { currentRevision } from '../../host/agentBridge';
 import { selectNode } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
 import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, CodeFolder, CodeGrant, PromptRequest, Proposal } from '../api';
@@ -34,7 +35,7 @@ import { arrivalLine, updateLine, blockedFolderOf, clockLines, RUN_SALT, smallTa
 import { PointPins } from './PointPins';
 import { NodiSkillMenu, SKILL_LIST_ID, skillOptionId } from './NodiSkillMenu';
 import { matchSkills, skillQuery, skillsFor, type NodiSkill } from './nodiSkills';
-import { shapesOffScreen, withArrangeMotion } from '../../canvas/arrangeMotion';
+import { startArrange } from '../../commands/arrange';
 import { ProposalHistory } from './ProposalHistory';
 import { countsLabel, useProposalReview } from './useProposalReview';
 
@@ -480,7 +481,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   const points = useMemo(() => pointsOf(turns.at(-1) ?? null, partsHere), [turns, partsHere]);
   const [hot, setHot] = useState<number | null>(null);
   const setPointedIds = useUiStore((s) => s.setPointedIds);
-  const { setViewport, fitView } = useReactFlow();
+  const { setViewport } = useReactFlow();
   const flowStore = useStoreApi();
   const pointAt = useCallback(
     (point: number | null, parts: readonly string[]) => {
@@ -582,7 +583,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
       if (isStage(next)) useUiStore.getState().openCommandPaletteAt(command.title.replace(/…$/, ''));
     }
   };
-  // Between Send and the turn starting (its view is read first): a second Enter is not a second turn.
+  // Between Send and the turn starting: a second Enter is not a second turn.
   const sending = useRef(false);
   const send = (text = draft) => {
     const prompt = text.trim();
@@ -611,6 +612,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     const kind = agent?.agent ?? 'claude-code';
     const request: PromptRequest = {
       runId: crypto.randomUUID(),
+      revision: currentRevision(),
       diagramId,
       text: prompt,
       selection: scoped ? { nodes: selection.nodes, edges: selection.edges } : null,
@@ -624,10 +626,9 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     sending.current = true;
     void (async () => {
       try {
-        // The view up front, so the agent's first call is its answer rather than a read; not when it
-        // has the view from last turn already.
-        const snapshot = request.unchanged ? null : await controller.companionSnapshot(diagramId, room).catch(() => null);
-        await controller.companionSend(snapshot ? { ...request, snapshot } : request, scoped ? about : null);
+        // The revision stays local to the host. Simple intents resolve names without sending
+        // the graph to the model, and refuse intervening edits before resolution.
+        await controller.companionSend(request, scoped ? about : null);
       } finally {
         sending.current = false;
       }
@@ -684,22 +685,15 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     }
     setSkilling(true);
     const asked = `/${skill.slash}`;
-    void withArrangeMotion(() => useEditorStore.getState().arrangeRoom(run.preset), run.preset.direction ?? 'right')
-      .then((moved) => {
-        // Laid out wider than the screen: the camera takes it all in once the shapes have landed,
-        // beside Nodi's box rather than under it.
-        if (moved && shapesOffScreen()) {
-          const box = document.querySelector('.dc-companion[data-open="true"]')?.getBoundingClientRect();
-          void fitView({ padding: { top: '48px', left: '48px', bottom: '48px', right: `${Math.round((box?.width ?? 0) + 56)}px` }, duration: prefersReducedMotion() ? 0 : 420 });
-        }
-        return moved;
-      })
-      .then((moved) =>
+    // Preview first, like Arrange from the menu or the palette: Nodi sets the layout down as a sheet over
+    // the diagram and the bar asks Apply or Cancel; nothing moves until it is pressed.
+    void startArrange({ preset: run.preset })
+      .then((outcome) =>
         companion.answer(
           diagramId,
           asked,
-          moved ? run.done : 'Already laid out that way, boss. Nothing to move.',
-          moved ? [{ kind: 'command', id: 'undo', label: 'Undo' }] : undefined,
+          outcome === 'preview' ? run.shown : outcome === 'unchanged' ? 'Already laid out that way, boss. Nothing to move.' : 'Couldn’t lay that out, boss. The diagram is as it was.',
+          undefined,
           agent?.agent,
         ),
       )

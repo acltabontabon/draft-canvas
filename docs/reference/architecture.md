@@ -25,11 +25,13 @@ Dependencies point toward `src/document/`, which is plain data with no React or 
 | Module | Imports only |
 | --- | --- |
 | `document/` | `lib/` |
-| `depth/`, `starters/` | `document/` |
+| `depth/`, `gallery/` | `document/` |
 | `layout/` | `document/`, `edges/bundles` |
 | `collab/` | `document/`, `depth/`, `lib/`, its own `transport/` |
+| `history/` | `document/`, `depth/`, and `collab/selective`'s `changeKeys` (which elements an edit touched, kept on an entry while a session is live) |
 | `continuation/` | `document/`, `edges/routing`, `edges/clearance`, `edges/compensationMarker`, `render/text` |
 | `openPoints/` | `document/`, `depth/`, `render/` |
+| `ink/` | `document/` |
 | `agent/` | the above plus rendering and export; never UI or store |
 
 Library and editor are two states of `src/App.tsx` with no router, so the build works from any path.
@@ -66,7 +68,7 @@ Drawing styles are parameters of that renderer and a device preference, not docu
 
 One sparse capability matrix, keyed by both endpoints' categories, says what a connection probably
 means. Connector defaults, the relation picker, starters and suggestions all read it. An unlisted
-pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semantics](semantics.md).
+pairing stays free; an unusual one gets guidance, not rejection.
 
 ## Connector routing
 
@@ -83,12 +85,21 @@ pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semanti
   browser check compares the settled canvas path with the accessor's path. The passes run in one
   order with no cycles: sides and trunk membership, then where automatic ends sit
   on a side (`edges/endpoints.ts` spreads ends sharing a side, and pins sharing one point within
-  their band), then the raw routes (`edges/edgeRoutes.ts`), then parallel tracks for runs sharing a
+  their band), then which side a troubled line should have used instead (`edges/sides.ts`, below)
+  and those ends placed again, then the raw routes (`edges/edgeRoutes.ts`), then parallel tracks for runs sharing a
   corridor (`edges/separation.ts`, each shift checked and kept only if it clears shapes and adds no
   crossing), then labels, label groups and line jumps on the final lines. A stepped
   line is checked against the shapes; when it is blocked, `edges/pathfinder.ts` searches for a clear
   one within the area its shapes were collected from, and a line it cannot clear says `blocked` or
   `budget` rather than passing as clear. Gesture frames are never searched.
+- **Sides are a repair, not a restyle.** Two shapes alone choose the facing sides across their wider
+  gap. `edges/sides.ts` revisits only a line with something wrong — it crosses another connector,
+  runs through a shape, or had to be searched for — and tries its automatic ends on the other
+  sides, drawn the quick way and kept only when clear. One scale decides: length, a bend, a crossing,
+  a run shared with another line. A clean line is never touched, so a laid-out diagram draws as it
+  did; pins, bends, trunks, parallel pairs and shared labels are only routed around. Lines settle in
+  id order within a fixed budget, so canvas, export and agent checks agree. A gesture's frames
+  draw a moving shape's lines the quick way and the drop settles them.
 - Agent repair screens candidates locally, then checks the complete view before accepting one: a
   shared corridor can move lines that share no endpoint. After selecting the layout, a bounded
   polish pass removes avoidable crossings and detours only if it preserves readable neighbours,
@@ -109,8 +120,29 @@ pairing stays free; an unusual one gets guidance, not rejection. Rules: [Semanti
 - A selected flow acts as a lighter lens, except during presentation or focus, or when empty.
 - Playback, emphasis and camera guidance are never saved, undone or exported. A presenter's pan takes
   the camera until guidance is requested again.
-- Sequence export writes every playable flow to one Mermaid or PlantUML file. The text is the product.
+- Sequence export writes every playable flow, and every native sequence, to one Mermaid or PlantUML file. The text is the product.
 - Nothing infers timing, outcomes or execution.
+
+## Sequences
+
+A sequence is one node (`type: 'sequence'`) with a nested, coordinate-free payload: semantic model →
+operations → checks → layout → display list → interaction overlay.
+
+- `document/sequenceOps.ts` holds the pure operations; `sequence/check.ts` the findings;
+  `sequence/layout.ts` a deterministic timeline solver (columns from label widths, rows in document
+  order, nested fragment bands) that also answers hit-tests and insertion slots.
+- `nodes/sequence.ts` turns the layout into the same display list every node uses, so canvas, PNG
+  and SVG agree. A participant's head is `describeNode` on a compact synthetic shape: the real
+  Service, Data Store, Queue, Actor or Component, with its technology mark.
+- The node's size follows its content (`nodes/sequenceFit.ts`), applied in the store's `apply` and
+  in the agent's update: a snug box stays snug, an enlarged one is kept until it must grow.
+- `canvas/sequence/` is the only interactive layer, mounted while the node is hovered, selected, a
+  drop target or presenting. Sub-selection (`uiStore.sequenceFocus`) and the open editor are
+  transient, never saved or undone.
+- Presenting plays a derived, never-saved flow (`document/sequenceFlow.ts`), one step per message,
+  through the existing playback.
+- Mermaid and PlantUML are written by `sequence/native/`; Mermaid is read by
+  `import/mermaid/sequence.ts`. Agents send and read the same Mermaid text (`agent/sequences.ts`).
 
 ## Command surface
 
@@ -121,10 +153,23 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
 
 ## Derived capabilities
 
-- **Starters** create ordinary nodes, edges and flows. `commands/` names a store action, the store
-  composes `document/` operations, and `starters/` is data.
-- **Continuation** ranks next shapes from the selection's neighborhood; only high confidence shows unprompted.
+- **Starters** are `.draftcanvas` files in the public starters gallery
+  ([draft-canvas-starters](https://github.com/acltabontabon/draft-canvas-starters)), not part of the
+  app. `gallery/` reads them on request: `remote.ts` is the app's one `fetch`, to that repository
+  only, and every file is hashed against `catalog.json` and opened through `parseDocument` before it
+  is kept in its own IndexedDB database. Adding one is a paste of the whole file (`pasteDocument`),
+  flows included, as one undo step. The Order processing example ships in `gallery/example/`.
+- **Next-shape suggestions** (`continuation/`) rank next shapes from the selection's neighborhood; only high confidence shows unprompted.
 - **Open points** attach to element ids; they never affect geometry, routing or semantics.
+- **Sketches** (`DraftInk`) are per-room annotation over the shapes: compact relative points, one
+  SVG layer in the viewport, one paint description (`render/ink.ts`) shared with export. They are
+  never obstacles, members or semantics, and the drawing being made never renders React — samples
+  go straight to one live path, and the document gets one stroke at pen-up.
+- **Smart Ink** separates geometry from meaning. `ink/recognize.ts` scores a drawing as a
+  rectangle, ellipse, cylinder, tube, stick figure, line or arrow in screen pixels; `ink/interpret.ts`
+  reads that against the canvas (containment, endpoints) and offers only existing shape kinds.
+  Strokes are kept as ink first, so a conversion is one undo step that undo reverses to them; a
+  later choice amends that step (`HistoryEntry.amendKey`). Recognition loads on first use.
 - **View levels** change how rooms are shown, not the tree.
 
 ## Persistence and the storage boundary
@@ -135,22 +180,19 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
 - Content writes check for intervening changes. Camera-only saves never conflict.
 - Reading never rewrites. Unreadable data is kept, never replaced with an empty diagram.
 
-**Docs images.** `export/docs/` draws the picture a Markdown page shows with the export renderer,
-never with the diagram embedded. The link to its source is the SVG itself: it sits beside
+**Docs images.** `export/docs/` draws the picture a Markdown page shows with the export renderer, never
+with the diagram embedded. The link back to the source is the SVG itself: it sits beside
 `name.draftcanvas` as `name.svg` and carries a note naming the level, look and whether it follows
-saves. There is no manifest. After any save, including an agent's, `desktop/docs.ts` redraws a
-following picture from the saved text. `src-tauri/src/docs.rs` replaces only an SVG with that note,
-skips identical bytes, and adds to a Markdown file only an insertion into the text the person read.
-Pictures are drawn where text is measured, in the app, so there is no headless renderer to drift
-from it.
+saves. There is no manifest. After any save, including an agent's, `desktop/docs.ts` redraws a following
+picture from the saved text; `src-tauri/src/docs.rs` replaces only an SVG with that note, skips
+identical bytes, and adds to a Markdown file only an insertion into the text the person read. Pictures
+are drawn in the app, where text is measured, so no headless renderer can drift from it.
 
-**Richer previews: decided, not built.** A custom fenced block (```` ```draftcanvas ````) only works
-in a viewer that knows it, never on GitHub. Building it now would split effort from the portable
-SVG, so this release ships the SVG alone. The extension point is the note in every docs image:
-`readMarker` (`export/docs/marker.ts`) gives a viewer the `.draftcanvas` beside the SVG and the level
-it shows. A Markdown preview (VS Code, a docs site) can swap the image for an interactive view of
-that level. It should reuse `renderDocumentSvg` and the reader, never a second renderer, and load no
-remote script.
+**Richer previews: decided, not built.** A custom fenced block (```` ```draftcanvas ````) works only in
+a viewer that knows it, never on GitHub, so the portable SVG ships alone. The extension point is the
+note in every docs image: `readMarker` (`export/docs/marker.ts`) gives a viewer the `.draftcanvas`
+beside the SVG and its level. A Markdown preview could swap the image for an interactive view, reusing
+`renderDocumentSvg` and the reader (never a second renderer) and loading no remote script.
 
 **Encrypted storage.** Browser records are written plain. `crypto/documentCipher.ts` and
 `crypto/keyStore.ts` only decrypt legacy rows and are called only by `storage/IndexedDbRepository.ts`.
@@ -159,8 +201,7 @@ The passphrase export is separate. See [Security](../../SECURITY.md#browser-stor
 ## Untrusted input and schema evolution
 
 Files, clipboard, stored records and collaboration changes pass one migrate-and-validate boundary.
-Recoverable defects are repaired and reported; newer formats are refused by name. See
-[Document schema](schema.md).
+Recoverable defects are repaired and reported; newer formats are refused by name.
 
 ## Desktop
 

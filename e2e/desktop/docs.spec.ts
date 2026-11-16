@@ -59,7 +59,7 @@ async function openUseInDocs(page: Page) {
   await page.keyboard.type('Use in docs');
   await page.keyboard.press('Enter');
   const dialog = page.getByRole('dialog', { name: 'Export & share' });
-  await expect(dialog.getByRole('radio', { name: /^Docs/ })).toBeChecked();
+  await expect(dialog.getByRole('radio', { name: /Use in a README/ })).toBeChecked();
   return dialog;
 }
 

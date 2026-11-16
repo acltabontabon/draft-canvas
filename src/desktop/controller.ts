@@ -1,5 +1,7 @@
 import { useUiStore } from '../store/uiStore';
 import { createDocument } from '../document/factory';
+import { DEFAULT_TITLE } from '../document/sanitize';
+import type { DraftDocument } from '../document/types';
 import { deserializeDocument, fileNameFor, serializeDocument } from '../export/project';
 import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
 import type { CommandMessage, LoadMessage, ToHostMessage } from '../host/embeddedHost';
@@ -15,8 +17,7 @@ import { readMarker, type DocsSettings } from '../export/docs/marker';
 import { picturesOf } from '../export/docs/names';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isRecord } from '../lib/isRecord';
-import type { StarterId } from '../starters';
-import { loadStarters } from '../starters/load';
+import { exampleCanvas } from '../gallery/example';
 import {
   DesktopError,
   type AgentClient,
@@ -515,7 +516,7 @@ export class DesktopController {
     if (this.dirty) return { opened: false, reason: `${this.displayName} has unsaved changes.` };
     const opened = await this.api.openHandle(handle);
     const parsed = deserializeDocument(opened.text);
-    if (!parsed.ok) return { opened: false, reason: `${opened.name}.draftcanvas can't be opened: ${parsed.error}` };
+    if (!parsed.ok) return { opened: false, reason: `${opened.name}.draftcanvas can’t be opened: ${parsed.error}` };
     const pending = (await this.api.recoveryList()).some((entry) => entry.origin.kind === 'file' && entry.origin.displayPath === opened.displayPath);
     if (pending) {
       return { opened: false, reason: `Draft Canvas kept unsaved changes to ${opened.name}.draftcanvas from an earlier session; the person should open it and decide what to keep.` };
@@ -912,18 +913,16 @@ export class DesktopController {
   }
 
   /**
-   * A blank canvas at once — or, from Home's starters, one already holding that starter. Either way
-   * nothing is kept until it is drawn on: a starter left untouched is one click from coming back.
+   * A blank canvas at once — or one already holding the bundled example or a gallery starter's
+   * diagram. Either way nothing is kept until it is drawn on: an untouched starter is one click from
+   * coming back.
    */
-  async newQuickDraft(starterId?: StarterId): Promise<void> {
+  async newQuickDraft(starter?: 'example' | DraftDocument): Promise<void> {
     this.store.getSnapshot().explorerSave?.cancel();
     await this.swap('Couldn’t start a Quick Draft', async () => {
-      // Fetched before anything is settled, so a starter that can't load leaves the open document alone.
-      const catalog = starterId ? await loadStarters() : null;
-      const starter = starterId ? catalog?.starterById(starterId) : undefined;
       if (!(await this.settleBeforeLeaving())) return;
-      const document = starter && catalog ? catalog.starterDocument(starter) : createDocument(QUICK_DRAFT_TITLE);
-      if (starterId === 'order-processing') useUiStore.getState().setExampleDocumentId(document.metadata.id);
+      const document = starter === 'example' ? exampleCanvas() : starter ?? createDocument(QUICK_DRAFT_TITLE);
+      if (starter === 'example') useUiStore.getState().setExampleDocumentId(document.metadata.id);
       this.session = { kind: 'quick', id: `q_${uuid()}` };
       this.edited = false;
       this.load(serializeDocument(document), document.metadata.title, { baseline: true });
@@ -937,7 +936,7 @@ export class DesktopController {
     await this.swap('Couldn’t create the canvas', async () => {
       if (!(await this.settleBeforeLeaving())) return;
       const blank = encoder.encode(serializeDocument(createDocument()));
-      const saved = await this.api.saveAs('Untitled canvas', blank);
+      const saved = await this.api.saveAs(DEFAULT_TITLE, blank);
       if (!saved) {
         // Whatever was open stays open; its snapshot was settled above and is only rewritten on the next edit.
         if (this.dirty) this.scheduleSnapshot();

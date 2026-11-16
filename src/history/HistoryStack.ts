@@ -1,6 +1,7 @@
 import { changeKeys } from '../collab/selective';
 import { samePath, viewOf } from '../depth/tree';
-import type { DraftDocument } from '../document/types';
+import { LIMITS } from '../document/limits';
+import type { DraftDocument, DraftNode } from '../document/types';
 
 export interface Selection {
   nodes: string[];
@@ -45,6 +46,13 @@ export interface HistoryEntry {
    * typing a node's name is a single undo rather than one per keystroke.
    */
   coalesceKey?: string;
+  /**
+   * Entries sharing an amend key replace one another however far apart in time — a later one
+   * *revises* the earlier rather than adding to it. Smart Ink uses it so that picking Service
+   * instead of the Component a drawing first became is still the one step undo takes back to the
+   * drawing, not a second step on top of it.
+   */
+  amendKey?: string;
   /** See `FlowSessionSnapshot`. Only ever set by `deleteFlow`. */
   flowSessionBefore?: FlowSessionSnapshot;
   flowSessionAfter?: FlowSessionSnapshot;
@@ -79,8 +87,10 @@ const COALESCE_WINDOW_MS = 900;
  *
  * Every document operation returns a new document that shares structure with
  * the previous one, so an entry costs roughly the objects that actually
- * changed — on the order of a kilobyte for a node move, even in a document with
- * a hundred nodes. Storing whole snapshots avoids maintaining a second, inverse
+ * changed plus the new array that holds them. Measured for a node move: about 2.6 KB an entry at
+ * 300 shapes, 8 KB at 1,000 and 24 KB at 3,000 — 0.4, 1.2 and 3.5 MB at the 150-entry cap. (The id
+ * indexes `store/selectors.ts` builds are not kept per entry: once they were, and cost ten times
+ * that.) Storing whole snapshots avoids maintaining a second, inverse
  * implementation of every operation, where a bug would silently corrupt a
  * user's diagram rather than merely being wrong on screen.
  */
@@ -97,9 +107,18 @@ export function pushEntry(
     // Coalesced, it would span someone else's edit: `before` predates it, so undoing an element both
     // of you touched (a nudge, their rename, another nudge) would put theirs back out too.
     !top.crossed &&
+    // Within the window and not before it: a clock that stepped backwards (a sync, a manual change)
+    // gives a negative difference, which is "less than" any window and merged edits made apart.
+    entry.at - top.at >= 0 &&
     entry.at - top.at < COALESCE_WINDOW_MS;
+  const canAmend =
+    top !== undefined &&
+    entry.amendKey !== undefined &&
+    top.amendKey === entry.amendKey &&
+    samePath(top.path, entry.path) &&
+    !top.crossed;
 
-  if (canCoalesce) {
+  if (canCoalesce || canAmend) {
     // Typed and then erased, or a slider dragged away and back, inside one burst: the burst as a
     // whole changed nothing, so it shouldn't leave an undo step that does nothing.
     if (sameContent(top.before, entry.after, entry.path)) {
@@ -142,15 +161,41 @@ function sameContent(a: DraftDocument, b: DraftDocument, path: readonly string[]
     // like a burst that changed nothing and be thrown away.
     viewA.level === viewB.level &&
     viewA.viewport === viewB.viewport &&
-    equivalent(viewA.nodes, viewB.nodes, 4) &&
+    sameNodes(viewA.nodes, viewB.nodes) &&
     equivalent(viewA.edges, viewB.edges, 4) &&
     equivalent(viewA.flows, viewB.flows, 4) &&
+    equivalent(viewA.ink, viewB.ink, 3) &&
     equivalent(a.settings, b.settings, 4) &&
     // Read off the file, not the view, because open points are root-only — and compared for the same
     // reason the rest of this is: a point's context typed and erased again within the coalesce
     // window has to come out as a burst that changed nothing, not a dead undo step.
     equivalent(a.openPoints, b.openPoints, 5)
   );
+}
+
+/**
+ * Deep enough to reach a message at the bottom of the deepest nesting a sequence allows (three
+ * levels per fragment: its branches, a branch, that branch's items). Only rebuilt objects are
+ * walked, and a sequence's size is capped, so this stays cheap.
+ */
+const SEQUENCE_DEPTH = 6 + LIMITS.maxSequenceDepth * 3;
+
+/**
+ * Nodes, compared as `equivalent` compares everything else — except a sequence, whose messages sit
+ * far below the depth that suits a flat shape. Without this a message label typed and erased again
+ * looked like a change and left an undo step that did nothing.
+ */
+function sameNodes(a: readonly DraftNode[], b: readonly DraftNode[]): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  return a.every((node, index) => {
+    const other = b[index]!;
+    if (node === other) return true;
+    if (!node.sequence && !other.sequence) return equivalent(node, other, 3);
+    const { sequence: left, ...restLeft } = node;
+    const { sequence: right, ...restRight } = other;
+    return equivalent(restLeft, restRight, 3) && equivalent(left, right, SEQUENCE_DEPTH);
+  });
 }
 
 function equivalent(a: unknown, b: unknown, depth: number): boolean {

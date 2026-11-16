@@ -523,6 +523,11 @@ export function mapGraphs(
  * or rewrites `nodes`, `edges` or `flows` goes through here, and `migrate.test.ts` proves each of
  * them reaches the root and all three levels below it. A migration that only touches `metadata`
  * or `settings` is document-wide and must not be wrapped.
+ *
+ * One entry reads and writes nodes without being wrapped, on purpose: the v16-to-v17 `migrateActionsToNotes`
+ * starts from a root-only field (`actions`) and walks the rooms itself to find the elements its
+ * entries point at, so running it once per room would find the same list in none of them. A
+ * migration of that shape says so in its own comment, as that one does.
  */
 function everyRoom(migration: Migration): Migration {
   return (doc) => mapGraphs(doc, migration);
@@ -625,6 +630,19 @@ const MIGRATIONS: Record<number, Migration> = {
   // Keep preview-build v23 files readable. Connector styling is a device preference;
   // normalization discards the retired per-connector overrides.
   22: (document) => document,
+  // Optional `replicas` and `kindOrigin` on nodes; a diagram without them means the same.
+  23: (document) => document,
+  // Optional `cadence` on connectors; a diagram without it means the same.
+  24: (document) => document,
+  // The `sequence` shape. Nothing older holds one; the number moves so a build that has never heard
+  // of it refuses the file instead of opening its sequences as empty notes.
+  25: (document) => document,
+  // Message attachments and larger sequence frames would be stripped or capped by v26 readers.
+  26: (document) => document,
+  // Optional `ink` (handwritten sketches) on every room; a diagram without it means the same. The
+  // version still moves so an older build refuses a file with sketches by name rather than opening
+  // it and silently dropping them on the next save.
+  27: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

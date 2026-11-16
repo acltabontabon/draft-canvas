@@ -1,21 +1,29 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { capabilityFor, categoryOf } from '../document/connectorSemantics';
 import { useEditorStore } from '../store/editorStore';
-import { useUiStore } from '../store/uiStore';
+import { useUiStore, type UiStore } from '../store/uiStore';
 
 type Point = { x: number; y: number };
 
-/** A transient, canvas-space invitation to choose the destination of a new recovery call. */
-export function RecoveryConnectGhost() {
+/**
+ * A transient, canvas-space invitation to choose the destination of a new recovery call.
+ *
+ * Split in two: this half only asks whether the gesture is on, so it is idle — no shapes read, no
+ * pointer followed — for every geometry write of a diagram being worked on.
+ */
+export const RecoveryConnectGhost = memo(function RecoveryConnectGhost() {
   const gesture = useUiStore((state) => state.recoveryConnect);
+  return gesture ? <RecoveryConnectArrow gesture={gesture} /> : null;
+});
+
+function RecoveryConnectArrow({ gesture }: { gesture: NonNullable<UiStore['recoveryConnect']> }) {
   const nodes = useEditorStore((state) => state.document.nodes);
   const { screenToFlowPosition } = useReactFlow();
   const [pointer, setPointer] = useState<Point | null>(null);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!gesture) return;
     const onMove = (event: PointerEvent) => {
       setPointer(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
       const element = event.target instanceof Element ? event.target.closest<HTMLElement>('.react-flow__node') : null;
@@ -23,9 +31,8 @@ export function RecoveryConnectGhost() {
     };
     window.addEventListener('pointermove', onMove);
     return () => window.removeEventListener('pointermove', onMove);
-  }, [gesture, screenToFlowPosition]);
+  }, [screenToFlowPosition]);
 
-  if (!gesture) return null;
   const source = nodes.find((node) => node.id === gesture.sourceNodeId);
   if (!source) return null;
   const candidate = nodes.find((node) => node.id === hoveredId);

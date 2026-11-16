@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { categoryOf } from '../../document/connectorSemantics';
 import { effectiveConnectorText } from '../../document/edgeSemantics';
@@ -24,8 +24,14 @@ import { Icon } from '../common/Icon';
  * is hovered or focused; the active row keeps its Present button showing, so the primary action
  * for "the flow I'm working on" is always one click. Expanding a row reveals its ordered steps.
  *
+ * Semantics: a tree, as the Outline is — each flow is a treeitem that opens onto its steps (a nested
+ * group), with `aria-expanded`. It used to be a listbox of options, whose children are
+ * presentational: the Rename / Present / Delete buttons and the step list inside every row were
+ * flattened out of what a screen reader could reach. One row at a time is in the Tab order (roving
+ * tabindex); the buttons inside a row stay tabbable, since Present has no key of its own.
+ *
  * Keyboard: rows are focusable. Enter/Space selects, F2 renames, Delete/Backspace deletes,
- * ↑/↓ move between rows, Escape closes the panel. Handled here in React (not on `window`) and
+ * ↑/↓ move between rows, →/← open and close one, Escape closes the panel. Handled here in React (not on `window`) and
  * stopped, so `EditorScreen`'s canvas shortcuts never see a key this panel consumed — but
  * unhandled keys fall through exactly as they would from any focused toolbar button.
  */
@@ -42,6 +48,9 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [toolsStepId, setToolsStepId] = useState<string | null>(null);
+  // The one row in the Tab order: wherever focus last was on a row, else the chosen flow. '' is the
+  // "Whole diagram" row.
+  const [activeRow, setActiveRow] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
 
   // A "new flow" made elsewhere (palette, a connector's chip) asks to be named here. One-shot:
@@ -176,6 +185,11 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
   };
 
   const selectedFlow = selectedFlowId ? document.flows.find((flow) => flow.id === selectedFlowId) : undefined;
+  // A remembered row that has since gone (deleted, undone) falls back to the chosen flow.
+  const tabbable = activeRow !== null && (activeRow === '' || document.flows.some((flow) => flow.id === activeRow)) ? activeRow : (selectedFlowId ?? '');
+  const rememberRow = (key: string) => (event: FocusEvent<HTMLElement>) => {
+    if (event.target === event.currentTarget) setActiveRow(key);
+  };
 
   return (
     <div className="dc-flow-panel" role="region" aria-label="Flows" tabIndex={-1} ref={rootRef} onKeyDown={onKeyDown}>
@@ -193,7 +207,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
             <strong>Tell a story through your diagram.</strong>
           </p>
           <p>
-            A flow is an ordered path across connectors you've already drawn — a request, a payment, an
+            A flow is an ordered path across connectors you’ve already drawn — a request, a payment, an
             event. Present it and each step lights up while the rest of the canvas quiets down.
           </p>
           {!readOnly && <Button variant="solid" icon="plus" onClick={createNewFlow}>
@@ -201,15 +215,18 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
           </Button>}
         </div>
       ) : (
-        <ul className="dc-flow-list" role="listbox" aria-label="Flows">
+        <ul className="dc-flow-list" role="tree" aria-label="Flows">
           <li
             className="dc-flow-row dc-flow-diagram"
             data-flow-id=""
             data-selected={selectedFlowId === null ? 'true' : undefined}
             aria-current={selectedFlowId === null ? 'true' : undefined}
-            role="option"
+            role="treeitem"
+            aria-level={1}
             aria-selected={selectedFlowId === null}
-            tabIndex={0}
+            aria-label="Whole diagram, everything, nothing dimmed"
+            tabIndex={tabbable === '' ? 0 : -1}
+            onFocus={rememberRow('')}
           >
             <div className="dc-flow-item-head" onClick={() => setSelectedFlowId(null)}>
               <span className="dc-flow-expand-spacer" aria-hidden="true">
@@ -235,10 +252,13 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                 data-flow-id={flow.id}
                 data-selected={selected ? 'true' : undefined}
                 aria-current={selected ? 'true' : undefined}
-                role="option"
+                role="treeitem"
+                aria-level={1}
                 aria-selected={selected}
                 aria-expanded={expanded}
-                tabIndex={0}
+                aria-label={`${flow.title}, ${steps === 0 ? 'no steps' : count(steps, 'step')}`}
+                tabIndex={tabbable === flow.id ? 0 : -1}
+                onFocus={rememberRow(flow.id)}
               >
                 <div className="dc-flow-item-head" onClick={() => setSelectedFlowId(flow.id)}>
                   <button
@@ -326,7 +346,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                 </div>
 
                 {expanded && (
-                  <ol className="dc-flow-steps">
+                  <ol className="dc-flow-steps" role="group">
                     {flow.steps.map((step, index) => (
                       <StepRow
                         key={step.id}
@@ -492,7 +512,12 @@ function StepRow({
   const hasExtras = extraNodes.length > 0 || extraEdges.length > 0 || step.viewport !== undefined;
 
   return (
-    <li className="dc-flow-step-row-group">
+    <li
+      className="dc-flow-step-row-group"
+      role="treeitem"
+      aria-level={2}
+      aria-label={`Step ${index + 1}${edge ? `: ${source ? displayNameFor(source) : 'Untitled'} to ${target ? displayNameFor(target) : 'Untitled'}` : ''}${detail ? `, ${detail}` : ''}`}
+    >
       <div className="dc-flow-step-row">
         <span className="dc-flow-step-index">{index + 1}</span>
         <button
@@ -608,7 +633,7 @@ function StepRow({
               <Button
                 icon="close"
                 variant="quiet"
-                aria-label="Clear this step's saved view"
+                aria-label="Clear this step’s pinned view"
                 disabled={readOnly}
                 onClick={() => useEditorStore.getState().setFlowStepViewport(flow.id, step.id, null)}
               />
@@ -622,7 +647,7 @@ function StepRow({
           {/* No aria-label: the visible words are the name, so speech control users can say them. */}
           <Button
             variant="quiet"
-            title="Spotlight whatever is selected on the canvas during this step"
+            title={canAddSelection ? 'Spotlight whatever is selected on the canvas during this step' : 'Select shapes or connectors on the canvas first, then add them to this step'}
             disabled={!canAddSelection}
             onClick={addSelection}
           >

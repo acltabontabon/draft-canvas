@@ -1,3 +1,4 @@
+import { currentRevision } from '../../src/host/agentBridge';
 import { ReactFlowProvider } from '@xyflow/react';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
@@ -132,20 +133,26 @@ describe('the companion', () => {
     expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'Explain this diagram' });
   });
 
-  it('sends the view with the turn, read as it was sent, so the agent needn’t read it first', async () => {
+  it.each([
+    'Could you call Orders database Orders store instead?',
+    'The Orders database box should be called Orders store. Keep everything else as it is.',
+    'What breaks first?',
+  ])('sends %s without eagerly reading or attaching the diagram', async (text) => {
     controller.companionSnapshot.mockResolvedValue('{"revision":"o:1.1","elements":[]}');
     useUiStore.setState({ companionOpen: true });
     mount();
     await settle();
     const input = screen.getByLabelText('Message Claude Code');
-    fireEvent.change(input, { target: { value: 'What breaks first?' } });
+    fireEvent.change(input, { target: { value: text } });
     fireEvent.keyDown(input, { key: 'Enter' });
-    // A second Enter while it is read is not a second turn.
+    // A second Enter while Send is in progress is not a second turn.
     fireEvent.keyDown(input, { key: 'Enter' });
     await settle();
-    expect(controller.companionSnapshot).toHaveBeenCalledWith(doc.metadata.id, []);
+    expect(controller.companionSnapshot).not.toHaveBeenCalled();
     expect(controller.companionSend).toHaveBeenCalledTimes(1);
-    expect(controller.companionSend.mock.calls[0]![0]).toMatchObject({ text: 'What breaks first?', snapshot: '{"revision":"o:1.1","elements":[]}' });
+    const request = controller.companionSend.mock.calls[0]![0];
+    expect(request).toMatchObject({ text, diagramId: doc.metadata.id, room: [], mode: 'proposal' });
+    expect(request).not.toHaveProperty('snapshot');
   });
 
   it('offers its suggestions the first time, about a selection, and otherwise only when asked', async () => {
@@ -427,14 +434,15 @@ describe('the companion', () => {
     });
   });
 
-  it('offers its skills on a slash, plays a layout and says so, and puts the slash away on Escape', async () => {
-    const arrangeRoom = vi.fn(async () => true);
-    const real = useEditorStore.getState().arrangeRoom;
-    onTestFinished(() => useEditorStore.setState({ arrangeRoom: real }));
+  it('offers its skills on a slash, previews a layout and says so, and puts the slash away on Escape', async () => {
+    const real = useEditorStore.getState().planArrange;
+    const planArrange = vi.fn(real);
+    onTestFinished(() => useUiStore.getState().setArrangePreview(null));
     useEditorStore.setState({
       document: { ...doc, nodes: [...doc.nodes, createNode({ id: 'api', type: 'service', x: 300, y: 0, text: 'Orders API' })] },
-      arrangeRoom,
+      planArrange,
     });
+    onTestFinished(() => useEditorStore.setState({ planArrange: real }));
     useUiStore.setState({ companionOpen: true });
     mount();
     await settle();
@@ -451,15 +459,18 @@ describe('the companion', () => {
     expect(screen.queryByRole('listbox')).toBeNull();
     expect(useUiStore.getState().companionOpen).toBe(true);
 
-    // Narrowed, then run: Arrange as asked, no agent run, and Nodi says what it did with an Undo.
+    // Narrowed, then run: Arrange as asked, no agent run, and Nodi says it is a preview, not a change.
     fireEvent.change(input, { target: { value: '/roo' } });
     expect(screen.getAllByRole('option')).toHaveLength(1);
     fireEvent.keyDown(input, { key: 'Enter' });
     await settle();
-    expect(arrangeRoom).toHaveBeenCalledWith({ spacing: 'spacious' });
+    await vi.waitFor(() => expect(useUiStore.getState().arrangePreview).not.toBeNull());
+    expect(planArrange).toHaveBeenCalledWith(false, expect.objectContaining({ preset: { spacing: 'spacious' } }));
     expect(controller.companionSend).not.toHaveBeenCalled();
-    expect(screen.getByText(/Gave everything some room/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Undo' })).toBeTruthy();
+    // Nothing moved: the layout waits on the bar for Apply or Cancel.
+    expect(useEditorStore.getState().history.past).toHaveLength(0);
+    expect(useUiStore.getState().arrangePreview?.motion).toBe(true);
+    await vi.waitFor(() => expect(screen.getByText(/Here it is with some room/)).toBeTruthy());
     expect((input as HTMLInputElement).value).toBe('');
 
     // The slash button opens them too; a question skill goes to the agent.
@@ -485,6 +496,7 @@ describe('the companion', () => {
     expect(request).toMatchObject({
       diagramId: doc.metadata.id,
       text: 'Put a cache in front of this',
+      revision: currentRevision(),
       selection: { nodes: ['db'], edges: [] },
       agent: 'claude-code',
       mode: 'proposal',

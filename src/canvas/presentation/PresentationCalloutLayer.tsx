@@ -1,5 +1,6 @@
+import { playbackFlowOf } from '../../document/sequenceFlow';
 import { useMemo } from 'react';
-import { findFlow } from '../../document/flow';
+
 import type { DraftEdge, DraftNode } from '../../document/types';
 import {
   describePresentationSubject,
@@ -38,7 +39,7 @@ export function PresentationCalloutLayer() {
   const overview = useEditorStore((state) => state.flowPlayback.stage !== undefined);
   const presenting = useEditorStore((state) => state.mode === 'present');
   const flow = useEditorStore((state) =>
-    active && flowId ? (findFlow(state.document, flowId) ?? null) : null,
+    active && flowId ? (playbackFlowOf(state.document, flowId, state.flowPlayback.sequenceNodeId) ?? null) : null,
   );
   // A presenter's click only means something while presenting, and only for the moment it was
   // made in — a reveal from the previous step is ignored even on the render before it's cleared.

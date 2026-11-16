@@ -154,9 +154,9 @@ describe('the wire', () => {
  * stop reaching collaborators — so adding one fails here until someone decides which it is.
  */
 it('accounts for every field of a document', () => {
-  const shared = ['metadata', 'nodes', 'edges', 'flows', 'settings', 'openPoints', 'level'];
+  const shared = ['metadata', 'nodes', 'edges', 'flows', 'ink', 'settings', 'openPoints', 'level'];
   const notShared = ['format', 'version', 'viewport'];
-  const keys = Object.keys({ ...createDocument(), level: 'context' }).sort();
+  const keys = Object.keys({ ...createDocument(), level: 'context', ink: [] }).sort();
   expect(keys).toEqual([...shared, ...notShared].sort());
 });
 

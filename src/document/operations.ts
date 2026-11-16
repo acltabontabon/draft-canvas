@@ -7,14 +7,23 @@
 import { reconnectProblem } from './reconnect';
 import { repairCompensationLinks } from './compensation';
 import { createId } from './ids';
+import { INK_ID_PREFIX } from './ink';
 import { OPEN_POINT_ID_PREFIX, pruneOpenPoints } from './openPoints';
 import { defaultSizeFor, maxSizeFor } from './factory';
+import { anchorBandOf } from './queueGeometry';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
-import { cleanText, cleanTextFields } from './sanitize';
+import { cleanDescription, cleanEdgeLabel, cleanText, cleanTextFields, cleanTitle, cleanTechnology } from './sanitize';
+import { replicasField } from './replicas';
+import { finite, oneOf, safeId } from './validationValues';
+import { dropParticipantLinks, mapSequenceText, repointParticipantLinks } from './sequenceOps';
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
+import { BACKGROUND_FITS, GRID_MODES } from './types';
 import type {
+  BackgroundFit,
+  BackgroundSettings,
+  DraftInk,
   Attachment,
   DraftDocument,
   DraftEdge,
@@ -26,6 +35,7 @@ import type {
   EdgeAnchor,
   DraftViewport,
   DraftSettings,
+  GridMode,
   Side,
   OpenPoint,
   OpenPointTarget,
@@ -50,9 +60,9 @@ export function isCanvasEmpty(doc: Pick<DraftDocument, 'nodes'>): boolean {
   return doc.nodes.length === 0;
 }
 
-const clampSize = (n: number) =>
+const clampSize = (n: number, maxSize: number = LIMITS.maxNodeSize) =>
   Number.isFinite(n)
-    ? clamp(Math.round(n), LIMITS.minNodeSize, LIMITS.maxNodeSize)
+    ? clamp(Math.round(n), LIMITS.minNodeSize, maxSize)
     : LIMITS.minNodeSize;
 
 /** `attachment.width`/`height` should always be set by `createAttachment` — this is a safety
@@ -111,25 +121,64 @@ export function addEdges(doc: DraftDocument, edges: DraftEdge[]): DraftDocument 
   return withEdges(doc, [...doc.edges, ...accepted]);
 }
 
+/**
+ * What a patch to a node is held to, so a save never holds what the next open would change: the C4
+ * text kept the way `normalizeDocument` keeps it (trimmed, a technology on one line, nothing left
+ * means no field), `z` and `replicas` within what a load accepts. The editor used to store a patch
+ * as given and a reload then clamped it, with nothing said.
+ */
+function heldToWhatALoadKeeps(patch: Partial<Omit<DraftNode, 'id'>>): Partial<Omit<DraftNode, 'id'>> {
+  let next = patch;
+  const set = <K extends Exclude<keyof DraftNode, 'id'>>(key: K, value: DraftNode[K]) => {
+    if (next === patch) next = { ...patch };
+    (next as Partial<DraftNode>)[key] = value;
+  };
+  if (typeof patch.technology === 'string') {
+    const technology = cleanTechnology(patch.technology);
+    if (technology !== patch.technology) set('technology', technology);
+  }
+  if (typeof patch.description === 'string') {
+    const description = cleanDescription(patch.description);
+    if (description !== patch.description) set('description', description);
+  }
+  if (typeof patch.z === 'number') {
+    const z = Math.round(clamp(finite(patch.z, 0), -LIMITS.maxZ, LIMITS.maxZ));
+    if (z !== patch.z) set('z', z);
+  }
+  if (typeof patch.replicas === 'number') {
+    const replicas = replicasField(patch.replicas);
+    if (replicas !== patch.replicas) set('replicas', replicas);
+  }
+  return next;
+}
+
 export function updateNode(
   doc: DraftDocument,
   id: string,
   patch: Partial<Omit<DraftNode, 'id'>>,
 ): DraftDocument {
   let changed = false;
-  patch = cleanTextFields(patch).patch;
+  patch = heldToWhatALoadKeeps(cleanTextFields(patch).patch);
   const nodes = doc.nodes.map((node) => {
     if (node.id !== id) return node;
     const next: DraftNode = applyPatch<DraftNode>(node, patch);
     if (patch.x !== undefined) next.x = clampCoord(patch.x);
     if (patch.y !== undefined) next.y = clampCoord(patch.y);
-    if (patch.width !== undefined) next.width = clampSize(patch.width);
-    if (patch.height !== undefined) next.height = clampSize(patch.height);
+    const maxSize = next.type === 'sequence' ? LIMITS.maxSequenceNodeSize : LIMITS.maxNodeSize;
+    if (patch.width !== undefined) next.width = clampSize(patch.width, maxSize);
+    if (patch.height !== undefined) next.height = clampSize(patch.height, maxSize);
     if (sameFields(node, next)) return node;
     changed = true;
     return next;
   });
   return changed ? withNodes(doc, nodes) : doc;
+}
+
+/** A connector's label as a load keeps it: trimmed, and none at all when nothing is left. */
+function trimmedLabel(patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>): Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> {
+  if (typeof patch.label !== 'string') return patch;
+  const label = cleanEdgeLabel(patch.label);
+  return label === patch.label ? patch : { ...patch, label };
 }
 
 export function updateEdge(
@@ -138,7 +187,7 @@ export function updateEdge(
   patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>>,
 ): DraftDocument {
   let changed = false;
-  patch = cleanTextFields(patch).patch;
+  patch = trimmedLabel(cleanTextFields(patch).patch);
   const edges = doc.edges.map((edge) => {
     if (edge.id !== id) return edge;
     const next = applyPatch<DraftEdge>(edge, patch);
@@ -157,7 +206,7 @@ export function updateEdges(
 ): DraftDocument {
   if (ids.size === 0) return doc;
   let changed = false;
-  patch = cleanTextFields(patch).patch;
+  patch = trimmedLabel(cleanTextFields(patch).patch);
   const edges = doc.edges.map((edge) => {
     if (!ids.has(edge.id)) return edge;
     const next = applyPatch<DraftEdge>(edge, patch);
@@ -221,7 +270,7 @@ export function reconnectEdge(
     // Dropped back on the handle it came from: nothing moved, so no undo step.
     const previousAnchor = edge[anchorKey];
     const sameNode = (endpoint === 'source' ? edge.source : edge.target) === newNodeId;
-    if (sameNode && previousAnchor?.side === anchor?.side && previousAnchor?.offset === anchor?.offset) return edge;
+    if (sameNode && !previousAnchor?.participantId && previousAnchor?.side === anchor?.side && previousAnchor?.offset === anchor?.offset) return edge;
     changed = true;
     const next: DraftEdge =
       endpoint === 'source' ? { ...edge, source: newNodeId } : { ...edge, target: newNodeId };
@@ -262,7 +311,7 @@ export function pinEnds(doc: DraftDocument, pins: ReadonlyMap<string, { source?:
   const edges = doc.edges.map((edge) => {
     const pin = pins.get(edge.id);
     if (!pin) return edge;
-    const same = (a: EdgeAnchor | undefined, b: EdgeAnchor | undefined) => !b || (a?.side === b.side && a.offset === b.offset);
+    const same = (a: EdgeAnchor | undefined, b: EdgeAnchor | undefined) => !b || (a?.side === b.side && a.offset === b.offset && a.participantId === b.participantId);
     if (same(edge.sourceAnchor, pin.source) && same(edge.targetAnchor, pin.target)) return edge;
     changed = true;
     return {
@@ -350,6 +399,15 @@ function translatePoints(points: readonly DraftPoint[], dx: number, dy: number):
   return points.map((point) => ({ x: clampCoord(point.x + dx), y: clampCoord(point.y + dy) }));
 }
 
+export function removeParticipantEdges(doc: DraftDocument, nodeId: string, removed: ReadonlySet<string>): DraftDocument {
+  if (removed.size === 0) return doc;
+  const edges = doc.edges.filter((edge) =>
+    (edge.source === nodeId && edge.sourceAnchor?.participantId && removed.has(edge.sourceAnchor.participantId)) ||
+    (edge.target === nodeId && edge.targetAnchor?.participantId && removed.has(edge.targetAnchor.participantId)),
+  );
+  return removeElements(doc, [], edges.map((edge) => edge.id));
+}
+
 /**
  * Deletes nodes and edges, cascading the references that would otherwise dangle:
  * edges attached to a deleted node, and children of a deleted group.
@@ -396,7 +454,9 @@ export function removeElements(
   // the room leaves with its owner, so every id inside it counts as removed here.
   const removedNodes = doc.nodes.filter((n) => removingNodes.has(n.id));
   for (const node of removedNodes) collectInsideIds(node, removingNodes, removedEdgeIds);
-  return pruneOpenPoints(pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds, removingNodes), removingNodes, removedEdgeIds);
+  const pruned = pruneOpenPoints(pruneFlowSteps({ ...doc, nodes, edges }, removedEdgeIds, removingNodes), removingNodes, removedEdgeIds);
+  // A sequence participant that stood for a deleted shape stays, on its own.
+  return dropParticipantLinks(pruned, removingNodes);
 }
 
 /** Every node and connector id inside `node`'s rooms, however deep, added to the two sets. */
@@ -418,6 +478,8 @@ export interface Clipboard {
    * the original keeps every target it had. Absent on a fragment made before this existed.
    */
   openPoints?: OpenPoint[];
+  /** Sketch strokes copied with (or instead of) the shapes. Absent when none were. */
+  ink?: DraftInk[];
 }
 
 /**
@@ -469,7 +531,7 @@ function reidentifyInside(inside: DraftInside, renamed?: IdRenames): DraftInside
     }
     if (node.attachments) next.attachments = node.attachments.map((a) => ({ ...a, id: createId('a') }));
     if (node.inside) next.inside = reidentifyInside(node.inside, renamed);
-    return next;
+    return repointParticipantLinks(next, nodeIds);
   });
 
   const edges = inside.edges.map((edge) => {
@@ -515,6 +577,8 @@ function reidentifyInside(inside: DraftInside, renamed?: IdRenames): DraftInside
   });
 
   const next: DraftInside = { nodes, edges, flows, viewport: inside.viewport };
+  // Sketches over the room travel with it, each under a new id: ids are unique across the file.
+  if (inside.ink && inside.ink.length > 0) next.ink = inside.ink.map((stroke) => ({ ...stroke, id: createId(INK_ID_PREFIX) }));
   // What the room says it shows is part of the room, not part of its identity: a copy that lost it
   // would start deriving a level from whatever it was pasted under, and a room deliberately marked
   // as just a drawing would quietly stop being one.
@@ -559,7 +623,7 @@ export function costOf(nodes: readonly DraftNode[]): { nodes: number; edges: num
 }
 
 /** Old id to new, for everything `reidentifyInside` renamed — what a copied open point is re-pointed by. */
-interface IdRenames {
+export interface IdRenames {
   nodes: Map<string, string>;
   edges: Map<string, string>;
 }
@@ -568,7 +632,7 @@ interface IdRenames {
 function instantiateFragment(
   fragment: Clipboard,
   offset: { x: number; y: number },
-): Clipboard {
+): Clipboard & { renamed: IdRenames } {
   const idMap = new Map<string, string>();
   for (const node of fragment.nodes) idMap.set(node.id, createId('n'));
   // Only collected when a point could need it: most fragments carry none.
@@ -598,7 +662,9 @@ function instantiateFragment(
     // ids would give two shapes rooms full of the same nodes, and the second copy of a copy would
     // then be ambiguous to every id-keyed thing in the app.
     if (node.inside) next.inside = reidentifyInside(node.inside, inner);
-    return next;
+    // A sequence copied with the shapes its participants stand for follows the copies; one copied
+    // alone goes on standing for the originals.
+    return repointParticipantLinks(next, idMap);
   });
 
   const edgeIdMap = new Map(fragment.edges.map((edge) => [edge.id, createId('e')]));
@@ -641,7 +707,8 @@ function instantiateFragment(
     if (targets.length > 0) openPoints.push({ ...point, id: createId(OPEN_POINT_ID_PREFIX), targets });
   }
 
-  return openPoints.length > 0 ? { nodes, edges, openPoints } : { nodes, edges };
+  const renamed: IdRenames = { nodes: idMap, edges: edgeIdMap };
+  return openPoints.length > 0 ? { nodes, edges, openPoints, renamed } : { nodes, edges, renamed };
 }
 
 export function pasteFragment(
@@ -654,7 +721,7 @@ export function pasteFragment(
     nodes: doc.nodes.length,
     edges: doc.edges.length,
   },
-): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[]; truncated: boolean; tooDeep: boolean } {
+): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[]; truncated: boolean; tooDeep: boolean; renamed: IdRenames } {
   const instantiated = instantiateFragment(fragment, offset);
   // `LIMITS.maxNodes`/`maxEdges` are otherwise only enforced on a document taken as a whole (file
   // import, clipboard decode) — pasting/duplicating repeatedly into an already-open document has
@@ -720,12 +787,72 @@ export function pasteFragment(
     }
     if (landed.length > 0) next = { ...next, openPoints: [...next.openPoints, ...landed] };
   }
+  // What each original id became, for the shapes and connectors that landed: a caller carrying
+  // more than the fragment holds (a whole document's flows) re-points it with these.
+  const landedNodes = new Set(created.nodes.map((n) => n.id));
+  const landedEdges = new Set(created.edges.map((e) => e.id));
   return {
     doc: next,
     nodeIds: created.nodes.map((n) => n.id),
     edgeIds: created.edges.map((e) => e.id),
     truncated,
     tooDeep,
+    renamed: {
+      nodes: new Map([...instantiated.renamed.nodes].filter(([, id]) => landedNodes.has(id))),
+      edges: new Map([...instantiated.renamed.edges].filter(([, id]) => landedEdges.has(id))),
+    },
+  };
+}
+
+/**
+ * Adds all of `source` (another whole document, such as a starter) to `doc`, shifted by `offset`:
+ * a paste of every shape and connector, then its flows, re-pointed at the copies. A step whose
+ * connector didn't land (the file's caps) is dropped, a flow left with no steps is dropped, and
+ * flows stop at `LIMITS.maxFlows`.
+ */
+export function pasteDocument(
+  doc: DraftDocument,
+  source: Pick<DraftDocument, 'nodes' | 'edges' | 'flows' | 'openPoints'>,
+  offset: { x: number; y: number },
+  used?: Parameters<typeof pasteFragment>[3],
+): ReturnType<typeof pasteFragment> & { flowIds: string[] } {
+  const fragment = extractFragment(source as DraftDocument, source.nodes.map((n) => n.id));
+  const pasted = pasteFragment(doc, fragment, offset, used);
+  const { nodes, edges } = pasted.renamed;
+  const flowIds = new Map<string, string>();
+  for (const flow of source.flows) flowIds.set(flow.id, createId('f'));
+  const room = Math.max(0, LIMITS.maxFlows - (used?.flows ?? doc.flows.length));
+  const flows: DraftFlow[] = [];
+  for (const flow of source.flows) {
+    if (flows.length >= room) break;
+    const steps: DraftFlowStep[] = [];
+    for (const step of flow.steps) {
+      const edgeId = step.edgeId ? edges.get(step.edgeId) : undefined;
+      if (step.edgeId && !edgeId) continue;
+      const next: DraftFlowStep = { ...step, id: createId('fs') };
+      if (edgeId) next.edgeId = edgeId;
+      if (step.extraEdgeIds) next.extraEdgeIds = step.extraEdgeIds.flatMap((id) => edges.get(id) ?? []);
+      if (step.extraNodeIds) next.extraNodeIds = step.extraNodeIds.flatMap((id) => nodes.get(id) ?? []);
+      // A step's camera looks at the same shapes, now `offset` away.
+      if (step.viewport) next.viewport = { ...step.viewport, x: step.viewport.x - offset.x * step.viewport.zoom, y: step.viewport.y - offset.y * step.viewport.zoom };
+      steps.push(next);
+    }
+    if (steps.length === 0) continue;
+    const next: DraftFlow = { ...flow, id: flowIds.get(flow.id)!, steps };
+    if (flow.variantOf) {
+      const variantOf = flowIds.get(flow.variantOf);
+      if (variantOf) next.variantOf = variantOf;
+      else delete next.variantOf;
+    }
+    flows.push(next);
+  }
+  // A variant whose main flow was cut by the cap would name a flow that isn't there.
+  const kept = new Set(flows.map((f) => f.id));
+  for (const flow of flows) if (flow.variantOf && !kept.has(flow.variantOf)) delete flow.variantOf;
+  return {
+    ...pasted,
+    doc: flows.length > 0 ? { ...pasted.doc, flows: [...pasted.doc.flows, ...flows] } : pasted.doc,
+    flowIds: flows.map((f) => f.id),
   };
 }
 
@@ -877,7 +1004,8 @@ export function distributeNodes(
  * ⌘A then Same height must not make every shape as tall as the boundary that holds them.
  */
 export function sizeMatchTargets<T extends Pick<DraftNode, 'type'>>(selected: readonly T[]): T[] {
-  const sized = selected.filter((node) => node.type !== 'ellipse');
+  // Nor a sequence, which is the size of what it holds.
+  const sized = selected.filter((node) => node.type !== 'ellipse' && node.type !== 'sequence');
   const shapes = sized.filter((node) => node.type !== 'group');
   return shapes.length > 0 ? shapes : sized;
 }
@@ -1207,6 +1335,34 @@ export interface PlaceNearOptions {
    * suggestion disappears.
    */
   avoid?: readonly Bounds[];
+  /**
+   * Level the connector the new node will be joined to the host by: a candidate to the right is set
+   * at the height that puts the two ends of that line on one level, and one below at the x that
+   * puts them one over the other — instead of top-to-top and left-to-left, which jogs the line
+   * whenever the two shapes' anchors are not at their boxes' centres (a Queue's anchor is its tube,
+   * a Data Store's its glyph). Without it, the candidates are exactly the fixed offsets they always
+   * were: `addConsumer` and `addDeadLetterQueue` want those, since `horizontalAnchorsFor` pins their
+   * connector only between shapes at the same `y`.
+   */
+  align?: PlaceAlignment;
+}
+
+/** Where each end of a left/right connector meets its shape, down from the shape's own top — see
+ *  `anchorOffsetY`. Only the vertical offsets are needed: a top/bottom connector meets every shape at
+ *  the middle of its width. */
+export interface PlaceAlignment {
+  host: number;
+  self: number;
+}
+
+/**
+ * How far down a shape a left/right connector meets it: the middle of its anchor band — a Queue's
+ * tube, a Data Store's glyph (`anchorBandOf`) — or of its height when the whole side is the anchor.
+ * What `edges/routing.ts` resolves a centred (offset `0.5`) left or right anchor to, minus the top.
+ */
+export function anchorOffsetY(shape: Pick<DraftNode, 'type' | 'width' | 'height'>): number {
+  const band = anchorBandOf({ type: shape.type, x: 0, y: 0, width: shape.width, height: shape.height });
+  return band ? (band.top + band.bottom) / 2 : shape.height / 2;
 }
 
 /**
@@ -1235,7 +1391,11 @@ export function tryPlaceNear(
   const foreignBoundaries = doc.nodes.filter(
     (n) => n.type === 'group' && n.id !== host.id && n !== options.parent && !containsRect(n, host),
   );
-  const candidates = orderCandidates(companionCandidates(host, size, gap, options.direction), options.parent, options.avoid);
+  const candidates = orderCandidates(
+    companionCandidates(host, size, gap, options.direction, options.align),
+    options.parent,
+    options.avoid,
+  );
   const chosen = candidates.find(
     (rect) => !obstacles.some((n) => rectsOverlap(rect, n)) && !foreignBoundaries.some((n) => rectsOverlap(rect, n)),
   );
@@ -1257,19 +1417,20 @@ export function placeNear(
 ): { x: number; y: number } {
   return (
     tryPlaceNear(doc, host, size, gap, options) ??
-    clampCompanion(companionCandidates(host, size, gap, options.direction)[0]!, host, size)
+    clampCompanion(companionCandidates(host, size, gap, options.direction, options.align)[0]!, host, size)
   );
 }
 
-/** Boundary-contained candidates first (their relative order otherwise preserved), then the rest —
- *  a no-op when `parent` is absent or nothing fits inside it. */
 /**
  * The candidate list, best first. Two preferences, in strict order of importance:
  *
- * 1. **Staying inside the host's boundary**, when any candidate can — membership is meaning, and a
- *    companion that leaves the boundary says something the diagram didn't.
- * 2. **Staying off the connectors already drawn here** — cosmetic, so it only ever reorders
- *    candidates that agree on the first question.
+ * 1. **Where it sits against the host's boundary** — membership is meaning, and a companion that
+ *    leaves the boundary says something the diagram didn't. Fully inside is best (it becomes a
+ *    member); fully outside is clean (it is visibly not one); a candidate that crosses the
+ *    boundary's edge is worst, since it looks like a member while not being one and stays behind
+ *    when the boundary moves. That last ranking applies even when no candidate fits inside.
+ * 2. **Staying off the connectors already drawn here** (and a boundary's title row) — cosmetic, so
+ *    it only ever reorders candidates that agree on the first question.
  *
  * Stable within each group, so with neither preference in play the order is exactly the authored
  * one. Neither preference can reject a candidate: that is `tryPlaceNear`'s own obstacle test.
@@ -1279,11 +1440,10 @@ function orderCandidates(
   parent?: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>,
   avoid?: readonly Bounds[],
 ): Bounds[] {
-  const insideAny = parent !== undefined && candidates.some((c) => containsRect(parent, c));
   const crowded = avoid !== undefined && avoid.length > 0;
-  if (!insideAny && !crowded) return candidates;
-  const rank = (c: Bounds) =>
-    (insideAny && !containsRect(parent!, c) ? 2 : 0) + (crowded && avoid!.some((a) => rectsOverlap(c, a)) ? 1 : 0);
+  if (parent === undefined && !crowded) return candidates;
+  const against = (c: Bounds) => (parent === undefined || containsRect(parent, c) ? 0 : rectsOverlap(c, parent) ? 4 : 2);
+  const rank = (c: Bounds) => against(c) + (crowded && avoid!.some((a) => rectsOverlap(c, a)) ? 1 : 0);
   return candidates
     .map((candidate, index) => ({ candidate, index }))
     .sort((a, b) => rank(a.candidate) - rank(b.candidate) || a.index - b.index)
@@ -1300,8 +1460,9 @@ export function companionRegion(
   size: { width: number; height: number },
   gap: number = COMPANION_GAP,
   direction: CompanionDirection = 'right',
+  align?: PlaceAlignment,
 ): Bounds {
-  return boundsOf(companionCandidates(host, size, gap, direction))!;
+  return boundsOf(companionCandidates(host, size, gap, direction, align))!;
 }
 
 function companionCandidates(
@@ -1309,12 +1470,18 @@ function companionCandidates(
   size: { width: number; height: number },
   gap: number,
   direction: CompanionDirection = 'right',
+  align?: PlaceAlignment,
 ): Bounds[] {
-  const right = { x: host.x + host.width + gap, y: host.y, ...size };
-  const below = { x: host.x, y: host.y + host.height + COMPANION_GAP, ...size };
+  // Levelled, the two ends of the line between host and companion meet at one height (beside) or one
+  // x (above and below); see `PlaceNearOptions.align`. The diagonal candidates are not on a shared
+  // axis with the host, so they keep their fixed offsets.
+  const rightY = align ? host.y + align.host - align.self : host.y;
+  const columnX = align ? host.x + (host.width - size.width) / 2 : host.x;
+  const right = { x: host.x + host.width + gap, y: rightY, ...size };
+  const below = { x: columnX, y: host.y + host.height + COMPANION_GAP, ...size };
   const belowRight = { x: host.x + host.width + gap, y: host.y + host.height + COMPANION_GAP, ...size };
   const aboveRight = { x: host.x + host.width + gap, y: host.y - size.height - COMPANION_GAP, ...size };
-  const furtherBelow = { x: host.x, y: host.y + host.height + COMPANION_GAP * 2 + size.height, ...size };
+  const furtherBelow = { x: columnX, y: host.y + host.height + COMPANION_GAP * 2 + size.height, ...size };
   return direction === 'below'
     ? [below, right, belowRight, aboveRight, furtherBelow]
     : [right, below, belowRight, aboveRight, furtherBelow];
@@ -1504,6 +1671,56 @@ export function reconcileAfterResize(doc: DraftDocument, id: string): DraftDocum
   return reconcileMembership(reconcileMembership(doc, [id]), affected);
 }
 
+/**
+ * A test of whether one node — carrying everything inside it — can sit under `parentId` without any
+ * boundary chain passing `LIMITS.maxGroupDepth` (what `validate` keeps, and what it repairs away on
+ * the next open, naming "invalid grouping links"). Built once for a parent so a group of hundreds
+ * costs one pass over the document. Without a parent there is nothing to exceed.
+ */
+function groupDepthCheck(doc: DraftDocument, parentId: string | undefined): (id: string) => boolean {
+  if (parentId === undefined) return () => true;
+  const byId = new Map(doc.nodes.map((node) => [node.id, node]));
+  // Boundaries above the node once moved: the parent and each of its own.
+  let above = 0;
+  const seen = new Set<string>();
+  for (let at = byId.get(parentId); at && !seen.has(at.id); at = at.parentId ? byId.get(at.parentId) : undefined) {
+    seen.add(at.id);
+    above += 1;
+  }
+  const below = new Map<string, string[]>();
+  for (const node of doc.nodes) {
+    if (!node.parentId) continue;
+    const list = below.get(node.parentId);
+    if (list) list.push(node.id);
+    else below.set(node.parentId, [node.id]);
+  }
+  return (id) => {
+    // The deepest descendant, level by level, with a guard against a loop in a damaged file.
+    let levels = 0;
+    const visited = new Set<string>([id]);
+    for (let level = [id]; level.length > 0; levels += 1) {
+      const next: string[] = [];
+      for (const at of level) {
+        for (const child of below.get(at) ?? []) {
+          if (visited.has(child)) continue;
+          visited.add(child);
+          next.push(child);
+        }
+      }
+      level = next;
+    }
+    // `levels` counts the node's own level too: a node with nothing inside it adds none.
+    return above + (levels - 1) <= LIMITS.maxGroupDepth;
+  };
+}
+
+/** `groupDepthCheck` for several nodes at once: whether every one of `childIds` fits under `parentId`. */
+export function fitsGroupDepth(doc: DraftDocument, childIds: Iterable<string>, parentId: string | undefined): boolean {
+  const fits = groupDepthCheck(doc, parentId);
+  for (const id of childIds) if (!fits(id)) return false;
+  return true;
+}
+
 export function setParent(
   doc: DraftDocument,
   childIds: Iterable<string>,
@@ -1517,6 +1734,7 @@ export function setParent(
   // Only a boundary can hold children — anything else would make a delete cascade into nodes the
   // user never saw as contained, and a reload drops the link anyway.
   if (byId && byId.get(parentId!)?.type !== 'group') return doc;
+  const fitsDepth = groupDepthCheck(doc, parentId);
   const isAncestorOfParent = (id: string) => {
     const seen = new Set<string>();
     for (let at = byId?.get(parentId!); at && !seen.has(at.id); at = at.parentId ? byId!.get(at.parentId) : undefined) {
@@ -1541,6 +1759,8 @@ export function setParent(
     // guard lives here too so correctness doesn't depend on every future
     // caller remembering to pre-filter the same way.
     if (isAncestorOfParent(node.id)) return node;
+    // Nor so deep that the next open would repair it away: it stays where it was.
+    if (!fitsDepth(node.id)) return node;
     changed = true;
     return { ...node, parentId };
   });
@@ -1549,19 +1769,61 @@ export function setParent(
 
 /* ------------------------------------------------------------- document ---- */
 
+/**
+ * A camera as a load keeps it: finite, and within the range the maths stays well-conditioned. A
+ * value that is not a number (a NaN from a gesture that divided by nothing) leaves that part of the
+ * camera where it was, rather than saving a position no file can hold.
+ */
 export function setViewport(doc: DraftDocument, viewport: DraftViewport): DraftDocument {
-  const zoom = clamp(viewport.zoom, LIMITS.minZoom, LIMITS.maxZoom);
-  return { ...doc, viewport: { x: viewport.x, y: viewport.y, zoom } };
+  const zoom = clamp(finite(viewport.zoom, doc.viewport.zoom), LIMITS.minZoom, LIMITS.maxZoom);
+  const x = clamp(finite(viewport.x, doc.viewport.x), -LIMITS.maxCoordinate, LIMITS.maxCoordinate);
+  const y = clamp(finite(viewport.y, doc.viewport.y), -LIMITS.maxCoordinate, LIMITS.maxCoordinate);
+  return { ...doc, viewport: { x, y, zoom } };
 }
 
 export function setTitle(doc: DraftDocument, title: string): DraftDocument {
-  const trimmed = title.trim().slice(0, LIMITS.maxTitleLength) || 'Untitled canvas';
-  if (trimmed === doc.metadata.title) return doc;
-  return { ...doc, metadata: { ...doc.metadata, title: trimmed } };
+  const clean = cleanTitle(title);
+  if (clean === doc.metadata.title) return doc;
+  return { ...doc, metadata: { ...doc.metadata, title: clean } };
 }
 
+/**
+ * Canvas settings as a load keeps them: a grid mode that exists, a scrim and a blur between 0 and 1
+ * (clamped without a word, as a load clamps them), a fit that exists. A value that is none of those
+ * leaves what was there. A patch that changes nothing is no change: the same document comes back, so
+ * re-picking what is already picked never becomes an undo step.
+ */
 export function setSettings(doc: DraftDocument, patch: Partial<DraftSettings>): DraftDocument {
-  return { ...doc, settings: { ...doc.settings, ...patch } };
+  const was = doc.settings;
+  const background = patch.background === undefined ? was.background : heldBackground(patch.background, was.background);
+  const next: DraftSettings = {
+    showSequence: patch.showSequence === undefined ? was.showSequence : patch.showSequence !== false,
+    grid: oneOf<GridMode>(patch.grid, GRID_MODES, was.grid),
+    background,
+  };
+  const same =
+    next.showSequence === was.showSequence &&
+    next.grid === was.grid &&
+    (background === was.background ||
+      (background.enabled === was.background.enabled &&
+        background.fit === was.background.fit &&
+        background.dim === was.background.dim &&
+        background.blur === was.background.blur &&
+        background.imageId === was.background.imageId &&
+        background.image === was.background.image));
+  return same ? doc : { ...doc, settings: next };
+}
+
+function heldBackground(patch: BackgroundSettings, was: BackgroundSettings): BackgroundSettings {
+  const imageId = safeId(patch.imageId);
+  return {
+    enabled: patch.enabled === true,
+    fit: oneOf<BackgroundFit>(patch.fit, BACKGROUND_FITS, was.fit),
+    dim: clamp(finite(patch.dim, was.dim), 0, 1),
+    blur: clamp(finite(patch.blur, was.blur), 0, 1),
+    ...(imageId ? { imageId } : {}),
+    ...(patch.image ? { image: patch.image } : {}),
+  };
 }
 
 export function touch(doc: DraftDocument, at = Date.now()): DraftDocument {
@@ -1633,9 +1895,16 @@ export function replaceLabels<T extends Labelled>(doc: T, find: string, replace:
   const nodes = doc.nodes.map((node) => {
     const text = swap(node.text, LIMITS.maxTextLength);
     const list = attachments(node.attachments);
-    if (text === node.text && list === node.attachments) return node;
+    // A sequence's names, messages, conditions and notes are labels too.
+    const sequence = node.sequence ? mapSequenceText(node.sequence, (words, max) => swap(words, max) ?? words) : undefined;
+    if (text === node.text && list === node.attachments && sequence === node.sequence) return node;
     changed = true;
-    return { ...node, ...(text === node.text ? {} : { text, textOrigin: 'explicit' as const }), ...(list === node.attachments ? {} : { attachments: list }) };
+    return {
+      ...node,
+      ...(text === node.text ? {} : { text, textOrigin: 'explicit' as const }),
+      ...(list === node.attachments ? {} : { attachments: list }),
+      ...(sequence === node.sequence ? {} : { sequence }),
+    };
   });
   const edges = doc.edges.map((edge) => {
     const label = swap(edge.label, LIMITS.maxLabelLength);

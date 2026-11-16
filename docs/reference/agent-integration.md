@@ -7,7 +7,8 @@ Draft Canvas Desktop lets a coding agent on the same computer draw and revise di
 - Draft Canvas validates it, lays it out, and writes ordinary, editable content that is saved and undoable.
 - Access is off until a person turns it on, is limited to folders they choose, and never uses the network.
 
-Setup is in [Connect an AI agent](../guides/connect-an-ai-agent.md).
+Setup and everyday use are in [Connect an AI agent](../guides/connect-an-ai-agent.md). This page is
+the contract: tools, receipts, limits, errors and security.
 
 ## Architecture
 
@@ -25,6 +26,8 @@ Setup is in [Connect an AI agent](../guides/connect-an-ai-agent.md).
 - **Broker.** Owns access, folder scope, the request ledger, file reads, deadlines and the commit gate.
 - **Page.** Validation, layout and quality checks (`src/agent/`, `src/layout/`) share the canvas's
   shape, text and routing code, so results match the canvas. Heavy work runs in `src/agent/worker.ts`.
+  The editor's Arrange and Tidy up use the same worker (`layoutPlan.ts`) and a deterministic work
+  budget, never the clock; an agent request keeps its time limit.
 - **One writer.** Edits to the open document go through the editor store and undo history. A new
   diagram is written by the shell with `create_new`, which never overwrites.
 - **No agent data in files.** An agent-made diagram is an ordinary diagram, on the web and the desktop.
@@ -33,28 +36,54 @@ Setup is in [Connect an AI agent](../guides/connect-an-ai-agent.md).
 
 ## Tools
 
-Schemas live in `src/agent/schema.ts`. `npm run agent:schemas` regenerates `src-tauri/mcp/tools.json`,
-which the sidecar compiles in; `tests/agent/schema.test.ts` fails if they drift. `get_capabilities`
-reports `contract: 3`.
+Schemas live in `src/agent/schema.ts`. `npm run agent:schemas` regenerates the catalogs in
+`src-tauri/mcp/` (`tools.json`, `entry-tools.json`, `planning-entry-tools.json`, `run-tools.json`),
+which the sidecar compiles in; `tests/agent/schema.test.ts` checks their contents and size budgets.
+
+Discovery advertises one small dispatcher, `diagram_tool({tool, args})`, so a model turn does not
+carry the whole grammar.
+
+- `tool: "help", args: {}` lists this session's operations; `args: {tool: "update_diagram"}` returns
+  that operation's common arguments.
+- `get_capabilities({tool: "update_diagram"})`, dispatched the same way, returns its complete schema.
+- Every request is still validated against the full contract (`contract: 3`).
+- The dispatcher is annotated as mutating. The broker checks permissions, review-only restrictions and
+  idempotency against the resolved operation, never the wrapper.
+- A client that needs per-operation read/write annotations or tool allowlists can launch the sidecar
+  with `--full-tools`. Previously discovered operation names stay callable.
+
+The operations below are passed as `tool`, with their arguments in `args`.
 
 | Tool | Kind | Purpose |
 | --- | --- | --- |
-| `get_capabilities({topics?, starter?})` | read | Vocabulary and rules. Without `topics`, an index of the topics and the common word lists; each topic in full on request: `types`, `relationships`, `c4`, `flows`, `notes`, `starters`, `limits`, `layout`, `readability`. |
+| `get_capabilities({tool?, topics?, starter?})` | read | `tool` alone returns that tool's complete input schema. Otherwise vocabulary and rules: an index of topics and common word lists, each topic in full on request (`types`, `relationships`, `c4`, `flows`, `notes`, `sequences`, `starters`, `limits`, `layout`, `readability`). `starters` lists only what the person downloaded from the [starters gallery](../guides/examples.md). |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read | Diagrams in allowed folders, plus `active` (the open one) and `thisSession` (ones this session changed). |
-| `read_diagram({diagramId, view?, focus?, include?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
+| `read_diagram({diagramId, query?, view?, focus?, include?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read | Full note or code text in 8,192-character chunks. |
 | `read_selection({diagramId})` | read | The current selection. See [Selection-aware editing](#selection-aware-editing). |
-| `get_implementation_context({diagramId, view?, focus?})` | read | Flow steps as stored, notes, decisions, code and boundaries, for implementing a design. |
-| `render_diagram({diagramId, view?, format?, scale?, theme?, previewId?, focus?})` | read | PNG (`scale` 1–3, `light`/`dark`) or SVG from the export renderer. `focus`: `{nodes}`, `{group}`, `{flow}` or `{selection: true}`, with optional `neighbors`. Max 8 MB. |
-| `create_diagram({requestId, title, nodes?, relationships?, groups?, flows?, notes?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?, fallbackType?})` | write | A new file. A title in use is `DUPLICATE_TITLE` unless `allowDuplicateTitle`. `fallbackType` draws unknown types as that type. |
+| `get_implementation_context({diagramId, view?, focus?})` | read | Flow steps as stored, sequences (at most 8), notes, decisions, code and boundaries: what to implement, in order. |
+| `render_diagram({diagramId, view?, format?, scale?, theme?, previewId?, focus?})` | read | PNG (`scale` 1–3, `light`/`dark`) or SVG from the export renderer, at most 8 MB. `focus`: `{nodes}`, `{group}`, `{flow}` or `{selection: true}`, with optional `neighbors`. |
+| `create_diagram({requestId, title, nodes?, relationships?, groups?, flows?, notes?, sequences?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?, fallbackType?})` | write | A new file. A title in use is `DUPLICATE_TITLE` unless `allowDuplicateTitle`. `fallbackType` draws unknown types as that type. `starter` begins from a downloaded gallery starter; its elements keep the file's ids under `starter.prefix`. The receipt counts free notes in `created.notes` and attached notes and code in `created.attachments`, across every inside view. |
 | `update_diagram({requestId, diagramId, expectedRevision, ops?, view?, scope?, layout?, activate?, onConflict?, previewId?})` | write | Every follow-up. See [Changing a diagram](#changing-a-diagram). |
 | `preview_diagram({diagramId, expectedRevision, ops, view?, layout?, scope?})` | read | An unsaved candidate: `previewId`, diff and quality. |
 | `submit_proposal({requestId, diagramId, expectedRevision, summary, ops?, rationale?, assumptions?, openQuestions?, view?, layout?, scope?, sourceRef?, revises?})` | write | Changes for a person to review. See [Proposals](#proposals-review-before-applying). |
 | `get_proposal({proposalId})` | read | Status, counts and `stale`. |
 | `list_proposals({diagramId?, cursor?, limit?})` | read | Proposals, newest first. |
 
-- A create receipt counts free-standing note cards in `created.notes`, and attached notes/code in
-  `created.attachments` when present. Both totals cover every inside view.
+`rename_element({diagramId, requestId, from, to, view?})` is a one-call shortcut for an exact-label rename:
+no read and no schema lookup.
+
+- Labels match exactly, including case, across architecture shapes and boundaries in every room.
+  `view: {inside: [ids]}` restricts it to one room; `scope` keeps selection limits.
+- A missing or duplicate label refuses without changing anything.
+- The app resolves the id and revision locally, then uses the normal validated update, approval,
+  revision, save and undo path. The request is journaled before resolution, so an identical retry
+  replays its receipt even after the old label is gone.
+- The compact receipt keeps durability, revision, undo, warnings and recovery instructions.
+- When the person asked for review before application, use a proposal instead.
+
+General rules:
+
 - Write tools are idempotent by `requestId` ([Retries](#retries-and-the-request-ledger)).
 - A tool failure is a result with `isError: true` and a stable `code`. JSON-RPC errors mean a malformed request.
 - New ids match `^[A-Za-z][A-Za-z0-9_.-]{0,63}$` and become native ids. Existing ids, such as `n_…`, are used as they are.
@@ -65,10 +94,12 @@ reports `contract: 3`.
 attachments and flows with their ids. Elements, boundaries, notes, relationships and flows carry the
 `color` they were given, in the form an update takes.
 
-- C4 `role` and `scope` are always derived from type, level and boundary, never stored. An element
-  whose role is `unspecified` also carries `basis`, saying why.
-- Empty values are left out: no `insideViews` when nothing in the page has one, no geometry `pins`
-  when both ends are automatic. Display geometry is rounded to hundredths.
+- `role` and `scope` are derived from type, level and boundary, never stored. A role of `unspecified`
+  also carries `basis`, saying why.
+- Empty values are left out (no `insideViews` when none has one, no geometry `pins` when both ends
+  are automatic). Display geometry is rounded to hundredths.
+- Pages hold at most 200 elements, 400 relationships, 20 flows, 50 open points and 96 KB. A `cursor`
+  is bound to the revision and read options; a change answers `CURSOR_STALE`.
 
 | Option | Effect |
 | --- | --- |
@@ -78,16 +109,27 @@ attachments and flows with their ids. Elements, boundaries, notes, relationships
 | `include: ["attachments"]` / `["fullText"]` | Attachment previews, or complete text. |
 | `include: ["suggestions"]` | Up to 5 next-step suggestions per element. Never applied. |
 | `include: ["views"]` | An outline of every inside view. |
+| `format: "outline"` | File title and revision, plus paths, owners, levels and counts for up to 100 inside views (`viewsTruncated` marks a longer outline). |
 | `format: "mermaid"` / `"plantuml"` / `"c4"` | Flows as sequence-diagram source, or the architecture as C4-PlantUML, as Export writes them. |
 
-Pages hold at most 200 elements, 400 relationships, 20 flows, 50 open points and 96 KB. A `cursor` is
-bound to the revision and read options; a change answers `CURSOR_STALE`.
+`outline` and the source formats cover the file and ignore `view`, `focus`, `include` and `cursor`.
+Use the outline to find a room, then read it with `view.inside`; for a known group, flow or set of
+nodes, pass `focus` directly.
+
+**Search.** For a named edit beyond an exact-label rename, `read_diagram({diagramId, query: "name"})`
+matches ids and labels (case-insensitive substring) across every room: shapes, free notes, groups,
+relationships and flows, not attachment bodies or ink. It returns at most 20 matches with ids, types,
+labels and `view.inside` paths, plus the file revision. `total` counts all matches, `truncated` means
+refine the query, and labels over 200 characters have `labelTruncated: true`. Do not combine `query`
+with other read options. Resolve ambiguity before editing; then send
+`ops: [{op: "update", id, set: {label: "New name"}}]` with the match's view and revision. The receipt
+verifies the change without another read.
 
 #### Semantic review
 
 The first page of a read also carries `review`: up to 8 findings, most important first, about what a
 pattern in the view is missing, read from the diagram's own semantics (`src/agent/review.ts`). Each is
-`{code, ids, message}`; a focused read keeps the findings about what it is focused on.
+`{code, ids, message}`; a focused read keeps the findings about its focus.
 
 ```json
 "review": [
@@ -102,20 +144,19 @@ pattern in the view is missing, read from the diagram's own semantics (`src/agen
 | `shared-database` | Two or more services, workers or schedulers write (`writes`, `readsWrites`) the same database. |
 | `no-consumer` | A queue, topic or stream receives messages and nothing consumes them. |
 | `no-dead-letter` | A queue with consumers has no dead-letter path, its own or a consumer's; or a stream consumer has nowhere to park a record. Topics never get this. |
-| `dead-letter-source` | A dead-letter queue is fed by something other than the queue whose messages it parks: a topic, a stream, or a consumer that writes to it itself. Names the queue to dead-letter from, or the consumer queue to add between a topic and its subscriber. A stream's consumer parking a record is not flagged. |
+| `dead-letter-source` | A dead-letter queue is fed by something other than the queue whose messages it parks: a topic, a stream, or a consumer that writes to it itself. Names the queue to dead-letter from, or the consumer queue to add between a topic and its subscriber. A stream consumer parking a record is not flagged. |
 | `no-producer` | A queue, topic or stream is consumed and nothing in the view sends to it. Not in inside views. |
 | `cache-not-written` | A cache is read and nothing writes, refreshes or invalidates it. |
 | `unconnected` | Shapes with no connections, in a view that has connections. Not in inside views. |
 
-A finding needs the model to say it. A connector's semantic counts when it was chosen, or when it was
-inferred and the connector carries no label (the canvas then shows that word). A connector that
-can't be read this way, or a junction or boundary at a part, silences findings about something absent
-there. A context-level view gets no messaging or cache findings. Findings are facts to raise with
-the person, not changes to make: a missing dead-letter path belongs in the diagram only if the system
-has one.
+A finding needs the model to say it. A connector's semantic counts when it was chosen, or inferred on
+a connector with no label (the canvas then shows that word). A connector that can't be read this way,
+or a junction or boundary at a part, silences findings about something absent there. A context-level
+view gets no messaging or cache findings. Findings are facts to raise with the person, not changes to
+make: a missing dead-letter path belongs in the diagram only if the system has one.
 
-`create_diagram`'s receipt carries the same `review` for every view (an inside view's findings name
-it in `view`). An update or preview adds the findings the change brought in to its advisories, as
+`create_diagram`'s receipt carries `review` for every view (an inside view's findings name it in
+`view`). An update or preview adds the findings the change brought in to its advisories, as
 `Review (<code>): <message>`.
 
 ## Changing a diagram
@@ -124,7 +165,7 @@ it in `view`). An update or preview adds the findings the change brought in to i
 
 | Op | Does |
 | --- | --- |
-| `{op:"add", nodes?, relationships?, groups?, flows?, notes?, openPoints?}` | Adds content beside what it connects to. |
+| `{op:"add", nodes?, relationships?, groups?, flows?, notes?, sequences?, openPoints?}` | Adds content beside what it connects to. |
 | `{op:"update", id, set:{…}}` | Edits anything by id. Omitted fields stay; `null` clears an optional field. |
 | `{op:"remove", ids, cascade?}` | Removes. A non-empty group needs `cascade`. |
 | `{op:"setLevel", level}` | Sets the view's C4 level. `null` makes it a non-C4 view, also an inside view that would otherwise inherit one. |
@@ -133,7 +174,7 @@ it in `view`). An update or preview adds the findings the change brought in to i
 
 - `view.inside` names the view to change. The first `add` inside a service or component creates its inside view.
 - Existing elements never move except by `arrange` or `set.place`. Boundaries grow to hold new members.
-- As in the editor, one ordinary relationship runs each way between two elements; a second, added or
+- As in the editor, one ordinary relationship runs each way between two elements. A second, added or
   re-pointed, is `UNSUPPORTED` (a `compensates` action may sit beside its step). A `set.kind` the
   pairing doesn't offer is `UNSUPPORTED`; on a new relationship it is left out with an advisory.
 - Boundaries and notes take `color` when added, as elements, relationships and flows do.
@@ -154,7 +195,8 @@ An agent captures the selection once, then edits only those ids, even if the per
 
 1. `read_selection({diagramId})` reads the open diagram (`NOT_ACTIVE` if it is not open, a `null`
    selection if nothing is selected). Items have `role: "selected"` or `"context"` (up to 50
-   neighbours). The ids come back as `selection: {path, nodes, edges}`.
+   neighbours). The ids come back as `selection: {path, nodes, edges}`. A selected sequence is
+   reported under `sequences`, in full.
 2. The agent passes them as `scope: {nodes, edges}` to `update_diagram`, `preview_diagram` or `submit_proposal`.
 
 With `scope`, `add` is always allowed. An `update`, `remove` or cascade outside scope is `OUT_OF_SCOPE`,
@@ -169,6 +211,7 @@ pull request's architectural impact. It never applies anything. No MCP tool can 
 | Field | Rule |
 | --- | --- |
 | `ops` | Validated as `update_diagram` would. Nonempty operations that make no changes are refused as `INVALID_INPUT`. `ops: []` with a `summary` records "no architectural impact" (`informational`). |
+| `rename` | `rename: {from, to}` instead of `ops`, with `summary` and optional `view`, `scope`, `revises`. It cannot be mixed with ops, layout or a caller revision. The page resolves it once and stores concrete ids, ops, base revision and preconditions; Accept never resolves the label again. |
 | `revises` | Replaces a pending proposal in place. A resolved one is `PROPOSAL_CLOSED`; a revision that landed first is `PROPOSAL_CHANGED`. |
 | `sourceRef` | A PR's url, title or commits, shown to the person. Never fetched. |
 
@@ -180,18 +223,16 @@ Submission captures preconditions: the before-state of everything the ops change
   run is not proof. **Accept** stays disabled until the agent revises.
 
 **Review panel** (`src/desktop/ui/ProposalPanel.tsx`): summary, status, counts and the changes in the
-diagram's words (`reviewRows.ts`: what only moved is one layout line, boundaries by name, colours as
-colours). On the canvas the proposal is drawn solid with its new and changed parts in teal and the
-diagram stepped back; a change that moves shapes is drawn on a tracing sheet, each moved shape trailing
-back to where it stands now; removals are struck through. **Show on canvas** toggles it and **Focus
-changes** frames it; the panel frames it beside itself once when it opens. A revised proposal lists its
-earlier versions (`history`). The preview clears on Accept, Reject, Dismiss, close, or a proposal or
-document switch. A decided proposal reads as a record, without actions.
+diagram's words (`reviewRows.ts`). On the canvas the proposal is drawn solid with new and changed
+parts in teal and the diagram stepped back; moved shapes are drawn on a tracing sheet, each trailing
+back to where it stands now; removals are struck through. The preview clears on Accept, Reject,
+Dismiss, close, or a proposal or document switch. A revised proposal lists its earlier versions
+(`history`, up to ten). A decided proposal reads as a record, without actions.
 
 **Accept** re-checks the proposal version and diagram revision inside the commit, then applies the
-whole batch as one undo step through `applyToFile`. While the diagram is still the one the dry run
-worked on, it commits that dry run's result, so what lands is what the diff and the canvas preview
-showed; after an edit in between, it works the proposal out again on the current diagram. **Reject** and **Dismiss** never touch the document.
+whole batch as one undo step through `applyToFile`. If the diagram is still the one the dry run
+worked on, it commits that dry run's result, so what lands is what the diff showed; after an edit in
+between, it works the proposal out again. **Reject** and **Dismiss** never touch the document.
 
 **Crash recovery.** A proposal is recorded as `accepting` before its commit. After a crash, the panel's
 dry run decides:
@@ -202,98 +243,106 @@ dry run decides:
 | B | Fails only because this proposal's own new ids exist with matching content (`looksAlreadyApplied` in `src/agent/proposal.ts`) | **Mark as applied** (no document write) or **Dismiss** |
 | C | Anything else | **Dismiss**; never resolved automatically |
 
-Proposals are stored in `agent/proposals.jsonl`; resolved ones are kept 30 days. Each keeps up to ten
-earlier versions' summaries in `history` when revised.
+Proposals are stored in `agent/proposals.jsonl`; resolved ones are kept 30 days.
 
 ## Nodi, the desktop companion
 
-Nodi (`src/desktop/ui/Companion.tsx`) runs the person's own agent CLI in the background for one turn at
-a time, behind an ACP-shaped interface (`src-tauri/src/companion/`: `RunEvent`s for started, message,
-tool call, tool update and stopped). Each agent is a `Backend` (locate, sign-in, command, parser):
+Nodi (`src/desktop/ui/Companion.tsx`) runs the person's own agent CLI in the background, one turn at
+a time, behind an ACP-shaped interface (`src-tauri/src/companion/`; events: started, message, tool
+call, tool update, stopped). Each agent is a `Backend` (locate, sign-in, command, parser). The
+person-facing description is in [Connect an AI agent](../guides/connect-an-ai-agent.md#ask-nodi-on-the-canvas).
 
 | Agent | Command (prompt on stdin) | Kept to Draft Canvas by |
 | --- | --- | --- |
 | Claude Code 2.1.295+ | `claude -p --output-format stream-json`, `--resume` for later turns | `--tools ""`, `--strict-mcp-config` with only Draft Canvas, `--allowedTools mcp__draft-canvas__*`, hooks off |
-| Codex 0.163.0+ | `codex exec --json`, `codex exec resume <thread>` for later turns | `--ignore-user-config`, shell and tool-providing features off, read-only sandbox, approvals off, only the run's Draft Canvas server configured |
+| Codex 0.163.0+ | `codex exec --json`, `codex exec resume <thread>` for later turns | `--ignore-user-config`, tool-providing features off, read-only sandbox, approvals off, only the run's Draft Canvas server configured |
 
-Codex starts only after its feature listing can be verified; an unreadable probe refuses the run
-rather than dropping tool restrictions. CLI probes have deadlines. Each run is killed as a whole
-process tree (a process group on Unix, a Job Object on Windows) on Stop, on an output limit and when
-the app exits.
+- Codex starts only after its feature listing can be verified; an unreadable probe refuses the run
+  rather than dropping restrictions. CLI probes have deadlines.
+- Codex merges MCP tables from configuration overrides, so runs pass `--ignore-user-config` and keep
+  only the person's `CODEX_HOME` for authentication and sessions. Custom models, providers and
+  credential-store settings do not carry into Nodi; externally connected agents keep their own.
+- Codex runs with every feature that brings its own tools turned off (browser, computer use, image
+  generation, sub-agents, plugins, apps, skill search, `unified_exec`: only those `codex features list`
+  reports), web search off, skill instructions omitted and multi-agent tools removed. Planning mode
+  and the structured-question tool are disabled, so Nodi asks clarifying questions in chat. The exact
+  overrides are in `src-tauri/src/companion/codex.rs`.
+- Codex reports cumulative token counters when resumed; the app reports only the turn's increase and
+  leaves usage unknown without a baseline.
+- Each run is killed as a whole process tree (a process group on Unix, a Job Object on Windows) on
+  Stop, on an output limit and when the app exits.
+- Claude Code keeps its own session transcripts (no `--no-session-persistence`); the folder is
+  `projectsDirectory` in `claude auth status --json`. That command is a hint, not a gate: it can
+  report `loggedIn: false` for a keychain sign-in, so a negative answer shows the sign-in line
+  without blocking **Send**. The person's own plugins still run inside the agent; that is documented,
+  not prevented.
 
-Codex merges MCP tables from configuration overrides, so Companion runs pass `--ignore-user-config`
-and keep only the person's `CODEX_HOME` for authentication and sessions. Custom models, providers and
-credential-store settings therefore do not carry into Nodi; external agents connected normally keep
-their own configuration.
+The brief (`BRIEF`) is the agent's whole system prompt, replacing its coding one (`--system-prompt`;
+Codex's `model_instructions_file`, the run folder's `brief.md`). Each turn's prompt starts with a
+`<draft-canvas-context>` block: diagram, view, selection, which tool makes changes, a proposal of this
+conversation still waiting for review, and on a follow-up whether the diagram is unchanged since the
+last turn. The page attaches no diagram snapshot; the agent reads what it needs, and an "unchanged"
+hint permits reuse only of views it actually read. Each run's connector carries `DRAFT_CANVAS_RUN`
+(the run id) and `DRAFT_CANVAS_AGENT_DIR` (the app's agent folder).
 
-The brief (`BRIEF`) goes in as the agent's whole system prompt, replacing its coding one: Claude Code's
-`--system-prompt`, Codex's `model_instructions_file` (the run folder's `brief.md`). Each turn's prompt
-starts with a `<draft-canvas-context>` block: the diagram, the view, the selection, which tool makes
-changes, a proposal of this conversation still waiting for review, the view itself as `read_diagram`
-answers it (read by the page through the agent host as the turn is sent, up to 40,000 characters, `<`
-escaped), and on a follow-up whether the diagram is unchanged since the last turn (then neither the view
-nor a read is needed). Each run's
-connector carries `DRAFT_CANVAS_RUN` (the run id) and `DRAFT_CANVAS_AGENT_DIR` (the starting app's own
-agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
+**Run policy** (`agent/runs.rs`). The bridge holds a run's calls to:
 
-- Only the diagram the person asked about. `list_diagrams` and `create_diagram` are refused
-  (`RUN_LIMIT`), as is any other diagram id.
-- `update_diagram` only in **Apply changes directly** mode; otherwise `PROPOSAL_ONLY`, and the agent
-  submits a proposal, tagged with its `run`.
-- Stopping the run, or turning agent access off, ends it: calls not yet committed fail with `CANCELLED`.
-  A terminal event from the agent closes the same authority immediately, even if its process has not
-  exited. Stop requested during process startup is remembered and applied when the process appears.
-- The project's code only when the person allowed it. A run without that is offered `ask_to_read_code`,
-  which the app answers itself ("end your turn"); Nodi sees the call in the run and asks the person in
-  the chat. With it, the connector carries `DRAFT_CANVAS_CODE=1` and offers `list_code`, `search_code`
-  and `read_code` instead, and the turn's context names the folder. The app answers them from that one
-  folder (`agent/code.rs`): canonical paths inside it only, no symlinks out, no `.git`, dependency or
-  build folders, nothing the root `.gitignore` ignores, no secrets (`.env`, keys, credentials,
-  Terraform state, kubeconfig, registry logins), no binaries, and bounded results. The folder
-  is the one the person chose for the diagram, else the repository the diagram is saved in, else its
-  own folder; "Always" is kept in settings (`codeFolders`), "Just for now" until the app quits. These
-  tools are in `RUN_TOOLS` (`src/agent/schema.ts`, generated into `src-tauri/mcp/run-tools.json`), and no
-  connected agent is ever offered them (`UNKNOWN_TOOL`).
+- **Only the diagram the person asked about.** `list_diagrams`, `create_diagram` and any other
+  diagram id are refused (`RUN_LIMIT`).
+- **`update_diagram` only in Apply changes directly mode.** Otherwise `PROPOSAL_ONLY`, and the agent
+  submits a proposal tagged with its `run`.
+- **Stopping the run, or turning agent access off, ends it.** Calls not yet committed fail with
+  `CANCELLED`. A terminal event from the agent closes the same authority at once, even if its process
+  has not exited. A Stop during process startup is remembered and applied when the process appears.
+- **The project's code only when the person allowed it.** Without that, the run is offered
+  `ask_to_read_code`, which the app answers itself ("end your turn"); Nodi then asks in chat. With it
+  (`DRAFT_CANVAS_CODE=1`), the run is offered `list_code`, `search_code` and `read_code`, answered
+  from one folder (`agent/code.rs`): canonical paths inside it only, no symlinks out, no `.git`,
+  dependency or build folders, nothing the root `.gitignore` ignores, no secrets (`.env`, keys,
+  credentials, Terraform state, kubeconfig, registry logins), no binaries, bounded results. The folder
+  is the one chosen for the diagram, else the repository it is saved in, else its own folder; "Always"
+  is kept in settings (`codeFolders`), "Just for now" until the app quits. These tools are in
+  `RUN_TOOLS` (`src/agent/schema.ts`, generated into `run-tools.json`); a connected agent is never
+  offered them (`UNKNOWN_TOOL`).
 
-**Tokens.** Every model call of a turn resends the agent's instructions and tools, so each is kept small
-and calls are kept few:
+**Token budget.** Every model call resends the agent's instructions and tools, so both are small and
+calls are few.
 
-- A run's connector serves a lean tool set (`src-tauri/mcp/src/main.rs`'s `lean`): only the tools the
-  run may call, without `render_diagram` or `read_selection`, output schemas, the bounds the app checks
-  anyway, or nested inside views in an element.
-- Codex runs with the features that bring tools of their own turned off (browser, computer use, image
-  generation, sub-agents, plugins, apps, skill search, `unified_exec`; only those `codex features list`
-  reports) and web search off.
-- The view comes with the turn, so a question is one call.
-- The brief: no read when the view came with the turn, `get_capabilities` only when a change is refused
-  for an unknown type, no preview before a proposal, no read after a change.
-- Small talk (a whole message of only "hello", "thanks", "bye", "how are you") is answered by Nodi
-  itself (`nodiLines.ts`'s `smallTalkOf`): no run, no tokens. Confirmations such as "yes" and "ok"
-  reach the selected agent, including its resumed session after an app restart.
-- Skills (`/` in the box, `nodiSkills.ts`) are worked out from the view when the menu opens: the
-  layouts are the editor's own Arrange with an `ArrangePreset` (direction, spacing or a primary flow,
-  one undo step each, played by `canvas/arrangeMotion.ts`); `/tidy` and `/present` run only when
+- **No local intent classifier.** Turns start with identity, room, selection and review mode. The
+  agent interprets the request and returns a structured final decision: a chat answer, an exact-label
+  rename, an ordinary update or a proposal. Reads, help and previews stay available while it plans;
+  the run policy refuses mutations in this phase, including through legacy tool names.
+- **Host-executed edit.** Only after a successful model turn and a clean process exit does the host
+  authorize the exact final payload and launch the bundled executor. It pins diagram id, request id
+  and the submitted selection scope; review mode still requires a proposal (and routes a rename to
+  `submit_proposal` with a bounded generated summary). The normal broker performs access checks,
+  validation, ambiguity refusal, journaling, revision checks, cancellation, persistence and undo.
+  No model runs afterwards to confirm it, which removes the post-edit confirmation inference.
+- **Receipt-driven replies.** The receipt supplies the outcome: saved, unchanged, applied-but-unsaved,
+  save-failed or awaiting review. A malformed decision, failed or cancelled run, denied edit or unknown
+  receipt never produces a success message, and errors are not retried automatically. Recent outcomes
+  go to the next turn as bounded, transient data (with the "unchanged" hint cleared), because the
+  model's transcript holds its plan, not the plan's result. Token usage, including cached input,
+  stays on the model turn.
+- **One dispatcher, on-demand schemas.** A companion run can dispatch only its permitted operations,
+  without `render_diagram` or `read_selection`. The brief tells the agent to reuse the supplied view,
+  fetch single capability topics, compare alternatives with previews and take revisions and
+  advisories from receipts.
+- **Small talk costs nothing.** A whole message of only "hello", "thanks", "bye" or "how are you" is
+  answered by Nodi (`nodiLines.ts`'s `smallTalkOf`): no run, no tokens. "Yes" and "ok" reach the agent.
+- **Skills** (`/` in the box, `nodiSkills.ts`) are worked out from the view when the menu opens. Layout
+  skills are the editor's own Arrange with an `ArrangePreset`, shown as a preview like every other way
+  in (`commands/arrange.ts`) and applied as one undo step; `/tidy` and `/present` appear only when
   their ⌘K command or a playable flow exists; `/explain` and `/risks` go to the agent. A read-only
   diagram offers no layout. None of the local skills starts a run or spends tokens.
 
-The agent's session id is kept per diagram and agent in `companion/sessions.json`; the conversation
-shown is also separate per agent, in memory only. Replies may name parts as `[[id]]`; the companion shows their names
-and pins numbered points onto them.
-
-Codex reports cumulative token counters when resumed, so the app reports only the turn's increase
-and leaves usage unknown if it cannot establish a baseline.
-
-Run output is bounded independently of the agent's model budget; passing a limit fails the run and
-closes its tool access. A reload recovers the run's recent events in order without duplicating text,
-and the two most recent completed turns stay available. **New conversation** clears them for the
-chosen agent on that diagram. The page also caps how many turns and conversations it keeps, and never
-evicts an active one. The limits are in `src-tauri/src/companion/`.
-
-Claude Code keeps its own session transcripts (Nodi does not pass `--no-session-persistence`); the
-folder is `projectsDirectory` in `claude auth status --json`. That command is a hint, not a gate: it can
-report `loggedIn: false` for an account signed in through the keychain, so a negative answer shows the
-sign-in line without blocking **Send**, and the run's own error is what counts. The
-person's own plugins still run inside the agent; that is documented, not prevented.
+**State.** The agent's session id is kept per diagram and agent in `companion/sessions.json`; the
+conversation shown is per agent and in memory only. Replies may name parts as `[[id]]`, which Nodi
+shows by name and pins as numbered points. Run output is bounded independently of the model's
+budget: passing the limit fails the run and closes its tool access. A reload recovers a run's recent
+events in order without duplicating text, and the two latest completed turns stay until **New
+conversation**. The page caps the turns and conversations it keeps, never evicting an active one
+(limits in `src-tauri/src/companion/`).
 
 ## One diagram across a conversation
 
@@ -314,9 +363,9 @@ A deleted or moved diagram is `NOT_FOUND`. A failed update never becomes a creat
 | `o:<pageEpoch>.<revision>` | The open document. Changes on every edit, undo, redo and page reload. |
 | `f:<16 hex digits of SHA-256>` | A file on disk. Also valid for the open document while it has no unsaved changes. Saved receipts carry this. |
 
-`expectedRevision` is checked before the work and again inside the commit, so a person's edit meanwhile
-is `REVISION_CONFLICT {currentRevision}`. With `onConflict: "rebase"`, the change applies to the
-current revision when the person changed none of the same content.
+`expectedRevision` is checked before the work and again inside the commit, so a person's edit in the
+meantime is `REVISION_CONFLICT {currentRevision}`. With `onConflict: "rebase"`, the change applies to
+the current revision when the person changed none of the same content.
 
 | Receipt `state` | `persisted` | Meaning |
 | --- | --- | --- |
@@ -342,8 +391,10 @@ advisories (10 on create).
 ## Retries and the request ledger
 
 Write calls are keyed by `(tool, requestId)` in `agent/ledger.jsonl` in the app's data folder:
-append-only, fsynced, mode 0600, compacted at start-up and every 500 records. A compaction that fails
-is tried again later and never fails the record that triggered it.
+append-only, fsynced, mode 0600, compacted at start-up and every 500 records (a failed compaction is
+retried later and never fails the triggering record). Guarantee: at most one application per
+`requestId` while its entry is kept. Resolved entries are kept 7 days (at most 2,000); unresolved
+ones 30 days.
 
 | Retry with the same `requestId` | Answer |
 | --- | --- |
@@ -364,13 +415,11 @@ is tried again later and never fails the record that triggered it.
 | Page reaches the commit gate | 30 s | Refused, nothing applied |
 | Receipt after the gate | 60 s | `OUTCOME_UNKNOWN` |
 
-- Cancellation counts only before the gate. It is remembered during connection setup, folder
-  lookup and between page requests, including before a prepared proposal is saved. A client
-  disconnect is not a cancel; turning access off still cancels its work that has not passed the gate.
-  Work already past its commit gate finishes and keeps its receipt. Proposal storage releases the
-  cancellation lock before disk I/O, so a slow save cannot hold Stop or process termination.
-- Resolved entries are kept 7 days (at most 2,000); unresolved ones 30 days.
-- Guarantee: at most one application per `requestId` while its entry is kept.
+Cancellation counts only before the gate. It is remembered during connection setup, folder lookup and
+between page requests, including before a prepared proposal is saved. A client disconnect is not a
+cancel; turning access off still cancels work that has not passed the gate. Work already past its
+gate finishes and keeps its receipt. Proposal storage releases the cancellation lock before disk I/O,
+so a slow save cannot hold Stop or process termination.
 
 ## Layout and the quality gate
 
@@ -392,10 +441,11 @@ readable at that size; refuse if none is).
 | Warning | A lone connector between facing sides that still steps sideways | Reported | Reported |
 
 Repair tries re-anchoring, roomier spacing, then the other direction. Where shapes one caller calls
-also call each other, a second layering keeps them in one row instead of a staircase; it is kept only
-when it reads better and adds no crossing. An add into an empty view (a new inside view) is laid out
-like a new diagram's room: around its first flow, with the whole ladder. Repair stops at a 6 s soft
-budget; a worker still busy at 20 s is ended. Either way nothing changes.
+also call each other, a second layering keeps them in one row; it is kept only when it reads better
+and adds no crossing. An add into an empty view (a new inside view) is laid out like a new diagram's
+room, around its first flow. Repair stops at a 6 s soft budget; a worker still busy at 20 s is ended.
+Either way nothing changes. Large one-shot requests (about 50+ elements) are often degraded or
+refused: build in steps or use inside views.
 
 **Legibility** (`src/agent/legibility.ts`) ranks equal candidates and is reported per view:
 
@@ -408,13 +458,22 @@ budget; a worker still busy at 20 s is ended. Either way nothing changes.
 | `farNotes` | Notes more than 160 px from their subject |
 | `fill` | Shape area over the diagram's area |
 
+**Proportion** (`src/agent/proportion.ts`) reports what reads badly although the lines are clean. It
+never refuses or repairs a layout; its fields appear beside the legibility measures only when found,
+and an update's advisories name the ones the edit touched, each with the op that fixes it:
+
+| Field | Reports |
+| --- | --- |
+| `stackedNames` | Shapes whose name wraps into more than two lines where a wider box takes fewer |
+| `hiddenCaptions` | Connectors whose label or caption is cut short or left out for lack of room |
+| `heavyHeaders` | Boundaries whose header band is 45% or more of their height |
+| `smallOverview` | The view fitted to a 1440×900 screen draws its smallest text under 8 px; `scale` says how small |
+
 **Advisories** (`src/agent/advice.ts`) name what to change, with ops where possible: ungroup unrelated
 external systems, move detail inside past 8 elements per boundary or 15 per view, give a note an
-`about`, set a `primaryFlow` when there are many crossings or detours, or name a technology as its product
-("Spring Boot 3", not "Spring Boot modular monolith") so its logo shows. An `arrange` that names a
-direction keeps it, and says so when the other direction reads clearly better.
-
-Large one-shot requests (about 50+ elements) are often degraded or refused. Build in steps or use inside views.
+`about`, set a `primaryFlow` when there are many crossings or detours, or name a technology as its
+product ("Spring Boot 3", not "Spring Boot modular monolith") so its logo shows. An `arrange` that
+names a direction keeps it, and says so when the other direction reads clearly better.
 
 ### Arrange
 
@@ -431,16 +490,14 @@ Ids, labels, attachments, note text and flows never change. To keep a shape fixe
 
 ### Exact placement and routing
 
-Coordinates are view px, as `include: ["geometry"]` reports them.
-Use exact placement for a single row or column: `arrange.direction` sets the reading direction of
-the graph, and can stack several nodes within a layer. For one row, chain `set.place` updates with
-`rightOf` and `align: "center"`; for one column, use `below` instead.
+Coordinates are view px, as `include: ["geometry"]` reports them. For a single row or column, chain
+`set.place` updates (`rightOf` with `align: "center"` for a row, `below` for a column);
+`arrange.direction` only sets the graph's reading direction and can stack several nodes in a layer.
 
-- **`place`** (on create, `add`, or `set.place`): `{x, y}`, or
-  `{rightOf | leftOf | above | below: id, gap?, align?}`, plus `width`/`height`. Never smaller than
-  the text needs. Groups move with their contents.
-  An omitted `gap` uses an explicitly supplied `layout.spacing`, with room for captions between the
-  two shapes. Without explicit spacing it remains 48 px; a numeric `gap` always wins.
+- **`place`** (on create, `add`, or `set.place`): `{x, y}`, or `{rightOf | leftOf | above | below: id,
+  gap?, align?}`, plus `width`/`height`. Never smaller than the text needs. Groups move with their
+  contents. An omitted `gap` uses an explicitly supplied `layout.spacing`, with room for captions
+  between the shapes; without explicit spacing it is 48 px. A numeric `gap` always wins.
 - **`route`** (on a relationship, or `set.route`): `{from?, to?, via?}`, with sides `top`, `right`,
   `bottom`, `left` and `via` as `[x, y]` bends, as in
   [Bend a connector by hand](../guides/shapes-and-connectors.md#bend-a-connector-by-hand).
@@ -473,6 +530,28 @@ and sequence export.
 - Duplicate titles are `DUPLICATE_FLOW`. A relationship appears once per flow.
 - `variantOf` links a variant to a base flow; a variant of a variant is `INVALID_REFERENCE`.
 - There is no stored "main" flow. Agents build flows only from an order the person or code gives.
+
+## Sequences
+
+A native [sequence](../guides/sequence-diagrams.md) is sent and read as a Mermaid `sequenceDiagram`
+(`src/agent/sequences.ts`); the app parses it into its own model, lays it out and sizes it. As with
+flows, build one only from an order the person or the code gives.
+
+- `sequences: [{id, title?, mermaid, links?}]` on `create_diagram` and the `add` op. On create it is
+  placed below the architecture; on add, where there is room. Nothing else moves.
+- `links: {participantId: elementId}` makes a participant stand for an element of the same view: it
+  takes that element's name, kind and technology and follows it. A participant written under an
+  element's own id is linked without being listed. One participant per element; only a service,
+  data store, queue, actor or component can be stood for.
+- `read_diagram` returns `sequences: [{id, title, participants, messages, mermaid, links?}]`, apart
+  from `elements`. Text over 6,000 characters is left out (`truncated: true`) unless `fullText` is
+  included or the read is focused.
+- `update` takes `set.title`, `set.mermaid` (replaces what it holds; participants still written under
+  the ids a read gave keep their links), `set.links` (re-links; `null` unlinks all) and `set.place`.
+  `remove` takes its id.
+- What the text asks for that is not drawn (`autonumber`, `rect`, lost messages) comes back as a
+  receipt advisory. Text that is not a sequence diagram is `INVALID_INPUT`.
+- A shape an agent renames or retypes is renamed where it stands in a sequence, in the same change.
 
 ## Relationship options
 
@@ -512,7 +591,7 @@ attachments and flow steps stay.
 - **Boundaries** are groups of kind `system`, `domain`, `network`, `deployment`, `group` or `boundary`, by `parentId`.
 - **Relationship technology** goes in the label: "Makes API calls [JSON/HTTPS]".
 
-**Role and scope are derived, never stored** (`src/depth/c4.ts`). Reads return `{role, scope}`, with `basis` (why) when the role is `unspecified`.
+**Role and scope are derived, never stored** (`src/depth/c4.ts`). Reads return `{role, scope}`, with `basis` when the role is `unspecified`.
 
 | Element | Context | Container | Component | No level |
 | --- | --- | --- | --- | --- |
@@ -537,6 +616,7 @@ Per request (`AGENT_LIMITS` in `src/agent/input.ts`). A breach is `LIMIT_EXCEEDE
 | Flows / steps per flow | 20 / 60 |
 | Extra elements / relationships one step lights | 40 / 40 |
 | Notes / open points / ops | 60 / 50 / 100 |
+| Sequences / sequence text | 8 / 20,000 characters |
 | Attachments per element in a request | 4 |
 | Label / relationship label / group label | 120 / 80 / 80 characters |
 | Description / technology | 280 / 60 characters |
@@ -561,6 +641,7 @@ Each error has a stable `code` and `message`, and where useful `hint`, `retryabl
 | Retries | `REQUEST_ID_MISMATCH`, `OUTCOME_UNKNOWN` |
 | Scope | `NOT_ENABLED`, `OUT_OF_SCOPE` (a folder agents may not use, or an op outside `scope`), `SCOPE_TARGET_MISSING`, `UNAUTHORIZED` |
 | Proposals | `PROPOSAL_CLOSED`, `PROPOSAL_CHANGED` |
+| Nodi runs | `RUN_LIMIT`, `PROPOSAL_ONLY` |
 | Connection | `APP_UNAVAILABLE` (Draft Canvas is not running), `APP_STARTING`, `APP_UNRESPONSIVE`, `CONNECTION_LOST`, `VERSION_MISMATCH`, `TIMEOUT`, `CANCELLED` |
 | Other | `PERSISTENCE_FAILED`, `INTERNAL` |
 
@@ -577,10 +658,10 @@ Threat model: another local program, or a web page, trying to drive the bridge.
 - **Disconnect.** **Disconnect agents** replaces the token and ends every connection. Turning access
   off removes `agent.json` and closes the listener.
 - **Untrusted input.** Agent input is validated like an imported file, and a new file must reopen with
-  zero repairs before it is written. Text read from a diagram is data, never instructions.
-  While hosting live collaboration, `read_diagram`, `read_selection` and `get_implementation_context`
+  zero repairs before it is written. Text read from a diagram is data, never instructions. While
+  hosting live collaboration, `read_diagram`, `read_selection` and `get_implementation_context`
   include `fromCollaborators` for returned content with remembered collaborator touches (including
-  attached notes and code); these are untrusted data, even after the owner builds on them.
+  attached notes and code); treat it as untrusted even after the owner builds on it.
 - **Privacy.** Draft Canvas sends nothing anywhere. The agent's model provider sees what the agent
   reads and writes. See [Privacy](privacy.md).
 
@@ -593,27 +674,26 @@ Threat model: another local program, or a web page, trying to drive the bridge.
 
 ## Not supported
 
-- **Accepting part of a proposal**, or an agent accepting one.
-- **Pinned shapes.** Updates never move existing shapes; `arrange` moves only its scope.
-- **Some graph shapes.** One hub shared by four or more boundaries, or six or more labelled routes
-  from one gateway, is refused or tangled. Split it into views.
-- **Pinning a presentation camera or starting a presentation.**
-- **Reordering attachments.**
-- **Writing export files.** Agents can render a view or read source formats; the person exports.
-- **A relationship `technology` field.** Use the label.
-- **Linux.** Not a desktop target.
-- **Launching the app.** If it is not running, the answer is `APP_UNAVAILABLE`.
-- **Fetching a PR or repository**, or editing code. Draft Canvas only changes diagrams.
+- Accepting part of a proposal, or an agent accepting one.
+- Pinned shapes: updates never move existing shapes, and `arrange` moves only its scope.
+- Some graph shapes: one hub shared by four or more boundaries, or six or more labelled routes from
+  one gateway, is refused or tangled. Split it into views.
+- Pinning a presentation camera or starting a presentation.
+- Reordering attachments.
+- Writing export files: agents can render a view or read source formats; the person exports.
+- A relationship `technology` field. Use the label.
+- Linux (not a desktop target) and launching the app (a stopped app answers `APP_UNAVAILABLE`).
+- Fetching a PR or repository, or editing code. Draft Canvas only changes diagrams.
 
 ## Native skill verification
 
-`e2e/native-skill.ts` drives the real MCP sidecar and running desktop app, including native folder
-scope, the request ledger and disk persistence. It does not install a mock shell or rewrite app
-settings. Use a separate test build/profile if you want to keep your normal projects untouched.
+`e2e/native-skill.ts` drives the real MCP sidecar and running desktop app, including folder scope,
+the request ledger and disk persistence. It installs no mock shell and rewrites no app settings, so use
+a separate test build or profile to keep your own projects untouched.
 
-1. Build and start the desktop app. Add an empty verification folder as a project, then enable
-   agent access for only that folder in **Settings → AI agents**. Keep the window visible.
-2. Run the create phase from the repository root:
+1. Build and start the desktop app. Add an empty folder as a project and enable agent access for only
+   that folder in **Settings → AI agents**. Keep the window visible.
+2. From the repository root, run the create phase:
 
    ```bash
    npx tsx e2e/native-skill.ts --phase create \
@@ -624,8 +704,8 @@ settings. Use a separate test build/profile if you want to keep your normal proj
 3. Quit the app, launch it again and open the saved diagram from Recent. Run the same command with
    `--phase verify` and the same folders.
 
-The create phase verifies that previews leave the real file untouched, exact retries do not write
-again or create duplicates, and stale revisions cannot change the disk. The verify phase compares
-the saved bytes and all four views—including flows, evidence, annotations and geometry—with the
-pre-restart snapshot. Both phases render every view and save PNGs and JSON reports. The report
-folder is separate from the diagram project; do not delete either between phases.
+The create phase checks that previews leave the real file untouched, exact retries do not write again
+or duplicate, and stale revisions cannot change the disk. The verify phase compares the saved bytes
+and all four views (flows, evidence, annotations, geometry) with the pre-restart snapshot. Both
+render every view and save PNGs and JSON reports. Keep the report folder separate from the project,
+and delete neither between phases.

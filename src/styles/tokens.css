@@ -19,14 +19,19 @@
   --dc-text: #e6e9ee;
   --dc-text-muted: #98a1b0;
   --dc-text-faint: #808998;
-  --dc-selection: #5fd6c9;
-  --dc-selection-soft: rgba(95, 214, 201, 0.16);
+  --dc-edge-text: #a0a8b6;
+  /* The same values ThemeProvider writes from `render/theme/tokens.ts` (`DARK.selection`): a static
+     fallback that differed painted one teal, then flashed another when React mounted. */
+  --dc-selection: #6cb3aa;
+  --dc-selection-soft: rgba(108, 179, 170, 0.16);
   --dc-edge: #6d7885;
   --dc-edge-label-bg: #12151a;
   --dc-code-bg: #12151a;
   --dc-shadow: rgba(0, 0, 0, 0.45);
 
-  --dc-danger: #e2687f;
+  /* Both themes' danger text holds 4.5:1 on its own hover tint (`.dc-button-danger:hover` mixes 16% of it
+     into the surface): #e2687f was 4.34:1 there in dark and #c2455f 3.89:1 in light. */
+  --dc-danger: #ea7087;
   /* Waiting, reconnecting, "check this": amber that reads as text (4.5:1) on its own theme's surfaces. */
   --dc-caution: #e3a33b;
 
@@ -59,13 +64,19 @@
   --dc-status-height: 32px;
 
   --dc-shadow-panel: 0 8px 30px -8px var(--dc-shadow), 0 1px 2px rgba(0, 0, 0, 0.2);
-  /* The header's pieces, lying on the sheet: barely lifted, the way paper rests on a drafting table. */
+  /* A banner lying on the sheet, over the drawing: barely lifted, the way paper rests on a drafting
+     table. The header's own pieces sit on bare ground and take a hairline alone. */
   --dc-island-shadow: 0 1px 2px rgba(0, 0, 0, 0.07), 0 8px 22px -12px var(--dc-shadow);
 
   /* Decelerating, never springy: things arrive and settle, nothing bounces. */
   --dc-ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
   /* Accelerate, then settle — for something that travels, not something arriving. */
   --dc-ease-in-out: cubic-bezier(0.45, 0.05, 0.2, 1);
+  /* How long the chrome takes to arrive, by size of surface: a menu or toast is quick, a dialog a
+     touch slower, so the same kind of thing always moves at the same pace. */
+  --dc-dur-fast: 120ms;
+  --dc-dur: 160ms;
+  --dc-dur-slow: 220ms;
 
   color-scheme: dark;
 }
@@ -73,7 +84,7 @@
 :root[data-theme='light'] {
   color-scheme: light;
   --dc-surface-hover: color-mix(in srgb, var(--dc-text) 6%, var(--dc-surface));
-  --dc-danger: #c2455f;
+  --dc-danger: #b0334d;
   --dc-caution: #9a6412;
   --dc-shadow-panel: 0 8px 28px -10px rgba(19, 24, 32, 0.22), 0 1px 2px rgba(19, 24, 32, 0.08);
 }
@@ -92,14 +103,16 @@
     --dc-border-strong: #b9c0ca;
     --dc-text: #1a1d23;
     --dc-text-muted: #59606d;
-    --dc-text-faint: #6a7280;
-    --dc-selection: #0a746b;
-    --dc-selection-soft: rgba(15, 143, 132, 0.12);
+    /* 4.5:1 on a hovered row too (`--dc-surface-hover` tints toward the text): #6a7280 was 4.30:1 there. */
+    --dc-text-faint: #666e7c;
+    --dc-edge-text: #6a7280;
+    --dc-selection: #2c6f68;
+    --dc-selection-soft: rgba(44, 111, 104, 0.12);
     --dc-edge: #7c8492;
     --dc-edge-label-bg: #ffffff;
     --dc-code-bg: #f7f8fa;
     --dc-shadow: rgba(19, 24, 32, 0.1);
-    --dc-danger: #c2455f;
+    --dc-danger: #b0334d;
     --dc-caution: #9a6412;
     --dc-shadow-panel: 0 8px 28px -10px rgba(19, 24, 32, 0.22), 0 1px 2px rgba(19, 24, 32, 0.08);
     color-scheme: light;

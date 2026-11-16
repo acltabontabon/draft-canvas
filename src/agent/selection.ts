@@ -15,6 +15,7 @@ import { ownerAt, viewOf, type DepthPath } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
 import { collectNotes, collectSnippets } from './context';
 import { c4Of, relationshipOf } from './read';
+import { sequenceRead } from './sequences';
 import { typeWordOf } from './vocabulary';
 
 /** How many context (unselected) elements/relationships ride along, at most. */
@@ -65,10 +66,16 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
 
   const elements: unknown[] = [];
   const groups: unknown[] = [];
+  const sequences: unknown[] = [];
   for (const id of [...selectedNodes, ...contextNodes]) {
     const node = byId.get(id);
     if (!node) continue;
     const role = selectedNodes.has(id) ? 'selected' : 'context';
+    if (node.type === 'sequence') {
+      // As update_diagram takes it back; in full when it is what was selected.
+      sequences.push({ ...sequenceRead(node, role === 'selected'), role });
+      continue;
+    }
     if (node.type === 'group') {
       groups.push({ id: node.id, label: node.text ?? '', role, ...(node.parentId ? { parent: node.parentId } : {}) });
       continue;
@@ -107,6 +114,7 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
     elements,
     relationships,
     ...(groups.length ? { groups } : {}),
+    ...(sequences.length ? { sequences } : {}),
     ...(notes.length ? { notes } : {}),
     ...(snippets.length ? { snippets } : {}),
     ...(notesTruncated || snippetsTruncated || neighborsTruncated ? { truncated: { ...(notesTruncated ? { notes: true } : {}), ...(snippetsTruncated ? { snippets: true } : {}), ...(neighborsTruncated ? { neighbors: true } : {}) } } : {}),

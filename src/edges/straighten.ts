@@ -1,25 +1,45 @@
 import { visibleEdges } from '../document/compensation';
 import { moveNodes } from '../document/operations';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
-import { rectOf } from './routing';
+import { connectorRoutes } from './connectorRoutes';
+import { NEAR_LEVEL, rectOf } from './routing';
 import { straightOffset } from './straight';
 
 /**
- * Straighten: the light alternative to Arrange. Every connector that misses running straight by a
- * few pixels — a kink a caption hangs off, or a jog right before the arrowhead — has one of its
- * shapes nudged onto the line (`straightOffset`: each shape's anchor axis, the middle of a tube or
- * a Data Store's glyph), and nothing else moves. A layout stays the layout it was.
+ * Straighten: the light alternative to Arrange. Every connector that is *drawn* with a kink — a jog a
+ * caption hangs off, or a step right before the arrowhead — has one of its shapes nudged onto the
+ * line (`straightOffset`: each shape's anchor axis, the middle of a tube or a Data Store's glyph), and
+ * nothing else moves. A layout stays the layout it was.
  *
- * Shapes joined by a line that is already straight move together, so straightening one connector
- * never kinks another; a move that would push a shape onto another, or out of its boundary, is
- * tried the other way round and otherwise left alone. Pure: the store commits the result as one
- * undo step (`editorStore.straighten`).
+ * "Drawn" is what the router draws, not what the anchors say: where two shapes are a few pixels out of
+ * line the router already slides an automatic end along its side to meet the other (`NEAR_LEVEL` in
+ * `routing.ts`), so the line is straight and there is nothing to straighten. Nudging those shapes
+ * anyway reported a change that changed nothing anyone could see. A connector the router draws
+ * straight is left alone and stays straight: its two shapes move together if either is moved for
+ * another connector's sake, as shapes joined by an exactly level line do.
+ *
+ * A move that would push a shape onto another, or out of its boundary, is tried the other way round
+ * and otherwise left alone. Pure: the store commits the result as one undo step
+ * (`editorStore.straighten`).
  */
 
-/** The largest kink Straighten removes. Past this a misalignment is a layout choice, not a slip. */
-export const STRAIGHTEN_LIMIT = 16;
+/**
+ * The largest kink Straighten removes. The router hides a slip itself — it slides an automatic end up to
+ * `NEAR_LEVEL` (24) along its side, so two default shapes up to 26 px out of line draw straight — and
+ * the first jog it draws is a step (27 px between two default shapes). This takes the next few: a step
+ * small enough still to be an accident. Past it a misalignment is a layout choice, not a slip.
+ * Measured on the gallery's starters, which are authored layouts: of their 95 facing connectors 69
+ * are drawn straight and none has a jog between 0.5 and 48 px, so the limit takes nothing a person
+ * drew on purpose (`tests/starter-files.test.ts` holds it).
+ */
+export const STRAIGHTEN_LIMIT = NEAR_LEVEL + 8;
 
-/** Below this two ends are level already: what a drag snap or a past straighten leaves. */
+/**
+ * At or below this two ends are level already: what a drag snap or a past straighten leaves — and the
+ * half pixel two shapes of odd and even height leave between their middles, which no whole-pixel nudge
+ * can remove. Inclusive: with a strict `<`, a half-pixel miss counted as a kink, and was "straightened"
+ * by a nudge `moveNodes` rounded away again (a diagram that was never quite tidy).
+ */
 const LEVEL = 0.5;
 
 interface Graph {
@@ -69,6 +89,17 @@ export function straightenPositions(
     degree.set(edge.target, (degree.get(edge.target) ?? 0) + 1);
   }
   const offsetOf = (edge: DraftEdge) => straightOffset(edge, rectOf(live(edge.source)), rectOf(live(edge.target)));
+  // Which connectors the router draws straight as things stand, though their anchors are a few pixels
+  // apart. Asked once, of the graph as given: the plans it reads are built once for it, and the
+  // answer is what the person sees.
+  const slid = new Set<string>();
+  const drawn = { nodes: graph.nodes, edges: graph.edges };
+  for (const edge of edges) {
+    const offset = offsetOf(edge);
+    if (!offset || Math.abs(offset.delta) <= LEVEL || Math.abs(offset.delta) > STRAIGHTEN_LIMIT + NEAR_LEVEL) continue;
+    const route = connectorRoutes(edge, drawn, 'transient', byId)?.request;
+    if (route && Math.abs(offset.axis === 'y' ? route.source.y - route.target.y : route.source.x - route.target.x) <= LEVEL) slid.add(edge.id);
+  }
 
   for (const axis of ['y', 'x'] as const) {
     // Rigid groups: shapes a straight line on this axis already joins.
@@ -88,14 +119,14 @@ export function straightenPositions(
     const joinLevel = () => {
       for (const edge of edges) {
         const offset = offsetOf(edge);
-        if (offset?.axis === axis && Math.abs(offset.delta) < LEVEL) union(edge.source, edge.target);
+        if (offset?.axis === axis && (Math.abs(offset.delta) <= LEVEL || slid.has(edge.id))) union(edge.source, edge.target);
       }
     };
     joinLevel();
 
     const kinks = edges
       .map((edge) => ({ edge, offset: offsetOf(edge) }))
-      .filter(({ offset }) => offset?.axis === axis && Math.abs(offset.delta) >= LEVEL && Math.abs(offset.delta) <= limit)
+      .filter(({ edge, offset }) => offset?.axis === axis && Math.abs(offset.delta) > LEVEL && Math.abs(offset.delta) <= limit && !slid.has(edge.id))
       .sort((a, b) => Math.abs(a.offset!.delta) - Math.abs(b.offset!.delta));
 
     const tryMove = (ids: string[], by: number): boolean => {
@@ -123,7 +154,7 @@ export function straightenPositions(
 
     for (const { edge } of kinks) {
       const offset = offsetOf(edge);
-      if (!offset || offset.axis !== axis || Math.abs(offset.delta) < LEVEL || Math.abs(offset.delta) > limit) continue;
+      if (!offset || offset.axis !== axis || Math.abs(offset.delta) <= LEVEL || Math.abs(offset.delta) > limit || slid.has(edge.id)) continue;
       const sourceRoot = find(edge.source);
       const targetRoot = find(edge.target);
       if (sourceRoot === targetRoot) continue;

@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 23;
+export const CURRENT_VERSION = 28;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -31,6 +31,7 @@ export const NODE_TYPES = [
   'queue',
   'actor',
   'component',
+  'sequence',
 ] as const;
 
 export type DraftNodeType = (typeof NODE_TYPES)[number];
@@ -121,6 +122,8 @@ export type Side = (typeof SIDES)[number];
 export interface EdgeAnchor {
   side: Side;
   offset: number;
+  /** When present, the offset runs down this sequence participant's lifeline. */
+  participantId?: string;
 }
 
 export const GRID_MODES = ['dots', 'lines', 'none'] as const;
@@ -350,6 +353,8 @@ export interface DraftInside {
   nodes: DraftNode[];
   edges: DraftEdge[];
   flows: DraftFlow[];
+  /** Handwritten annotation over this room's shapes — see `DraftInk`. Absent when there is none. */
+  ink?: DraftInk[];
   viewport: DraftViewport;
   /** Only ever what someone actually chose, or what a starter declared — never a guess, and never
    *  the value a room simply inherits from the one outside it. See `depth/level.ts`. */
@@ -390,10 +395,16 @@ export interface DraftNode {
   /**
    * What it is built with ("Spring Boot", "PostgreSQL 16") — displayed as a recognized technology
    * logo or a generic technology mark. The full value is retained for details and source exports.
-   * Architecture shapes only (`C4_TEXT_TYPES`). Not a kind: it never changes the silhouette or the
-   * connector semantics, which follow `serviceKind`/`databaseKind`/… exactly as before.
+   * Architecture shapes only (`C4_TEXT_TYPES`). Setting a known product can set the kind as well —
+   * Redis makes a Data Store a cache, Kafka a Queue a topic (`technologyKind.ts`) — but only a kind
+   * still at its default or one an earlier technology set (`kindOrigin`); a picked kind stays.
    */
   technology?: string;
+  /**
+   * `'technology'`: the kind (`serviceKind`/`databaseKind`/`queueKind`) was set by `technology`
+   * rather than picked, so a later technology may change it again. Absent: picked, or the default.
+   */
+  kindOrigin?: 'technology';
   /**
    * Whether `text` is a system-managed placeholder or a name the user chose — the same
    * "may this be silently recomputed?" question `DraftEdge.semanticsOrigin` answers for an edge's
@@ -414,6 +425,12 @@ export interface DraftNode {
   code?: string;
   /** `service` nodes only. */
   serviceKind?: ServiceKind;
+  /**
+   * `service` nodes only. How many instances of it run — 2 to `LIMITS.maxReplicas`, drawn as a
+   * stack with a small ×N. Absent is one. Read by Traffic: a queue's consumer with replicas has
+   * competing consumers.
+   */
+  replicas?: number;
   /** `database` nodes only. */
   databaseKind?: DatabaseKind;
   /** `queue` nodes only. */
@@ -437,7 +454,7 @@ export interface DraftNode {
    * at normal weight — smaller, muted text, still zero-semantics, still no box. Absent/`false` is
    * the Label primitive's one existing look, unchanged; this never affects any other node type.
    * Superseded by `textRole` going forward (see below) but kept exactly as-is: every starter in
-   * `src/starters/catalog.ts` still sets this, not `textRole`, and must keep rendering unchanged.
+   * the starters gallery's files (exported from the old catalog) still set this, not `textRole`, and must keep rendering unchanged.
    */
   annotation?: boolean;
   /**
@@ -465,7 +482,150 @@ export interface DraftNode {
    * was retyped.
    */
   inside?: DraftInside;
+  /** `sequence` nodes only — what the sequence says. See `DraftSequence`. */
+  sequence?: DraftSequence;
 }
+
+/**
+ * A sequence diagram, held whole inside one `sequence` node.
+ *
+ * This is what is said, never where anything is drawn: who takes part, in which order, what passes
+ * between them and under which condition. Every position on the canvas is worked out from it by
+ * `sequence/layout.ts`, so nothing here can drift out of line and nothing is read back from
+ * coordinates. Ids are unique within the one sequence and mean nothing outside it, which is what
+ * lets a copied sequence keep them.
+ */
+export interface DraftSequence {
+  /** Left to right. */
+  participants: SeqParticipant[];
+  /** Participants drawn together under a name. Looks only — see `SeqGroup`. */
+  groups?: SeqGroup[];
+  /** Top to bottom. */
+  items: SeqItem[];
+  /** Show message numbers on the diagram. Defaults to on. */
+  numberMessages?: boolean;
+}
+
+/** The shapes a participant may be: the ones that stand for a piece of architecture. */
+export type SeqParticipantType = (typeof C4_TEXT_TYPES)[number];
+
+/**
+ * One lifeline. It carries the same identity fields as an architecture shape, on purpose: its head
+ * is drawn by the same code (`nodes/describe.ts`), its technology is recognised by the same
+ * catalogue, and what it may sensibly say to its neighbours is read off the same matrix
+ * (`connectorSemantics.ts`'s `categoryOf`).
+ */
+export interface SeqParticipant {
+  id: string;
+  name: string;
+  type: SeqParticipantType;
+  serviceKind?: ServiceKind;
+  databaseKind?: DatabaseKind;
+  queueKind?: QueueKind;
+  deliveryRole?: DeliveryRole;
+  actorKind?: ActorKind;
+  componentKind?: ComponentKind;
+  technology?: string;
+  /** As `DraftNode.kindOrigin`: the kind followed the technology, so a later one may move it. */
+  kindOrigin?: 'technology';
+  accent?: Accent;
+  /**
+   * The shape on the canvas this participant stands for, by id, in the same view. The two are one
+   * thing in two places: renaming or retyping either changes the other (`sequenceLinks.ts`). Kept
+   * even when nothing answers to it — a shape deleted by someone else, a sequence pasted into
+   * another diagram — because one node is checked on its own in a shared session and cannot see
+   * its neighbours; a link that leads nowhere is simply not drawn.
+   */
+  ref?: string;
+}
+
+/**
+ * Participants drawn together under a name: "Backend", "External systems". It says nothing about
+ * what happens — that is what a `SeqFragment` is for — so it is drawn as a quiet band behind the
+ * lifelines, never as a frame. Its members always stand side by side.
+ */
+export interface SeqGroup {
+  id: string;
+  name: string;
+  accent?: Accent;
+  participantIds: string[];
+}
+
+/**
+ * `sync` is a call that waits; `async` one that does not. `reply` answers an earlier call. `create`
+ * brings its receiver into being at that point, and `destroy` ends it there.
+ */
+export const SEQ_MESSAGE_KINDS = ['sync', 'async', 'reply', 'create', 'destroy'] as const;
+export type SeqMessageKind = (typeof SEQ_MESSAGE_KINDS)[number];
+
+export interface SeqMessage {
+  id: string;
+  t: 'message';
+  /** Participant ids. The same one twice is a message to itself. */
+  from: string;
+  to: string;
+  kind: SeqMessageKind;
+  label: string;
+  /** Supporting note and code cards attached to this arrow. */
+  attachments?: Attachment[];
+  /** A reply's call, by id. Absent on a reply that answers nothing in particular. */
+  replyTo?: string;
+  /**
+   * The receiver starts working when this arrives: the bar on its lifeline begins here. Written
+   * when the message is made (a call starts work, by default) and then left alone, so the bar is
+   * never a guess about a message someone changed since.
+   */
+  activate?: true;
+  /** The sender's work ends as this leaves: its innermost bar stops here. */
+  deactivate?: true;
+  /** `'explicit'`: someone chose `kind`, so a suggestion is no longer offered for it. */
+  kindOrigin?: 'explicit';
+}
+
+/**
+ * `alt` one of several branches, `opt` one that may not happen, `loop` repeated, `par` branches
+ * with no order between them, `break` leaves the enclosing interaction, `critical` not to be
+ * interleaved, `ref` stands for another interaction drawn elsewhere.
+ */
+export const SEQ_OPERATORS = ['alt', 'opt', 'loop', 'par', 'break', 'critical', 'ref'] as const;
+export type SeqOperator = (typeof SEQ_OPERATORS)[number];
+
+/** The operators that may have more than one branch. Every other holds exactly one; `ref` none. */
+export const SEQ_BRANCHING_OPERATORS: readonly SeqOperator[] = ['alt', 'par'];
+
+export interface SeqOperand {
+  id: string;
+  /** The condition this branch runs under, without its brackets. */
+  guard?: string;
+  items: SeqItem[];
+}
+
+/** A combined fragment. Its messages belong to it; it is never a box drawn around them. */
+export interface SeqFragment {
+  id: string;
+  t: 'fragment';
+  operator: SeqOperator;
+  /** `ref` only: the interaction referred to. */
+  label?: string;
+  /** `ref` only: the participants it covers. Absent is all of them. */
+  covers?: string[];
+  operands: SeqOperand[];
+}
+
+export const SEQ_NOTE_SIDES = ['left', 'right'] as const;
+export type SeqNoteSide = (typeof SEQ_NOTE_SIDES)[number];
+
+export interface SeqNote {
+  id: string;
+  t: 'note';
+  text: string;
+  /** The participants it sits over, at least one. */
+  over: string[];
+  /** Beside its (first) participant rather than over it. */
+  side?: SeqNoteSide;
+}
+
+export type SeqItem = SeqMessage | SeqFragment | SeqNote;
 
 export interface EdgeDetails {
   language: CodeLanguage;
@@ -476,6 +636,48 @@ export interface EdgeDetails {
 export interface DraftPoint {
   x: number;
   y: number;
+}
+
+/**
+ * What drew a stroke. A pen line is the annotation itself; a highlighter is a wide, translucent mark
+ * laid over what it emphasises. Both are ink, never architecture.
+ */
+export const INK_TOOLS = ['pen', 'highlighter'] as const;
+export type InkTool = (typeof INK_TOOLS)[number];
+
+/**
+ * The few inks a stroke can be drawn in — markers on a whiteboard, not a colour picker. `graphite`
+ * is the drawing's own ink (light on a dark canvas, dark on a light one); the rest are the usual
+ * red/blue/green pens and a yellow for highlighting. Each theme maps them (`render/ink.ts`).
+ */
+export const INK_COLORS = ['graphite', 'red', 'blue', 'green', 'yellow'] as const;
+export type InkColor = (typeof INK_COLORS)[number];
+
+/**
+ * One handwritten stroke, laid over a room's shapes: a circled service, an underline, a margin
+ * scribble during a review. Annotation only — a stroke has no meaning to routing, layout,
+ * semantics, Arrange, Tidy up or agents, and nothing ever turns one into a shape by itself. Smart
+ * Ink (`src/ink/`) only *offers* that, and a conversion is an ordinary edit that undo reverses.
+ *
+ * Stored compactly and in room coordinates: `x`/`y` place the stroke, and `points` are the
+ * flattened `[dx0, dy0, dx1, dy1, …]` offsets from there, rounded to a tenth of a unit — so moving
+ * a stroke rewrites two numbers, not its every point, and a collaborator's change carries the same.
+ */
+export interface DraftInk {
+  id: string;
+  tool: InkTool;
+  color: InkColor;
+  /** Nominal line width in room units — the pen's width at full pressure. */
+  size: number;
+  x: number;
+  y: number;
+  /** Flattened offset pairs from `x`/`y`. At least one pair; a single pair is a dot. */
+  points: number[];
+  /**
+   * Pen pressure at each point, 0–100 — only when the device reported real pressure (a stylus).
+   * Absent draws an even line, which is what a mouse or a finger produces anyway.
+   */
+  pressure?: number[];
 }
 
 export interface DraftEdge {
@@ -511,6 +713,12 @@ export interface DraftEdge {
    * evaluated — display only.
    */
   condition?: string;
+  /**
+   * How often this connector moves its data — "streaming", "hourly", "daily 02:00". Shown as a
+   * small chip under the caption, beside a condition. Free text; the connector panel offers the
+   * common answers (`CADENCE_PRESETS`). Display only.
+   */
+  cadence?: string;
   /**
    * Free-text response chip for a synchronous call, e.g. "200 Customer",
    * "404 Not Found". Distinct from `condition`: `condition` says *when* a
@@ -684,6 +892,17 @@ export interface DraftMetadata {
   /** The project this canvas belongs to, if any — see `Project`. A canvas
    *  belongs to zero or one project; absent means Unorganized. */
   projectId?: string;
+  /**
+   * The gallery starter this canvas began as, and that file's SHA-256 — so the editor can say when
+   * the starter has since been updated (`src/gallery/`). Bookkeeping only: never shared with
+   * collaborators, and nothing about the canvas depends on it.
+   */
+  origin?: DraftOrigin;
+}
+
+export interface DraftOrigin {
+  starter: string;
+  sha256: string;
 }
 
 /**
@@ -807,6 +1026,12 @@ export interface DraftDocument {
   viewport: DraftViewport;
   settings: DraftSettings;
   flows: DraftFlow[];
+  /**
+   * Handwritten annotation over this graph's shapes (`DraftInk`), per room like `flows`: a sketch
+   * belongs to the view it was drawn on. Absent — never an empty array — when there is none, which
+   * is every file written before v28.
+   */
+  ink?: DraftInk[];
   /**
    * Root-only, like `settings` and unlike `flows`: a room is a room, but the meeting is the file.
    * `DraftInside` deliberately has no counterpart, so `depth/tree.ts`'s `embed` has to carry this back

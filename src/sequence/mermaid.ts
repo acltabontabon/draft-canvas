@@ -26,14 +26,14 @@ const GROUP_FILL = 'rgb(240, 240, 240)';
 
 const INDENT = '    ';
 
-function mermaidKeyword(kind: ParticipantKind): 'actor' | 'participant' {
+export function mermaidKeyword(kind: ParticipantKind): 'actor' | 'participant' {
   return kind === 'actor' ? 'actor' : 'participant';
 }
 
 /** Everything after `as` is the display name, verbatim to the end of the line — colons, quotes and
  *  backslashes included (checked against Mermaid 11). Quoting it would put the quotes on screen; only
  *  the statement-level characters `escapeMermaidText` handles, and line breaks, need care. */
-function sanitizeParticipantName(label: string): string {
+export function sanitizeParticipantName(label: string): string {
   return escapeMermaidText(label.replace(/\r\n?|\n/g, ' ').trim()) || 'Participant';
 }
 
@@ -54,7 +54,7 @@ export function escapeMermaidText(text: string): string {
 /** A message's label runs from the first `:` after the arrow to the end of the line, and a colon
  *  inside it is just text — `GET /orders: by id` is what the author wrote (checked against Mermaid
  *  11's grammar, which splits on the first colon only). Only line breaks need collapsing. */
-function sanitizeMessageLabel(label: string): string {
+export function sanitizeMessageLabel(label: string): string {
   const clean = escapeMermaidText(label.replace(/\r\n?|\n/g, ' ').trim());
   return clean || 'Message';
 }
@@ -69,7 +69,7 @@ function sanitizeMessageLabel(label: string): string {
  * literal `<br/>` — Mermaid's own documented line-break token inside note text, not a hack. A colon
  * is kept: `Note over A: text` splits on its first colon only, so the ones in the text are text.
  */
-function sanitizeNoteText(text: string, code = false): string {
+export function sanitizeNoteText(text: string, code = false): string {
   const lines = noteLines(text, code)
     .map((line) => escapeMermaidText(line.trim()))
     .filter((line) => line.length > 0);

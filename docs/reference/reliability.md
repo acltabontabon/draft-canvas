@@ -19,9 +19,11 @@
 ## Recovery guarantees and limits
 
 - **IndexedDB saves** write summary and body in one transaction. A failed autosave keeps the
-  document for retry or export. Conflicts always ask.
-- **Autosave** runs 700 ms after the last edit, or within 4 s of continuous editing. A crash or power
-  loss can still lose unsaved edits.
+  document and the status bar says why (storage full, connection lost, other) with **Retry**,
+  **Export** and **Leave without saving**; panning does not retry a failed save. Conflicts always ask.
+- **Autosave** runs 700 ms after the last edit, or within 4 s of continuous editing. A write of
+  only the camera (pan, zoom) waits for 3.5 s of stillness, or lands about every 10 s of continuous
+  moving, and never shows as unsaved. A crash or power loss can still lose unsaved edits.
 - **Reload stash** covers same-tab refresh only, and fails when storage is full.
 - **Persistent storage** lowers eviction risk only; backup reminders still apply.
 - **Backups** skip unreadable diagrams and report it; a partial backup does not reset the

@@ -19,6 +19,14 @@
   background: transparent;
 }
 
+/* Empty canvas is not a target: a click on it only clears the selection, and a drag is a marquee.
+   React Flow gives the pane a pointing hand while a marquee can start from it (`selectionOnDrag`),
+   which read as "click here" over nothing, against the grab on shapes and the crosshair of an armed
+   tool. The armed tool, the Pencil, Present and a recovery arrow set their own, further down. */
+.dc-canvas .react-flow__pane.selection {
+  cursor: default;
+}
+
 /* The whole diagram on its own compositor layer. Without it a pan moved an uncomposited transform,
  * so every frame re-layerized and re-painted every shape and connector, and the main thread spent
  * most of each frame waiting for that commit: at 500 shapes a pointer pan ran at 88 ms frames
@@ -33,10 +41,14 @@
   will-change: auto;
 }
 
-/* Keep keyboard focus for editing, without framing the whole drawing as a selected object.
- * An inset focus ring lingered after deleting shapes; selected nodes and edges carry feedback. */
+/* The canvas is the one Tab stop for the drawing, so keyboard focus on it has to be visible: with
+ * `outline: none` there was no sign of where Tab had landed. An inset ring — a negative offset, so it
+ * never moves the layout — and only for keyboard modality (`:focus-visible`), so a click that focuses
+ * the canvas draws nothing. (It once lingered after deleting shapes with the mouse; that was the
+ * pointer-focus case, which `:focus-visible` no longer matches.) */
 .dc-canvas:focus-visible {
-  outline: none;
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
 /* ------------------------------------------------------- 5.1 background -- */
@@ -127,7 +139,8 @@
   content: '';
   position: absolute;
   inset: -4px;
-  border: 1.5px solid var(--dc-selection);
+  /* A full 2px: at 1.5 the ring was barely heavier than the outline of the shape it surrounds. */
+  border: 2px solid var(--dc-selection);
   border-radius: calc(var(--dc-radius) + 3px);
   pointer-events: none;
 }
@@ -141,13 +154,18 @@
   border-radius: 50%;
 }
 
+.dc-node[data-seq-editing='true']::after {
+  content: none;
+}
+
 /* A keyboard-navigated selection reads as a plain selection plus a soft outer glow, shown only
  * while `.dc-canvas` itself has real *keyboard* focus (`:focus-visible` already tells a Tab-driven
  * focus apart from a mouse click on this plain, non-form `tabIndex` element — no extra JS state
- * needed). One visual state (selection) carries the meaning; this is a subtle addition to it, not
- * a second, competing "focused but not selected" look. */
+ * needed). One visual state (selection) carries the meaning; this is an addition to it, not a
+ * second, competing "focused but not selected" look — but a plain one: wide and strong enough
+ * that "the arrow keys act on this" can be told from "this is selected" at a glance. */
 .dc-canvas:focus-visible .dc-node[data-selected='true']::after {
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dc-selection) 35%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 45%, transparent);
 }
 
 .dc-node[data-type='text'] {
@@ -257,19 +275,39 @@
   transition: opacity 90ms ease, visibility 90ms, width 90ms ease, height 90ms ease;
 }
 
+/* What the hit rings of handles and bends are built from. A ring is drawn inside the zoomed layer,
+   so a size on screen is divided by `--dc-zoom` (published by `Canvas.tsx`) into the flow units it
+   is drawn in. */
+.dc-canvas {
+  /* The 9px dot a handle is drawn as, in flow units: no ring is smaller than it. */
+  --dc-handle-dot: 9px;
+  /* How big a ring is on screen, while the canvas is zoomed out as far as the cap allows. */
+  --dc-ring: 18px;
+  /* The most flow units a ring grows to while zooming out, so neighbouring anchors (44 units apart on
+     an ordinary shape) never swallow one another. Past it a ring shrinks with the zoom... */
+  --dc-ring-cap: 36px;
+  /* ...but only to this on screen. Capped alone, the ring was 3.6px at the furthest zoom out
+     (`minZoom` 0.1 in `Canvas.tsx`): a target nobody could hit. A connector end's ring
+     (`.dc-edge-endpoint`) holds its size on screen the same way. */
+  --dc-ring-floor: 9px;
+}
+
 /* An invisible hit ring that stays a comfortable size on screen as the canvas zooms out — the
-   9px dot itself is drawn in flow units and shrinks to a 2px target at 25%. `--dc-zoom` is
-   published by `Canvas.tsx`. The extra reach is pushed outward, off the node, so it never covers
-   the body a node drag starts from; capped so neighbouring anchors never overlap. */
+   9px dot itself is drawn in flow units and shrinks to a 2px target at 25%. The extra reach is
+   pushed outward, off the node, so it never covers the body a node drag starts from; capped so
+   neighbouring anchors never overlap, and never below the floor on screen. */
 .dc-handle,
 .dc-resize-handle {
-  --dc-hit: clamp(9px, calc(18px / var(--dc-zoom, 1)), 36px);
+  --dc-hit: max(
+    clamp(var(--dc-handle-dot), calc(var(--dc-ring) / var(--dc-zoom, 1)), var(--dc-ring-cap)),
+    calc(var(--dc-ring-floor) / var(--dc-zoom, 1))
+  );
 }
 
 .dc-handle::before,
 .dc-edge-endpoint::before,
 .dc-resize-handle::before {
-  --dc-out: calc((var(--dc-hit) - 9px) / 2);
+  --dc-out: calc((var(--dc-hit) - var(--dc-handle-dot)) / 2);
   content: '';
   position: absolute;
   top: 50%;
@@ -377,6 +415,11 @@
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--dc-selection) 25%, transparent);
 }
 
+.react-flow:not(.connecting) .dc-node[data-seq-editing='true'] .dc-handle {
+  opacity: 0;
+  visibility: hidden;
+}
+
 /* Present mode keeps the handles in the DOM but out of sight. */
 .dc-editor[data-mode='present'] .dc-handle {
   opacity: 0 !important;
@@ -392,7 +435,8 @@
 /* A boundary's outline *is* its kind and colour, and its resize line would sit exactly on top of
  * it — hiding the colour whenever it's selected. The ring just outside says "selected"; the line
  * stays as an invisible grab strip for resizing. */
-.dc-node[data-type='group'] .dc-resize-line {
+.dc-node[data-type='group'] .dc-resize-line,
+.dc-node[data-type='sequence'] .dc-resize-line {
   opacity: 0;
 }
 
@@ -445,10 +489,23 @@
   cursor: default;
 }
 
-/* A connector's relationship caption belongs to it: clicking the words selects it, like its label. */
+/* A connector's relationship caption belongs to it: clicking the words selects it, like its label.
+   It sits in the label layer above every line, on the same quiet canvas-toned mask as a label
+   (`.dc-edge-label`), only closer around its text: a line that runs under the words is erased there
+   rather than striking through them. `CAPTION_PADDING_X`/`_Y` in `edges/labelLayout.ts`, which the
+   exporter's backing uses too. */
 .dc-edge-caption {
-  pointer-events: visiblePainted;
+  position: absolute;
+  padding: 1px 3px;
+  border-radius: var(--dc-radius-xs);
+  background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
+  text-shadow: 0 0 3px var(--dc-canvas);
+  white-space: pre;
+  pointer-events: all;
   cursor: pointer;
+  -webkit-user-select: none;
+  user-select: none;
+  transition: opacity 180ms ease;
 }
 
 /* A node's connection handle sits over the last stretch of every arrow; while the pointer is really
@@ -520,6 +577,17 @@
   stroke-width: clamp(10px, calc(30px / var(--dc-zoom, 1)), 72px);
 }
 
+/* Lines from the other selected shapes to the pointer while a fan-in connection is dragged. */
+.dc-fan-in-preview {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+}
+
 /* Escape during a new-connector drag. React Flow has no cancel and redraws its live line on every
    pointer move until release, so once cancelled the line is simply not shown (`Canvas.tsx` vetoes
    the connection itself). */
@@ -563,7 +631,9 @@
 /* A dragged note/code card is hovering this connector's own hit corridor — dropping now folds it
  * into an attachment. A brighter, wider glow than selection's, so "drop here" reads as a distinct
  * signal, not as "this happens to be selected". */
-.dc-edge[data-attach-target='true'] .dc-edge-line {
+.dc-edge[data-attach-target='true'] .dc-edge-line,
+/* Same signal for a dragged, unconnected shape that would be put into the middle of this connector. */
+.dc-edge[data-splice-target='true'] .dc-edge-line {
   filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-selection) 55%, transparent));
 }
 
@@ -613,7 +683,10 @@
  * points adds a bend. All of them keep a hit ring wider than they are drawn.
  */
 .dc-edge-bend {
-  --dc-hit: clamp(12px, calc(18px / var(--dc-zoom, 1)), 28px);
+  --dc-hit: max(
+    clamp(12px, calc(var(--dc-ring) / var(--dc-zoom, 1)), 28px),
+    calc(var(--dc-ring-floor) / var(--dc-zoom, 1))
+  );
   position: absolute;
   width: 8px;
   height: 8px;
@@ -715,8 +788,8 @@
   back to full strength while hovered or being edited, so reaching for one still reads. Keep
      `font-size` equal to `TEXT_SIZES.edgeLabel` — the export lays the label out with it, and
      `tests/connector-text.test.ts` holds the two together. */
-  color: var(--dc-text-faint);
-  font-size: 9.5px;
+  color: var(--dc-edge-text);
+  font-size: 10.5px;
   font-weight: 500;
   line-height: 1.35;
   white-space: nowrap;
@@ -958,8 +1031,8 @@
   padding: 1px 3px;
   border-radius: 3px;
   background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
-  color: var(--dc-text-faint);
-  font-size: 9.5px;
+  color: var(--dc-edge-text);
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   pointer-events: none;
@@ -1141,6 +1214,17 @@
 
 .dc-attachment-chip-row[data-flip='below'] .dc-attachment-card {
   top: calc(100% + 6px);
+}
+
+/* The sequence already provides the chip. Measure and place its card directly. */
+.dc-attachment-slot[hidden],
+.dc-attachment-chip-row[data-direct-card] .dc-attachment-chip {
+  display: none;
+}
+
+.dc-attachment-chip-row[data-direct-card] .dc-attachment-card {
+  position: static;
+  transform: none;
 }
 
 /* The animation lives here, separate from the positioned outer element above — see the matching
@@ -1459,7 +1543,8 @@
   content: '';
   position: absolute;
   inset: -4px;
-  border: 1.5px solid var(--dc-selection);
+  /* A full 2px: at 1.5 the ring was barely heavier than the outline of the shape it surrounds. */
+  border: 2px solid var(--dc-selection);
   border-radius: calc(var(--dc-radius) + 3px);
   pointer-events: none;
 }
@@ -1589,31 +1674,40 @@
   /* Clickable even while presenting, when React Flow stops nodes receiving the pointer — the badge
   is how a presenter asks a node to speak (same as a connector's chips). */
   pointer-events: all;
-  /* Sits fully above the node's top edge rather than straddling the
-  top-right corner, which is exactly where the resize handle grabs —
-  a badge there would sit on top of it and block that corner. */
-  top: -22px;
-  right: 6px;
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  padding: 2px 7px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-pill);
-  background: var(--dc-surface);
+  /* Placed by `document/markerRail.ts` (inline `left`/`top`/`width`): one row above the shape's
+  top-right corner that the technology mark and the open-point tab share, wholly above the top
+  edge so it never sits on the corner the resize handle grabs. The picture is the exporter's own
+  (`describeAttachmentTab`); this is only the button around it. */
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
   color: var(--dc-text-muted);
-  font-size: 10.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.4;
   cursor: pointer;
-  box-shadow: var(--dc-shadow-panel);
+}
+
+.dc-attachment-badge > svg {
+  display: block;
+  overflow: visible;
+}
+
+/* A 28px target around a 16px tab, as the open-point marker has. */
+.dc-attachment-badge::before {
+  content: '';
+  position: absolute;
+  inset: -6px;
 }
 
 .dc-attachment-badge:hover,
 .dc-attachment-badge[data-open='true'] {
-  color: var(--dc-text);
-  border-color: var(--dc-selection);
+  outline: 1.5px solid var(--dc-selection);
+  outline-offset: 0;
+}
+
+.dc-attachment-badge:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
 }
 
 /* The depth glyph (`DepthGlyph`): a tiny stack of three flat layers. Colour is `currentColor`; a
@@ -1939,10 +2033,13 @@
   flex: none;
 }
 
-/* A selected shape reads as a small canvas card: identity above, contextual actions below. */
+/* A selected shape reads as a small canvas card: identity above, contextual actions below.
+   400px, not 340: a default Service's identity row (swatch, kind, instances, details, divider, two
+   actions) needs about 360, and at 340 the only two shrinkable items — the kind select and the
+   Details label — ellipsised to "Gene…" and "Deta…" on every new Service. */
 .dc-element-inspector {
   width: max-content;
-  max-width: min(340px, calc(100vw - 24px));
+  max-width: min(400px, calc(100vw - 24px));
 }
 
 .dc-element-identity-row {
@@ -1950,8 +2047,12 @@
   padding: 7px 8px;
 }
 
+/* The kind picker sizes to its label and only gives way when the row is genuinely out of room;
+   it never grows to fill spare width (which is what squeezed Details beside it). In a shape's
+   one-row popover it reads as text with a chevron — its border shows on hover or focus — so the
+   row is a line of words, not a form. */
 .dc-popover-config.dc-element-identity-row > .dc-inspector-select {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
 }
 
@@ -1966,6 +2067,26 @@
   color: var(--dc-text-muted);
 }
 
+/* A Service's instance count: − ×3 +, the count set in the tabular figures so the row never shifts. */
+.dc-element-replicas {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  color: var(--dc-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-element-replicas > span {
+  min-width: 2.2ch;
+  text-align: center;
+}
+
+/* The two steps are a glyph each; the row's usual 8px side padding made the stepper ~68px wide for
+   "− ×1 +", the widest single control on a default Service. */
+.dc-popover-row .dc-element-replicas .dc-button {
+  padding: 0 6px;
+}
+
 .dc-element-technology svg {
   flex: none;
 }
@@ -1976,9 +2097,11 @@
   white-space: nowrap;
 }
 
-/* Actor has both a kind and a frame picker. Keep the technology action legible as an icon
-   instead of squeezing its text into a meaningless "T…" between those controls. */
-.dc-element-inspector[data-node-type='actor'] .dc-element-technology {
+/* Until a technology is set the action is an icon, not the word "Details": Actor has both a kind
+   and a frame picker, and every other shape would otherwise spend a label on a control whose
+   tooltip already says what it opens. Once a technology is set its name takes the label. */
+.dc-element-inspector[data-node-type='actor'] .dc-element-technology,
+.dc-element-inspector .dc-element-technology[data-empty='true'] {
   flex: none;
   justify-content: center;
   width: var(--dc-popover-control);
@@ -2324,12 +2447,6 @@
   pointer-events: none;
 }
 
-/* The kind picker sizes to its label, and in a shape's one-row popover reads as text with a
-   chevron — its border shows on hover or focus — so the row is a line of words, not a form. */
-.dc-popover-config .dc-inspector-select {
-  flex: none;
-}
-
 .dc-element-inspector .dc-inspector-select-button {
   justify-content: flex-start;
   gap: 8px;
@@ -2368,8 +2485,9 @@
 }
 
 /* Recovery is a companion sketch beside the connector, so opening it does not turn the
- * inspector into a tall form or make the person scroll past the operation they are editing. */
-.dc-edge-inspector:has(.dc-recovery-action[data-open='true'], .dc-connector-flyout) .dc-popover-inner {
+ * inspector into a tall form or make the person scroll past the operation they are editing. An
+ * open dropdown is the same: it hangs past the panel's edge rather than growing a scroll area. */
+.dc-edge-inspector:has(.dc-recovery-action[data-open='true'], .dc-connector-flyout, .dc-inspector-select-menu) .dc-popover-inner {
   max-height: none;
   overflow: visible;
 }
@@ -2762,7 +2880,11 @@
 .dc-recovery-collapse:focus-visible {
   background: var(--dc-selection-soft);
   color: var(--dc-selection);
-  outline: none;
+}
+
+.dc-recovery-collapse:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
 .dc-recovery-show-arrow {
@@ -2862,7 +2984,11 @@
 .dc-recovery-protocol-button:hover,
 .dc-recovery-protocol-button:focus-visible {
   color: var(--dc-text);
-  outline: none;
+}
+
+.dc-recovery-protocol-button:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
 .dc-recovery-protocol-button[aria-pressed='true'] {
@@ -3597,7 +3723,7 @@
 
 .dc-quick-connect-item:hover,
 .dc-quick-connect-item:focus-visible {
-  background: var(--dc-surface-hover);
+  background: var(--dc-selection-soft);
   outline: none;
 }
 
@@ -3818,6 +3944,112 @@
   }
 }
 
+/* Every shape, by name (`ShapePicker`): a search field over rows of picture, name, one plain line
+   and the shape's key. */
+.dc-shape-picker {
+  width: 328px;
+  max-width: calc(100vw - 16px);
+  max-height: min(680px, calc(100dvh - 72px));
+  padding: 6px;
+  overflow: hidden;
+}
+
+.dc-shape-picker-search {
+  flex: none;
+  height: 34px;
+  margin: 0 0 2px;
+  padding: 0 10px;
+  border: 0;
+  border-bottom: 1px solid var(--dc-border);
+  border-radius: 0;
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.dc-shape-picker-search::placeholder {
+  color: var(--dc-text-faint);
+}
+
+/* The field holds focus for as long as the panel is open; its rule says so, and the highlighted
+   row says where Enter will land. */
+.dc-shape-picker-search:focus-visible {
+  border-bottom-color: var(--dc-selection);
+}
+
+.dc-shape-picker-list {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.dc-shape-picker-list > [role='group'] {
+  display: flex;
+  flex-direction: column;
+}
+
+.dc-shape-picker-heading {
+  padding: 9px 10px 4px;
+  color: var(--dc-text-faint);
+  font-family: var(--dc-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.dc-shape-option {
+  gap: 10px;
+  padding: 5px 8px;
+}
+
+.dc-shape-option-glyph {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--dc-text) 6%, transparent);
+  color: var(--dc-text-muted);
+}
+
+.dc-shape-option[data-highlighted='true'] .dc-shape-option-glyph {
+  background: none;
+  color: var(--dc-selection);
+}
+
+.dc-shape-option .dc-context-menu-title {
+  font-weight: 550;
+}
+
+.dc-shape-option[data-armed='true'] .dc-context-menu-title {
+  color: var(--dc-selection);
+}
+
+.dc-shape-picker-empty {
+  margin: 0;
+  padding: 14px 10px 12px;
+  color: var(--dc-text-muted);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.dc-shape-picker-foot {
+  flex: none;
+  margin: 4px 0 0;
+  padding: 8px 10px 4px;
+  border-top: 1px solid var(--dc-border);
+  color: var(--dc-text-faint);
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
 .dc-toolbar-menu-item .dc-new-dot[data-inline='true'],
 .dc-toolbar-menu-item .dc-update-dot[data-inline='true'] {
   position: static;
@@ -4016,8 +4248,18 @@
   text-align: center;
 }
 
+/*
+ * Everything here is a margin note on the sheet, not a page about it: the invitation in a quiet
+ * serif, the first keystrokes beneath it, and one line of ways to begin otherwise. Nothing in the
+ * middle of a blank canvas should be louder than the first shape someone is about to draw.
+ */
 .dc-empty-start {
-  max-width: 480px;
+  max-width: 440px;
+}
+
+/* Space kept, so the starters below do not jump when the chooser opens and closes. */
+.dc-empty-start[data-chooser='true'] {
+  visibility: hidden;
 }
 
 .dc-empty-title {
@@ -4030,10 +4272,11 @@
 }
 
 .dc-empty-start .dc-empty-title {
+  color: color-mix(in srgb, var(--dc-text) 72%, transparent);
   font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
-  font-size: clamp(34px, 4vw, 48px);
+  font-size: clamp(26px, 2.6vw, 32px);
   font-weight: 400;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.03em;
   line-height: 1.15;
 }
 
@@ -4044,85 +4287,96 @@
   line-height: 1.45;
 }
 
-.dc-empty-start .dc-empty-hint {
-  margin-top: 16px;
-  font-size: 13px;
-}
-
-/* Three small annotations teach the first keystroke without resembling another toolbar. */
+/* Three small annotations teach the first keystroke without resembling another toolbar. They are set
+   exactly like the line of links beneath (`.dc-empty-footer`): the same size, the same dot between
+   items, the same key style, so the two read as one quiet block rather than two different notes. */
 .dc-empty-keys {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   justify-content: center;
-  gap: 5px 18px;
-  margin: 14px 0 0;
+  gap: 4px 8px;
+  margin: 8px 0 0;
   color: var(--dc-text-faint);
-  font-size: 11px;
+  font-size: 11.5px;
   line-height: 20px;
 }
 
 .dc-empty-key {
+  padding: 0 6px;
   white-space: nowrap;
 }
 
-.dc-empty-keys kbd {
+/* The key in both lines: the letter or chord is the part to act on, so it is a step stronger than
+   the word beside it. */
+.dc-empty-keys kbd,
+.dc-empty-shortcut kbd {
   min-width: 0;
   padding: 0;
   border: 0;
   background: none;
   box-shadow: none;
   color: var(--dc-text-muted);
-  font: 600 10px/1 var(--dc-mono);
+  font: 600 10.5px/1.4 var(--dc-mono);
 }
 
 .dc-empty-pick {
   width: 100%;
-  margin-top: 32px;
+  margin-top: 36px;
 }
 
+/* No starter drawings (not loaded, or none chosen): the line of links follows the keys closely, as
+   part of the same block, instead of floating a whole section away from them. */
+.dc-empty-pick:not(:has(.dc-empty-rows)) {
+  margin-top: 6px;
+}
+
+/* Only above the starter drawings, once they are loaded: a few lowercase words, no rule across the
+   canvas — a ruled line is a section break, and a blank sheet has no sections yet. */
 .dc-empty .dc-empty-pick-label {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin: 0 0 16px;
+  margin: 0 0 10px;
   color: var(--dc-text-faint);
-  font-size: 9px;
-  font-weight: 500;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.dc-empty-pick-label::before,
-.dc-empty-pick-label::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--dc-border);
+  font-size: 11px;
+  font-style: italic;
+  font-variant-caps: normal;
+  letter-spacing: 0;
 }
 
 .dc-empty-rows {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(var(--count, 5), minmax(0, 1fr));
+  gap: 8px;
 }
 
-/* A small paper sample is unmistakably a choice, while its drawing stays the catalog's own. */
+/* The starter drawings rest as faint pencil on the sheet — no paper card around them — and become a
+   choice only when pointed at: the paper's edge appears and the drawing comes to full strength. */
 .dc-empty .dc-starter {
   width: 100%;
   min-width: 0;
-  padding: 10px 6px;
-  border: 1px solid var(--dc-border);
+  padding: 8px 6px;
+  border: 1px solid transparent;
   border-radius: 9px;
-  background: color-mix(in srgb, var(--dc-surface) 76%, transparent);
+  background: transparent;
   pointer-events: auto;
-  transition: background 140ms ease, border-color 140ms ease, transform 160ms var(--dc-ease-out);
+  transition: background 160ms ease, border-color 160ms ease, transform 200ms var(--dc-ease-out);
+}
+
+.dc-empty .dc-starter-swatch,
+.dc-empty .dc-starter-name {
+  opacity: 0.62;
+  transition: opacity 160ms ease;
 }
 
 .dc-empty .dc-starter:hover,
 .dc-empty .dc-starter:focus-visible {
-  border-color: var(--dc-selection);
-  background: var(--dc-surface);
-  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--dc-border) 80%, transparent);
+  background: color-mix(in srgb, var(--dc-surface) 70%, transparent);
+  transform: translateY(-2px);
+}
+
+.dc-empty .dc-starter:hover :is(.dc-starter-swatch, .dc-starter-name),
+.dc-empty .dc-starter:focus-visible :is(.dc-starter-swatch, .dc-starter-name) {
+  opacity: 1;
 }
 
 .dc-empty .dc-starter:focus-visible {
@@ -4132,18 +4386,18 @@
 
 .dc-empty .dc-starter-swatch {
   width: 100%;
-  height: 80px;
+  height: 72px;
 }
 
 .dc-empty .dc-starter-glyph {
   width: 100%;
-  max-width: 144px;
+  max-width: 132px;
   height: auto;
-  max-height: 76px;
+  max-height: 68px;
 }
 
 .dc-empty .dc-starter-name {
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 500;
 }
 
@@ -4153,13 +4407,26 @@
   display: none;
 }
 
+/* One line of text links, separated by small dots rather than spread into a toolbar. */
 .dc-empty-footer {
   display: flex;
   align-items: center;
   justify-content: center;
   flex-wrap: wrap;
-  gap: 8px 10px;
-  margin-top: 14px;
+  gap: 4px 8px;
+  margin-top: 0;
+}
+
+.dc-empty-rows + .dc-empty-footer {
+  margin-top: 10px;
+}
+
+.dc-empty-dot {
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  background: var(--dc-text-faint);
+  opacity: 0.6;
 }
 
 .dc-empty-action {
@@ -4171,10 +4438,10 @@
   margin: 0;
   padding: 4px 6px;
   border: 0;
-  border-radius: 3px;
+  border-radius: 4px;
   background: none;
   color: var(--dc-text-faint);
-  font: 11px/20px var(--dc-font);
+  font: 11.5px/20px var(--dc-font);
   cursor: pointer;
   pointer-events: auto;
   transition: color 140ms ease;
@@ -4183,22 +4450,64 @@
 .dc-empty-action:hover {
   color: var(--dc-text);
   text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 3px;
+}
+
+.dc-empty-action:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+/* Before the gallery is loaded, its link carries a pair of tiny sheets — the same stack its consent
+   shows — that fan a little when pointed at. */
+.dc-empty-gallery-art {
+  position: relative;
+  flex: none;
+  width: 14px;
+  height: 11px;
+}
+
+.dc-empty-gallery-art span {
+  position: absolute;
+  inset: 0;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  background: var(--dc-canvas);
+  transition: transform 220ms var(--dc-ease-out);
+}
+
+.dc-empty-gallery-art span:nth-child(1) {
+  opacity: 0.55;
+  transform: rotate(-9deg) translate(-2px, 0);
+}
+
+.dc-empty-gallery:hover .dc-empty-gallery-art span:nth-child(1),
+.dc-empty-gallery:focus-visible .dc-empty-gallery-art span:nth-child(1) {
+  transform: rotate(-16deg) translate(-3px, 1px);
+}
+
+.dc-empty-gallery:hover .dc-empty-gallery-art span:nth-child(2),
+.dc-empty-gallery:focus-visible .dc-empty-gallery-art span:nth-child(2) {
+  transform: rotate(4deg) translateY(-1px);
+}
+
+.dc-empty-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-empty-gallery-short {
+  display: none;
 }
 
 .dc-empty-shortcut {
   margin: 0;
+  padding: 0 6px;
   color: var(--dc-text-faint);
-  font-size: 10px;
-}
-
-.dc-empty-shortcut kbd {
-  padding: 0;
-  border: 0;
-  background: none;
-  box-shadow: none;
-  color: var(--dc-text-faint);
-  font: 500 10px/1.4 var(--dc-mono);
+  font-size: 11.5px;
+  line-height: 20px;
 }
 
 .dc-starter-picker-section + .dc-starter-picker-section {
@@ -4273,6 +4582,7 @@
 
 .dc-empty[data-leaving='true'],
 .dc-empty[data-leaving='true'] .dc-starter,
+.dc-empty[data-leaving='true'] .dc-empty-gallery,
 .dc-empty[data-leaving='true'] .dc-empty-action {
   pointer-events: none;
 }
@@ -4336,6 +4646,11 @@
   .dc-empty-crops {
   display: none;
   }
+
+  /* A phone has no keyboard to search with. */
+  .dc-empty-search {
+  display: none;
+  }
 }
 
 @media (max-height: 599px) {
@@ -4344,20 +4659,20 @@
   }
 
   .dc-empty-start .dc-empty-title {
-  font-size: 30px;
-  }
-
-  .dc-empty-start .dc-empty-hint {
-  margin-top: 10px;
-  font-size: 12px;
+  font-size: 24px;
   }
 
   .dc-empty-pick {
   margin-top: 20px;
   }
 
+  /* The keys are gone here, so the links follow the title itself. */
+  .dc-empty-pick:not(:has(.dc-empty-rows)) {
+  margin-top: 10px;
+  }
+
   .dc-empty .dc-empty-pick-label {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
   }
 
   .dc-empty .dc-starter {
@@ -4372,8 +4687,8 @@
   max-height: 44px;
   }
 
-  .dc-empty-footer {
-  margin-top: 12px;
+  .dc-empty-rows + .dc-empty-footer {
+  margin-top: 8px;
   }
 }
 
@@ -4382,6 +4697,17 @@
 @container (max-height: 280px) {
   .dc-empty-stage {
   margin-bottom: 0;
+  }
+
+  /* Short enough that the line must stay one line: the gallery's short name, no sheets, no search. */
+  .dc-empty-gallery-long,
+  .dc-empty-gallery-art,
+  .dc-empty-search {
+  display: none;
+  }
+
+  .dc-empty-gallery-short {
+  display: inline;
   }
 
   .dc-empty-keys,
@@ -4460,6 +4786,7 @@
  * connector does not reach them. Without this the quiet steps keep shouting.
  */
 .dc-edge-label[data-dimmed='true'],
+.dc-edge-caption[data-dimmed='true'],
 .dc-edge-step[data-dimmed='true'],
 .dc-edge-meta[data-dimmed='true'] {
   opacity: 0.3;
@@ -4467,6 +4794,7 @@
 }
 
 .dc-edge-label[data-shown='true'],
+.dc-edge-caption[data-shown='true'],
 .dc-edge-step[data-shown='true'],
 .dc-edge-meta[data-shown='true'] {
   opacity: 0.62;
@@ -4511,6 +4839,7 @@
 
 .dc-canvas[data-explain-stage='overview'] .dc-edge[data-shown='true'],
 .dc-canvas[data-explain-stage='overview'] .dc-edge-label[data-shown='true'],
+.dc-canvas[data-explain-stage='overview'] .dc-edge-caption[data-shown='true'],
 .dc-canvas[data-explain-stage='overview'] .dc-edge-step[data-shown='true'],
 .dc-canvas[data-explain-stage='overview'] .dc-edge-meta[data-shown='true'],
 .dc-canvas[data-explain-stage='overview'] .dc-attachment-chip-row[data-explain-tier='shown'] {
@@ -4921,6 +5250,7 @@
 }
 
 .dc-edge-label[data-focus-dimmed='true'],
+.dc-edge-caption[data-focus-dimmed='true'],
 .dc-edge-step[data-focus-dimmed='true'],
 .dc-edge-meta[data-focus-dimmed='true'] {
   opacity: 0.22;
@@ -4956,6 +5286,7 @@
 }
 
 .dc-edge-label[data-lens-dimmed='true'],
+.dc-edge-caption[data-lens-dimmed='true'],
 .dc-edge-step[data-lens-dimmed='true'],
 .dc-edge-meta[data-lens-dimmed='true'] {
   opacity: 0.4;
@@ -5298,6 +5629,17 @@
 .dc-hand-link:focus-visible {
   outline: 2px dashed var(--dc-sketch-ink);
   outline-offset: 3px;
+}
+
+/* More notes than handwriting can carry (`HANDWRITTEN_NOTES`): the same notes in the plain face. */
+.dc-traffic-note[data-plain] {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.dc-traffic-note[data-plain][data-tone='unknown'] {
+  font-weight: 500;
 }
 
 .dc-traffic-note[data-tone='unknown'] {
@@ -5962,6 +6304,18 @@
   opacity: 0.3;
 }
 
+/* Arrange's result, where a shape's move is shown on request: a moved shape answers the pointer (the
+   pane still pans from it), and the one whose trail is kept up wears the selection ring. */
+.dc-agent-preview[data-pick='true'] .dc-preview-ink[data-moved='true'] .dc-ghost-node {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+.dc-agent-preview[data-pick='true'] .dc-preview-ink[data-moved='true'] .dc-ghost-node:hover .dc-ghost-node-body::after,
+.dc-agent-preview[data-pick='true'] .dc-preview-ink[data-picked='true'] .dc-ghost-node-body::after {
+  border: 1.5px solid var(--dc-selection);
+}
+
 /* The ghost: an offer drawn in flow space (inside the viewport portal, so it pans and zooms
    with the diagram) at reduced opacity with a dashed outline in the plain border colour — not
    the selection colour, whose dashed form already means "drag-to-attach armed". Distinguished
@@ -6035,10 +6389,18 @@
   }
 }
 
+/* The pill is drawn in flow space like the ghost beside it, so at a low zoom its eleven pixels of
+   text would shrink to a few. It scales back up by the inverse of the zoom (`--dc-zoom`, published by
+   `Canvas.tsx`) — so it reads at 11px anywhere from 40% to 200% zoom — not below 0.5, so zoomed further
+   in it grows slowly rather than with the diagram, and not above 2.5, so far out it does not swallow
+   the shape it sits under. The scale lives in the inline `transform`
+   beside the pill's position; the origin is its own corner so that position stays where it is. */
 .dc-ghost-pill {
+  --dc-ghost-pill-scale: clamp(0.5, calc(1 / var(--dc-zoom, 1)), 2.5);
   position: absolute;
   left: 0;
   top: 0;
+  transform-origin: 0 0;
   display: inline-flex;
   align-items: stretch;
   border: 1px solid var(--dc-border);
@@ -6078,6 +6440,47 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* What `]` has to say when there is nothing to step to — set off from the key hints by a hairline. */
+.dc-ghost-pill .dc-ghost-pill-note {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 9px 4px 8px;
+  border-left: 1px solid var(--dc-border);
+  color: var(--dc-text-muted);
+}
+
+/* Touch has no Tab to accept with and no Esc to wave away with: the pill is itself the accept target
+   (it is a button), and the dismiss is a visible button instead of a key hint. Everywhere else the
+   button is not rendered at all — a keyboard has Esc, and the pill's tooltip says so. */
+.dc-ghost-pill .dc-ghost-pill-dismiss {
+  display: none;
+}
+
+@media (pointer: coarse) {
+  .dc-ghost-pill kbd {
+    display: none;
+  }
+
+  .dc-ghost-pill .dc-ghost-pill-dismiss {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 9px 4px 8px;
+    border-left: 1px solid var(--dc-border);
+    color: var(--dc-text-muted);
+  }
+
+  .dc-ghost-pill .dc-ghost-pill-dismiss:hover,
+  .dc-ghost-pill .dc-ghost-pill-dismiss:focus-visible {
+    background: var(--dc-selection-soft);
+    color: var(--dc-text);
+  }
+
+  .dc-ghost-pill .dc-ghost-pill-dismiss:focus-visible {
+    outline: 2px solid var(--dc-selection);
+    outline-offset: -2px;
+  }
+}
+
 .dc-ghost-pill:has(.dc-ghost-pill-accept:hover, .dc-ghost-pill-accept:focus-visible) {
   border-color: var(--dc-selection);
 }
@@ -6087,7 +6490,14 @@
 .dc-ghost-pill-next:hover,
 .dc-ghost-pill-next:focus-visible {
   background: var(--dc-selection-soft);
-  outline: none;
+}
+
+/* The tint alone is no focus indicator; the pill's own border (below) turns to the accent for the
+   accept button, and the others get the same inset ring everything else uses. */
+.dc-ghost-pill-accept:focus-visible,
+.dc-ghost-pill-next:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
 .dc-ghost-pill .dc-ghost-pill-next:hover,
@@ -6133,13 +6543,34 @@
 /* The settle: a just-accepted node fades up from ghost opacity to real. Under reduced motion the
    ghost is simply replaced by the node, which is already the right end state. */
 @media (prefers-reduced-motion: no-preference) {
-  .dc-ghost-node-body,
-  .dc-ghost-pill {
+  .dc-ghost-node-body {
   animation: dc-attachment-card-in 120ms ease;
+  }
+
+  /* Opacity only: `dc-attachment-card-in` animates `transform` too, and a running animation replaces
+     the pill's inline `transform` (its position and its zoom scale) — it sat at the layer's origin for
+     the 120 ms of the fade, then jumped. A cycle moves the pill by gliding, as a same-identity ghost does. */
+  .dc-ghost-pill {
+  animation: dc-ghost-pill-in 120ms ease;
+  transition: transform 140ms ease;
+  }
+
+  /* A cycle swaps the words under the pill's key hint; they fade in as the ghost they name does. */
+  .dc-ghost-pill-main {
+  animation: dc-ghost-pill-in 120ms ease;
   }
 
   .dc-node[data-settle='true'] {
   animation: dc-ghost-settle 180ms ease-out 1;
+  }
+}
+
+@keyframes dc-ghost-pill-in {
+  from {
+  opacity: 0;
+  }
+  to {
+  opacity: 1;
   }
 }
 
@@ -6165,8 +6596,19 @@
   flex: none;
 }
 
+/* The soft tint alone is 1.1:1 against the menu, which read as no highlight at all. The accent bar
+   down the row's edge is the cue (3:1 and up in both themes) and the tint only backs it; the
+   keyboard-focused row adds a full ring. */
+.dc-quick-connect-item:hover,
+.dc-quick-connect-item:focus-visible,
 .dc-quick-connect-item[data-highlighted='true'] {
   background: var(--dc-selection-soft);
+  box-shadow: inset 3px 0 0 var(--dc-selection);
+}
+
+.dc-quick-connect-item:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: -2px;
 }
 
 .dc-quick-connect-item[data-suggested='true']::after {
@@ -6877,9 +7319,12 @@
   margin-top: 8px;
   color: var(--dc-caution);
 }
+/* In the card, the hand is kept for the one number it leads with; what opens further detail is set
+   like the rest of the card's type. */
 .dc-traffic-work summary {
   cursor: pointer;
-  font-size: 17px;
+  font-size: 13px;
+  font-weight: 600;
   line-height: 28px;
   text-decoration: underline;
   text-decoration-style: wavy;
@@ -6996,9 +7441,9 @@
 .dc-traffic-shared-work h3 {
   margin: 0 0 4px;
   color: var(--dc-caution);
-  font-size: 16px;
+  font-size: 13px;
   line-height: 21px;
-  font-weight: 400;
+  font-weight: 600;
 }
 .dc-traffic-shared-work p {
   margin: 0;
@@ -7008,7 +7453,253 @@
 }
 
 .dc-traffic-crossings { margin: 12px 0; }
-.dc-traffic-crossings h3 { margin: 0 0 8px; color: var(--dc-caution); font-size: 16px; font-weight: 400; }
+.dc-traffic-crossings h3 { margin: 0 0 8px; color: var(--dc-caution); font-size: 13px; line-height: 19px; font-weight: 600; }
 .dc-traffic-crossing { margin-top: 10px; padding-left: 10px; border-left: 1px dashed var(--dc-border); }
 .dc-traffic-crossing strong { font-size: 12px; line-height: 18px; }
 .dc-traffic-crossings p { margin: 3px 0; font-size: 11px; line-height: 16px; color: var(--dc-text-muted); }
+
+/* ── What a change did ──────────────────────────────────────────────────────────────────────────
+   `canvas/useChangeFeedback.ts`: a new shape settles in where it was put, a new connector is drawn
+   from source to target, an undo or redo pulses what it changed in place, and a deleted element
+   fades where it stood (`.dc-departures`, filled by `canvas/changeMotion.ts`). The markers are
+   short-lived and set only when motion is welcome; these rules say the same again, so a marker that
+   outlives a switch to reduced motion still shows nothing. Interactive chrome, never exported. */
+.dc-departures {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.dc-departing-shape,
+.dc-departing-connector {
+  position: absolute;
+  max-width: none;
+  pointer-events: none;
+  user-select: none;
+}
+
+.dc-edge-ink {
+  display: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Arrives and settles — a little small and see-through, then itself. No overshoot. The shape
+     fades; only its drawing scales, so the shape's own box (what a resize, a snap guide or a test
+     measures) is exact from the first frame. */
+  .dc-node[data-arriving='true'] {
+  animation: dc-node-arrive 240ms var(--dc-ease-out) both;
+  }
+
+  .dc-node[data-arriving='true'] > .dc-node-surface {
+  animation: dc-node-arrive-surface 240ms var(--dc-ease-out) both;
+  }
+
+  .dc-edge-ink {
+  display: initial;
+  stroke-dasharray: 1 1;
+  animation: dc-edge-ink 440ms cubic-bezier(0.3, 0.6, 0.2, 1) both;
+  }
+
+  .dc-edge[data-arriving='true'] .dc-edge-line,
+  .dc-edge[data-arriving='true'] .dc-edge-response-line,
+  .dc-edge[data-arriving='true'] .dc-edge-arrow,
+  .dc-edge[data-arriving='true'] .dc-edge-async-marker,
+  .dc-edge-caption[data-arriving='true'],
+  .dc-edge-label[data-arriving='true'] {
+  animation: dc-edge-resolve 440ms ease-out both;
+  }
+
+  /* Changed in place by an undo or redo. A drop shadow follows the drawing's own silhouette — a
+     cylinder glows as a cylinder — where a ring would draw a box around it. */
+  .dc-node[data-changed='true'] > .dc-node-surface {
+  animation: dc-node-changed 620ms ease-out 1;
+  }
+
+  .dc-edge[data-changed='true'] .dc-edge-line {
+  animation: dc-edge-changed 620ms ease-out 1;
+  }
+}
+
+@keyframes dc-node-arrive {
+  from {
+  opacity: 0;
+  }
+}
+
+@keyframes dc-node-arrive-surface {
+  from {
+  scale: 0.92;
+  }
+}
+
+@keyframes dc-edge-ink {
+  0% {
+  stroke-dashoffset: 1;
+  opacity: 1;
+  }
+  68% {
+  stroke-dashoffset: 0;
+  opacity: 1;
+  }
+  100% {
+  stroke-dashoffset: 0;
+  opacity: 0;
+  }
+}
+
+@keyframes dc-edge-resolve {
+  0%,
+  42% {
+  opacity: 0;
+  }
+  100% {
+  opacity: 1;
+  }
+}
+
+@keyframes dc-node-changed {
+  0% {
+  filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
+  }
+  30% {
+  filter: drop-shadow(0 0 7px color-mix(in srgb, var(--dc-selection) 75%, transparent));
+  }
+  100% {
+  filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
+  }
+}
+
+@keyframes dc-edge-changed {
+  0% {
+  filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
+  }
+  30% {
+  filter: drop-shadow(0 0 6px color-mix(in srgb, var(--dc-selection) 90%, transparent));
+  }
+  100% {
+  filter: drop-shadow(0 0 0 color-mix(in srgb, var(--dc-selection) 0%, transparent));
+  }
+}
+
+/* ── Sketches: the Pencil ────────────────────────────────────────────────────────────────────────
+   `canvas/InkLayer.tsx` draws a room's strokes over its shapes, from the same paint the exports use
+   (`render/ink.ts`); `canvas/useInkInput.ts` owns the pointer while a Pencil tool is in hand. */
+.dc-ink-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  /* Over shapes and connectors, as ink on a whiteboard is over what it marks — above a selected
+     (elevated) shape too, never above the connection line being dragged. */
+  z-index: 1000;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.dc-ink-hit {
+  pointer-events: none;
+}
+
+.dc-ink-layer[data-selectable='true'] .dc-ink-hit {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.dc-ink-layer[data-selectable='true'] g[data-selected='true'] .dc-ink-hit {
+  cursor: move;
+}
+
+/* A chosen stroke wears a soft halo in the selection colour, under the ink. */
+.dc-ink-halo {
+  stroke: var(--dc-selection);
+  opacity: 0.32;
+}
+
+/* What the eraser has passed over, until it lets go. */
+g[data-ink-erasing='true'] .dc-ink-stroke {
+  opacity: 0.22;
+  transition: opacity 80ms linear;
+}
+
+.dc-ink-live {
+  fill: none;
+  pointer-events: none;
+}
+
+/* A drawing resolving into the shape it became: the ink lets go as the shape arrives. */
+.dc-ink-resolving {
+  pointer-events: none;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .dc-ink-resolving {
+    animation: dc-ink-resolve 260ms var(--dc-ease-out) both;
+  }
+}
+
+@keyframes dc-ink-resolve {
+  from {
+    opacity: 0.85;
+    filter: blur(0);
+  }
+  to {
+    opacity: 0;
+    filter: blur(1.5px);
+  }
+}
+
+/* With the Pencil in hand, the canvas is paper: a fine crosshair to draw with, a ring to erase with,
+   and no browser gesture (scroll, text selection) stealing a stroke. Panning stays on the wheel,
+   the middle button and a pinch. */
+.dc-canvas[data-pencil] .react-flow__pane,
+.dc-canvas[data-pencil] .react-flow__node,
+.dc-canvas[data-pencil] .react-flow__edge,
+.dc-canvas[data-pencil] .dc-ink-layer {
+  cursor: crosshair;
+}
+
+.dc-canvas[data-pencil] {
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.dc-canvas[data-pencil='eraser'] .react-flow__pane,
+.dc-canvas[data-pencil='eraser'] .react-flow__node,
+.dc-canvas[data-pencil='eraser'] .react-flow__edge {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='22' height='22'%3E%3Ccircle cx='11' cy='11' r='8.5' fill='rgba(255,255,255,0.35)' stroke='%23596170' stroke-width='1.5'/%3E%3C/svg%3E") 11 11, cell;
+}
+
+/* Hover chrome — handles, connector traces — would only flicker under a pen. */
+.dc-canvas[data-pencil] .react-flow__handle,
+.dc-canvas[data-pencil] .dc-ghost {
+  visibility: hidden;
+}
+
+/* ------------------------------------------------------- touch targets -- */
+
+/* A finger needs about 40px where a mouse is happy with 24–28 (the rest of this lives at the end of
+   `app.css`; these two are here because this file loads after it and the popover's own sizes would win
+   a tie). Every control in a popover is sized from `--dc-popover-control` / `--dc-popover-field`, so one
+   token carries them all, and a row that no longer fits wraps instead of clipping. Long-press is the
+   touch way to Attach note, Delete and Align, so the context menu's rows grow with the rest. */
+@media (pointer: coarse) {
+  .dc-popover {
+    --dc-popover-control: 40px;
+    --dc-popover-field: 40px;
+  }
+
+  .dc-popover-row {
+    flex-wrap: wrap;
+  }
+
+  .dc-context-menu-item {
+    min-height: 40px;
+  }
+
+  .dc-context-menu-icon {
+    min-width: 40px;
+    height: 40px;
+  }
+}

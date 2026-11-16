@@ -1,3 +1,4 @@
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { NodeResizer, useUpdateNodeInternals, type NodeProps } from '@xyflow/react';
 import { displayNameFor, maxSizeFor } from '../document/factory';
@@ -19,8 +20,9 @@ import {
   naturalNoteHeight,
   naturalTextHeight,
   noteLayout,
-  textPaddingOf,
-} from '../nodes/describe';
+  textPaddingOf, describeSequenceFrame, sequenceLayoutFor } from '../nodes/describe';
+import { SequenceOverlay } from './sequence/SequenceOverlay';
+import { SequenceStepLayer } from './sequence/SequenceStepLayer';
 import { activeTextEditor, handleMarkdownKey } from './textEditor';
 import { nodeReading } from '../nodes/readings';
 import { HANDLE_ANCHORS } from '../edges/routing';
@@ -45,11 +47,12 @@ import { pathsLabel } from './trafficLabels';
 import { trafficNodeOf, trafficNodeReading, trafficScenarioOf } from '../store/traffic';
 import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
-import { nodeMarkerOrigin } from '../openPoints/marker';
+import { attachmentTabWidth, markerRail, RAIL_SIZE } from '../document/markerRail';
+import { describeAttachmentTab } from '../edges/attachmentChips';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { count } from '../lib/plural';
 import { TechnologyDetails } from './TechnologyDetails';
-import { useTechnologyIcon } from './useTechnologyIcon';
+import { useTechnologyIcon, useTechnologyRevision } from './useTechnologyIcon';
 import { nodeTechnologyIcon } from '../nodes/technology';
 import { presentationScope, toggledReveal } from '../presentation/presentationAttachments';
 
@@ -114,6 +117,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
   const settling = useSettle(id);
+  // Just placed, pasted, undone back or added by someone else: settles in once. Changed in place by
+  // an undo or redo: a brief pulse says what the step touched. See `useChangeFeedback.ts`.
+  const arriving = useUiStore((state) => state.arrivingIds.has(id));
+  const changed = useUiStore((state) => state.changedIds.has(id));
   // One subscription for all of this shape's handles (see `DraftHandle.tsx`).
   const connecting = useConnectingHandles(id);
   const popoverOpen = useUiStore(
@@ -152,6 +159,19 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const isCode = node?.type === 'code';
   const isNote = node?.type === 'note';
   const isText = node?.type === 'text';
+  const isSequence = node?.type === 'sequence';
+  // A sequence's own controls exist only while someone is at it: under the pointer, selected, or
+  // with something inside it selected, being typed or being dropped onto.
+  const [hovered, setHovered] = useState(false);
+  const sequenceBusy = useUiStore(
+    (state) => state.sequenceFocus?.nodeId === id || state.sequenceEdit?.nodeId === id || state.sequenceDropTarget?.nodeId === id || state.sequenceAttachmentTarget?.nodeId === id || state.sequenceLinkTarget?.nodeId === id,
+  );
+  const sequenceEditing = useUiStore((state) => state.sequenceEdit?.nodeId === id);
+  // Which of its messages is being told, while this sequence is the one being presented: a number
+  // (counted from 1), 0 for the opening and closing looks at the whole of it, null otherwise.
+  const sequenceStep = useEditorStore((state) =>
+    state.flowPlayback.active && state.flowPlayback.sequenceNodeId === id ? (state.flowPlayback.stage ? 0 : state.flowPlayback.step) : null,
+  );
   const copiedTimeout = useRef<number | null>(null);
   useEffect(
     () => () => {
@@ -297,6 +317,13 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // text underneath as well would show two copies wherever the two wrap differently by a word.
   const editingNote = editing && (isNote || isText);
   const technologyIcon = useTechnologyIcon(node?.technology);
+  // A sequence's heads carry their participants' logos; it draws again as each arrives.
+  const participants = node?.sequence?.participants;
+  const participantTechnologies = useMemo(
+    () => (participants ?? []).map((participant) => participant.technology ?? '').filter(Boolean).join('\n'),
+    [participants],
+  );
+  const participantIcons = useTechnologyRevision(participantTechnologies);
   const shapes = useMemo(() => {
     if (!liveNode) return [];
     beginClipScope(liveNode.id);
@@ -305,7 +332,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     const described = editingNote ? { ...liveNode, text: isText ? '\u200b' : '' } : liveNode;
     return emitDisplayList(describeNode(described, describeContext(theme, preset)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
-  }, [liveNode, theme, preset, editingNote, technologyIcon]);
+  }, [liveNode, theme, preset, editingNote, technologyIcon, participantIcons]);
 
   /**
    * The font a plain shape label (Service/Component/Database/Queue/Actor/Group — everything but
@@ -333,7 +360,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const emphasis = useMemo(() => {
     if (emphasisKey === null || !liveNode) return null;
     beginClipScope(`emphasis-${liveNode.id}`);
-    const shapes = emphasisOf(describeNode(liveNode, describeContext(theme, preset)).shapes);
+    // A sequence is lit along its frame, not along every head, bar and note inside it.
+    const ctx = describeContext(theme, preset);
+    const shapes = emphasisOf(liveNode.type === 'sequence' ? describeSequenceFrame(liveNode, ctx) : describeNode(liveNode, ctx).shapes);
     if (shapes.length === 0) return null;
     return { markup: emitDisplayList({ width: liveNode.width, height: liveNode.height, shapes }), color: emphasisColorOf(shapes) };
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- same clip-scope reason as `shapes`.
@@ -358,6 +387,14 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // A view-only collaborator's copy refuses every change, so it offers no handles to make one.
   const viewOnly = useUiStore((state) => state.readOnly !== null);
   const readOnly = mode === 'present' || viewOnly;
+
+  // The same geometry the display list above was drawn from (it is kept by the sequence's identity),
+  // so every target sits exactly on what it is for.
+  const sequenceLayout = useMemo(
+    () => (isSequence && liveNode && mode !== 'present' && (hovered || selected || sequenceBusy) ? sequenceLayoutFor(liveNode, describeContext(theme, preset)) : null),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- `participantIcons` is the redraw signal for loaded logos.
+    [isSequence, liveNode, mode, hovered, selected, sequenceBusy, theme, preset, participantIcons],
+  );
 
   // `NodeResizer` below is only rendered while `!readOnly`, so switching to Presentation Mode
   // mid-resize (e.g. Cmd/Ctrl+Enter pressed without releasing the resize handle) unmounts it
@@ -439,6 +476,15 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const max = maxSizeFor(node.type);
   const attachmentCount = node.attachments?.length ?? 0;
   const insideCount = node.inside?.nodes.length ?? 0;
+  // One row for every mark the shape carries above its corner, so none lands on another.
+  const rail = markerRail(
+    { type: node.type, width: effectiveWidth },
+    {
+      technology: Boolean(liveNode && nodeTechnologyIcon(liveNode)),
+      attachments: attachmentCount,
+      openPoints: openPoints.length > 0,
+    },
+  );
 
   return (
     <div
@@ -465,7 +511,11 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
       data-settle={settling ? 'true' : undefined}
+      data-arriving={arriving && !settling ? 'true' : undefined}
+      data-changed={changed ? 'true' : undefined}
       data-plate-focus={plateFocused ? 'true' : undefined}
+      data-seq-editing={sequenceEditing ? 'true' : undefined}
+      data-seq-telling={sequenceStep ? 'true' : undefined}
       style={
         {
           width: effectiveWidth,
@@ -474,13 +524,20 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         } as CSSProperties
       }
       onDoubleClick={beginEditing}
-      onMouseEnter={layer ? () => useUiStore.getState().setDepthShapeHoverId(id) : undefined}
+      // A click that reaches the sequence itself was on none of its parts (they keep their own
+      // clicks): it is the whole sequence that is meant now.
+      onClick={isSequence ? () => useUiStore.getState().setSequenceFocus(null) : undefined}
+      onMouseEnter={
+        isSequence ? () => setHovered(true) : layer ? () => useUiStore.getState().setDepthShapeHoverId(id) : undefined
+      }
       onMouseLeave={
-        layer
-          ? () => {
-              if (useUiStore.getState().depthShapeHoverId === id) useUiStore.getState().setDepthShapeHoverId(null);
-            }
-          : undefined
+        isSequence
+          ? () => setHovered(false)
+          : layer
+            ? () => {
+                if (useUiStore.getState().depthShapeHoverId === id) useUiStore.getState().setDepthShapeHoverId(null);
+              }
+            : undefined
       }
     >
       {/* A picture is all the depth glyph is, so what it means is said here as well. Part of the
@@ -489,7 +546,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       {insideCount > 0 && <span className="dc-sr-only">, has an inside, {count(insideCount, 'shape')}</span>}
       {!readOnly && (
         <NodeResizer
-          isVisible={Boolean(selected)}
+          isVisible={Boolean(selected) && !sequenceEditing}
           minWidth={min.width}
           minHeight={min.height}
           maxWidth={max?.width}
@@ -521,7 +578,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           onClick={(event) => {
             event.stopPropagation();
             const failed = () =>
-              useUiStore.getState().notify("Couldn't copy — the browser blocked clipboard access.", 'error');
+              useUiStore.getState().notify("Couldn’t copy — the browser blocked clipboard access.", 'error');
             // Absent outside a secure context (a self-hosted copy served over plain HTTP on a LAN).
             if (!navigator.clipboard?.writeText) {
               failed();
@@ -564,6 +621,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         <button
           type="button"
           className="dc-attachment-badge"
+          style={rail.attachments && { left: rail.attachments.x, top: rail.attachments.y, width: rail.attachments.width }}
           data-open={popoverOpen ? 'true' : undefined}
           title={count(attachmentCount, 'attachment')}
           aria-label={count(attachmentCount, 'attachment')}
@@ -586,12 +644,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
             useUiStore.getState().setOpenAttachmentDetail(popoverOpen ? null : { hostKind: 'node', hostId: node.id, attachmentId: null });
           }}
         >
-          {'<>'} {attachmentCount}
+          <AttachmentTab count={attachmentCount} id={node.id} />
         </button>
       )}
 
-      {openPoints.length > 0 && !capsule && (() => {
-        const origin = nodeMarkerOrigin({ type: node.type, width: effectiveWidth, height: effectiveHeight });
+      {rail.openPoint && !capsule && (() => {
+        const origin = rail.openPoint;
         return (
           <OpenPointMarker
             targetKind="node"
@@ -628,6 +686,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       <SvgSurface className="dc-node-surface" width={effectiveWidth} height={effectiveHeight}>
         {shapes}
       </SvgSurface>
+
+      {isSequence && liveNode && sequenceStep ? <SequenceStepLayer node={liveNode} step={sequenceStep} theme={theme} preset={preset} /> : null}
+
+      {sequenceLayout && liveNode && !capsule && (
+        <SequenceOverlay node={liveNode} layout={sequenceLayout} readOnly={readOnly} selected={Boolean(selected)} preset={preset} />
+      )}
 
       {/* Illustrative work per minute, in words as well as the halo — never a colour alone.
           Chrome, like the halo: it never reaches an export. */}
@@ -759,6 +823,20 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
 
 /** React Flow owns placement on its wrapper. Only these props change this component's chrome;
  *  store subscriptions still deliver content, mode and preview changes independently. */
+/** The attachment tab's picture: the exporter's own shapes, so the two can never drift apart. */
+const AttachmentTab = memo(function AttachmentTab({ count, id }: { count: number; id: string }) {
+  const theme = useThemeValue();
+  const shapes = useMemo(() => {
+    beginClipScope(`attachment-tab-${id}`);
+    return emitDisplayList({ width: attachmentTabWidth(count), height: RAIL_SIZE, shapes: describeAttachmentTab(count, { theme }) });
+  }, [count, id, theme]);
+  return (
+    <SvgSurface width={attachmentTabWidth(count)} height={RAIL_SIZE}>
+      {shapes}
+    </SvgSurface>
+  );
+});
+
 function sameNodeViewProps(before: NodeProps, after: NodeProps): boolean {
   return (
     before.id === after.id &&
@@ -913,7 +991,7 @@ function explainTierFor(state: EditorStore, id: string): ExplainTier {
   // not by walking the parent chain in every node selector.
   if (stepContextOf(state)?.containing.has(id)) return 'active';
   if (!state.flowPlayback.active || !state.flowPlayback.flowId) return 'hidden';
-  const flow = state.document.flows.find((f) => f.id === state.flowPlayback.flowId);
+  const flow = playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId);
   return nodeTierInPlayback(flow, state.document.edges, id, state.flowPlayback);
 }
 

@@ -5,11 +5,11 @@
 
 import { CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
 import { LEVEL_HINTS } from '../depth/level';
-import { ARCHITECTURE_STARTERS } from '../starters';
 import { AgentError } from './errors';
 import { AGENT_LIMITS } from './input';
 import { READ_LIMITS } from './read';
-import { starterIds } from './starter';
+import { FULL_TOOLS } from './schema';
+import { starterIds, type AgentStarter } from './starter';
 import { ELEMENT_TYPES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES } from './vocabulary';
 
 /**
@@ -19,7 +19,9 @@ import { ELEMENT_TYPES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIN
  */
 export const CONTRACT_VERSION = 3;
 
-const TOPICS = ['types', 'relationships', 'c4', 'flows', 'notes', 'starters', 'limits', 'layout', 'readability'] as const;
+const STARTERS_OFF = 'No starters are downloaded: they come from the optional starters gallery, which the person turns on in Draft Canvas (Starters → Load starters). Compose the diagram from elements instead.';
+
+const TOPICS = ['types', 'relationships', 'c4', 'flows', 'notes', 'sequences', 'starters', 'limits', 'layout', 'readability'] as const;
 
 /** What each topic holds — the whole answer when no topic is asked for, so one call stays small. */
 const TOPIC_INDEX: Record<(typeof TOPICS)[number], string> = {
@@ -28,27 +30,39 @@ const TOPIC_INDEX: Record<(typeof TOPICS)[number], string> = {
   c4: 'Levels, inside views, moveInside/moveOutside, derived role and scope.',
   flows: 'Flows as presentations: order, steps, highlights, spotlights, variants.',
   notes: 'Notes, code snippets, Markdown labels and their style, attaching and detaching.',
+  sequences: 'Native sequence diagrams beside the architecture: Mermaid text in, linked participants, what is and is not drawn.',
   starters: 'Starter names and categories; {starter: id} describes one.',
   limits: 'Per-request and read limits.',
   layout: 'Automatic layout, exact place and route, arrange, previews, evidence.',
   readability: 'How to send a request that reads clearly, and how to read the receipt.',
 };
 
-export function capabilities(args: { topics?: unknown; starter?: unknown }): Record<string, unknown> {
+/**
+ * `starters` is the gallery the person has downloaded (`src/gallery/`), resolved by the page: the
+ * starters are no longer part of the app, so an empty list means the gallery is off or never loaded.
+ */
+export function capabilities(args: { topics?: unknown; starter?: unknown; tool?: unknown }, starters: readonly AgentStarter[] = []): Record<string, unknown> {
+  if (args.tool !== undefined) {
+    const tool = FULL_TOOLS.find((entry) => entry.name === args.tool);
+    if (!tool) throw new AgentError('INVALID_INPUT', 'Unknown tool; use a name from tools/list.', { path: '/tool' });
+    if (args.topics !== undefined || args.starter !== undefined) throw new AgentError('INVALID_INPUT', 'Request tool schema separately from topics or starter.');
+    return { tool: tool.name, description: tool.description, inputSchema: tool.inputSchema };
+  }
   // A starter with topics answers both; alone it is just the starter, as it always was.
-  if (typeof args.starter === 'string' && Array.isArray(args.topics)) return { ...capabilities({ topics: args.topics }), ...capabilities({ starter: args.starter }) };
+  if (typeof args.starter === 'string' && Array.isArray(args.topics)) return { ...capabilities({ topics: args.topics }, starters), ...capabilities({ starter: args.starter }, starters) };
   if (typeof args.starter === 'string') {
-    const starter = ARCHITECTURE_STARTERS.find((s) => s.id === args.starter);
-    if (!starter) throw new AgentError('NOT_FOUND', `No starter "${args.starter}".`);
+    const starter = starters.find((s) => s.id === args.starter);
+    if (!starter) throw new AgentError('NOT_FOUND', starters.length ? `No starter "${args.starter}".` : STARTERS_OFF);
     const ids = starterIds(starter, '');
+    const { file } = starter;
     return {
       starter: {
         id: starter.id,
         name: starter.name,
-        description: starter.description,
-        elements: starter.nodes.map((n) => ({ key: n.key, type: n.type, label: n.text ?? null, ...(n.parent ? { group: n.parent } : {}) })),
-        relationships: starter.edges.map((e, i) => ({ id: ids.edges[i], from: e.from, to: e.to, ...(e.label ? { label: e.label } : {}) })),
-        flows: (starter.flows ?? []).map((f, i) => ({ id: ids.flows[i], title: f.title, steps: f.steps.length })),
+        description: starter.summary,
+        elements: file.nodes.map((n) => ({ key: n.id, type: n.type, label: n.text ?? null, ...(n.parentId ? { group: n.parentId } : {}) })),
+        relationships: file.edges.map((e, i) => ({ id: ids.edges[i], from: e.source, to: e.target, ...(e.label ? { label: e.label } : {}) })),
+        flows: file.flows.map((f, i) => ({ id: ids.flows[i], title: f.title, steps: f.steps.length })),
         note: 'Ids here are unprefixed; with starter.prefix "p-", element "api" becomes "p-api".',
       },
     };
@@ -64,7 +78,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       groupKinds: Object.keys(GROUP_KINDS),
       noteKinds: NOTE_FORM_NAMES,
       lineStyles: LINE_STYLE_NAMES,
-      starters: ARCHITECTURE_STARTERS.map((s) => s.id),
+      starters: starters.map((s) => s.id),
     };
   }
   const topics = new Set(args.topics.filter((t): t is (typeof TOPICS)[number] => (TOPICS as readonly unknown[]).includes(t)));
@@ -124,8 +138,19 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       convert: 'update set.attach: true with about folds a free note, snippet or label onto that host; set.attach: false takes an attachment off as a free card (beside its host, or beside/inside about). The id stays either way.',
     };
   }
+  if (want('sequences')) {
+    out.sequences = {
+      what: 'A sequence is one self-laying-out element on the canvas, beside the architecture: participants with lifelines, messages in order, replies, work in progress, conditions, loops and parallel branches. It is behaviour over time; the architecture stays the shapes and relationships. People edit it in place and present it one message at a time.',
+      write: 'sequences: [{id, title, mermaid, links?}] on create_diagram or an add op. mermaid is a Mermaid sequenceDiagram: participant/actor lines (with "as" names), ->> a call, -) asynchronous, -->> a reply, + and - after the arrow for work starting and ending, create/destroy, Note over/left of/right of, box … end, and alt/else, opt, loop, par/and, critical/option, break. Nothing in it is positioned: the app lays it out and sizes it.',
+      links: 'links: {participantId: elementId} makes a participant stand for an element of the same view — it takes the element\'s name, kind and technology and follows it from then on. A participant written under an element\'s own id is linked without being listed. Link the participants that are shapes in the diagram; leave the rest free.',
+      order: 'Only from an order the person or the code gives, as with flows. A sequence is never derived from the layout or from which relationships exist.',
+      edit: 'read_diagram returns each sequence as {id, title, mermaid, links} (mermaid left out with truncated: true when long; include ["fullText"] gives it). update set.mermaid replaces what it holds and keeps the links of participants still written under the same ids; set.title renames it; set.links re-links (null unlinks all); set.place moves it. remove by id.',
+      notDrawn: 'autonumber, rect backgrounds, participant links/properties, two-way arrows and lost messages (-x) are not drawn; a receipt advisory names what was left out. A reply answers the latest unanswered call between the same two participants.',
+      versusFlows: 'A flow walks existing relationships and is the presentation of the architecture. Use a sequence when the order, replies, conditions or participants go beyond what the relationships say — a protocol, a saga, an error path.',
+    };
+  }
   if (want('starters')) {
-    out.starters = ARCHITECTURE_STARTERS.map((s) => ({ id: s.id, name: s.name, category: s.category }));
+    out.starters = starters.length ? starters.map((s) => ({ id: s.id, name: s.name, category: s.category })) : STARTERS_OFF;
   }
   if (want('limits')) out.limits = { ...AGENT_LIMITS, read: READ_LIMITS };
   if (want('layout')) {
@@ -153,11 +178,12 @@ export function capabilities(args: { topics?: unknown; starter?: unknown }): Rec
       size: 'About 15 elements is what one view reads well. Past that, draw one element for a part and put its detail in that element\'s inside view (the next C4 level): a nested domain in a container view is the usual candidate.',
       returns: 'A reply is implied by the request; draw a relationship back only when it is its own interaction (a callback, a notification). Every relationship that runs against the reading direction goes around what lies between.',
       direction: 'Leave layout.direction out unless the person asks — in create_diagram and in arrange alike: both directions are tried and the clearer one kept. "down" suits a person at the top calling one system that calls many externals. An arrange that names a direction keeps it, and an advisory says when the other reads clearly better.',
+      replicas: 'Services only: how many instances of it run, when the deployment says (replicas: 3). Drawn as a stack with ×3; Traffic reads several instances of one consumer as competing consumers.',
       technology: 'One product as it is called, optionally with a version ("Spring Boot 3", "PostgreSQL 16", "Kafka"): that shows its logo. A mixed stack or a phrase shows a plain mark, so qualifiers ("modular monolith", "Java 21") go in description. A receipt names any technology that missed its logo, with the update that fixes it.',
       peers: 'Components one caller calls that also call each other (an API\'s components, one of which asks another) are laid out as one row with short hops between them when that reads better than a staircase; nothing to send for it.',
       settle: 'One create (or add) and at most one arrange is the normal path for automatic layout. Re-arranging with another spacing or direction, renaming captions or removing labels does not change what crosses — legibility.crossed names the pairs, and crossings come from which relationships exist. For a layout the person specifies, use place and route to implement it, including all nodes in one row or column. Exact positions need enough space for shapes and captions; overlapping shapes are refused.',
       trunks: 'Three or more labelled connectors leaving one shape (or reaching one) with the same meaning and kind are drawn as one trunk, each branch keeping its own caption — give them the same semantic and kind to bundle, different ones to stay apart. A trunk can share a side with other connectors. The main path never joins a trunk with other connectors; where it fans out itself (an orchestrator calling several services in turn), its own steps share one.',
-      feedback: 'The create receipt reports legibility — crossings (legibility.crossed lists which pairs of relationships cross), connectors that detour or cut through a boundary they are not in, connectors no clear line could be drawn for (unresolved) and sides too crowded to give each end its own point (crowded), all by id — for the top view, and for every inside view under legibility.views (each with its view path); an update receipt reports it for the view it changed, and leads its advisories with what the edit\'s own connectors could change (a crossing, a detour, a pin that can\'t be drawn clear), each with the op that does it. Advisories name what in the request to change, with the update_diagram ops that do it, an inside view\'s prefixed "Inside <path>:". Apply them in the same turn when they make sense, then read the receipt again.',
+      feedback: 'The create receipt reports legibility — crossings (legibility.crossed lists which pairs of relationships cross), connectors that detour or cut through a boundary they are not in, connectors no clear line could be drawn for (unresolved) and sides too crowded to give each end its own point (crowded), all by id — and what reads badly although the lines are clean: names wrapped into tall columns (stackedNames), labels or captions cut short or left out for lack of room (hiddenCaptions), boundaries that are mostly header (heavyHeaders), and a view drawn too small to read on a 1440×900 screen (smallOverview, with its scale) — for the top view, and for every inside view under legibility.views (each with its view path); an update receipt reports it for the view it changed, and leads its advisories with what the edit\'s own connectors could change (a crossing, a detour, a pin that can\'t be drawn clear), each with the op that does it. Advisories name what in the request to change, with the update_diagram ops that do it, an inside view\'s prefixed "Inside <path>:". Apply them in the same turn when they make sense, then read the receipt again.',
     };
   }
   return out;

@@ -1,0 +1,527 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-saga-choreography",
+    "title": "Saga – Choreography",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "annotation",
+      "type": "text",
+      "x": -628,
+      "y": 279,
+      "width": 460,
+      "height": 24,
+      "z": 0,
+      "text": "No central coordinator: each service reacts to an event and publishes its own",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "order",
+      "type": "service",
+      "x": -628,
+      "y": 17,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Order Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "order-store",
+      "type": "database",
+      "x": -626,
+      "y": 157,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "text": "Order DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "payment",
+      "type": "service",
+      "x": -88,
+      "y": 17,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Payment Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "payment-store",
+      "type": "database",
+      "x": -86,
+      "y": 157,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "text": "Payment DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "inventory",
+      "type": "service",
+      "x": 452,
+      "y": 17,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Inventory Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "inventory-store",
+      "type": "database",
+      "x": 454,
+      "y": 157,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "text": "Inventory DB",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "placed",
+      "type": "queue",
+      "x": -340,
+      "y": 34,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Order Placed",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "taken",
+      "type": "queue",
+      "x": 200,
+      "y": 34,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Payment Taken",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "reserved",
+      "type": "queue",
+      "x": -70,
+      "y": -303,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Stock Reserved",
+      "textOrigin": "explicit",
+      "queueKind": "topic",
+      "attachments": [
+        {
+          "id": "a_nhzvwsf12vls",
+          "type": "note",
+          "text": "The last participant publishes the outcome like any other fact, and Order reacts to it — confirming the order is its own local transaction. Nobody reports to anybody.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "rejected",
+      "type": "queue",
+      "x": 200,
+      "y": -159,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Stock Rejected",
+      "textOrigin": "explicit",
+      "queueKind": "topic",
+      "attachments": [
+        {
+          "id": "a_72mgzhjsls4n",
+          "type": "note",
+          "text": "Compensation is event-driven too: Payment refunds and publishes Payment Refunded, and Order reacts to that by cancelling. Every hop of the unwinding is one more reaction.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "refunded",
+      "type": "queue",
+      "x": -340,
+      "y": -159,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Payment Refunded",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    }
+  ],
+  "edges": [
+    {
+      "id": "place",
+      "source": "order",
+      "target": "placed",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "take",
+      "source": "placed",
+      "target": "payment",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "deliversTo",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "taken",
+      "source": "payment",
+      "target": "taken",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "reserve",
+      "source": "taken",
+      "target": "inventory",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "deliversTo",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "commit-order",
+      "source": "order",
+      "target": "order-store",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "commit-payment",
+      "source": "payment",
+      "target": "payment-store",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "commit-inventory",
+      "source": "inventory",
+      "target": "inventory-store",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "reserved",
+      "source": "inventory",
+      "target": "reserved",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.75
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "confirm",
+      "source": "reserved",
+      "target": "order",
+      "label": "Confirm order",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "deliversTo",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "reject",
+      "source": "inventory",
+      "target": "rejected",
+      "directed": true,
+      "routing": "smoothstep",
+      "accent": "rose",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "refund",
+      "source": "rejected",
+      "target": "payment",
+      "label": "Refund payment",
+      "directed": true,
+      "routing": "smoothstep",
+      "accent": "rose",
+      "semantic": "deliversTo",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "refunded",
+      "source": "payment",
+      "target": "refunded",
+      "directed": true,
+      "routing": "smoothstep",
+      "accent": "rose",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.25
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "cancel",
+      "source": "refunded",
+      "target": "order",
+      "label": "Cancel order",
+      "directed": true,
+      "routing": "smoothstep",
+      "accent": "rose",
+      "semantic": "deliversTo",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.75
+      },
+      "semanticsOrigin": "inferred"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 0.9171974522292994
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Happy path",
+      "steps": [
+        {
+          "id": "fs_fbororop7587",
+          "edgeId": "commit-order",
+          "caption": "Order commits locally"
+        },
+        {
+          "id": "fs_2p8z6raz2wi8",
+          "edgeId": "place",
+          "caption": "And publishes the fact"
+        },
+        {
+          "id": "fs_gfa0uovp9m5n",
+          "edgeId": "take",
+          "caption": "Payment reacts — nobody told it to"
+        },
+        {
+          "id": "fs_0bdl8lyhn3r9",
+          "edgeId": "commit-payment",
+          "caption": "Its own local transaction"
+        },
+        {
+          "id": "fs_7l3wbxtvoiz1",
+          "edgeId": "taken"
+        },
+        {
+          "id": "fs_wjds70riyvbp",
+          "edgeId": "reserve",
+          "caption": "Inventory reacts in turn"
+        },
+        {
+          "id": "fs_iotneh3caf27",
+          "edgeId": "commit-inventory",
+          "caption": "Stock reserved"
+        },
+        {
+          "id": "fs_jom3b35rp4m1",
+          "edgeId": "reserved",
+          "caption": "And that is published like any other fact"
+        },
+        {
+          "id": "fs_z32ygfoi6alu",
+          "edgeId": "confirm",
+          "caption": "Order reacts: confirmed — the saga completed with no one in charge"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "flow2",
+      "title": "Compensation",
+      "steps": [
+        {
+          "id": "fs_qdkirjc77al6",
+          "edgeId": "reserve",
+          "caption": "Inventory cannot reserve the stock"
+        },
+        {
+          "id": "fs_8ypi62424idn",
+          "edgeId": "reject",
+          "caption": "It publishes the failure as an event"
+        },
+        {
+          "id": "fs_ml90h38b8egg",
+          "edgeId": "refund",
+          "caption": "Payment reacts: a refund, a new local transaction"
+        },
+        {
+          "id": "fs_eps6w77s5mjj",
+          "edgeId": "commit-payment",
+          "caption": "Committed locally"
+        },
+        {
+          "id": "fs_iecn42gsobrc",
+          "edgeId": "refunded",
+          "caption": "And published — the unwinding continues the same way"
+        },
+        {
+          "id": "fs_xfvkrel5ybc8",
+          "edgeId": "cancel",
+          "caption": "Order reacts: cancelled. Every hop was one more reaction"
+        }
+      ],
+      "accent": "rose"
+    }
+  ]
+}

@@ -2,19 +2,21 @@ import { ALL_PRESETS } from '../lib/presets';
 import { categoryOf, edgeRelationLabel } from '../document/connectorSemantics';
 import { displayNameFor } from '../document/factory';
 import type { DraftEdge, DraftNode } from '../document/types';
-import { count } from '../lib/plural';
+import { count, selectionCount } from '../lib/plural';
 import { QUEUE_KIND_OPTION_LABELS } from '../lib/nodeKindLabels';
 import {
   canvasCommands,
   arrangeSelectionCommands,
   createCommandAt,
   edgeCommands,
+  inkCommands,
   multiCommands,
   nodeCommands,
   openPointCommands,
   pasteAtCommand,
   viewCommands,
 } from './registry';
+import { SEQUENCE_WRAP_IDS } from './sequence';
 import type { Command, CommandContext } from './types';
 import type { ContextMenuTarget } from '../store/uiStore';
 
@@ -61,19 +63,19 @@ export type ContextMenuEntry =
   | { type: 'icons'; label: string; items: (ContextMenuItem & { icon: AlignIcon })[] };
 
 /** Menu and toolbar wording where it differs from the palette's: the header already names the
- *  target, so "Spotlight selection" is just "Spotlight"; an attachment reads as attaching, not adding
- *  a shape; and short action labels use sentence case. */
+ *  target, so "Spotlight selection" is just "Spotlight", and a message's attachment reads as
+ *  "Attach note" rather than "Attach note to message". Casing is not one of the differences: both
+ *  surfaces use the palette's titles, sentence case with a shape's own name capitalised ("Connect
+ *  Data Store", "Add consumer"). */
 const MENU_LABELS: Record<string, string> = {
-  'attach-note': 'Attach note',
-  'attach-code': 'Attach code',
+  'seq-attach-note': 'Attach note',
+  'seq-attach-code': 'Attach code',
   'open-point-add': 'Add open point…',
   spotlight: 'Spotlight',
-  'add-consumer': 'Add consumer',
-  'add-subscriber': 'Add subscriber',
-  'add-data-store': 'Connect data store',
-  'add-routed-service': 'Route to service',
-  'arrange-selection': 'Tidy up selection',
-  arrange: 'Tidy up layout',
+  // "Tidy up" is the gentle, previewed cleanup (`tidy`); Arrange lays things out again from scratch,
+  // and says so, now that the two sit side by side.
+  'arrange-selection': 'Rearrange selection',
+  arrange: 'Rearrange layout',
   delete: 'Delete',
 };
 
@@ -141,7 +143,7 @@ function paneMenu(ctx: CommandContext, flowPosition: { x: number; y: number }): 
   return grouped(null, [
     [pasteAtCommand(flowPosition), ...pick(canvas, ['undo'])],
     { type: 'grid', label: 'Add here', items: shapes },
-    [...pick(canvas, ['select-all']), ...pick(viewCommands(ctx), ['fit', 'traffic-show', 'traffic-hide']), ...pick(canvas, ['arrange'])],
+    [...pick(canvas, ['select-all']), ...pick(viewCommands(ctx), ['fit', 'traffic-show', 'traffic-hide']), ...pick(canvas, ['tidy', 'arrange'])],
     // What acts on the whole diagram lives with the diagram, now that the header has no ⋯ for it.
     pick(canvas, ['find-replace', 'settings']),
   ]);
@@ -158,6 +160,7 @@ const KIND_CAPTIONS: Record<DraftNode['type'], string> = {
   queue: 'Queue',
   actor: 'Actor',
   component: 'Component',
+  sequence: 'Sequence',
 };
 
 function nodeHeader(node: DraftNode): Extract<ContextMenuEntry, { type: 'header' }> {
@@ -177,13 +180,40 @@ function edgeHeader(ctx: CommandContext, edge: DraftEdge): Extract<ContextMenuEn
 const COPY_AND_ORDER = ['duplicate', 'copy', 'bring-to-front', 'send-to-back'];
 const ATTACH = ['attach-note', 'attach-code', 'open-point-add'];
 
+/**
+ * A sequence's menu is about what was right-clicked: a message, a participant, a branch — and only
+ * about the whole sequence when none of them was. (The overlay selects what is under the pointer
+ * before the menu opens, so "what is selected inside it" is "what was clicked".)
+ */
+function sequenceMenu(ctx: CommandContext, node: DraftNode, commands: Command[]): ContextMenuEntry[] {
+  const inside = ctx.ui.sequenceFocus?.nodeId === node.id ? ctx.ui.sequenceFocus : null;
+  if (!inside) {
+    return grouped(nodeHeader(node), [
+      pick(commands, ['seq-add-participant', 'seq-present', 'edit-text']),
+      pick(commands, ATTACH),
+      pick(commands, COPY_AND_ORDER),
+      pick(commands, ['spotlight']),
+      pick(commands, ['delete']),
+    ]);
+  }
+  const title = inside.kind === 'participant' ? 'Participant' : inside.kind === 'group' ? 'Group' : inside.kind === 'operand' ? 'Branch' : inside.ids.length > 1 ? `${inside.ids.length} selected` : 'In this sequence';
+  return grouped({ type: 'header', title, caption: 'Sequence' }, [
+    pick(commands, ['seq-rename', 'seq-edit', 'seq-add-reply', 'seq-reverse']),
+    pick(commands, ['seq-attach-note', 'seq-attach-code']),
+    pick(commands, ['seq-add-branch', 'seq-unwrap', 'seq-group', 'seq-leave-group', 'seq-ungroup']),
+    pick(commands, SEQUENCE_WRAP_IDS),
+    pick(commands, ['seq-duplicate']),
+    pick(commands, ['seq-remove-branch', 'seq-delete']),
+  ]);
+}
+
 /** A Junction is a routing point, not a content holder — no Add Note/Add Code. */
 function junctionMenu(node: DraftNode, commands: Command[]): ContextMenuEntry[] {
   return grouped(nodeHeader(node), [
     pick(commands, ['edit-text']),
     pick(commands, COPY_AND_ORDER),
     pick(commands, ['spotlight']),
-    pick(commands, ['delete']),
+    pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
 
@@ -191,14 +221,14 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
   // `flow-start-here` resolves directly only with exactly one outgoing edge — with more, its
   // `run()` returns a `CommandStage` (a picker), which the stage-command rule excludes.
   const outgoing = ctx.editor.document.edges.filter((edge) => edge.source === node.id);
-  const lastGroup = outgoing.length === 1 ? ['spotlight', 'flow-start-here'] : ['spotlight'];
+  const lastGroup = outgoing.length === 1 ? ['spotlight', 'show-lineage', 'flow-start-here'] : ['spotlight', 'show-lineage'];
   return grouped(nodeHeader(node), [
     pick(commands, ['edit-text', 'look-inside']),
     pick(commands, ['add-consumer', 'add-dead-letter-queue', 'remove-dead-letter-queue', 'add-subscriber']),
     pick(commands, ATTACH),
     pick(commands, COPY_AND_ORDER),
     pick(commands, lastGroup),
-    pick(commands, ['delete']),
+    pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
 
@@ -223,6 +253,7 @@ function nodeMenu(ctx: CommandContext, node: DraftNode): ContextMenuEntry[] {
   // into a second menu, never a second copy of it.
   const commands = [...arrangeSelectionCommands(ctx), ...nodeCommands(ctx, node), ...pick(openPointCommands(ctx), ['open-point-add'])];
   if (node.type === 'group') return boundaryMenu(node, commands);
+  if (node.type === 'sequence') return sequenceMenu(ctx, node, commands);
   if (categoryOf(node) === 'junction') return junctionMenu(node, commands);
   return regularNodeMenu(ctx, node, commands);
 }
@@ -274,13 +305,14 @@ const ALIGN_IDS: AlignIcon[] = [
 function selectionMenu(ctx: CommandContext, commands: Command[]): ContextMenuEntry[] {
   const { nodes, edges } = ctx.editor.selection;
   const align = pick(commands, ALIGN_IDS).map((command) => ({ ...itemOf(command), icon: command.id as AlignIcon }));
-  return grouped({ type: 'header', title: count(nodes.length + edges.length, 'element') }, [
+  return grouped({ type: 'header', title: selectionCount(nodes.length, edges.length) }, [
     // One shared point for everything selected — the header already says how many.
-    pick(commands, ['group', 'ungroup', 'arrange-selection', 'open-point-add']),
+    pick(commands, ['group', 'ungroup', 'tidy', 'arrange-selection', 'open-point-add']),
+    pick(commands, ['sequence-from-selection']),
     { type: 'icons', label: 'Align and distribute', items: align },
     pick(commands, COPY_AND_ORDER),
     pick(commands, ['spotlight']),
-    pick(commands, ['delete']),
+    pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
 
@@ -302,10 +334,19 @@ export function contextMenuCommandsFor(
         ? edgeMenu(ctx, edge, [...edgeCommands(ctx, edge), ...pick(openPointCommands(ctx), ['open-point-add'])])
         : [];
     }
+    case 'ink': {
+      const strokes = ctx.ui.inkSelection.length;
+      if (strokes === 0) return [];
+      const commands = inkCommands(ctx);
+      return grouped({ type: 'header', title: strokes === 1 ? 'Sketch' : count(strokes, 'stroke') }, [pick(commands, ['ink-convert']), pick(commands, ['ink-delete'])]);
+    }
     case 'selection': {
       const { nodes, edges } = ctx.editor.selection;
       if (nodes.length + edges.length < 2) return []; // no longer a multi-selection — see the effect that closes the menu when this happens
-      return selectionMenu(ctx, [...arrangeSelectionCommands(ctx), ...multiCommands(ctx), ...pick(openPointCommands(ctx), ['open-point-add'])]);
+      return selectionMenu(ctx, [
+        // Only with shapes among what is selected: for connectors alone it would tidy the whole view.
+        ...(ctx.editor.selection.nodes.length > 0 ? pick(canvasCommands(ctx), ['tidy']) : []),
+        ...arrangeSelectionCommands(ctx), ...multiCommands(ctx), ...pick(openPointCommands(ctx), ['open-point-add'])]);
     }
     default:
       return [];

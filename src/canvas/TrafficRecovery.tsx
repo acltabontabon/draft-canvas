@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { DraftNode } from '../document/types';
 import { displayNameFor } from '../document/factory';
-import { familyOf } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { useEditorStore } from '../store/editorStore';
 import type { TrafficAnalysis } from '../traffic';
@@ -28,7 +27,7 @@ export function TrafficRecovery({ analysis, nodes, plan, width, onExplore, initi
   };
   return (
     <details className="dc-traffic-work dc-traffic-recovery" onToggle={(event) => { if (event.currentTarget.open && plan.kind === 'replay') onExplore(count); }}>
-      <summary style={{ fontFamily: familyOf('hand') }}>Recovery work</summary>
+      <summary>Recovery work</summary>
       <div className="dc-traffic-work-paper">
         {plan.kind === 'replay' && !plan.missing && (
           <label className="dc-traffic-replay-count">

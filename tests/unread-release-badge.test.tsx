@@ -10,7 +10,7 @@ import { LibraryScreen } from '../src/ui/Library/LibraryScreen';
 
 /**
  * The homepage and toolbar About/info buttons share one small unread-release affordance — see
- * `AboutDialog.tsx`'s version row for the "permanent What's New link" this dot merely flags.
+ * `AboutDialog.tsx`'s version row for the "permanent What’s New link" this dot merely flags.
  * Covers only the state it renders from; the modal's own content is `whats-new-view.test.tsx`.
  */
 
@@ -29,6 +29,9 @@ function stubSession(overrides: Partial<DocumentSession> = {}): DocumentSession 
     makeEditableCopy: async () => {},
     closeDocument: async () => true,
     resolveConflict: async () => {},
+    retrySave: async () => true,
+    exportUnsaved: async () => {},
+    leaveWithoutSaving: async () => {},
     renameDocument: async () => {},
     duplicateDocument: async () => {},
     deleteDocument: async () => {},
@@ -57,14 +60,14 @@ describe('unread release indicator', () => {
   it('homepage About control reflects unread state via its accessible name', async () => {
     render(<LibraryScreen session={stubSession()} />);
     // The notes are fetched only after an upgrade, so the Library's first chunk doesn't carry them.
-    expect(await screen.findByRole('button', { name: /About Draft Canvas.*what's new/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /About Draft Canvas.*what’s new/i })).toBeInTheDocument();
   });
 
   // About now lives behind the toolbar's More menu, so the state has to survive one level of
   // folding: the collapsed trigger says something is waiting, and the row inside says what.
   it('the editor’s Help button inherits the unread state of the About item it holds', () => {
     render(<HelpMenu />);
-    expect(screen.getByRole('button', { name: /^Help.*what's new/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Help.*what’s new/i })).toBeInTheDocument();
   });
 
   it('the About row reflects unread state once the Help menu is open', async () => {
@@ -92,7 +95,7 @@ describe('unread release indicator', () => {
     useUiStore.getState().markProductReleaseSeen();
     render(<LibraryScreen session={stubSession()} />);
     expect(screen.getByRole('button', { name: 'About Draft Canvas' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /what's new/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /what’s new/i })).not.toBeInTheDocument();
   });
 
   it('an update ready to install takes priority over the unread-release indicator', () => {

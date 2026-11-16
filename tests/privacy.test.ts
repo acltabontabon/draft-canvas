@@ -63,6 +63,8 @@ const PEER_APIS: [string, RegExp][] = [
   ['WebSocket', /\bWebSocket\b/],
 ];
 const TRANSPORT_DIR = join(SRC, 'collab', 'transport') + sep;
+/** The starters gallery's reader: the one file allowed to call `fetch` (see its test below). */
+const GALLERY_REMOTE = join(SRC, 'gallery', 'remote.ts');
 
 /** Ways code could be built from a string at runtime. */
 const EVAL_APIS: [string, RegExp][] = [
@@ -85,9 +87,22 @@ describe('nothing on the canvas can reach a network', () => {
     }
   });
 
-  it.each(NETWORK_APIS)('uses no %s anywhere in src/', (_name, pattern) => {
-    const offenders = files.filter((file) => pattern.test(code(file)));
+  it.each(NETWORK_APIS)('uses no %s anywhere in src/ (but the starters gallery\'s one reader)', (name, pattern) => {
+    const offenders = files.filter((file) => !(name === 'fetch' && file === GALLERY_REMOTE) && pattern.test(code(file)));
     expect(offenders.map((file) => relative(ROOT, file))).toEqual([]);
+  });
+
+  it('lets the starters gallery read only from its own public repository', () => {
+    // The one `fetch` in the app reads files of the opt-in starters gallery. It builds every URL
+    // from `GALLERY_BASE`, and the only origin it may name is GitHub's raw file host.
+    const remote = code(GALLERY_REMOTE);
+    expect(remote.match(/\bfetch\b/g)).toHaveLength(1);
+    expect(remote).toMatch(/fetch\(GALLERY_BASE \+ path,/);
+    expect(remote).toMatch(/credentials: 'omit'/);
+    expect(remote).not.toMatch(/https?:\/\//);
+    const source = code(join(SRC, 'gallery', 'source.ts'));
+    const origins = new Set([...source.matchAll(/https?:\/\/[^/`'"]+/g)].map(([origin]) => origin));
+    expect([...origins].sort()).toEqual(['https://github.com', 'https://raw.githubusercontent.com']);
   });
 
   it.each(PEER_APIS)('uses %s only in src/collab/transport/', (_name, pattern) => {

@@ -9,6 +9,12 @@ import type { TextMeasurer } from '../render/text/measure';
 export const LABEL_PADDING_X = 6;
 export const LABEL_PADDING_Y = 3;
 
+/** A relationship caption's backing: a canvas-toned mask this far around its text, close enough
+ *  that the caption still reads as text on the canvas rather than as a chip. Shared by the canvas
+ *  (`.dc-edge-caption`'s padding) and the exporter. */
+export const CAPTION_PADDING_X = 3;
+export const CAPTION_PADDING_Y = 1;
+
 /** A connector label's widest line before it wraps, in canvas units. */
 const EDGE_LABEL_MAX_WIDTH = 220;
 export const RECOVERY_LABEL_GAP = 2;
@@ -79,6 +85,32 @@ export function layoutConnectorCaption(text: string, measurer?: TextMeasurer, ro
     maxLines: 1,
     measurer,
   });
+}
+
+/** How far past its room a caption may reach before it is left out: a couple of pixels into the
+ *  arrowhead's own clearance at each end, which no eye reads as touching. */
+const CAPTION_OVERHANG = 8;
+
+/**
+ * The caption both renderers draw, or `null` when its line has no room for it.
+ *
+ * A caption is fitted to the room its run leaves before a shape or the arrowhead, but never
+ * narrower than `MIN_FIT_WIDTH`. On a run shorter than that the fitted caption still reached into
+ * the shapes at both ends, and since shapes paint over connectors it showed as a few clipped
+ * letters under each one. A caption that cannot be read is left out: the line's own style and its
+ * inspector still say what the relationship is, and the caption returns as soon as the two shapes
+ * are far enough apart to hold it.
+ */
+export function fittedConnectorCaption(text: string, measurer?: TextMeasurer, room?: number): TextLayout | null {
+  const layout = layoutConnectorCaption(text, measurer, room);
+  return room !== undefined && layout.width > room + CAPTION_OVERHANG ? null : layout;
+}
+
+/** A relationship caption's box as routing measures words: its unfitted text plus a chip's padding,
+ *  so a caption and a label chip are kept clear of the same things by the same rule. */
+export function connectorCaptionSize(text: string): { width: number; height: number } {
+  const layout = layoutConnectorCaption(text);
+  return { width: layout.width + LABEL_PADDING_X * 2, height: layout.height + LABEL_PADDING_Y * 2 };
 }
 
 /** Measured chip bounds, including the same padding used by both renderers. */

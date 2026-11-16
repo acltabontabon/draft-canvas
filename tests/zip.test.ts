@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { LIMITS } from '../src/document/limits';
-import { crc32, unzipFiles, zipFiles } from '../src/export/zip';
+import { crc32, unzipFiles, unzipFilesLeniently, zipFiles } from '../src/export/zip';
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
@@ -181,5 +181,45 @@ describe('zipFiles / unzipFiles', () => {
     withComment.set(comment, archive.length);
     new DataView(withComment.buffer).setUint16(archive.length - 2, comment.length, true);
     expect(unzipFiles(withComment)[0]!.name).toBe('a.txt');
+  });
+});
+
+describe('unzipFilesLeniently', () => {
+  const three = () => zipFiles([{ name: 'a.txt', data: 'aaaa' }, { name: 'b.txt', data: 'bbbb' }, { name: 'c.txt', data: 'cccc' }]);
+  /** The central directory header of entry `index` (every name here is five bytes). */
+  const centralOf = (archive: Uint8Array, index: number) => le32(archive, archive.length - 22 + 16) + index * (46 + 5);
+
+  it('returns what it can read and names what it cannot: a compressed entry, a corrupt one', () => {
+    const archive = three();
+    const view = new DataView(archive.buffer);
+    view.setUint16(centralOf(archive, 0) + 10, 8, true); // a.txt claims Deflate
+    const crcAt = centralOf(archive, 2) + 16;
+    view.setUint32(crcAt, view.getUint32(crcAt, true) ^ 1, true); // c.txt's checksum no longer matches
+
+    const { entries, unreadable } = unzipFilesLeniently(archive);
+    expect(entries.map((entry) => entry.name)).toEqual(['b.txt']);
+    expect(decoder.decode(entries[0]!.data)).toBe('bbbb');
+    expect(unreadable).toEqual(['a.txt', 'c.txt']);
+    // The strict reader is unchanged: one bad entry is the whole archive.
+    expect(() => unzipFiles(archive)).toThrow(/compressed \(method 8\)/);
+  });
+
+  it('reads an intact archive exactly as the strict reader does', () => {
+    const archive = three();
+    const { entries, unreadable } = unzipFilesLeniently(archive);
+    expect(unreadable).toEqual([]);
+    expect(entries.map((entry) => entry.name)).toEqual(unzipFiles(archive).map((entry) => entry.name));
+  });
+
+  it('still refuses what is not an archive at all, and one whose entries overlap', () => {
+    expect(() => unzipFilesLeniently(encoder.encode('not a zip at all, really not'))).toThrow(/Not a ZIP archive/);
+    const archive = three();
+    const view = new DataView(archive.buffer);
+    // Every entry claims the first one's bytes and a size no archive this small can hold twice over.
+    for (let index = 0; index < 3; index += 1) {
+      view.setUint32(centralOf(archive, index) + 20, 120, true);
+      view.setUint32(centralOf(archive, index) + 24, 120, true);
+    }
+    expect(() => unzipFilesLeniently(archive)).toThrow(/overlap/);
   });
 });

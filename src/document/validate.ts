@@ -1,3 +1,5 @@
+import { finite, oneOf, oneOfOptional, safeId, text } from './validationValues';
+import { parseAttachments, validateAttachableFields } from './validateAttachments';
 import { parseEvidence } from './evidence';
 /**
  * The untrusted-input boundary.
@@ -10,7 +12,7 @@ import { parseEvidence } from './evidence';
  */
 import { createId } from './ids';
 import { LIMITS } from './limits';
-import { cleanText } from './sanitize';
+import { cleanDescription, cleanEdgeLabel, cleanTechnology, cleanTitle, DEFAULT_TITLE } from './sanitize';
 import { repairCompensationLinks } from './compensation';
 import { migrateToCurrent, UnsupportedVersionError } from './migrate';
 import { defaultSizeFor } from './factory';
@@ -18,7 +20,6 @@ import {
   ACCENTS,
   ACTOR_KINDS,
   ACTOR_FRAMES,
-  ATTACHABLE_TYPES,
   BACKGROUND_FITS,
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
@@ -32,7 +33,6 @@ import {
   GRID_MODES,
   NODE_TYPES,
   C4_TEXT_TYPES,
-  NOTE_KINDS,
   EDGE_SEMANTICS,
   QUEUE_KINDS,
   ROUTE_MODES,
@@ -46,8 +46,6 @@ import {
   type Accent,
   type ActorKind,
   type ActorFrame,
-  type AttachableType,
-  type Attachment,
   type BackgroundFit,
   type BoundaryPreset,
   type CodeLanguage,
@@ -67,7 +65,6 @@ import {
   type EdgeSemantic,
   type EmbeddedBackgroundImage,
   type GridMode,
-  type NoteKind,
   type QueueKind,
   type RouteMode,
   type ServiceKind,
@@ -80,16 +77,18 @@ import {
   type OpenPointTarget,
   OPEN_POINT_KINDS,
   type ViewLevel,
+  type DraftOrigin,
 } from './types';
-import { clamp, isFiniteNumber } from '../lib/math';
+import { clamp } from '../lib/math';
 import { isRecord } from '../lib/isRecord';
 import { normalizeOpenPointText, normalizeTargets, OPEN_POINT_ID_PREFIX } from './openPoints';
+import { normalizeSequence } from './validateSequence';
+import { INK_ID_PREFIX, parseInkStroke } from './ink';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
-  | { ok: false; error: string };
-
-const finite = (value: unknown, fallback: number): number => (isFiniteNumber(value) ? value : fallback);
+  /** `reason: 'newer'` — written by a later version of Draft Canvas: nothing is wrong with the file. */
+  | { ok: false; error: string; reason?: 'newer' };
 
 /**
  * Whether `node`'s chain of boundaries ends within `LIMITS.maxGroupDepth` steps. Walked no further
@@ -104,27 +103,11 @@ export function withinGroupDepth(node: { parentId?: string }, byId: ReadonlyMap<
   return true;
 }
 
-function text(value: unknown, max: number): string | undefined {
-  return typeof value === 'string' ? cleanText(value, max) : undefined;
-}
 
-function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
-  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
-    ? (value as T)
-    : fallback;
-}
-
-/** Like `oneOf`, but an absent or invalid value stays absent rather than being
- *  coerced to a fallback — used for fields that are optional conveniences
- *  rather than always-present classifications (e.g. an edge's `semantic`). */
-function oneOfOptional<T extends string>(value: unknown, allowed: readonly T[]): T | undefined {
-  return typeof value === 'string' && (allowed as readonly string[]).includes(value)
-    ? (value as T)
-    : undefined;
-}
 
 /**
- * Like `oneOfOptional`, but for a number: absent or non-finite stays absent (never a fabricated
+ * Like `oneOfOptional` (`validationValues.ts`: an absent or invalid value stays absent rather than
+ * being coerced to a fallback), but for a number: absent or non-finite stays absent (never a fabricated
  * default — genuine absence is meaningful, e.g. a `deadLetters` edge someone hasn't configured a
  * count for yet), while a present-but-out-of-range value (zero, negative, a hand-edited million)
  * is clamped into range rather than dropped — the same "repair the value, don't reject the field"
@@ -135,26 +118,6 @@ function positiveIntOptional(value: unknown, min: number, max: number): number |
   return clamp(Math.round(value), min, max);
 }
 
-/**
- * The `note`/`code` field pairs shared by a top-level node and an attachment —
- * both are "a Note or a Code card's content," so this is the one place that
- * knows how to read them out of an untrusted candidate object.
- */
-function validateAttachableFields(
-  candidate: Record<string, unknown>,
-  type: DraftNodeType | AttachableType,
-): Pick<DraftNode, 'noteKind' | 'language' | 'code'> {
-  const fields: Pick<DraftNode, 'noteKind' | 'language' | 'code'> = {};
-  if (type === 'note') {
-    fields.noteKind = oneOf<NoteKind>(candidate.noteKind, NOTE_KINDS, 'note');
-  }
-  if (type === 'code') {
-    fields.language = oneOf<CodeLanguage>(candidate.language, CODE_LANGUAGES, 'plaintext');
-    fields.code = text(candidate.code, LIMITS.maxCodeLength) ?? '';
-  }
-  return fields;
-}
-
 /** An edge's `sourceAnchor`/`targetAnchor`: a closed-enum side plus a clamped
  *  0..1 offset. Absent or malformed collapses to `undefined` — same repair
  *  discipline as `semantic` — rather than a coerced fallback, since "no
@@ -163,7 +126,8 @@ function parseAnchor(value: unknown): EdgeAnchor | undefined {
   if (!isRecord(value)) return undefined;
   const side = oneOfOptional(value.side, SIDES);
   if (!side) return undefined;
-  return { side, offset: clamp(finite(value.offset, 0.5), 0, 1) };
+  const participantId = safeId(value.participantId);
+  return { side, offset: clamp(finite(value.offset, 0.5), 0, 1), ...(participantId ? { participantId } : {}) };
 }
 
 /** A connector's bend points: finite numbers kept on the canvas, at most `maxWaypointsPerEdge`.
@@ -205,12 +169,15 @@ function parseEmbeddedBackground(value: unknown): EmbeddedBackgroundImage | unde
   return { dataUri: value.dataUri, width, height };
 }
 
-function safeId(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
-  const trimmed = value.trim();
-  if (!trimmed || trimmed.length > LIMITS.maxIdLength) return null;
-  return trimmed;
+/** A starter id and a SHA-256, or nothing: anything else in `metadata.origin` is dropped. */
+function originOf(value: unknown): DraftOrigin | null {
+  if (!isRecord(value)) return null;
+  const { starter, sha256 } = value;
+  if (typeof starter !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(starter) || starter.length > 64) return null;
+  if (typeof sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(sha256)) return null;
+  return { starter, sha256 };
 }
+
 
 /**
  * A node id, which unlike every other id is also a path segment: `depth/tree.ts` joins them with a
@@ -226,52 +193,6 @@ function safeNodeId(value: unknown): string | null {
     if (code <= 0x1f || code === 0x7f) return null;
   }
   return id;
-}
-
-/**
- * A host's attachment list — shared by nodes and connectors, which carry the identical shape. Keeps
- * at most `max`, gives missing or duplicate ids fresh ones, and keeps a card's size (detaching
- * restores it at the size it had, not a default). Counts what it dropped and cut so the caller can
- * report it.
- */
-function parseAttachments(
-  value: unknown,
-  max: number,
-): { attachments: Attachment[]; dropped: number; truncated: number } {
-  const raw = Array.isArray(value) ? value : [];
-  const attachments: Attachment[] = [];
-  const seenIds = new Set<string>();
-  let dropped = 0;
-  for (const rawAttachment of raw.slice(0, max)) {
-    if (!isRecord(rawAttachment)) {
-      dropped += 1;
-      continue;
-    }
-    let id = safeId(rawAttachment.id);
-    if (!id || seenIds.has(id)) id = createId('a');
-    seenIds.add(id);
-
-    const type = oneOf<AttachableType>(rawAttachment.type, ATTACHABLE_TYPES, 'note');
-    const attachment: Attachment = { id, type };
-
-    const label = text(rawAttachment.text, LIMITS.maxTextLength);
-    if (label !== undefined) attachment.text = label;
-
-    const accent = oneOfOptional<Accent>(rawAttachment.accent, ACCENTS);
-    if (accent !== undefined) attachment.accent = accent;
-
-    Object.assign(attachment, validateAttachableFields(rawAttachment, type));
-
-    const width = finite(rawAttachment.width, Number.NaN);
-    const height = finite(rawAttachment.height, Number.NaN);
-    if (Number.isFinite(width) && Number.isFinite(height)) {
-      attachment.width = clamp(width, LIMITS.minNodeSize, LIMITS.maxNodeSize);
-      attachment.height = clamp(height, LIMITS.minNodeSize, LIMITS.maxNodeSize);
-    }
-
-    attachments.push(attachment);
-  }
-  return { attachments, dropped, truncated: Math.max(0, raw.length - max) };
 }
 
 /** Node types that may own a room. Narrower than what the app offers "Look inside" on: a Service
@@ -298,7 +219,8 @@ interface FileContext {
   nodeIds: Set<string>;
   edgeIds: Set<string>;
   flowIds: Set<string>;
-  budget: { nodes: number; edges: number; flows: number };
+  inkIds: Set<string>;
+  budget: { nodes: number; edges: number; flows: number; ink: number };
   pending: PendingInside[];
   dropped: { deep: number; unreadable: number; overBudget: number };
 }
@@ -310,6 +232,7 @@ function childContext(ctx: FileContext, depth: number): FileContext {
     nodeIds: ctx.nodeIds,
     edgeIds: ctx.edgeIds,
     flowIds: ctx.flowIds,
+    inkIds: ctx.inkIds,
     budget: ctx.budget,
     pending: ctx.pending,
     dropped: ctx.dropped,
@@ -322,7 +245,8 @@ function rootContext(): FileContext {
     nodeIds: new Set(),
     edgeIds: new Set(),
     flowIds: new Set(),
-    budget: { nodes: LIMITS.maxNodes, edges: LIMITS.maxEdges, flows: LIMITS.maxFlows },
+    inkIds: new Set(),
+    budget: { nodes: LIMITS.maxNodes, edges: LIMITS.maxEdges, flows: LIMITS.maxFlows, ink: LIMITS.maxInkStrokes },
     pending: [],
     dropped: { deep: 0, unreadable: 0, overBudget: 0 },
   };
@@ -359,8 +283,8 @@ function drainInsides(ctx: FileContext, repairs: string[]): void {
         ctx.dropped.unreadable += 1;
         continue;
       }
-      const { nodes, edges, flows, viewport, level } = result.document;
-      node.inside = { nodes, edges, flows, viewport, ...(level === undefined ? {} : { level }) };
+      const { nodes, edges, flows, ink, viewport, level } = result.document;
+      node.inside = { nodes, edges, flows, ...(ink === undefined ? {} : { ink }), viewport, ...(level === undefined ? {} : { level }) };
     }
   }
 
@@ -412,7 +336,7 @@ export function parseDocument(input: unknown): NormalizeResult {
       repairs.push(`Upgraded document format from v${result.applied[0]} to v${CURRENT_VERSION}.`);
     }
   } catch (error) {
-    if (error instanceof UnsupportedVersionError) return { ok: false, error: error.message };
+    if (error instanceof UnsupportedVersionError) return { ok: false, error: error.message, reason: 'newer' };
     return {
       ok: false,
       error: error instanceof Error ? error.message : 'Could not read that file.',
@@ -468,8 +392,14 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   let droppedNodes = 0;
   let renamedNodes = 0;
   let droppedAttachments = 0;
+  /** Ids given afresh because the file's were missing or repeated: nodes, connectors, flows, steps, attachments. */
+  let renamedAttachments = 0;
+  let renamedEdges = 0;
+  let renamedFlows = 0;
+  let renamedSteps = 0;
   let truncatedAttachments = 0;
   let droppedInsides = 0;
+  let droppedSequenceParts = 0;
   let droppedEdgeAttachments = 0;
   let truncatedEdgeAttachments = 0;
   /** Maps the id as written in the file to the id we actually used. */
@@ -492,6 +422,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
     const type = oneOf<DraftNodeType>(candidate.type, NODE_TYPES, 'note');
     const fallbackSize = defaultSizeFor(type);
+    const maxSize = type === 'sequence' ? LIMITS.maxSequenceNodeSize : LIMITS.maxNodeSize;
 
     const node: DraftNode = {
       id,
@@ -501,21 +432,21 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       // Whole pixels, like every size the editor writes (`clampSize`): the canvas renders rounded sizes,
       // and a fractional one would never match them — a fresh node object on every render.
       width: Math.round(
-        clamp(finite(candidate.width, fallbackSize.width), LIMITS.minNodeSize, LIMITS.maxNodeSize),
+        clamp(finite(candidate.width, fallbackSize.width), LIMITS.minNodeSize, maxSize),
       ),
       height: Math.round(
-        clamp(finite(candidate.height, fallbackSize.height), LIMITS.minNodeSize, LIMITS.maxNodeSize),
+        clamp(finite(candidate.height, fallbackSize.height), LIMITS.minNodeSize, maxSize),
       ),
-      z: Math.round(clamp(finite(candidate.z, 0), -10_000, 10_000)),
+      z: Math.round(clamp(finite(candidate.z, 0), -LIMITS.maxZ, LIMITS.maxZ)),
     };
 
     const label = text(candidate.text, LIMITS.maxTextLength);
     if (label !== undefined) node.text = label;
     if ((C4_TEXT_TYPES as readonly DraftNodeType[]).includes(type)) {
       // Trimmed and empty-dropped: an empty line would still reserve room under the name.
-      const description = text(candidate.description, LIMITS.maxDescriptionLength)?.trim();
+      const description = typeof candidate.description === 'string' ? cleanDescription(candidate.description) : undefined;
       if (description) node.description = description;
-      const technology = text(candidate.technology, LIMITS.maxTechnologyLength)?.replace(/\s+/g, ' ').trim();
+      const technology = typeof candidate.technology === 'string' ? cleanTechnology(candidate.technology) : undefined;
       if (technology) node.technology = technology;
     }
 
@@ -549,6 +480,13 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     }
     if (type === 'service') {
       node.serviceKind = oneOf<ServiceKind>(candidate.serviceKind, SERVICE_KINDS, 'generic');
+      const replicas = candidate.replicas;
+      if (typeof replicas === 'number' && Number.isInteger(replicas) && replicas >= 2) {
+        node.replicas = Math.min(replicas, LIMITS.maxReplicas);
+      }
+    }
+    if ((type === 'service' || type === 'database' || type === 'queue') && candidate.kindOrigin === 'technology') {
+      node.kindOrigin = 'technology';
     }
     if (type === 'database') {
       node.databaseKind = oneOf<DatabaseKind>(candidate.databaseKind, DATABASE_KINDS, 'generic');
@@ -582,8 +520,15 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       if (textBackground !== undefined) node.textBackground = textBackground;
     }
 
+    if (type === 'sequence') {
+      const read = normalizeSequence(candidate.sequence);
+      node.sequence = read.sequence;
+      droppedSequenceParts += read.dropped;
+    }
+
     const nodeAttachments = parseAttachments(candidate.attachments, LIMITS.maxAttachmentsPerNode);
     droppedAttachments += nodeAttachments.dropped;
+    renamedAttachments += nodeAttachments.renamed;
     truncatedAttachments += nodeAttachments.truncated;
     if (nodeAttachments.attachments.length > 0) node.attachments = nodeAttachments.attachments;
 
@@ -615,6 +560,15 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       continue;
     }
     node.parentId = mapped;
+  }
+  // A participant's link follows a shape whose id was reissued above. One that leads nowhere is
+  // kept: see `SeqParticipant.ref`.
+  for (const node of nodes) {
+    if (!node.sequence) continue;
+    for (const participant of node.sequence.participants) {
+      const mapped = participant.ref ? nodeIdRemap.get(participant.ref) : undefined;
+      if (mapped && mapped !== participant.ref) participant.ref = mapped;
+    }
   }
   // A link is only broken where the node itself sits on the cycle. A node whose chain merely
   // leads into a cycle keeps its parent — the cycle is cut at one of its own members instead.
@@ -677,7 +631,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
     const originalEdgeId = typeof candidate.id === 'string' ? candidate.id : null;
     let id = safeId(candidate.id);
-    if (!id || seenEdgeIds.has(id)) id = createId('e');
+    if (!id || seenEdgeIds.has(id)) {
+      id = createId('e');
+      renamedEdges += 1;
+    }
     seenEdgeIds.add(id);
     if (originalEdgeId && !edgeIdRemap.has(originalEdgeId)) edgeIdRemap.set(originalEdgeId, id);
 
@@ -689,7 +646,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       routing: oneOf<EdgeRouting>(candidate.routing, EDGE_ROUTINGS, 'smoothstep'),
     };
 
-    const label = text(candidate.label, LIMITS.maxLabelLength);
+    const label = typeof candidate.label === 'string' ? cleanEdgeLabel(candidate.label) : undefined;
     if (label) edge.label = label;
 
     // See the matching comment on the node's own accent above: `neutral` is a
@@ -699,6 +656,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
     const condition = text(candidate.condition, LIMITS.maxConditionLength)?.trim();
     if (condition) edge.condition = condition;
+    const cadence = text(candidate.cadence, LIMITS.maxCadenceLength)?.trim();
+    if (cadence) edge.cadence = cadence;
 
     const response = text(candidate.response, LIMITS.maxResponseLength)?.trim();
     if (response) edge.response = response;
@@ -774,6 +733,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     // The identical `Attachment` shape a node carries, just hosted on a connector.
     const edgeAttachments = parseAttachments(candidate.attachments, LIMITS.maxAttachmentsPerEdge);
     droppedEdgeAttachments += edgeAttachments.dropped;
+    renamedAttachments += edgeAttachments.renamed;
     truncatedEdgeAttachments += edgeAttachments.truncated;
     if (edgeAttachments.attachments.length > 0) edge.attachments = edgeAttachments.attachments;
 
@@ -793,6 +753,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     repairs.push(`Gave ${renamedNodes} node(s) new ids (missing or duplicate).`);
   }
   if (droppedParents > 0) repairs.push(`Removed ${droppedParents} invalid grouping link(s).`);
+  if (renamedAttachments > 0) repairs.push(`Gave ${renamedAttachments} attachment(s) new ids (missing or duplicate).`);
   if (droppedAttachments > 0) {
     repairs.push(`Dropped ${droppedAttachments} unreadable attachment(s).`);
   }
@@ -802,6 +763,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   if (droppedInsides > 0) {
     repairs.push(`Dropped what was inside ${droppedInsides} shape(s) — shapes of that kind hold nothing.`);
   }
+  if (droppedSequenceParts > 0) {
+    repairs.push(`Dropped ${droppedSequenceParts} part(s) of a sequence that could not be read.`);
+  }
+  if (renamedEdges > 0) repairs.push(`Gave ${renamedEdges} connector(s) new ids (missing or duplicate).`);
   if (droppedEdges > 0) {
     repairs.push(`Dropped ${droppedEdges} connector(s) pointing at nodes that do not exist.`);
   }
@@ -839,8 +804,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       continue;
     }
     const rawId = typeof candidateFlow.id === 'string' ? candidateFlow.id : undefined;
-    let id = safeId(candidateFlow.id) ?? createId('f');
-    if (seenFlowIds.has(id)) id = createId('f');
+    let id = safeId(candidateFlow.id);
+    if (!id || seenFlowIds.has(id)) {
+      id = createId('f');
+      renamedFlows += 1;
+    }
     seenFlowIds.add(id);
     if (rawId) flowIdRemap.set(rawId, id);
     if (typeof candidateFlow.variantOf === 'string') pendingVariantOf.set(id, candidateFlow.variantOf);
@@ -901,7 +869,10 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       }
 
       let stepId = safeId(candidateStep.id);
-      if (!stepId || seenStepIds.has(stepId)) stepId = createId('fs');
+      if (!stepId || seenStepIds.has(stepId)) {
+        stepId = createId('fs');
+        renamedSteps += 1;
+      }
       seenStepIds.add(stepId);
 
       const step: DraftFlowStep = { id: stepId };
@@ -934,12 +905,43 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   }
   if (droppedVariantOf > 0) repairs.push(`Dropped ${droppedVariantOf} flow variant link(s) that pointed at itself, at another variant, or at nothing.`);
 
+  if (renamedFlows > 0) repairs.push(`Gave ${renamedFlows} flow(s) new ids (missing or duplicate).`);
+  if (renamedSteps > 0) repairs.push(`Gave ${renamedSteps} flow step(s) new ids (missing or duplicate).`);
   if (droppedFlows > 0) repairs.push(`Dropped ${droppedFlows} unreadable flow(s).`);
   if (droppedFlowSteps > 0) {
     repairs.push(`Dropped ${droppedFlowSteps} flow step(s) that were unreadable or had nothing left to show.`);
   }
   if (truncatedFlowSteps > 0) {
     repairs.push(`${truncatedFlowSteps} flow(s) had too many steps; kept the first ${LIMITS.maxStepsPerFlow} of each.`);
+  }
+
+  /* ----------------------------------------------------------------- ink -- */
+
+  /*
+   * Handwritten strokes, per room like flows. Repaired stroke by stroke (`parseInkStroke`); one that
+   * cannot be read is dropped and reported, never the room. Ids are unique across the file, as for
+   * every other element, so a collaborator's change can name a stroke without saying where it is.
+   */
+  const ink: NonNullable<DraftDocument['ink']> = [];
+  {
+    const rawInk = Array.isArray(raw.ink) ? raw.ink : [];
+    const allowance = Math.max(0, ctx.budget.ink);
+    if (rawInk.length > allowance) {
+      repairs.push(`${here} had more sketch strokes than a canvas holds; kept the first ${allowance}.`);
+    }
+    let droppedInk = 0;
+    for (const candidate of rawInk.slice(0, allowance)) {
+      let id = isRecord(candidate) ? safeId(candidate.id) : null;
+      if (!id || ctx.inkIds.has(id)) id = createId(INK_ID_PREFIX);
+      const stroke = parseInkStroke(candidate, id);
+      if (!stroke) {
+        droppedInk += 1;
+        continue;
+      }
+      ctx.inkIds.add(stroke.id);
+      ink.push(stroke);
+    }
+    if (droppedInk > 0) repairs.push(`Dropped ${droppedInk} unreadable sketch stroke(s).`);
   }
 
   /* --------------------------------------------------------- open points -- */
@@ -1009,10 +1011,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     version: CURRENT_VERSION,
     metadata: {
       id: safeId(meta.id) ?? createId('d'),
-      title: text(meta.title, LIMITS.maxTitleLength)?.trim() || 'Untitled canvas',
+      title: typeof meta.title === 'string' ? cleanTitle(meta.title) : DEFAULT_TITLE,
       createdAt,
       updatedAt: Math.max(createdAt, finite(meta.updatedAt, now)),
       ...(safeId(meta.projectId) ? { projectId: safeId(meta.projectId)! } : {}),
+      ...(originOf(meta.origin) ? { origin: originOf(meta.origin)! } : {}),
     },
     nodes,
     edges,
@@ -1037,6 +1040,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       },
     },
     flows,
+    ...(ink.length > 0 ? { ink } : {}),
     openPoints,
     // Absent stays absent: a view with no level behaves exactly as every canvas did before
     // levels existed, and nothing here ever invents one.
@@ -1050,6 +1054,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
   ctx.budget.nodes -= nodes.length;
   ctx.budget.edges -= edges.length;
   ctx.budget.flows -= flows.length;
+  ctx.budget.ink -= ink.length;
   if (isRoot) {
     drainInsides(ctx, repairs);
     // Only now does `ctx` know every id in the file, rooms included, so only now can a target be told

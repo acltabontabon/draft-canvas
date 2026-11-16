@@ -1,3 +1,4 @@
+import { LIMITS } from '../../document/limits';
 import { describeEdge } from '../../edges/describe';
 import { obstaclesForEdge } from '../../edges/obstacles';
 import { connectorRouteInputs } from '../../edges/connectorRoutes';
@@ -6,6 +7,7 @@ import { describeNode, describeContext, type DescribeContext } from '../../nodes
 import { technologyMarkBounds } from '../../nodes/technology';
 import { findFlow, stepIndexOf } from '../../document/flow';
 import { visibleEdges } from '../../document/compensation';
+import { recoverCappedSequence } from '../../nodes/sequenceFit';
 import { boundsOf } from '../../document/operations';
 import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../../document/types';
 import { unresolvedOpenPoints, unresolvedOpenPointsFor } from '../../document/openPoints';
@@ -15,6 +17,7 @@ import { laneIndex } from '../../edges/routing';
 import { routingPlan } from '../../edges/bundles';
 import { crossingPlan } from '../../edges/crossings';
 import { labelGroupPlan } from '../../edges/labelGroups';
+import { replyLabelPlan } from '../../edges/replyLabels';
 import { blurRadiusFor } from '../backgroundAnchor';
 import { themeFor, type Theme, type ThemeName } from '../theme/tokens';
 import { getMeasurer } from '../text/measure';
@@ -25,6 +28,8 @@ import { markerDefs } from './markers';
 import { PERSONALITY_PROFILES } from '../roughness/presets';
 import type { PersonalityPreset } from '../../theme/usePersonality';
 import type { Shape } from '../displayList';
+import { inkOf, inkPaintBounds } from '../../document/ink';
+import { inkPaint } from '../ink';
 
 const BACKGROUND_BLUR_FILTER_ID = 'dc-bg-blur';
 
@@ -68,6 +73,40 @@ export interface ExportOptions {
   openPoints?: boolean;
   /** The exported legend is unnecessary when drawing a transient camera-sized room picture. */
   openPointKey?: boolean;
+  /** Preserve element ids in SVG data attributes for an interactive embedding. */
+  identifyElements?: boolean;
+  /**
+   * Whether the picture keeps the room's handwritten sketches, drawn over everything as on the
+   * canvas. Defaults to `true`. A selection-only export (`only`) leaves them out: a sketch belongs
+   * to the view, not to any one shape.
+   */
+  ink?: boolean;
+}
+
+/**
+ * A room's sketches as SVG, in room coordinates — the same paint the canvas draws
+ * (`render/ink.ts`). Kept to plain paths so a vector editor opens them as editable lines.
+ */
+export function inkSvgEls(document: Pick<DraftDocument, 'ink'>, theme: ThemeName): SvgEl[] {
+  return inkOf(document).map((stroke) => {
+    const paint = inkPaint(stroke, theme);
+    const attrs: Record<string, string | number> = {
+      d: paint.d,
+      transform: `translate(${n(stroke.x)} ${n(stroke.y)})`,
+    };
+    if (paint.mode === 'fill') {
+      attrs.fill = paint.color;
+    } else {
+      attrs.fill = 'none';
+      attrs.stroke = paint.color;
+      attrs['stroke-width'] = n(paint.width);
+      attrs['stroke-linecap'] = 'round';
+      attrs['stroke-linejoin'] = 'round';
+    }
+    if (paint.opacity < 1) attrs.opacity = paint.opacity;
+    if (paint.blend) attrs.style = `mix-blend-mode:${paint.blend}`;
+    return el('path', attrs);
+  });
 }
 
 /**
@@ -149,6 +188,7 @@ export interface Decoration {
 }
 
 export interface SceneOptions {
+  identifyElements?: boolean;
   only?: ReadonlySet<string>;
   selectedFlow?: DraftFlow;
   /** Clip-path id scope (see `beginClipScope`). Defaults to `'export'`; anything drawn into the
@@ -254,9 +294,12 @@ export function buildScene(
   },
   options: SceneOptions = {},
 ): Scene {
-  const nodes = options.only
+  let nodes = options.only
     ? document.nodes.filter((node) => options.only!.has(node.id))
     : document.nodes;
+  if (nodes.some((node) => node.type === 'sequence' && (node.width === LIMITS.maxNodeSize || node.height === LIMITS.maxNodeSize))) {
+    nodes = nodes.map((node) => recoverCappedSequence(node, nodeCtx));
+  }
   const visible = new Set(nodes.map((node) => node.id));
   const isVisible = (edge: DraftEdge) => visible.has(edge.source) && visible.has(edge.target);
   // The document's own array whenever every connector is in the picture (the usual case — only a
@@ -284,6 +327,7 @@ export function buildScene(
   // Connectors that leave together under one label draw it once, as on the canvas — unless a flow's
   // numbered steps are showing, which ride inside each connector's own label.
   const labels = labelGroupPlan(nodes, edges, 'transient');
+  const replies = replyLabelPlan(nodes, edges, 'transient');
   const sharedLabelOf = (edgeId: string) => {
     const group = labels.groupFor(edgeId);
     const stepped = edgeCtx.showSequence && group?.members.some((member) => stepIndexOf(options.selectedFlow, member) !== undefined);
@@ -317,6 +361,7 @@ export function buildScene(
       ...(edgePoints.length ? { openPoints: edgePoints } : {}),
       spine: plan.spineFor(edge.id),
       sharedLabel: sharedLabelOf(edge.id),
+      replyShift: replies.shiftFor(edge.id),
       obstacles: inputs?.obstacles ?? obstaclesForEdge(nodes, edge.source, edge.target, 'transient'),
       crossings: crossings.crossingsFor(edge.id),
       ...(inputs ? { routes: edgeRoutes(inputs, 'transient') } : {}),
@@ -342,8 +387,15 @@ export function buildScene(
     for (const bend of edge.waypoints ?? []) overlayRects.push({ x: bend.x - 2, y: bend.y - 2, width: 4, height: 4 });
     const groupAttrs = decorateGroupAttrs(decoration);
 
-    edgeLines.push(...(groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls));
-    edgeOverlays.push(...(groupAttrs ? [el('g', groupAttrs, overlayEls)] : overlayEls));
+    const routedLines = options.identifyElements
+      ? [el('g', { ...groupAttrs, 'data-diagram-edge': edge.id }, lineEls)]
+      : groupAttrs ? [el('g', groupAttrs, lineEls)] : lineEls;
+    // Participant connectors cross the sequence surface to reach their lifelines.
+    if (edge.sourceAnchor?.participantId || edge.targetAnchor?.participantId) edgeOverlays.push(...routedLines);
+    else edgeLines.push(...routedLines);
+    edgeOverlays.push(...(options.identifyElements && overlayEls.length
+      ? [el('g', { ...groupAttrs, 'data-diagram-edge-labels': edge.id }, overlayEls)]
+      : groupAttrs ? [el('g', groupAttrs, overlayEls)] : overlayEls));
     edgeEntries.push({ edge, lineEls, overlayEls });
   }
 
@@ -358,7 +410,11 @@ export function buildScene(
     const els = emitDisplayList(list);
     const group = el(
       'g',
-      { transform: `translate(${n(node.x)} ${n(node.y)})`, ...decorateGroupAttrs(decoration) },
+      {
+        transform: `translate(${n(node.x)} ${n(node.y)})`,
+        ...decorateGroupAttrs(decoration),
+        'data-diagram-node': options.identifyElements ? node.id : undefined,
+      },
       els,
     );
     if (node.type === 'group') backdropEls.push(group);
@@ -369,8 +425,8 @@ export function buildScene(
     const technologyMark = technologyMarkBounds(node);
     if (technologyMark) overlayRects.push({ ...technologyMark, x: node.x + technologyMark.x, y: node.y + technologyMark.y });
 
-    // The "<> 2" badge a shape with attachments carries above its corner on the canvas.
-    const badge = describeAttachmentBadge(node, { theme: nodeCtx.theme, measurer: nodeCtx.measurer });
+    // The attachment tab a shape carries in its marker rail on the canvas, after its technology mark.
+    const badge = describeAttachmentBadge(node, { theme: nodeCtx.theme, measurer: nodeCtx.measurer }, Boolean(technologyMark));
     if (badge.length) {
       markerEls.push(el('g', { transform: `translate(${n(node.x)} ${n(node.y)})`, ...decorateGroupAttrs(decoration) }, badge.flatMap(emitShape)));
       shapeRects(badge, node.x, node.y, overlayRects);
@@ -379,11 +435,15 @@ export function buildScene(
     // The same tab, at the same place, `DraftNodeView` puts it — from the same two functions.
     const nodePoints = points.length ? unresolvedOpenPointsFor(points, { kind: 'node', id: node.id }) : [];
     if (nodePoints.length) {
-      const origin = nodeMarkerOrigin(node);
+      const origin = nodeMarkerOrigin(node, { technology: Boolean(technologyMark), attachments: node.attachments?.length });
       const x = node.x + origin.x;
       const y = node.y + origin.y;
       markerEls.push(
-        el('g', { transform: `translate(${n(x)} ${n(y)})`, ...decorateGroupAttrs(decoration) }, emitDisplayList({
+        el('g', {
+          transform: `translate(${n(x)} ${n(y)})`,
+          ...decorateGroupAttrs(decoration),
+          'data-diagram-open-point': options.identifyElements ? node.id : undefined,
+        }, emitDisplayList({
           width: MARKER_SIZE,
           height: MARKER_SIZE,
           shapes: describeMarker(nodePoints, { theme: nodeCtx.theme, measurer: nodeCtx.measurer }),
@@ -420,9 +480,14 @@ export function renderDocumentSvg(
   const selectedFlow = options.selectedFlowId ? findFlow(document, options.selectedFlowId) : undefined;
 
   const openPoints = options.openPoints === false ? [] : unresolvedOpenPoints(document);
-  const scene = buildScene(document, nodeCtx, edgeCtx, { only: options.only, selectedFlow, openPoints });
+  const scene = buildScene(document, nodeCtx, edgeCtx, {
+    only: options.only, selectedFlow, openPoints, identifyElements: options.identifyElements,
+  });
+  const withInk = options.ink !== false && !options.only;
+  const inkEls = withInk ? inkSvgEls(document, theme.name) : [];
+  const inkRects = withInk ? inkOf(document).map(inkPaintBounds) : [];
 
-  const bounds = boundsOf([...scene.nodes, ...scene.overlayRects]) ?? { x: 0, y: 0, width: 320, height: 160 };
+  const bounds = boundsOf([...scene.nodes, ...scene.overlayRects, ...inkRects]) ?? { x: 0, y: 0, width: 320, height: 160 };
   // Only the kinds actually in the picture — a "selection only" export of an unmarked corner needs
   // no key at all. Below the architecture, inside the margin, so it never reads as part of it.
   const shown = scene.markerEls.length || scene.edgeEntries.some((entry) => unresolvedOpenPointsFor(openPoints, { kind: 'edge', id: entry.edge.id }).length);
@@ -469,6 +534,8 @@ export function renderDocumentSvg(
       ...scene.nodeEls,
       ...scene.edgeOverlays,
       ...scene.markerEls,
+      // Over everything, as on the canvas: a circle drawn round a shape is drawn on top of it.
+      ...inkEls,
     ]),
   );
   if (key) {

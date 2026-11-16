@@ -22,7 +22,7 @@ name: Deploy the web
 #
 # Releases call this only after verification and desktop acceptance. This is the only workflow that deploys. pages-site.yml calls it rather than building its own
 # copy, so there is exactly one definition of what gets published. On a release tag both halves
-# come from that tag; anywhere else the landing page comes from the commit and the editor from the
+# come from that tag; anywhere else the site and docs come from the commit and the editor from the
 # latest vX.Y.Z (see the first step), so the editor only ever changes on a release. The relay and
 # app.draftcanvas.dev are deployed only for a release (or a withdrawal to one): off a release this
 # publishes the landing page and the www. redirect alone.
@@ -70,7 +70,7 @@ jobs:
       # The editor half is only ever a release. A site-only push (pages-site.yml) or a run on demand
       # from a branch would otherwise build main's unreleased editor into /draft-canvas/editor/
       # and stamp the site's download links with a package.json version that has no installers yet.
-      # So off a tag, check out the newest stable vX.Y.Z and lay this commit's www/ (and the script that assembles it) over it.
+      # Off a tag, use the newest stable vX.Y.Z for the editor and this commit for the site and docs.
       - name: Build the editor from the latest release
         id: release
         if: github.ref_type != 'tag' || inputs.release-tag != ''
@@ -95,9 +95,7 @@ jobs:
           fi
           revision="$(SOURCE_REF="refs/tags/$tag" node scripts/verify-source.mjs)"
           git checkout --quiet --detach "$revision"
-          git rm -rq --cached --ignore-unmatch www
-          rm -rf www
-          git checkout "$site" -- www scripts/assemble-web.mjs
+          git restore --source="$site" --staged --worktree -- www docs SECURITY.md scripts/assemble-web.mjs
           # The relay and the editor's hosting (its config and headers) belong with the editor: the
           # relay is half of the protocol the released editor speaks. From the release too, wherever it
           # has them — so the tests that run below match, and a withdrawal puts back that release's
@@ -113,7 +111,7 @@ jobs:
             fi
           done
           echo "relay-released=$relay_released" >> "$GITHUB_OUTPUT"
-          echo "::notice::Editor from $tag, landing page from ${site:0:7}."
+          echo "::notice::Editor from $tag, site and docs from ${site:0:7}."
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: 22.22.2
@@ -185,13 +183,13 @@ jobs:
         with:
           node-version: 22.22.2
           cache: npm
-      # Test the selected editor's journeys, with the current no-rebuild server configuration.
-      - name: Use the artifact-only server configuration
+      # Offline tests belong to the selected editor. Web tests and their fixtures belong to the site.
+      - name: Use the site acceptance tests, fixtures and artifact-only server
         env:
           CONTROL_COMMIT: ${{ github.sha }}
         run: |
           git fetch --no-tags --depth=1 origin "$CONTROL_COMMIT"
-          git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts e2e/web-deploy.spec.ts scripts/stage-subpath.mjs scripts/serve-web.mjs
+          git checkout FETCH_HEAD -- playwright.dist.config.ts playwright.web.config.ts e2e/web-deploy.spec.ts scripts/stage-subpath.mjs scripts/serve-web.mjs www/examples/
       - run: npm ci --no-audit --no-fund
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:

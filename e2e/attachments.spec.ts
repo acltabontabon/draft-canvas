@@ -66,7 +66,7 @@ test.describe('attachments', () => {
 
     await expect(page.locator('.dc-node[data-type="code"]')).toHaveCount(0);
     await expect(page.locator('.dc-attachment-badge')).toHaveCount(1);
-    await expect(page.locator('.dc-attachment-badge')).toContainText('1');
+    await expect(page.locator('.dc-attachment-badge')).toHaveAccessibleName('1 attachment');
     await expect(page.locator('.dc-node')).toHaveCount(1);
   });
 
@@ -96,7 +96,7 @@ test.describe('attachments', () => {
     await release();
 
     await expect(page.locator('.dc-node[data-type="text"]')).toHaveCount(0);
-    await expect(page.locator('.dc-attachment-badge')).toContainText('1');
+    await expect(page.locator('.dc-attachment-badge')).toHaveAccessibleName('1 attachment');
   });
 
   test('a low-overlap hold arms via dwell, not overlap', async ({ page }) => {
@@ -122,7 +122,7 @@ test.describe('attachments', () => {
     await release();
 
     await expect(page.locator('.dc-node[data-type="note"]')).toHaveCount(0);
-    await expect(page.locator('.dc-attachment-badge')).toContainText('1');
+    await expect(page.locator('.dc-attachment-badge')).toHaveAccessibleName('1 attachment');
   });
 
   test('opens the badge into a chip row, edits via its card, detaches with original size preserved, and deletes with undo', async ({

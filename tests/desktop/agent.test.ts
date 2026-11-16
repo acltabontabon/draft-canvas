@@ -4,6 +4,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { compose } from '../../src/agent/compile';
+import { preconditionConflicts, type PreconditionSnapshot } from '../../src/agent/proposal';
 import { handleAgentRequest as answerInEditor, currentRevision, proposalStale } from '../../src/host/agentBridge';
 import { deserializeDocument, serializeDocument } from '../../src/export/project';
 import { __resetInteraction, fileOf, useEditorStore } from '../../src/store/editorStore';
@@ -220,6 +221,11 @@ describe('collaborator provenance in agent reads', () => {
       { id: 'd', kind: 'edge', by: 'Alice' },
       { id: 'flow-a', kind: 'flow', by: 'Alice' },
     ]) });
+    const edit = await request('read_diagram', { format: 'edit', query: 'Collaborator connector' }, context);
+    expect(edit.value!.matches).toMatchObject([{ id: 'd', from: { id: 'api', label: 'Collaborator label' } }]);
+    expect(edit.value!.fromCollaborators).toMatchObject({ elements: expect.arrayContaining([
+      { id: 'api', kind: 'node', by: 'Alice' }, { id: 'api', kind: 'node', by: 'peer-b' }, { id: 'd', kind: 'edge', by: 'Alice' },
+    ]) });
     expect(fileOf(useEditorStore.getState())).not.toHaveProperty('fromCollaborators');
   });
 
@@ -235,6 +241,18 @@ describe('collaborator provenance in agent reads', () => {
     const context = { handle, open: true, diagramId: 'd_orders000001' };
     const root = await request('read_diagram', {}, context);
     expect(root.value).not.toHaveProperty('fromCollaborators');
+    const outline = await request('read_diagram', { format: 'outline' }, context);
+    expect(outline.value).toEqual({
+      diagramId: context.diagramId,
+      title: 'Orders',
+      revision: root.value!.revision,
+      format: 'outline',
+      views: [{ inside: ['api'], owner: { id: 'api', label: 'Orders API', type: 'api' }, level: null, elements: 1, relationships: 0, flows: 0 }],
+    });
+    const lookup = await request('read_diagram', { query: 'Untrusted inner' }, context);
+    expect(lookup.value!.fromCollaborators).toMatchObject({ elements: [{ id: 'inner', kind: 'node', by: 'peer-a' }] });
+    const edit = await request('read_diagram', { format: 'edit', query: 'Untrusted inner' }, context);
+    expect(edit.value!.fromCollaborators).toMatchObject({ elements: [{ id: 'inner', kind: 'node', by: 'peer-a' }] });
     const inner = await request('read_diagram', { view: { inside: ['api'] } }, context);
     expect(inner.value!.fromCollaborators).toMatchObject({ elements: [{ id: 'inner', kind: 'node', by: 'peer-a' }] });
     const focused = await request('get_implementation_context', { focus: { nodes: ['db'] } }, context);
@@ -1023,5 +1041,244 @@ describe('revisions a clean open diagram answers to', () => {
     // A file revision is the shell's to judge.
     expect(proposalStale('f:0123456789abcdef', false)).toBe(false);
     expect(proposalStale('f:0123456789abcdef', true)).toBe(true);
+  });
+});
+
+describe('one-call rename through the existing edit pipeline', () => {
+  const args = () => ({ diagramId: 'd_orders000001', requestId: `rename-${nextId}`, rename: { from: 'Orders API', to: 'Gateway' } });
+
+  it('prepares a concrete rename proposal without writing, changing history, or retargeting later', async () => {
+    const handle = await openOrders();
+    const before = fileOf(useEditorStore.getState());
+    const history = useEditorStore.getState().history;
+    const revision = currentRevision();
+    const saves = h.api.saveDocument.mock.calls.length;
+    const disk = h.files.get(handle)!.text;
+    const out = await request('submit_proposal', { ...args(), summary: 'Rename API' }, { handle, open: true, diagramId: 'd_orders000001' });
+    expect(out.ok).toBe(true);
+    expect(out.value).toMatchObject({ path: [], baseRevision: expect.any(String), noImpact: false, ops: [{ op: 'update', id: 'api', set: { label: 'Gateway' } }], preconditions: { nodes: { api: { label: 'Orders API' } } } });
+    expect(fileOf(useEditorStore.getState())).toBe(before);
+    expect(useEditorStore.getState().history).toBe(history);
+    expect(currentRevision()).toBe(revision);
+    expect(h.files.get(handle)!.text).toBe(disk);
+    expect(h.api.saveDocument.mock.calls.length).toBe(saves);
+    expect(h.agent.gates).not.toContain(nextId - 1);
+    const preconditions = out.value!.preconditions as PreconditionSnapshot;
+    expect(preconditionConflicts(before, [], preconditions)).toEqual([]);
+    const changed = { ...before, nodes: before.nodes.map(n => ({ ...n, text: n.id === 'api' ? 'My API' : 'Orders API' })) };
+    expect(preconditionConflicts(changed, [], preconditions)).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'api' })]));
+    expect(out.value!.ops).toEqual([{ op: 'update', id: 'api', set: { label: 'Gateway' } }]);
+  });
+
+  it('refuses ambiguous, missing and out-of-scope proposal targets without changing the diagram', async () => {
+    const handle = await openOrders();
+    const before = currentRevision();
+    const scoped = await request('submit_proposal', { ...args(), summary: 'Rename API', scope: { nodes: ['db'] } }, { handle, open: true });
+    expect(scoped.error?.code).toBe('OUT_OF_SCOPE');
+    const missing = await request('submit_proposal', { ...args(), summary: 'Rename API', rename: { from: 'Missing', to: 'Gateway' } }, { handle, open: true });
+    expect(missing.error?.code).toBe('NOT_FOUND');
+    expect(currentRevision()).toBe(before);
+    useEditorStore.getState().apply('Duplicate', doc => ({ ...doc, nodes: doc.nodes.map(n => ({ ...n, text: 'Orders API' })) }));
+    const duplicated = currentRevision();
+    const ambiguous = await request('submit_proposal', { ...args(), summary: 'Rename API' }, { handle, open: true });
+    expect(ambiguous.error?.code).toBe('INVALID_INPUT');
+    expect(currentRevision()).toBe(duplicated);
+  });
+
+  it('prepares a closed-file proposal without opening or writing the file', async () => {
+    await openOrders();
+    const active = fileOf(useEditorStore.getState());
+    const handle = h.addFile('Other', diagramText());
+    const file = h.files.get(handle)!;
+    const original = file.text;
+    const out = await request('submit_proposal', { ...args(), summary: 'Rename API' }, { handle, open: false, text: file.text, stamp: `v1:${file.version}`, diagramId: 'd_orders000001' });
+    expect(out.ok).toBe(true);
+    expect(out.value).toMatchObject({ ops: [{ op: 'update', id: 'api', set: { label: 'Gateway' } }] });
+    expect(out.value).not.toHaveProperty('write');
+    expect(h.files.get(handle)!.text).toBe(original);
+    expect(fileOf(useEditorStore.getState())).toBe(active);
+  });
+
+  it('saves a clean diagram with one undo step and preserves unrelated content and placement', async () => {
+    const handle = await openOrders();
+    const before = structuredClone(fileOf(useEditorStore.getState()));
+    const out = await request('update_diagram', args(), { handle, open: true, diagramId: 'd_orders000001' });
+    expect(out.value).toMatchObject({ applied: true, persisted: true, state: 'saved', updated: 1 });
+    const expected = structuredClone(before.nodes);
+    expected.find((n) => n.id === 'api')!.text = 'Gateway';
+    expect(fileOf(useEditorStore.getState()).nodes).toEqual(expected);
+    expect(fileOf(useEditorStore.getState()).edges).toEqual(before.edges);
+    expect(h.agent.gates).toContain(nextId - 1);
+    useEditorStore.getState().undo();
+    expect(fileOf(useEditorStore.getState()).nodes).toEqual(before.nodes);
+  });
+
+  it('refuses ambiguity and missing old labels without opening a commit gate', async () => {
+    const handle = await openOrders();
+    useEditorStore.getState().apply('Duplicate label', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => ({ ...n, text: 'Orders API' })) }));
+    const before = currentRevision();
+    const out = await request('update_diagram', args(), { handle, open: true });
+    expect(out.error?.code).toBe('INVALID_INPUT');
+    expect(currentRevision()).toBe(before);
+    expect(h.agent.gates).not.toContain(nextId - 1);
+    const missing = await request('update_diagram', { ...args(), rename: { from: 'Missing', to: 'Gateway' } }, { handle, open: true });
+    expect(missing.error?.code).toBe('NOT_FOUND');
+  });
+
+  it('still refuses changes outside an imposed selection scope', async () => {
+    const handle = await openOrders();
+    const out = await request('update_diagram', { ...args(), scope: { nodes: ['db'] } }, { handle, open: true });
+    expect(out.error?.code).toBe('OUT_OF_SCOPE');
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'api')!.text).toBe('Orders API');
+  });
+
+  it('does not overwrite a target changed during approval', async () => {
+    const handle = await openOrders();
+    h.api.agentGate.mockImplementationOnce(async () => {
+      useEditorStore.getState().apply('My rename', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => n.id === 'api' ? { ...n, text: 'Mine' } : n) }));
+      return true;
+    });
+    const out = await request('update_diagram', args(), { handle, open: true });
+    expect(out.error?.code).toBe('REVISION_CONFLICT');
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'api')!.text).toBe('Mine');
+  });
+
+  it('honours cancellation and preserves the person’s unsaved changes', async () => {
+    const handle = await openOrders();
+    h.agent.gateOpen = false;
+    const cancelled = await request('update_diagram', args(), { handle, open: true });
+    expect(cancelled.error?.code).toBe('CANCELLED');
+    h.agent.gateOpen = true;
+    useEditorStore.getState().apply('My note', (doc) => ({ ...doc, nodes: doc.nodes.map((n) => n.id === 'db' ? { ...n, text: 'My database' } : n) }));
+    h.edit(serializeDocument(fileOf(useEditorStore.getState())));
+    const saves = h.api.saveDocument.mock.calls.length;
+    const renamed = await request('update_diagram', args(), { handle, open: true });
+    expect(renamed.value).toMatchObject({ applied: true, persisted: false, state: 'applied-unsaved' });
+    expect(h.api.saveDocument.mock.calls.length).toBe(saves);
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'db')!.text).toBe('My database');
+  });
+
+  it('prepares a closed-file rename under the broker’s original stamp without switching the editor', async () => {
+    await openOrders();
+    const before = fileOf(useEditorStore.getState());
+    const handle = h.addFile('Other', diagramText());
+    const file = h.files.get(handle)!;
+    const out = await request('update_diagram', args(), { handle, open: false, text: file.text, stamp: `v1:${file.version}`, diagramId: 'd_orders000001' });
+    expect(out.value).toMatchObject({ applied: true, where: 'file', undo: 'on-open' });
+    const parsed = deserializeDocument((out.value!.write as { text: string }).text);
+    expect(parsed.ok && parsed.document.nodes.find((n) => n.id === 'api')!.text).toBe('Gateway');
+    expect(fileOf(useEditorStore.getState())).toBe(before);
+  });
+});
+
+describe('compact reads keep common edits on the guarded pipeline', () => {
+  const edits = [
+    { name: 'description', ops: [{ op: 'update', id: 'api', set: { description: 'Handles orders' } }] },
+    { name: 'shape', ops: [{ op: 'add', nodes: [{ id: 'worker', type: 'service', label: 'Worker' }] }] },
+    { name: 'connection', ops: [{ op: 'update', id: 'd', set: { label: 'Saves locally' } }] },
+  ];
+  for (const tool of ['update_diagram', 'submit_proposal']) {
+    for (const { name, ops } of edits) {
+      it(`${tool}: ${name} retains revision/scope checks and proposal isolation`, async () => {
+        const handle = await openOrders();
+        const context = { handle, open: true, diagramId: 'd_orders000001' };
+        const read = await request('read_diagram', { format: 'edit' }, context);
+        expect(read.ok).toBe(true);
+        const before = fileOf(useEditorStore.getState());
+        const history = useEditorStore.getState().history;
+        const disk = h.files.get(handle)!.text;
+        const args = { diagramId: context.diagramId, requestId: `edit-${nextId}`, expectedRevision: read.value!.revision, view: { inside: [] }, ops, ...(tool === 'submit_proposal' ? { summary: name } : {}) };
+        expect((await request(tool, { ...args, expectedRevision: 'f:stale' }, context)).error?.code).toBe('REVISION_CONFLICT');
+        expect((await request(tool, { ...args, ops: name === 'shape' ? [...ops, { op: 'update', id: 'api', set: { label: 'Outside scope' } }] : ops, scope: { nodes: ['db'], edges: [] } }, context)).error?.code).toBe('OUT_OF_SCOPE');
+        expect(fileOf(useEditorStore.getState())).toBe(before);
+        expect(h.files.get(handle)!.text).toBe(disk);
+        const result = await request(tool, args, context);
+        expect(result.ok).toBe(true);
+        if (tool === 'submit_proposal') {
+          expect(result.value).toMatchObject({ ops, baseRevision: read.value!.revision, path: [], noImpact: false });
+          expect(fileOf(useEditorStore.getState())).toBe(before);
+          expect(useEditorStore.getState().history).toBe(history);
+          expect(h.files.get(handle)!.text).toBe(disk);
+          expect(h.agent.gates).not.toContain(nextId - 1);
+        } else {
+          expect(result.value).toMatchObject({ applied: true, persisted: true });
+          useEditorStore.getState().undo();
+          const restored = fileOf(useEditorStore.getState());
+          expect(restored.nodes).toEqual(before.nodes);
+          expect(restored.edges).toEqual(before.edges);
+        }
+      });
+    }
+  }
+});
+
+describe('local intents pin the Send revision without a model read', () => {
+  const intents = [
+    { kind: 'shape', target: 'Orders API', set: { description: 'Handles orders' } },
+    { kind: 'add', type: 'service', label: 'Audit worker', description: 'Records events' },
+    { kind: 'connection', from: 'Orders API', to: 'Orders DB', set: { label: 'Saves locally' } },
+    { kind: 'connection', from: 'Orders API', to: 'Orders DB', set: { from: 'Orders DB', to: 'Orders API' } },
+  ];
+  for (const tool of ['update_diagram', 'submit_proposal']) {
+    it.each(intents)(`${tool} validates and preserves the guarded pipeline for %j`, async intent => {
+      const handle = await openOrders();
+      const before = fileOf(useEditorStore.getState());
+      const history = useEditorStore.getState().history;
+      const disk = h.files.get(handle)!.text;
+      const context = { handle, open: true, diagramId: 'd_orders000001' };
+      const args = { diagramId: context.diagramId, requestId: `intent-${nextId}`, expectedRevision: currentRevision(), intent, ...(tool === 'submit_proposal' ? { summary: 'Requested edit' } : {}) };
+      expect((await request(tool, { ...args, expectedRevision: 'o:stale' }, context)).error?.code).toBe('REVISION_CONFLICT');
+      if (intent.kind !== 'add') {
+        expect((await request(tool, { ...args, scope: { nodes: ['db'], edges: [] } }, context)).error?.code).toBe('OUT_OF_SCOPE');
+      }
+      expect(fileOf(useEditorStore.getState())).toBe(before);
+      const out = await request(tool, args, context);
+      expect(out.ok).toBe(true);
+      if (tool === 'submit_proposal') {
+        expect(out.value!.ops).toBeInstanceOf(Array);
+        expect(out.value).not.toHaveProperty('intent');
+        expect(out.value).toMatchObject({ path: [], baseRevision: expect.any(String), noImpact: false });
+        expect(fileOf(useEditorStore.getState())).toBe(before);
+        expect(useEditorStore.getState().history).toBe(history);
+        expect(h.files.get(handle)!.text).toBe(disk);
+        expect(h.agent.gates).not.toContain(nextId - 1);
+      } else {
+        expect(out.value).toMatchObject({ applied: true, persisted: true });
+        const after = fileOf(useEditorStore.getState());
+        if (intent.kind === 'shape') expect(after.nodes.find(n => n.id === 'api')!.description).toBe('Handles orders');
+        if (intent.kind === 'add') expect(after.nodes.find(n => n.text === 'Audit worker')!.description).toBe('Records events');
+        if (intent.set?.label) expect(after.edges[0]!.label).toBe('Saves locally');
+        if (intent.set?.to) expect(after.edges[0]).toMatchObject({ source: 'db', target: 'api' });
+        useEditorStore.getState().undo();
+        expect(fileOf(useEditorStore.getState()).nodes).toEqual(before.nodes);
+        expect(fileOf(useEditorStore.getState()).edges).toEqual(before.edges);
+      }
+    });
+  }
+
+  it('refuses a user edit made while the model was thinking, before resolving names', async () => {
+    const handle = await openOrders();
+    const expectedRevision = currentRevision();
+    useEditorStore.getState().apply('Human edit', doc => ({ ...doc, nodes: doc.nodes.map(n => n.id === 'api' ? { ...n, description: 'My description' } : n) }));
+    for (const tool of ['update_diagram', 'submit_proposal']) {
+      const out = await request(tool, { diagramId: 'd_orders000001', requestId: `intent-${nextId}`, expectedRevision, intent: { kind: 'shape', target: 'Orders API', set: { description: 'Agent description' } }, ...(tool === 'submit_proposal' ? { summary: 'Edit' } : {}) }, { handle, open: true });
+      expect(out.error?.code).toBe('REVISION_CONFLICT');
+      expect(fileOf(useEditorStore.getState()).nodes.find(n => n.id === 'api')!.description).toBe('My description');
+    }
+  });
+
+  it('rechecks after native approval and honours cancellation for a resolved intent', async () => {
+    const handle = await openOrders();
+    const args = () => ({ diagramId: 'd_orders000001', requestId: `intent-${nextId}`, expectedRevision: currentRevision(), intent: { kind: 'shape', target: 'Orders API', set: { description: 'Agent description' } } });
+    h.agent.gateOpen = false;
+    expect((await request('update_diagram', args(), { handle, open: true })).ok).toBe(false);
+    h.agent.gateOpen = true;
+    h.api.agentGate.mockImplementationOnce(async () => {
+      useEditorStore.getState().apply('Human edit', doc => ({ ...doc, nodes: doc.nodes.map(n => n.id === 'api' ? { ...n, description: 'My description' } : n) }));
+      return true;
+    });
+    const out = await request('update_diagram', args(), { handle, open: true });
+    expect(out.error?.code).toBe('REVISION_CONFLICT');
+    expect(fileOf(useEditorStore.getState()).nodes.find(n => n.id === 'api')!.description).toBe('My description');
   });
 });

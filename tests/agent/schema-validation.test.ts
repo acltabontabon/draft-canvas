@@ -1,14 +1,16 @@
 import { expect, it } from 'vitest';
 import Ajv from 'ajv';
-import { TOOLS } from '../../src/agent/schema';
+import { FULL_TOOLS, TOOLS } from '../../src/agent/schema';
 import { GALLERY } from '../fixtures/agent/gallery';
 
 const ajv = new Ajv({ strict: false, allErrors: true });
-const create = ajv.compile(TOOLS.find((tool) => tool.name === 'create_diagram')!.inputSchema);
+const discovery = ajv.compile(TOOLS.find((tool) => tool.name === 'create_diagram')!.inputSchema);
+const create = ajv.compile(FULL_TOOLS.find((tool) => tool.name === 'create_diagram')!.inputSchema);
 
 it('the published schema accepts the create gallery, including descriptions inside rooms', () => {
   for (const fixture of GALLERY) {
     if (fixture.kind !== 'create') continue;
+    expect(discovery({ requestId: fixture.id, ...fixture.request }), `${fixture.id}: ${JSON.stringify(discovery.errors)}`).toBe(true);
     expect(create({ requestId: fixture.id, ...fixture.request }), `${fixture.id}: ${JSON.stringify(create.errors)}`).toBe(true);
   }
 });

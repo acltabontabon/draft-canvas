@@ -1,9 +1,10 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { DraftDocument } from '../../document/types';
 import { renderDocumentSvg, type ExportOptions } from '../../render/svg/document';
 import { themeFor, type ThemeName } from '../../render/theme/tokens';
 import { Icon, type IconName } from '../common/Icon';
 import { useTechnologyIcons } from '../../canvas/useTechnologyIcon';
+import { ExportInspector } from './ExportInspector';
 
 export type ArtifactVisual =
   | {
@@ -26,6 +27,9 @@ export type ArtifactVisual =
  * export uses (so palette, transparency, and "Selection only" all show up here before a file ever
  * exists), or a file glyph for text formats — never a rendered Mermaid/PlantUML diagram. The
  * filename is the exact one the download will carry.
+ *
+ * The thumbnail is a button: it opens the same image large (`ExportInspector`), where its text can
+ * be read at the size it is drawn before a file is made.
  */
 export function ExportArtifact({
   fileName,
@@ -90,13 +94,18 @@ function Thumbnail({
   );
 
   const meta = rendered ? describe(rendered.width, rendered.height) : 'Preview unavailable';
+  const [inspecting, setInspecting] = useState(false);
+  const background = transparent ? undefined : themeFor(theme).canvas;
+  // A button only while there is an image to open: an empty stage is not a control.
+  const Stage = src ? 'button' : 'div';
 
   return (
     <>
-      <div
+      <Stage
         className="dc-export-stage"
         data-transparent={transparent ? 'true' : undefined}
-        style={transparent ? undefined : { background: themeFor(theme).canvas }}
+        style={background === undefined ? undefined : { background }}
+        {...(src ? { type: 'button' as const, title: 'Inspect at actual size', 'aria-label': 'Inspect image at actual size', onClick: () => setInspecting(true) } : {})}
       >
         {src ? (
           // Keyed on the look, so a palette/transparency/selection change gets the same quick
@@ -110,8 +119,25 @@ function Thumbnail({
         ) : (
           <Icon name="image" size={20} />
         )}
-      </div>
+        {src && (
+          <span className="dc-export-stage-hint" aria-hidden="true">
+            <Icon name="search" size={12} />
+            Inspect
+          </span>
+        )}
+      </Stage>
       <Caption fileName={fileName} meta={meta} />
+      {inspecting && src && rendered && (
+        <ExportInspector
+          src={src}
+          width={rendered.width}
+          height={rendered.height}
+          fileName={fileName}
+          meta={meta}
+          background={background}
+          onClose={() => setInspecting(false)}
+        />
+      )}
     </>
   );
 }

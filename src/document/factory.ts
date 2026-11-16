@@ -1,6 +1,7 @@
 import { createId } from './ids';
 import { plainTextOfMarkdown } from './markdownText';
 import { DEFAULTS } from './limits';
+import { cleanTitle, DEFAULT_TITLE } from './sanitize';
 import {
   C4_TEXT_TYPES,
   CURRENT_VERSION,
@@ -52,6 +53,8 @@ export function defaultSizeFor(type: DraftNodeType): { width: number; height: nu
       return { width: DEFAULTS.queueWidth, height: DEFAULTS.queueHeight };
     case 'component':
       return { width: DEFAULTS.componentWidth, height: DEFAULTS.componentHeight };
+    case 'sequence':
+      return { width: DEFAULTS.sequenceWidth, height: DEFAULTS.sequenceHeight };
     default:
       return { width: DEFAULTS.nodeWidth, height: DEFAULTS.nodeHeight };
   }
@@ -82,6 +85,10 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
       return { width: 200, height: 96 };
     case 'group':
       return { width: 160, height: 120 };
+    // The floor for an empty one. A sequence with anything in it is held to what it needs to stay
+    // readable (`canvas/resizeSnap.ts`'s `minResizeSizeFor`).
+    case 'sequence':
+      return { width: 200, height: 140 };
     default:
       return { width: 96, height: 48 };
   }
@@ -126,6 +133,8 @@ export function defaultTextFor(
       return ACTOR_KIND_NAMES[actorKind ?? 'human'];
     case 'group':
       return 'Boundary';
+    case 'sequence':
+      return 'Sequence';
     case 'note':
       return '';
     case 'code':
@@ -209,6 +218,8 @@ export function displayNameFor(
       return (node.actorKind && ACTOR_KIND_NAMES[node.actorKind]) || 'Actor';
     case 'group':
       return 'Boundary';
+    case 'sequence':
+      return 'Sequence';
     case 'note':
       return 'Note';
     case 'code':
@@ -254,6 +265,8 @@ export interface CreateNodeInput {
   /** Architecture shapes only (`C4_TEXT_TYPES`) — ignored on anything else. */
   description?: string;
   technology?: string;
+  /** With a kind the technology implied (`technologyStart`), so a later technology may move it. */
+  kindOrigin?: 'technology';
 }
 
 export function createNode(input: CreateNodeInput): DraftNode {
@@ -295,10 +308,12 @@ export function createNode(input: CreateNodeInput): DraftNode {
     node.actorFrame = input.actorFrame ?? 'borderless';
   }
   if (input.type === 'component') node.componentKind = input.componentKind ?? 'generic';
+  if (input.type === 'sequence') node.sequence = { participants: [], items: [] };
   if (input.deliveryRole) node.deliveryRole = input.deliveryRole;
   if ((C4_TEXT_TYPES as readonly DraftNodeType[]).includes(input.type)) {
     if (input.description?.trim()) node.description = input.description.trim();
     if (input.technology?.trim()) node.technology = input.technology.trim();
+    if (node.technology && input.kindOrigin) node.kindOrigin = input.kindOrigin;
   }
   if (input.type === 'text' && input.annotation) node.annotation = true;
   if (input.type === 'text') {
@@ -403,7 +418,7 @@ export function createEdge(input: CreateEdgeInput): DraftEdge {
   return edge;
 }
 
-export function createDocument(title = 'Untitled canvas'): DraftDocument {
+export function createDocument(title = DEFAULT_TITLE): DraftDocument {
   const now = Date.now();
   return {
     format: DRAFT_FORMAT,
@@ -422,16 +437,21 @@ export function createDocument(title = 'Untitled canvas'): DraftDocument {
   };
 }
 
-/** A deep copy with fresh identity, used by "Duplicate" in the library. */
+/**
+ * A deep copy with fresh identity (id, title, times), used by "Duplicate" in the library and by every
+ * import that finds its id already stored. What the diagram is and where it began (`origin`: the
+ * gallery starter it came from, so its update notice still applies to the copy) stay with it.
+ */
 export function cloneDocumentAsNew(doc: DraftDocument, title: string): DraftDocument {
   const now = Date.now();
   return {
     ...structuredClone(doc),
     metadata: {
       id: createId('d'),
-      title,
+      title: cleanTitle(title),
       createdAt: now,
       updatedAt: now,
+      ...(doc.metadata.origin ? { origin: structuredClone(doc.metadata.origin) } : {}),
       // Duplicate stays in the same project, same principle as carrying over
       // the background image — see `useDocumentSession.ts`'s `duplicateDocument`.
       ...(doc.metadata.projectId ? { projectId: doc.metadata.projectId } : {}),

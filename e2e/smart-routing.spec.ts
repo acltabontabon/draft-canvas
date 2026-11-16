@@ -81,13 +81,11 @@ test.describe('Smart Routing — fan-out on the live canvas', () => {
   test('collapses the repeated relationship caption onto the trunk', async ({ page }) => {
     await fanOut(page);
 
-    const captions = page.locator('svg text').filter({ hasText: 'calls' });
+    const captions = page.locator('.dc-edge-caption').filter({ hasText: 'calls' });
     await expect(captions).toHaveCount(5);
     // All five are drawn, but at one point — so the reader sees a single
     // "calls" on the shared stem rather than five copies down a column.
-    const positions = await captions.evaluateAll((els) =>
-      els.map((el) => `${el.getAttribute('x')},${el.getAttribute('y')}`),
-    );
+    const positions = await captions.evaluateAll((els) => els.map((el) => (el as HTMLElement).style.transform));
     expect(new Set(positions).size).toBe(1);
   });
 

@@ -48,7 +48,7 @@ export function ExportSequencePanel({ format, onFormatChange, playableFlowCount,
           value={family}
           onChange={(next) => onFormatChange(defaultFormatFor(next))}
           options={[
-            { value: 'sequence', label: 'Flows' },
+            { value: 'sequence', label: 'Sequences' },
             { value: 'architecture', label: 'Architecture' },
           ]}
         />
@@ -65,7 +65,7 @@ export function ExportSequencePanel({ format, onFormatChange, playableFlowCount,
         {empty && (
           <>
             <span aria-hidden="true" />
-            <p className="dc-export-hint">Add a Flow to export its sequence diagram.</p>
+            <p className="dc-export-hint">Add a Flow or a sequence to export its sequence diagram.</p>
           </>
         )}
       </div>

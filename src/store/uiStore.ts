@@ -1,8 +1,12 @@
 import { create } from 'zustand';
+import type { SequenceEdit, SequenceFocus } from '../sequence/focus';
+import type { ArrangeFix } from '../lib/arrangeFixes';
 import type { Preset } from '../lib/presets';
 import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
-import type { DraftEdge, DraftNode, OpenPointTarget } from '../document/types';
+import type { DraftDocument, DraftEdge, DraftInk, DraftNode, InkColor, OpenPointTarget } from '../document/types';
+import type { InkShapeChoice } from '../ink/choices';
+import type { Box } from '../ink/geometry';
 import type { CaptionCorner } from '../presentation/framing';
 import type { ExportMode } from '../export/exportTypes';
 import type { PresentationReveal } from '../presentation/presentationAttachments';
@@ -11,6 +15,8 @@ import { PRODUCT } from '../product';
 import { markLastSeenRelease, readLastSeenRelease } from '../releases/seen';
 
 /** A toast's one optional button — e.g. "Undo" for something that was just removed. */
+export type NewCanvasRequest = { kind: 'example' } | { kind: 'canvas'; document: DraftDocument };
+
 export interface FlowTrace {
   documentId: string;
   path: string[];
@@ -74,7 +80,9 @@ export type ContextMenuTarget =
   | { kind: 'pane' }
   | { kind: 'node'; id: string }
   | { kind: 'edge'; id: string }
-  | { kind: 'selection' };
+  | { kind: 'selection' }
+  /** Chosen sketch strokes (`inkSelection`). */
+  | { kind: 'ink' };
 
 /**
  * Drives the right-click context menu — mirrors `QuickConnectState`'s shape and reasoning exactly.
@@ -112,6 +120,101 @@ export interface AgentPreview {
    *  screen instead, a shape the person added meanwhile would show as one the agent removes. */
   base?: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] };
 }
+
+/**
+ * What Tidy up would do to the room on screen, worked out and not yet applied: shown on the canvas
+ * as a tracing sheet (`canvas/AgentPreviewLayer.tsx`) with Apply and Cancel beside it
+ * (`ui/Editor/TidyBar.tsx`). Transient like every preview here: never saved, undone or exported, and
+ * dropped the moment the room it was worked out from changes.
+ */
+export interface TidyPreview {
+  /** The room it was worked out for, and that room exactly as it was then: applying is refused,
+   *  and the preview dropped, once either differs from what is on screen. */
+  path: readonly string[];
+  base: DraftDocument;
+  /** That room after tidying. */
+  view: DraftDocument;
+  /** How many shapes it nudges and how many connectors it re-attaches, for the bar's summary. */
+  moved: number;
+  reattached: number;
+  /** Whether only the selection was tidied. */
+  scoped: boolean;
+  /** The work budget was spent before every repair was tried (a large diagram): running Tidy up
+   *  again on the result continues. */
+  partial?: boolean;
+  /** How many sketches the room holds: they stay where they are, which the bar says. */
+  sketches?: number;
+}
+
+/** Tidy up found nothing to change. */
+export interface TidyNothing {
+  nothing: true;
+  /** It ran out of its work budget on a large diagram before it could tell. */
+  stopped: boolean;
+  /** What reads badly all the same (`agent/proportion.ts`): laying the room out again may fix it. */
+  reads: ArrangeFix[];
+}
+
+/**
+ * What Arrange would do to the room on screen: the room laid out again from scratch, reading each
+ * way the person can choose between, shown like Tidy up's preview (a tracing sheet with a bar beside
+ * it, `ui/Editor/ArrangeBar.tsx`) and applied only on Apply, as one undo step. Transient like every
+ * preview here: never saved, undone or exported, and dropped the moment the room changes.
+ */
+export interface ArrangePreview {
+  /** The room it was worked out for, and that room exactly as it was then (see `TidyPreview`). */
+  path: readonly string[];
+  base: DraftDocument;
+  /** That room arranged, by the reading direction it was laid out in. A selection, which has to
+   *  read the way the rest of the view does, has only that one. */
+  options: Partial<Record<ArrangeDirection, DraftDocument>>;
+  /** The direction shown, and the one Apply applies: the suggested one until the person picks. */
+  direction: ArrangeDirection;
+  /** What the layout recommends: the way the room reads now, unless the other reads clearly better
+   *  or fits a screen clearly better (`agent/arrange.ts`). */
+  suggested: ArrangeDirection;
+  /** The way the room reads now. */
+  current: ArrangeDirection;
+  /** Whether only the selection was arranged. */
+  scoped: boolean;
+  /** What the canvas shows while the person decides: see `ArrangeShow`. */
+  show: ArrangeShow;
+  /** What each arrangement fixes that reads badly now (`agent/proportion.ts`): names stacked into
+   *  columns, captions with no room, header-heavy boundaries, an overview too small to read. Only
+   *  what that arrangement resolves, so nothing is reported that Apply would not change. */
+  fixes?: Partial<Record<ArrangeDirection, ArrangeFix[]>>;
+  /** The work budget was spent before every repair was tried (a large diagram). */
+  partial?: boolean;
+  /** Only one direction is offered because the budget was spent on the first, not because the other
+   *  adds nothing: the bar says why the choice is missing. */
+  alternativeSkipped?: boolean;
+  /** How many sketches the room holds: they stay where they are, which the bar says. */
+  sketches?: number;
+  /** Asked for by a layout skill of Nodi's: Apply plays the rearrangement (`canvas/arrangeMotion.ts`)
+   *  instead of cutting to it. */
+  motion?: boolean;
+}
+
+export type { ArrangeFix };
+
+/** A layout job in flight (see `UiStore.layoutBusy`). */
+export interface LayoutBusy {
+  kind: 'arrange' | 'tidy';
+  /** Whether only the selection is being worked on. */
+  scoped: boolean;
+  cancel: () => void;
+}
+
+export type ArrangeDirection = 'right' | 'down';
+
+/**
+ * What an Arrange preview puts on the canvas. `result` is the proposal alone, framed to fit, since
+ * that is the picture being judged; `before` lifts the sheet off the diagram as it is, in the view the
+ * person had; `moves` lays both in one frame, every shape trailing back to where it stands now. The
+ * last used to be the only one, and made the decision harder: framing both made the result smaller,
+ * and a whole re-layout's outlines and trails crossed it everywhere.
+ */
+export type ArrangeShow = 'result' | 'before' | 'moves';
 
 /**
  * A pending MCP proposal's reviewed result, shown as a ghost on the canvas alongside
@@ -160,6 +263,13 @@ const RECENT_LIMIT = 12;
 /** How long accepted nodes keep their one-shot settle marker — just past the 180 ms animation. */
 const SETTLE_MS = 240;
 let settleTimer: ReturnType<typeof setTimeout> | undefined;
+/** How long a continuation notice ("No other suggestions") stays up — long enough to read, and to be announced once. */
+const CONTINUATION_NOTICE_MS = 1800;
+let continuationNoticeTimer: ReturnType<typeof setTimeout> | undefined;
+/** Long enough for the slowest change animation in `canvas.css` (a connector drawing itself, ~420 ms). */
+const CHANGE_MARK_MS = 560;
+let changeTimer: ReturnType<typeof setTimeout> | undefined;
+const NO_IDS: ReadonlySet<string> = new Set();
 
 const CONTINUATION_PREFERENCE = 'continuation';
 const NO_MOVING_NODES: ReadonlySet<string> = new Set();
@@ -224,6 +334,53 @@ export interface OpenPointPopoverState {
   pointId?: string;
 }
 
+/** `startEditing` opens the card ready to type — for an attachment that was just made on purpose
+ *  ("Attach note" is a request to write one), never for a click on an existing chip, which only reads. */
+export type AttachmentDetail = (
+  | { hostKind: 'node'; hostId: string }
+  | { hostKind: 'edge'; hostId: string }
+  | { hostKind: 'message'; hostId: string; messageId: string }
+) & { attachmentId: string | null; startEditing?: boolean };
+/** What the Pencil draws with: a pen, a highlighter, or the eraser that takes whole strokes away. */
+export type PencilTool = 'pen' | 'highlighter' | 'eraser';
+export type InkSizeName = 's' | 'm' | 'l';
+
+/** The Pencil's settings — a device preference, like the theme, never document data. */
+export interface InkPrefs {
+  /** Smart Ink: the pen offers to turn what it draws into shapes and connectors. */
+  smart: boolean;
+  penColor: InkColor;
+  highlighterColor: InkColor;
+  penSize: InkSizeName;
+  highlighterSize: InkSizeName;
+}
+
+export const DEFAULT_INK_PREFS: InkPrefs = { smart: false, penColor: 'graphite', highlighterColor: 'yellow', penSize: 'm', highlighterSize: 'm' };
+
+/**
+ * Smart Ink's offer for one drawing, shown in a small popover beside it (`InkSuggestionPopover`).
+ * `converted`: the drawing already became `nodeId`, and the choices re-type it. `offer`: the reading
+ * was too uncertain to act on, so the strokes are still ink and a choice converts them.
+ */
+export interface InkSuggestion {
+  token: number;
+  mode: 'converted' | 'offer';
+  nodeId?: string;
+  strokeIds: string[];
+  /** The strokes as drawn, so "Keep as sketch" can put them back even after other edits. */
+  strokes: DraftInk[];
+  /** Where the drawing was, in room coordinates. */
+  drawn: Box;
+  /** Recommended first. */
+  choices: InkShapeChoice[];
+  /** The choice applied (`converted`), or -1. */
+  chosen: number;
+  /** Shapes inside the drawing — what a Boundary made from it holds. */
+  encloses: string[];
+  /** The room it belongs to (`pathKey`). */
+  room: string;
+}
+
 export interface UiStore {
   sharedFlowIntroduction: { documentId: string; flowId: string } | null;
   shareFromHere: boolean;
@@ -233,13 +390,29 @@ export interface UiStore {
   openExportAt: (mode: ExportMode) => void;
   exampleDocumentId: string | null;
   setExampleDocumentId: (id: string | null) => void;
-  exampleRequested: boolean;
+  /** A new canvas to open, once: the bundled example, or a gallery starter's diagram. Handled by
+   *  the shell (`App.tsx`), which knows how this host makes a canvas. */
+  newCanvasRequest: NewCanvasRequest | null;
   requestExample: () => void;
+  requestCanvas: (document: DraftDocument) => void;
   flowTrace: FlowTrace | null;
   setFlowTrace: (trace: FlowTrace | null) => void;
 
   /** The preset a canvas click will place, or null for plain selection. */
   armed: Preset | null;
+  /** The Pencil in hand, or null. Exclusive with `armed`: picking up one puts the other down. */
+  pencil: PencilTool | null;
+  setPencil: (tool: PencilTool | null) => void;
+  inkPrefs: InkPrefs;
+  setInkPrefs: (patch: Partial<InkPrefs>) => void;
+  /** Selected sketch strokes, by id — apart from `editorStore.selection`, which holds shapes and connectors. */
+  inkSelection: readonly string[];
+  setInkSelection: (ids: readonly string[]) => void;
+  inkSuggestion: InkSuggestion | null;
+  setInkSuggestion: (suggestion: InkSuggestion | null) => void;
+  /** Strokes fading out as a drawing resolves into a shape. Transient; drawn, never saved. */
+  inkResolving: { token: number; strokes: DraftInk[] } | null;
+  setInkResolving: (resolving: { token: number; strokes: DraftInk[] } | null) => void;
   shortcutsOpen: boolean;
   /** The Find and replace dialog (⌘H, or the palette's "Find and replace…"). */
   findReplaceOpen: boolean;
@@ -277,6 +450,14 @@ export interface UiStore {
   /** The edge id a dragged note/code node is currently armed against — see `Canvas.tsx`'s
    *  drag-to-attach wiring and `dragTargets.ts`'s `findEdgeDropCandidate`. */
   attachArmedEdgeTarget: string | null;
+  /** The connector a dragged, unconnected shape would be put into the middle of if dropped now
+   *  (`spliceIntoEdge`), and whether such a shape is being carried at all — which widens every
+   *  connector's hit corridor for the gesture, as carrying a Note/Code capsule does. */
+  spliceArmedEdgeTarget: string | null;
+  spliceDrag: boolean;
+  /** The other selected shapes a connection drag started from one of them will also connect from
+   *  (`connectMany`) — `null` outside such a drag. */
+  fanInSources: string[] | null;
   /**
    * The Note/Code card currently collapsed into its drag capsule, and where on that card the
    * grab started (`offsetX`/`offsetY`, in flow units from its own top-left — the aim point).
@@ -321,7 +502,27 @@ export interface UiStore {
    * yet"; non-null means a specific chip is additionally pinned open — a node's badge click and an
    * edge's chip click both write here, just at different granularity.
    */
-  openAttachmentDetail: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null;
+  openAttachmentDetail: AttachmentDetail | null;
+  /**
+   * What is selected *inside* a sequence: a participant, one or more messages, a branch, a group.
+   * The editor's selection holds only whole shapes and connectors, and a sequence is one shape — so
+   * this sits beside it, naming its host, and is dropped the moment the host stops being the one
+   * thing selected. Never saved, undone or shared.
+   */
+  sequenceFocus: SequenceFocus | null;
+  /** The piece of a sequence whose words are being typed, or the place a new participant is being named. */
+  sequenceEdit: SequenceEdit | null;
+  /** Which of the offered next messages is showing, for the selection inside a sequence. Back to the first whenever that selection changes. */
+  sequenceGhost: number;
+  /** The message under a dragged note or code card. */
+  sequenceAttachmentTarget: { nodeId: string; messageId: string } | null;
+  /**
+   * Where a shape being dragged over a sequence would join it as a participant. `stays`: the shape
+   * is part of a diagram (it has connectors, notes or an inside), so it stays where it is and the
+   * participant stands for it; otherwise the shape itself moves in.
+   */
+  sequenceDropTarget: { nodeId: string; index: number; stays: boolean } | null;
+  sequenceLinkTarget: { nodeId: string; participantId: string } | null;
   /**
    * The element a presenter clicked open while presenting — a chip on a connector, or a node's
    * attachment badge. Presentation Mode's callout shows that element's attachments instead of
@@ -453,6 +654,14 @@ export interface UiStore {
    * and on closing the panel.
    */
   proposalPreview: ProposalPreview | null;
+  /** What Tidy up would change, while the person decides: see `TidyPreview`. */
+  tidyPreview: TidyPreview | null;
+  /** What Arrange would change, while the person decides: see `ArrangePreview`. */
+  arrangePreview: ArrangePreview | null;
+  /** Arrange or Tidy up is being worked out, off the page's thread: what `LayoutBusyBar` says, and the
+   *  Cancel that stops it. Transient like the previews it leads to. */
+  layoutBusy: LayoutBusy | null;
+  setLayoutBusy: (busy: LayoutBusy | null) => void;
   /**
    * Offers the user has waved away this session, pinned to the exact neighborhood they were made
    * in (`dismissalKey`): Escape on a ghost keeps it away for that node until something about that
@@ -465,6 +674,12 @@ export interface UiStore {
   /** The alternative the user cycled to at the selected node, if they did. */
   continuationCycle: ContinuationCycle | null;
   /**
+   * A line the suggestion has for the person who just pressed `]` or `[` when nothing came of it
+   * ("No other suggestions" — one alternative has nothing to step to). Read out by the screen-reader
+   * announcer and echoed in the pill; expires on its own, and is never a toast.
+   */
+  continuationNotice: string | null;
+  /**
    * Rule ids of recently accepted continuations, newest last — a light ranking hint ("you keep
    * adding Data Stores") and nothing more. Session-only: cleared on document switch, never saved.
    */
@@ -474,6 +689,14 @@ export interface UiStore {
    * (ghost → real) animation. Each view consumes and clears its own id.
    */
   settleNodeIds: readonly string[];
+  /**
+   * Shapes and connectors that just appeared on the canvas — placed, pasted, connected, undone back,
+   * or added by a collaborator or an agent — so their views can settle in or draw themselves once
+   * (`canvas/useChangeFeedback.ts`). Sets, for an O(1) per-element selector. Expires on its own.
+   */
+  arrivingIds: ReadonlySet<string>;
+  /** Elements an undo or redo changed in place, so they can show it with a brief pulse. Expires on its own. */
+  changedIds: ReadonlySet<string>;
   /**
    * The one-shot "the shape opened into a room" (or closed back into a shape) animation: which way
    * it goes, the shape it belongs to, and the screen rectangle it starts from — the room in the
@@ -540,13 +763,16 @@ export interface UiStore {
   setContextMenu: (state: ContextMenuState | null) => void;
   setAttachArmedTarget: (nodeId: string | null) => void;
   setAttachArmedEdgeTarget: (edgeId: string | null) => void;
+  setSpliceArmedEdgeTarget: (edgeId: string | null) => void;
+  setSpliceDrag: (spliceDrag: boolean) => void;
+  setFanInSources: (sources: string[] | null) => void;
   setDragCapsule: (dragCapsule: DragCapsuleState | null) => void;
   setReconnectHoverTarget: (nodeId: string | null, handleId?: string | null) => void;
   setReconnectDragActive: (active: boolean) => void;
   setHoveredEdge: (id: string | null) => void;
   setHoveredRecoveryParent: (id: string | null) => void;
   setOpenAttachmentDetail: (
-    target: { hostKind: 'node' | 'edge'; hostId: string; attachmentId: string | null } | null,
+    target: AttachmentDetail | null,
   ) => void;
   setPresentationReveal: (target: PresentationReveal | null) => void;
   /** Patches presentation state — a no-op (same object, no re-render) when nothing changes. */
@@ -564,6 +790,12 @@ export interface UiStore {
   setCompanionOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
   requestEdit: (id: string | null) => void;
+  setSequenceFocus: (focus: SequenceFocus | null) => void;
+  setSequenceEdit: (edit: SequenceEdit | null) => void;
+  setSequenceGhost: (index: number) => void;
+  setSequenceAttachmentTarget: (target: UiStore['sequenceAttachmentTarget']) => void;
+  setSequenceDropTarget: (target: { nodeId: string; index: number; stays: boolean } | null) => void;
+  setSequenceLinkTarget: (target: { nodeId: string; participantId: string } | null) => void;
   requestRecovery: (edgeId: string | null, actionId?: string | null) => void;
   setRecoveryConnect: (gesture: UiStore['recoveryConnect']) => void;
   setEditingText: (id: string | null) => void;
@@ -603,6 +835,8 @@ export interface UiStore {
   setAgentPreview: (preview: AgentPreview | null) => void;
   /** Replaces the whole proposal ghost — a proposalId change never merges onto the previous one. */
   setProposalPreview: (preview: ProposalPreview | null) => void;
+  setTidyPreview: (preview: TidyPreview | null) => void;
+  setArrangePreview: (preview: ArrangePreview | null) => void;
   /** Flips the review panel's "Show on canvas" toggle without recomputing or dropping the ghost data. */
   setProposalPreviewVisible: (visible: boolean) => void;
   /**
@@ -614,6 +848,8 @@ export interface UiStore {
   cycleContinuation: (delta: 1 | -1) => void;
   /** Pins a chosen candidate (or clears the choice with `null`). */
   setContinuationCycle: (cycle: ContinuationCycle | null) => void;
+  /** Says `text` through the pill and the live region for a moment; `null` takes it back at once. */
+  noteContinuation: (text: string | null) => void;
   /** Remembers an accepted continuation's rule for ranking. */
   recordContinuationAccepted: (ruleId: string) => void;
   /** On document switch: nothing about the previous diagram's offers applies to the next. */
@@ -625,6 +861,8 @@ export interface UiStore {
   setDepthTransition: (transition: UiStore['depthTransition']) => void;
   /** Marks freshly accepted nodes for their settle animation; the marker expires on its own. */
   setSettleNodeIds: (ids: readonly string[]) => void;
+  /** Marks the elements a change brought in, and those an undo or redo changed; both expire together. */
+  markCanvasChange: (arriving: readonly string[], changed: readonly string[]) => void;
   setLibrarySearchQuery: (query: string) => void;
   setLibraryBrowsing: (browsing: boolean) => void;
   setLibrarySort: (sort: UiStore['librarySort']) => void;
@@ -648,6 +886,37 @@ let toastsPaused = false;
  *  it's a function reference, not something a component should re-render on. */
 let activateFn: (() => void) | null = null;
 
+/* -------------------------------------------------------- Pencil prefs -- */
+
+const INK_PREFS_KEY = 'ink';
+const INK_COLOR_SET = new Set<string>(['graphite', 'red', 'blue', 'green', 'yellow']);
+const INK_SIZE_SET = new Set<string>(['s', 'm', 'l']);
+
+/** `smart|penColor|highlighterColor|penSize|highlighterSize` — a few short words, well inside a preference's cap. */
+function encodeInkPrefs(prefs: InkPrefs): string {
+  return [prefs.smart ? '1' : '0', prefs.penColor, prefs.highlighterColor, prefs.penSize, prefs.highlighterSize].join('|');
+}
+
+/** Read once at startup. As with `initialContinuationsEnabled`, a preference store not usable at
+ *  that moment (blocked storage, a test harness still wiring up) means the defaults. */
+function readInkPrefs(): InkPrefs {
+  let raw: string | null;
+  try {
+    raw = readPreference(INK_PREFS_KEY);
+  } catch {
+    return DEFAULT_INK_PREFS;
+  }
+  if (!raw) return DEFAULT_INK_PREFS;
+  const [smart, penColor, highlighterColor, penSize, highlighterSize] = raw.split('|');
+  return {
+    smart: smart === '1',
+    penColor: INK_COLOR_SET.has(penColor ?? '') ? (penColor as InkColor) : DEFAULT_INK_PREFS.penColor,
+    highlighterColor: INK_COLOR_SET.has(highlighterColor ?? '') ? (highlighterColor as InkColor) : DEFAULT_INK_PREFS.highlighterColor,
+    penSize: INK_SIZE_SET.has(penSize ?? '') ? (penSize as InkSizeName) : DEFAULT_INK_PREFS.penSize,
+    highlighterSize: INK_SIZE_SET.has(highlighterSize ?? '') ? (highlighterSize as InkSizeName) : DEFAULT_INK_PREFS.highlighterSize,
+  };
+}
+
 export const useUiStore = create<UiStore>((set, get) => ({
   sharedFlowIntroduction: null,
   shareFromHere: false,
@@ -656,11 +925,27 @@ export const useUiStore = create<UiStore>((set, get) => ({
   requestShareFromHere: () => set({ shareFromHere: true, exportOpen: true, exportSelectionRequested: false }),
   exampleDocumentId: null,
   setExampleDocumentId: (exampleDocumentId) => set({ exampleDocumentId }),
-  exampleRequested: false,
-  requestExample: () => set({ exampleRequested: true }),
+  newCanvasRequest: null,
+  requestExample: () => set({ newCanvasRequest: { kind: 'example' } }),
+  requestCanvas: (document) => set({ newCanvasRequest: { kind: 'canvas', document } }),
   flowTrace: null,
   setFlowTrace: (flowTrace) => set({ flowTrace }),
   armed: null,
+  pencil: null,
+  setPencil: (pencil) => set((state) => ({ pencil, armed: pencil ? null : state.armed, spliceArmedEdgeTarget: pencil ? null : state.spliceArmedEdgeTarget })),
+  inkPrefs: readInkPrefs(),
+  setInkPrefs: (patch) =>
+    set((state) => {
+      const inkPrefs = { ...state.inkPrefs, ...patch };
+      writePreference(INK_PREFS_KEY, encodeInkPrefs(inkPrefs));
+      return { inkPrefs };
+    }),
+  inkSelection: [],
+  setInkSelection: (ids) => set((state) => (ids.length === 0 && state.inkSelection.length === 0 ? state : { inkSelection: ids })),
+  inkSuggestion: null,
+  setInkSuggestion: (inkSuggestion) => set({ inkSuggestion }),
+  inkResolving: null,
+  setInkResolving: (inkResolving) => set({ inkResolving }),
   shortcutsOpen: false,
   findReplaceOpen: false,
   fitRequestId: 0,
@@ -676,6 +961,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   contextMenu: null,
   attachArmedTarget: null,
   attachArmedEdgeTarget: null,
+  spliceArmedEdgeTarget: null,
+  spliceDrag: false,
+  fanInSources: null,
   dragCapsule: null,
   reconnectHoverTarget: null,
   reconnectHoverHandle: null,
@@ -683,6 +971,12 @@ export const useUiStore = create<UiStore>((set, get) => ({
   hoveredEdgeId: null,
   hoveredRecoveryParentId: null,
   openAttachmentDetail: null,
+  sequenceFocus: null,
+  sequenceEdit: null,
+  sequenceGhost: 0,
+  sequenceAttachmentTarget: null,
+  sequenceDropTarget: null,
+  sequenceLinkTarget: null,
   presentationReveal: null,
   presentation: PRESENTATION_AT_REST,
   openPointPopover: null,
@@ -713,11 +1007,18 @@ export const useUiStore = create<UiStore>((set, get) => ({
   continuation: null,
   agentPreview: null,
   proposalPreview: null,
+  tidyPreview: null,
+  arrangePreview: null,
+  layoutBusy: null,
+  setLayoutBusy: (layoutBusy) => set({ layoutBusy }),
   continuationDismissals: new Set<DismissalKey>(),
   continuationsEnabled: initialContinuationsEnabled(),
   continuationCycle: null,
+  continuationNotice: null,
   continuationRecent: [],
   settleNodeIds: [],
+  arrivingIds: NO_IDS,
+  changedIds: NO_IDS,
   depthTransition: null,
   depthPlateFocusId: null,
   depthShapeHoverId: null,
@@ -729,7 +1030,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   moveMenuOpenFor: null,
   clipboardPermissionRequest: null,
 
-  arm: (armed) => set({ armed }),
+  // A connector a placed shape would have gone into is not one any more once the tool changes.
+  // Picking up a shape tool puts the Pencil down; putting a shape tool down (`null`) leaves it be.
+  arm: (armed) => set((state) => ({ armed, spliceArmedEdgeTarget: null, pencil: armed ? null : state.pencil })),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setFindReplaceOpen: (findReplaceOpen) => set({ findReplaceOpen }),
   requestFit: () => set((state) => ({ fitRequestId: state.fitRequestId + 1 })),
@@ -747,6 +1050,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (state.attachArmedTarget === attachArmedTarget ? state : { attachArmedTarget })),
   setAttachArmedEdgeTarget: (attachArmedEdgeTarget) =>
     set((state) => (state.attachArmedEdgeTarget === attachArmedEdgeTarget ? state : { attachArmedEdgeTarget })),
+  setSpliceArmedEdgeTarget: (spliceArmedEdgeTarget) =>
+    set((state) => (state.spliceArmedEdgeTarget === spliceArmedEdgeTarget ? state : { spliceArmedEdgeTarget })),
+  setSpliceDrag: (spliceDrag) => set((state) => (state.spliceDrag === spliceDrag ? state : { spliceDrag })),
+  setFanInSources: (fanInSources) => set((state) => (state.fanInSources === fanInSources ? state : { fanInSources })),
   setDragCapsule: (dragCapsule) =>
     set((state) => {
       const current = state.dragCapsule;
@@ -773,6 +1080,35 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setHoveredEdge: (hoveredEdgeId) => set((state) => (state.hoveredEdgeId === hoveredEdgeId ? state : { hoveredEdgeId })),
   setHoveredRecoveryParent: (hoveredRecoveryParentId) => set((state) => (state.hoveredRecoveryParentId === hoveredRecoveryParentId ? state : { hoveredRecoveryParentId })),
   setOpenAttachmentDetail: (openAttachmentDetail) => set({ openAttachmentDetail }),
+  setSequenceFocus: (sequenceFocus) =>
+    set((state) => {
+      const same =
+        state.sequenceFocus === sequenceFocus ||
+        (state.sequenceFocus !== null &&
+          sequenceFocus !== null &&
+          state.sequenceFocus.nodeId === sequenceFocus.nodeId &&
+          state.sequenceFocus.kind === sequenceFocus.kind &&
+          Boolean(state.sequenceFocus.quiet) === Boolean(sequenceFocus.quiet) &&
+          state.sequenceFocus.ids.length === sequenceFocus.ids.length &&
+          state.sequenceFocus.ids.every((id, index) => id === sequenceFocus.ids[index]));
+      return same ? state : { sequenceFocus, sequenceGhost: 0 };
+    }),
+  setSequenceGhost: (sequenceGhost) => set({ sequenceGhost }),
+  setSequenceEdit: (sequenceEdit) => set({ sequenceEdit }),
+  setSequenceAttachmentTarget: (sequenceAttachmentTarget) =>
+    set((state) => state.sequenceAttachmentTarget?.nodeId === sequenceAttachmentTarget?.nodeId &&
+      state.sequenceAttachmentTarget?.messageId === sequenceAttachmentTarget?.messageId ? state : { sequenceAttachmentTarget }),
+  setSequenceDropTarget: (sequenceDropTarget) =>
+    set((state) =>
+      state.sequenceDropTarget?.nodeId === sequenceDropTarget?.nodeId &&
+      state.sequenceDropTarget?.index === sequenceDropTarget?.index &&
+      state.sequenceDropTarget?.stays === sequenceDropTarget?.stays
+        ? state
+        : { sequenceDropTarget },
+    ),
+  setSequenceLinkTarget: (sequenceLinkTarget) =>
+    set((state) => state.sequenceLinkTarget?.nodeId === sequenceLinkTarget?.nodeId &&
+      state.sequenceLinkTarget?.participantId === sequenceLinkTarget?.participantId ? state : { sequenceLinkTarget }),
   setPresentationReveal: (presentationReveal) => set({ presentationReveal }),
   setPresentation: (patch) =>
     set((state) => {
@@ -878,13 +1214,17 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (state.openFitDocumentId === documentId ? { openFitDocumentId: null } : state)),
   setAgentPreview: (agentPreview) => set({ agentPreview }),
   setProposalPreview: (proposalPreview) => set({ proposalPreview }),
+  // One cleanup decided at a time: opening either preview closes the other.
+  setTidyPreview: (tidyPreview) => set(tidyPreview ? { tidyPreview, arrangePreview: null } : { tidyPreview }),
+  setArrangePreview: (arrangePreview) => set(arrangePreview ? { arrangePreview, tidyPreview: null } : { arrangePreview }),
   setProposalPreviewVisible: (visible) =>
     set((state) => (state.proposalPreview ? { proposalPreview: { ...state.proposalPreview, visible } } : state)),
   setContinuation: (next) =>
     set((state) => {
       const previous = state.continuation;
       if (previous === next) return state;
-      if (!sameOffer(previous, next)) return { continuation: next };
+      // A different suggestion has no use for a line said about the last one.
+      if (!sameOffer(previous, next)) return { continuation: next, ...(state.continuationNotice !== null ? { continuationNotice: null } : {}) };
       if (!previous || !next) return { continuation: next };
       return { continuation: reidentify(previous, next) };
     }),
@@ -909,14 +1249,22 @@ export const useUiStore = create<UiStore>((set, get) => ({
     }),
   setContinuationCycle: (continuationCycle) =>
     set((state) => (sameCycle(state.continuationCycle, continuationCycle) ? state : { continuationCycle })),
+  noteContinuation: (text) => {
+    clearTimeout(continuationNoticeTimer);
+    set({ continuationNotice: text });
+    if (text === null) return;
+    continuationNoticeTimer = setTimeout(() => set({ continuationNotice: null }), CONTINUATION_NOTICE_MS);
+  },
   recordContinuationAccepted: (ruleId) =>
     set((state) => ({ continuationRecent: [...state.continuationRecent, ruleId].slice(-RECENT_LIMIT) })),
   resetContinuation: () => {
     clearTimeout(settleTimer);
+    clearTimeout(continuationNoticeTimer);
     set({
       continuation: null,
       continuationDismissals: new Set<DismissalKey>(),
       continuationCycle: null,
+      continuationNotice: null,
       continuationRecent: [],
       settleNodeIds: [],
     });
@@ -945,6 +1293,23 @@ export const useUiStore = create<UiStore>((set, get) => ({
     settleTimer = setTimeout(() => {
       if (get().settleNodeIds === settleNodeIds) set({ settleNodeIds: [] });
     }, SETTLE_MS);
+  },
+  markCanvasChange: (arriving, changed) => {
+    clearTimeout(changeTimer);
+    // Joined with what is still in flight: a quick second change (two pastes in a row) must not
+    // strip the first one's marker and cut its animation short.
+    const { arrivingIds: arrivingNow, changedIds: changedNow } = get();
+    const arrivingIds = arriving.length > 0 ? new Set([...arrivingNow, ...arriving]) : arrivingNow;
+    const changedIds = changed.length > 0 ? new Set([...changedNow, ...changed]) : changedNow;
+    set((state) =>
+      arrivingIds === state.arrivingIds && changedIds === state.changedIds ? state : { arrivingIds, changedIds },
+    );
+    if (arrivingIds === NO_IDS && changedIds === NO_IDS) return;
+    // Owned here, not by each view, for the reason `setSettleNodeIds` gives: an element undone
+    // mid-animation unmounts without clearing itself, and would replay when redone.
+    changeTimer = setTimeout(() => {
+      if (get().arrivingIds === arrivingIds && get().changedIds === changedIds) set({ arrivingIds: NO_IDS, changedIds: NO_IDS });
+    }, CHANGE_MARK_MS);
   },
   setLibrarySearchQuery: (librarySearchQuery) => set({ librarySearchQuery }),
   setLibraryBrowsing: (libraryBrowsing) => set({ libraryBrowsing }),
@@ -1027,16 +1392,30 @@ function reidentify(previous: ContinuationOffer, next: ContinuationOffer): Conti
 }
 
 /**
- * The last pointer position over the canvas: `x`/`y` in canvas coordinates, `screenX`/`screenY` where
- * it is on screen. `known` is false while the pointer is off the canvas.
+ * The last pointer position over the canvas, in screen pixels. `known` is false while the pointer is
+ * off the canvas.
  *
  * Kept outside React deliberately: keyboard shortcuts need to know where the
  * cursor is so a new note appears under it, and re-rendering the canvas on
- * every mouse move to track that would be absurd. The canvas re-derives `x`/`y` whenever the camera
- * moves: kept from the last mouse move, a zoom, fit, trackpad pan or step inside left them pointing
- * at a spot the cursor no longer covers, often off screen.
+ * every mouse move to track that would be absurd. Only the screen point is stored per move: where
+ * it is on the canvas (`pointerFlow`) is worked out when a shortcut asks, from the camera as it is
+ * then — a zoom, fit, trackpad pan or step inside moves the canvas under a cursor that has not,
+ * and converting on every move (a layout read each) and again on every camera frame to keep a
+ * flow-space copy fresh was work for a question asked a few times a minute.
  */
-export const pointer = { x: 0, y: 0, screenX: 0, screenY: 0, known: false };
+export const pointer = {
+  screenX: 0,
+  screenY: 0,
+  known: false,
+  /** The canvas's own screen → canvas conversion, set while it is mounted. */
+  toFlow: null as ((point: { x: number; y: number }) => { x: number; y: number }) | null,
+};
+
+/** Where the pointer is on the canvas, in canvas coordinates, as the camera stands now. */
+export function pointerFlow(): { x: number; y: number } {
+  const screen = { x: pointer.screenX, y: pointer.screenY };
+  return pointer.toFlow ? pointer.toFlow(screen) : screen;
+}
 
 function sameBox(
   a: PresentationState['focus'] | undefined,

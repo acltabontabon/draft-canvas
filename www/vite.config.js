@@ -3,7 +3,7 @@ import { createReadStream, existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
-import { docsPaths, renderDocs } from './scripts/docs.mjs';
+import { DOCS_START, docsPaths, renderDocs } from './scripts/docs.mjs';
 
 /**
  * The version the download links point at.
@@ -56,12 +56,24 @@ function policyFor(html) {
  * Done here rather than in JavaScript so the version, and the installer URLs built from it, are in
  * the shipped HTML: someone with scripting off still gets working downloads and an honest number.
  */
-function versionInHtml() {
+function fillLandingHtml() {
+  const viewsPath = new URL('./src/checkout-views.json', import.meta.url);
   return {
-    name: 'draft-canvas-www:version',
+    name: 'draft-canvas-www:landing-html',
     transformIndexHtml: {
       order: 'pre',
-      handler: (html) => html.replaceAll('__VERSION__', appVersion),
+      handler: (html) => {
+        const { checkout, pipeline, paymentViews, video, lakehouse, search } = JSON.parse(readFileSync(viewsPath, 'utf8'));
+        return html
+          .replaceAll('__VERSION__', appVersion)
+          .replace('__CHECKOUT_SYSTEM__', () => checkout.system)
+          .replace('__CHECKOUT_ATTACHMENTS__', () => checkout.attachments)
+          .replace('__PIPELINE_SYSTEM__', () => pipeline)
+          .replace('__PAYMENT_VIEWS__', () => paymentViews)
+          .replace('__VIDEO_SYSTEM__', () => video)
+          .replace('__LAKEHOUSE_SYSTEM__', () => lakehouse)
+          .replace('__SEARCH_SYSTEM__', () => search);
+      },
     },
   };
 }
@@ -113,22 +125,33 @@ function documentation() {
     },
     configureServer(server) {
       server.middlewares.use((request, response, next) => {
-        const path = decodeURIComponent(new URL(request.url, 'http://localhost').pathname);
-        if (path !== '/docs' && !path.startsWith('/docs/')) return next();
+        const url = new URL(request.url, 'http://localhost');
+        const path = decodeURIComponent(url.pathname);
+        const catalog = path === '/docs-search-data.js';
+        if (!catalog && path !== '/docs' && !path.startsWith('/docs/')) return next();
+        if (path === '/docs' || path === '/docs/') {
+          response.writeHead(302, { location: `/docs/${DOCS_START}${url.search}` }).end();
+          return;
+        }
+        if (path === '/docs/security' || path === '/docs/security/') {
+          response.writeHead(302, { location: `/docs/privacy/${url.search}` }).end();
+          return;
+        }
         if (path.startsWith('/docs/media/') && !path.includes('..')) {
           const file = join(paths.docsDir, path.slice('/docs/'.length));
           if (!existsSync(file)) return next();
           return createReadStream(file).pipe(response);
         }
-        if (!path.endsWith('/')) {
+        if (!catalog && !path.endsWith('/')) {
           response.writeHead(301, { location: `${path}/` }).end();
           return;
         }
         try {
           const { files } = renderDocs({ ...paths, stylesheet: '/src/styles.css' });
-          const page = files[`${path.slice(1)}index.html`];
+          const page = files[catalog ? path.slice(1) : `${path.slice(1)}index.html`];
           if (!page) return next();
-          response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }).end(page);
+          const type = catalog ? 'text/javascript' : 'text/html';
+          response.writeHead(200, { 'content-type': `${type}; charset=utf-8` }).end(page);
         } catch (error) {
           // A broken link fails the build; here it should only fail the page, with the reason on it.
           response.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' }).end(String(error.message));
@@ -143,7 +166,7 @@ function documentation() {
 export default defineConfig({
   base: './',
   define: { __APP_VERSION__: JSON.stringify(appVersion) },
-  plugins: [versionInHtml(), contentSecurityPolicy(), documentation()],
+  plugins: [fillLandingHtml(), contentSecurityPolicy(), documentation()],
   build: {
     outDir: 'dist',
     emptyOutDir: true,

@@ -258,7 +258,7 @@ describe('Label/Text — the "annotation" rendering variant', () => {
   it('reuses the exact same quiet caption tokens a connector\'s own inferred relationship uses', () => {
     const shape = firstRun(describeNode(nodeFor(true), ctx));
     expect(shape.font).toEqual(FONTS.connectorCaption);
-    expect(shape.fill).toBe(THEMES.light.textFaint);
+    expect(shape.fill).toBe(THEMES.light.edgeText);
   });
 });
 

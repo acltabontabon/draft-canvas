@@ -1,3 +1,4 @@
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
@@ -5,7 +6,7 @@ import { reconnectProblem } from '../document/reconnect';
 import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
 import { useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
-import type { DraftNode, DraftPoint } from '../document/types';
+import type { DraftEdge, DraftNode, DraftPoint } from '../document/types';
 import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
 import { edgeTierInPlayback, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
@@ -25,17 +26,20 @@ import {
   responseAwayAt,
   strokeSeed,
   type Rect,
+  type RoutedEdge,
   type Side,
-  captionAnchor,
 } from '../edges/routing';
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
-import { LABEL_PADDING_X, LABEL_PADDING_Y, layoutConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
+import { replyLabelPlan } from '../edges/replyLabels';
+import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
-import { compensationActionCaption, compensationLabelParts } from '../edges/compensationMarker';
+import { compensationLabelParts } from '../edges/compensationMarker';
 import { compensationDisplayLabel } from '../document/compensation';
 import { EdgeLabels } from './EdgeLabels';
-import { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, captionSideOf, rectOfInternal } from './edgeGeometry';
+import { rectOfInternal } from './edgeGeometry';
+import { connectorMarkRow, markRowAttachmentsWidth } from '../edges/connectorMarks';
+import { getMeasurer } from '../render/text/measure';
 import { obstaclesForEdge, withoutNodes } from '../edges/obstacles';
 import { badgeCrowds, badgePoint } from '../edges/badgePoint';
 import { bridgePath } from '../edges/bridge';
@@ -43,9 +47,9 @@ import { NO_CROSSINGS, crossingPlan, withoutMoving } from '../edges/crossings';
 import { AttachmentChipRow, type AttachmentActions } from './AttachmentPresentation';
 import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
-import { captionAnchor as captionAnchorRect, labelChipRect } from '../edges/describe';
-import { edgeMarkerCenter, type OccupiedRect } from '../openPoints/marker';
-import { relationshipCaptionLabel } from '../document/edgeSemantics';
+import { captionAnchor as captionAnchorRect, conditionChipRect, conditionChipSize, edgeMetaText, labelChipRect } from '../edges/describe';
+import type { OccupiedRect } from '../openPoints/marker';
+import { connectorCaptionText } from '../edges/captionText';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { accentOf } from '../render/theme/tokens';
@@ -61,9 +65,11 @@ import { pointInBox } from '../lib/math';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { EdgeBendHandles, type BendPreview } from './EdgeBendHandles';
 import { translateWaypoints } from '../edges/waypoints';
-import { computeEdgeRoutes, edgeRoutes, searchAllowed, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
+import { computeEdgeRoutes, edgeRoutes, routedCaption, searchAllowed, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
 import { endpointPlan } from '../edges/endpoints';
+import { sequenceAnchorRect } from '../edges/sequenceAnchors';
 import { separationPlan } from '../edges/separation';
+import { DRAG_THRESHOLD_PX } from './gestureThresholds';
 
 const NO_OBSTACLES: readonly Rect[] = [];
 
@@ -94,10 +100,6 @@ function RecoveryHoverTooltip({ parentId, x, y, side }: { parentId: string; x: n
  *  renders (selection, lens, playback, hover) move none of them, and building the shared cache's
  *  string key meant serialising every obstacle rect on each of those renders, for every connector. */
 const LAST_ROUTES = new Lru<string, { inputs: readonly unknown[]; routes: EdgeRoutes }>(LIMITS.maxEdges);
-
-/** Minimum pointer movement, in screen pixels, before an endpoint gesture
- *  counts as a drag rather than a click — see `EdgeEndpointHandle`. */
-const DRAG_THRESHOLD_PX = 4;
 
 interface DragOverride {
   endpoint: 'source' | 'target';
@@ -134,25 +136,23 @@ function labelChipTransform(side: Side, x: number, y: number): string {
 
 /** Same idea for the condition chip — stacked below the caption for a horizontal line
  *  (unchanged), stacked beside the line for a vertical one. */
-function conditionTransform(side: Side, x: number, y: number): string {
+function conditionTransform(side: Side, x: number, top: number): string {
   switch (side) {
     case 'right':
-      return `translate(0, 0) translate(${x + LABEL_LINE_GAP}px, ${y + 16}px)`;
+      return `translate(0, 0) translate(${x + LABEL_LINE_GAP}px, ${top}px)`;
     case 'left':
-      return `translate(-100%, 0) translate(${x - LABEL_LINE_GAP}px, ${y + 16}px)`;
+      return `translate(-100%, 0) translate(${x - LABEL_LINE_GAP}px, ${top}px)`;
     case 'top':
     case 'bottom':
-      return `translate(-50%, 0) translate(${x}px, ${y + 16}px)`;
+      return `translate(-50%, 0) translate(${x}px, ${top}px)`;
   }
 }
 
-/** The chip row hangs `ATTACHMENT_ROW_GAP` off the label point — small, since a chip row is compact
- *  and doesn't need the clearance a full label chip does. Shared from `edgeGeometry.ts` so the probe
- *  in `attachmentRowBelowsSourceOrTarget` and Presentation Mode's callout anchor use the same ruler. */
-function attachmentRowTransform(x: number, y: number, flipBelow: boolean): string {
-  return flipBelow
-    ? `translate(-50%, 0) translate(${x}px, ${y + ATTACHMENT_ROW_GAP}px)`
-    : `translate(-50%, -100%) translate(${x}px, ${y - ATTACHMENT_ROW_GAP}px)`;
+/** The chip row where `connectorMarkRow` puts it, pinned by the edge that must not move: the browser
+ *  measures the chips, and a row a pixel wider than measured grows away from the tab or the words. */
+function attachmentRowTransform(anchor: 'start' | 'middle' | 'end', x: number, top: number): string {
+  const shift = anchor === 'start' ? '0' : anchor === 'end' ? '-100%' : '-50%';
+  return `translate(${shift}, 0) translate(${x}px, ${top}px)`;
 }
 
 /**
@@ -310,6 +310,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Connectors leaving together under one label draw it once, on the run they share — see
   // `edges/labelGroups.ts`. The group is identity-stable out of a memoized plan, like `spine`.
   const labelGroup = useEditorStore((state) => labelGroupPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).groupFor(id));
+  // How far this connector's reply label moves to keep clear of a neighbour's
+  // (`edges/replyLabels.ts`): identity-stable out of a memoized plan, and `undefined` for most.
+  const replyShift = useEditorStore((state) => replyLabelPlan(state.document.nodes, visibleEdgesForPlayback(state.document, state.flowPlayback)).shiftFor(id));
   // A numbered step rides inside each connector's own label chip, so while a flow's steps show, a
   // group whose members carry them keeps separate labels.
   const groupStepped = useEditorStore((state) => {
@@ -331,11 +334,14 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // positions, it says whether a gesture is carrying both ends (and so this connector's bends) along.
   // The node objects themselves, so nothing is allocated per store update — and only a bent
   // connector asks at all.
-  const committedSource = useEditorStore((state) => (edge?.waypoints ? selectNode(state.document, edge.source) : undefined));
-  const committedTarget = useEditorStore((state) => (edge?.waypoints ? selectNode(state.document, edge.target) : undefined));
+  const committedSource = useEditorStore((state) => (edge && (edge.waypoints || edge.sourceAnchor?.participantId) ? selectNode(state.document, edge.source) : undefined));
+  const committedTarget = useEditorStore((state) => (edge && (edge.waypoints || edge.targetAnchor?.participantId) ? selectNode(state.document, edge.target) : undefined));
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
+  /** A dragged, unconnected shape would go into the middle of this connector on drop. Tinted like
+   *  an attach target, with no landing dot: the shape lands where it is, not at the label point. */
+  const spliceTarget = useUiStore((state) => state.spliceArmedEdgeTarget === id);
 
   const sourceNode = useInternalNode(edge?.source ?? '');
   const targetNode = useInternalNode(edge?.target ?? '');
@@ -351,6 +357,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const compensating = Boolean(edge?.compensationFor);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
+  // Just connected (or undone back, or added by someone else): drawn on once, source to target.
+  // An undo or redo that changed this connector in place pulses it instead. See `useChangeFeedback.ts`.
+  const arriving = useUiStore((state) => state.arrivingIds.has(id));
+  const changed = useUiStore((state) => state.changedIds.has(id));
 
   // Tracked in JS, not left to a pure `.dc-edge:hover` CSS rule: the response label and the
   // attachment chip row both live in React Flow's `EdgeLabels` portal, a sibling overlay div
@@ -497,6 +507,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const displayLabel = compensationDisplayLabel(edge);
   const recoveryParts = compensationLabelParts(edge);
 
+  const routedCaptionText = routedCaption(edge, sourceCategory, targetCategory);
   const routeInputs = [
     edge,
     sourceNode,
@@ -523,10 +534,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // crossing plan has usually filed it already.
   const transient = routeUnsettled;
   const routeRequest: EdgeRouteInputs = {
-    source: effectiveSourceRect,
-    target: effectiveTargetRect,
+    source: sequenceAnchorRect(committedSource, effectiveSourceRect, dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor),
+    target: sequenceAnchorRect(committedTarget, effectiveTargetRect, dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor),
     routing: edge.routing,
     label: displayLabel,
+    // Its caption is placed with its size in view too, as every other renderer routes it.
+    ...(routedCaptionText ? { caption: routedCaptionText } : {}),
     // A dragged end's persisted anchor is set aside (see `effectiveSourceRect` above).
     sourceAnchor: dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor,
     targetAnchor: dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor,
@@ -558,7 +571,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // Mirrors `edges/describe.ts`.
   const responseAway = responseAwayAt(route, routes.response, laneOffset);
   const labelSide = labelChipSide(route.labelSide, responseAway);
-  const attachmentFlipBelow = attachmentRowBelowsSourceOrTarget(labelX, labelY, sourceRect, targetRect, captionSideOf(edge, labelSide));
 
   const hasLabel = Boolean(displayLabel);
   // In a label group, the leader draws the one label at the group's point — along its own live line
@@ -593,18 +605,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const captionAt = captionCollapsed ? route.trunkLabel! : { x: labelX, y: labelY };
   // The relationship caption, laid out as the exporter lays it out (`layoutConnectorCaption`): one
   // line fitted to its line's room, the whole caption in its tooltip.
-  const captionText = !hasLabel && edge.semantic
-    ? (() => {
-        const text = compensationActionCaption(edge.compensationFor ? edge.compensationName : undefined, relationshipCaptionLabel(edge.semantic, {
-          hasResponse: edge.hasResponse,
-          deliveryAttempts: edge.deliveryAttempts,
-          source: sourceCategory,
-          target: targetCategory,
-        }));
-        return captionIsUnusual ? `▲ ${text}` : text;
-      })()
-    : null;
-  const captionLayout = captionText ? layoutConnectorCaption(captionText, undefined, captionCollapsed ? undefined : route.labelRoom) : null;
+  const captionText = !hasLabel ? (connectorCaptionText(edge, sourceCategory, targetCategory)?.text ?? null) : null;
+  const captionLayout = captionText ? fittedConnectorCaption(captionText, undefined, captionCollapsed ? route.trunkLabelRoom : route.labelRoom) : null;
   // Being a numbered step must never cost a connector its words — only the step badge physically
   // landing on them may, which is a question about two points and nothing else (`badgeCrowds`).
   // The glyphs below sit at the midpoint whatever the bundle does; only the caption follows the
@@ -620,31 +622,57 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // already folded into `color`); with no accent set, it falls back to the
   // plain selection colour exactly as it always has.
   const strokeColor =
-    selected || attachTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
-  const conditionText = edge.condition ? `[${edge.condition}]` : null;
+    selected || attachTarget || spliceTarget ? theme.selection : isActiveStep ? (presentationAccent ?? theme.selection) : color;
+  // Condition and cadence share one chip, worded once for the canvas and the export (`edgeMetaText`).
+  const conditionText = edgeMetaText(edge);
 
-  // Where the open-point tab sits: beside the label chip or the caption this connector draws at its
-  // label point, in reading direction — the same rule `edges/describe.ts` applies for the export.
-  // Followers in a label group, and captions hoisted onto a shared trunk, have nothing of their own
-  // there, so their tab sits at their own label point.
-  const openPointCenter = (() => {
-    if (openPoints.length === 0) return null;
-    let occupied: OccupiedRect | undefined;
+  // Where the caption's text sits — the box the exporter draws it in (`captionAnchor` in
+  // `edges/describe.ts`), on the side away from the reply and the neighbouring lane.
+  const captionBox = captionLayout && !badgeOverCaption
+    ? (() => {
+        const side = captionCollapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
+        const at = captionAnchorRect(side, captionAt.x, captionAt.y, captionLayout, captionCollapsed ? responseAway : captionAwayForLane(laneOffset, responseAway));
+        const left = at.align === 'start' ? at.x : at.align === 'end' ? at.x - captionLayout.width : at.x - captionLayout.width / 2;
+        return { left, top: at.y, width: captionLayout.width, height: captionLayout.height };
+      })()
+    : null;
+
+  // The words this connector draws at its own label point: its label chip, or its caption. Followers
+  // in a label group, and captions hoisted onto a shared trunk, have none of their own there. The
+  // same box `edges/describe.ts` measures for the export.
+  const ownWords = ((): OccupiedRect | undefined => {
     if (hasLabel && !hidesOwnLabel && labelLayout && !sharedLabel) {
       // `.dc-edge-label`: 3px 6px padding, and — for a numbered step — a 16px badge plus a 6px gap.
       const stepWidth = hasStep ? 16 + 6 : 0;
       const w = (recoveryLayout?.width ?? labelLayout.width) + stepWidth + LABEL_PADDING_X * 2;
       const h = Math.max(recoveryLayout?.height ?? labelLayout.height, hasStep ? 16 : 0) + LABEL_PADDING_Y * 2;
       const { left, top } = labelChipRect(chipSide, chipX, chipY, w, h);
-      occupied = { left, top, width: w, height: h };
-    } else if (captionLayout && !badgeOverCaption && !captionCollapsed) {
-      const layout = captionLayout;
-      const caption = captionAnchorRect(route.labelSide, captionAt.x, captionAt.y, layout, captionCollapsed ? responseAway : captionAwayForLane(laneOffset, responseAway));
-      const left = caption.align === 'start' ? caption.x : caption.align === 'end' ? caption.x - layout.width : caption.x - layout.width / 2;
-      occupied = { left, top: caption.y, width: layout.width, height: layout.height };
+      return { left, top, width: w, height: h };
     }
-    return edgeMarkerCenter({ x: labelX, y: labelY }, labelSide, occupied);
+    if (captionBox && !captionCollapsed) return captionBox;
+    return undefined;
   })();
+  // The condition chip, stacked under the words when they already hang where it would go.
+  const conditionBox = (() => {
+    if (!conditionText) return undefined;
+    const { width, height } = conditionChipSize(conditionText);
+    const { left, top } = conditionChipRect(labelSide, labelX, labelY, width, height, ownWords);
+    return { x: left, y: top, width, height };
+  })();
+  // Its attachment chips and open-point tab, in one row beyond its words — the export's own row
+  // (`edges/connectorMarks.ts`).
+  const markRow = connectorMarkRow({
+    point: { x: labelX, y: labelY },
+    upright: route.labelSide === 'left' || route.labelSide === 'right',
+    side: labelSide,
+    ...(ownWords ? { words: { x: ownWords.left, y: ownWords.top, width: ownWords.width, height: ownWords.height } } : {}),
+    ...(conditionBox ? { condition: conditionBox } : {}),
+    attachmentsWidth: markRowAttachmentsWidth(edge.attachments, getMeasurer()),
+    openPoint: openPoints.length > 0,
+    source: sourceRect,
+    target: targetRect,
+  });
+  const openPointCenter = openPoints.length > 0 ? markRow?.openPoint ?? null : null;
 
   // Only the drawn stroke wobbles — every geometry value above (`route`,
   // `labelX`/`labelY`, attachment points) already reads from the unperturbed
@@ -707,7 +735,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // that nudge on top of the response lane used to push the response label tens of pixels
   // further away than the line it sits against. This paired anchor is cached with the routes
   // and shared with edges/describe.ts.
-  const responseLabel = routes.responseLabel;
+  // …then moved along its run when a neighbour's reply label would be written over it.
+  const responseLabel = routes.responseLabel && replyShift && !routeUnsettled
+    ? { ...routes.responseLabel, x: routes.responseLabel.x + replyShift.x, y: routes.responseLabel.y + replyShift.y }
+    : routes.responseLabel;
   // Compact by default; the response's own half of a two-phase presentation pulse also counts as
   // "useful to see right now", same as hover/selection.
   const responseRevealed = selected || hovering || pulseTarget === 'response';
@@ -725,9 +756,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-focus-dimmed={focusDimmed ? 'true' : undefined}
       data-flow-active={isActiveStep ? pulseTarget : undefined}
       data-attach-target={attachTarget ? 'true' : undefined}
+      data-splice-target={spliceTarget ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
+      data-arriving={arriving ? 'true' : undefined}
+      data-changed={changed ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
       data-traffic={trafficReading ?? undefined}
       data-lens-pulse={lensPulsing ? 'true' : undefined}
@@ -783,7 +817,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           strokeWidth: Math.max(CONNECTOR_STYLE.lineWidth,
             isActiveStep
               ? 2.6
-              : selected || attachTarget
+              : selected || attachTarget || spliceTarget
                 ? 2.4
                 : trafficReading === 'shared'
                   ? 2.3
@@ -829,6 +863,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )}
       {arrowPath && (
         <path
+          className="dc-edge-arrow"
           d={arrowPath}
           pointerEvents="none"
           fill={markerVariantForEdge(edge) === 'closed' ? strokeColor : 'none'}
@@ -860,6 +895,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )}
       {responseArrowPath && (
         <path
+          className="dc-edge-arrow"
           d={responseArrowPath}
           pointerEvents="none"
           fill="none"
@@ -868,6 +904,21 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           strokeLinecap="round"
           strokeLinejoin="round"
           opacity={0.8}
+        />
+      )}
+      {/* The pen that draws a new connector: one solid stroke in the line's own colour, source to
+          target, that the real line (dashed or not, arrowhead and all) resolves out of as it fades.
+          Mounted only while the arrival marker lasts; CSS opts in only when motion is welcome. */}
+      {arriving && (
+        <path
+          className="dc-edge-ink"
+          d={drawnPath}
+          pathLength={1}
+          fill="none"
+          stroke={strokeColor}
+          strokeWidth={CONNECTOR_STYLE.lineWidth + 0.4}
+          strokeLinecap="round"
+          pointerEvents="none"
         />
       )}
       {/* One short directional cue per hover. CSS opts in only when motion is welcome; the paths
@@ -979,32 +1030,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             </g>
           );
         })()}
-      {/* A subtle caption of the relationship — independent of `kind`'s glyph above, so a plain
-          call/read/write connector reads just as clearly as an event one. Yields entirely to a
-          real label the moment there is one. A request/response connector now gets one too (see
-          `relationshipCaptionLabel`) — the two-line shape communicates "this is a call," but not
-          *what kind* of call, which is exactly what left a fresh Service→Service connector with
-          no visible text at all. `captionAnchor`'s `responseAway` flag is what keeps this from
-          landing on top of the response line's own label — see its own doc comment. */}
-      {captionLayout && !badgeOverCaption && (() => {
-        const captionSide = captionCollapsed ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide;
-        const caption = captionAnchor(captionSide, captionAt.x, captionAt.y, captionCollapsed ? responseAway : captionAwayForLane(laneOffset, responseAway));
-        return (
-          <text
-            className="dc-edge-caption"
-            x={caption.x}
-            y={caption.y}
-            textAnchor={caption.textAnchor}
-            dominantBaseline={caption.dominantBaseline}
-            fill={captionIsUnusual ? theme.accents.amber.text : theme.textFaint}
-            style={{ font: cssFont(FONTS.connectorCaption) }}
-          >
-            {captionLayout.truncated && <title>{captionText}</title>}
-            {captionLayout.lines[0]?.text ?? captionText}
-          </text>
-        );
-      })()}
-
       <EdgeLabels>
         {/* `display: contents` — no box of its own, so every chip below still positions against the
             label layer. It only tells `edgePick.ts` whose chip the pointer is on. */}
@@ -1033,31 +1058,42 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           which has no notion of this app's per-side offsets or custom routing.
         */}
         {selected && mode !== 'present' && (
-          <>
-            <EdgeEndpointHandle
-              edgeId={edge.id}
-              endpoint="source"
-              x={route.source.x}
-              y={route.source.y}
-              pinned={edge.sourceAnchor !== undefined}
-              oppositeNodeId={edge.target}
-              onDrag={setDragOverride}
-            />
-            <EdgeEndpointHandle
-              edgeId={edge.id}
-              endpoint="target"
-              x={route.target.x}
-              y={route.target.y}
-              pinned={edge.targetAnchor !== undefined}
-              oppositeNodeId={edge.source}
-              onDrag={setDragOverride}
-            />
-          </>
+          <EdgeEditHandles
+            edge={edge}
+            route={route}
+            waypoints={waypoints}
+            soleSelection={soleSelection}
+            reshaping={dragOverride !== null}
+            onDrag={setDragOverride}
+            onBendPreview={setBendPreview}
+          />
         )}
-        {/* Bend handles, beside the endpoint ones and for the same pointer-priority reason. Hidden
-            while an end is being re-pointed: the line they sit on is then a preview. */}
-        {selected && soleSelection && mode !== 'present' && !dragOverride && (
-          <EdgeBendHandles edgeId={edge.id} routing={edge.routing} route={route} waypoints={waypoints} onPreview={setBendPreview} />
+
+        {/* A subtle caption of the relationship — independent of `kind`'s glyph, so a plain
+            call/read/write connector reads just as clearly as an event one. Yields entirely to a
+            real label the moment there is one. A request/response connector gets one too (see
+            `relationshipCaptionLabel`): the two-line shape says "this is a call", not what kind.
+            Drawn up here with the labels, above every line, on the same quiet canvas-toned backing:
+            in the connector's own SVG it sat under any line drawn after it, struck through. */}
+        {captionBox && captionLayout && (
+          <div
+            className="dc-edge-caption"
+            data-unusual={captionIsUnusual ? 'true' : undefined}
+            data-arriving={arriving ? 'true' : undefined}
+            data-dimmed={dimmed ? 'true' : undefined}
+            data-focus-dimmed={focusDimmed ? 'true' : undefined}
+            data-shown={isShownStep ? 'true' : undefined}
+            data-lens-dimmed={lensDimmed ? 'true' : undefined}
+            title={captionLayout.truncated ? (captionText ?? undefined) : undefined}
+            style={{
+              transform: `translate(${captionBox.left - CAPTION_PADDING_X}px, ${captionBox.top - CAPTION_PADDING_Y}px)`,
+              color: captionIsUnusual ? theme.accents.amber.text : theme.edgeText,
+              font: cssFont(FONTS.connectorCaption),
+              lineHeight: `${captionLayout.lineHeight}px`,
+            }}
+          >
+            {captionLayout.lines[0]?.text ?? captionText}
+          </div>
         )}
 
         {(hasLabel || editing) && !hidesOwnLabel && (
@@ -1067,6 +1103,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-editing={editing ? 'true' : undefined}
             // Named for `edgePick.ts`: a click on a label several connectors share steps through them.
             data-label-group={drawsSharedLabel ? sharedLabel!.members.join(' ') : undefined}
+            data-arriving={arriving ? 'true' : undefined}
             data-dimmed={dimmed ? 'true' : undefined}
             data-focus-dimmed={focusDimmed ? 'true' : undefined}
             data-shown={isShownStep ? 'true' : undefined}
@@ -1169,7 +1206,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             data-active={isActiveStep ? 'true' : undefined}
             data-lens-dimmed={lensDimmed ? 'true' : undefined}
             style={{
-              transform: conditionTransform(labelSide, labelX, labelY),
+              transform: conditionTransform(labelSide, labelX, conditionBox?.y ?? labelY + 16),
             }}
           >
             <span
@@ -1177,7 +1214,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               data-editing={editingCondition ? 'true' : undefined}
               style={{ color }}
               title={mode === 'edit' && !editingCondition ? 'Double-click to edit' : undefined}
-              onDoubleClick={() => mode === 'edit' && useUiStore.getState().readOnly === null && setEditingCondition(true)}
+              onDoubleClick={() => mode === 'edit' && useUiStore.getState().readOnly === null && edge.condition && setEditingCondition(true)}
             >
               {editingCondition ? (
                 <input
@@ -1230,6 +1267,25 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           </div>
         )}
 
+        {/* Mounted only when there is something to reveal — no cost, no listeners, when an
+            edge has no attachment. Stays mounted in presentation mode (click-to-reveal still
+            works there); only pinning into edit mode is gated to edit mode, below. */}
+        {edge.attachments?.length && markRow?.attachments ? (
+          <AttachmentChipRow
+            hostKind="edge"
+            hostId={edge.id}
+            attachments={edge.attachments}
+            cardSide={markRow?.below ? 'below' : 'above'}
+            editable={mode !== 'present'}
+            actions={attachmentActions}
+            dimmed={lensDimmed}
+            explainTier={playbackActive ? tier : undefined}
+            revealed={selected || hovering}
+            anchor={markRow.attachments}
+            style={{ position: 'absolute', transform: attachmentRowTransform(markRow.attachments.anchor, markRow.attachments.anchorX, markRow.attachments.box.y) }}
+          />
+        ) : null}
+
         {openPointCenter && (
           <OpenPointMarker
             targetKind="edge"
@@ -1245,29 +1301,67 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             y={openPointCenter.y}
           />
         )}
-
-        {/* Mounted only when there is something to reveal — no cost, no listeners, when an
-            edge has no attachment. Stays mounted in presentation mode (click-to-reveal still
-            works there); only pinning into edit mode is gated to edit mode, below. */}
-        {edge.attachments?.length ? (
-          <AttachmentChipRow
-            hostKind="edge"
-            hostId={edge.id}
-            attachments={edge.attachments}
-            cardSide={attachmentFlipBelow ? 'below' : 'above'}
-            editable={mode !== 'present'}
-            actions={attachmentActions}
-            dimmed={lensDimmed}
-            explainTier={playbackActive ? tier : undefined}
-            revealed={selected || hovering}
-            style={{ position: 'absolute', transform: attachmentRowTransform(labelX, labelY, attachmentFlipBelow) }}
-          />
-        ) : null}
         </div>
       </EdgeLabels>
     </g>
   );
 });
+
+/**
+ * A selected connector's handles: one at each end, to re-point it, and — beside them, for the same
+ * pointer-priority reason — the bend handles. Hidden while an end is being re-pointed: the line the
+ * bend handles sit on is then a preview.
+ *
+ * A component of its own for the one thing they need beyond the connector: whether this copy can be
+ * edited at all. A shared or view-only one cannot (the store refuses the write, and the drag only
+ * snapped back), and nothing is being traced. One boolean selector, mounted only for the connector
+ * that is selected — never another subscription on every connector in the diagram.
+ */
+function EdgeEditHandles({
+  edge,
+  route,
+  waypoints,
+  soleSelection,
+  reshaping,
+  onDrag,
+  onBendPreview,
+}: {
+  edge: DraftEdge;
+  route: RoutedEdge;
+  waypoints: DraftPoint[] | undefined;
+  soleSelection: boolean;
+  reshaping: boolean;
+  onDrag: (override: DragOverride | null) => void;
+  onBendPreview: (preview: BendPreview | null) => void;
+}) {
+  const editable = useUiStore((state) => state.readOnly === null && state.flowTrace === null);
+  if (!editable) return null;
+  return (
+    <>
+      <EdgeEndpointHandle
+        edgeId={edge.id}
+        endpoint="source"
+        x={route.source.x}
+        y={route.source.y}
+        pinned={edge.sourceAnchor !== undefined}
+        oppositeNodeId={edge.target}
+        onDrag={onDrag}
+      />
+      <EdgeEndpointHandle
+        edgeId={edge.id}
+        endpoint="target"
+        x={route.target.x}
+        y={route.target.y}
+        pinned={edge.targetAnchor !== undefined}
+        oppositeNodeId={edge.source}
+        onDrag={onDrag}
+      />
+      {soleSelection && !reshaping && (
+        <EdgeBendHandles edgeId={edge.id} routing={edge.routing} route={route} waypoints={waypoints} onPreview={onBendPreview} />
+      )}
+    </>
+  );
+}
 
 /**
  * One draggable connector endpoint. Grabbing it and dropping it on a node
@@ -1500,8 +1594,8 @@ type InternalNodeLike = { internals: { positionAbsolute: { x: number; y: number 
 
 /** The flow being presented, if any. */
 function playingFlowOf(state: EditorStore) {
-  const { active, flowId } = state.flowPlayback;
-  return active && flowId ? findFlow(state.document, flowId) : undefined;
+  const { active, flowId, sequenceNodeId } = state.flowPlayback;
+  return active && flowId ? playbackFlowOf(state.document, flowId, sequenceNodeId) : undefined;
 }
 
 /** This connector's Presentation tier — a string, so only connectors whose tier flips re-render.

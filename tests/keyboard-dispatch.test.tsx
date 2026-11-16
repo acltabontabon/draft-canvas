@@ -280,3 +280,114 @@ describe('presenting owns the keyboard', () => {
     expect(useEditorStore.getState().selection.nodes).toEqual([node.id]);
   });
 });
+
+describe('keyboard dispatch — arrow-key nudges', () => {
+  beforeEach(reset);
+
+  /** Animation frames run by hand, so a test decides how many presses land in one. */
+  function holdFrames() {
+    const queue: Array<() => void> = [];
+    vi.stubGlobal('requestAnimationFrame', (callback: () => void) => queue.push(callback));
+    vi.stubGlobal('cancelAnimationFrame', () => queue.splice(0, queue.length));
+    return () => {
+      for (const callback of queue.splice(0, queue.length)) callback();
+    };
+  }
+
+  const positionOf = (id: string) => useEditorStore.getState().document.nodes.find((node) => node.id === id)!.x;
+
+  it('applies the presses of one frame as one nudge by their sum, and one undo step', () => {
+    const runFrame = holdFrames();
+    try {
+      mount();
+      const node = addNode();
+      useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+      const before = useEditorStore.getState().history.past.length;
+
+      for (let held = 0; held < 30; held += 1) press('ArrowRight', { repeat: held > 0 });
+      press('ArrowRight', { shiftKey: true });
+      // Nothing has been applied (and no plan made) while the frame has not come.
+      expect(positionOf(node.id)).toBe(0);
+
+      act(() => runFrame());
+      expect(positionOf(node.id)).toBe(40);
+      expect(useEditorStore.getState().history.past).toHaveLength(before + 1);
+
+      press('z', { metaKey: true });
+      expect(positionOf(node.id)).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('asks the store for one nudge for a frame, not one per press', () => {
+    const runFrame = holdFrames();
+    const nudge = vi.fn();
+    const original = useEditorStore.getState().nudgeSelection;
+    try {
+      mount();
+      const node = addNode();
+      useEditorStore.setState({ selection: { nodes: [node.id], edges: [] }, nudgeSelection: nudge });
+      for (let held = 0; held < 12; held += 1) press('ArrowDown');
+      act(() => runFrame());
+      expect(nudge).toHaveBeenCalledTimes(1);
+      expect(nudge).toHaveBeenCalledWith(0, 12, [node.id]);
+    } finally {
+      useEditorStore.setState({ nudgeSelection: original });
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('applies a pending nudge before any other key does its work, so an undo sees it', () => {
+    const runFrame = holdFrames();
+    try {
+      mount();
+      const node = addNode();
+      useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+      press('ArrowRight');
+      press('ArrowRight');
+      expect(positionOf(node.id)).toBe(0);
+      // ⌘Z is not an arrow: the two presses are applied first, and it takes back that one step.
+      press('z', { metaKey: true });
+      expect(positionOf(node.id)).toBe(0);
+      expect(useEditorStore.getState().history.future.at(-1)?.label).toBe('Nudge');
+      act(() => runFrame());
+      expect(positionOf(node.id)).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('moves the shapes the keys were pressed on, even if the selection has changed by the frame', () => {
+    const runFrame = holdFrames();
+    try {
+      mount();
+      const first = addNode();
+      const second = addNode();
+      useEditorStore.getState().setSelection({ nodes: [first.id], edges: [] });
+      press('ArrowRight', { shiftKey: true });
+      useEditorStore.getState().setSelection({ nodes: [second.id], edges: [] });
+      act(() => runFrame());
+      expect(positionOf(first.id)).toBe(10);
+      expect(positionOf(second.id)).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('applies a pending nudge when the editor goes away, rather than losing the press', () => {
+    const runFrame = holdFrames();
+    try {
+      const view = mount();
+      const node = addNode();
+      useEditorStore.getState().setSelection({ nodes: [node.id], edges: [] });
+      press('ArrowLeft');
+      view.unmount();
+      expect(positionOf(node.id)).toBe(-1);
+      act(() => runFrame());
+      expect(positionOf(node.id)).toBe(-1);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+});

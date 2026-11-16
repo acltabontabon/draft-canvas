@@ -10,24 +10,39 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | Field | Contents |
 | --- | --- |
 | `format` | Always `"draft-canvas"` |
-| `version` | Format version, currently **23** (`CURRENT_VERSION`) |
+| `version` | Format version, currently **28** (`CURRENT_VERSION`) |
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
+| `ink` | Optional handwritten strokes over the top-level graph (`DraftInk`). Absent when there are none |
 | `settings` | Canvas settings, including the background |
 | `openPoints` | Unsettled questions attached to elements. Root only |
 | `level` | Optional `ViewLevel` |
 
-A node may own a room (`DraftNode.inside`): its own `nodes`, `edges`, `flows`, `viewport` and
-optional `level`. A document is a tree of graphs, nested at most 3 levels below the root.
+A node may own a room (`DraftNode.inside`): its own `nodes`, `edges`, `flows`, `viewport`, and
+optional `ink` and `level`. A document is a tree of graphs, nested at most 3 levels below the root.
 
-The same shape is stored in IndexedDB's `bodies` store.
+A node of type `sequence` carries a `sequence` payload (`DraftSequence`): `participants`, optional
+`groups` of neighbouring participants, and `items` in order: messages, notes and fragments, whose
+operands hold items in turn. `numberMessages: false` hides message numbers. Nothing in the payload is
+a coordinate: layout, work bars and the node's size are derived.
+
+- Ids inside a sequence are local to the node.
+- A participant has a shape's identity fields (`type`, kind, `technology`, `accent`) and an optional
+  `ref`, the id of the shape in the same view it stands for.
+- A message has `from`, `to`, a `kind` (`sync`, `async`, `reply`, `create`, `destroy`), a `label`,
+  optional `replyTo`, `activate` / `deactivate` flags, and optionally an `attachments` array with the
+  same note and code payloads as a canvas connector.
+- A canvas connector can attach to a participant through `sourceAnchor.participantId` or
+  `targetAnchor.participantId`; its anchor offset is then measured along the participant's lifeline.
+
+IndexedDB's `bodies` store holds the same shape.
 
 ## Versions and migrations
 
 `src/document/migrate.ts` is the only code that reads `version`. `MIGRATIONS[n]` upgrades a
 version-`n` document to `n + 1`. `migrateToCurrent` runs the chain:
 
-- A missing `version` is treated as 1. A present but unreadable one (a string, a fraction, `null`, zero or negative) is refused, so a current file is never run through the whole chain.
+- A missing `version` is treated as 1. A present but unreadable one (a string, a fraction, `null`, zero or negative) is refused, so a current file never runs through the whole chain.
 - A version newer than `CURRENT_VERSION` throws `UnsupportedVersionError`, naming both versions.
 - A gap in the chain throws `Missing migration from document format v${v} to v${v + 1}.`
 
@@ -63,17 +78,21 @@ Rules for a new version:
 | v20 → v21 | `migrateTextToMarkdown` | Text node and Text attachment `text` (on shapes and connectors) is escaped so it reads the same as Markdown |
 | v21 → v22 | identity | No-op (optional linked compensation fields on connectors) |
 | v22 → v23 | identity | No-op (retired per-connector style overrides are discarded by normalization) |
+| v23 → v24 | identity | No-op (optional `replicas` on Services and `kindOrigin` on Services, Data Stores and Queues) |
+| v24 → v25 | identity | No-op (optional connector `cadence`) |
+| v25 → v26 | identity | No-op (the `sequence` node type and its payload) |
+| v26 → v27 | identity | Message attachments and larger sequence frames |
+| v27 → v28 | identity | No-op (optional `ink` on the document and every room) |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
 
-Linked compensating actions remain ordinary connectors. A compensation can name its originating
-interaction with `compensationFor`, keep its line folded with `compensationVisible: false`, and
-carry a business name (`compensationName`), protocol (`compensationProtocol`) and optional context
-(`compensationDescription`). Its ordinary `label` remains the counteraction operation. These fields
-are available in MCP `create_diagram`, `read_diagram` and `update_diagram`, including through Nodi.
-Older, unlinked `compensates` connectors stay visible; migration never guesses which operation they
-counteract. An invalid link is removed while the action remains visible and editable.
+**Compensating actions** are ordinary connectors. One can name its originating interaction
+(`compensationFor`), keep its line folded (`compensationVisible: false`), and carry a business name
+(`compensationName`), protocol (`compensationProtocol`) and context (`compensationDescription`); its
+`label` stays the counteraction operation. MCP `create_diagram`, `read_diagram` and `update_diagram`
+expose these fields. Older unlinked `compensates` connectors stay visible, since migration never
+guesses which operation they counteract; an invalid link is removed and the action stays editable.
 
 ## Validation
 
@@ -90,16 +109,28 @@ Rejected outright:
 Repaired, after migration, and reported to the caller:
 
 - Enums are checked against closed sets; invalid values fall back or are dropped.
-- Text has control characters stripped and is length-clamped.
+- Text has control characters stripped and is length-clamped. A title, a connector label, a
+  description and a technology are also trimmed (a technology on one line, a title never cut mid-emoji),
+  and none left means the field is absent. The editor writes them the same way, so a save holds what
+  the next open keeps.
 - Numbers are coerced to finite values and clamped.
 - Collections over their limit are truncated. `maxNodes` and `maxEdges` are one allowance across
   the file, spent outermost first.
 - Dangling references are dropped: edges to missing nodes, missing `parentId` boundaries, flow
   steps to missing edges.
+- Boundaries nested deeper than `maxGroupDepth` lose the link ("Removed … invalid grouping link(s)");
+  the editor refuses to nest that deep, so only a hand-edited file reaches it.
 - Rooms deeper than `maxInsideDepth` are dropped. A room with no shapes is dropped. Ids are unique
-  across the whole file.
+  across the whole file. A missing or repeated id on a shape, connector, flow, flow step or
+  attachment gets a new one, and the report says how many.
+- `ink` strokes are read per room: an unknown `tool` or unreadable points drop the stroke; size is
+  clamped; a `pressure` list that doesn't match the points is dropped; ids are unique across the
+  file; a room over `maxInkStrokes` keeps the first strokes.
 - `openPoints` is read at the root only. Targets are resolved after every room is loaded; a
   missing target is dropped, and a point with no targets left is dropped.
+- A `sequence` payload is normalized by `validateSequence.ts`: messages to or from a missing
+  participant, replies whose call is gone, broken nesting and anything past the sequence limits are
+  dropped; a participant's `ref` to a missing shape is cleared and the participant kept.
 
 ## Limits
 
@@ -109,11 +140,16 @@ From `LIMITS` in `src/document/limits.ts`:
 | --- | --- |
 | `maxFileBytes` | 24 MB |
 | `maxNodes` / `maxEdges` | 5,000 / 10,000 |
-| `maxInsideDepth` | 3 |
+| `maxInsideDepth` / `maxGroupDepth` | 3 / 32 |
+| `maxZ` | ±10,000 (stacking order) |
 | `maxAttachmentsPerNode` / `maxAttachmentsPerEdge` | 12 / 4 |
 | `maxFlows` / `maxStepsPerFlow` / `maxExtraMembersPerStep` | 50 / 200 / 40 |
 | `maxOpenPoints` / `maxOpenPointTargets` | 200 / 40 |
 | `maxWaypointsPerEdge` | 32 |
+| `maxSequenceParticipants` / `maxSequenceItems` | 40 / 600 |
+| `maxSequenceDepth` / `maxSequenceOperands` / `maxSequenceGroups` | 8 / 12 / 20 |
+| `maxSequenceNameLength` / `maxSequenceNoteLength` | 120 / 1,000 |
+| `maxInkStrokes` / `maxInkPoints` | 4,000 per file / 2,000 per stroke |
 | `maxTitleLength` / `maxLabelLength` | 200 / 500 |
 | `maxTextLength` / `maxCodeLength` | 20,000 / 200,000 |
 | `maxDescriptionLength` / `maxTechnologyLength` | 280 / 60 |

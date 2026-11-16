@@ -17,6 +17,7 @@ import { AgentError } from './errors';
 import { viewOf, type DepthPath } from '../depth/tree';
 import type { DraftDocument, DraftNode } from '../document/types';
 import { nearestElement } from './read';
+import { sequenceRead } from './sequences';
 import { groupKindOf } from './vocabulary';
 
 export const NOTES_LIMIT = 100;
@@ -148,6 +149,7 @@ export interface BoundaryContext {
 
 const FLOWS_LIMIT = 20;
 const BOUNDARIES_LIMIT = 50;
+const SEQUENCES_LIMIT = 8;
 
 export function buildImplementationContext(
   file: DraftDocument,
@@ -221,9 +223,17 @@ export function buildImplementationContext(
     memberIds: view.nodes.filter((n) => n.parentId === g.id).map((n) => n.id),
   }));
 
+  // The sequences that say how this behaves: all of them, or with a focus those in it and those
+  // one of whose participants stands for something in it. In full: the order is what is implemented.
+  const sequences = view.nodes
+    .filter((n) => n.type === 'sequence' && (inFocus(n.id) || (n.sequence?.participants ?? []).some((participant) => participant.ref !== undefined && inFocus(participant.ref))))
+    .slice(0, SEQUENCES_LIMIT)
+    .map((n) => sequenceRead(n, true));
+
   return {
     ...base,
     flows,
+    ...(sequences.length ? { sequences } : {}),
     evidence: [...view.nodes, ...view.edges].filter((item) => inFocus(item.id) && item.evidence?.length).map((item) => ({ id: item.id, sources: item.evidence })),
     ...(notes.length ? { notes } : {}),
     ...(snippets.length ? { snippets } : {}),

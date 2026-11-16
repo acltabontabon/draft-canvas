@@ -1,0 +1,29 @@
+{
+  "id": "transactional-outbox",
+  "name": "Transactional Outbox",
+  "category": "pattern",
+  "summary": "Persist state and event intent atomically, publish after",
+  "aliases": [
+    "outbox",
+    "transactional outbox",
+    "outbox pattern",
+    "dual write",
+    "reliable publish"
+  ],
+  "tags": [
+    "outbox",
+    "reliable messaging",
+    "events",
+    "consistency"
+  ],
+  "useWhen": [
+    "A state change and its event must never disagree.",
+    "Publishing events from a service that owns a database."
+  ],
+  "watchOutFor": [
+    "Events arrive at least once and slightly late.",
+    "The outbox table needs cleaning up."
+  ],
+  "featured": false,
+  "order": 130
+}

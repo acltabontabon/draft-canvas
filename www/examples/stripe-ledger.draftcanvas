@@ -1,0 +1,828 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "example-stripe-ledger",
+    "title": "Stripe Ledger",
+    "createdAt": 1794614400000,
+    "updatedAt": 1794614400000
+  },
+  "nodes": [
+    {
+      "id": "finance",
+      "type": "actor",
+      "text": "Finance team",
+      "x": 1339,
+      "y": 72,
+      "width": 125,
+      "height": 80,
+      "z": 0,
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "engineer",
+      "type": "actor",
+      "text": "On-call engineer",
+      "x": 1339,
+      "y": 363,
+      "width": 125,
+      "height": 80,
+      "z": 0,
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "payments",
+      "type": "service",
+      "text": "Payments systems",
+      "x": 0,
+      "y": 69,
+      "width": 208,
+      "height": 86,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "external",
+      "description": "Produce charge events"
+    },
+    {
+      "id": "partners",
+      "type": "service",
+      "text": "Bank and network reports",
+      "x": 0,
+      "y": 216,
+      "width": 208,
+      "height": 86,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "external",
+      "description": "External settlement data"
+    },
+    {
+      "id": "producers",
+      "type": "service",
+      "text": "Stripe reporting systems",
+      "x": 356,
+      "y": 216,
+      "width": 218,
+      "height": 86,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "external",
+      "description": "Parse and reconcile reports"
+    },
+    {
+      "id": "ledger-system",
+      "type": "service",
+      "text": "Ledger and Data Quality",
+      "x": 727,
+      "y": 216,
+      "width": 236,
+      "height": 86,
+      "z": 0,
+      "accent": "teal",
+      "serviceKind": "generic",
+      "description": "Tracks and validates funds",
+      "inside": {
+        "level": "container",
+        "nodes": [
+          {
+            "id": "ledger-boundary",
+            "type": "group",
+            "text": "Stripe Ledger and Data Quality",
+            "x": 226,
+            "y": 0,
+            "width": 1120,
+            "height": 515,
+            "z": 0,
+            "accent": "blue",
+            "boundaryPreset": "system"
+          },
+          {
+            "id": "event-producer",
+            "type": "service",
+            "text": "Producer systems",
+            "x": 0,
+            "y": 108,
+            "width": 159,
+            "height": 84,
+            "z": 0,
+            "accent": "blue",
+            "serviceKind": "external",
+            "description": "Publish financial events"
+          },
+          {
+            "id": "event-log",
+            "type": "database",
+            "text": "Immutable event log",
+            "x": 264,
+            "y": 120,
+            "width": 191,
+            "height": 88,
+            "z": 0,
+            "databaseKind": "generic",
+            "accent": "blue",
+            "parentId": "ledger-boundary"
+          },
+          {
+            "id": "projections",
+            "type": "service",
+            "text": "Fund flow model",
+            "x": 577,
+            "y": 108,
+            "width": 180,
+            "height": 84,
+            "z": 0,
+            "accent": "blue",
+            "serviceKind": "generic",
+            "description": "Reconstructs balances",
+            "parentId": "ledger-boundary"
+          },
+          {
+            "id": "quality",
+            "type": "service",
+            "text": "Data Quality checks",
+            "x": 910,
+            "y": 108,
+            "width": 213,
+            "height": 84,
+            "z": 0,
+            "accent": "violet",
+            "serviceKind": "generic",
+            "description": "Scores each fund flow",
+            "parentId": "ledger-boundary",
+            "inside": {
+              "level": "component",
+              "nodes": [
+                {
+                  "id": "dq-components",
+                  "type": "group",
+                  "text": "Data Quality checks",
+                  "x": 245,
+                  "y": 0,
+                  "width": 736,
+                  "height": 447,
+                  "z": 0,
+                  "accent": "violet",
+                  "boundaryPreset": "boundary"
+                },
+                {
+                  "id": "fund-flow",
+                  "type": "service",
+                  "text": "Ledger fund flows",
+                  "x": 0,
+                  "y": 184,
+                  "width": 158,
+                  "height": 80,
+                  "z": 0,
+                  "accent": "blue",
+                  "serviceKind": "external",
+                  "description": "Events grouped by ID"
+                },
+                {
+                  "id": "clearing",
+                  "type": "component",
+                  "text": "Clearing",
+                  "x": 339,
+                  "y": 62,
+                  "width": 184,
+                  "height": 81,
+                  "z": 0,
+                  "description": "Checks unsettled balances",
+                  "componentKind": "module",
+                  "accent": "violet",
+                  "parentId": "dq-components"
+                },
+                {
+                  "id": "timeliness",
+                  "type": "component",
+                  "text": "Timeliness",
+                  "x": 339,
+                  "y": 184,
+                  "width": 184,
+                  "height": 81,
+                  "z": 0,
+                  "description": "Measures delivery delay",
+                  "componentKind": "module",
+                  "accent": "violet",
+                  "parentId": "dq-components"
+                },
+                {
+                  "id": "completeness",
+                  "type": "component",
+                  "text": "Completeness",
+                  "x": 339,
+                  "y": 306,
+                  "width": 184,
+                  "height": 81,
+                  "z": 0,
+                  "description": "Matches producer records",
+                  "componentKind": "module",
+                  "accent": "violet",
+                  "parentId": "dq-components"
+                },
+                {
+                  "id": "scores",
+                  "type": "component",
+                  "text": "Data quality scoring",
+                  "x": 733,
+                  "y": 184,
+                  "width": 198,
+                  "height": 81,
+                  "z": 0,
+                  "description": "Rolls up health by flow",
+                  "componentKind": "module",
+                  "accent": "violet",
+                  "parentId": "dq-components"
+                },
+                {
+                  "id": "alerts",
+                  "type": "service",
+                  "text": "Alerts and tickets",
+                  "x": 1060,
+                  "y": 184,
+                  "width": 171,
+                  "height": 80,
+                  "z": 0,
+                  "accent": "blue",
+                  "serviceKind": "external",
+                  "description": "Routes issues to owners"
+                }
+              ],
+              "edges": [
+                {
+                  "id": "check-clearing",
+                  "source": "fund-flow",
+                  "target": "clearing",
+                  "label": "fund flow",
+                  "accent": "violet",
+                  "semantic": "reads",
+                  "directed": true,
+                  "routing": "smoothstep",
+                  "sourceAnchor": {
+                    "side": "right",
+                    "offset": 0.26
+                  },
+                  "targetAnchor": {
+                    "side": "left",
+                    "offset": 0.5
+                  },
+                  "routeMode": "direct",
+                  "waypoints": [
+                    {
+                      "x": 233,
+                      "y": 204.8
+                    },
+                    {
+                      "x": 233,
+                      "y": 102.5
+                    }
+                  ]
+                },
+                {
+                  "id": "check-time",
+                  "source": "fund-flow",
+                  "target": "timeliness",
+                  "label": "event times",
+                  "accent": "violet",
+                  "semantic": "reads",
+                  "directed": true,
+                  "routing": "straight",
+                  "sourceAnchor": {
+                    "side": "right",
+                    "offset": 0.5
+                  },
+                  "targetAnchor": {
+                    "side": "left",
+                    "offset": 0.49382716049382713
+                  }
+                },
+                {
+                  "id": "check-completeness",
+                  "source": "fund-flow",
+                  "target": "completeness",
+                  "label": "event IDs",
+                  "accent": "violet",
+                  "semantic": "reads",
+                  "directed": true,
+                  "routing": "smoothstep",
+                  "sourceAnchor": {
+                    "side": "right",
+                    "offset": 0.74
+                  },
+                  "targetAnchor": {
+                    "side": "left",
+                    "offset": 0.5
+                  },
+                  "routeMode": "direct",
+                  "waypoints": [
+                    {
+                      "x": 233,
+                      "y": 243.2
+                    },
+                    {
+                      "x": 233,
+                      "y": 346.5
+                    }
+                  ]
+                },
+                {
+                  "id": "clearing-score",
+                  "source": "clearing",
+                  "target": "scores",
+                  "label": "clearing result",
+                  "accent": "violet",
+                  "semantic": "deliversTo",
+                  "directed": true,
+                  "routing": "smoothstep",
+                  "sourceAnchor": {
+                    "side": "right",
+                    "offset": 0.5
+                  },
+                  "targetAnchor": {
+                    "side": "left",
+                    "offset": 0.25
+                  },
+                  "routeMode": "direct",
+                  "waypoints": [
+                    {
+                      "x": 636,
+                      "y": 102.5
+                    },
+                    {
+                      "x": 636,
+                      "y": 204.25
+                    }
+                  ]
+                },
+                {
+                  "id": "time-score",
+                  "source": "timeliness",
+                  "target": "scores",
+                  "label": "timeliness result",
+                  "accent": "violet",
+                  "semantic": "deliversTo",
+                  "directed": true,
+                  "routing": "straight",
+                  "sourceAnchor": {
+                    "side": "right",
+                    "offset": 0.5
+                  },
+                  "targetAnchor": {
+                    "side": "left",
+                    "offset": 0.5
+                  }
+                },
+                {
+                  "id": "completeness-score",
+                  "source": "completeness",
+                  "target": "scores",
+                  "label": "completeness result",
+                  "accent": "violet",
+                  "semantic": "deliversTo",
+                  "directed": true,
+                  "routing": "smoothstep",
+                  "sourceAnchor": {
+                    "side": "right",
+                    "offset": 0.5
+                  },
+                  "targetAnchor": {
+                    "side": "left",
+                    "offset": 0.75
+                  },
+                  "routeMode": "direct",
+                  "waypoints": [
+                    {
+                      "x": 636,
+                      "y": 346.5
+                    },
+                    {
+                      "x": 636,
+                      "y": 244.75
+                    }
+                  ]
+                },
+                {
+                  "id": "alert",
+                  "source": "scores",
+                  "target": "alerts",
+                  "label": "flags issues",
+                  "accent": "amber",
+                  "semantic": "deliversTo",
+                  "directed": true,
+                  "routing": "straight",
+                  "sourceAnchor": {
+                    "side": "right",
+                    "offset": 0.49382716049382713
+                  },
+                  "targetAnchor": {
+                    "side": "left",
+                    "offset": 0.5
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "id": "investigation",
+            "type": "service",
+            "text": "Investigation tools",
+            "x": 910,
+            "y": 327,
+            "width": 213,
+            "height": 84,
+            "z": 0,
+            "accent": "violet",
+            "serviceKind": "generic",
+            "description": "Builds Presto queries",
+            "parentId": "ledger-boundary",
+            "technology": "Presto"
+          },
+          {
+            "id": "repair",
+            "type": "service",
+            "text": "Correction utility",
+            "x": 577,
+            "y": 327,
+            "width": 180,
+            "height": 84,
+            "z": 0,
+            "accent": "amber",
+            "serviceKind": "generic",
+            "description": "Reverts and reprocesses",
+            "parentId": "ledger-boundary"
+          },
+          {
+            "id": "impact",
+            "type": "service",
+            "text": "Impact report",
+            "x": 264,
+            "y": 327,
+            "width": 191,
+            "height": 84,
+            "z": 0,
+            "accent": "amber",
+            "serviceKind": "generic",
+            "description": "Shows expected impact",
+            "parentId": "ledger-boundary"
+          },
+          {
+            "id": "operator",
+            "type": "actor",
+            "text": "Operator",
+            "x": 1433,
+            "y": 329,
+            "width": 102,
+            "height": 80,
+            "z": 0,
+            "actorFrame": "borderless"
+          }
+        ],
+        "edges": [
+          {
+            "id": "append",
+            "source": "event-producer",
+            "target": "event-log",
+            "label": "appends events",
+            "accent": "blue",
+            "semantic": "publishes",
+            "directed": true,
+            "routing": "straight",
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.5
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.5
+            }
+          },
+          {
+            "id": "project",
+            "source": "event-log",
+            "target": "projections",
+            "label": "projects fund flows",
+            "accent": "blue",
+            "semantic": "transforms",
+            "directed": true,
+            "routing": "straight",
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.5
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.5
+            }
+          },
+          {
+            "id": "check-quality",
+            "source": "projections",
+            "target": "quality",
+            "label": "evaluates flow",
+            "accent": "violet",
+            "semantic": "calls",
+            "directed": true,
+            "routing": "straight",
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.5
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.5
+            }
+          },
+          {
+            "id": "surface",
+            "source": "quality",
+            "target": "investigation",
+            "label": "surfaces anomalies",
+            "accent": "violet",
+            "semantic": "deliversTo",
+            "directed": true,
+            "routing": "straight",
+            "sourceAnchor": {
+              "side": "bottom",
+              "offset": 0.5
+            },
+            "targetAnchor": {
+              "side": "top",
+              "offset": 0.5
+            }
+          },
+          {
+            "id": "inspect",
+            "source": "operator",
+            "target": "investigation",
+            "label": "investigates",
+            "accent": "violet",
+            "semantic": "calls",
+            "directed": true,
+            "routing": "straight",
+            "sourceAnchor": {
+              "side": "left",
+              "offset": 0.5
+            },
+            "targetAnchor": {
+              "side": "right",
+              "offset": 0.5
+            }
+          },
+          {
+            "id": "request-repair",
+            "source": "investigation",
+            "target": "repair",
+            "label": "plans repair",
+            "accent": "amber",
+            "semantic": "calls",
+            "directed": true,
+            "routing": "straight",
+            "sourceAnchor": {
+              "side": "left",
+              "offset": 0.5
+            },
+            "targetAnchor": {
+              "side": "right",
+              "offset": 0.5
+            }
+          },
+          {
+            "id": "review-impact",
+            "source": "repair",
+            "target": "impact",
+            "label": "previews impact",
+            "accent": "amber",
+            "semantic": "calls",
+            "directed": true,
+            "routing": "straight",
+            "sourceAnchor": {
+              "side": "left",
+              "offset": 0.5
+            },
+            "targetAnchor": {
+              "side": "right",
+              "offset": 0.5
+            }
+          },
+          {
+            "id": "commit-repair",
+            "source": "repair",
+            "target": "event-log",
+            "label": "commits after review",
+            "accent": "amber",
+            "semantic": "writes",
+            "directed": true,
+            "routing": "smoothstep",
+            "sourceAnchor": {
+              "side": "top",
+              "offset": 0.5
+            },
+            "targetAnchor": {
+              "side": "bottom",
+              "offset": 0.5
+            },
+            "routeMode": "direct",
+            "waypoints": [
+              {
+                "x": 667,
+                "y": 265
+              },
+              {
+                "x": 359.5,
+                "y": 265
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "close",
+      "type": "service",
+      "text": "Accounting Close",
+      "x": 1097,
+      "y": 69,
+      "width": 154,
+      "height": 86,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "external",
+      "description": "Tracks readiness"
+    },
+    {
+      "id": "ownership",
+      "type": "service",
+      "text": "Issue ownership",
+      "x": 1097,
+      "y": 360,
+      "width": 154,
+      "height": 86,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "external",
+      "description": "Routes investigations"
+    }
+  ],
+  "edges": [
+    {
+      "id": "charge-events",
+      "source": "payments",
+      "target": "ledger-system",
+      "label": "charge events",
+      "accent": "blue",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.22
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 644,
+          "y": 112
+        },
+        {
+          "x": 644,
+          "y": 234.92
+        }
+      ]
+    },
+    {
+      "id": "partner-data",
+      "source": "partners",
+      "target": "producers",
+      "label": "settlement reports",
+      "accent": "blue",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "publish-reports",
+      "source": "producers",
+      "target": "ledger-system",
+      "label": "normalized events",
+      "accent": "blue",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "readiness",
+      "source": "ledger-system",
+      "target": "close",
+      "label": "readiness scores",
+      "accent": "teal",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.22
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 1034,
+          "y": 234.92
+        },
+        {
+          "x": 1034,
+          "y": 112
+        }
+      ]
+    },
+    {
+      "id": "review-close",
+      "source": "finance",
+      "target": "close",
+      "label": "reviews",
+      "accent": "teal",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "anomalies",
+      "source": "ledger-system",
+      "target": "ownership",
+      "label": "flags issues",
+      "accent": "violet",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.78
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 1034,
+          "y": 283.08
+        },
+        {
+          "x": 1034,
+          "y": 403
+        }
+      ]
+    },
+    {
+      "id": "triage",
+      "source": "engineer",
+      "target": "ownership",
+      "label": "triages",
+      "accent": "violet",
+      "semantic": "calls",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      }
+    }
+  ],
+  "notes": [],
+  "level": "context"
+}

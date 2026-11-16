@@ -227,7 +227,10 @@ const FENCE_LANGUAGES: Record<string, CodeLanguage> = {
 
 /** A Markdown fence's info string (```ts) as a highlighting language; plain text when unknown. */
 export function languageForFence(name: string): CodeLanguage {
-  return FENCE_LANGUAGES[name.toLowerCase()] ?? 'plaintext';
+  // Own keys only: a fence named `constructor` or `__proto__` is user text, and on a plain object
+  // it finds Object.prototype's members, which are not languages.
+  const key = name.toLowerCase();
+  return Object.hasOwn(FENCE_LANGUAGES, key) ? FENCE_LANGUAGES[key]! : 'plaintext';
 }
 
 const TAB_WIDTH = 2;

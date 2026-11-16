@@ -25,6 +25,8 @@ import { outermostSelected, useEditorStore } from '../../store/editorStore';
 import { nodeIndex, edgeIndex } from '../../store/selectors';
 import { useThemeValue } from '../../theme/useTheme';
 import { Button } from '../common/Button';
+import { Tooltip } from '../common/Tooltip';
+import { shortcutFor } from '../../commands/shortcutLookup';
 import { NOTE_LABELS, BOUNDARY_PRESET_OPTION_LABELS } from '../../lib/nodeKindLabels';
 
 /**
@@ -91,7 +93,7 @@ export function Inspector() {
   return (
     <div ref={rootRef} className="dc-inspector" role="toolbar" aria-label="Selection options">
       <span className="dc-inspector-label">
-        {nodes.length > 0 && `${nodes.length} ${nodes.length === 1 ? 'element' : 'elements'}`}
+        {nodes.length > 0 && `${nodes.length} ${nodes.length === 1 ? 'shape' : 'shapes'}`}
         {nodes.length > 0 && edges.length > 0 && ' · '}
         {edges.length > 0 &&
           `${edges.length} ${edges.length === 1 ? 'connector' : 'connectors'}`}
@@ -115,7 +117,7 @@ export function Inspector() {
         {nodes.length === 0 && edges.some((edge) => edge.accent !== undefined) && (
           <Button
             variant="ghost"
-            title="Derive this connector's colour from its source node instead of a fixed one"
+            title="Derive this connector’s colour from its source shape instead of a fixed one"
             onClick={() => recolour('Reset colour', undefined, false)}
           >
             Auto
@@ -289,25 +291,29 @@ export function Inspector() {
             <option value="" disabled>
               Align…
             </option>
-            <option value="left">Left</option>
-            <option value="centerX">Centre</option>
-            <option value="right">Right</option>
-            <option value="top">Top</option>
-            <option value="centerY">Middle</option>
-            <option value="bottom">Bottom</option>
+            {/* The right-click menu's own words (`registry.ts`'s align commands), in the order the
+                shapes sit on the page, so the same action reads the same on both surfaces. */}
+            <option value="left">Align left</option>
+            <option value="centerX">Align centres horizontally</option>
+            <option value="right">Align right</option>
+            <option value="top">Align top</option>
+            <option value="centerY">Align centres vertically</option>
+            <option value="bottom">Align bottom</option>
           </select>
           {outer >= 3 && (
             <>
               <Button
                 variant="quiet"
-                title="Distribute evenly, left to right"
+                aria-label="Distribute horizontally"
+                title="Distribute horizontally — space them evenly, left to right"
                 onClick={() => useEditorStore.getState().distribute('x')}
               >
                 Distribute ↔
               </Button>
               <Button
                 variant="quiet"
-                title="Distribute evenly, top to bottom"
+                aria-label="Distribute vertically"
+                title="Distribute vertically — space them evenly, top to bottom"
                 onClick={() => useEditorStore.getState().distribute('y')}
               >
                 Distribute ↕
@@ -372,25 +378,27 @@ export function Inspector() {
       )}
 
       <span className="dc-inspector-divider" />
-      <Button
-        variant="quiet"
-        title="Fade everything else, to focus on this while explaining (Esc to exit)"
-        onClick={() =>
-          useEditorStore.getState().enterFocus(
-            nodes.map((node) => node.id),
-            edges.map((edge) => edge.id),
-          )
-        }
-      >
-        Spotlight
-      </Button>
-      <Button
-        icon="trash"
-        variant="quiet"
-        aria-label="Delete selection"
-        title="Delete (Backspace)"
-        onClick={() => useEditorStore.getState().deleteSelection()}
-      />
+      <Tooltip content={{ title: 'Spotlight', description: 'Fade everything else, to focus on this while explaining. Esc exits.' }}>
+        {(tip) => (
+          <Button
+            variant="quiet"
+            {...tip}
+            onClick={() =>
+              useEditorStore.getState().enterFocus(
+                nodes.map((node) => node.id),
+                edges.map((edge) => edge.id),
+              )
+            }
+          >
+            Spotlight
+          </Button>
+        )}
+      </Tooltip>
+      {/* The key is read from the command, not typed here: Delete is bound to Backspace on a Mac's
+          keyboard and to whichever the platform's command table says elsewhere. */}
+      <Tooltip content={{ title: 'Delete selection', shortcut: shortcutFor('delete') }}>
+        {(tip) => <Button icon="trash" variant="quiet" aria-label="Delete selection" {...tip} onClick={() => useEditorStore.getState().deleteSelection()} />}
+      </Tooltip>
     </div>
   );
 }

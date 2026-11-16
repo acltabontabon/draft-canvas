@@ -1,3 +1,4 @@
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { TrafficReplayProvider } from './TrafficReplayContext';
 import { TrafficScenario } from './TrafficScenario';
 import { FlowTraceBadges } from './FlowTraceBadges';
@@ -10,7 +11,6 @@ import {
   ReactFlow,
   applyEdgeChanges,
   applyNodeChanges,
-  useOnViewportChange,
   useReactFlow,
   useStore,
   useStoreApi,
@@ -21,27 +21,33 @@ import {
   type OnSelectionChangeParams,
   type XYPosition,
 } from '@xyflow/react';
-import { defaultTextFor, maxSizeFor } from '../document/factory';
+import { defaultTextFor } from '../document/factory';
 import { linkedCompensations, visibleEdges } from '../document/compensation';
 import { openFitViewport } from '../document/geometry';
 import { boundsOf, descendantsOf, hasAttachmentRoom } from '../document/operations';
+import { canSpliceInto, canSpliceType } from '../document/splice';
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
 import { rectOf, type Rect } from '../edges/routing';
-import { straightOffset } from '../edges/straight';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { motionMs } from '../lib/motion';
 import { centerOf, pointInBox } from '../lib/math';
 import { pathKey } from '../depth/tree';
-import { findFlow } from '../document/flow';
+
 import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
 import { accentOf } from '../render/theme/tokens';
 import { lensFlow, useEditorStore } from '../store/editorStore';
 import { PresentationPointer } from './presentation/PresentationPointer';
-import { edgeIndex, nodeIndex } from '../store/selectors';
+import { edgeIndex, nodeIndex, selectSequenceMessage, sequenceNodes } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
 import { CanvasBackground } from './CanvasBackground';
-import { ATTACH_DWELL_MS, evaluateAttachCandidates } from './dragTargets';
+import { ATTACH_DWELL_MS, evaluateAttachCandidates, isAttachableType } from './dragTargets';
+import { isLinkable, isPartOfDiagram } from '../document/sequenceLinks';
+import { LIMITS } from '../document/limits';
+import { describeContext, sequenceLayoutFor } from '../nodes/describe';
+import { LIGHT } from '../render/theme/tokens';
+import { hitSequence, participantIndexAt } from '../sequence/layout';
+import { sequenceActions } from '../store/sequenceActions';
 import {
   CAPSULE_MOVE_THRESHOLD_PX,
   CAPSULE_RELEASE_MARGIN_PX,
@@ -58,6 +64,8 @@ import { endsBendDrag } from './bendDrag';
 import { DraftEdgeView } from './DraftEdgeView';
 import { EdgeLabelRoot } from './EdgeLabels';
 import { ViewportLayer } from './ViewportLayer';
+import { useChangeFeedback } from './useChangeFeedback';
+import { FanInPreview } from './FanInPreview';
 import { DEPTH_MOVE_MS, depthEase, fitCamera } from './depthCamera';
 import { DraftNodeView } from './DraftNodeView';
 import { Markers } from './Markers';
@@ -71,9 +79,12 @@ import {
   type DraftRfEdge,
   type DraftRfNode,
 } from './projection';
-import { computeSnap, sameGuides, type Guide, type SnapLink } from './snapping';
-import { minResizeSizeFor, snapResize } from './resizeSnap';
-import { AgentPreviewLayer, ProposalPreviewLayer } from './AgentPreviewLayer';
+import { sameGuides, type Guide } from './snapping';
+import { NO_DRAG_SNAP, NO_GUIDES, snapChanges, snapResizeChanges, type DragLink, type DragSnapContext, type NodeLookup } from './dragSnap';
+import { snapBypassed, trackSnapBypass } from './snapBypass';
+import { useIdSet } from './useIdSet';
+import { DRAG_THRESHOLD_PX, LONG_PRESS_DRIFT_PX, LONG_PRESS_MS } from './gestureThresholds';
+import { AgentPreviewLayer, ArrangePreviewLayer, ProposalPreviewLayer, TidyPreviewLayer } from './AgentPreviewLayer';
 import { ContinuationGhost } from './ContinuationGhost';
 import { RecoveryConnectGhost } from './RecoveryConnectGhost';
 import { RoomFrame } from './RoomFrame';
@@ -82,6 +93,8 @@ import { FollowPrompt } from '../ui/collab/FollowPrompt';
 import { stopFollowingOnGesture } from '../ui/collab/presence/useFollowPresenter';
 import { useLivePresence } from '../ui/collab/presence/useLivePresence';
 import { useContinuation } from './useContinuation';
+import { InkLayer } from './InkLayer';
+import { useInkInput } from './useInkInput';
 
 /**
  * These must be module-scope constants. An object literal defined during render
@@ -93,16 +106,6 @@ const edgeTypes = { [EDGE_COMPONENT]: DraftEdgeView };
 
 const PRO_OPTIONS = { hideAttribution: true } as const;
 
-/** How far the pointer may drift between a right-mousedown and the native `contextmenu` event
- *  before a menu open is suppressed as an unintentional gesture rather than a stationary click —
- *  its own independently-declared constant, per this file's usual "no shared clearance/threshold
- *  numbers across gestures" house style (see `DraftEdgeView.tsx`'s own `DRAG_THRESHOLD_PX`). */
-const CONTEXT_MENU_DRAG_THRESHOLD_PX = 4;
-/** A touch or pen held this long, moving less than `LONG_PRESS_DRIFT_PX`, is a long-press — the
- *  finger's right-click. 500 ms is the platforms' own hold time; 8 px absorbs the wobble of a held
- *  finger without letting a slow drag count. */
-const LONG_PRESS_MS = 500;
-const LONG_PRESS_DRIFT_PX = 8;
 /** How far (screen px) a dragged card moves before the connector under it is hit-tested again. */
 const EDGE_PROBE_STEP_PX = 4;
 
@@ -110,8 +113,6 @@ const EDGE_PROBE_STEP_PX = 4;
  *  Small on purpose: this says "the drop has a destination", it does not drag the pointer. */
 const CAPSULE_NUDGE_MAX_PX = 10;
 
-/** Stable empty array, so `sameGuides` keeps short-circuiting rather than seeing a new `[]`. */
-const NO_GUIDES: Guide[] = [];
 // Module-level: a fresh array per render defeats React Flow's memo and made its pan/zoom and key-press
 // effects rebind their listeners on every drag frame (`CanvasBody` re-renders with each one).
 const PAN_WITH_MIDDLE_BUTTON = [1];
@@ -126,8 +127,6 @@ function selectSharedEdge(_event: unknown, edge: { id: string }): void {
   useEditorStore.getState().setSelection({ nodes: [], edges: [edge.id] });
 }
 
-/** Ties the capsule that was under the cursor to the chip it just became: the new chip plays the
- *  same one-shot arrival the accepted-continuation nodes do, and the marker expires on its own. */
 /** The screen point a drag started from, whichever kind of event React Flow handed over. Null for
  *  a gesture that carried no pointer at all (a multi-touch start), where the aim point falls back
  *  to the card's own centre. */
@@ -139,6 +138,8 @@ function pointerOf(event: MouseEvent | TouchEvent): XYPosition | null {
   return { x: event.clientX, y: event.clientY };
 }
 
+/** Ties the capsule that was under the cursor to the chip it just became: the new chip plays the
+ *  same one-shot arrival the accepted-continuation nodes do, and the marker expires on its own. */
 function markArrived(attachmentId: string | null): void {
   if (attachmentId) useUiStore.getState().setSettleNodeIds([attachmentId]);
 }
@@ -175,6 +176,17 @@ function leanToward(from: XYPosition, to: XYPosition | null, zoom: number): XYPo
   return { x: Math.round(dx * scale), y: Math.round(dy * scale) };
 }
 
+/** Shapes that join a fan-in when selected alongside the one a connection is dragged from. */
+const FAN_IN_TYPES: ReadonlySet<DraftNode['type']> = new Set(['service', 'database', 'queue', 'actor', 'component', 'ellipse']);
+
+/** A connection dropped on a handle: from every fan-in source when the drag carries them, else
+ *  just the one it started from. */
+function connectFrom(source: string, target: string): void {
+  const fanIn = useUiStore.getState().fanInSources;
+  if (fanIn) useEditorStore.getState().connectMany([source, ...fanIn], target);
+  else useEditorStore.getState().connect(source, target);
+}
+
 /** See `onSelectionChange`: more reports than this inside the window is a feedback loop, not clicks. */
 const SELECTION_BURST_WINDOW_MS = 300;
 const SELECTION_BURST_LIMIT = 10;
@@ -196,191 +208,6 @@ interface ProjectionState {
 }
 
 const EMPTY_VIEW: ProjectionState = { nodes: [], edges: [], from: null };
-
-/**
- * The selection's ids as a set that keeps its identity while the ids are the same. React Flow
- * reports a selection as fresh arrays even when nothing changed (`onSelectionChange` rebuilds the
- * edge list on every click), and a new set re-projected the whole canvas.
- */
-function useIdSet(ids: readonly string[]): ReadonlySet<string> {
-  const key = ids.join('\u0000');
-  return useMemo(() => new Set(key === '' ? [] : key.split('\u0000')), [key]);
-}
-
-const NO_SNAP = { changes: [] as NodeChange<DraftRfNode>[], guides: [] as Guide[] };
-
-/** A connector between a dragged shape and a resting one: what drag snapping straightens. */
-interface DragLink {
-  edge: DraftEdge;
-  /** The dragged end's shape as it was when the gesture began. */
-  moving: DraftNode;
-  /** The resting end, with its anchor band. */
-  fixed: Rect;
-  movingIsSource: boolean;
-}
-
-/** What a drag snaps against, gathered once when the gesture begins. */
-interface DragSnapContext {
-  statics: Rect[];
-  /** The resting shapes less boundaries, for even spacing. */
-  spacing: Rect[];
-  links: DragLink[];
-  /** Where each dragged shape began, so a frame's move is known from any of them. */
-  origin: Map<string, { x: number; y: number }>;
-}
-
-const NO_DRAG_SNAP: DragSnapContext = { statics: [], spacing: [], links: [], origin: new Map() };
-
-/** Each connector's straight line, measured with the dragged shapes moved by `shift`. */
-function linksAt(links: readonly DragLink[], shift: { x: number; y: number }): SnapLink[] {
-  const out: SnapLink[] = [];
-  for (const link of links) {
-    const live = rectOf({ ...link.moving, x: link.moving.x + shift.x, y: link.moving.y + shift.y });
-    const offset = link.movingIsSource ? straightOffset(link.edge, live, link.fixed) : straightOffset(link.edge, link.fixed, live);
-    if (!offset) continue;
-    const fixedEnd = link.movingIsSource ? offset.to : offset.from;
-    const movingEnd = link.movingIsSource ? offset.from : offset.to;
-    const across = offset.axis === 'y' ? 'x' : 'y';
-    out.push({
-      axis: offset.axis,
-      // `delta` moves the target; when the dragged shape is the source it moves the other way.
-      delta: link.movingIsSource ? -offset.delta : offset.delta,
-      at: fixedEnd[offset.axis],
-      from: Math.min(fixedEnd[across], movingEnd[across]),
-      to: Math.max(fixedEnd[across], movingEnd[across]),
-    });
-  }
-  return out;
-}
-
-/** A React Flow node by id — its live position and measured size mid-gesture. */
-type NodeLookup = (id: string) => Pick<DraftRfNode, 'position' | 'width' | 'height' | 'measured'> | undefined;
-
-/**
- * Nudges an in-flight drag onto alignment with its neighbours, and reports the
- * guides to draw. Returns the changes untouched when nothing is close enough.
- */
-function snapChanges(
-  changes: NodeChange<DraftRfNode>[],
-  nodeById: NodeLookup,
-  context: DragSnapContext,
-): { changes: NodeChange<DraftRfNode>[]; guides: Guide[] } {
-  const moves = changes.filter(
-    (change) => change.type === 'position' && change.dragging === true && change.position,
-  );
-  if (moves.length === 0 || (context.statics.length === 0 && context.links.length === 0)) return { ...NO_SNAP, changes };
-
-  const rects: Rect[] = [];
-  for (const change of moves) {
-    if (change.type !== 'position' || !change.position) continue;
-    const node = nodeById(change.id);
-    rects.push({
-      x: change.position.x,
-      y: change.position.y,
-      width: node?.width ?? node?.measured?.width ?? 0,
-      height: node?.height ?? node?.measured?.height ?? 0,
-    });
-  }
-
-  const bounds = boundsOf(rects);
-  if (!bounds) return { ...NO_SNAP, changes };
-
-  // The whole selection moves rigidly, so any one dragged shape tells how far this frame has it.
-  let shift: { x: number; y: number } | null = null;
-  for (const change of moves) {
-    const origin = change.type === 'position' && change.position ? context.origin.get(change.id) : undefined;
-    if (origin && change.type === 'position' && change.position) {
-      shift = { x: change.position.x - origin.x, y: change.position.y - origin.y };
-      break;
-    }
-  }
-  const links = shift && context.links.length > 0 ? linksAt(context.links, shift) : [];
-  const snap = computeSnap(bounds, context.statics, undefined, { links, spacing: context.spacing });
-  if (snap.dx === 0 && snap.dy === 0) return { changes, guides: snap.guides };
-
-  return {
-    guides: snap.guides,
-    changes: changes.map((change) =>
-      change.type === 'position' && change.dragging === true && change.position
-        ? { ...change, position: { x: change.position.x + snap.dx, y: change.position.y + snap.dy } }
-        : change,
-    ),
-  };
-}
-
-/**
- * The resize counterpart to `snapChanges` — see `snapResize` for which edges snap. The rect the node
- * started the gesture with is the document's: nothing is written to it until the gesture ends.
- *
- * The terminal frame (`resizing: false`) isn't snapped again: React Flow reports its own raw,
- * unsnapped size there, so it's replaced with the rect the last live frame actually showed —
- * otherwise the far edge of a snapped top/left resize would commit off by the snap.
- */
-function snapResizeChanges(
-  changes: NodeChange<DraftRfNode>[],
-  nodeById: NodeLookup,
-  statics: readonly Rect[],
-): { changes: NodeChange<DraftRfNode>[]; guides: Guide[] } {
-  // Snapping applies equally to the terminal (`resizing: false`) frame —
-  // that one commits to the document, so skipping it would mean the guide
-  // shown mid-gesture never actually took effect. `resizing` is only ever
-  // present (true or false) on a change dispatched by NodeResizer itself;
-  // React Flow's own ResizeObserver fires dimension changes with no
-  // `resizing` field at all whenever a node is first measured (on mount, or
-  // whenever its DOM size changes for any other reason) — those must never
-  // be mistaken for a live resize, or opening a diagram whose nodes happen
-  // to already be aligned shows guides for a gesture that never happened.
-  const resizing = changes.filter(
-    (change) => change.type === 'dimensions' && change.dimensions && change.resizing !== undefined,
-  );
-  if (resizing.length === 0) return { ...NO_SNAP, changes };
-
-  let result = changes;
-  const guides: Guide[] = [];
-  const documentNodes = nodeIndex(useEditorStore.getState().document.nodes);
-
-  for (const change of resizing) {
-    if (change.type !== 'dimensions' || !change.dimensions) continue;
-    const live = nodeById(change.id);
-    const node = documentNodes.get(change.id);
-    if (!live || !node) continue;
-
-    if (change.resizing === false) {
-      const width = live.width ?? live.measured?.width;
-      const height = live.height ?? live.measured?.height;
-      if (width === undefined || height === undefined) continue;
-      result = result.map((c) => (c === change ? { ...change, dimensions: { width, height } } : c));
-      continue;
-    }
-
-    // A proportional resize (a Junction stays round) would need both axes snapped together.
-    if (statics.length === 0 || node.type === 'ellipse') continue;
-    const posChange = changes.find((c) => c.type === 'position' && c.id === change.id && c.position);
-    const position = (posChange?.type === 'position' ? posChange.position : undefined) ?? live.position;
-    const min = minResizeSizeFor(node);
-    const snap = snapResize(
-      { x: node.x, y: node.y, width: node.width, height: node.height },
-      { ...position, width: change.dimensions.width, height: change.dimensions.height },
-      statics,
-      { min, max: maxSizeFor(node.type) ?? { width: Infinity, height: Infinity } },
-    );
-    guides.push(...snap.guides);
-    if (snap.guides.length === 0) continue;
-
-    const { x, y, width, height } = snap.rect;
-    result = result.map((c) => {
-      if (c === change) return { ...change, dimensions: { width, height } };
-      if (c === posChange) return { ...posChange, position: { x, y } };
-      return c;
-    });
-    // A top or left edge that snapped moves the node even on a frame React Flow sent no position for.
-    if (!posChange && (x !== position.x || y !== position.y)) {
-      result = [...result, { type: 'position', id: change.id, position: { x, y } }];
-    }
-  }
-
-  return { changes: result, guides };
-}
 
 /**
  * Carries a dragged boundary's contents along with it. React Flow has no idea
@@ -420,6 +247,36 @@ function sweepDescendants(
     return patch ? { ...node, position: patch } : node;
   });
 }
+
+/** The alignment guides a gesture shows. Memoised on the array, which `sameGuides` keeps the same
+ *  until a guide is gained or lost, so the frames between draw nothing here. */
+const GuideLines = memo(function GuideLines({ guides }: { guides: readonly Guide[] }) {
+  return (
+    <>
+      {guides.map((guide, index) => (
+        <div
+          key={`${guide.axis}-${index}`}
+          className="dc-guide"
+          data-axis={guide.axis}
+          data-kind={guide.kind}
+          style={
+            guide.axis === 'x'
+              ? {
+                  transform: `translate(${guide.at}px, ${guide.from}px)`,
+                  height: guide.to - guide.from,
+                }
+              : {
+                  transform: `translate(${guide.from}px, ${guide.at}px)`,
+                  width: guide.to - guide.from,
+                }
+          }
+        >
+          {guide.label !== undefined && <span className="dc-guide-label">{guide.label}</span>}
+        </div>
+      ))}
+    </>
+  );
+});
 
 /** How long the zoom must hold still before `--dc-zoom` follows it. */
 const ZOOM_VARIABLE_SETTLE_MS = 140;
@@ -508,8 +365,12 @@ function truncateForAffordance(text: string): string {
 }
 
 export interface CanvasProps {
-  /** Called when an armed tool is placed at a point on the canvas (toolbar click, or double-click with a tool armed). */
-  onCreateAt?: (position: { x: number; y: number }) => void;
+  /**
+   * Called when an armed tool is placed at a point on the canvas (toolbar click, or double-click
+   * with a tool armed). `spliceEdgeId`: the click landed on a connector, so the new shape goes into
+   * its middle.
+   */
+  onCreateAt?: (position: { x: number; y: number }, spliceEdgeId?: string) => void;
   /**
    * Called instead of creating a node when a connection is dragged onto empty
    * canvas — the caller opens a small type picker and creates+connects once
@@ -556,7 +417,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // colour — handed to every arrival ring, boundary outline and caption through a single variable.
   const explainAccent = useEditorStore((state) => {
     if (!state.flowPlayback.active || !state.flowPlayback.flowId) return undefined;
-    return findFlow(state.document, state.flowPlayback.flowId)?.accent;
+    return playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)?.accent;
   });
   const focusActive = useEditorStore((state) => state.focus.active);
   // A flow merely selected (not presented) acts as a gentler lens — see
@@ -617,6 +478,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const openFitWidth = useStore((state) => state.width);
   const openFitHeight = useStore((state) => state.height);
   const openFitDocumentId = useUiStore((state) => state.openFitDocumentId);
+  // The two fields the effect below reads of the document — it depends on those, not on the whole
+  // document, which is a new object on every keystroke.
+  const documentId = document.metadata.id;
+  const documentNodes = document.nodes;
+  const inRoom = path.length > 0;
   // Refines where an *opened* diagram starts, in a `useLayoutEffect` so it lands before the first
   // paint rather than after a visible frame at the saved (or default) camera — see `arriveWith` in
   // `useDocumentSession.ts` for who asks for this and why a mere reopen or a freshly created canvas
@@ -625,17 +491,17 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   useLayoutEffect(() => {
     // Not a top-level open, or asking for a document that isn't (or is no longer) this one — a
     // second open racing ahead already pointed this at something else.
-    if (path.length > 0 || openFitDocumentId !== document.metadata.id) return;
+    if (inRoom || openFitDocumentId !== documentId) return;
     // The user (or the room-arrival effect above) already moved the camera since this document
     // arrived: nothing left here to override.
     if (useEditorStore.getState().liveViewport) {
-      useUiStore.getState().clearOpenFit(document.metadata.id);
+      useUiStore.getState().clearOpenFit(documentId);
       return;
     }
-    const bounds = boundsOf(document.nodes);
+    const bounds = boundsOf(documentNodes);
     if (!bounds) {
       // Nothing to fit — an empty diagram keeps its ordinary starting position.
-      useUiStore.getState().clearOpenFit(document.metadata.id);
+      useUiStore.getState().clearOpenFit(documentId);
       return;
     }
     // The pane hasn't been measured yet. Leave the request pending rather than fit against a stale
@@ -643,8 +509,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     if (openFitWidth <= 0 || openFitHeight <= 0) return;
     const viewport = openFitViewport(bounds, { width: openFitWidth, height: openFitHeight });
     if (viewport) void setViewport(viewport, { duration: 0 });
-    useUiStore.getState().clearOpenFit(document.metadata.id);
-  }, [path, openFitDocumentId, document, openFitWidth, openFitHeight, setViewport]);
+    useUiStore.getState().clearOpenFit(documentId);
+  }, [inRoom, openFitDocumentId, documentId, documentNodes, openFitWidth, openFitHeight, setViewport]);
 
   const tracing = useUiStore((state) => state.flowTrace !== null);
   const sharedReadOnly = useUiStore((state) => state.readOnly !== null && !state.readOnly.collaborative);
@@ -678,7 +544,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     else if (
       editable &&
       useUiStore.getState().armed &&
-      nodeIndex(useEditorStore.getState().document.nodes).get(node.id)?.type === 'group'
+      // …and on a sequence, where a shape tool adds a participant (`EditorScreen`'s `createAt`).
+      ['group', 'sequence'].includes(nodeIndex(useEditorStore.getState().document.nodes).get(node.id)?.type ?? '')
     ) {
       // A tool armed and clicked inside a boundary places there, as on empty canvas; the boundary
       // covering the pane swallowed the click and the tool stayed armed with nothing placed.
@@ -688,14 +555,21 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   }, [editable, finishRecoveryConnect, onCreateAt, screenToFlowPosition, sharedReadOnly]);
   useContinuation(editable);
 
+  // The Pencil: drawing claims the pointer only while it is in hand on an editable canvas.
+  const pencil = useUiStore((state) => state.pencil);
+  const armedShape = useUiStore((state) => state.armed !== null);
+  const drawing = editable && pencil !== null && !trafficActive;
+  useInkInput(paneRef, drawing);
+
   useZoomVariable();
+  useChangeFeedback();
 
   const [guides, setGuides] = useState<Guide[]>([]);
   const attachArmedTarget = useUiStore((state) => state.attachArmedTarget);
   const attachTarget = attachArmedTarget ? nodeIndex(document.nodes).get(attachArmedTarget) : undefined;
   /** A boolean, not the capsule itself: this only widens the connector hit corridor for the
    *  length of the gesture, so it flips twice per drag and never re-renders on the nudge. */
-  const carryingCapsule = useUiStore((state) => state.dragCapsule !== null);
+  const carryingCapsule = useUiStore((state) => state.dragCapsule !== null || state.spliceDrag);
 
   /** Rectangles of everything not being dragged, and the connectors to them, rebuilt once per gesture. */
   const dragSnap = useRef<DragSnapContext>(NO_DRAG_SNAP);
@@ -720,6 +594,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   /** Same indirection as `finishDrag` above, for the Escape listener a drag installs: the listener
    *  is bound once at drag start, but the callback it should reach is rebuilt on every render. */
   const cancelDrag = useRef<() => void>(() => {});
+  /** The one-id exclusion set a dragged card's attach evaluation is handed, for as long as it is the
+   *  card being dragged — `evaluateAttachCandidates` caches its candidates against it. */
+  const attachExclude = useRef<{ id: string; ids: ReadonlySet<string> } | null>(null);
   /**
    * Attach-arming dwell: while the pointer sits still, React Flow fires no
    * further drag events at all, so elapsed time can't be checked from inside
@@ -803,6 +680,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     grabOrigin.current = null;
     clearPathCache();
     useUiStore.getState().setDragCapsule(null);
+    useUiStore.getState().setSequenceAttachmentTarget(null);
   }, []);
   useEffect(() => clearCapsule, [clearCapsule]);
 
@@ -866,6 +744,69 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   );
 
   /**
+   * A piece of architecture held over a sequence joins it as a participant when dropped, and goes
+   * back to where it was: it belongs to the architecture, and only stands in the sequence.
+   *
+   * Armed like every other drop here — deliberately. The shape's centre has to rest inside the
+   * sequence for the same dwell a note needs over a shape, and while it is armed a line shows where
+   * the participant would stand, so a shape merely carried across a sequence never ends up in it.
+   */
+  const sequenceDwell = useRef<{ hostId: string; index: number; timer: number } | null>(null);
+  const clearSequenceDrop = useCallback(() => {
+    if (sequenceDwell.current) window.clearTimeout(sequenceDwell.current.timer);
+    sequenceDwell.current = null;
+    useUiStore.getState().setSequenceDropTarget(null);
+  }, []);
+  // The dwell is a real timer, so a canvas unmounting under it must not leave it to fire into the
+  // store afterwards.
+  useEffect(() => clearSequenceDrop, [clearSequenceDrop]);
+  const armSequenceDrop = useCallback(
+    (changes: readonly NodeChange<DraftRfNode>[]) => {
+      const ui = useUiStore.getState();
+      if (dragCancelled.current || draggingIds.current.size !== 1 || sweptDescendants.current.size !== 0) return clearSequenceDrop();
+      const [draggedId] = draggingIds.current;
+      const { nodes } = useEditorStore.getState().document;
+      const dragged = nodeIndex(nodes).get(draggedId!);
+      const change = changes.find((candidate) => candidate.type === 'position' && candidate.id === draggedId);
+      const position = change?.type === 'position' ? change.position : undefined;
+      // The drag's last frame carries no position; what was armed a moment ago still stands.
+      if (!position) return;
+      if (!dragged || !isLinkable(dragged) || ui.attachArmedTarget || ui.attachArmedEdgeTarget || ui.spliceArmedEdgeTarget) return clearSequenceDrop();
+      const centre = centerOf({ ...position, width: dragged.width, height: dragged.height });
+      let host: DraftNode | undefined;
+      for (const node of sequenceNodes(nodes)) {
+        if (!pointInBox(centre, node)) continue;
+        if (!host || node.z >= host.z) host = node;
+      }
+      const sequence = host?.sequence;
+      // Not twice: a shape that already stands in this sequence is only being moved past it.
+      if (!host || !sequence || sequence.participants.length >= LIMITS.maxSequenceParticipants || sequence.participants.some((participant) => participant.ref === dragged.id)) {
+        return clearSequenceDrop();
+      }
+      const index = participantIndexAt(sequenceLayoutFor(host, describeContext(LIGHT)), centre.x - host.x);
+      // A shape that is part of a diagram stays in it and is stood in for. One with nothing attached
+      // to it is simply being put into the sequence: leaving a copy behind would be a duplicate.
+      const stays = isPartOfDiagram(useEditorStore.getState().document, dragged);
+      if (ui.sequenceDropTarget?.nodeId === host.id) return ui.setSequenceDropTarget({ nodeId: host.id, index, stays });
+      if (sequenceDwell.current?.hostId === host.id) {
+        sequenceDwell.current.index = index;
+        return;
+      }
+      clearSequenceDrop();
+      const hostId = host.id;
+      sequenceDwell.current = {
+        hostId,
+        index,
+        timer: window.setTimeout(() => {
+          const waiting = sequenceDwell.current;
+          if (waiting?.hostId === hostId) useUiStore.getState().setSequenceDropTarget({ nodeId: hostId, index: waiting.index, stays });
+        }, ATTACH_DWELL_MS),
+      };
+    },
+    [clearSequenceDrop],
+  );
+
+  /**
    * Position and size changes stream in per frame while a gesture runs.
    *
    * Snapping is applied to the change *before* it is applied, rather than by
@@ -890,7 +831,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       }
       // Per id, not `getNodes()`: that copies every node on every frame of a drag.
       const nodeById: NodeLookup = (id) => getInternalNode(id);
-      const snappedMove = snapChanges(changes, nodeById, dragSnap.current);
+      // The same pull on screen at every zoom, and none at all while Alt is held.
+      const frame = { zoom: getZoom(), bypass: snapBypassed() };
+      const snappedMove = snapChanges(changes, nodeById, dragSnap.current, frame);
 
       // A dimensions change appears on every frame of a resize gesture,
       // including the terminal one (`resizing: false`) that commits to the
@@ -914,14 +857,27 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           .document.nodes.filter((node) => node.id !== dimChange.id)
           .map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height }));
       }
-      const snapped = snapResizeChanges(snappedMove.changes, nodeById, resizeStaticRects.current);
+      const snapped = snapResizeChanges(
+        snappedMove.changes,
+        nodeById,
+        resizeStaticRects.current,
+        nodeIndex(useEditorStore.getState().document.nodes),
+        frame,
+      );
       // A move and a resize are never in progress in the same gesture, so at
       // most one side of this ever has guides to show. The terminal resize
       // frame (`resizing: false`) still reports a snap-adjusted dimensions
       // change here, but the gesture is over — showing its guide would leave
       // it stuck on screen forever, since (unlike a drag) nothing else ever
       // runs to clear it afterward.
-      const guides = dimChange?.resizing === false ? [] : [...snappedMove.guides, ...snapped.guides];
+      const guides =
+        dimChange?.resizing === false
+          ? NO_GUIDES
+          : snapped.guides.length === 0
+            ? snappedMove.guides
+            : snappedMove.guides.length === 0
+              ? snapped.guides
+              : [...snappedMove.guides, ...snapped.guides];
 
       if (dimChange?.resizing === false) {
         resizingNodeId.current = null;
@@ -961,6 +917,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           clearDwell();
           useUiStore.getState().setAttachArmedTarget(null);
           useUiStore.getState().setAttachArmedEdgeTarget(null);
+          useUiStore.getState().setSequenceAttachmentTarget(null);
         } else if (draggedDoc && livePosition) {
           const liveRect: Rect = { ...livePosition, width: draggedDoc.width, height: draggedDoc.height };
           const collapsible = draggedDoc.type === 'note' || draggedDoc.type === 'code';
@@ -987,18 +944,40 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             Math.hypot(livePosition.x - origin.x, livePosition.y - origin.y) * getZoom() >=
               CAPSULE_MOVE_THRESHOLD_PX;
           if (collapsible && offset && movedFar) capsuleSubject = { node: draggedDoc, aim };
-          // Only a boundary has descendants, so only a boundary pays for walking them.
-          const exclude = new Set(
-            draggedDoc.type === 'group' ? [draggedDoc.id, ...descendantsOf(state.document, draggedDoc.id)] : [draggedDoc.id],
-          );
-          const { overlapId, centerHitId } = evaluateAttachCandidates(
-            probeRect,
-            draggedDoc.type,
-            state.document,
-            exclude,
-          );
+          // Only a Note, Code or Text card can arm anything. Every other shape skips the evaluation
+          // and the exclusion set it asks for, on every frame of its drag; the set is one id, kept
+          // for the gesture rather than built again per frame.
+          let overlapId: string | null = null;
+          let centerHitId: string | null = null;
+          if (isAttachableType(draggedDoc.type)) {
+            if (attachExclude.current?.id !== draggedDoc.id) attachExclude.current = { id: draggedDoc.id, ids: new Set([draggedDoc.id]) };
+            ({ overlapId, centerHitId } = evaluateAttachCandidates(probeRect, draggedDoc.type, state.document, attachExclude.current.ids));
+          }
 
-          if (overlapId) {
+          // The message under the cursor is more specific than its sequence frame. Outside its
+          // hit area, the usual shape/connector drop behavior still applies.
+          const host = collapsible && movedFar && !centerHitId && !overlapId
+            ? sequenceNodes(state.document.nodes).reduce<DraftNode | undefined>((top, node) => {
+              if (!pointInBox(aim, node)) return top;
+              return !top || node.z >= top.z ? node : top;
+            }, undefined)
+            : undefined;
+          const hit = host?.type === 'sequence'
+            ? hitSequence(sequenceLayoutFor(host, describeContext(LIGHT)), aim.x - host.x, aim.y - host.y)
+            : null;
+          const message = hit?.kind === 'message' && host?.sequence
+            ? selectSequenceMessage(state.document, host.id, hit.id)
+            : undefined;
+          const messageTarget = message && host && hasAttachmentRoom(message, 'edge') ? { nodeId: host.id, messageId: message.id } : null;
+          useUiStore.getState().setSequenceAttachmentTarget(messageTarget);
+          if (messageTarget) {
+            clearDwell();
+            capsuleInside = true;
+            capsuleHostRect.current = null;
+            nudge.current = { x: 0, y: 0 };
+            useUiStore.getState().setAttachArmedTarget(null);
+            useUiStore.getState().setAttachArmedEdgeTarget(null);
+          } else if (overlapId) {
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(overlapId);
             useUiStore.getState().setAttachArmedEdgeTarget(null);
@@ -1061,6 +1040,27 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
               nudge.current = canAttach && edge ? leanToward(flowPoint, landingPointFor(state.document, edge, getInternalNode), getZoom()) : { x: 0, y: 0 };
             }
             capsuleInside = useUiStore.getState().attachArmedEdgeTarget !== null;
+          } else if (useUiStore.getState().spliceDrag) {
+            // An unconnected Queue, Data Store, Service, Component or Junction held over a
+            // connector goes into the middle of it on drop. Aimed with the pointer, the same point
+            // a person reads as "on the line", through the same corridor a note/code card uses.
+            clearDwell();
+            useUiStore.getState().setAttachArmedTarget(null);
+            useUiStore.getState().setAttachArmedEdgeTarget(null);
+            probingEdges = true;
+            const flowPoint = offset ? { x: livePosition.x + offset.x, y: livePosition.y + offset.y } : aim;
+            const screenPoint = flowToScreenPosition(flowPoint);
+            const lastProbe = lastEdgeProbe.current;
+            if (
+              !lastProbe ||
+              Math.hypot(screenPoint.x - lastProbe.screen.x, screenPoint.y - lastProbe.screen.y) >= EDGE_PROBE_STEP_PX ||
+              Math.hypot(flowPoint.x - lastProbe.flow.x, flowPoint.y - lastProbe.flow.y) >= EDGE_PROBE_STEP_PX
+            ) {
+              lastEdgeProbe.current = { screen: screenPoint, flow: flowPoint };
+              const edgeId = findEdgeDropCandidate(screenPoint.x, screenPoint.y, draggedDoc.id, flowPoint);
+              const canSplice = edgeId !== null && canSpliceInto(state.document, edgeId, draggedDoc.id);
+              useUiStore.getState().setSpliceArmedEdgeTarget(canSplice ? edgeId : null);
+            }
           } else {
             clearDwell();
             useUiStore.getState().setAttachArmedTarget(null);
@@ -1071,8 +1071,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         clearDwell();
         useUiStore.getState().setAttachArmedTarget(null);
         useUiStore.getState().setAttachArmedEdgeTarget(null);
+        useUiStore.getState().setSequenceAttachmentTarget(null);
       }
+      if (!probingEdges) useUiStore.getState().setSpliceArmedEdgeTarget(null);
       if (!probingEdges) lastEdgeProbe.current = null;
+      armSequenceDrop(snapped.changes);
 
       // Collapse/expand, decided from the same aim point that decided arming above. This is pure
       // paint — the card itself never moves or resizes — so neither direction can make it jump,
@@ -1142,7 +1145,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         }
       }
     },
-    [clearDwell, flowToScreenPosition, getInternalNode, getZoom, setNodes],
+    [armSequenceDrop, clearDwell, flowToScreenPosition, getInternalNode, getZoom, setNodes],
   );
 
   const setEdges = useCallback(
@@ -1350,8 +1353,20 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       sweptDescendants.current = swept;
       useUiStore.getState().setInteractionActive(true, moving);
       clearDwell();
+      clearSequenceDrop();
       useUiStore.getState().setAttachArmedTarget(null);
       useUiStore.getState().setAttachArmedEdgeTarget(null);
+      useUiStore.getState().setSpliceArmedEdgeTarget(null);
+      // Only a shape with no connectors of its own can be dropped into the middle of one: moving a
+      // wired service across lines must never rewire it by accident.
+      const lone = dragged.length === 1 && swept.size === 0 ? byId.get(dragged[0]!.id) : undefined;
+      useUiStore
+        .getState()
+        .setSpliceDrag(
+          lone !== undefined &&
+            canSpliceType(lone.type) &&
+            !state.document.edges.some((edge) => edge.source === lone.id || edge.target === lone.id),
+        );
 
       const resting = state.document.nodes.filter((node) => !moving.has(node.id));
       const links: DragLink[] = [];
@@ -1375,8 +1390,42 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         })),
       };
     },
-    [clearDwell, screenToFlowPosition],
+    [clearDwell, clearSequenceDrop, screenToFlowPosition],
   );
+
+  /**
+   * Escape mid-drag. The card goes back where it started and nothing is committed — no move, no
+   * attach, no reparent, and no history entry, since the document was never written during the
+   * gesture in the first place. React Flow keeps streaming position changes until the pointer is
+   * released; `onNodesChange` drops them from here on, which is what actually pins the card.
+   */
+  const onDragCancel = useCallback(() => {
+    dragCancelled.current = true;
+    clearDwell();
+    clearSequenceDrop();
+    clearCapsule();
+    setGuides([]);
+    useUiStore.getState().setAttachArmedTarget(null);
+    useUiStore.getState().setAttachArmedEdgeTarget(null);
+    useUiStore.getState().setSpliceArmedEdgeTarget(null);
+    // Back to the committed positions. The document is the pre-drag truth, so there is nothing
+    // extra to have remembered.
+    const byId = nodeIndex(useEditorStore.getState().document.nodes);
+    const moving = draggingIds.current;
+    setNodes((current) =>
+      current.map((node) => {
+        if (!moving.has(node.id)) return node;
+        const doc = byId.get(node.id);
+        if (!doc || (node.position.x === doc.x && node.position.y === doc.y)) return node;
+        return { ...node, position: { x: doc.x, y: doc.y }, dragging: false };
+      }),
+    );
+  }, [clearCapsule, clearDwell, clearSequenceDrop, setNodes]);
+  // Layout effects, not passive ones: the refs are what a window listener reaches the latest closure
+  // through, and a key or touch landing between a commit and its passive effects found the last one.
+  useLayoutEffect(() => {
+    cancelDrag.current = onDragCancel;
+  }, [onDragCancel]);
 
   /**
    * Committing the drag reads the final positions from React Flow rather than
@@ -1395,36 +1444,6 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
    * because a shape that leaves its boundary while keeping its `parentId` is
    * deleted along with it.
    */
-  /**
-   * Escape mid-drag. The card goes back where it started and nothing is committed — no move, no
-   * attach, no reparent, and no history entry, since the document was never written during the
-   * gesture in the first place. React Flow keeps streaming position changes until the pointer is
-   * released; `onNodesChange` drops them from here on, which is what actually pins the card.
-   */
-  const onDragCancel = useCallback(() => {
-    dragCancelled.current = true;
-    clearDwell();
-    clearCapsule();
-    setGuides([]);
-    useUiStore.getState().setAttachArmedTarget(null);
-    useUiStore.getState().setAttachArmedEdgeTarget(null);
-    // Back to the committed positions. The document is the pre-drag truth, so there is nothing
-    // extra to have remembered.
-    const byId = nodeIndex(useEditorStore.getState().document.nodes);
-    const moving = draggingIds.current;
-    setNodes((current) =>
-      current.map((node) => {
-        if (!moving.has(node.id)) return node;
-        const doc = byId.get(node.id);
-        if (!doc || (node.position.x === doc.x && node.position.y === doc.y)) return node;
-        return { ...node, position: { x: doc.x, y: doc.y }, dragging: false };
-      }),
-    );
-  }, [clearCapsule, clearDwell, setNodes]);
-  useEffect(() => {
-    cancelDrag.current = onDragCancel;
-  }, [onDragCancel]);
-
   const onNodeDragStop = useCallback(() => {
     stopWatchingTouches.current?.();
     stopWatchingEscape.current?.();
@@ -1441,9 +1460,12 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       lastEdgeProbe.current = null;
       sweptDescendants.current = new Map();
       clearDwell();
+      clearSequenceDrop();
       clearCapsule();
       useUiStore.getState().setAttachArmedTarget(null);
       useUiStore.getState().setAttachArmedEdgeTarget(null);
+      useUiStore.getState().setSpliceArmedEdgeTarget(null);
+      useUiStore.getState().setSpliceDrag(false);
       return;
     }
     const state = useEditorStore.getState();
@@ -1458,8 +1480,34 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     const singleId = draggedIds.size === 1 && sweptDescendants.current.size === 0 ? [...draggedIds][0]! : null;
     const armedHost = useUiStore.getState().attachArmedTarget;
     const armedEdge = useUiStore.getState().attachArmedEdgeTarget;
+    const armedSplice = useUiStore.getState().spliceArmedEdgeTarget;
+    const armedSequence = useUiStore.getState().sequenceDropTarget;
+    const armedMessage = useUiStore.getState().sequenceAttachmentTarget;
+    let label: string | undefined;
 
-    if (singleId && armedHost) {
+    if (singleId && armedMessage) {
+      const attachment = sequenceActions.attachExistingNode(armedMessage.nodeId, armedMessage.messageId, singleId);
+      if (attachment) {
+        markArrived(attachment);
+        label = 'Attach to message';
+      } else {
+        state.commitMove(positions, draggedIds);
+      }
+    } else if (singleId && armedSequence) {
+      // Either way the shape is put back where it was before anything is written: a refused drop
+      // would otherwise leave it lying on the sequence. One undo step, and no move in it.
+      positions.delete(singleId);
+      if (positions.size > 0) state.commitPositions(positions);
+      const home = nodeIndex(state.document.nodes).get(singleId);
+      if (home) setNodes((current) => current.map((node) => (node.id === singleId ? { ...node, position: { x: home.x, y: home.y }, dragging: false } : node)));
+      if (armedSequence.stays) {
+        // Part of a diagram: it stays in the architecture and the participant stands for it.
+        if (sequenceActions.addParticipantFromShape(armedSequence.nodeId, singleId, armedSequence.index)) label = 'Add participant';
+      } else if (sequenceActions.moveShapeIn(armedSequence.nodeId, singleId, armedSequence.index)) {
+        // On its own: the shape itself goes into the sequence, and nothing is left on the canvas.
+        label = 'Move into sequence';
+      }
+    } else if (singleId && armedHost) {
       positions.delete(singleId);
       if (positions.size > 0) state.commitPositions(positions);
       markArrived(state.attachExistingNode(singleId, armedHost));
@@ -1467,6 +1515,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       positions.delete(singleId);
       if (positions.size > 0) state.commitPositions(positions);
       markArrived(state.attachExistingNodeToEdge(singleId, armedEdge));
+    } else if (singleId && armedSplice) {
+      // Lands where it was dropped — already over the line — then takes the connector's place.
+      state.commitMove(positions, draggedIds);
+      if (useEditorStore.getState().spliceIntoEdge(singleId, armedSplice)) label = 'Insert into connector';
     } else {
       // Membership follows where things landed, for a whole selection or a boundary and what it
       // carries as much as for one shape dropped on its own. `parentId` is what a delete cascades
@@ -1475,23 +1527,38 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       state.commitMove(positions, draggedIds);
     }
 
-    state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : undefined);
+    state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : label);
     useUiStore.getState().setInteractionActive(false);
     draggingIds.current = new Set();
     dragSnap.current = NO_DRAG_SNAP;
     lastEdgeProbe.current = null;
     sweptDescendants.current = new Map();
     clearDwell();
+    clearSequenceDrop();
     clearCapsule();
     useUiStore.getState().setAttachArmedTarget(null);
     useUiStore.getState().setAttachArmedEdgeTarget(null);
-  }, [clearCapsule, clearDwell, getNodes]);
+    useUiStore.getState().setSpliceArmedEdgeTarget(null);
+    useUiStore.getState().setSpliceDrag(false);
+  }, [clearCapsule, clearDwell, clearSequenceDrop, getNodes, setNodes]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     finishDrag.current = onNodeDragStop;
   }, [onNodeDragStop]);
   useEffect(() => () => stopWatchingTouches.current?.(), []);
   useEffect(() => () => stopWatchingEscape.current?.(), []);
+  // The canvas going away mid-drag (the document closes, a room is left, Present starts) is not a
+  // release: React Flow's stop callback never comes, and the undo bracket and `interactionActive`
+  // would stay open — every later edit skipping history. It reads as a cancel, for the reason the
+  // window losing focus does: nobody chose where the shape was left.
+  useEffect(
+    () => () => {
+      if (draggingIds.current.size === 0) return;
+      cancelDrag.current();
+      finishDrag.current();
+    },
+    [],
+  );
   // The grabbed node gone from the document mid-drag (deleted some way other than a key, which
   // waits for the drag): React Flow abandons the gesture on its next move.
   useEffect(() => {
@@ -1499,8 +1566,20 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     if (id && draggingIds.current.size > 0 && !nodeIndex(document.nodes).has(id)) finishDrag.current();
   }, [document.nodes]);
 
-  const onConnectStart = useCallback(() => {
+  const onConnectStart = useCallback((_event: MouseEvent | TouchEvent, params: { nodeId: string | null }) => {
     connectCancelled.current = false;
+    // Started from one of several selected shapes: the drop connects all of them (fan-in).
+    const editor = useEditorStore.getState();
+    const from = params.nodeId;
+    const byId = nodeIndex(editor.document.nodes);
+    const others =
+      from && editor.selection.nodes.length > 1 && editor.selection.nodes.includes(from)
+        ? editor.selection.nodes.filter((id) => {
+            const node = byId.get(id);
+            return id !== from && node !== undefined && FAN_IN_TYPES.has(node.type);
+          })
+        : [];
+    useUiStore.getState().setFanInSources(others.length > 0 ? others : null);
     stopWatchingConnect.current?.();
     // Capture phase, and stopped: the editor's own Escape (deselect, or step back out of a room) is
     // gated on `interactionActive`, which a connection drag does not set, so without this one press
@@ -1536,7 +1615,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       if (!connection.source || !connection.target) return;
       // Handles start the gesture, but a new connector follows its shapes by default. Pinning is
       // explicit through "Pin ends here" after the line is drawn.
-      useEditorStore.getState().connect(connection.source, connection.target);
+      connectFrom(connection.source, connection.target);
     },
     [],
   );
@@ -1553,6 +1632,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const onConnectEnd = useCallback(
     (event: MouseEvent | TouchEvent, connectionState: FinalConnectionState) => {
       stopWatchingConnect.current?.();
+      // Read before it is cleared: `onConnect` (a drop on a handle) has already used it.
+      const fanIn = useUiStore.getState().fanInSources;
+      useUiStore.getState().setFanInSources(null);
       if (connectCancelled.current) {
         // Released after Escape: nothing connects, and nothing is offered in place of it.
         connectCancelled.current = false;
@@ -1577,9 +1659,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         .find((node) => pointInBox(position, node));
 
       if (droppedOn) {
-        if (droppedOn.id !== source) {
-          state.connect(source, droppedOn.id);
-        }
+        if (fanIn) state.connectMany([source, ...fanIn], droppedOn.id);
+        else if (droppedOn.id !== source) state.connect(source, droppedOn.id);
         return;
       }
 
@@ -1633,12 +1714,12 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     [],
   );
 
-  /** True once the pointer has moved past `CONTEXT_MENU_DRAG_THRESHOLD_PX` since the right button
+  /** True once the pointer has moved past `DRAG_THRESHOLD_PX` since the right button
    *  went down — a real gesture (jitter aside), not a click, so no menu should open for it. */
   const movedPastContextMenuThreshold = useCallback((event: { clientX: number; clientY: number }) => {
     const down = rightPointerDown.current;
     if (!down) return false;
-    return Math.hypot(event.clientX - down.x, event.clientY - down.y) > CONTEXT_MENU_DRAG_THRESHOLD_PX;
+    return Math.hypot(event.clientX - down.x, event.clientY - down.y) > DRAG_THRESHOLD_PX;
   }, []);
 
   /** Each right press is consumed by exactly one context menu: left in place, a later Shift+F10 /
@@ -1884,6 +1965,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   /** A toolbar button arms a tool; the next click on empty canvas places it. */
   const onPaneClick = useCallback(
     (event: React.MouseEvent) => {
+      // A click on empty canvas puts chosen sketch strokes down, as it does shapes.
+      useUiStore.getState().setInkSelection([]);
       if (!editable || !useUiStore.getState().armed) return;
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) });
@@ -1919,6 +2002,20 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const scheduleHover = useCallback(
     (event: React.PointerEvent) => {
       const ui = useUiStore.getState();
+      // A shape tool that can go into a connector's middle shows which one a click would put it in.
+      if (ui.armed && canSpliceType(ui.armed.type) && event.pointerType !== 'touch' && event.buttons === 0 && !ui.interactionActive) {
+        if (ui.hoveredEdgeId !== null) setHover(null);
+        hoverAt.current = { clientX: event.clientX, clientY: event.clientY };
+        if (hoverFrame.current !== null) return;
+        hoverFrame.current = requestAnimationFrame(() => {
+          hoverFrame.current = null;
+          const at = hoverAt.current;
+          if (!at || !useUiStore.getState().armed) return;
+          const pick = edgeAtEvent(at);
+          useUiStore.getState().setSpliceArmedEdgeTarget(pick && pick.part !== 'control' ? pick.id : null);
+        });
+        return;
+      }
       if (event.pointerType === 'touch' || event.buttons !== 0 || ui.armed || ui.interactionActive || ui.reconnectDragActive) {
         hoverAt.current = null;
         if (ui.hoveredEdgeId !== null) setHover(null);
@@ -1938,6 +2035,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   );
   const clearHover = useCallback(() => {
     hoverAt.current = null;
+    if (useUiStore.getState().armed) useUiStore.getState().setSpliceArmedEdgeTarget(null);
     if (hoverFrame.current !== null) cancelAnimationFrame(hoverFrame.current);
     hoverFrame.current = null;
     if (useUiStore.getState().hoveredEdgeId !== null) setHover(null);
@@ -1952,30 +2050,33 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   /**
    * Keyboard shortcuts create an element under the cursor, so the pointer
    * position is tracked outside React — re-rendering the canvas on every mouse
-   * move to keep it in state would be indefensible.
+   * move to keep it in state would be indefensible. Only the screen point is
+   * kept: the camera moves under a cursor that has not, and where it is on the canvas is worked out
+   * when a shortcut asks (`pointerFlow`), through the conversion registered below.
    */
   const onPointerMove = useCallback(
     (event: React.PointerEvent) => {
-      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      pointer.x = position.x;
-      pointer.y = position.y;
       pointer.screenX = event.clientX;
       pointer.screenY = event.clientY;
       pointer.known = true;
       scheduleHover(event);
     },
-    [scheduleHover, screenToFlowPosition],
+    [scheduleHover],
   );
-  // The cursor stays put on screen while the camera moves under it. Start and end too: a single
-  // wheel notch of pan-on-scroll reports only those, never a change. Stable, because React Flow
-  // stores the handlers and a new one each render would write its store every frame.
-  const rederivePointer = useCallback(() => {
-    if (!pointer.known) return;
-    const position = screenToFlowPosition({ x: pointer.screenX, y: pointer.screenY });
-    pointer.x = position.x;
-    pointer.y = position.y;
+  useEffect(() => {
+    pointer.toFlow = screenToFlowPosition;
+    return () => {
+      if (pointer.toFlow === screenToFlowPosition) pointer.toFlow = null;
+    };
   }, [screenToFlowPosition]);
-  useOnViewportChange({ onStart: rederivePointer, onChange: rederivePointer, onEnd: rederivePointer });
+  useEffect(
+    () => () => {
+      pointer.known = false;
+    },
+    [],
+  );
+  // Alt switches alignment snapping off for as long as it is held (`snapBypass.ts`).
+  useEffect(() => trackSnapBypass(), []);
   const onPointerLeave = useCallback(() => {
     // Off the canvas (over the toolbar, a panel, another window), a shortcut places near the
     // selection or mid-view instead of wherever the cursor last crossed the canvas.
@@ -2041,7 +2142,19 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         }
         return;
       }
-      if (!interactive || event.button !== 0 || useUiStore.getState().armed) return;
+      const armedTool = useUiStore.getState().armed;
+      if (armedTool && editable && interactive && event.button === 0 && !isEditableTarget(event.target) && canSpliceType(armedTool.type)) {
+        // A Queue, Data Store, Service, Component or Junction placed onto a connector goes into its
+        // middle — the same edit as dropping an unconnected one there.
+        const pick = edgeAtEvent(event);
+        if (pick && pick.part !== 'control') {
+          event.stopPropagation();
+          const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+          onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) }, pick.id);
+          return;
+        }
+      }
+      if (!interactive || event.button !== 0 || armedTool) return;
       if (isEditableTarget(event.target)) return;
       // The click that ends dragging a bend is not a click on the connector.
       if (endsBendDrag()) {
@@ -2067,7 +2180,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       }
       setHover(pick.group ? edgeToSelect(pick, useEditorStore.getState().selection.edges) : pick.id, event);
     },
-    [edgeAtEvent, interactive, onPaneClick, setHover],
+    [edgeAtEvent, editable, interactive, onCreateAt, onPaneClick, screenToFlowPosition, setHover],
   );
 
   // A pan or zoom by the user slides the canvas out from under a menu pinned to a screen point, and
@@ -2128,6 +2241,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       data-lens={lensActive ? 'on' : undefined}
       data-traffic={trafficActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}
+      data-pencil={drawing ? pencil : undefined}
       data-recovery-connecting={recoveryConnect ? 'true' : undefined}
       style={
         explainActive
@@ -2195,16 +2309,21 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         // Slightly past React Flow's own default (20px) — with 3 handles per
         // side now sitting closer together, this is what lets its native
         // nearest-handle highlight/snap (`.connectingto.valid`) still engage
-        // without pixel-precision aim, while staying short enough that a drop
-        // near a small node's centre still falls through to `onConnectEnd`'s
-        // own dynamic-routing dead zone (`CENTER_DROP_TOLERANCE`) instead of
-        // always resolving to one specific handle.
+        // without pixel-precision aim. Short enough that a drop on a shape's body, away from its
+        // handles, still reaches `onConnectEnd`'s own hit test (which connects to the shape, pinning
+        // nothing) instead of always resolving to one specific handle. The centre dead zone
+        // (`CENTER_DROP_TOLERANCE` in `routing.ts`) belongs to re-pointing an existing connector's
+        // end, not to this drop.
         connectionRadius={28}
         // A press on a handle only becomes a new connector once it has really moved — the same 4px a
         // connector's own endpoint drag waits for. React Flow's default (1px) turned the jitter of a
         // plain click on the end of an arrow (where the handles sit) into a connection drag that ended
         // on empty canvas and offered to create a node there.
-        connectionDragThreshold={4}
+        connectionDragThreshold={DRAG_THRESHOLD_PX}
+        // And a press on a shape only becomes a move once it has moved that far too. React Flow's
+        // default (1px) started a Move — and could commit one, with snapping pulling the shape a few
+        // units — from the jitter of an ordinary click. Measured in screen pixels, at any zoom.
+        nodeDragThreshold={DRAG_THRESHOLD_PX}
         // React Flow's click-to-connect (click one handle, then another) is off: nothing in the app
         // offers it, and with a node's handles sitting over the end of every arrow, two clicks near two
         // arrowheads quietly drew a new connector between them.
@@ -2225,7 +2344,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         nodesFocusable={false}
         edgesFocusable={false}
         panOnScroll
-        selectionOnDrag={interactive}
+        // Off while the Pencil is in hand: React Flow starts its marquee from a React capture handler,
+        // ahead of the Pencil's own listener, and a stroke drawn as a suggestion strip closed went on
+        // to drag a selection rectangle across the canvas.
+        selectionOnDrag={interactive && !drawing}
         // Button 1 (middle-mouse-drag) still pans; button 2 (right) is freed for the context menu —
         // see `onPaneContextMenu`'s own comment for why React Flow's `Pane` would otherwise swallow
         // the native `contextmenu` event before it ever reaches that handler.
@@ -2259,6 +2381,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         <TrafficReplayProvider active={trafficActive}>
         <ViewportLayer>
           {tracing && <FlowTraceBadges />}
+          {interactive && <FanInPreview />}
           {/*
             Both of these are drag-in-progress chrome, meaningless once the
             gesture that produced them ends — and impossible to produce at all
@@ -2267,28 +2390,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             state at the right moment) means a stale value can never render,
             including across a mode switch mid-gesture.
           */}
-          {interactive &&
-            guides.map((guide, index) => (
-              <div
-                key={`${guide.axis}-${index}`}
-                className="dc-guide"
-                data-axis={guide.axis}
-                data-kind={guide.kind}
-                style={
-                  guide.axis === 'x'
-                    ? {
-                        transform: `translate(${guide.at}px, ${guide.from}px)`,
-                        height: guide.to - guide.from,
-                      }
-                    : {
-                        transform: `translate(${guide.from}px, ${guide.at}px)`,
-                        width: guide.to - guide.from,
-                      }
-                }
-              >
-                {guide.label !== undefined && <span className="dc-guide-label">{guide.label}</span>}
-              </div>
-            ))}
+          {interactive && <GuideLines guides={guides} />}
+
+          {/* Where deleted shapes and connectors fade (`changeMotion.ts` fills it, imperatively and
+              briefly). React renders it empty and never touches what is put inside. */}
+          <div className="dc-departures" aria-hidden="true" />
 
           {/* Not gated on `interactive`: which room you are standing in is as true in a
               walkthrough as it is while drawing, and the frame is inert either way. */}
@@ -2303,8 +2409,16 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           {/* A pending proposal's reviewed result (desktop only), while `ProposalPanel` shows it. */}
           <ProposalPreviewLayer />
 
+          {/* What Tidy up would change, while the person decides (`TidyBar`). Never in the document. */}
+          <TidyPreviewLayer />
+          {/* What Arrange would change, in the direction chosen (`ArrangeBar`). Never in the document. */}
+          <ArrangePreviewLayer />
+
           {/* Other people in a live session: their pointers and what they hold. Never exported. */}
           <PresenceLayer />
+
+          {/* Handwritten sketches sit over everything else drawn in the room, as on a whiteboard. */}
+          <InkLayer theme={theme.name} selectable={editable && !drawing && !armedShape && !trafficActive} />
 
           {/* Traffic's findings, written over the diagram like a whiteboard review. Never exported. */}
           {trafficActive && <TrafficSketches />}

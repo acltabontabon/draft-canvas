@@ -3,6 +3,10 @@
 // Flow's base styles), so its overrides keep winning.
 import '../../styles/canvas.css';
 import { ExampleBanner } from './ExampleBanner';
+import { InkSuggestionPopover } from './ink/InkSuggestionPopover';
+import { cancelSmartInk, flushSmartInk } from '../../canvas/inkSession';
+import { StarterUpdateBanner } from './StarterUpdateBanner';
+import { StartersDialog } from '../Gallery/StartersDialog';
 import { FlowTraceBar } from './FlowTraceBar';
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
@@ -16,6 +20,7 @@ import { canvasBounds, canvasCenter } from '../../canvas/canvasFrame';
 import type { DraftNode, DraftViewport } from '../../document/types';
 import { loadFailureNotice } from '../../lib/staleChunk';
 import { presetForShortcut, type Preset } from '../../lib/presets';
+import { isConvertibleType, type ConvertibleType } from '../../document/convert';
 import { nearestInDirection, nextRelationshipNeighbor, type Direction } from '../../canvas/spatialNav';
 import { QuickConnectMenu } from '../../canvas/QuickConnectMenu';
 import { offerFor, quickConnectItems, type QuickConnectItem } from '../../canvas/quickConnectItems';
@@ -24,17 +29,22 @@ import { contextMenuCommandsFor } from '../../commands/contextMenu';
 import { openPointTargetsOf, readSafeMenu, starterCommands } from '../../commands/registry';
 import type { Command } from '../../commands/types';
 import { useCommandContext } from '../../commands/useCommandContext';
-import type { StarterId } from '../../starters';
 import { defaultSizeFor } from '../../document/factory';
+import { technologyStart } from '../../document/technologyKind';
 import { DEFAULTS } from '../../document/limits';
 import { pathKey } from '../../depth/tree';
 import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../../lib/isEditableTarget';
+import { handleSequenceKey } from '../../canvas/sequence/sequenceKeys';
+import { sequenceActions, sequenceSeatAt } from '../../store/sequenceActions';
+import { isLinkable } from '../../document/sequenceLinks';
+import { displayNameFor as nameOfShape } from '../../document/factory';
+import type { SeqParticipant } from '../../document/types';
 import { centerOf, overlapArea } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, hasSomethingToFit, lensFlow, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
-import { pointer, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
+import { pointer, pointerFlow, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
 import { useCollabStore } from '../../store/collabStore';
 import { END_MESSAGES } from '../collab/collabCopy';
 import { PresenceDock } from '../collab/PresenceDock';
@@ -46,6 +56,7 @@ import { useThemeValue } from '../../theme/useTheme';
 import { backOut, lookInside } from '../../commands/depthNavigation';
 import { OpenPointsPanel } from './OpenPointsPanel';
 import { OutlinePanel } from './OutlinePanel';
+import { createNudgeCoalescer } from './nudgeCoalescer';
 import { useSelectionAnnouncements } from './useSelectionAnnouncements';
 import { OpenPointPopover } from '../../canvas/OpenPointPopover';
 import { DepthAnnouncer, DepthStack } from './DepthStack';
@@ -55,10 +66,14 @@ import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
 import { SharedReader } from './SharedReader';
 import { FocusIndicator } from './FocusIndicator';
+import { TidyBar } from './TidyBar';
+import { ArrangeBar } from './ArrangeBar';
+import { LayoutBusyBar } from './LayoutBusyBar';
 import { FlowLensIndicator } from './FlowLensIndicator';
 import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
 import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { CommandPalette } from './CommandPalette';
+import { ContinuationAnnouncer } from './ContinuationAnnouncer';
 import { Inspector } from './Inspector';
 import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
@@ -109,7 +124,8 @@ function focusIsOnCanvas(): boolean {
 
 /** Shapes that open ready to be typed into when they are made — see `createAt`. A Junction has no text. */
 function hasNameToType(type: DraftNode['type']): boolean {
-  return type !== 'ellipse';
+  // Nor is a sequence named first: what it wants first is someone to take part.
+  return type !== 'ellipse' && type !== 'sequence';
 }
 
 /** Focus sits on a control that was reached from the keyboard (`:focus-visible`), not by a click. */
@@ -225,20 +241,40 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const [canvasInstanceKey, setCanvasInstanceKey] = useState(0);
 
   const createAt = useCallback(
-    (preset: Preset, position: { x: number; y: number }, autoEdit = true) => {
+    (preset: Preset, position: { x: number; y: number }, autoEdit = true, spliceEdgeId?: string) => {
       const code = preset.type === 'code' ? (CODE_SAMPLES[preset.language ?? ''] ?? '') : undefined;
       const size =
         preset.type === 'code' && code
           ? naturalCodeSize(code, describeContext(theme))
           : undefined;
 
+      // A piece of architecture put down on a sequence joins it: a participant of that kind, where
+      // the pointer is. The same whichever way it was put
+      // down — a tool from the toolbar, a key over the canvas, the palette, the right-click menu.
+      // (`position` is the corner of a default shape centred on the point: see below.)
+      if (!spliceEdgeId && isLinkable({ type: preset.type })) {
+        const seat = sequenceSeatAt({ x: position.x + 88, y: position.y + 34 });
+        if (seat) {
+          const started = preset.technology ? technologyStart(preset.type, preset.technology) : {};
+          const is = { type: preset.type, ...started } as Omit<SeqParticipant, 'id' | 'name'>;
+          const name = preset.technology ?? preset.text ?? nameOfShape({ ...is, text: undefined });
+          sequenceActions.addParticipant(seat.nodeId, { ...is, name }, seat.index);
+          arm(null);
+          return null;
+        }
+      }
       // Refused past the node cap, with a toast — the store's `addNode` itself stays unconditional.
       if (!roomFor(1, 0)) return null;
       // Every caller hands the top-left a default 176×68 shape centred on the point would have
       // (`point - 88,34`); centred by its own size instead, a Junction lands under the cursor rather
       // than beside it, and a Boundary or code card doesn't hang off below and to the right.
       const { width, height } = size ?? defaultSizeFor(preset.type);
-      const node = useEditorStore.getState().addNode({
+      // Placed onto a connector: made and put into its middle as one undo step.
+      const editor = useEditorStore.getState();
+      const startSequence = autoEdit && preset.type === 'sequence';
+      if (startSequence) editor.beginInteraction('Add sequence');
+      if (spliceEdgeId) editor.beginInteraction('Insert into connector');
+      const node = editor.addNode({
         type: preset.type,
         x: Math.round(position.x + 88 - width / 2),
         y: Math.round(position.y + 34 - height / 2),
@@ -249,7 +285,14 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         noteKind: preset.noteKind,
         language: preset.language,
         code,
+        // Picked as a technology ("kafka" in the shape picker): it arrives as that technology, with
+        // the kind it implies.
+        ...(preset.technology ? technologyStart(preset.type, preset.technology) : {}),
       });
+      if (spliceEdgeId) {
+        editor.spliceIntoEdge(node.id, spliceEdgeId);
+        useEditorStore.getState().endInteraction('Insert into connector');
+      }
       arm(null);
       // Whatever made it — a key, the palette, the double-click picker, a click with a tool armed —
       // a new shape opens ready to name, its placeholder selected so typing replaces it. "Service"
@@ -258,6 +301,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // one. Escape or a click away keeps the placeholder. A code card (it arrives with sample code
       // to edit, not a name) and a junction (an `ellipse`, nothing to name) are left as they are.
       if (autoEdit && hasNameToType(node.type)) useUiStore.getState().requestEdit(node.id);
+      if (startSequence) {
+        sequenceActions.addDefaultParticipant(node.id);
+        useUiStore.getState().setSequenceFocus(null);
+        editor.endInteraction('Add sequence');
+      }
       return node;
     },
     [arm, theme],
@@ -364,7 +412,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       const { nodes: selectedNodes } = state.selection;
       const host = selectedNodes.length === 1 ? state.document.nodes.find((n) => n.id === selectedNodes[0]) : undefined;
       const size = defaultSizeFor(preset.type);
-      const atPointer = { x: pointer.x - 88, y: pointer.y - 34 };
+      const at = pointer.known ? pointerFlow() : { x: 0, y: 0 };
+      const atPointer = { x: at.x - 88, y: at.y - 34 };
       // Pressing the key again without moving the mouse put each new shape exactly on an earlier one:
       // beside the shape under the pointer instead, wherever there is room.
       const box = { x: atPointer.x + 88 - size.width / 2, y: atPointer.y + 34 - size.height / 2, ...size };
@@ -399,7 +448,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   // With a `flowId`, that flow; without one, whatever `start()` decides (the active flow, the one
   // playable flow, else the picker).
   const onPresent = useCallback(
-    (requested?: string) => {
+    (requested?: string, sequenceNodeId?: string) => {
       // Every consumer types this as `() => void`, so nothing stops a `onClick={onPresent}` from
       // handing it a click event as the flow id — truthy, and the presentation would then start on
       // a flow that doesn't exist and silently do nothing. Cheap to make impossible.
@@ -407,7 +456,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // The camera has to be read before the fit below moves it. React Flow owns it, not the
       // store, which is why it is handed over rather than picked up there.
       setMode('present', getViewport());
-      if (flowId) playback.pickFlow(flowId);
+      if (flowId) playback.pickFlow(flowId, sequenceNodeId);
       else if (playback.canStart) playback.start();
       // A flow that started has framed its own opening (`useFlowPlayback`'s directed camera). Only
       // with none chosen — the picker, or nothing to present — is the whole diagram fitted, with
@@ -491,8 +540,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   // The empty canvas's starter row runs the palette's own command rather than calling the store
   // itself, so the two entry points can never drift apart — the same discipline the right-click
   // menu follows (`commands/contextMenu.ts`).
-  const insertStarter = useCallback(
-    (id: StarterId) => {
+  const addStarter = useCallback(
+    (id: string) => {
       const command = starterCommands().find((entry) => entry.id === `starter-${id}`);
       command?.run(buildCommandContext());
     },
@@ -537,8 +586,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   // Stable, so the memoized `Canvas` (and React Flow under it) skips renders the editor makes for
   // its own chrome.
   const onCanvasCreateAt = useCallback(
-    (position: { x: number; y: number }) => {
-      if (armed) createAt(armed, position);
+    (position: { x: number; y: number }, spliceEdgeId?: string) => {
+      if (armed) createAt(armed, position, true, spliceEdgeId);
     },
     [armed, createAt],
   );
@@ -664,7 +713,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               onDismiss={dismissContextMenu}
             />
           )}
-          {!presenting && !tracing && <AttachmentPopover />}
+          {!tracing && <AttachmentPopover />}
           {/* In every mode: while presenting it opens read-only, so a presenter can show what is still
               open here without any editing surface appearing over the story. */}
           <OpenPointPopover />
@@ -677,9 +726,12 @@ function EditorScreen({ session }: { session: DocumentSession }) {
             <ElementInspectorPopover buildCommandContext={buildCommandContext} />
           )}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
+          {!presenting && !tracing && <InkSuggestionPopover />}
+          {!presenting && !tracing && <StarterUpdateBanner />}
+          <StartersDialog onAdd={addStarter} />
           <FlowTraceBar />
           <PresentationCalloutLayer />
-          <EmptyState onInsertStarter={insertStarter} />
+          <EmptyState onAddStarter={addStarter} />
           {!presenting && <ContinuationAnnouncer />}
           {!presenting && !tracing && !readingTraffic && !readOnly && <Inspector />}
           {!presenting && !tracing && <FlowPanel onPresent={onPresent} />}
@@ -696,6 +748,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           )}
           <FlowBar playback={playback} />
           <FocusIndicator />
+          <LayoutBusyBar />
+          <TidyBar />
+          <ArrangeBar />
           {!presenting && !tracing && <FlowLensIndicator />}
           <DepthStack />
           <DepthAnnouncer />
@@ -724,6 +779,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         durable={session.durable}
         presenting={presenting}
         onResolveConflict={(choice) => void session.resolveConflict(choice)}
+        onSaveFailure={{
+          retry: () => void session.retrySave(),
+          exportCopy: () => void session.exportUnsaved(),
+          leave: () => returnHome(session.leaveWithoutSaving),
+        }}
       />
       </div>
       {sessionOver && (
@@ -764,26 +824,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   );
 }
 
-/**
- * The one screen-reader-facing signal Intent Continuation makes: a polite announcement when a new
- * offer appears — once per offer, never on a re-show — so a ghost that is only visual otherwise
- * is still discoverable without a pointer.
- */
-function ContinuationAnnouncer() {
-  const message = useUiStore((state) => {
-    const offer = state.continuation;
-    if (offer?.trigger !== 'select') return '';
-    const ids = offer.alternatives ?? [];
-    if (ids.length < 2) return `Suggested: ${offer.label}. Press Tab to add it.`;
-    const position = `${ids.indexOf(offer.id) + 1} of ${ids.length}`;
-    return `Suggested: ${offer.label}, ${position}. Press Tab to add it, or ] for the next.`;
-  });
-  return (
-    <div className="dc-sr-only" aria-live="polite">
-      {message}
-    </div>
-  );
-}
+/** The keys that nudge the selection; see `nudgeCoalescer.ts`. */
+const PLAIN_ARROWS: ReadonlySet<string> = new Set(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']);
 
 /**
  * Keyboard handling for the whole editor.
@@ -791,14 +833,15 @@ function ContinuationAnnouncer() {
  * Anything typed into a field belongs to that field, so the handler bails out
  * the moment focus is inside an input — otherwise pressing "n" while renaming a
  * node would spawn a note.
+ *
+ * Exported only for `tests/keyboard-dispatch.test.tsx`, which renders this hook directly (via
+ * `renderHook`) to fire real `keydown` events against the actual dispatch switch below — so a
+ * binding changed here can't silently drift from what `shortcutLookup.ts` tells the palette and
+ * Shortcut Sheet to display. Not part of the app's own render path otherwise; `EditorScreen`
+ * below still calls it exactly as before. The export costs this file fast refresh (edits to it
+ * reload the editor rather than patching it in place), which is a development convenience only;
+ * moving the hook out would split the dispatch from the helpers it shares with this screen.
  */
-/** Exported only for `tests/keyboard-dispatch.test.tsx`, which renders this hook directly (via
- *  `renderHook`) to fire real `keydown` events against the actual dispatch switch below — so a
- *  binding changed here can't silently drift from what `shortcutLookup.ts` tells the palette and
- *  Shortcut Sheet to display. Not part of the app's own render path otherwise; `EditorScreen`
- *  below still calls it exactly as before. The export costs this file fast refresh (edits to it
- *  reload the editor rather than patching it in place), which is a development convenience only;
- *  moving the hook out would split the dispatch from the helpers it shares with this screen. */
 // oxlint-disable-next-line react/only-export-components -- see above
 export function useKeyboard({
   createAtPointer,
@@ -852,10 +895,11 @@ export function useKeyboard({
    * The keyboard-only path into the context menu (Shift+F10 / the Menu key, standard desktop
    * convention) — anchors the menu to the current selection instead of a click point, since there's
    * no pointer position to use. A single node/edge/multi-selection each resolve their own screen
-   * anchor; nothing selected is a no-op, since there's no keyboard-native equivalent of "a point on
-   * empty canvas" — the pane menu stays mouse-only, a deliberate scope boundary, not an oversight.
-   * Presentation Mode is excluded for free: `selection` is always empty there (`setMode('present')`
-   * clears it), so this always falls through to the no-op branch without needing its own check.
+   * anchor; with nothing selected the pane menu (Add here, Paste, Tidy up, Arrange) opens at the
+   * middle of the canvas, the one point a keyboard has — it was mouse-only, which left Paste and the
+   * layout commands with no keyboard route to them from the canvas itself. Presentation Mode, a flow
+   * trace and a read-only view have no pane menu (`Canvas`'s `interactive` and `readOnly` guards),
+   * so they stay a no-op.
    */
   const openContextMenuFromKeyboard = useCallback(() => {
     const state = useEditorStore.getState();
@@ -890,6 +934,12 @@ export function useKeyboard({
         // reasonable, simple fallback; the menu's own content is correct regardless of where it opens.
         : screenToFlowPosition(canvasCenter());
       target = { kind: 'selection' };
+    } else if (nodes.length + edges.length === 0) {
+      const ui = useUiStore.getState();
+      if (state.mode !== 'edit' || ui.flowTrace || ui.readOnly !== null) return;
+      const middle = screenToFlowPosition(canvasCenter());
+      flowPoint = { x: Math.round(middle.x), y: Math.round(middle.y) };
+      target = { kind: 'pane' };
     }
 
     if (!flowPoint || !target) return;
@@ -956,7 +1006,7 @@ export function useKeyboard({
         return;
       }
       const target = pointer.known
-        ? { x: pointer.x, y: pointer.y }
+        ? pointerFlow()
         : screenToFlowPosition(canvasCenter());
       useEditorStore.getState().paste(target);
     };
@@ -977,6 +1027,12 @@ export function useKeyboard({
       if (ui.commandPaletteOpen || ui.contextMenu || ui.interactionActive || modalIsOpen()) return;
       const state = useEditorStore.getState();
       if (event.type === 'cut' && state.mode === 'present') return;
+      if (ui.sequenceFocus && state.selection.nodes.includes(ui.sequenceFocus.nodeId)) {
+        keyedClipboardText = null;
+        event.preventDefault();
+        ui.notify('Select the sequence frame to copy or cut it.');
+        return;
+      }
       // The ⌘C/⌘X keydown already copied (or cut) and left its text here: write that, don't repeat
       // the gesture — a second cut would find nothing left to cut.
       const keyed = keyedClipboardText;
@@ -1019,7 +1075,11 @@ export function useKeyboard({
   }, []);
 
   useEffect(() => {
+    const nudges = createNudgeCoalescer((dx, dy, ids) => useEditorStore.getState().nudgeSelection(dx, dy, ids));
     const onKeyDown = (event: KeyboardEvent) => {
+      // Whatever this key does sees every nudge pressed before it: only a plain arrow goes on adding
+      // to the one waiting for its frame.
+      if (!PLAIN_ARROWS.has(event.key) || event.altKey || event.metaKey || event.ctrlKey) nudges.flush();
       const readOnly = useUiStore.getState().readOnly;
       if (isEditableTarget(event.target) || useUiStore.getState().flowTrace || (readOnly && !readOnly.collaborative)) return;
 
@@ -1053,6 +1113,10 @@ export function useKeyboard({
       // offers present-only commands, so the keyboard must not be the one way to edit.
       const presenting = state.mode === 'present';
 
+      // Something selected inside a sequence takes its keys first: Delete is then that message, not
+      // the sequence; an arrow moves it, not the whole shape. See `sequenceKeys.ts`.
+      if (!presenting && !playback.active && useUiStore.getState().readOnly === null && handleSequenceKey(event)) return;
+
       // `]` / `[` step through Intent Continuation's alternatives — or, with nothing showing, ask
       // for them. Matched on the produced character, not the physical key, and ahead of the
       // Cmd/Ctrl branch because AltGr arrives as Ctrl+Alt on Windows (German `[` is AltGr+8, and
@@ -1083,6 +1147,12 @@ export function useKeyboard({
             return;
           case 'c':
           case 'x': {
+            const focus = useUiStore.getState().sequenceFocus;
+            if (focus && state.selection.nodes.includes(focus.nodeId)) {
+              event.preventDefault();
+              useUiStore.getState().notify('Select the sequence frame to copy or cut it.');
+              return;
+            }
             // Not `preventDefault`: the browser's own copy event still follows, and `onCopyOrCut`
             // writes this text through `clipboardData` — the one path that reaches the system
             // clipboard where `navigator.clipboard` is refused (a self-hosted copy over plain HTTP,
@@ -1253,7 +1323,9 @@ export function useKeyboard({
         case 'Backspace':
         case 'Delete':
           event.preventDefault();
-          state.deleteSelection();
+          // ⌥⌫ takes a shape out of the middle of a line and joins the line back up.
+          if (event.altKey) state.deleteSelectionKeepingLines();
+          else state.deleteSelection();
           return;
         case 'Escape': {
           if (useUiStore.getState().recoveryConnect) {
@@ -1265,6 +1337,17 @@ export function useKeyboard({
           // Mid endpoint drag, Escape cancels that drag (the handle's own listener) — and only that.
           if (useUiStore.getState().reconnectDragActive) return;
           arm(null);
+          // The Pencil goes down first: Escape is how you get back to selecting.
+          if (useUiStore.getState().pencil) {
+            flushSmartInk();
+            useUiStore.getState().setPencil(null);
+            return;
+          }
+          // Chosen sketch strokes are put down before anything else is.
+          if (useUiStore.getState().inkSelection.length > 0) {
+            useUiStore.getState().setInkSelection([]);
+            return;
+          }
           // The Open points panel is a surface you opened, so it closes before anything you were
           // doing on the canvas does. (The open-point popover has its own capture-phase Escape, like
           // every popover.) Only when it is actually on screen: presentation hides the panel without
@@ -1328,7 +1411,8 @@ export function useKeyboard({
           if (playback.active || state.focus.active) break;
           const uiState = useUiStore.getState();
           const offer = uiState.continuation;
-          if (!offer || offer.trigger !== 'select' || uiState.quickConnect || uiState.openAttachmentDetail) break;
+          // The Pencil hides the ghost; Tab must not add a shape nobody can see.
+          if (!offer || offer.trigger !== 'select' || uiState.quickConnect || uiState.openAttachmentDetail || uiState.pencil) break;
           if (!focusIsOnCanvas()) break;
           event.preventDefault();
           state.acceptContinuation(offer);
@@ -1418,12 +1502,21 @@ export function useKeyboard({
             return;
           }
 
+          const inkChosen = useUiStore.getState().inkSelection;
+          if (state.selection.nodes.length === 0 && inkChosen.length > 0) {
+            event.preventDefault();
+            const step = event.shiftKey ? 10 : 1;
+            state.moveInk(inkChosen, direction === 'left' ? -step : direction === 'right' ? step : 0, direction === 'up' ? -step : direction === 'down' ? step : 0);
+            return;
+          }
           if (state.selection.nodes.length === 0) return;
           event.preventDefault();
           const magnitude = event.shiftKey ? 10 : 1;
           const dx = direction === 'left' ? -magnitude : direction === 'right' ? magnitude : 0;
           const dy = direction === 'up' ? -magnitude : direction === 'down' ? magnitude : 0;
-          state.nudgeSelection(dx, dy);
+          // Held down, the key repeats faster than a large diagram can plan its connectors: the
+          // presses of one frame are applied as one nudge (`nudgeCoalescer.ts`).
+          nudges.push(dx, dy, state.selection.nodes);
           return;
         }
         case 'Enter':
@@ -1463,7 +1556,47 @@ export function useKeyboard({
           break;
       }
 
+      // ⇧ + a shape's letter turns the selected shapes into that shape (⇧Q → Queue, ⇧D → Data
+      // Store…), keeping their connectors. By `event.code`, so Caps Lock's capital letter — which
+      // arrives without Shift — still drops a shape rather than converting one.
+      if (event.shiftKey && !event.altKey && !meta && event.code.startsWith('Key')) {
+        const target = presetForShortcut(event.code.slice(3));
+        const convertible =
+          target !== undefined &&
+          isConvertibleType(target.type) &&
+          state.selection.nodes.some((id) => {
+            const node = state.document.nodes.find((n) => n.id === id);
+            return node !== undefined && isConvertibleType(node.type) && node.type !== target.type;
+          });
+        if (convertible && !playback.active && !state.focus.active && !(!focusIsOnCanvas() && keyboardFocusIsOnControl())) {
+          event.preventDefault();
+          if (!event.repeat) state.convertSelection(target.type as ConvertibleType);
+          return;
+        }
+      }
+
       if (event.shiftKey || event.altKey) return;
+      // The Pencil: P picks it up (and, in hand, switches Sketch ↔ Smart Ink), H highlights, E erases.
+      // Read-only canvases and presentations returned above; a view-only collaborator draws nothing.
+      if (['p', 'h', 'e'].includes(event.key.toLowerCase()) && !(!focusIsOnCanvas() && keyboardFocusIsOnControl())) {
+        if (useUiStore.getState().readOnly) return;
+        event.preventDefault();
+        if (event.repeat) return;
+        const ui = useUiStore.getState();
+        const key = event.key.toLowerCase();
+        if (key === 'p') {
+          if (ui.pencil === 'pen') {
+            const smart = !ui.inkPrefs.smart;
+            if (!smart) cancelSmartInk();
+            ui.setInkPrefs({ smart });
+            ui.notify(smart ? 'Smart Ink — rough shapes and arrows become real ones.' : 'Sketch — ink stays as drawn.');
+          } else ui.setPencil('pen');
+        } else {
+          flushSmartInk();
+          ui.setPencil(key === 'h' ? 'highlighter' : 'eraser');
+        }
+        return;
+      }
       // Not while someone is working a control from the keyboard — Tabbed onto a toolbar, panel or
       // popover button, a letter is them moving through it, and dropping a shape at the pointer
       // behind their back is the last thing it means. A button that merely kept focus after a click
@@ -1478,7 +1611,11 @@ export function useKeyboard({
     };
 
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      // A press nobody saw applied yet must not be lost with the listener.
+      nudges.flush();
+    };
   }, [
     arm,
     createAtPointer,

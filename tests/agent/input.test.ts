@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { agentStarter } from '../fixtures/gallery';
 import { AgentError } from '../../src/agent/errors';
 import { readCreate } from '../../src/agent/input';
 
@@ -148,12 +149,19 @@ describe('reading a create_diagram request', () => {
   });
 
   it('knows a starter\'s ids (prefix + key) before the request\'s own relationships refer to them', () => {
-    const spec = readCreate({
-      title: 'T',
-      starter: { id: 'event-driven', prefix: 'ed-' },
-      nodes: [{ id: 'audit', type: 'worker', label: 'Audit' }],
-      relationships: [{ id: 'x', from: 'ed-topic', to: 'audit' }],
-    });
+    const spec = readCreate(
+      {
+        title: 'T',
+        starter: { id: 'event-driven', prefix: 'ed-' },
+        nodes: [{ id: 'audit', type: 'worker', label: 'Audit' }],
+        relationships: [{ id: 'x', from: 'ed-topic', to: 'audit' }],
+      },
+      agentStarter('event-driven'),
+    );
     expect(spec.relationships[0]).toMatchObject({ from: 'ed-topic', to: 'audit' });
+  });
+
+  it('refuses a starter that isn\'t downloaded, saying how to go on', () => {
+    expect(() => readCreate({ title: 'T', starter: { id: 'event-driven' } })).toThrow(/Load starters|Compose the diagram/);
   });
 });

@@ -6,6 +6,7 @@ import {
   copySource,
   copySvg,
   countPlayableFlows,
+  countSequences,
   exportEveryLevel,
   exportPngFile,
   exportProjectFile,
@@ -105,8 +106,8 @@ function describeCopy(what: string, result: CopyResult): string {
 }
 
 /**
- * Export is choose → configure → export: one mode picker, one contextual panel for whatever's
- * selected, one dominant CTA, and — beside it — the artifact you're about to get. The dialog
+ * Export is choose → configure → export: what you want to do down the left, one contextual panel
+ * for whatever's selected, one dominant CTA, and — beside it — the artifact you're about to get. The dialog
  * remembers the last mode/format used (`readPreference`/`writePreference`, the same mechanism
  * `sequenceFormat` already used) so reopening lands where the user left off.
  */
@@ -163,6 +164,9 @@ export function ExportDialog() {
     };
   }, [open, document]);
   const [busy, setBusy] = useState(false);
+  // Esc, the X and the backdrop do nothing while an export is running (closing then would orphan the
+  // download); a press on any of them says so here instead of being a silent no-op.
+  const [closeHeld, setCloseHeld] = useState(false);
   const [protectedLink, setProtectedLink] = useState(true);
   const [passphrase, setPassphrase] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -226,6 +230,11 @@ export function ExportDialog() {
     onFinished: () => close(),
   });
 
+  // The notice belongs to one wait: once nothing is running it is dropped, so the next export does
+  // not open with a stale "still exporting".
+  const working = busy || Boolean(docs?.busy);
+  if (!working && closeHeld) setCloseHeld(false);
+
   const close = () => {
     requestExportSelection(false);
     useUiStore.setState({ exportModeRequest: null });
@@ -283,7 +292,9 @@ export function ExportDialog() {
   // count spans every room, since the source does.
   const playableFlowCount = countPlayableFlows(document);
   const sourceInfo = SOURCE_FORMAT_INFO[sourceFormat];
-  const sourceEmpty = sourceInfo.family === 'sequence' && playableFlowCount === 0;
+  // A sequence drawn on the canvas is sequence source too, with or without a Flow beside it.
+  const sequenceCount = countSequences(document);
+  const sourceEmpty = sourceInfo.family === 'sequence' && playableFlowCount + sequenceCount === 0;
   // The text itself, generated on every render the Source panel shows — a few milliseconds for a
   // large canvas, and it is exactly what the file and the clipboard will get.
   const sourceText = effectiveMode === 'sequence' && !sourceEmpty ? sourceTextFor(document, sourceFormat) : null;
@@ -343,7 +354,7 @@ export function ExportDialog() {
               type: 'file',
               icon: 'pencil',
               badge: 'DRAFTCANVAS',
-              meta: `${count(document.nodes.length, 'element')} · ${count(document.edges.length, 'connector')}${backgroundNote}`,
+              meta: `${count(document.nodes.length, 'shape')} · ${count(document.edges.length, 'connector')}${backgroundNote}`,
             },
           }
         : {
@@ -381,9 +392,9 @@ export function ExportDialog() {
               icon: 'code',
               badge: sourceInfo.badge,
               meta: sourceEmpty
-                ? 'No Flow yet'
+                ? 'Nothing yet'
                 : sourceInfo.family === 'sequence'
-                  ? `${count(playableFlowCount, 'Flow')} · plain text`
+                  ? `${[playableFlowCount > 0 ? count(playableFlowCount, 'Flow') : null, sequenceCount > 0 ? count(sequenceCount, 'sequence') : null].filter(Boolean).join(' · ')} · plain text`
                   : `${count(sourceText?.split('\n').length ?? 0, 'line')} · ${sourceFormat === 'drawio' ? 'XML' : 'plain text'}`,
             },
           };
@@ -466,9 +477,9 @@ export function ExportDialog() {
       : effectiveMode === 'document'
       ? documentFormat === 'editable'
         ? {
-            label: 'Export document',
+            label: 'Export file',
             disabled: busy,
-            onClick: () => void run(() => exportProjectFile(fileWithLiveViewport(useEditorStore.getState())), 'Document export'),
+            onClick: () => void run(() => exportProjectFile(fileWithLiveViewport(useEditorStore.getState())), 'File export'),
           }
         : { label: 'Export securely…', disabled: busy, onClick: () => setSecurePromptOpen(true) }
       : levelsOn
@@ -546,9 +557,9 @@ export function ExportDialog() {
   return (
     <Modal
       title="Export & share"
-      width={700}
+      width={880}
       className="dc-modal-export"
-      onClose={busy || docs?.busy ? () => {} : close}
+      onClose={working ? () => setCloseHeld(true) : close}
       footer={
         <div className="dc-export-footer">
           {/* Where it was made, said once on hover, focus or click of the lock — not a line of text
@@ -560,6 +571,11 @@ export function ExportDialog() {
               </button>
             )}
           </Tooltip>
+          {closeHeld && working && (
+            <span className="dc-export-hold" role="status">
+              {effectiveMode === 'share' && shareStage ? 'Cancel the link first, or wait for it.' : 'Still exporting — this closes when it is done.'}
+            </span>
+          )}
           <span className="dc-export-footer-actions">
             {copy && (
               <Button icon="copy" disabled={copy.disabled} onClick={() => void runCopy()}>
@@ -575,6 +591,8 @@ export function ExportDialog() {
         </div>
       }
     >
+      {/* What you want (left), then how and what you'll get (right). */}
+      <div className="dc-export-layout">
       <ExportModePicker mode={effectiveMode} onChange={(next) => { if (busy || docs?.busy) return; useUiStore.setState({ shareFromHere: false }); setMode(next); }} />
 
       <div className="dc-export-body" data-share={effectiveMode === 'share' ? 'true' : undefined} data-docs={effectiveMode === 'docs' ? 'true' : undefined}>
@@ -626,7 +644,7 @@ export function ExportDialog() {
             <ExportSequencePanel
               format={sourceFormat}
               onFormatChange={setSourceFormatValue}
-              playableFlowCount={playableFlowCount}
+              playableFlowCount={playableFlowCount + sequenceCount}
               source={sourceText}
             />
           )}
@@ -635,6 +653,7 @@ export function ExportDialog() {
           {effectiveMode === 'share' && <span className="dc-share-preview-label">Recipient view</span>}
           {effectiveMode === 'docs' && docs ? <DocsPreview docs={docs} /> : <ExportArtifact fileName={artifact.fileName} visual={artifact.visual} empty={artifact.empty} />}
         </div>
+      </div>
       </div>
 
       {securePromptOpen && (

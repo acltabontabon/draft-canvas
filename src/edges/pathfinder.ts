@@ -135,6 +135,29 @@ export function polylineClear(points: readonly Point[], boxes: readonly Box[]): 
   return true;
 }
 
+/**
+ * The searched corners with the first and last runs square to the ends they meet. The search works
+ * on a half-pixel grid, and an end need not sit on it — a queue's tube is anchored on a quarter
+ * pixel — so the run out of such an end came back a quarter pixel aslant: not a level run to
+ * anything that rounds corners, which drew a spike at the shape instead of a stub. Every corner on
+ * the stub's own line takes the end's exact coordinate; nothing moves more than half a pixel.
+ */
+function squareEnds(corners: readonly Point[], from: Point, fromSide: Side, to: Point, toSide: Side): Point[] {
+  const out = corners.map((p) => ({ x: p.x, y: p.y }));
+  const square = (order: readonly Point[], end: Point, side: Side) => {
+    const axis = side === 'left' || side === 'right' ? 'y' : 'x';
+    const line = order[0]?.[axis];
+    if (line === undefined || line === end[axis] || Math.abs(line - end[axis]) > 0.5) return;
+    for (const p of order) {
+      if (p[axis] !== line) break;
+      p[axis] = end[axis];
+    }
+  };
+  square(out, from, fromSide);
+  square([...out].reverse(), to, toSide);
+  return out;
+}
+
 /** Drops corners that don't turn. */
 function simplify(points: readonly Point[]): Point[] {
   const out: Point[] = [];
@@ -412,7 +435,7 @@ export function orthogonalRoute(request: PathRequest, pops = MAX_POPS): PathResu
       continue;
     }
     if (!attempt.points) continue;
-    const points = simplify([from, ...attempt.points, to]);
+    const points = simplify([from, ...squareEnds(attempt.points, from, fromSide, to, toSide), to]);
     if (polylineClear(points, shapes)) return { points, status: 'clear', work };
   }
   return { points: null, status: exhausted ? 'budget' : 'blocked', work };

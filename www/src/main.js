@@ -1,7 +1,6 @@
 import { setUpDownloads } from './downloads.js';
-import { setUpStudio } from './studio.js';
-
-const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+import { setUpGallery } from './gallery.js';
+import { animateOverviewInk } from './pencil.js';
 
 function setUpCopyButtons() {
   if (!navigator.clipboard?.writeText) return;
@@ -40,37 +39,16 @@ function setUpDownloadSheet() {
   const dialog = document.getElementById('download');
   if (!(dialog instanceof HTMLDialogElement) || typeof dialog.showModal !== 'function') return;
 
-  document.documentElement.dataset.downloadSheet = '';
-
   const open = () => {
     if (dialog.open) return;
-    delete dialog.dataset.closing;
     dialog.showModal();
     // The row the visitor most likely wants is first (see downloads.js); start there.
     dialog.querySelector('#targets a')?.focus({ preventScroll: true });
   };
 
-  const finish = () => {
-    delete dialog.dataset.closing;
-    dialog.close();
+  dialog.addEventListener('close', () => {
     if (location.hash === '#download') history.replaceState(null, '', location.pathname + location.search);
-  };
-
-  const close = () => {
-    if (!dialog.open || 'closing' in dialog.dataset) return;
-    if (reduceMotion.matches) return finish();
-    dialog.dataset.closing = '';
-    // A fallback in case the exit animation never runs, which would leave the sheet stuck open.
-    const timer = setTimeout(finish, 400);
-    dialog.addEventListener(
-      'animationend',
-      () => {
-        clearTimeout(timer);
-        finish();
-      },
-      { once: true },
-    );
-  };
+  });
 
   for (const trigger of document.querySelectorAll('[data-download]')) {
     trigger.addEventListener('click', (event) => {
@@ -79,14 +57,10 @@ function setUpDownloadSheet() {
     });
   }
 
-  dialog.querySelector('[data-close]')?.addEventListener('click', close);
+  dialog.querySelector('[data-close]')?.addEventListener('click', () => dialog.close());
   // A click on the backdrop lands on the <dialog> itself; the sheet inside fills the dialog box.
   dialog.addEventListener('click', (event) => {
-    if (event.target === dialog) close();
-  });
-  dialog.addEventListener('cancel', (event) => {
-    event.preventDefault();
-    close();
+    if (event.target === dialog) dialog.close();
   });
 
   // A shared link to the downloads opens them.
@@ -96,7 +70,20 @@ function setUpDownloadSheet() {
   });
 }
 
+function animateClosingCanvas() {
+  if (!matchMedia('(prefers-reduced-motion: no-preference)').matches || !('IntersectionObserver' in window)) return;
+  const closing = document.getElementById('closing');
+  const observer = new IntersectionObserver(([entry]) => {
+    if (entry.intersectionRatio < 0.35) return;
+    closing.dataset.drawn = '';
+    observer.disconnect();
+  }, { threshold: 0.35 });
+  observer.observe(closing);
+}
+
 setUpDownloads();
 setUpDownloadSheet();
 setUpCopyButtons();
-setUpStudio();
+animateOverviewInk();
+setUpGallery();
+animateClosingCanvas();

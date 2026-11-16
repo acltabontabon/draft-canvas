@@ -8,7 +8,7 @@ import { LIMITS } from '../document/limits';
 import type { DraftDocument, DraftNode } from '../document/types';
 import type { Change } from './changes';
 import { nodeValue, wireSettings } from './diff';
-import { indexOf } from './fileIndex';
+import { elementsOf, indexOf } from './fileIndex';
 import { MAX_MESSAGE_BYTES } from './protocol';
 
 /**
@@ -80,17 +80,18 @@ export function growthOf(before: DraftDocument, after: DraftDocument, changes: r
     for (const [id, located] of index.nodes) if (inRemoved(located.room) && !next.nodes.has(id)) bytes -= gone(nodeValue(located.value), located.room);
     for (const [id, located] of index.edges) if (inRemoved(located.room) && !next.edges.has(id)) bytes -= gone(located.value, located.room);
     for (const [id, located] of index.flows) if (inRemoved(located.room) && !next.flows.has(id)) bytes -= gone(located.value, located.room);
+    for (const [id, located] of index.ink) if (inRemoved(located.room) && !next.ink.has(id)) bytes -= gone(located.value, located.room);
   }
   // Elements whose value this edit also sets: that change counts them at their new depth already.
-  const valued = new Set(changes.filter((change) => (change.kind === 'node' || change.kind === 'edge' || change.kind === 'flow') && change.value !== null).map((change) => `${change.kind}:${(change as { id: string }).id}`));
+  const valued = new Set(changes.filter((change) => (change.kind === 'node' || change.kind === 'edge' || change.kind === 'flow' || change.kind === 'ink') && change.value !== null).map((change) => `${change.kind}:${(change as { id: string }).id}`));
   for (const change of changes) {
     switch (change.kind) {
       case 'node':
       case 'edge':
-      case 'flow': {
-        const lookup = change.kind === 'node' ? index.nodes : change.kind === 'edge' ? index.edges : index.flows;
-        const was = lookup.get(change.id);
-        const room = (change.kind === 'node' ? next.nodes : change.kind === 'edge' ? next.edges : next.flows).get(change.id)?.room ?? change.room;
+      case 'flow':
+      case 'ink': {
+        const was = elementsOf(index, change.kind).get(change.id);
+        const room = elementsOf(next, change.kind).get(change.id)?.room ?? change.room;
         const own = (value: unknown) => (change.kind === 'node' ? nodeValue(value as DraftNode) : value);
         if (change.value) bytes += written(change.value, depth(next, room)).bytes + (was ? 0 : SEPARATOR_BYTES);
         if (was) bytes -= written(own(was.value), depth(index, was.room)).bytes + (change.value ? 0 : SEPARATOR_BYTES);
@@ -112,9 +113,8 @@ export function growthOf(before: DraftDocument, after: DraftDocument, changes: r
       // The same bytes elsewhere — but at another depth, every line of it indented more or less (a
       // shape takes its rooms along).
       case 'move': {
-        const lookup = change.target === 'node' ? index.nodes : change.target === 'edge' ? index.edges : index.flows;
-        const was = lookup.get(change.id);
-        const now = (change.target === 'node' ? next.nodes : change.target === 'edge' ? next.edges : next.flows).get(change.id);
+        const was = elementsOf(index, change.target).get(change.id);
+        const now = elementsOf(next, change.target).get(change.id);
         if (!was || !now) break;
         const shift = depth(next, now.room) - depth(index, was.room);
         if (shift === 0) break;
@@ -139,7 +139,7 @@ export function growthOf(before: DraftDocument, after: DraftDocument, changes: r
 export function idsUnique(file: DraftDocument): boolean {
   const count = totals(file);
   const index = indexOf(file);
-  return index.nodes.size === count.nodes && index.edges.size === count.edges && index.flows.size === count.flows && new Set(file.openPoints.map((point) => point.id)).size === file.openPoints.length;
+  return index.nodes.size === count.nodes && index.edges.size === count.edges && index.flows.size === count.flows && index.ink.size === count.ink && new Set(file.openPoints.map((point) => point.id)).size === file.openPoints.length;
 }
 
 /** The document-wide limits `validate.ts` holds a file to, so the owner's file always reopens whole. */
@@ -149,6 +149,7 @@ export function withinLimits(file: DraftDocument): boolean {
     count.nodes <= LIMITS.maxNodes &&
     count.edges <= LIMITS.maxEdges &&
     count.flows <= LIMITS.maxFlows &&
+    count.ink <= LIMITS.maxInkStrokes &&
     file.openPoints.length <= LIMITS.maxOpenPoints
   );
 }

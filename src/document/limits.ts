@@ -32,11 +32,16 @@ export const LIMITS = {
   maxDescriptionLength: 280,
   /** "Spring Boot 3, Kotlin" — a line, not a stack listing. */
   maxTechnologyLength: 60,
+  /** The most instances a Service can be drawn with (`DraftNode.replicas`). */
+  maxReplicas: 99,
   maxIdLength: 128,
+  /** Stacking order is clamped to ±this: an unbounded `z` is only ever a way to overflow a sort. */
+  maxZ: 10_000,
   /** Coordinates are clamped to keep the viewport maths well-conditioned. */
   maxCoordinate: 1_000_000,
   minNodeSize: 24,
   maxNodeSize: 20_000,
+  maxSequenceNodeSize: 200_000,
   minZoom: 0.1,
   maxZoom: 4,
   maxAttachmentsPerNode: 12,
@@ -56,7 +61,19 @@ export const LIMITS = {
   maxOpenPointTargets: 40,
   /** Bend points on one connector — a hand-routed line needs a handful; more is a scribble. */
   maxWaypointsPerEdge: 32,
+  /**
+   * Handwritten strokes across the whole file. A review covered in notes is a few hundred; this is
+   * room for a long workshop while keeping a file, and every collaborator's copy of it, small.
+   */
+  maxInkStrokes: 4000,
+  /** Points in one stroke once simplified (`ink/capture.ts` thins a stroke before it is kept). */
+  maxInkPoints: 2000,
+  /** A stroke's nominal width, in room units: a hairline pen to a broad highlighter. */
+  minInkSize: 0.5,
+  maxInkSize: 120,
   maxConditionLength: 120,
+  /** "daily 02:00 UTC" — a few words, not a schedule. */
+  maxCadenceLength: 32,
   maxResponseLength: 120,
   /**
    * The largest background image a `.draftcanvas` file carries inline (`BackgroundSettings.image`),
@@ -64,6 +81,16 @@ export const LIMITS = {
    * most, so this keeps a file with a backdrop well inside `maxFileBytes` and a `git diff` bearable.
    */
   maxEmbeddedBackgroundBytes: 2 * 1024 * 1024,
+  /** One sequence. Past forty lifelines nobody can follow a message across the page. */
+  maxSequenceParticipants: 40,
+  /** Messages, notes and fragments in one sequence, at every depth. */
+  maxSequenceItems: 600,
+  /** Fragments inside fragments. Bounds the walk a hostile file can ask for. */
+  maxSequenceDepth: 8,
+  maxSequenceOperands: 12,
+  maxSequenceGroups: 20,
+  maxSequenceNameLength: 120,
+  maxSequenceNoteLength: 1000,
 } as const;
 
 export const DEFAULTS = {
@@ -120,4 +147,8 @@ export const DEFAULTS = {
    *  `height` entirely). */
   componentWidth: 152,
   componentHeight: 56,
+  /** An empty sequence: room for its title and the first participant. It is sized to what it holds
+   *  from then on (`sequence/fit.ts`). */
+  sequenceWidth: 320,
+  sequenceHeight: 200,
 } as const;

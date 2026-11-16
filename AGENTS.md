@@ -53,8 +53,13 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Only `src/desktop/tauri/` imports `@tauri-apps/*`. Other code uses `DesktopApi` in
   `src/desktop/api.ts`; desktop-only code stays behind `__DESKTOP__`.
 - Use `localStorage` only for tiny preferences through `src/lib/preferences.ts`. Documents use IndexedDB.
-- `src/starters/` is data. `build.ts` derives connector semantics from `connectorSemantics.ts`.
-  No hardcoded colors, fonts or personality; starters create ordinary nodes and edges.
+- Starters are `.draftcanvas` files in the public starters gallery
+  (github.com/acltabontabon/draft-canvas-starters), not app code. `src/gallery/` reads them only
+  after the person chooses **Load starters**; `src/gallery/remote.ts` is the only `fetch` in `src/`,
+  to that repository only. Every file is checked against `catalog.json`'s SHA-256 and opened with
+  `parseDocument` before it is kept. `tests/starter-files.test.ts` is the quality gate for starter
+  files; `tests/fixtures/starters/` is a vendored snapshot (`npm run starters:fixtures`) and
+  `tests/fixtures/starters-v1/` the frozen old catalog for routing and performance corpora.
 - Commands live in `src/commands/registry.ts`, with jump targets in `search.ts`. Call existing store
   actions or camera methods, never document operations directly. Add an operation and store wrapper
   before naming a new command.
@@ -91,6 +96,9 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   size or connector semantics. Their shared glyph is `openPoints/marker.ts`; use it in both canvas
   and export. Delete elements through `removeElements`, or prune attachments in the same operation
   with `pruneOpenPoints`.
+- The marks above a shape's top-right corner (technology mark, attachment tab, open-point tab) are
+  placed only by `document/markerRail.ts`, in one row. Never position one on its own, and draw each
+  from its shared describe function (`describeAttachmentTab`, `describeMarker`) in canvas and export.
 - Connector visuals have two renderers: `canvas/DraftEdgeView.tsx` and `edges/describe.ts`.
   Update both for badges, dashes, chips or other visual changes. Continuation and agent previews
   are not exported and reuse the shared ghost routing, dash and marker helpers.
@@ -100,6 +108,31 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Camera movement decisions belong in pure `presentation/framing.ts`. While a move is in flight,
   `useFlowPlayback` judges against the requested camera. A presenter's pan sets `framing: 'manual'`;
   guided framing stays off until requested again.
+
+### Tidy up
+
+- Tidy up is the gentle cleanup (`agent/tidy.ts`): it never lays a view out again and never moves a
+  shape outside its scope. Layout from scratch stays in Arrange.
+- Its preview lives in `uiStore.tidyPreview`, never the document, history or autosave. Only
+  `editorStore.commitTidy` applies it, as one undo step, and only to the room it was worked out from.
+- Arrange's proportion rules (wider boxes for long names, gaps sized to their captions, a reading
+  direction weighed by how it fits a screen) belong to Arrange and new layouts, never Tidy up. Its
+  preview lives in `uiStore.arrangePreview`; only `editorStore.commitArrange` applies it.
+- Every way into Arrange or Tidy up (palette, menus, the desktop menu, Nodi's skills) goes through
+  `commands/arrange.ts`, which shows a preview first. The work runs on the agent worker
+  (`agent/layoutPlan.ts` through `offThread.ts`, Cancel included) and is bounded by a deterministic
+  work budget (`route.ts`'s `withBudget`), never a wall-clock deadline: the same diagram gives the
+  same preview on any machine, and a result that ran out says `partial`.
+
+### Sketches and Smart Ink
+
+- Sketches (`DraftInk`) are per-room annotation in `ink`, absent when empty. They never take part in
+  routing, layout, Arrange, Tidy up, semantics, Traffic or agent reads, and nothing turns one into a
+  shape except an explicit Smart Ink conversion through `editorStore.inkToShape`/`inkToConnector`.
+- `src/ink/` imports `document/` only and stays free of React, the store and the DOM. Geometry
+  (`recognize.ts`) and meaning (`interpret.ts`) stay apart; Smart Ink offers only existing shape kinds.
+- Draw ink with `render/ink.ts` in both canvas and export. A stroke in progress is written to the DOM
+  directly (`canvas/liveInk.ts`), never through React state, and kept as one stroke at pen-up.
 
 ### Live collaboration
 
@@ -138,9 +171,10 @@ and the presence hooks in `ui/collab/`. The theme and personality hooks live in 
 labels and presets in `lib/`.
 Library and editor are states of `src/App.tsx`, with no router. Keep the editor's Vite `base: './'`.
 
-`depth/`, `starters/` and `traffic/` import only `document/`; `layout/` also imports `edges/bundles`. `collab/`
-imports `document/`, `depth/` and `lib/`. `continuation/` also imports `render/text` and `edges/` routing
-helpers; `openPoints/` also imports `depth/` and `render/` types. None of these import UI, canvas or
+`depth/`, `gallery/` and `traffic/` import only `document/`; `layout/` also imports `edges/bundles`. `collab/`
+imports `document/`, `depth/` and `lib/`. `history/` imports `document/` and `depth/`, plus `collab/selective`'s
+`changeKeys`, which records what an edit touched while a session is live. `continuation/` also imports
+`render/text` and `edges/` routing helpers; `openPoints/` also imports `depth/` and `render/` types. None of these import UI, canvas or
 store modules. `agent/` may consume these and rendering/export helpers, never UI or store modules. `depth/c4.ts` shares C4 role and scope derivation with the editor and agent.
 
 `www/` is a separate Vite project with its own lockfile and no shared app dependencies. Web assembly

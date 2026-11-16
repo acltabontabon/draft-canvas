@@ -28,32 +28,46 @@ npm run e2e:web         # checks against the assembled artifact
 Run `site:preview` before shipping: `scripts/serve-web.mjs` mimics the hosts' trailing-slash
 redirects and 404 pages.
 
-The landing page is a single charcoal page built from `www/index.html`, one stylesheet and a few
-small scripts, with no webfonts. Its story is told with muted demo clips and one editor screenshot.
-Media loads when it nears the viewport, and reduced-motion preferences show static frames. The clips
-are cut from the demo recording by the media scripts below; the collaboration and open-points clips
-are standalone captures that those scripts do not regenerate. Generated clips and images are
-committed.
+## The landing page
+
+`www/index.html` is a static page with a feature overview, an **Architecture examples** index, six
+exhibits, a download dialog and a closing connector. Behavior worth knowing before you edit it:
+
+- **Exhibits are drawn from editable files.** Each of the six (Shopify inventory reservations, Slack
+  real-time messaging, Netflix Live Origin, Uber IngestionNext, Stripe Ledger, Discord message search)
+  is a `.draftcanvas` file in `www/examples/`, rendered by the editor's own SVG renderer. Each links
+  to the engineering write-up it models, and models only what that source describes.
+- **The pencil.** It draws the headline underline, connects the feature icons and plays each
+  exhibit's drawing sequence the first time that exhibit opens on a page load; after that the
+  finished diagram shows at once. Escape skips it, and reduced motion shows the finished diagram
+  immediately. A handwritten draft holds briefly before the finished diagram fades in.
+- **Exhibit interactions.** Pencil marks flag featured elements; hovering or focusing an element, or a
+  phrase under the caption, shows its note. Attachments (the paperclip) preview on hover or focus and
+  stay open on click. The Stripe Ledger exhibit nests C4 levels: breadcrumb, Escape and browser
+  Back/Forward move through the same level history.
+- Direct links open their exhibit or section; narrow windows scroll the diagram horizontally.
 
 ## The build
 
-- `www/vite.config.js` replaces `__VERSION__` with the root `package.json` version for download links.
-- It generates the CSP, hashing the one inline script, with `connect-src 'none'`.
+- `www/vite.config.js` fills in the root `package.json` version for desktop installer links and
+  inserts the generated diagram scenes.
+- It generates the CSP with `connect-src 'none'`.
 - `scripts/assemble-web.mjs` builds `dist-web/` from `site/` (`www/dist/`), `app/` (`dist/`),
   `legacy/` (`www/legacy/` plus `dist/` under `editor/`) and `cloudflare/` (Wrangler configs), then
   checks each part. `dist/` is left unchanged.
 
 ## The documentation
 
-`docs/` is the only copy of the docs. The site build renders it under `/docs/`.
+The site renders the repository's Markdown under `/docs/`. `/docs/` opens Getting started. Each
+article has a search control in its header and a grouped sidebar that opens the current article's
+topic. Groups with one page appear as direct links. Longer articles also show an on-page outline.
+Narrow screens use an expandable guide menu.
 
-- **Published:** `docs/index.md`, every guide, and `PUBLISHED_REFERENCE` in `www/scripts/docs.mjs`
-  (privacy and agent integration). Links to anything else go to GitHub.
-- **Sidebar:** the rows of the tables in `docs/index.md`, in order. A new guide appears once listed
-  there.
-- **Link checks:** a link to an unpublished page, anchor or image fails `npm run site:build`. Anchors
+- **Published:** the documents listed in `docs/index.md`. The same headings and links define the
+  sidebar groups and reading order. Source code and workflow links point to GitHub.
+- **Link checks:** broken document, section and image links fail `npm run site:build`. Anchors
   use GitHub's slug rule, as in `tests/docs.test.ts`.
-- **Release timing:** pages ship from the release tag, so doc changes go live with the next release.
+- **Publishing:** docs ship with the site. A docs-only push waits for the next site deploy or release.
 
 With `npm run site:dev`, refresh `http://localhost:5280/docs/` to see an edit.
 
@@ -61,15 +75,12 @@ With `npm run site:dev`, refresh `http://localhost:5280/docs/` to see an edit.
 
 | Command | Regenerates |
 | --- | --- |
-| `npm --prefix www run clips` | The Present and Inside clips and the editor film's poster in `www/public/clips/`, cut from `docs/media/demo.mp4` with ffmpeg |
+| `node --input-type=module -e "import { runnerImport } from 'vite'; await runnerImport('./www/scripts/checkout-preview.ts')"` | `www/src/checkout-views.json`: the diagram scenes and attachment previews, from `www/examples/` |
 | `npm --prefix www run social` | `og-image.png` and the Apple touch icon |
 
-The hero SVG is edited directly in `www/index.html`.
-
-Outputs are committed, so deploys need neither ffmpeg nor a browser. The 1200 × 630 social card
-combines `www/scripts/og-illustration.png` with editable lettering and the root package's release
-version. Keep text out of the source illustration, run `social` after changing it or the version,
-and check that the full headline remains visible at small preview sizes.
+Outputs are committed, so deploys need no browser. The 1200 × 630 social card uses the Shopify
+inventory diagram. Run `social` after changing the headline or that diagram, and check that the
+headline stays legible at small preview sizes.
 
 ## Deploying
 
@@ -87,11 +98,12 @@ Triggers (all share the `pages` concurrency group):
   version that is not the latest published release; that release's deploy publishes it instead.
 - **On demand:** run it from `main` (site only, unless `release-tag` is set).
 
-Off a release tag, `pages.yml` builds the newest stable `vX.Y.Z` with this commit's `www/` and
-`scripts/assemble-web.mjs` laid over it, and tests it in Chromium, Firefox and WebKit. The relay and
-the editor's hosting (`relay*.js`, `relay.jsonc`, `app.jsonc`, `app.headers`) come from the release
-wherever it has them, and are not deployed. So the editor, docs, relay and the editor's headers change
-only on a release; a push touching `www/cloudflare/` waits for the next one.
+Off a release tag, `pages.yml` builds the editor from the newest stable `vX.Y.Z` and the site and
+docs from the workflow commit. Acceptance tests in Chromium, Firefox and WebKit use the selected
+release's offline editor tests and the site's web tests and example fixtures. The relay and the
+editor's hosting (`relay*.js`, `relay.jsonc`, `app.jsonc`, `app.headers`) come from the release
+wherever it has them. A site-only deploy publishes the site and docs, and a release or withdrawal
+also publishes the editor and relay.
 
 **Withdrawal:** run `pages.yml` from `main` with `release-tag` set to the last good tag. Follow
 [the recovery procedure](reliability.md#withdrawal-and-recovery-procedure) first.
@@ -135,12 +147,11 @@ browsers connect directly.
   (`Sec-WebSocket-Protocol: draft-canvas.relay.v1, host.<secret>`); another host is closed with 4003.
   Each owner connection or departure renews the claim for 12 hours.
   No logging; observability is off in `relay.jsonc`.
-- **Limits:** one owner and 32 joining sockets per room, at most 4 of them from one address (per /64
-  for IPv6); text frames with at most 16,384 characters of data; 30 messages per 10 seconds per
-  socket, and the owner that much for every joining socket, since it answers each of them (past it,
-the owner's frames are dropped, never its socket); 60 new
-  sockets per minute per address. A room closes after 15 idle minutes, or 12 hours at most. The
-  owner's own reconnect replaces a socket the relay still thinks is open.
+- **Limits:** one owner and 32 joining sockets per room, at most 4 from one address (per /64 for
+  IPv6); text frames of at most 16,384 characters; 30 messages per 10 seconds per socket, and the
+  owner that many for every joining socket, since it answers each (past it the owner's frames are
+  dropped, never its socket); 60 new sockets per minute per address. A room closes after 15 idle
+  minutes, or 12 hours at most. The owner's reconnect replaces a socket the relay still thinks is open.
 - **Origins:** only `ALLOWED_ORIGINS`; by default the web editor and the desktop app.
 
 Code:

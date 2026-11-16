@@ -69,7 +69,7 @@ test.describe('Topic-aware relationships', () => {
     await expect(inspectorSelect(page, 'Interaction type')).toHaveText('No type');
 
     const guidance = page.locator('.dc-relationship-guidance-text');
-    await expect(guidance).toHaveText(/doesn't typically publish to a topic/);
+    await expect(guidance).toHaveText(/doesn’t typically publish to a topic/);
     await expect(page.getByRole('button', { name: 'Insert Worker' })).toBeVisible();
   });
 
@@ -91,8 +91,8 @@ test.describe('Topic-aware relationships', () => {
     // Both new connectors' own inferred captions read correctly — a more direct check than
     // clicking each short connector to select it, which the compact layout (the Worker node
     // necessarily overlapping both its own short edges) makes unreliable.
-    await expect(page.locator('svg text').filter({ hasText: 'consumed by' })).toBeVisible();
-    await expect(page.locator('svg text').filter({ hasText: 'publishes to' })).toBeVisible();
+    await expect(page.locator('.dc-edge-caption').filter({ hasText: 'consumed by' })).toBeVisible();
+    await expect(page.locator('.dc-edge-caption').filter({ hasText: 'publishes to' })).toBeVisible();
 
     await page.keyboard.press('Meta+z');
     await expect(page.locator('.dc-node')).toHaveCount(2);
@@ -128,7 +128,7 @@ test.describe('Topic-aware relationships', () => {
     // Still reads "Writes" — an explicit choice is never silently overwritten by a reconnect.
     await expect(relation).toHaveText('Writes');
     await expect(page.locator('.dc-relationship-guidance-text')).toHaveText(
-      /"Writes" doesn't typically apply to this connection/,
+      /"Writes" doesn’t typically apply to this connector/,
     );
     const fix = page.getByRole('button', { name: 'Use "publishes to" instead' });
     await expect(fix).toBeVisible();
@@ -176,13 +176,13 @@ test.describe('Request/response default caption', () => {
     // draws its reply line. A fresh connector no longer turns that on by
     // itself, so the caption is the plain relationship — turning Response on
     // in the connector's own editor is what brings "requests" back.
-    await expect(page.locator('svg text').filter({ hasText: 'calls' })).toBeVisible();
+    await expect(page.locator('.dc-edge-caption').filter({ hasText: 'calls' })).toBeVisible();
 
     await inspectorSelect(page, 'Protocol').click();
     await page.getByRole('option', { name: 'HTTP', exact: true }).click();
 
     // The protocol is not a caption on its own: the verb stays, and names the protocol with it.
-    await expect(page.locator('svg text').filter({ hasText: 'calls over HTTP' })).toBeVisible();
-    await expect(page.locator('svg text').filter({ hasText: /^calls$/ })).toHaveCount(0);
+    await expect(page.locator('.dc-edge-caption').filter({ hasText: 'calls over HTTP' })).toBeVisible();
+    await expect(page.locator('.dc-edge-caption').filter({ hasText: /^calls$/ })).toHaveCount(0);
   });
 });

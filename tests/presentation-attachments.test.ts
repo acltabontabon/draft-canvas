@@ -9,8 +9,8 @@ import {
   toggledReveal,
 } from '../src/presentation/presentationAttachments';
 import { resolveFlowSteps } from '../src/presentation/useFlowPlayback';
-import { buildStarter } from '../src/starters/build';
-import { starterById } from '../src/starters';
+import { buildStarter } from './fixtures/starters-v1/build';
+import { starterById } from './fixtures/starters-v1';
 
 function playbackOf(flow: DraftFlow, nodes: DraftNode[], edges: DraftEdge[]) {
   const nodesById = new Map(nodes.map((node) => [node.id, node]));

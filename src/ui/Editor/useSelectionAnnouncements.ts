@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { DraftDocument } from '../../document/types';
 import { announce } from '../../lib/announce';
-import { count } from '../../lib/plural';
+import { count, selectionCount } from '../../lib/plural';
 import { connectorReading, nodeLookupOf, nodeReading } from '../../nodes/readings';
 import { useEditorStore } from '../../store/editorStore';
 import { selectEdge, selectNode } from '../../store/selectors';
@@ -27,7 +27,7 @@ export function selectionAnnouncement(document: DraftDocument, selection: Select
     const edge = selectEdge(document, selection.edges[0]!);
     return edge ? connectorReading(edge, nodeLookupOf(document.nodes)) : null;
   }
-  return `${count(total, 'element')} selected`;
+  return `${selectionCount(selection.nodes.length, selection.edges.length)} selected`;
 }
 
 /**

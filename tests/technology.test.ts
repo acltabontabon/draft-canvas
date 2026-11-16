@@ -6,6 +6,7 @@ import { GENERIC_TECHNOLOGY_ICON, loadTechnologyIcon, nodeTechnologyIcon, techno
 import { dataStoreGlyphBounds } from '../src/document/dataStoreGeometry';
 import { DARK, LIGHT } from '../src/render/theme/tokens';
 import { renderDocumentSvg } from '../src/render/svg/document';
+import { RAIL_LIFT, RAIL_SIZE } from '../src/document/markerRail';
 import { emitDisplayList } from '../src/render/svg/emit';
 import { serialize } from '../src/render/svg/element';
 
@@ -117,6 +118,15 @@ describe('Quiet corner rendering', () => {
     expect(technologyMarkBounds(node)).toMatchObject({ x: glyph.right + 9, y: glyph.top + 2 });
   });
 
+  it('sits at the corner end of the marker rail on every other architecture shape', () => {
+    const node = createNode({ type: 'service', x: 40, y: 40, technology: 'Redis' });
+    const mark = technologyMarkBounds(node)!;
+    // Flush with the right edge and wholly above the top one, so it never meets a connector
+    // leaving the right side or that connector's label.
+    expect(mark.x + mark.width).toBe(node.width);
+    expect(mark.y + mark.height).toBeLessThan(0);
+  });
+
   it('never adds a technology mark to annotation or boundary shapes', () => {
     for (const type of ['note', 'text', 'code', 'group', 'ellipse'] as const) {
       const node = { ...createNode({ type, x: 0, y: 0 }), technology: 'PostgreSQL' };
@@ -126,10 +136,12 @@ describe('Quiet corner rendering', () => {
 
   it('embeds the same local path and full technology in a zero-padding SVG export', () => {
     const node = createNode({ type: 'service', x: -100, y: -200, technology: 'Node.js 22' });
-    const { svg, width } = renderDocumentSvg({ ...createDocument('Technology'), nodes: [node] }, { padding: 0 });
+    const { svg, width, height } = renderDocumentSvg({ ...createDocument('Technology'), nodes: [node] }, { padding: 0 });
     expect(svg).toContain(technologyIcon(node.technology)!.path);
     expect(svg).toContain('<title>Node.js 22</title>');
-    expect(width).toBe(node.width + 25);
+    // The mark sits in the marker rail above the corner: the picture grows up to hold it, not sideways.
+    expect(width).toBe(node.width);
+    expect(height).toBe(node.height + RAIL_SIZE + RAIL_LIFT);
     expect(svg).not.toMatch(/<image|(?:href|src)="https?:|\[Node\.js/);
   });
 });

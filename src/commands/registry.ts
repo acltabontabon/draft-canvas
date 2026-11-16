@@ -1,6 +1,10 @@
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
-import { ALL_PRESETS, DEV_PRESETS, type Preset } from '../lib/presets';
+import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
+import { sequenceCommands, sequenceFromSelectionCommands, sequenceQuickCommands } from './sequence';
+import { sequenceActions } from '../store/sequenceActions';
+import { bridgeProblems } from '../document/splice';
+import { CONVERTIBLE_TYPES, CONVERTIBLE_TYPE_NAMES, isConvertibleType } from '../document/convert';
 import { reconnectProblem } from '../document/reconnect';
 import { capabilityFor, categoryOf, edgeRelationLabel, isServiceInteraction } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
@@ -27,15 +31,19 @@ import { ALT_SYMBOL, MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
-import { fileOf, fileWithLiveViewport, lensFlow, outermostSelected, ownsData, viewLevel } from '../store/editorStore';
-import { pointer, type UiStore } from '../store/uiStore';
+import { fileOf, fileWithLiveViewport, lensFlow, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
+import { pointer, pointerFlow, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
-import { useCollabStore } from '../store/collabStore';
+import { setFollowing, useCollabStore } from '../store/collabStore';
 import { leaveSessionKeepingView, stopHosting } from '../store/collabBridge';
 import { SOURCE_FORMAT_INFO, SOURCE_FORMATS } from '../export/source/formats';
 import type { CopyResult } from '../export/clipboard';
 // Type-only: `contextMenu.ts` builds its menus from this module, so a value import would be a cycle.
 import type { ContextMenuEntry } from './contextMenu';
+import { inkOf } from '../document/ink';
+import { cancelSmartInk, convertStrokes } from '../canvas/inkSession';
+import { startArrange, startCheckLayout, startTidy } from './arrange';
+import type { PencilTool } from '../store/uiStore';
 
 // The exporters (rasterizer, Structurizr, draw.io, sequence engine) load when a copy command runs, not with the editor.
 const clipboard = () => import('../export/clipboard');
@@ -53,12 +61,11 @@ export function warmCopyExports(): void {
 import { readEditableImagePreference } from '../export/exportPreferences';
 import { systemTheme } from '../theme/systemTheme';
 import { copyText } from '../ui/collab/clipboard';
-import { ARRANGE_FAILED, notifyLoadFailure } from '../ui/common/notifyLoadFailure';
 import { focusBounds, focusNodes } from './search';
-import { ARCHITECTURE_STARTERS } from '../starters';
-import type { StarterCategory } from '../starters';
+import type { GalleryCategory } from '../gallery';
+import { useGalleryStore } from '../store/galleryStore';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
-import { count } from '../lib/plural';
+import { count, selectionCount } from '../lib/plural';
 import { openPointsOverview, unresolvedTargetsIn } from '../openPoints/collect';
 import type { OpenPointTarget } from '../document/types';
 
@@ -70,26 +77,6 @@ import type { OpenPointTarget } from '../document/types';
  *
  * Every `run` is one call into an existing store action or hook — see `types.ts`.
  */
-
-const PRESET_KEYWORDS: Record<string, string[]> = {
-  text: ['label', 'caption', 'heading', 'annotation'],
-  note: ['remark', 'question', 'warning', 'decision', 'sticky'],
-  code: ['snippet', 'json', 'yaml', 'sql', 'log', 'config'],
-  boundary: ['container', 'system', 'domain', 'network', 'deployment'],
-  service: ['api', 'app', 'worker', 'microservice'],
-  database: ['db', 'database', 'sql', 'store', 'cache', 'table'],
-  queue: ['topic', 'stream', 'kafka', 'event bus', 'message'],
-  actor: ['user', 'person', 'client', 'device', 'agent', 'bot'],
-  ellipse: ['junction', 'branch', 'merge', 'circle'],
-  // Deliberately no 'module'/'adapter' typed alone here — 'module' would compete with
-  // Architecture Starters' own "Modular Monolith" alias ('modules') for the same query, and
-  // "typing 'adapter' creates a Component *already set to* kind Adapter" would need `createAt`/
-  // `createAtPointer` to thread a starting sub-kind through node creation, which nothing in the
-  // app does today for any kind-bearing type (Service included) — out of scope for adding one new
-  // node type. A user reaches Module/Adapter by adding a Component, then picking its kind in the
-  // inspector, same as every other kind-bearing shape.
-  component: ['building block', 'internal', 'logical component'],
-};
 
 function createCommand(preset: Preset): Command {
   return {
@@ -402,14 +389,16 @@ export function openPointCommands(ctx: CommandContext): Command[] {
 
   const here = unresolvedTargetsIn(document);
   const marked = here.nodeIds.length + here.edgeIds.length;
-  if (marked > 0 && mode !== 'present') {
+  // Leaving it is `focus-exit`'s ("Exit spotlight"): the same state however it was entered, so a
+  // second row for it here only listed two names for one action.
+  if (marked > 0 && mode !== 'present' && !focus.active) {
     commands.push({
       id: 'open-points-focus',
-      title: focus.active ? 'Exit focus' : 'Focus open points',
+      title: 'Spotlight open points',
       group: 'openPoints',
-      keywords: ['spotlight', 'dim others', 'unresolved', 'review'],
-      hint: focus.active ? undefined : count(marked, 'element'),
-      run: (inner) => (inner.editor.focus.active ? inner.editor.exitFocus() : inner.editor.enterFocus(here.nodeIds, here.edgeIds)),
+      keywords: ['focus', 'dim others', 'unresolved', 'review'],
+      hint: count(marked, 'element'),
+      run: (inner) => inner.editor.enterFocus(here.nodeIds, here.edgeIds),
     });
   }
   return commands;
@@ -437,7 +426,7 @@ function flowCommands(ctx: CommandContext): Command[] {
     if (flows.length > 1) {
       commands.push({
         id: 'present-flow',
-        title: 'Present flow…',
+        title: 'Present a flow…',
         group: 'flow',
         keywords: ['walkthrough', 'play'],
         run: presentFlowStage,
@@ -445,11 +434,11 @@ function flowCommands(ctx: CommandContext): Command[] {
     }
     commands.push({
       id: 'switch-flow',
-      title: 'Switch to flow…',
+      title: 'Switch flow…',
       group: 'flow',
       keywords: ['lens', 'view', 'select flow', 'whole diagram', 'leave flow'],
       run: (inner) => ({
-        prompt: 'Switch to',
+        prompt: 'Switch flow',
         options: [
           {
             id: 'switch-flow:diagram',
@@ -495,13 +484,37 @@ function flowCommands(ctx: CommandContext): Command[] {
   commands.push(
     {
       id: 'flow-manage',
-      title: 'Show flows',
+      // `F` toggles the panel, so the row says which way it goes now.
+      title: ctx.ui.flowPanelOpen ? 'Hide flows' : 'Show flows',
       group: 'flow',
       keywords: ['manage', 'rename', 'reorder', 'steps', 'panel'],
       shortcut: 'F',
-      run: (inner) => inner.ui.setFlowPanelOpen(true),
+      run: (inner) => inner.ui.setFlowPanelOpen(!inner.ui.flowPanelOpen),
     },
   );
+  // A flow is an order somebody gave: it can be drawn as a sequence without guessing at one.
+  if (ctx.playback.flows.length > 0) {
+    commands.push({
+      id: 'flow-to-sequence',
+      title: ctx.playback.flows.length === 1 ? 'Draw the flow as a sequence' : 'Draw a flow as a sequence…',
+      group: 'flow',
+      keywords: ['sequence diagram', 'lifelines', 'convert', 'messages'],
+      hint: 'A sequence beside the diagram, still linked to its shapes',
+      run: (inner) => {
+        const { flows } = inner.playback;
+        if (flows.length === 1) return void sequenceActions.createFromFlow(flows[0]!.id);
+        return {
+          prompt: 'Draw as a sequence',
+          options: flows.map((flow) => ({
+            id: `flow-to-sequence:${flow.id}`,
+            title: flow.title,
+            hint: count(flow.steps.length, 'step'),
+            run: () => void sequenceActions.createFromFlow(flow.id),
+          })),
+        };
+      },
+    });
+  }
   return commands;
 }
 
@@ -581,9 +594,9 @@ export function viewCommands(ctx: CommandContext): Command[] {
   }
   commands.push({
     id: 'continuation-toggle',
-    title: ctx.ui.continuationsEnabled ? 'Turn off Intent Continuation' : 'Turn on Intent Continuation',
+    title: ctx.ui.continuationsEnabled ? 'Turn off next-shape suggestions' : 'Turn on next-shape suggestions',
     group: 'view',
-    keywords: ['suggest', 'suggestion', 'ghost', 'next', 'continue', 'assist', 'autocomplete'],
+    keywords: ['suggest', 'suggestion', 'suggestions', 'next-shape', 'ghost', 'next', 'continue', 'continuation', 'intent', 'assist', 'autocomplete'],
     run: (inner) => inner.ui.setContinuationsEnabled(!inner.ui.continuationsEnabled),
   });
   return commands;
@@ -678,6 +691,23 @@ export function canvasCommands(ctx: CommandContext): Command[] {
   }
   // Tidy, Arrange and Find and replace edit the document, which a shared (read-only) diagram
   // refuses — offering them only produced a misleading error.
+  const arrangeable = ctx.editor.document.nodes.some((node) => node.type !== 'group' && node.type !== 'note' && node.type !== 'text' && node.type !== 'code');
+  // The one cleanup to reach for first. It keeps every shape where it was put, shows what it would
+  // change before changing anything, and with shapes selected tidies only their neighbourhood. The
+  // specialised commands below stay for someone who wants exactly one of them.
+  if (!ctx.ui.readOnly && arrangeable) {
+    const scoped = ctx.editor.selection.nodes.length > 0;
+    commands.push({
+      id: 'tidy',
+      title: scoped ? 'Tidy up selection' : 'Tidy up',
+      group: 'canvas',
+      keywords: ['tidy', 'clean up', 'cleanup', 'neaten', 'fix layout', 'straighten', 'untangle', 'preview', 'polish'],
+      hint: scoped
+        ? 'Preview a gentle cleanup of the selected shapes — nothing else moves'
+        : 'Preview a gentle cleanup — shapes stay where you put them',
+      run: (inner) => void startTidy(scoped, inner),
+    });
+  }
   if (!ctx.ui.readOnly && ctx.editor.document.edges.some((edge) => edge.routeMode || edge.waypoints)) {
     commands.push({
       id: 'tidy-connections',
@@ -714,23 +744,22 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       },
     });
   }
-  if (!ctx.ui.readOnly && ctx.editor.document.nodes.some((node) => node.type !== 'group' && node.type !== 'note' && node.type !== 'text' && node.type !== 'code')) {
+  if (!ctx.ui.readOnly && arrangeable) {
     commands.push({
       id: 'arrange',
       title: 'Arrange diagram',
       group: 'canvas',
       keywords: ['layout', 'auto layout', 'tidy', 'clean up', 'organize', 'rearrange', 'align'],
-      hint: 'Lay this view out again — one undo step',
-      run: (inner) => {
-        // The camera follows only once the engine has moved things: fitting first would frame the
-        // old positions, and the engine loads on demand.
-        void inner.editor.arrangeRoom()
-          .then((moved) => {
-            if (moved) void inner.camera.fitView({ padding: 0.2, duration: 320 });
-            else if (!inner.ui.readOnly) inner.ui.notify('Already tidy.');
-          })
-          .catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED));
-      },
+      hint: 'Preview this view laid out again from scratch, and choose which way it reads',
+      run: (inner) => void startArrange({}, inner),
+    });
+    commands.push({
+      id: 'check-layout',
+      title: 'Check layout',
+      group: 'canvas',
+      keywords: ['check', 'review', 'quality', 'readable', 'legible', 'problems', 'issues', 'lint', 'names', 'captions', 'spacing'],
+      hint: 'Find names, captions, boundaries and spacing that read badly, and preview the fix',
+      run: (inner) => void startCheckLayout(inner),
     });
   }
   if (!ctx.ui.readOnly && ctx.editor.selection.nodes.some((id) => {
@@ -781,7 +810,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
     run: (inner) => {
       void (async () => {
         await requestClipboardRead(inner.editor, inner.ui);
-        const target = pointer.known ? { x: pointer.x, y: pointer.y } : undefined;
+        const target = pointer.known ? pointerFlow() : undefined;
         inner.editor.paste(target);
       })();
     },
@@ -893,12 +922,13 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   note: 'Note',
   code: 'Code',
   service: 'Service',
-  database: 'Data store',
+  database: 'Data Store',
   queue: 'Queue',
   actor: 'Actor',
   component: 'Component',
   group: 'Boundary',
   ellipse: 'Junction',
+  sequence: 'Sequence',
 };
 
 function captionFor(node: DraftNode): string {
@@ -927,7 +957,8 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
     const edge = inner.editor.connect(source.id, target.id);
     if (edge) inner.editor.setSelection({ nodes: [], edges: [edge.id] });
   });
-  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse').map((preset) => ({
+  // Not a Junction (nothing to name) and not a Sequence (a connector does not lead to one).
+  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse' && preset.id !== 'sequence').map((preset) => ({
     id: `connect-new:${preset.id}`,
     title: `New ${preset.label}`,
     keywords: PRESET_KEYWORDS[preset.id],
@@ -961,7 +992,11 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
       }
     },
   }));
-  return { prompt: 'Connect to', options: [...existing, ...fresh] };
+  // A shape with nothing attached yet is the start of a chain, and what comes next is usually a new
+  // shape, not one already drawn: leading with "New Service / Data Store / Queue" makes the
+  // keyboard-only chain S, ⌘K, Enter, Enter. Once it has connectors, the existing shapes lead again.
+  const attached = ctx.editor.document.edges.some((edge) => edge.source === source.id || edge.target === source.id);
+  return { prompt: 'Connect to', options: attached ? [...existing, ...fresh] : [...fresh, ...existing] };
 }
 
 /**
@@ -1057,19 +1092,19 @@ function cutCommand(): Command {
   };
 }
 
-/** "Add Note"/"Add Code" on a node's own menu — creates a brand-new, empty attachment directly
- *  (`attachToNode`/`createAttachment` already existed with zero UI call sites; every attachment
- *  before this was created by dragging an existing standalone Note/Code node onto a host and
- *  folding it in). Opens the new attachment's card immediately (pinned via `openAttachmentDetail`,
- *  same as clicking its chip) instead of leaving the user to go find and click the new chip
- *  themselves. Deliberately does not also force `AttachmentPresentation.tsx`'s own local `editing`
- *  state open — that pin→edit split is that component's own established, tested safety behavior
- *  (view before you commit to editing), and reaching past its public interface to bypass it for
- *  this one entry point would be a bigger change than this menu warrants; one more click (the
- *  card's own pencil icon) reaches the textarea. Id is `attach-*`, not `add-*` — `add-note`/
- *  `add-code` are already taken by the "create a standalone Note/Code node" preset commands, and
- *  sharing an id would corrupt `commands/history.ts`'s by-id "Recent" lookup in the palette (two
- *  different commands silently shadowing each other under one key). */
+/** "Attach note"/"Attach code" on a shape's or connector's own menu — creates a brand-new, empty
+ *  attachment directly (`attachToNode`/`createAttachment` already existed with zero UI call sites;
+ *  every attachment before this was created by dragging an existing standalone Note/Code node onto
+ *  a host and folding it in). Opens the new attachment's card immediately, ready to type
+ *  (`startEditing`): asking to attach a note is asking to write one, and a card that waited for a
+ *  click on its pencil read as the command not working — the guide's "Type, then press Esc" is
+ *  true because of it. (Clicking an existing chip still opens read-only first.) The title is
+ *  "Attach …", the menu's own wording, so the palette's two note rows are told apart by their verb:
+ *  "Attach note" to the selection, "Add Note" for a standalone Note on the canvas. Id is
+ *  `attach-*`, not `add-*` — `add-note`/`add-code` are already taken by the "create a standalone
+ *  Note/Code node" preset commands, and sharing an id would corrupt `commands/history.ts`'s by-id
+ *  "Recent" lookup in the palette (two different commands silently shadowing each other under one
+ *  key). */
 function addAttachmentCommand(
   host: { hostKind: 'node'; node: DraftNode } | { hostKind: 'edge'; edge: DraftEdge },
   type: AttachableType,
@@ -1078,14 +1113,14 @@ function addAttachmentCommand(
   const hostId = host.hostKind === 'node' ? host.node.id : host.edge.id;
   return {
     id: `attach-${type}`,
-    title: type === 'note' ? 'Add Note' : 'Add Code',
+    title: type === 'note' ? 'Attach note' : 'Attach code',
     group,
-    keywords: ['attach', 'context', 'detail'],
+    keywords: ['add', 'attach', 'context', 'detail'],
     run: (inner) => {
       const attachment = createAttachment({ type });
       if (host.hostKind === 'node') inner.editor.attachToNode(hostId, attachment);
       else inner.editor.attachToEdge(hostId, attachment);
-      inner.ui.setOpenAttachmentDetail({ hostKind: host.hostKind, hostId, attachmentId: attachment.id });
+      inner.ui.setOpenAttachmentDetail({ hostKind: host.hostKind, hostId, attachmentId: attachment.id, startEditing: true });
     },
   };
 }
@@ -1138,7 +1173,7 @@ function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
   if (category === 'queue' || category === 'stream' || category === 'deadLetter') {
     commands.push({
       id: 'add-consumer',
-      title: 'Add Consumer',
+      title: 'Add consumer',
       group: 'selection',
       keywords: ['worker', 'subscriber', 'consume'],
       primary: true,
@@ -1179,7 +1214,7 @@ function queueQuickCommands(ctx: CommandContext, node: DraftNode): Command[] {
   if (category === 'topic') {
     commands.push({
       id: 'add-subscriber',
-      title: 'Add Subscriber',
+      title: 'Add subscriber',
       group: 'selection',
       keywords: ['queue', 'fan out', 'subscribe'],
       primary: true,
@@ -1368,11 +1403,15 @@ export function primaryCommandsFor(ctx: CommandContext, node: DraftNode): Comman
     return hasInside(node) ? [...inside, ...quick] : [...quick, ...inside];
   }
   if (node.type === 'group') return [boundaryUngroupCommand()];
+  if (node.type === 'sequence') return sequenceQuickCommands(node).filter((command) => command.primary);
   return inside;
 }
 
 export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
   const commands: Command[] = [];
+  // What a sequence offers, and what the thing selected inside it does, come first: with a message
+  // selected, "Delete" in the palette should be that message.
+  if (node.type === 'sequence') commands.push(...sequenceCommands(ctx, node));
   const isBoundary = node.type === 'group';
   const suggested = continuationCommandFor(ctx, node);
   if (suggested) commands.push(suggested);
@@ -1484,6 +1523,18 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       keywords: ['focus', 'highlight', 'dim others'],
       run: (inner) => inner.editor.enterFocus([node.id], []),
     },
+    // Where its data comes from and what it feeds: offered once a shape has a connector at all.
+    ...(node.type !== 'group' && ctx.editor.document.edges.some((e) => e.source === node.id || e.target === node.id)
+      ? [
+          {
+            id: 'show-lineage',
+            title: 'Show lineage',
+            group: 'selection' as const,
+            keywords: ['upstream', 'downstream', 'where does this come from', 'impact', 'data flow', 'trace'],
+            run: (inner: CommandContext) => inner.editor.showLineage(node.id),
+          },
+        ]
+      : []),
     {
       id: 'duplicate',
       title: 'Duplicate',
@@ -1505,7 +1556,7 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       const descendantSet = new Set(descendantIds);
       commands.push({
         id: 'select-contents',
-        title: 'Select Contents',
+        title: 'Select contents',
         group: 'selection',
         keywords: ['children', 'members', 'inside'],
         hint: count(descendantIds.length, 'element'),
@@ -1521,7 +1572,10 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
   }
   // Wrapping one shape is how a boundary is often started, as ⌘G already does.
   commands.push(groupCommand(1));
+  commands.push(...turnIntoCommands(ctx));
   commands.push(deleteCommand('Delete'));
+  const keepingLines = deleteKeepingLinesCommand(ctx);
+  if (keepingLines) commands.push(keepingLines);
   return commands;
 }
 
@@ -1532,7 +1586,7 @@ function groupCommand(members: number): Command {
     group: 'selection',
     keywords: ['boundary', 'system', 'domain', 'container', 'wrap'],
     shortcut: `${MOD_SYMBOL} G`,
-    hint: members === 1 ? '1 element' : `${members} elements`,
+    hint: count(members, 'shape'),
     run: (inner) => inner.editor.groupSelection(),
   };
 }
@@ -1545,6 +1599,57 @@ function deleteCommand(title: string): Command {
     keywords: ['remove', 'trash'],
     shortcut: 'Backspace',
     run: (inner) => inner.editor.deleteSelection(),
+  };
+}
+
+/**
+ * "Turn into Queue" and the rest: one flat command per shape the selection could become, each with
+ * its ⇧ + shape-letter key, so the palette finds each by name ("queue") and shows its key. Kept out
+ * of the context menu: four more rows on every shape's menu cost more than they save. Offered for
+ * the types some selected architecture shape isn't already.
+ */
+function turnIntoCommands(ctx: CommandContext): Command[] {
+  const { document, selection } = ctx.editor;
+  const types = new Set(
+    selection.nodes.flatMap((id) => {
+      const node = document.nodes.find((n) => n.id === id);
+      return node && isConvertibleType(node.type) ? [node.type] : [];
+    }),
+  );
+  if (types.size === 0) return [];
+  return CONVERTIBLE_TYPES.filter((type) => !(types.size === 1 && types.has(type))).map((type) => {
+    const letter = ALL_PRESETS.find((preset) => preset.type === type)?.shortcut;
+    return {
+      id: `turn-into-${type}`,
+      title: `Turn into ${CONVERTIBLE_TYPE_NAMES[type]}`,
+      group: 'selection',
+      // Not the shape's own name: an exact keyword hit outranks a title, and "data store" must keep
+      // finding Add Data Store first. The title already carries it.
+      keywords: ['convert', 'change shape', 'change type', 'become', 'swap'],
+      ...(letter ? { shortcut: `Shift ${letter}` } : {}),
+      run: (inner) => inner.editor.convertSelection(type),
+    };
+  });
+}
+
+/**
+ * Deleting shapes out of the middle of a line and joining it back up (`removeAndBridge`). Offered
+ * only when some selected shape has a way in and a way out, and none has several of both.
+ */
+function deleteKeepingLinesCommand(ctx: CommandContext): Command | null {
+  const { document, selection } = ctx.editor;
+  if (selection.nodes.length === 0) return null;
+  const through = selection.nodes.some(
+    (id) => document.edges.some((e) => e.target === id && e.source !== id) && document.edges.some((e) => e.source === id && e.target !== id),
+  );
+  if (!through || bridgeProblems(document, selection.nodes).length > 0) return null;
+  return {
+    id: 'delete-keep-lines',
+    title: 'Delete and join connectors',
+    group: 'selection',
+    keywords: ['remove', 'bridge', 'reconnect', 'keep line', 'splice out', 'bypass'],
+    shortcut: `${ALT_SYMBOL} Backspace`,
+    run: (inner) => inner.editor.deleteSelectionKeepingLines(),
   };
 }
 
@@ -1699,9 +1804,9 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
     },
     ...(!serviceCall || !asyncMode ? [{
       id: 'edge-response',
-      title: edge.hasResponse ? 'Remove response line' : 'Add response line',
+      title: edge.hasResponse ? 'Remove reply line' : 'Add reply line',
       group: 'connector' as const,
-      keywords: ['reply', 'return', 'request response', '200'],
+      keywords: ['response', 'return', 'request response', '200'],
       run: (inner: CommandContext) => inner.editor.setEdgeHasResponse(edge.id, !edge.hasResponse),
     }] : []),
     {
@@ -1850,8 +1955,8 @@ export function multiCommands(ctx: CommandContext): Command[] {
       ['align-right', 'Align right', 'right'],
       ['align-top', 'Align top', 'top'],
       ['align-bottom', 'Align bottom', 'bottom'],
-      ['align-center-x', 'Align centers horizontally', 'centerX'],
-      ['align-center-y', 'Align centers vertically', 'centerY'],
+      ['align-center-x', 'Align centres horizontally', 'centerX'],
+      ['align-center-y', 'Align centres vertically', 'centerY'],
     ];
     for (const [id, title, edge] of aligns) {
       commands.push({
@@ -1906,7 +2011,7 @@ export function multiCommands(ctx: CommandContext): Command[] {
     title: 'Spotlight selection',
     group: 'selection',
     keywords: ['focus', 'highlight', 'dim others'],
-    hint: `${selection.nodes.length + selection.edges.length} elements`,
+    hint: selectionCount(selection.nodes.length, selection.edges.length),
     run: (inner) => inner.editor.enterFocus(inner.editor.selection.nodes, inner.editor.selection.edges),
   });
   if (nodes.length > 0) {
@@ -1938,11 +2043,13 @@ export function multiCommands(ctx: CommandContext): Command[] {
       },
     );
   }
+  commands.push(...turnIntoCommands(ctx));
   commands.push(deleteCommand('Delete selection'));
+  const keepingLines = deleteKeepingLinesCommand(ctx);
+  if (keepingLines) commands.push(keepingLines);
   return commands;
 }
 
-/** The selection-dependent part of the list — empty when nothing is selected. */
 export function arrangeSelectionCommands(ctx: CommandContext): Command[] {
   if (ctx.ui.readOnly || !ctx.editor.selection.nodes.some((id) => {
     const node = ctx.editor.document.nodes.find((item) => item.id === id);
@@ -1952,8 +2059,7 @@ export function arrangeSelectionCommands(ctx: CommandContext): Command[] {
     });
     return node && !['note', 'text', 'code'].includes(node.type);
   })) return [];
-  return [{ id: 'arrange-selection', title: 'Arrange selection', group: 'selection', keywords: ['layout', 'tidy'],
-    run: (inner) => { void inner.editor.arrangeSelection().catch((error: unknown) => notifyLoadFailure(error, ARRANGE_FAILED)); } }];
+  return [{ id: 'arrange-selection', title: 'Arrange selection', group: 'selection', keywords: ['layout', 'tidy'], run: (inner) => void startArrange({ selection: true }, inner) }];
 }
 
 function selectionCommands(ctx: CommandContext): Command[] {
@@ -1961,51 +2067,61 @@ function selectionCommands(ctx: CommandContext): Command[] {
   const { document } = ctx.editor;
   if (nodes.length === 1 && edges.length === 0) {
     const node = document.nodes.find((entry) => entry.id === nodes[0]);
-    return node ? nodeCommands(ctx, node) : [];
+    return node ? [...nodeCommands(ctx, node), ...sequenceFromSelectionCommands(ctx)] : [];
   }
   if (edges.length === 1 && nodes.length === 0) {
     const edge = document.edges.find((entry) => entry.id === edges[0]);
     return edge ? edgeCommands(ctx, edge) : [];
   }
-  if (nodes.length + edges.length >= 2) return multiCommands(ctx);
+  if (nodes.length + edges.length >= 2) return [...multiCommands(ctx), ...sequenceFromSelectionCommands(ctx)];
   return [];
 }
 
-const STARTER_CATEGORY_GROUP: Record<StarterCategory, CommandGroup> = {
+const STARTER_CATEGORY_GROUP: Record<GalleryCategory, CommandGroup> = {
   architecture: 'starter',
   data: 'data',
   pattern: 'pattern',
+  example: 'canvas',
 };
 
 /**
- * Starters — one row per composed opening diagram (`src/starters/`), under three headers:
- * *Architectures* (how the major parts of a system are organized), *Data Architectures* (how data
- * moves and is refined — Medallion, Kappa, CDC) and *Patterns* (how one recurring design problem is
- * solved — a saga, an outbox). The split is the catalog's own
- * `category`, kept purely for discoverability; a starter is one architectural idea at one scope,
- * and a real system composes several of them, so nothing here reads as a choice between them.
+ * Starters — one row per starter in the gallery this device has downloaded (`src/gallery/`), under
+ * the gallery's own headers: *Architectures*, *Data Architectures* and *Patterns*. Before the person
+ * has chosen to load the gallery there are none; "Browse starters…" (`canvasCommands`) offers it.
  *
  * These are not a template browser and deliberately not a separate surface: a starter is a name for
- * `insertStarter`, exactly as "Add Service" is a name for `addNode`. The row adds only the camera
- * move that puts the result on screen, so ⌘K → "microservices" → Enter is the whole interaction.
+ * `galleryStore.addToCanvas`, exactly as "Add Service" is a name for `addNode`. The row adds only the
+ * camera move that puts the result on screen, so ⌘K → "microservices" → Enter is the whole
+ * interaction.
  *
  * They never depend on `ctx`, so unlike the selection-driven builders this one takes no argument —
  * a starter applies to any canvas, empty or not. Exported for the same reason `nodeCommands` is:
  * the empty canvas's starter row is a second surface over these identical commands, not a second
- * implementation of them (`ui/Editor/EmptyState.tsx`). The catalog lists every architecture, then
- * every data architecture, then every pattern, which is what keeps the three headers contiguous
- * without sorting here.
+ * implementation of them (`ui/Editor/EmptyState.tsx`). The gallery lists every architecture, then
+ * every data architecture, then every pattern, which is what keeps the headers contiguous without
+ * sorting here.
  */
 export function starterCommands(): Command[] {
-  return ARCHITECTURE_STARTERS.map((starter) => ({
-    id: `starter-${starter.id}`,
-    title: starter.name,
-    group: STARTER_CATEGORY_GROUP[starter.category],
-    keywords: starter.aliases,
-    hint: starter.description,
-    // On the web a blank "Untitled canvas" takes the starter's name; elsewhere the name is the file's.
-    run: (inner) => focusBounds(inner, boundsOf(inner.editor.insertStarter(starter, hostKind() === null ? starter.name : undefined))),
-  }));
+  const starters = useGalleryStore.getState().snapshot?.starters ?? [];
+  return starters
+    // The worked example has its own command ("Try an example"), which opens it as its own canvas.
+    .filter((starter) => starter.availability === 'ready' && starter.category !== 'example')
+    .map((starter) => ({
+      id: `starter-${starter.id}`,
+      title: starter.name,
+      group: STARTER_CATEGORY_GROUP[starter.category],
+      keywords: starter.aliases,
+      hint: starter.summary,
+      // On the web a blank "Untitled diagram" takes the starter's name; elsewhere the name is the file's.
+      run: (inner) =>
+        void useGalleryStore
+          .getState()
+          .addToCanvas(starter.id, { title: hostKind() === null ? starter.name : undefined })
+          .then((ids) => {
+            const added = new Set(ids);
+            focusBounds(inner, boundsOf(useEditorStore.getState().document.nodes.filter((node) => added.has(node.id))));
+          }),
+    }));
 }
 
 /**
@@ -2056,7 +2172,7 @@ function collabCommands(): Command[] {
         title: collab.following ? 'Stop following the presenter' : 'Follow the presenter',
         group: 'canvas',
         keywords: ['presentation', 'camera', 'live', 'follow'],
-        run: () => useCollabStore.setState({ following: !useCollabStore.getState().following }),
+        run: () => setFollowing(!useCollabStore.getState().following),
       });
     }
   }
@@ -2078,6 +2194,8 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'present-flow',
   'switch-flow',
   'flow-manage',
+  // A sequence telling itself is a presentation like any other: nothing is written.
+  'seq-present',
   // Open points: the panel and Focus are views; raising or resolving one is not.
   'open-points',
   'open-points-focus',
@@ -2167,9 +2285,12 @@ export function commandsFor(ctx: CommandContext): Command[] {
 
 function editCommands(ctx: CommandContext): Command[] {
   return [
+    ...inkCommands(ctx),
     ...selectionCommands(ctx),
     ...ALL_PRESETS.map(createCommand),
+    ...pencilCommands(ctx),
     { id: 'try-example', title: 'Try an example', group: 'canvas', keywords: ['order', 'processing', 'learn'], run: (inner) => inner.ui.requestExample() },
+    { id: 'browse-starters', title: 'Browse starters…', group: 'canvas', keywords: ['starter', 'gallery', 'template', 'example', 'architecture', 'pattern'], hint: 'Ready-made architectures from the starters gallery', run: () => useGalleryStore.getState().openDialog() },
     ...starterCommands(),
     ...flowCommands(ctx),
     ...openPointCommands(ctx),
@@ -2179,6 +2300,74 @@ function editCommands(ctx: CommandContext): Command[] {
     // The companion runs the person's own coding agent, which only the desktop app can start.
     ...(__DESKTOP__ && hostKind() === 'desktop' ? [companionCommand(ctx)] : []),
   ];
+}
+
+/**
+ * The Pencil and the sketches it leaves: picking up each of its tools, and what can be done with
+ * chosen strokes. Each is the same store action the toolbar, a key or the right-click menu uses.
+ */
+export function inkCommands(ctx: CommandContext): Command[] {
+  if (ctx.ui.readOnly) return [];
+  const commands: Command[] = [];
+  // `?? []`: the shortcut sheet builds its catalogue from a stand-in context that predates sketches.
+  const chosen = ctx.ui.inkSelection ?? [];
+  if (chosen.length > 0) {
+    commands.push({
+      id: 'ink-convert',
+      title: 'Convert to shape',
+      group: 'selection',
+      keywords: ['smart ink', 'recognise', 'recognize', 'sketch', 'drawing', 'shape', 'connector', 'clean up'],
+      hint: 'Turn the chosen sketch into a shape or connector',
+      run: (inner) => {
+        const zoom = inner.editor.liveViewport?.zoom ?? inner.editor.document.viewport.zoom;
+        void convertStrokes(inner.ui.inkSelection, zoom);
+      },
+    });
+    commands.push({
+      id: 'ink-delete',
+      title: chosen.length === 1 ? 'Erase stroke' : 'Erase strokes',
+      group: 'selection',
+      keywords: ['delete', 'remove', 'sketch', 'ink'],
+      // Backspace and Delete erase chosen strokes through `delete`'s own key; one key, one command.
+      run: (inner) => inner.editor.deleteSelection(),
+    });
+  }
+  const strokes = inkOf(ctx.editor.document);
+  if (strokes.length > 0) {
+    commands.push({
+      id: 'ink-select-all',
+      title: 'Select all sketches',
+      group: 'selection',
+      keywords: ['ink', 'strokes', 'drawings', 'annotations'],
+      run: (inner) => {
+        inner.editor.setSelection({ nodes: [], edges: [] });
+        inner.ui.setPencil(null);
+        inner.ui.setInkSelection(inkOf(inner.editor.document).map((stroke) => stroke.id));
+      },
+    });
+  }
+  return commands;
+}
+
+
+/** Picking up each of the Pencil's tools — the toolbar's Pencil and tray, by name. */
+export function pencilCommands(ctx: CommandContext): Command[] {
+  if (ctx.ui.readOnly) return [];
+  const commands: Command[] = [];
+  const pick = (tool: PencilTool, smart?: boolean) => (inner: CommandContext) => {
+    if (smart !== undefined && smart !== inner.ui.inkPrefs?.smart) {
+      if (!smart) cancelSmartInk();
+      inner.ui.setInkPrefs({ smart });
+    }
+    inner.ui.setPencil(tool);
+  };
+  commands.push(
+    { id: 'pencil-sketch', title: 'Sketch', group: 'create', keywords: ['pencil', 'pen', 'draw', 'freehand', 'annotate', 'ink', 'handwriting'], hint: 'Draw freehand over the diagram', shortcut: 'P', run: pick('pen', false) },
+    { id: 'pencil-smart', title: 'Smart Ink', group: 'create', keywords: ['pencil', 'pen', 'draw', 'recognise', 'recognize', 'shapes', 'sketch to diagram'], hint: 'Draw rough shapes and arrows; they become real ones', run: pick('pen', true) },
+    { id: 'pencil-highlighter', title: 'Highlighter', group: 'create', keywords: ['pencil', 'marker', 'highlight', 'emphasis', 'annotate'], shortcut: 'H', run: pick('highlighter') },
+    { id: 'pencil-eraser', title: 'Eraser', group: 'create', keywords: ['pencil', 'erase', 'rubber', 'remove sketch'], shortcut: 'E', run: pick('eraser') },
+  );
+  return commands;
 }
 
 /** Opens Nodi, the agent companion, or puts it back to rest. Desktop only (see `editCommands`). */

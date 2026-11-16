@@ -121,6 +121,9 @@ export function projectEdges(
     const existing = before.get(edge.id);
     const sourceHandle = handleIdForAnchor(edge.sourceAnchor);
     const targetHandle = handleIdForAnchor(edge.targetAnchor);
+    const zIndex = edge.sourceAnchor?.participantId || edge.targetAnchor?.participantId
+      ? Math.max(lookup(edge.source)?.z ?? 0, lookup(edge.target)?.z ?? 0) + 1
+      : undefined;
     // What a screen reader says for the connector. React Flow's wrapper is `role="img"` named
     // "Edge from <id> to <id>" by default, and an `img` makes everything inside it presentational —
     // so the sentence has to be given to the wrapper here, not drawn in `DraftEdgeView`. Computed
@@ -133,6 +136,7 @@ export function projectEdges(
       existing.target === edge.target &&
       existing.sourceHandle === sourceHandle &&
       existing.targetHandle === targetHandle &&
+      existing.zIndex === zIndex &&
       existing.selectable === options.interactive &&
       existing.ariaLabel === ariaLabel
     ) {
@@ -152,6 +156,7 @@ export function projectEdges(
       // own route from the document, which is why this went unnoticed.
       sourceHandle,
       targetHandle,
+      zIndex,
       selected,
       selectable: options.interactive,
       focusable: options.interactive,

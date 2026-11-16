@@ -1,0 +1,23 @@
+{
+  "id": "order-processing",
+  "name": "Order processing",
+  "category": "example",
+  "summary": "Follow an order from the API through a queue to storage",
+  "aliases": [
+    "order example"
+  ],
+  "tags": [
+    "example",
+    "queue",
+    "worker"
+  ],
+  "useWhen": [
+    "Learning how shapes, connectors and flows read on the canvas.",
+    "A starting point for any queue-and-worker design."
+  ],
+  "watchOutFor": [
+    "It is deliberately small: there is no failure path."
+  ],
+  "featured": false,
+  "order": 140
+}

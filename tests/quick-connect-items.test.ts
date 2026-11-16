@@ -39,6 +39,54 @@ describe('quickConnectItems', () => {
   });
 });
 
+describe('quickConnectItems — a suggestion stands in for a preset only when it is that shape', () => {
+  function gatewayDoc() {
+    const caller = createNode({ id: 'c', type: 'actor', x: 0, y: 0 });
+    const gateway = createNode({ id: 'g', type: 'service', serviceKind: 'gateway', x: 400, y: 0 });
+    return addEdges(addNodes(createDocument('G'), [caller, gateway]), [
+      createEdge({ source: 'c', target: 'g', ...inferRelationship(caller, gateway) }),
+    ]);
+  }
+
+  it('a gateway’s route is an API, so the plain Service row stays', () => {
+    // The suggestion is called what the ghost draws; it used to be "Service" and to hide the Service
+    // preset, which would have drawn something else.
+    const rows = quickConnectItems(gatewayDoc(), drop('g'));
+    expect(rows.map((r) => `${r.kind}:${r.label}`)).toEqual([
+      'continuation:API',
+      'preset:Service',
+      'preset:Data Store',
+      'preset:Queue',
+      'preset:Actor',
+    ]);
+    const api = offerFor(gatewayDoc(), drop('g'), rows[0]!)!;
+    expect(api.nodes[0]).toMatchObject({ serviceKind: 'api', text: 'API' });
+    const plain = offerFor(gatewayDoc(), drop('g'), rows.find((r) => r.label === 'Service')!)!;
+    expect(plain.nodes[0]).toMatchObject({ serviceKind: 'generic' });
+  });
+
+  it('a plain Service suggestion still is the Service row, and a plain Queue the Queue row', () => {
+    const scheduler = createNode({ id: 's', type: 'service', serviceKind: 'scheduler', x: 0, y: 0 });
+    const doc = addNodes(createDocument('S'), [scheduler]);
+    // Worker leads (the quiet pick), the plain Service follows and replaces the preset of its own name.
+    expect(quickConnectItems(doc, drop('s')).map((r) => `${r.kind}:${r.label}`)).toEqual([
+      'continuation:Worker',
+      'continuation:Service',
+      'preset:Data Store',
+      'preset:Queue',
+      'preset:Actor',
+    ]);
+    // A Topic is not a plain Queue: only the suggested Queue, not the Topic beside it, replaces that preset.
+    const publisher = createNode({ id: 'p', type: 'service', x: 0, y: 0 });
+    const bucket = createNode({ id: 'b', type: 'database', databaseKind: 'object-storage', x: 400, y: 0 });
+    const bucketDoc = addEdges(addNodes(createDocument('B'), [publisher, bucket]), [
+      createEdge({ source: 'p', target: 'b', ...inferRelationship(publisher, bucket), semantic: 'writes' }),
+    ]);
+    const rows = quickConnectItems(bucketDoc, drop('b')).map((r) => `${r.kind}:${r.label}`);
+    expect(rows).toEqual(['continuation:Queue', 'continuation:Topic', 'preset:Service', 'preset:Data Store', 'preset:Actor']);
+  });
+});
+
 describe('offerFor', () => {
   it('centres any row on the drop point and infers the connector from the matrix', () => {
     const doc = topicDoc();

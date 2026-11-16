@@ -9791,7 +9791,7 @@ PackageDownloadLocation: git+https://github.com/tauri-apps/tauri.git
 PackageDownloadLocation: git+ssh://github.com/tauri-apps/tauri.git
 Creator: Person: Daniel Thompson-Yvetot
 
-### tauri-plugin-opener 2.7.2 — Apache-2.0 OR MIT
+### tauri-plugin-opener 2.7.3 — Apache-2.0 OR MIT
 
 SPDXVersion: SPDX-2.1
 DataLicense: CC0-1.0
