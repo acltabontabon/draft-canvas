@@ -18,10 +18,9 @@ use crate::docio::{
 };
 use crate::paths::{display_path, sanitize_stem, DOC_EXT};
 use crate::state::{AppState, HostEvent};
-use crate::util::now_ms;
+use crate::util::{now_ms, sha256_hex};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -135,7 +134,7 @@ pub fn fingerprint(tool: &str, args: &Value) -> String {
     let mut text = String::from(tool);
     text.push('\n');
     canonical(&stripped, &mut text);
-    format!("{:x}", Sha256::digest(text.as_bytes()))
+    sha256_hex(text.as_bytes())
 }
 
 /// Runs one tool call. `calls` is how the connection finds this call's page request to cancel it.
