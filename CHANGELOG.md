@@ -180,6 +180,28 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Desktop
 
+#### Improved
+
+- AI agents can rename a shape in one call without reading whole rooms. A small default tool
+  interface loads other schemas on demand, and Codex avoids unused dispatch instructions.
+  Exact-label renames preserve the existing approval, revision, save and undo checks.
+- Nodi confirms agent-planned edits from the native tool receipt, without an extra model call.
+  Natural-language requests keep the same review, scope, validation, save and undo checks;
+  confirmations distinguish saved, unsaved and failed-save outcomes and preserve warnings.
+- Nodi reads diagram context on demand instead of attaching the whole view to every request.
+  Natural-language exact-label renames need no diagram snapshot; other edits can request targeted
+  reads, with the same scope, revision and review checks.
+- Review-mode renames also resolve exact labels locally, creating a proposal without a model read.
+  The diagram changes only after acceptance; ambiguity, scope and changed-target conflicts still
+  refuse unsafe edits, and retries do not create duplicate proposals.
+- Nodi resolves descriptions, added shapes and connection edits locally from the agent's final
+  intent, without a model read or confirmation call. The host pins the revision captured at Send;
+  intervening edits, ambiguous targets and out-of-scope changes are refused. Review mode keeps
+  its normal acceptance and conflict checks. A reproducible benchmark covers both modes and agents.
+- Nodi starts each turn with a small context and reads earlier chat only when needed, keeping
+  simple edits inexpensive in long conversations. Bounded local history retains requests and
+  actual outcomes across restart; context-dependent follow-ups retrieve it or ask for clarification.
+
 #### Fixed
 
 - **Arrange Diagram** in the menu, and Nodi's layout skills, now show a preview first, like `⌘K`.

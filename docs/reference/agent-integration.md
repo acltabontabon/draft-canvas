@@ -39,15 +39,49 @@ Setup is in [Connect an AI agent](../guides/connect-an-ai-agent.md).
 
 ## Tools
 
-Schemas live in `src/agent/schema.ts`. `npm run agent:schemas` regenerates `src-tauri/mcp/tools.json`,
-which the sidecar compiles in; `tests/agent/schema.test.ts` fails if they drift. `get_capabilities`
-reports `contract: 3`.
+Schemas live in `src/agent/schema.ts`. `npm run agent:schemas` generates the default
+`src-tauri/mcp/entry-tools.json` and the operation catalogs compiled into the sidecar.
+`tests/agent/schema.test.ts` checks their contents and size budgets. Discovery advertises one small
+`diagram_tool({tool, args})` dispatcher. `tool: "help", args: {}` lists the operations available in
+this session; `args: {tool: "update_diagram"}` returns that operation's common arguments.
+`get_capabilities({tool: "update_diagram"})`, dispatched the same way, returns its complete schema.
+All requests still pass the complete server validation contract (`contract: 3`).
+
+The dispatcher is conservatively annotated as mutating. The native broker checks permissions,
+review-only restrictions and idempotency against the resolved operation, never the wrapper.
+Clients requiring individual read/write annotations or tool allowlists can launch the sidecar with
+`--full-tools`. Previously discovered operation names remain callable. The operations below are
+passed as `tool`, with their arguments in `args`.
+
+An exact-label rename takes one call, without reading the diagram or its schema:
+
+```json
+{
+  "tool": "rename_element",
+  "args": {
+    "diagramId": "d_example",
+    "requestId": "a-new-uuid",
+    "from": "Orders API",
+    "to": "Checkout API"
+  }
+}
+```
+
+Labels match exactly, including case. Search covers architecture shapes and boundaries across all
+rooms; optional `view: {inside: [ids]}` restricts it to one room, and `scope` preserves selection
+limits. Missing or duplicate labels refuse
+without changing anything. The app resolves the id and revision locally, then uses the normal
+validated update, approval, revision, save and undo path. Ordinary patches still require a client
+revision. The original rename is journaled before resolution, so an identical retry replays its
+receipt even after the old label is gone. The compact receipt retains durability, revision, undo,
+warnings and recovery instructions; it omits repeated request context and graph metrics.
+Use proposals instead when the person requested review before application.
 
 | Tool | Kind | Purpose |
 | --- | --- | --- |
-| `get_capabilities({topics?, starter?})` | read | Vocabulary and rules. Without `topics`, an index of the topics and the common word lists; each topic in full on request: `types`, `relationships`, `c4`, `flows`, `notes`, `starters`, `limits`, `layout`, `readability`. `starters` lists only what the person has downloaded from the [starters gallery](../guides/examples.md); with the gallery off there are none. |
+| `get_capabilities({tool?, topics?, starter?})` | read | `tool` alone returns that tool’s complete input schema. Otherwise, vocabulary and rules: without `topics`, an index of the topics and the common word lists; each topic in full on request: `types`, `relationships`, `c4`, `flows`, `notes`, `starters`, `limits`, `layout`, `readability`. `starters` lists only what the person has downloaded from the [starters gallery](../guides/examples.md); with the gallery off there are none. |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read | Diagrams in allowed folders, plus `active` (the open one) and `thisSession` (ones this session changed). |
-| `read_diagram({diagramId, view?, focus?, include?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
+| `read_diagram({diagramId, query?, view?, focus?, include?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read | Full note or code text in 8,192-character chunks. |
 | `read_selection({diagramId})` | read | The current selection. See [Selection-aware editing](#selection-aware-editing). |
 | `get_implementation_context({diagramId, view?, focus?})` | read | Flow steps as stored, notes, decisions, code and boundaries, for implementing a design. |
@@ -84,7 +118,21 @@ attachments and flows with their ids. Elements, boundaries, notes, relationships
 | `include: ["attachments"]` / `["fullText"]` | Attachment previews, or complete text. |
 | `include: ["suggestions"]` | Up to 5 next-step suggestions per element. Never applied. |
 | `include: ["views"]` | An outline of every inside view. |
+| `format: "outline"` | File title and revision, plus paths, owners, levels and counts for up to 100 inside views. `viewsTruncated` marks a longer outline. |
 | `format: "mermaid"` / `"plantuml"` / `"c4"` | Flows as sequence-diagram source, or the architecture as C4-PlantUML, as Export writes them. |
+
+For a named edit beyond the exact-label rename above, use `read_diagram({diagramId, query: "name"})`. It matches ids and labels
+(case-insensitive substring) across every room, returning at most 20 matches with their ids,
+types, labels and `view.inside` paths, plus the file revision. `total` counts all matches;
+`truncated` means refine the query. Labels over 200 characters have `labelTruncated: true`.
+Search covers shapes, free notes, groups, relationships and flows, not attachment bodies or ink.
+Do not combine `query` with other read options. Resolve ambiguity before editing. For a rename,
+send `ops: [{op: "update", id, set: {label: "New name"}}]` with the match’s view and revision;
+the receipt verifies it without another read or render.
+
+Use the outline to find a room, then read that room with `view.inside`. For a known group, flow or
+set of nodes, pass `focus` directly. The outline and source formats cover the file and ignore
+`view`, `focus`, `include` and `cursor`.
 
 Pages hold at most 200 elements, 400 relationships, 20 flows, 50 open points and 96 KB. A `cursor` is
 bound to the revision and read options; a change answers `CURSOR_STALE`.
@@ -235,10 +283,11 @@ their own configuration.
 The brief (`BRIEF`) goes in as the agent's whole system prompt, replacing its coding one: Claude Code's
 `--system-prompt`, Codex's `model_instructions_file` (the run folder's `brief.md`). Each turn's prompt
 starts with a `<draft-canvas-context>` block: the diagram, the view, the selection, which tool makes
-changes, a proposal of this conversation still waiting for review, the view itself as `read_diagram`
-answers it (read by the page through the agent host as the turn is sent, up to 40,000 characters, `<`
-escaped), and on a follow-up whether the diagram is unchanged since the last turn (then neither the view
-nor a read is needed). Each run's
+changes, a proposal of this conversation still waiting for review, and on a follow-up whether the
+diagram is unchanged since the last turn. The page does not eagerly read or attach the diagram.
+The agent requests needed context through targeted reads; an unchanged hint permits reuse only of
+views it actually read. The protocol still accepts a bounded, escaped snapshot from callers that
+already have one. Each run's
 connector carries `DRAFT_CANVAS_RUN` (the run id) and `DRAFT_CANVAS_AGENT_DIR` (the starting app's own
 agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 
@@ -264,15 +313,57 @@ agent folder). The bridge holds a run's calls to its policy (`agent/runs.rs`):
 **Tokens.** Every model call of a turn resends the agent's instructions and tools, so each is kept small
 and calls are kept few:
 
-- A run's connector serves a lean tool set (`src-tauri/mcp/src/main.rs`'s `lean`): only the tools the
-  run may call, without `render_diagram` or `read_selection`, output schemas, the bounds the app checks
-  anyway, or nested inside views in an element.
+- Turns start with identity, room, selection and review mode, without a full diagram snapshot or
+  a local natural-language classifier. An exact-label rename resolves its target and current
+  revision locally inside the ordinary checked update transaction. Missing/ambiguous labels,
+  scope restrictions and concurrent edits still refuse. Requests needing interpretation of the
+  diagram use targeted reads with the usual revision checks. In review mode the host routes the
+  same final `rename_element` decision to `submit_proposal`, with a bounded generated summary.
+  The native policy still refuses `update_diagram` in review mode.
+- `submit_proposal` accepts either the usual revision/ops or an isolated `rename:{from,to}` with
+  summary, optional view/scope and `revises`. Rename cannot be mixed with ops, layout or a caller
+  revision. The page resolves it from one local snapshot, validates the ordinary proposal and
+  persists concrete ids, ops, base revision and preconditions. Acceptance never resolves the label
+  again. No diagram/history/save mutation happens at submission; normal review, conflicts and
+  undo apply at acceptance. The original request is journaled, so retries do not duplicate or
+  revise the proposal twice; replay confirmation refers to the panel for its current status.
+- Nodi's agent interprets natural-language requests and returns a structured final decision: a
+  chat answer, exact-label rename, ordinary update or proposal. Reads, help and previews remain
+  available while it plans. Native run policy refuses mutations during this phase, even through
+  legacy tool names. The literal quoted-command shortcut is no longer used.
+- Only after a successful model turn **and clean process exit** does the host authorize the exact
+  final payload and launch the bundled executor. The host pins diagram id, request id and the
+  submitted selection scope; review mode still requires a proposal. The normal broker performs
+  access checks, full validation, ambiguity refusal, journaling, revision/concurrency checks,
+  cancellation, persistence and undo. No model runs after this operation to confirm it.
+- The receipt supplies the outcome: saved, unchanged, applied-but-unsaved, save-failed or proposal
+  awaiting review. Warnings and recovery notes remain visible. Malformed decisions, failed or
+  cancelled model runs, denied edits and unknown receipts cannot produce a success confirmation.
+  Errors are not automatically retried. Token usage stays attached to the model turn, including
+  cached input; the deterministic executor does not report it as zero.
+- Agent sessions end normally and remain resumable. Recent native outcomes are supplied as data
+  on the next agent turn, with the "unchanged" hint cleared, because the model's transcript contains
+  its plan but not that plan's execution result. This receipt context is bounded and transient.
+  Reads and previews can still require additional inferences before an edit; this removes the
+  **post-edit confirmation** inference. External MCP clients retain control of their own loops.
+- Connections discover one dispatcher; operation schemas are fetched on demand. Exact-label renames
+  need one call. A companion run can dispatch only its permitted operations, without `render_diagram`
+  or `read_selection`.
+  The app validates the full contract regardless of what discovery exposes.
 - Codex runs with the features that bring tools of their own turned off (browser, computer use, image
   generation, sub-agents, plugins, apps, skill search, `unified_exec`; only those `codex features list`
-  reports) and web search off.
+  reports) and web search off. Its canvas brief supplies workflow guidance, so automatic skill
+  instructions are omitted with `skills.include_instructions=false` and the unused skill catalog is
+  capped with `skills.max_context_tokens=1`. `agents.enabled=false` also removes multi-agent tools
+  and instructions that feature flags alone can leave enabled. Draft Canvas namespaces use
+  `features.code_mode.direct_only_tool_namespaces`; `excluded_tool_namespaces=["functions"]` omits
+  unused native file/resource tools from the nested execution surface. The code-mode host stays
+  enabled for model compatibility. CLI planning-mode instructions and the structured-question tool
+  are disabled; Nodi asks clarifying questions in chat. Permission instructions, the read-only
+  sandbox, and native diagram approval, validation, revision, save and undo checks remain intact.
 - The view comes with the turn, so a question is one call.
-- The brief: no read when the view came with the turn, `get_capabilities` only when a change is refused
-  for an unknown type, no preview before a proposal, no read after a change.
+- The brief directs the agent to reuse the supplied view, look up individual capability topics as
+  needed, use previews to compare alternatives, and take revisions and advisories from receipts.
 - Small talk (a whole message of only "hello", "thanks", "bye", "how are you") is answered by Nodi
   itself (`nodiLines.ts`'s `smallTalkOf`): no run, no tokens. Confirmations such as "yes" and "ok"
   reach the selected agent, including its resumed session after an app restart.

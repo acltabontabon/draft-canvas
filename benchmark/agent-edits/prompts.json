@@ -1,0 +1,7 @@
+{
+  "description": "Change the description of Document and depth to “Validates files and manages nested views.” Keep its label, position and all other diagram content unchanged.",
+  "shape": "Add one unconnected service named Audit worker with description “Records audit events.” in the current top-level view. Keep all existing shapes, connections and positions unchanged.",
+  "connection": "Change the label of the connection from Shared editor to Browser documents to “Saves locally”. Preserve its endpoints, semantics, routing and all other diagram content.",
+  "repoint": "Redirect the connection from Shared editor to Browser documents so it goes to Diagram files instead. Keep its label, semantics and all other diagram content unchanged.",
+  "rename": "Please change the name of Shared editor to Diagram editor. Keep everything else unchanged."
+}

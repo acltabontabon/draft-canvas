@@ -8,7 +8,7 @@ import { AgentError } from '../../src/agent/errors';
 import { applyUpdate } from '../../src/agent/patch';
 import { diffForReview } from '../../src/agent/proposal';
 import { readDiagram, viewPathOf } from '../../src/agent/read';
-import { TOOLS } from '../../src/agent/schema';
+import { FULL_TOOLS as TOOLS } from '../../src/agent/schema';
 import { viewOf } from '../../src/depth/tree';
 import { deserializeDocument } from '../../src/export/project';
 import type { DraftDocument, DraftFlowStep } from '../../src/document/types';

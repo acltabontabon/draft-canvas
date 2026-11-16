@@ -148,7 +148,9 @@ jobs:
         run: npx playwright install chromium webkit
       - name: Real MCP sidecar to proposal review and acceptance
         if: runner.os == 'macOS'
-        run: npm run e2e:mcp -- --project=chromium --project=webkit --fail-on-flaky-tests
+        run: |
+          test -x src-tauri/target/debug/draft-canvas-mcp
+          npm run e2e:mcp -- --project=chromium --project=webkit --fail-on-flaky-tests
       - name: Build and package
         run: npx tauri build --debug --ci --config src-tauri/tauri.sidecar.conf.json
       # Bundled beside the app, and the same version as it: Settings → AI agents points agents here.

@@ -57,6 +57,10 @@ pub const FILES: &[(&str, &[u8])] = &[
         include_bytes!("../../../skills/draft-canvas/scripts/pairings.json"),
     ),
     (
+        "references/workflows.md",
+        include_bytes!("../../../skills/draft-canvas/references/workflows.md"),
+    ),
+    (
         "references/authoring.md",
         include_bytes!("../../../skills/draft-canvas/references/authoring.md"),
     ),
@@ -657,6 +661,22 @@ mod tests {
         (
             "24",
             "49556365054ad8931038ce88c6e94ca74d84fbb433cc8e942a99bff2eca76d8c",
+        ),
+        (
+            "25",
+            "509793ffe65f877401448c32d8f114f875efe9fd37e414b4bf5554758c3792f6",
+        ),
+        (
+            "26",
+            "ed37b0155d264598a936880c98566b20e3ac4ca8e69523f61c112141bacaaeca",
+        ),
+        (
+            "27",
+            "33bafce23c9e24ee9d07ab35bb298987b564713bee6818553d9a812bc7af2f01",
+        ),
+        (
+            "28",
+            "b6521644788a09ab31d2c5e4ab5b76f84af9b96b233b2b911bc12beb7a6417aa",
         ),
     ];
 

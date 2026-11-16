@@ -105,6 +105,34 @@ into view. Ask Nodi to adjust it ("keep the cache, but use Redis") and it revise
 the same proposal; the chip lists earlier versions. **Review changes first** under the message box
 switches to **Apply changes directly**, where changes land at once and Undo takes them back.
 
+For a request such as “Could you change the name of Orders API to Checkout API and save it?”, your
+agent works out the edit, then Draft Canvas applies it through the normal checked tool and confirms
+from its receipt. There is no extra model call just to say it is done. The reply distinguishes a
+saved edit from an unsaved change or a failed save, and keeps warnings visible. Review mode still
+creates a proposal for you to accept; selection scope and Undo still apply. More involved requests
+may need reads or previews before the final edit.
+
+Nodi loads diagram context only when the agent needs it. A rename that supplies both exact labels
+does not send the whole diagram first. Ambiguous labels are refused; requests referring to “this
+box” or other diagram details can still trigger a targeted read.
+
+Exact-label renames work this way in **Review changes first** too: Draft Canvas resolves the target
+locally and creates a proposal. The diagram stays unchanged until you accept it. If the target
+changes while the proposal waits, review reports a conflict instead of renaming a different shape.
+
+For descriptions, new shapes and connection changes, Nodi can return an edit intent without reading
+the diagram through the model. Draft Canvas resolves exact names locally, generates new ids and
+uses the revision captured when you pressed Send. If the diagram changed while the agent was
+thinking, the edit is refused. Ambiguous names or parallel connections need clarification.
+Review mode stores concrete changes and their preconditions, and still requires your acceptance.
+Larger design questions can use compact or detailed reads; all edits keep the same validation,
+scope, approval, save and Undo checks.
+
+Each Nodi turn starts with a small model context, so a simple explicit edit does not reread the
+whole chat. Earlier requests and actual outcomes remain available through a read-only history tool.
+Follow-ups that depend on earlier choices retrieve that context; missing history needs clarification.
+These reads can cost more than a self-contained edit. Pending proposals still need acceptance.
+
 Ask for all shapes in one horizontal row or vertical column when you want them aligned; automatic
 layout's reading direction can put several shapes in the same layer. Nodi can place and route shapes
 exactly for a specific arrangement. Short replies such as **yes** or
@@ -134,8 +162,9 @@ Explicit attachment sides and hand-placed bends stay fixed; an agent can set `ro
   build folders and secrets such as `.env` and keys. Folders allowed always are listed under
   **Settings → AI agents → Code Nodi may read**, where **Stop** takes one back.
 - **Two agents:** with both installed, the name under the message box switches between them. Each
-  diagram keeps one conversation per agent; switching restores that agent's history and terminal
-  session. The pencil starts over with the chosen agent.
+  diagram keeps one conversation per agent; switching restores that agent's visible history. The
+  terminal shortcut opens its latest CLI turn. The pencil clears Nodi's retained history for the
+  chosen agent; the CLI's own transcript files remain under that agent's control.
 - **Stopping:** **Stop** closes the run's access to diagram tools immediately, even while the agent
   is starting. Oversized agent output ends the run with an error; ask for a smaller answer and retry.
 - **What it uses:** the line under the message box shows the conversation's new tokens, and with an
@@ -143,7 +172,10 @@ Explicit attachment sides and hand-placed bends stay fixed; an agent can set `ro
   cached input, output and totals. New tokens are new input plus output; cached input is reused
   context, with pricing and plan limits set by the provider.
 - **Where conversations are kept:** the agent's own sessions (`~/.claude/projects`,
-  `~/.codex/sessions`). Draft Canvas keeps the conversation shown only while the app runs.
+  `~/.codex/sessions`). Draft Canvas keeps the conversation shown while the app runs, plus up to
+  128 turns / 64 KiB of requests and outcomes per diagram and agent in its private local settings.
+  This context survives restart, expires after 30 days without use and is never stored in a diagram.
+  History reads report when older context was omitted, including chats from before this feature.
 
 ## Draw a repository
 
