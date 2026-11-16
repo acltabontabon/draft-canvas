@@ -11,6 +11,7 @@ import { categoryOf } from '../../document/connectorSemantics';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument, DraftEdge, DraftNode } from '../../document/types';
 import { isInteracting, useEditorStore } from '../../store/editorStore';
+import { currentRevision } from '../../host/agentBridge';
 import { selectNode } from '../../store/selectors';
 import { useUiStore } from '../../store/uiStore';
 import type { AgentClientSetup, AgentInfo, AgentSkillSetup, ApplyMode, CodeFolder, CodeGrant, PromptRequest, Proposal } from '../api';
@@ -582,7 +583,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
       if (isStage(next)) useUiStore.getState().openCommandPaletteAt(command.title.replace(/…$/, ''));
     }
   };
-  // Between Send and the turn starting (its view is read first): a second Enter is not a second turn.
+  // Between Send and the turn starting: a second Enter is not a second turn.
   const sending = useRef(false);
   const send = (text = draft) => {
     const prompt = text.trim();
@@ -611,6 +612,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     const kind = agent?.agent ?? 'claude-code';
     const request: PromptRequest = {
       runId: crypto.randomUUID(),
+      revision: currentRevision(),
       diagramId,
       text: prompt,
       selection: scoped ? { nodes: selection.nodes, edges: selection.edges } : null,
@@ -624,10 +626,9 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
     sending.current = true;
     void (async () => {
       try {
-        // The view up front, so the agent's first call is its answer rather than a read; not when it
-        // has the view from last turn already.
-        const snapshot = request.unchanged ? null : await controller.companionSnapshot(diagramId, room).catch(() => null);
-        await controller.companionSend(snapshot ? { ...request, snapshot } : request, scoped ? about : null);
+        // The revision stays local to the host. Simple intents resolve names without sending
+        // the graph to the model, and refuse intervening edits before resolution.
+        await controller.companionSend(request, scoped ? about : null);
       } finally {
         sending.current = false;
       }

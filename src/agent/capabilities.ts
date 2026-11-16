@@ -8,6 +8,7 @@ import { LEVEL_HINTS } from '../depth/level';
 import { AgentError } from './errors';
 import { AGENT_LIMITS } from './input';
 import { READ_LIMITS } from './read';
+import { FULL_TOOLS } from './schema';
 import { starterIds, type AgentStarter } from './starter';
 import { ELEMENT_TYPES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES } from './vocabulary';
 
@@ -40,7 +41,13 @@ const TOPIC_INDEX: Record<(typeof TOPICS)[number], string> = {
  * `starters` is the gallery the person has downloaded (`src/gallery/`), resolved by the page: the
  * starters are no longer part of the app, so an empty list means the gallery is off or never loaded.
  */
-export function capabilities(args: { topics?: unknown; starter?: unknown }, starters: readonly AgentStarter[] = []): Record<string, unknown> {
+export function capabilities(args: { topics?: unknown; starter?: unknown; tool?: unknown }, starters: readonly AgentStarter[] = []): Record<string, unknown> {
+  if (args.tool !== undefined) {
+    const tool = FULL_TOOLS.find((entry) => entry.name === args.tool);
+    if (!tool) throw new AgentError('INVALID_INPUT', 'Unknown tool; use a name from tools/list.', { path: '/tool' });
+    if (args.topics !== undefined || args.starter !== undefined) throw new AgentError('INVALID_INPUT', 'Request tool schema separately from topics or starter.');
+    return { tool: tool.name, description: tool.description, inputSchema: tool.inputSchema };
+  }
   // A starter with topics answers both; alone it is just the starter, as it always was.
   if (typeof args.starter === 'string' && Array.isArray(args.topics)) return { ...capabilities({ topics: args.topics }, starters), ...capabilities({ starter: args.starter }, starters) };
   if (typeof args.starter === 'string') {

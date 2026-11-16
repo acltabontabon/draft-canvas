@@ -10,16 +10,13 @@ Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
 On Home, choose **Quick Draft**. To see a finished diagram first, choose **Try an example**, then
 **Play explanation**.
 
-The web app saves in your browser as you draw; on desktop, `⌘S` saves a file. Shape tools are at
-the top; **Present**, **Flows** and **Share** at the top right. `⌘K` finds any command and `?` lists
-shortcuts.
-The back arrow beside the diagram title returns to your diagrams. In the web app, each recent
-diagram on Home has **Rename**, **Duplicate** and **Delete** buttons.
+The web app saves in your browser as you draw; on desktop, `⌘S` saves a file. Shape tools are at the
+top, and **Present**, **Flows** and **Share** at the top right. `⌘K` finds any command and `?` lists
+shortcuts. The back arrow beside the title returns to your diagrams.
 
-On a blank canvas, double-click (or long-press, on a touch screen) anywhere to choose your first shape, or
-point at the canvas and press `S`, `D` or `Q` for a Service, Data Store or Queue. For a starting point,
-**Browse the starters gallery** offers ready-made architectures; once you load it, the blank canvas
-shows five of them. See [architecture examples](examples.md). `⌘K` searches for a command by name.
+On a blank canvas, double-click (long-press on touch) to choose your first shape, or point at the
+canvas and press `S`, `D` or `Q` for a Service, Data Store or Queue. For a head start, **Browse the
+starters gallery** offers ready-made architectures; see [architecture examples](examples.md).
 
 ![The blank canvas with drawing hints and the starters gallery.](../media/guides/empty-canvas.png)
 
@@ -36,8 +33,8 @@ Connectors label themselves; click one to change it.
 
 ## Add a note
 
-Right-click the queue and choose **Attach note**. The note opens ready to type; click the canvas to keep
-it (`Esc` throws it away). Click the chip to reopen it.
+Right-click the queue and choose **Attach note**. Type, then click the canvas to keep it (`Esc`
+throws it away). Click the chip to reopen it.
 
 ## Draw a boundary
 
@@ -69,9 +66,8 @@ Open **Share → Export…** (`⌘⇧E`):
 ## Make it yours
 
 The sliders button at the bottom right opens **Settings → Canvas**: a **Clean**, **Draft** or
-**Sketch** drawing style, the next-shape suggestions, and a
-background image for the open diagram. The first two are for this device; the background is saved
-with the diagram.
+**Sketch** drawing style, next-shape suggestions, and a background image. The first two are device
+preferences; the background is saved with the diagram.
 
-Next: [saving and sharing](saving-and-sharing.md), [starters](examples.md),
-[looking inside a service](depth.md) and [open points](open-points.md).
+Next: [saving and sharing](saving-and-sharing.md), [starters](examples.md), [system
+levels](depth.md) and [open points](open-points.md).

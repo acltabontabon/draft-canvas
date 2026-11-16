@@ -88,6 +88,7 @@ const TOOLS: &[&str] = &[
     "submit_proposal",
     "get_proposal",
     "list_proposals",
+    "read_conversation",
     "ask_to_read_code",
     "list_code",
     "search_code",
@@ -183,6 +184,14 @@ pub async fn call(agent: &Agent, tool: &str, args: Value, calls: &CallRegistry) 
         })?,
         None => args,
     };
+    if let Some(run) = &calls.run {
+        agent.runs.check_write(run, tool, &args)?;
+    }
+    if tool == "read_conversation" {
+        return agent
+            .runs
+            .history(calls.run.as_deref().ok_or_else(runs::ended)?, &args);
+    }
     if runs::RUN_ONLY.contains(&tool) {
         return read_code(tool, policy.and_then(|p| p.code), args).await;
     }
@@ -2358,6 +2367,65 @@ mod tests {
             !safe_to_resume(&entry),
             "a missing update target does not prove no mutation"
         );
+    }
+
+    #[tokio::test]
+    async fn a_local_edit_retry_replays_before_resolving_names_again() {
+        for (tool, intent) in [
+            ("update_diagram", false),
+            ("submit_proposal", false),
+            ("update_diagram", true),
+            ("submit_proposal", true),
+        ] {
+            let dir = tempfile::tempdir().unwrap();
+            let agent = Agent::new(dir.path());
+            agent.ensure_ledger().unwrap();
+            let mut args = json!({"diagramId":"d_1", "requestId":"rename", "rename":{"from":"API","to":"Gateway"}});
+            if intent {
+                args.as_object_mut().unwrap().remove("rename");
+                args["expectedRevision"] = json!("o:captured.1");
+                args["intent"] = json!({"kind":"add","type":"service","label":"Audit"});
+            }
+            if tool == "submit_proposal" {
+                args["summary"] = json!("Rename API");
+            }
+            record(
+                &agent,
+                Entry {
+                    key: format!("{tool}:rename"),
+                    tool: tool.into(),
+                    fingerprint: fingerprint(tool, &args),
+                    stage: Stage::Committed,
+                    at: now_ms(),
+                    diagram_id: Some("d_1".into()),
+                    path: None,
+                    receipt: Some(if tool == "submit_proposal" {
+                        json!({"proposalId":"p_1","status":"pending","revision":"f:2"})
+                    } else {
+                        json!({"applied":true,"persisted":true,"state":"saved","revision":"f:2"})
+                    }),
+                },
+            )
+            .unwrap();
+            let calls = CallRegistry::new("external".into());
+            let Admission::Replay(receipt) = admit(&agent, tool, &args, &[], &calls, |_| None)
+                .await
+                .unwrap()
+            else {
+                panic!("a completed rename must never enter the page again");
+            };
+            assert_eq!(receipt["revision"], "f:2");
+            assert_eq!(receipt["replayed"], true);
+            let mut changed = args.clone();
+            if intent {
+                changed["intent"]["label"] = json!("Different");
+            } else {
+                changed["rename"]["to"] = json!("Different");
+            }
+            assert!(
+                matches!(admit(&agent, tool, &changed, &[], &calls, |_| None).await, Err(error) if error.code == "REQUEST_ID_MISMATCH")
+            );
+        }
     }
 
     #[test]

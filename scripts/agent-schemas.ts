@@ -7,7 +7,7 @@
  */
 import { writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { RUN_TOOLS, TOOLS } from '../src/agent/schema';
+import { ENTRY_TOOLS, PLANNING_ENTRY_TOOLS, RUN_TOOLS, TOOLS } from '../src/agent/schema';
 import { ELEMENT_TYPE_ALIASES, ELEMENT_TYPE_NAMES, resolveType } from '../src/agent/vocabulary';
 import { capabilityFor, categoryOf, type NodeCategory } from '../src/document/connectorSemantics';
 
@@ -51,6 +51,8 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const target = fileURLToPath(new URL('../src-tauri/mcp/tools.json', import.meta.url));
   writeFileSync(target, toolsJson());
   console.log(`wrote ${target}`);
+  writeFileSync(fileURLToPath(new URL('../src-tauri/mcp/entry-tools.json', import.meta.url)), `${JSON.stringify(ENTRY_TOOLS, null, 2)}\n`);
+  writeFileSync(fileURLToPath(new URL('../src-tauri/mcp/planning-entry-tools.json', import.meta.url)), `${JSON.stringify(PLANNING_ENTRY_TOOLS, null, 2)}\n`);
   const runTarget = fileURLToPath(new URL('../src-tauri/mcp/run-tools.json', import.meta.url));
   writeFileSync(runTarget, runToolsJson());
   console.log(`wrote ${runTarget}`);

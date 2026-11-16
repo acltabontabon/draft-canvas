@@ -6,182 +6,132 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+## [1.20.0] - 2026-11-16
+
+Draw sequences. Sketch over any diagram.
+
+Sequence diagrams and a Pencil join the canvas, Arrange and Tidy up show a preview before anything
+moves, and starters now come from a public gallery you load when you want them.
+
 ### Shared
 
 #### Added
 
 - **Sequence diagrams, on the canvas** — Press `L` to start with a participant. Drag between
-  lifelines to add messages or move an arrow's ends. Replies and work bars lay themselves out.
-  Wrap messages in a condition, loop or parallel branches, or press `Tab` to add the suggested
-  next message. Turn automatic message numbering on or off for each sequence. <!-- highlight -->
-- **Your shapes take part** — Drop a Service, Data Store or Queue into a sequence to use its name,
-  kind, technology and colour. Linked shapes and participants update together. Messages suggest
-  labels based on who's connected, and you can connect lifelines in separate frames. <!-- highlight -->
-- **Present a sequence** one message at a time with every lifeline visible. Export to Mermaid or
-  PlantUML, paste a Mermaid `sequenceDiagram` to edit it, or draw an existing flow as a sequence.
-- **Attach notes and code to sequence messages.** Right-click an arrow to start a new card,
-  or drag a canvas note or code card onto it. Open the card from its chip while editing or presenting.
-- AI agents can add, read and change sequences.
+  lifelines to add messages; replies and work bars lay themselves out. Wrap messages in a condition,
+  loop or parallel branches, drop in a Service, Data Store or Queue to use its name and technology,
+  and present one message at a time. <!-- highlight -->
+- Export a sequence to Mermaid or PlantUML, paste a Mermaid sequence to edit it, or draw an existing
+  flow as a sequence. Notes and code attach to a message, and AI agents can add, read and change
+  sequences.
 - **Sketch and Smart Ink** — Pick up the Pencil (`P`) to draw over a diagram: circle a service,
   underline a risk, highlight a name. Smart Ink turns rough boxes, cylinders, circles and arrows into
-  real shapes and connectors as you draw, with a small strip to pick another kind; `Esc` or undo
-  puts your drawing back. Works with a mouse, a finger or a pen with pressure, offline. <!-- highlight -->
-- **Tidy up, with a preview** — One cleanup to reach for first, in `⌘K` and on right-click. It
-  keeps every shape where you put it, straightens connectors that just miss level and re-attaches
-  ones drawn through a shape, and shows the result over the diagram before anything changes.
-  **Apply** is one undo step. With shapes selected it tidies only that corner. <!-- highlight -->
-- **Put a shape in between** — Drop a Queue (or a Data Store, Service, Component or Junction) onto a
-  connector and it goes in the middle: `Orders API → orders → Billing`, with both lines dashed and
-  captioned on their own. Placing one there with a shape tool works too. <!-- highlight -->
-- **Delete and keep the line** — `⌥⌫` takes a shape out of the middle and joins the line back up,
-  keeping its flows. <!-- highlight -->
+  real shapes and connectors as you draw; `Esc` or undo puts your drawing back. Works with a mouse,
+  a finger or a pen, offline. <!-- highlight -->
+- **Tidy up, with a preview** — In `⌘K` and on right-click. It keeps every shape where you put it,
+  straightens connectors that just miss level and re-attaches ones drawn through a shape. **Apply**
+  is one undo step; with shapes selected it tidies only that corner.
+- **Starters gallery** — Starters now live in a public repository,
+  [draft-canvas-starters](https://github.com/acltabontabon/draft-canvas-starters), so they improve
+  between releases. Load them once from a blank canvas or `⌘K`, preview what each is for, then add
+  it or open it as a new diagram. Nothing about your diagrams is sent. <!-- highlight -->
+- **Put a shape in between** — Drop a Queue, Data Store, Service, Component or Junction onto a
+  connector and it goes in the middle, with both lines captioned on their own.
+- **Delete and keep the line** — `⌥⌫` removes a shape from the middle of a path and joins the line
+  back up, keeping its flows.
 - **Turn into another shape** — `⇧Q` turns the selection into a Queue, `⇧D` into a Data Store, and
   so on. Name, connectors, flows and notes stay.
-- **Fan-in in one drag** — With several shapes selected, drag from any one of their dots onto a
-  shape to connect them all.
-- The technology sets the kind: Redis makes a Data Store a Cache, Kafka a Queue a Topic, Stripe a
-  Service External. A kind you picked stays.
-- **Data pipelines read as data** — The Medallion starter now runs left to right the way its data
-  moves, sources to Gold to whoever reads it. Connectors can say how often they run (Streaming,
-  Hourly, Daily…), and **Show lineage** lights up everything a shape's data comes from and feeds.
-  <!-- highlight -->
-- A Table feeding another Table is `transforms` by default. Delta Lake, Snowflake and BigQuery make
-  a Data Store a Table; Auto Loader, Spark and dbt make a Service a Worker; Airflow a Scheduler.
-  Databricks products show the Databricks logo.
+- **Fan-in in one drag** — With several shapes selected, drag from any one of their dots onto a shape
+  to connect them all.
+- **Data pipelines read as data** — The Medallion starter runs left to right, sources to Gold to
+  readers. Connectors can say how often they run (Streaming, Hourly, Daily…), and **Show lineage**
+  lights up everything a shape's data comes from and feeds.
 - **Instances** — Name a Service `Fulfilment ×3`, or set the count in its toolbar, and it draws as a
-  stack with a small ×3. Traffic reads the instances as competing consumers.
-- **Starters gallery** — Starters now live in a public repository,
-  [draft-canvas-starters](https://github.com/acltabontabon/draft-canvas-starters), so they get better
-  between releases. Load them once from **Browse the starters gallery** on a blank canvas or
-  **Browse starters…** in `⌘K`; preview any starter with when to use it and what to watch out for,
-  then add it or open it as a new diagram. Nothing about your diagrams is sent. <!-- highlight -->
-- Starters that are new or have changed are marked **New** or **Updated**, and a diagram made from a
-  starter offers its newer version as a new diagram. Yours is never changed.
+  stack. Traffic reads the instances as competing consumers.
+- **Technology sets the kind** — Redis makes a Data Store a Cache, Kafka a Queue a Topic, Stripe a
+  Service External, and Snowflake or BigQuery a Table. A kind you picked stays.
 
 #### Changed
 
-- **Export by what you want to do** — The export dialog now asks in plain words: **Share a link**,
-  **Save an editable file**, **Save an image**, **Use in a README**, with Mermaid, PlantUML, C4 and
-  draw.io under **Other formats**. Each choice says what you get. <!-- highlight -->
-- **A shorter toolbar** — The toolbar keeps the shapes most diagrams use. **Shapes** at its end
-  lists every one by name, with what it is for and its key, and finds a shape by any name you'd use
-  (`cache`, `user`, `topic`). Every key still works over the canvas.
-- **Search by technology** — Type `kafka`, `redis`, `postgres` or `s3` in **Shapes** and pick the
-  shape that technology is: a Kafka topic, a Redis cache, with the kind set and the logo on it.
-  `spring`, `rust` or `node` gives a Service built with it.
-  <!-- highlight -->
-- A calmer look: buttons and toggles no longer stack an outline on a tint, the selection ring and
-  keyboard focus are heavier, and **Saved locally** stays in the background unless something needs
-  you.
-- Traffic uses handwriting more sparingly: with more than three findings the notes are set in plain
-  type, and the detail card keeps handwriting for its headline number.
+- **Export by what you want to do** — **Share a link**, **Save an editable file**, **Save an image**
+  and **Use in a README**, with Mermaid, PlantUML, C4 and draw.io under **Other formats**. Click the
+  image preview to inspect it large, or at 100%. <!-- highlight -->
+- **A shorter toolbar** — It keeps the shapes most diagrams use. **Shapes** lists every one with
+  what it is for and its key, and finds a shape by any name you'd use (`cache`, `user`, `topic`).
+  Every key still works over the canvas.
+- **Search by technology** — Type `kafka`, `redis`, `postgres` or `s3` in **Shapes** to get that
+  technology as a shape, kind set and logo on. `spring`, `rust` or `node` gives a Service built with
+  it.
 - **Connectors that pick a better side** — A connector that would cross another, cut through a shape
-  or take a long way round a shape now tries the other sides of its two shapes and takes the
-  cleanest line. Add an arrow to a busy diagram and it finds its own way in; the arrows around it
-  step aside. Connectors that are already clean stay exactly where they are, and so do pinned ends
-  and bends you placed by hand. <!-- highlight -->
-- Starters are no longer part of the app: until you load the gallery, a blank canvas offers it in
-  one card instead of five tiles. **Try an example** still works offline.
-- The starters were redrawn: captions such as "publishes to" no longer get cut short, and named
-  queues use their full size.
-- **The canvas shows what changed** — A new shape settles in, a new connector draws itself from
-  start to end, and a deleted one fades where it was. Undo and redo glide moved shapes back and
-  briefly light what they changed. <!-- highlight -->
-- Dialogs, menus, toasts and panels ease in instead of appearing at once, buttons give a little
-  when pressed, and a slow editor load shows a small diagram drawing itself instead of a blank
-  screen. All of it follows your system's Reduce motion setting.
-- A blank canvas is quieter: a smaller invitation to draw, then one line of text for the starters
-  gallery, an example and search, with no card or ruled divider. Loaded starters rest as faint
-  sketches until you point at one.
-- **Quieter shapes, one family** — A Service's top band now takes its outline's colour, and the
-  card behind a Worker or a replicated Service is drawn lighter, so services no longer outweigh
-  queues and data stores.
-- **Marks in one row** — A shape's technology logo, attachments and open points now sit in one row
-  above its top-right corner, in one style, instead of crowding the corner and the labels of
-  connectors leaving it. Attachments show as a paperclip tab. <!-- highlight -->
-- Connector labels keep clear of the shapes they join: a label beside an upright run moves to the
-  side with room, and a relationship caption its line has no room for is left out instead of
-  running under a shape.
-- **Connector words and notes in their place** — A connector's label or caption stays off its own
-  corners, its arrowhead and its reply line, and sits on a quiet backing so a line passing under it
-  never strikes through the words. Notes, code and open points on a connector line up in one row
-  just past its words, instead of floating near the line. The same in exports.
-- On right-click, Arrange is now **Rearrange layout** and **Rearrange selection**, next to the new
-  **Tidy up**.
-- **Arrange, with a preview and a reading direction** — Arrange shows the diagram laid out again
-  before anything moves, with **Across →** or **Down ↓** to choose and the better fit suggested.
-  **Apply** is one undo step; **Cancel** keeps your layout and puts the view back exactly where it
-  was. The preview shows the result on its own, fitted to the screen: **Before** flips to the
-  diagram as it is, **Moves** shows where every shape goes, and pointing at one shape shows its own
-  move. <!-- highlight -->
-- **Check layout** — New in `⌘K`. It looks for names stacked into tall columns, captions with no
-  room to show, boundaries that are mostly header and spacing that makes the whole diagram too small
-  to read, and reports only what laying the view out again fixes: the Arrange preview opens with
-  the fixes named and marked. Every Arrange preview now says what it fixes, **Tidy up** names them
-  when a diagram is tidy but still reads badly, and agents get the same findings in their receipts.
-- Reply labels of neighbouring connectors no longer run into each other: each slides along its own
-  line to make room.
-- **Connector words are easier to read** — Labels and relationship captions are a size larger and
-  brighter on the dark canvas, so a request can be followed without zooming in.
-- **Inspect an image before exporting** — Click the preview in Export to open it large, and switch to
-  100% to read its text at actual size.
-- **Better proportions when arranging** — A long name gets a wider, shorter box instead of a tall
-  column, gaps between rows are only as long as their captions need, and neither a caption nor a
-  line runs through a boundary's title. Agents' diagrams get the same.
-- **Arrange and Tidy up work in the background** — A bar says "Arranging…" or "Tidying…" with a
-  **Cancel**, and the canvas stays usable. The same diagram gives the same preview on any computer;
-  a very large one says when it stopped early, and Arrange says when only one reading direction
-  was worked out. The bars also say why shapes were nudged, how many moved, and that sketches stay
-  where they are.
-- **Tidy up leaves straight connectors alone** and straightens real steps up to 32 px, instead of
-  nudging shapes whose line already ran level.
-- **Next-shape suggestions line up** — A suggested shape sits level with the one it follows, so its
-  connector runs straight, and its caption shows in full. Suggestions wait for you to rest on a
-  shape instead of flashing on every click, a User offers a Web App, and the Worker after a Queue,
-  Topic or Stream is named for it. The setting is now "Suggest the next shape while drawing".
-- **Snapping pulls the same distance at every zoom.** Hold `⌥` (Option) while dragging or resizing
-  to turn it off.
-- **Attach note opens ready to type**, and `⌘K` tells **Attach note** (to the selection) from **Add
-  note** (on the canvas). Shift+F10 with nothing selected opens the canvas menu.
-- **A failed save says why** — browser storage full, or the storage connection lost — and offers
-  **Retry**, **Export** and **Leave without saving**, also while presenting.
+  or take a long way round tries the other sides of its two shapes and takes the cleanest line.
+  Clean connectors, pinned ends and bends you placed stay where they are.
+- **Connector words in their place** — Labels and captions are larger and brighter on the dark
+  canvas and keep clear of corners, arrowheads and the shapes they join. Neighbouring reply labels
+  slide apart, and notes, code and open points line up in one row beside the words. Exports match.
+- **Marks in one row** — A shape's technology logo, attachments and open points sit in one row above
+  its top-right corner, in one style. Attachments show as a paperclip tab.
+- **Quieter shapes** — A Service's top band takes its outline's colour, and the card behind a Worker
+  or replicated Service is lighter, so services no longer outweigh queues and data stores.
+- **The canvas shows what changed** — A new shape settles in, a new connector draws itself, a
+  deleted one fades. Undo and redo glide shapes back and briefly light what changed. All of it
+  follows your system's Reduce motion setting.
+- **Arrange, with a preview** — Shows the diagram laid out again before anything moves, with
+  **Across →** or **Down ↓** (the better fit suggested). **Before** flips to the current diagram,
+  **Moves** shows where every shape goes, and **Apply** is one undo step. Long names get wider boxes,
+  gaps fit their captions, and nothing runs through a boundary's title. <!-- highlight -->
+- **Check layout** — New in `⌘K`. It reports names stacked into tall columns, captions with no room,
+  boundaries that are mostly header and diagrams too small to read, and opens the Arrange preview with
+  the fixes marked.
+- **Arrange and Tidy up run in the background** — A bar shows progress with **Cancel**, and the
+  canvas stays usable. The same diagram gives the same preview on any computer, and a very large one
+  says when it stopped early.
+- **Tidy up leaves straight connectors alone** and straightens real steps up to 32 px.
+- **Next-shape suggestions line up** — A suggestion sits level with the shape it follows and waits
+  until you rest on a shape. A User offers a Web App; the Worker after a Queue, Topic or Stream is
+  named for it. The setting is now "Suggest the next shape while drawing".
+- **Snapping pulls the same distance at every zoom.** Hold `⌥` while dragging or resizing to turn it
+  off.
+- **A failed save says why** — browser storage full, or the connection lost — and offers **Retry**,
+  **Export** and **Leave without saving**, also while presenting.
 - **Mermaid import is more forgiving** — Several arrows between the same two shapes become one
-  connector with the labels joined, long file names and deeply nested subgraphs import, and errors
-  are in plain words. A diagram saved by a newer Draft Canvas says so and is left untouched.
-- **Easier on touch screens and for screen readers** — Buttons, popovers, menus and the status bar
-  are at least 40 px on touch screens, the status bar wraps on phones and whenever a save needs
-  attention (a narrow desktop window keeps its one row), the Flows panel is a tree,
-  the blank canvas reads its `S`, `D`, `Q` keys aloud, and the canvas and
-  Quick Connect rows show where focus is. Zoom, status chips and flow-bar buttons show their keys,
-  danger and faint text have more contrast, and one name is used for each thing (spotlight, shape,
-  connector, reply line).
+  connector, long file names and deeply nested subgraphs import, and errors are in plain words. A
+  diagram saved by a newer Draft Canvas says so and is left untouched.
+- **Easier on touch screens and for screen readers** — Controls are at least 40 px on touch screens,
+  the Flows panel is a tree, the canvas shows where focus is, and danger and faint text have more
+  contrast.
+- A blank canvas is quieter: one line for the starters gallery, an example and search. Buttons lose
+  their stacked outlines, selection and focus rings are heavier, and **Saved locally** stays in the
+  background unless something needs you.
+- **Attach note** opens ready to type, and `⌘K` tells **Attach note** (to the selection) from
+  **Add note** (on the canvas). `Shift+F10` with nothing selected opens the canvas menu.
 
 #### Fixed
 
-- A connector routed round a shape from a Queue no longer starts with a small spike at the tube.
-- A click that wobbles a few pixels no longer moves a shape or leaves an undo step, and holding an
-  arrow key no longer queues a stall on large diagrams. Dropping or moving shapes in large diagrams
-  plans connectors faster.
-- The shape popover no longer cuts off "Generic" and "Details"; Details is an icon until a
-  technology is set.
+- A click that wobbles a few pixels no longer moves a shape or leaves an undo step. Holding an arrow
+  key no longer stalls large diagrams, and moving shapes in them plans connectors faster.
 - Typing `constructor` or `__proto__` as a technology no longer stops every save.
-- Grouping stops at 32 levels instead of being undone on reload, and undo no longer moves the saved
-  camera. Panning and zooming save less often and never show "Unsaved".
-- Shared and view-only copies no longer show draggable connector end and bend handles, and the empty
-  canvas shows the normal arrow instead of a pointing hand.
-- An Arrange no longer lays a boundary's heading text over a shape on very large diagrams.
-- Smart Ink: undo removes a stale **Make it** strip, a highlighter in a selection no longer blocks
-  **Convert**, an abandoned stroke no longer stalls a drawing, and `Esc` or a cancelled pointer
-  during a sketch drag leaves it in place.
-- Bare `Enter` on Home no longer starts a diagram, and toasts no longer cover the create rail on a
-  phone.
-- Restoring a backup skips one bad entry instead of failing, and a diagram that clashes with an
-  existing one is titled "… copy". New diagrams are named "Untitled diagram".
+- Grouping stops at 32 levels instead of being undone on reload. Undo no longer moves the saved
+  camera, and panning and zooming save less often and never show "Unsaved".
+- Shared and view-only copies no longer show draggable connector handles, and the empty canvas shows
+  the normal arrow.
+- A connector routed round a shape from a Queue no longer starts with a spike at the tube, and Arrange
+  no longer lays a boundary's heading over a shape on very large diagrams.
+- Smart Ink: undo removes a stale **Make it** strip, a highlighter no longer blocks **Convert**, an
+  abandoned stroke no longer stalls a drawing, and `Esc` leaves a sketch drag in place.
+- The shape popover no longer cuts off "Generic" and "Details". Bare `Enter` on Home no longer starts
+  a diagram, and toasts no longer cover the create rail on a phone.
+- Restoring a backup skips one bad entry instead of failing, and a clashing diagram is titled
+  "… copy". New diagrams are named "Untitled diagram".
 
 ### Desktop
 
-#### Fixed
+#### Changed
 
+- **Nodi is cheaper and quicker on simple edits** — Renames, descriptions, added shapes and
+  connection edits resolve locally with no extra model call, and Nodi reads the diagram or earlier
+  chat only when needed. Ambiguous, out-of-scope or stale edits are still refused, and the diagram
+  changes only when you accept. <!-- highlight -->
+- AI agents can rename a shape in one call without reading whole rooms.
 - **Arrange Diagram** in the menu, and Nodi's layout skills, now show a preview first, like `⌘K`.
 
 ## [1.19.0] - 2026-11-11
@@ -2763,7 +2713,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.19.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.20.0...main
+[1.20.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.19.0...v1.20.0
 [1.19.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.1...v1.19.0
 [1.18.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.0...v1.18.1
 [1.18.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.17.0...v1.18.0

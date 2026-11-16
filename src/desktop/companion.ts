@@ -1,7 +1,7 @@
 /**
  * The agent companion's conversations (desktop only): what the person asked on each diagram and what
  * their agent did about it, folded from the shell's `companion` events. In memory only — never saved,
- * undone or exported, like `agentActivity.ts`. The shell keeps which agent session to resume.
+ * undone or exported, like `agentActivity.ts`. The shell keeps bounded local chat context on demand.
  *
  * No React here: `ui/Companion.tsx` reads it through `subscribe`/`snapshot`.
  */

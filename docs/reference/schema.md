@@ -22,25 +22,27 @@ A node may own a room (`DraftNode.inside`): its own `nodes`, `edges`, `flows`, `
 optional `ink` and `level`. A document is a tree of graphs, nested at most 3 levels below the root.
 
 A node of type `sequence` carries a `sequence` payload (`DraftSequence`): `participants`, optional
-`groups` of neighbouring participants, and `items` in order — messages, notes and fragments, whose
-operands hold items in turn. Set `numberMessages` to `false` to hide the sequence's message numbers.
-Ids inside it are local to the node. A participant has the identity
-fields of a shape (`type`, kind, `technology`, `accent`) and an optional `ref`, the id of the shape
-in the same view it stands for. A message has `from`, `to`, a `kind` (`sync`, `async`, `reply`,
-`create`, `destroy`), a `label`, optional `replyTo`, and `activate` / `deactivate` flags. A message can also contain an `attachments` array with the same note and code payloads
-as a canvas connector. Nothing in
-the payload is a coordinate: layout, work bars and the node's size are derived. A canvas connector
-can attach to a participant through `sourceAnchor.participantId` or `targetAnchor.participantId`.
-Its anchor offset is then measured along the participant's lifeline.
+`groups` of neighbouring participants, and `items` in order: messages, notes and fragments, whose
+operands hold items in turn. `numberMessages: false` hides message numbers. Nothing in the payload is
+a coordinate: layout, work bars and the node's size are derived.
 
-The same shape is stored in IndexedDB's `bodies` store.
+- Ids inside a sequence are local to the node.
+- A participant has a shape's identity fields (`type`, kind, `technology`, `accent`) and an optional
+  `ref`, the id of the shape in the same view it stands for.
+- A message has `from`, `to`, a `kind` (`sync`, `async`, `reply`, `create`, `destroy`), a `label`,
+  optional `replyTo`, `activate` / `deactivate` flags, and optionally an `attachments` array with the
+  same note and code payloads as a canvas connector.
+- A canvas connector can attach to a participant through `sourceAnchor.participantId` or
+  `targetAnchor.participantId`; its anchor offset is then measured along the participant's lifeline.
+
+IndexedDB's `bodies` store holds the same shape.
 
 ## Versions and migrations
 
 `src/document/migrate.ts` is the only code that reads `version`. `MIGRATIONS[n]` upgrades a
 version-`n` document to `n + 1`. `migrateToCurrent` runs the chain:
 
-- A missing `version` is treated as 1. A present but unreadable one (a string, a fraction, `null`, zero or negative) is refused, so a current file is never run through the whole chain.
+- A missing `version` is treated as 1. A present but unreadable one (a string, a fraction, `null`, zero or negative) is refused, so a current file never runs through the whole chain.
 - A version newer than `CURRENT_VERSION` throws `UnsupportedVersionError`, naming both versions.
 - A gap in the chain throws `Missing migration from document format v${v} to v${v + 1}.`
 
@@ -85,13 +87,12 @@ Rules for a new version:
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
 
-Linked compensating actions remain ordinary connectors. A compensation can name its originating
-interaction with `compensationFor`, keep its line folded with `compensationVisible: false`, and
-carry a business name (`compensationName`), protocol (`compensationProtocol`) and optional context
-(`compensationDescription`). Its ordinary `label` remains the counteraction operation. These fields
-are available in MCP `create_diagram`, `read_diagram` and `update_diagram`, including through Nodi.
-Older, unlinked `compensates` connectors stay visible; migration never guesses which operation they
-counteract. An invalid link is removed while the action remains visible and editable.
+**Compensating actions** are ordinary connectors. One can name its originating interaction
+(`compensationFor`), keep its line folded (`compensationVisible: false`), and carry a business name
+(`compensationName`), protocol (`compensationProtocol`) and context (`compensationDescription`); its
+`label` stays the counteraction operation. MCP `create_diagram`, `read_diagram` and `update_diagram`
+expose these fields. Older unlinked `compensates` connectors stay visible, since migration never
+guesses which operation they counteract; an invalid link is removed and the action stays editable.
 
 ## Validation
 

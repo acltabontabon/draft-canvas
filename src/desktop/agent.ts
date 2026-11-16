@@ -39,7 +39,10 @@ import { runOffThread, type Progress } from '../agent/offThread';
 import type { AgentStarter } from '../agent/starter';
 import { loadGallery, starterFile } from '../gallery';
 import { STAGE_TEXT } from '../agent/progress';
-import { readAttachment, readDiagram, viewPathOf } from '../agent/read';
+import { readAttachment, readDiagram, readEdit, readLookup, readOutline, viewPathOf } from '../agent/read';
+import { renamePatch } from '../agent/rename';
+import { intentPatch, type EditIntent } from '../agent/intent';
+import { READ_FORMATS } from '../agent/schema';
 import { buildImplementationContext } from '../agent/context';
 import type { PreparedProposal } from '../agent/proposal';
 import { readSelectionContext } from '../agent/selection';
@@ -187,8 +190,10 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
   const { args, context } = event;
   validateToolInput(event.tool, event.tool !== 'create_diagram' && context.diagramId ? { diagramId: context.diagramId, ...args } : args);
   switch (event.tool) {
-    case 'get_capabilities':
-      return capabilities(args, await downloadedStarters());
+    case 'get_capabilities': {
+      const wantsStarters = args.tool === undefined && (typeof args.starter === 'string' || !Array.isArray(args.topics) || args.topics.includes('starters'));
+      return capabilities(args, wantsStarters ? await downloadedStarters() : []);
+    }
     case 'read_attachment': {
       const snapshot = await fileFor(host, context);
       return readAttachment(snapshot.file, { ...args, expectedRevision: currentAs(snapshot, args.expectedRevision) }, snapshot.revision, context.diagramId ?? '');
@@ -228,7 +233,19 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
         return { opened: true };
       });
     case 'update_diagram':
-      return host.inTurn(() => update(api, host, event));
+      return host.inTurn(async () => {
+        if (args.rename === undefined && args.intent === undefined) return update(api, host, event);
+        // Resolve locally, inside the same controller turn. The ordinary update below still checks
+        // this snapshot's revision again and passes the review/commit/save gates. The broker has
+        // already journaled the ORIGINAL selector request, so a lost response replays its receipt.
+        const snapshot = await fileForInTurn(host, context);
+        if (args.intent !== undefined && currentAs(snapshot, args.expectedRevision) !== snapshot.revision) throw conflict(snapshot.revision);
+        const { rename: _rename, intent: _intent, ...rest } = args;
+        const resolved = args.intent !== undefined ? intentPatch(snapshot.file, args.intent as EditIntent, args.view) : renamePatch(snapshot.file, args.rename as { from: string; to: string }, args.view);
+        const normalized = { ...rest, ...resolved, expectedRevision: args.intent !== undefined ? args.expectedRevision : snapshot.revision };
+        validateToolInput('update_diagram', { diagramId: context.diagramId, ...normalized });
+        return update(api, host, { ...event, args: normalized });
+      });
     case 'submit_proposal':
       return host.inTurn(() => submitProposal(host, event));
     default:
@@ -301,14 +318,15 @@ function oneOf<T extends string | number>(raw: unknown, allowed: readonly T[], f
   throw new AgentError('INVALID_INPUT', `${path.slice(1)} must be one of ${allowed.map((a) => JSON.stringify(a)).join(', ')}.`, { path });
 }
 
-const READ_FORMATS = ['draft', 'mermaid', 'plantuml', 'c4'] as const;
-
 async function read(host: AgentHost, args: Record<string, unknown>, context: AgentContext) {
   const diagramId = context.diagramId ?? '';
   const format = oneOf(args.format, READ_FORMATS, 'draft', '/format');
   const snapshot = await fileFor(host, context);
   const { file, revision } = snapshot;
+  if (format === 'edit') return withCollaborators(readEdit(file, args, revision, diagramId), snapshot);
+  if (args.query !== undefined) return withCollaborators(readLookup(file, args, revision, diagramId), snapshot);
   if (format === 'draft') return withCollaborators(readDiagram(file, args, revision, diagramId), snapshot);
+  if (format === 'outline') return withCollaborators(readOutline(file, revision, diagramId), snapshot);
   // The architecture itself as C4-PlantUML — the same text the Source export writes.
   if (format === 'c4') return withCollaborators({ diagramId, title: file.metadata.title, revision, format, source: c4PlantUmlSource(file) }, snapshot);
   // The flows as sequence-diagram source — the same text the app's own export writes, every view
@@ -408,8 +426,12 @@ function withCollaborators(result: Record<string, unknown>, snapshot: ReadSnapsh
       }
     }
   } else {
-    const view = result.view as { path: string[]; owner?: { id: string } };
-    const edges = new Set(viewOf(snapshot.file, view.path)?.edges.map((edge) => edge.id));
+    for (const item of items('matches')) {
+      show(item.type === 'relationship' ? 'edge' : item.type === 'flow' ? 'flow' : 'node', item.id);
+      for (const end of ['from', 'to']) show('node', (item[end] as { id?: string } | undefined)?.id);
+    }
+    const view = result.view as { path: string[]; owner?: { id: string } } | undefined;
+    const edges = new Set(view && viewOf(snapshot.file, view.path)?.edges.map((edge) => edge.id));
     for (const name of ['elements', 'groups', 'boundaries', 'outsideEndpoints']) for (const item of items(name)) showItem('node', item);
     for (const item of items('relationships')) showItem('edge', item);
     for (const item of items('openPoints')) show('point', item.id);
@@ -426,7 +448,7 @@ function withCollaborators(result: Record<string, unknown>, snapshot: ReadSnapsh
       }
     }
     for (const item of items('evidence')) show(edges.has(String(item.id)) ? 'edge' : 'node', item.id);
-    show('node', view.owner?.id);
+    show('node', view?.owner?.id);
     for (const item of items('views')) show('node', (item.owner as { id: string }).id);
   }
   const elements = snapshot.collaboratorTouches.flatMap(({ key, by }) => [...(shown.get(key)?.values() ?? [])].map((item) => ({ ...item, by })));
@@ -878,14 +900,24 @@ async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expe
  * An empty `ops` is a "no architectural impact" finding, not an error.
  */
 async function submitProposal(host: AgentHost, event: Request) {
-  const { args, context } = event;
+  const { context } = event;
+  let args = event.args;
+  // Resolve against one local snapshot and prepare the usual proposal from it. Persist only its
+  // concrete ids/ops/preconditions: Accept must never resolve the label again against later work.
+  // This handler already owns the turn; queuing fileFor here would wait behind itself forever.
+  const snapshot = await fileForInTurn(host, context);
+  if (args.rename !== undefined || args.intent !== undefined) {
+    if (args.intent !== undefined && currentAs(snapshot, args.expectedRevision) !== snapshot.revision) throw conflict(snapshot.revision);
+    const { rename, intent, ...rest } = args;
+    const resolved = intent !== undefined ? intentPatch(snapshot.file, intent as EditIntent, args.view) : renamePatch(snapshot.file, rename as { from: string; to: string }, args.view);
+    args = { ...rest, ...resolved, expectedRevision: intent !== undefined ? args.expectedRevision : snapshot.revision };
+    validateToolInput('submit_proposal', { diagramId: context.diagramId, ...args });
+  }
   const expected = typeof args.expectedRevision === 'string' ? args.expectedRevision : undefined;
   if (!expected) throw new AgentError('INVALID_INPUT', 'expectedRevision is required: the revision from your last read or receipt.', { path: '/expectedRevision' });
   const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
   if (!summary) throw new AgentError('INVALID_INPUT', 'summary is required: what this proposal does, or why it has no architectural impact.', { path: '/summary' });
 
-  // This handler already owns the turn; queuing fileFor here would wait behind itself forever.
-  const snapshot = await fileForInTurn(host, context);
   const { file, revision } = snapshot;
   if (currentAs(snapshot, expected) !== revision) throw conflict(revision);
 

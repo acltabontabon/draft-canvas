@@ -51,6 +51,10 @@ function pythonSet(name: string): string[] {
 }
 
 describe('the agent skill', () => {
+  it('keeps the always-loaded instructions within the rename context budget', () => {
+    expect(Buffer.byteLength(skillMd)).toBeLessThanOrEqual(300);
+  });
+
   it('names exactly the element types, meanings, behaviours and colours the app accepts', () => {
     expect(pythonSet('TYPES')).toEqual([...ELEMENT_TYPE_NAMES].sort());
     expect(pythonSet('SEMANTICS')).toEqual([...EDGE_SEMANTICS].sort());
@@ -141,6 +145,5 @@ describe('the agent skill', () => {
     // Bumping CONTRACT_VERSION means re-reading the skill against the new tools, then bumping its
     // `contract` and `version` (so installed copies are replaced; see src-tauri/src/agent/skill.rs).
     expect(skillMd).toContain(`contract: "${CONTRACT_VERSION}"`);
-    expect(skillMd).toContain(`written for tool contract ${CONTRACT_VERSION}`);
   });
 });

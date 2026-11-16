@@ -2,19 +2,18 @@
 
 A **sequence** shows behaviour over time: who says what to whom, in what order, and under which
 condition. It is one element on the canvas, beside your architecture, and it lays itself out. You
-say who takes part and what happens; you never place a lifeline, size an arrow or draw a frame.
+say who takes part and what happens; you never place a lifeline or size an arrow.
 
 ![A sequence with four participants, a call chain, replies and an optional part.](../media/guides/sequence-diagram.png)
 
 ## Start one
 
-Press `L`, or click **Sequence** in the toolbar and then click the canvas. The sequence starts
-with **Participant 1**. Click **+** to add another participant anywhere along the row, with a
-default name assigned immediately.
+Press `L`, or click **Sequence** in the toolbar and then the canvas. It starts with **Participant 1**;
+click **+** to add more anywhere along the row.
 
-Double-click a participant to rename it. Press `Enter` or click away to save the name. While
-editing, use the arrow keys to browse suggestions. Click an option to choose a participant
-type, a matching technology, or [a shape already on the canvas](#use-shapes-from-your-architecture).
+Double-click a participant to rename it, then press `Enter` or click away. While typing, the arrow
+keys browse suggestions: a participant type, a matching technology, or
+[a shape already on the canvas](#use-shapes-from-your-architecture).
 
 ![Renaming a participant in place.](../media/guides/sequence-participants.png)
 
@@ -23,13 +22,13 @@ type, a matching technology, or [a shape already on the canvas](#use-shapes-from
 Drag from one lifeline to another, then type what the message says. The arrow follows the pointer,
 the destination lifeline lights up, and a dot marks where the message will land.
 
-New messages start with the same editable label as a canvas connection between those shapes.
-For example, a service calling a data store starts with **reads / writes**. A cache starts with
-**reads from**. Type to replace the label or press `Enter` to keep it.
+A new message starts with the label a canvas connector between those shapes would get: a service
+calling a data store starts with **reads / writes**, a cache with **reads from**. Type to replace
+it or press `Enter` to keep it.
 
-By default, arrows are numbered in reading order. The numbers update when messages are inserted,
-moved, or deleted. Click the sequence title or frame, then toggle **Message numbers** in the
-inspector. Each sequence saves its own setting.
+Arrows are numbered in reading order, and the numbers follow inserts, moves and deletes. To turn
+them off, select the sequence and toggle **Message numbers** in the inspector; each sequence keeps
+its own setting.
 
 - Drag past the last participant until **Add participant** appears, then release to add a participant
   with a default name and write the message.
@@ -41,20 +40,19 @@ browse other suggestions, such as a reply, a call onward, or a call to itself.
 
 ![The next message offered after a call.](../media/guides/sequence-next.png)
 
-A call starts work on its receiver, drawn as a bar on the lifeline. **Reply** puts the reply
-below whatever that call set going, and ends the bar. Nothing is added that you did not ask for:
-a reply is never inserted on its own.
+A call starts work on its receiver, drawn as a bar on the lifeline. **Reply** puts the reply below
+whatever that call set going, and ends the bar. A reply is never added on its own.
 
-To connect two sequences, drag from a lifeline in one frame to a participant's head or lifeline
-in the other. The connector stays attached as you move either frame or reorder its participants.
-Select it to edit its label as you would any canvas connector.
+To connect two sequences, drag from a lifeline in one to a participant's head or lifeline in the
+other. The connector stays attached as you move either sequence, and its label edits like any
+connector.
 
 ![A connector from the Checkout API lifeline to the Orders worker in another sequence.](../media/guides/sequence-cross-frame.png)
 
 ## Select and change
 
-Click a participant, message, note or frame to select it; `Shift`-click extends the selection.
-What you can do appears beside it and nowhere else.
+Click a participant, message, note or frame to select it; `Shift`-click extends the selection. What
+you can do appears beside it.
 
 | Selected | You can |
 | --- | --- |
@@ -74,8 +72,8 @@ The right-click menu and `⌘K` also offer message commands.
 - **Change the sender or receiver** by selecting a message and dragging either end of its arrow
   to another participant's head or lifeline. The destination lifeline lights up, and the arrow
   snaps into place on release.
-- **Asynchronous** is suggested, never assumed, where the receiver is usually sent to without
-  waiting (a queue or topic). One click applies it.
+- **Asynchronous** is suggested where the receiver is usually not waited on (a queue or topic),
+  never assumed. One click applies it.
 - **Create** starts the receiver's lifeline at that message; **Destroy** ends it.
 - A problem in the order (a reply with no call, a message after its participant ended) is marked
   with a small warning on its row. Select it to read what is wrong.
@@ -104,13 +102,12 @@ both.
 
 **Timeline note** draws a note over one or two participants on its own row.
 
-To keep supporting details on the arrow, right-click a message and choose **Attach note** or
-**Attach code** to start typing. With a message selected, you can also use **Attach note to message**
-or **Attach code to message** from the command palette. To reuse an existing canvas note or code
-card, drag it onto the arrow and release when **Attach to message** appears. Click a note or code
-chip below the arrow to reopen its card. Cards stay with the message as you move it, and can be reordered, deleted or
-detached onto the canvas. During a presentation, the current message’s chips open its cards for
-reading.
+To keep supporting detail on an arrow, right-click a message and choose **Attach note** or **Attach
+code** (also **Attach note to message** and **Attach code to message** in `⌘K`). To reuse a canvas
+note or code card, drag it onto the arrow and release when **Attach to message** appears. Click a
+chip below the arrow to reopen its card. Cards stay with the message as you move it, and can be
+reordered, deleted or detached onto the canvas. While presenting, the current message's chips open
+its cards.
 
 ![A code card attached to a checkout message.](../media/guides/sequence-attachment.png)
 
@@ -129,13 +126,13 @@ Drag a shape from the canvas over a sequence and rest it between two participant
 A shape tool or key used over a sequence (`S`, `D`, `Q`, `A`, `M`, or a toolbar button) adds a
 participant of that kind there.
 
-With architecture shapes selected, `⌘K` → **Sequence from these** starts a sequence beside them
-with one linked participant each, left to right. It adds no messages: order is never guessed from
-connectors. **Unlink** on a participant lets the two go their own way. Deleting the shape keeps
-the participant.
+With architecture shapes selected, `⌘K` → **Sequence from these** starts a sequence beside them with
+one linked participant each, left to right. It adds no messages, because order is never guessed from
+connectors. **Unlink** on a participant lets the two go their own way; deleting the shape keeps the
+participant.
 
-A [flow](flows-and-presentation.md) has an order you already gave it. `⌘K` → **Draw the flow as a
-sequence** draws it beside the diagram, with participants that stand for the flow's shapes.
+A [flow](flows-and-presentation.md#draw-a-flow-as-a-sequence) already has an order, so `⌘K` → **Draw
+the flow as a sequence** can draw it for you.
 
 ## Keyboard
 
@@ -155,33 +152,30 @@ sequence** draws it beside the diagram, with participants that stand for the flo
 
 ## Present
 
-Select the sequence and choose **Present this sequence** (also in `⌘K` and the right-click menu). It plays one
-message at a time with the same keys as a [flow](flows-and-presentation.md#present): what has been
-said stays, what is being said is lit, and the caption names the condition or branch it is in.
-The lifelines stay visible throughout.
+Select the sequence and choose **Present this sequence** (also in `⌘K` and the right-click menu). It
+plays one message at a time with the [same keys as a flow](flows-and-presentation.md#present). What
+has been said stays, the current message is lit, and the caption names its condition or branch.
 
 ![Presentation highlights the current message and keeps every participant's lifeline visible.](../media/guides/sequence-present.png)
 
 ## Export and import
 
-- **Images** (PNG, SVG) show sequences as drawn, including message numbers and connectors between
-  frames.
-- **Share → Export… → Other formats → Sequences** writes each sequence, and each flow, as
-  standalone **Mermaid** or **PlantUML**, with its conditions, loops, work bars and groups.
-  Attached cards stay in the editable Draft Canvas file. The image exports show their chips.
-- Paste or import a Mermaid `sequenceDiagram` to get an editable sequence. Anything it uses that
-  is not drawn is listed. See the [Mermaid import reference](../reference/mermaid-import.md#sequence-diagrams).
-- An [AI agent](connect-an-ai-agent.md) can add, read and change sequences when asked.
+- **Images** (PNG, SVG) show sequences as drawn, with message numbers and connectors between
+  sequences.
+- **Share → Export… → Other formats → Sequences** writes each sequence and each flow as **Mermaid**
+  or **PlantUML**, with conditions, loops, work bars and groups. Attached cards stay in the
+  `.draftcanvas` file; image exports show their chips.
+- Paste or import a Mermaid `sequenceDiagram` to get an editable sequence; anything not drawn is
+  listed. See the [Mermaid import reference](../reference/mermaid-import.md#sequence-diagrams).
+- An [AI agent](connect-an-ai-agent.md) can add, read and change sequences.
 
 ## Good to know
 
-- A sequence is one shape on the canvas: move it, put it in a boundary, connect to it, copy and
-  paste it, attach notes and [open points](open-points.md) to it. Resize it for more room; it
-  never gets smaller than what it holds.
-- Undo and redo work inside it. Naming a new participant or message is one step.
-- Mermaid has no reference frame; one is exported as a note.
-- draw.io export shows a sequence as a labelled box.
-- While [collaborating live](collaborating.md), two people changing the same sequence at the same
-  moment keep the later change; changes to different shapes never conflict.
-- Copying a single message to the clipboard is not available; **Duplicate** is.
+- A sequence is one shape on the canvas: move it, put it in a boundary, connect to it, copy it, attach
+  notes and [open points](open-points.md). It never resizes smaller than what it holds.
+- Mermaid has no reference frame, so one is exported as a note. draw.io shows a sequence as a
+  labelled box.
+- While [collaborating live](collaborating.md), if two people change the same sequence at once the
+  later change wins.
+- A single message can be duplicated but not copied to the clipboard.
 - A flow step can light a whole sequence, not one of its messages.

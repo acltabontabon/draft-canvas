@@ -1,6 +1,6 @@
 # Mark what is still open
 
-An **open point** is a marker for an unresolved question on a shape, connector or boundary.
+An **open point** marks an unresolved question on a shape, connector or boundary.
 
 | Kind | For |
 | --- | --- |
@@ -16,10 +16,9 @@ An **open point** is a marker for an unresolved question on a shape, connector o
 
 ![Choosing an open-point kind beside a service.](../media/guides/open-point-raise.png)
 
-On a shape the marker sits in the row above its top-right corner; on a connector it ends the row of
-attachments past the connector's words. Click a marker to change its kind, edit context, **Resolve**
-or delete it. On a shared point,
-**Not this one** detaches just that element.
+On a shape the marker sits above its top-right corner; on a connector it sits just past the label,
+with any attachments. Click a marker to change its kind, edit the context, **Resolve** or delete it.
+On a shared point, **Not this one** detaches just that element.
 
 ## Review them
 
@@ -34,8 +33,8 @@ reopen or delete it.
 ## Good to know
 
 - While presenting, click a marker to read it.
-- PNG and SVG exports show markers and a key; untick **Open point markers** to hide them.
-  Sequence exports leave points out.
-- Deleting an element detaches it from a shared point; the others keep it.
-- A copied element gets its own point.
+- PNG and SVG exports show markers and a key; untick **Open point markers** to hide them. Sequence
+  exports leave points out.
+- Deleting an element detaches it from a shared point; the others keep it. A copied element gets its
+  own point.
 - An [AI agent](connect-an-ai-agent.md) can manage points when asked.

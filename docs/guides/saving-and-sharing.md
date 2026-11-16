@@ -6,18 +6,14 @@
 - **Desktop:** `⌘S` saves to a file; see [desktop files](desktop.md#files).
 
 Browser diagrams do not sync between devices, browsers or sites, and clearing site data deletes them.
-The footer keeps the save status and canvas controls together, without diagram counts or a repeating
-privacy message.
 
-If the status bar says **In memory only**, nothing is stored: export before closing.
-If another tab changed the same diagram, choose **Keep mine** or **Load the other tab's**.
+If the status bar says **In memory only**, nothing is stored: export before closing. If another tab
+changed the same diagram, choose **Keep mine** or **Load the other tab's**.
 
-If a save fails, the status bar says why (the browser is out of space, or Draft Canvas lost its
-connection to the browser's storage) and offers **Retry**, **Export** and **Leave without saving**.
-**Export** downloads the diagram as it is on screen, so nothing is lost; to free space, export first,
-then delete diagrams you no longer need from the Library. **Leave without saving** asks before it
-gives up the changes that could not be stored. The same bar shows while presenting. Panning and
-zooming alone are saved in the background without any message.
+If a save fails, the status bar says why (the browser is out of space, or storage became
+unavailable) and offers **Retry**, **Export** and **Leave without saving**. **Export** downloads the
+diagram as it is on screen. To free space, export first, then delete diagrams you no longer need from
+the Library. **Leave without saving** asks before it gives up the unsaved changes.
 
 ## Back up the browser library
 
@@ -26,9 +22,8 @@ zooming alone are saved in the background without any message.
 3. To bring it back, choose **Restore…**. Existing diagrams are never overwritten; matches come back
    as copies.
 
-Once you have a few diagrams, or one more than a day old, the Library reminds you when the last
-backup is missing or over a week old. Press `/` there to
-search; deleting a project moves its diagrams to **Unorganized**.
+Once you have a few diagrams, the Library reminds you when the last backup is missing or over a week
+old. Press `/` in the Library to search. Deleting a project moves its diagrams to **Unorganized**.
 
 ## Export a file
 
@@ -46,26 +41,25 @@ Open **Share → Export…** (`⌘⇧E`).
 
 ![Export with Save an editable file selected.](../media/guides/export-document.png)
 
-- Exports are snapshots, made on your device. Documents include every room, and a background
-  image up to 2 MB.
+- Exports are snapshots made on your device. Files include every level and a background image up to
+  2 MB.
 - An encrypted file needs a passphrase of 8 or more characters. It cannot be recovered, so send it
-  separately. Open `.dcenc` files in the web app.
-- **Copy** puts an image or source on the clipboard; `⌘K` has **Copy as image**, **Copy as SVG**
-  and **Copy source as…**. If the clipboard refuses, the file downloads instead.
+  separately. `.dcenc` files open in the web app only.
+- **Copy** puts an image or source on the clipboard; `⌘K` has **Copy as image**, **Copy as SVG** and
+  **Copy source as…**. If the clipboard refuses, the file downloads instead.
 
-Click the preview to inspect the image before exporting. It opens large; **100%** shows it at
-actual size, so you can read its smallest text as a reader will, and **200%** doubles it. Drag to
-move around.
+Click the preview to inspect it. **100%** shows actual size, so you can read the smallest text as a
+reader will; **200%** doubles it.
 
 Image options:
 
 - **Light** or **Dark**, **Transparent**, **Selection only**; PNG at 1×, 2× or 3×.
-- Inside a room: that room or **The whole canvas**. **Every level** zips one image per room.
+- Inside a level: that level or **The whole canvas**. **Every level** zips one image per level.
 - Open-point markers are included unless you untick them.
-- [Sketches](sketching.md) are drawn over the diagram; a **Selection only** image leaves them out.
-  Text exports (Mermaid, PlantUML) leave them out.
-- **Editable** embeds the whole diagram, every room, so the image can
-  be imported and edited. On by default for SVG, off for PNG.
+- [Sketches](sketching.md) are drawn over the diagram, except in a **Selection only** image and in
+  text exports.
+- **Editable** embeds the whole diagram so the image can be imported and edited again. On by default
+  for SVG, off for PNG.
 
 ## Import a file
 
@@ -77,25 +71,24 @@ Choose **Import** on Home or in the Library, or drop the file onto the Library o
 - Mermaid `.mmd`, `.mermaid` or Markdown: see below.
 
 An import never replaces an existing diagram: one whose id is already stored comes in as a copy
-titled "… copy". Older files upgrade; a diagram saved by a newer version is left untouched until you
-update Draft Canvas. Damaged files are repaired where possible, with a report of what was dropped.
-Files over 24 MB are refused.
+titled "… copy". Older files upgrade; a file saved by a newer version is not opened until you update
+Draft Canvas. Damaged files are repaired where possible, with a report of what was dropped. Files
+over 24 MB are refused.
 
 ### Importing a Mermaid flowchart
 
-Import a `flowchart` or `graph` file for a new diagram, or paste Mermaid text onto a canvas (one
-undo removes it). Draft Canvas lays it out and skips styling. Several arrows between the same two
-shapes become one connector with the labels joined, and the notice says so. A `sequenceDiagram`
-becomes an editable [sequence](sequence-diagrams.md) the same way. Draft Canvas refuses other
-diagram types. See the [Mermaid import reference](../reference/mermaid-import.md).
+Import a `flowchart` or `graph` file for a new diagram, or paste Mermaid text onto a canvas (one undo
+removes it). Draft Canvas lays it out itself and skips styling. A `sequenceDiagram` becomes an
+editable [sequence](sequence-diagrams.md). Other diagram types are refused. What is supported,
+skipped and limited is in the [Mermaid import reference](../reference/mermaid-import.md).
 
 ## Share a diagram
 
 | Send | How | Recipient gets |
 | --- | --- | --- |
 | Link | **Share → Share read-only link…**, or the same in `⌘K` | A protected, view-only snapshot in Guided reader or Focus view |
-| File | **Document → Editable** or **Encrypted** | A diagram they can reopen |
-| Picture | **Image**, or **Copy as image** | A PNG or SVG; editing requires an embedded diagram |
+| File | **Save an editable file → Editable** or **Encrypted** | A diagram they can reopen |
+| Picture | **Save an image**, or **Copy as image** | A PNG or SVG; it can be edited only if the diagram is embedded |
 | Live session | **Share → Collaborate…** | A shared canvas; see [Collaborating live](collaborating.md) |
 
 ### Create a protected link
@@ -105,60 +98,46 @@ diagram types. See the [Mermaid import reference](../reference/mermaid-import.md
 3. Enter and confirm a passphrase of at least eight characters. A long, unique phrase is safer.
 4. Choose **Copy protected link**, then send the passphrase separately.
 
-Desktop links open in the browser at `app.draftcanvas.dev`. The completed link stays visible if
-copying is unavailable; **Copy link** retries, and **Open Guided reader** opens the recipient view.
-Turn protection off to create a link anyone can open.
+Desktop links open in the browser at `app.draftcanvas.dev`. **Open Guided reader** previews what the
+recipient sees. Turn protection off to create a link anyone can open.
 
 ![Share a link, with passphrase protection and an actual diagram preview.](../media/guides/export-share.png)
 
-Preparation compresses the snapshot locally, using a background worker for larger diagrams.
-A progress bar names the current stage; **Cancel** stops preparation. Protected links are encrypted
-on your device and unlocked on the recipient's device. Draft Canvas never stores or recovers the
-passphrase. **Lock** discards an unlocked diagram from memory and asks for its passphrase again.
+The link is built on your device, with a progress bar and **Cancel** for larger diagrams. A protected
+link is encrypted there and unlocked on the recipient's device; Draft Canvas never stores or recovers
+the passphrase. **Lock** discards an unlocked diagram from memory and asks for the passphrase again.
 
-Links contain every room after the `#`; nothing is uploaded. Later edits do not update them.
-They have no expiry or revocation, and someone who unlocks a diagram can save or capture its content.
-Browsers and messages may keep the link. The compressed limit is 32 KB; export a file if the diagram
-is too large. Background images are omitted.
+The link carries the whole diagram, every level, after the `#`; nothing is uploaded, and later edits
+do not update it. Links have no expiry and cannot be revoked, and someone who unlocks a diagram can
+save or capture it. Browsers and messages may keep the link. The compressed limit is 32 KB; export a
+file if the diagram is too large. Background images are left out.
 
 ### Read a shared diagram
 
-The reader uses the actual shapes and connectors. Shapes stay fixed; recipients can pan, zoom,
-fit the diagram and inspect details. **Contents** holds the existing levels and shapes. The reader
-frames the diagram beneath its title,
-with zoom controls in the lower-right corner and walkthrough controls below the canvas. Handwritten,
-underlined attachment labels sit beside their shapes; the selected label is circled and linked to its
-open note. The note’s body stays in regular type.
-There are no editing, download or editable-copy controls.
+Recipients see the real shapes and connectors. They can pan, zoom, fit the diagram and inspect
+details; **Contents** lists the levels and shapes. There are no editing, download or copy controls.
 
-**Guided reader** has a compact manual walkthrough. Choose **Start walkthrough**, then **Back** or
-**Next**; open the step count to choose a step or switch Flows. Nothing advances automatically.
-A level without a playable Flow opens in **Focus view**, with no walkthrough controls.
+**Guided reader** has a manual walkthrough: **Start walkthrough**, then **Back** or **Next**. Open
+the step count to choose a step or switch flows. Nothing advances on its own. A level without a
+playable flow opens in **Focus view**, with no walkthrough controls.
 
 ![Guided reader with a selected Flow step and its attachment.](../media/guides/share-guided-reader.png)
 
 [Guided reader in dark mode](../media/guides/share-guided-reader-dark.png).
 
-**Attachments** opens one card beside its shape or connector. Diagram markers show notes,
-decisions, code and pending items. The card's previous and next arrows browse details across
-levels; related-element links show the other shapes a shared point concerns. A Flow step reveals
-its relevant detail. Close a card at any time. On smaller or shorter screens, cards sit below the
-diagram, clear of the shapes and walkthrough controls.
-
-Pending items keep their Tentative, Awaiting input or Parked status. Resolved points retain their
-resolution notes. Browsing never changes the snapshot.
+Markers on the diagram show notes, decisions, code and pending items. Click one to open its card
+beside the shape or connector; the arrows on the card browse details across levels. A flow step
+reveals its relevant detail. On small screens cards sit below the diagram. Pending items keep their
+Tentative, Awaiting input or Parked status, and resolved points keep their notes. Browsing never
+changes the snapshot.
 
 ![Focus view with a pending item and attachment browsing controls.](../media/guides/share-focus-view.png)
 
 [Focus view in dark mode](../media/guides/share-focus-view-dark.png).
 
-Run **Share read-only link…** in `⌘K`, or use **Start at** in **Share → Export… → Share a link**.
-It defaults to the selected playable Flow, then the current level, then the overview.
-A Flow link starts at its introduction; the reader chooses when to advance.
-
-The starting point changes where reading begins. **Every room is still shared.**
-An unavailable level or Flow falls back to the overview with a notice. Older unprotected links
-also open in the reader. Starting metadata counts toward the link-size limit.
+**Start at** defaults to the selected playable flow, then the current level, then the overview. It
+changes only where reading begins: **every level is still shared.** If the level or flow is
+unavailable, the reader opens the overview with a notice.
 
 ## If something looks wrong
 

@@ -28,6 +28,15 @@ pub struct RunPolicy {
 struct Open {
     policy: RunPolicy,
     calls: Vec<Weak<CallRegistry>>,
+    writes: Writes,
+    history: crate::companion::history::History,
+}
+
+enum Writes {
+    #[cfg(test)]
+    Normal,
+    Deferred,
+    Final(String, Value),
 }
 
 #[derive(Default)]
@@ -36,14 +45,75 @@ pub struct Runs {
 }
 
 impl Runs {
+    #[cfg(test)]
     pub fn open(&self, run: &str, policy: RunPolicy) {
         lock(&self.open).insert(
             run.to_string(),
             Open {
                 policy,
                 calls: Vec::new(),
+                writes: Writes::Normal,
+                history: Default::default(),
             },
         );
+    }
+
+    pub fn open_deferred(&self, run: &str, policy: RunPolicy) {
+        lock(&self.open).insert(
+            run.into(),
+            Open {
+                policy,
+                calls: Vec::new(),
+                writes: Writes::Deferred,
+                history: Default::default(),
+            },
+        );
+    }
+
+    pub fn set_history(&self, run: &str, history: crate::companion::history::History) {
+        if let Some(entry) = lock(&self.open).get_mut(run) {
+            entry.history = history;
+        }
+    }
+
+    pub fn history(&self, run: &str, args: &Value) -> Result<Value, ToolError> {
+        lock(&self.open)
+            .get(run)
+            .ok_or_else(ended)?
+            .history
+            .read(args)
+    }
+
+    /// Called by the host only after the model and its children have exited. Admit precisely one
+    /// payload; normal broker policy, validation, journal and commit gates still run afterwards.
+    pub fn authorize(&self, run: &str, tool: &str, args: &Value) -> Result<(), String> {
+        if !matches!(tool, "update_diagram" | "submit_proposal") {
+            return Err("Only a final edit can be authorized.".into());
+        }
+        let mut open = lock(&self.open);
+        let entry = open
+            .get_mut(run)
+            .ok_or("The request was stopped before its edit could run.")?;
+        if !matches!(entry.writes, Writes::Deferred) {
+            return Err("The final edit was already authorized.".into());
+        }
+        constrain(&entry.policy, tool, args.clone(), |_| None).map_err(|error| error.message)?;
+        entry.writes = Writes::Final(tool.into(), args.clone());
+        Ok(())
+    }
+
+    pub fn check_write(&self, run: &str, tool: &str, args: &Value) -> Result<(), ToolError> {
+        if !matches!(tool, "update_diagram" | "submit_proposal") {
+            return Ok(());
+        }
+        let open = lock(&self.open);
+        let entry = open.get(run).ok_or_else(ended)?;
+        match &entry.writes {
+            #[cfg(test)]
+            Writes::Normal => Ok(()),
+            Writes::Final(expected_tool, expected_args) if tool == expected_tool && args == expected_args => Ok(()),
+            _ => Err(ToolError::new("DEFERRED_EDIT", "Return this edit as your final structured response; only the host may apply it after your turn ends.")),
+        }
     }
 
     pub fn policy(&self, run: &str) -> Option<RunPolicy> {
@@ -86,6 +156,7 @@ const RUN_TOOLS: &[&str] = &[
     "submit_proposal",
     "get_proposal",
     "list_proposals",
+    "read_conversation",
     "ask_to_read_code",
     "list_code",
     "search_code",
@@ -94,7 +165,13 @@ const RUN_TOOLS: &[&str] = &[
 
 /// Tools no agent but a companion run is ever offered: an agent the person connected has files of
 /// its own.
-pub const RUN_ONLY: &[&str] = &["ask_to_read_code", "list_code", "search_code", "read_code"];
+pub const RUN_ONLY: &[&str] = &[
+    "read_conversation",
+    "ask_to_read_code",
+    "list_code",
+    "search_code",
+    "read_code",
+];
 
 pub fn ended() -> ToolError {
     ToolError::new(
@@ -130,7 +207,7 @@ pub fn constrain(
     }
     let named = args.get("diagramId").and_then(Value::as_str);
     match tool {
-        "get_capabilities" | "ask_to_read_code" => {}
+        "get_capabilities" | "ask_to_read_code" | "read_conversation" => {}
         reader if super::code::CODE_TOOLS.contains(&reader) => {
             if policy.code.is_none() {
                 return Err(ToolError::new(
@@ -194,6 +271,70 @@ mod tests {
             direct,
             code: None,
         }
+    }
+
+    #[test]
+    fn history_is_an_immutable_run_scoped_read_and_ends_with_the_run() {
+        let runs = Runs::default();
+        let p = RunPolicy {
+            diagram_id: "d1".into(),
+            direct: false,
+            code: None,
+        };
+        runs.open_deferred("a", p.clone());
+        runs.open_deferred("b", p);
+        let mut history = crate::companion::history::History::default();
+        history.push(crate::companion::history::Turn {
+            request: "Use Checkout API".into(),
+            response: "Pending proposal".into(),
+            outcome: "end-turn".into(),
+        });
+        runs.set_history("a", history.clone());
+        history.turns.clear();
+        assert_eq!(
+            runs.history("a", &json!({})).unwrap()["turns"][0]["request"],
+            "Use Checkout API"
+        );
+        assert_eq!(runs.history("b", &json!({})).unwrap()["total"], 0);
+        assert!(runs.history("a", &json!({"diagramId":"d2"})).is_err());
+        assert!(runs
+            .check_write("a", "submit_proposal", &json!({}))
+            .is_err());
+        runs.close("a");
+        assert_eq!(runs.history("a", &json!({})).unwrap_err().code, "CANCELLED");
+    }
+
+    #[test]
+    fn deferred_writes_require_the_exact_host_authorized_payload() {
+        let runs = Runs::default();
+        let args = json!({"diagramId":"d_1","requestId":"host","rename":{"from":"A","to":"B"}});
+        runs.open_deferred("r", policy(true));
+        assert!(runs.check_write("r", "update_diagram", &args).is_err());
+        assert!(runs
+            .check_write("r", "read_diagram", &json!({"diagramId":"d_1"}))
+            .is_ok());
+        runs.authorize("r", "update_diagram", &args).unwrap();
+        assert!(runs.check_write("r", "update_diagram", &args).is_ok());
+        for changed in [
+            json!({"diagramId":"d_1","requestId":"other","rename":{"from":"A","to":"B"}}),
+            json!({"diagramId":"d_1","requestId":"host","rename":{"from":"A","to":"C"}}),
+        ] {
+            assert!(runs.check_write("r", "update_diagram", &changed).is_err());
+        }
+        assert!(runs.check_write("r", "submit_proposal", &args).is_err());
+        assert!(runs.authorize("r", "update_diagram", &args).is_err());
+        runs.close("r");
+        assert!(runs.authorize("r", "update_diagram", &args).is_err());
+        assert!(runs.check_write("r", "update_diagram", &args).is_err());
+        runs.open_deferred("review", policy(false));
+        assert!(runs.authorize("review", "update_diagram", &args).is_err());
+        runs.authorize("review", "submit_proposal", &args).unwrap();
+        assert!(runs.check_write("review", "submit_proposal", &args).is_ok());
+        assert!(runs.check_write("review", "update_diagram", &args).is_err());
+        runs.close("review");
+        assert!(runs
+            .check_write("review", "submit_proposal", &args)
+            .is_err());
     }
 
     fn code(result: Result<Value, ToolError>) -> String {
@@ -269,6 +410,17 @@ mod tests {
         );
         assert!(constrain(&policy(true), "update_diagram", args.clone(), |_| None).is_ok());
         assert!(constrain(&policy(false), "submit_proposal", args, |_| None).is_ok());
+        let rename = json!({"diagramId":"d_1", "requestId":"rename", "rename":{"from":"API","to":"Gateway"}});
+        assert_eq!(
+            code(constrain(
+                &policy(false),
+                "update_diagram",
+                rename.clone(),
+                |_| None
+            )),
+            "PROPOSAL_ONLY"
+        );
+        assert!(constrain(&policy(true), "update_diagram", rename, |_| None).is_ok());
     }
 
     #[test]

@@ -56,9 +56,9 @@ current folder. **Find a diagram** (`⌘F` on Home) searches projects, recent fi
 
 To move a diagram to another project, point at its tile on Home or in **Find a diagram** and choose
 **Move to a project**, or drag the tile onto a project's name above the grid. For the open diagram,
-use **File → Move to Project…**. The diagram moves into the project's top folder with its name and
-background image. If that project already has a diagram with the same name, Draft Canvas asks first:
-**Keep both** adds a number to the moved diagram's name, and nothing is replaced.
+use **File → Move to Project…**. It lands in the project's top folder with its background image. If
+the project already has a diagram with that name, Draft Canvas asks first; **Keep both** numbers the
+moved one, and nothing is replaced.
 
 ![Move "checkout": the project it is in now, and Payments asking to keep both copies.](../media/guides/desktop-move.png)
 
@@ -77,10 +77,9 @@ For coding agents, see [Connect an AI agent](connect-an-ai-agent.md).
 ## Nodi
 
 Nodi asks your own Claude Code or Codex about the open diagram: explain it, find its risks, or
-propose a change you review on the canvas. It shows up once one of them is installed. Between
-conversations it waits at the right end of the status bar, and jumps up onto the canvas to say hello,
-to bring news of a run, or when you click it or press ⌘J. With nothing left to do, it goes back down.
-See [Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas).
+propose a change you review on the canvas. It appears at the right end of the status bar once one of
+them is installed; click it or press `⌘J`. See
+[Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas).
 
 ![Nodi up on the canvas, saying hello.](../media/guides/nodi-rest.png)
 
@@ -89,7 +88,8 @@ See [Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas).
 **Settings…** (`⌘,`) has five pages: **General** (closing the window), **Canvas** (drawing style,
 next-shape suggestions and the open diagram's background), **AI agents**, **Updates** and **Support**
 (a diagnostic report with no diagram content or file paths, never sent automatically).
-**Canvas Settings…** in the menu bar and the sliders button in the status bar open it at **Canvas**. Licences are under **About Draft Canvas**.
+**Canvas Settings…** in the menu bar and the sliders button in the status bar open it at **Canvas**.
+Licences are under **About Draft Canvas**.
 
 ## Updates
 
