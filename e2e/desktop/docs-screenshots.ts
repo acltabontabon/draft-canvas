@@ -193,8 +193,7 @@ async function capture(browser: Browser): Promise<void> {
         { spotlight: ['cache', 'r4'], caption: 'Fill the cache for next time' },
       ] }],
     },
-    { op: 'update', id: 'r3', set: { label: '2. Miss · writes' } },
-  ], 'Cache-aside Orders cache: read first, fill on a miss, evict on write', { added: 3, updated: 1, removed: 0 });
+  ], 'Cache-aside Orders cache: read first, fill on a miss, evict on write', { added: 3, updated: 0, removed: 0 });
   await shot(changes, 'nodi-proposal');
   if (RELEASE) {
     if (!/^\d+\.\d+\.\d+$/.test(RELEASE)) throw new Error('Use --release X.Y.Z.');
