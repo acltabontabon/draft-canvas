@@ -86,3 +86,11 @@ export async function copySource(document: DraftDocument, format: SourceFormat):
   await downloadText(text, sourceFileNameFor(document, format), SOURCE_FORMAT_INFO[format].mime);
   return DOWNLOADED;
 }
+
+/**
+ * One line of Markdown, as text. Never downloaded instead: a file holding one line would only be a
+ * puzzle, and the line is on screen to select by hand when the clipboard says no.
+ */
+export function copyMarkdownLine(text: string): Promise<boolean> {
+  return writeText(text);
+}

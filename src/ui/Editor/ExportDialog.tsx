@@ -6,6 +6,7 @@ import {
   copySource,
   copySvg,
   countPlayableFlows,
+  countSequences,
   exportEveryLevel,
   exportPngFile,
   exportProjectFile,
@@ -43,13 +44,18 @@ import type { ShareStage } from '../../share/compress';
 import { usePersonality } from '../../theme/usePersonality';
 import { useTheme } from '../../theme/useTheme';
 import { Button } from '../common/Button';
+import { SegmentedControl } from '../common/SegmentedControl';
 import { Icon } from '../common/Icon';
+import { Tooltip } from '../common/Tooltip';
 import { Modal } from '../common/Modal';
 import { ExportModePicker } from './ExportModePicker';
 import { ExportDocumentPanel } from './ExportDocumentPanel';
 import { ExportImagePanel } from './ExportImagePanel';
 import { ExportSequencePanel } from './ExportSequencePanel';
 import { ExportArtifact, type ArtifactVisual } from './ExportArtifact';
+import { DocsPreview, ExportDocsPanel } from './ExportDocsPanel';
+import { useDocsPublishing } from './useDocsPublishing';
+import { copyMarkdownLine } from '../../export/clipboard';
 import { SecureExportPrompt } from './SecureExportPrompt';
 import { DEFAULT_PNG_SCALE, PNG_SCALES, type DocumentFormat, type ExportMode, type ImageFormat, type PngScale } from '../../export/exportTypes';
 import type { ThemeName } from '../../render/theme/tokens';
@@ -67,7 +73,7 @@ const EXPORT_PNG_SCALE_PREFERENCE = 'export-png-scale';
 function readExportModePreference(): ExportMode {
   const value = readPreference(EXPORT_MODE_PREFERENCE);
   // 'animated' (the retired GIF export) reads as the default, like any other stale value.
-  return value === 'share' || value === 'document' || value === 'image' || value === 'sequence' ? value : 'image';
+  return value === 'share' || value === 'document' || value === 'image' || value === 'docs' || value === 'sequence' ? value : 'image';
 }
 
 function readDocumentFormatPreference(): DocumentFormat {
@@ -100,8 +106,8 @@ function describeCopy(what: string, result: CopyResult): string {
 }
 
 /**
- * Export is choose → configure → export: one mode picker, one contextual panel for whatever's
- * selected, one dominant CTA, and — beside it — the artifact you're about to get. The dialog
+ * Export is choose → configure → export: what you want to do down the left, one contextual panel
+ * for whatever's selected, one dominant CTA, and — beside it — the artifact you're about to get. The dialog
  * remembers the last mode/format used (`readPreference`/`writePreference`, the same mechanism
  * `sequenceFormat` already used) so reopening lands where the user left off.
  */
@@ -158,6 +164,9 @@ export function ExportDialog() {
     };
   }, [open, document]);
   const [busy, setBusy] = useState(false);
+  // Esc, the X and the backdrop do nothing while an export is running (closing then would orphan the
+  // download); a press on any of them says so here instead of being a silent no-op.
+  const [closeHeld, setCloseHeld] = useState(false);
   const [protectedLink, setProtectedLink] = useState(true);
   const [passphrase, setPassphrase] = useState('');
   const [confirmation, setConfirmation] = useState('');
@@ -204,10 +213,31 @@ export function ExportDialog() {
   // A selection belongs to the room it was made in, so it means nothing about the whole file.
   const effectiveSelectionOnly = (selectionOnly || selectionRequested) && !scopeIsWhole;
   const shareRequested = useUiStore((state) => state.shareFromHere);
-  const effectiveMode: ExportMode = shareRequested ? 'share' : selectionRequested ? 'image' : mode;
+  // ⌘K "Use in docs…" opens on the Docs mode — derived like the selection request, until the user
+  // picks a mode or closes the dialog.
+  const modeRequest = useUiStore((state) => state.exportModeRequest);
+  const effectiveMode: ExportMode = shareRequested ? 'share' : selectionRequested ? 'image' : (modeRequest ?? mode);
+  const docsActive = open && effectiveMode === 'docs';
+  // Use in docs always pictures the file, whatever room is on screen: the level is its own choice.
+  const docsFile = useEditorStore((state) => (docsActive ? fileOf(state) : null));
+  const editorPath = useEditorStore((state) => state.path);
+  const docs = useDocsPublishing({
+    active: docsActive,
+    file: docsFile,
+    startPath: editorPath,
+    preset,
+    notify,
+    onFinished: () => close(),
+  });
+
+  // The notice belongs to one wait: once nothing is running it is dropped, so the next export does
+  // not open with a stale "still exporting".
+  const working = busy || Boolean(docs?.busy);
+  if (!working && closeHeld) setCloseHeld(false);
 
   const close = () => {
     requestExportSelection(false);
+    useUiStore.setState({ exportModeRequest: null });
     // The checkbox is per open: left ticked, a reopen with nothing selected shows it ticked and
     // disabled, and a later single selection would export only that.
     setSelectionOnly(false);
@@ -229,6 +259,7 @@ export function ExportDialog() {
     setModeState(next);
     writePreference(EXPORT_MODE_PREFERENCE, next);
     requestExportSelection(false);
+    useUiStore.setState({ exportModeRequest: null });
   };
   const setDocumentFormat = (next: DocumentFormat) => {
     setDocumentFormatState(next);
@@ -261,7 +292,9 @@ export function ExportDialog() {
   // count spans every room, since the source does.
   const playableFlowCount = countPlayableFlows(document);
   const sourceInfo = SOURCE_FORMAT_INFO[sourceFormat];
-  const sourceEmpty = sourceInfo.family === 'sequence' && playableFlowCount === 0;
+  // A sequence drawn on the canvas is sequence source too, with or without a Flow beside it.
+  const sequenceCount = countSequences(document);
+  const sourceEmpty = sourceInfo.family === 'sequence' && playableFlowCount + sequenceCount === 0;
   // The text itself, generated on every render the Source panel shows — a few milliseconds for a
   // large canvas, and it is exactly what the file and the clipboard will get.
   const sourceText = effectiveMode === 'sequence' && !sourceEmpty ? sourceTextFor(document, sourceFormat) : null;
@@ -321,7 +354,7 @@ export function ExportDialog() {
               type: 'file',
               icon: 'pencil',
               badge: 'DRAFTCANVAS',
-              meta: `${count(document.nodes.length, 'element')} · ${count(document.edges.length, 'connector')}${backgroundNote}`,
+              meta: `${count(document.nodes.length, 'shape')} · ${count(document.edges.length, 'connector')}${backgroundNote}`,
             },
           }
         : {
@@ -359,9 +392,9 @@ export function ExportDialog() {
               icon: 'code',
               badge: sourceInfo.badge,
               meta: sourceEmpty
-                ? 'No Flow yet'
+                ? 'Nothing yet'
                 : sourceInfo.family === 'sequence'
-                  ? `${count(playableFlowCount, 'Flow')} · plain text`
+                  ? `${[playableFlowCount > 0 ? count(playableFlowCount, 'Flow') : null, sequenceCount > 0 ? count(sequenceCount, 'sequence') : null].filter(Boolean).join(' · ')} · plain text`
                   : `${count(sourceText?.split('\n').length ?? 0, 'line')} · ${sourceFormat === 'drawio' ? 'XML' : 'plain text'}`,
             },
           };
@@ -435,16 +468,18 @@ export function ExportDialog() {
     }
   };
   const cta =
-    effectiveMode === 'share'
+    effectiveMode === 'docs'
+      ? { label: docs?.primary.label ?? '', disabled: !docs || docs.primary.disabled, onClick: () => void docs?.primary.run() }
+      : effectiveMode === 'share'
       ? shareLink
         ? { label: 'Copy link', disabled: busy, onClick: () => void runShareCopy() }
         : { label: protectedLink ? 'Copy protected link' : 'Copy share link', disabled: busy || (protectedLink && (passphrase.length < 8 || passphrase !== confirmation)), onClick: () => void runShare() }
       : effectiveMode === 'document'
       ? documentFormat === 'editable'
         ? {
-            label: 'Export document',
+            label: 'Export file',
             disabled: busy,
-            onClick: () => void run(() => exportProjectFile(fileWithLiveViewport(useEditorStore.getState())), 'Document export'),
+            onClick: () => void run(() => exportProjectFile(fileWithLiveViewport(useEditorStore.getState())), 'File export'),
           }
         : { label: 'Export securely…', disabled: busy, onClick: () => setSecurePromptOpen(true) }
       : levelsOn
@@ -479,7 +514,13 @@ export function ExportDialog() {
   // The same export, pointed at the clipboard. The dialog stays open: a copy is often the first of
   // several, and nothing was downloaded to go and look at.
   const copy =
-    effectiveMode === 'image' && !levelsOn
+    effectiveMode === 'docs'
+      ? {
+          what: 'Markdown',
+          disabled: !docs || docs.busy || !docs.canCopy,
+          task: async (): Promise<CopyResult | 'refused'> => ((await copyMarkdownLine(docs?.copyText ?? '')) ? { copied: true } : 'refused'),
+        }
+      : effectiveMode === 'image' && !levelsOn
       ? {
           what: imageFormat === 'png' ? 'Image' : 'SVG',
           disabled: busy,
@@ -496,7 +537,9 @@ export function ExportDialog() {
     running.current = true;
     setBusy(true);
     try {
-      notify(describeCopy(copy.what, await copy.task()));
+      const result = await copy.task();
+      if (result === 'refused') notify('The clipboard isn’t available here. Select the Markdown line and copy it.', 'error');
+      else notify(describeCopy(copy.what, result));
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       notify(error instanceof Error ? `Copy failed: ${error.message}` : 'Copy failed.', 'error');
@@ -506,39 +549,53 @@ export function ExportDialog() {
     }
   };
 
+  const privacyNote =
+    effectiveMode === 'share'
+      ? `${protectedLink ? 'Encrypted' : 'Created'} locally. Nothing is uploaded.`
+      : `Made on your device. Nothing about this diagram leaves ${__DESKTOP__ ? 'this computer' : 'your browser'}.`;
+
   return (
     <Modal
       title="Export & share"
-      width={700}
+      width={880}
       className="dc-modal-export"
-      onClose={busy ? () => {} : close}
+      onClose={working ? () => setCloseHeld(true) : close}
       footer={
         <div className="dc-export-footer">
-          <span
-            className="dc-export-footer-note"
-            title={`Nothing about this diagram leaves ${__DESKTOP__ ? 'this computer' : 'your browser'} during export.`}
-          >
-            <Icon name="lock" size={13} />
-            {effectiveMode === 'share'
-              ? `${protectedLink ? 'Encrypted' : 'Created'} locally. Nothing uploaded.`
-              : 'Generated locally on your device.'}
-          </span>
+          {/* Where it was made, said once on hover, focus or click of the lock — not a line of text
+              on every tab. */}
+          <Tooltip content={{ title: privacyNote }} showOnClick>
+            {(tip) => (
+              <button type="button" className="dc-export-privacy" aria-label={privacyNote} {...tip}>
+                <Icon name="lock" size={15} />
+              </button>
+            )}
+          </Tooltip>
+          {closeHeld && working && (
+            <span className="dc-export-hold" role="status">
+              {effectiveMode === 'share' && shareStage ? 'Cancel the link first, or wait for it.' : 'Still exporting — this closes when it is done.'}
+            </span>
+          )}
           <span className="dc-export-footer-actions">
             {copy && (
               <Button icon="copy" disabled={copy.disabled} onClick={() => void runCopy()}>
-                Copy
+                {effectiveMode === 'docs' ? 'Copy Markdown' : 'Copy'}
               </Button>
             )}
-            <Button variant="solid" icon={effectiveMode === 'share' ? 'copy' : 'export'} disabled={cta.disabled} aria-busy={busy || undefined} onClick={cta.onClick}>
-              {busy ? effectiveMode === 'share' ? shareLink ? 'Copying…' : 'Creating link…' : 'Exporting…' : cta.label}
+            <Button variant="solid" icon={effectiveMode === 'share' ? 'copy' : effectiveMode === 'docs' ? 'docs' : 'export'} disabled={cta.disabled} aria-busy={busy || docs?.busy || undefined} onClick={cta.onClick}>
+              {effectiveMode === 'docs'
+                ? docs?.busy ? docs.primary.busyLabel : cta.label
+                : busy ? effectiveMode === 'share' ? shareLink ? 'Copying…' : 'Creating link…' : 'Exporting…' : cta.label}
             </Button>
           </span>
         </div>
       }
     >
-      <ExportModePicker mode={effectiveMode} onChange={(next) => { if (busy) return; useUiStore.setState({ shareFromHere: false }); setMode(next); }} />
+      {/* What you want (left), then how and what you'll get (right). */}
+      <div className="dc-export-layout">
+      <ExportModePicker mode={effectiveMode} onChange={(next) => { if (busy || docs?.busy) return; useUiStore.setState({ shareFromHere: false }); setMode(next); }} />
 
-      <div className="dc-export-body" data-share={effectiveMode === 'share' ? 'true' : undefined}>
+      <div className="dc-export-body" data-share={effectiveMode === 'share' ? 'true' : undefined} data-docs={effectiveMode === 'docs' ? 'true' : undefined}>
         <div className="dc-export-config" key={effectiveMode}>
           {effectiveMode === 'share' && (busy && shareStage
             ? <ExportShareProgress stage={shareStage} onCancel={cancelShare} />
@@ -547,7 +604,9 @@ export function ExportDialog() {
             : <ExportSharePanel choices={shareChoices} choice={chosenShare.key} onChoice={setShareChoice} protectedLink={protectedLink} onProtectedLink={(value) => { setProtectedLink(value); setPassphrase(''); setConfirmation(''); }} passphrase={passphrase} onPassphrase={setPassphrase} confirmation={confirmation} onConfirmation={setConfirmation} busy={busy} onSubmit={() => { if (!cta.disabled) cta.onClick(); }} />)}
           {effectiveMode === 'document' && <ExportDocumentPanel format={documentFormat} onChange={setDocumentFormat} />}
 
-          {inRoom && effectiveMode !== 'document' && effectiveMode !== 'share' && (
+          {effectiveMode === 'docs' && docs && <ExportDocsPanel docs={docs} />}
+
+          {inRoom && effectiveMode !== 'document' && effectiveMode !== 'share' && effectiveMode !== 'docs' && (
             <ExportScope whole={wholeCanvas} roomName={roomName} onChange={setWholeCanvas} />
           )}
 
@@ -585,15 +644,16 @@ export function ExportDialog() {
             <ExportSequencePanel
               format={sourceFormat}
               onFormatChange={setSourceFormatValue}
-              playableFlowCount={playableFlowCount}
+              playableFlowCount={playableFlowCount + sequenceCount}
               source={sourceText}
             />
           )}
         </div>
         <div className="dc-export-artifact-column">
           {effectiveMode === 'share' && <span className="dc-share-preview-label">Recipient view</span>}
-          <ExportArtifact fileName={artifact.fileName} visual={artifact.visual} empty={artifact.empty} />
+          {effectiveMode === 'docs' && docs ? <DocsPreview docs={docs} /> : <ExportArtifact fileName={artifact.fileName} visual={artifact.visual} empty={artifact.empty} />}
         </div>
+      </div>
       </div>
 
       {securePromptOpen && (
@@ -630,16 +690,18 @@ function ExportScope({
   onChange: (whole: boolean) => void;
 }) {
   return (
-    <fieldset className="dc-export-scope">
-      <legend>What to export</legend>
-      <label>
-        <input type="radio" name="dc-export-scope" checked={!whole} onChange={() => onChange(false)} />
-        <span>Inside {roomName}</span>
-      </label>
-      <label>
-        <input type="radio" name="dc-export-scope" checked={whole} onChange={() => onChange(true)} />
-        <span>The whole canvas</span>
-      </label>
-    </fieldset>
+    <div className="dc-export-form">
+      <span className="dc-export-label" aria-hidden="true">Show</span>
+      <SegmentedControl
+        name="dc-export-scope"
+        legend="What to export"
+        value={whole ? 'whole' : 'room'}
+        onChange={(next) => onChange(next === 'whole')}
+        options={[
+          { value: 'room', label: `Inside ${roomName}` },
+          { value: 'whole', label: 'The whole canvas' },
+        ]}
+      />
+    </div>
   );
 }

@@ -1,0 +1,27 @@
+[
+  {
+    "file": "sequence-diagrams-on-the-canvas.png",
+    "alt": "A native sequence diagram of placing an order, with lifelines for the shopper, storefront, orders API and database.",
+    "platform": "shared"
+  },
+  {
+    "file": "export-by-what-you-want-to-do.png",
+    "alt": "The Export dialog offering Share a link, Save an editable file, Save an image and Use in a README.",
+    "platform": "shared"
+  },
+  {
+    "file": "arrange-with-a-preview.png",
+    "alt": "The Arrange preview laying out an online store across, with Before, Moves and Apply.",
+    "platform": "shared"
+  },
+  {
+    "file": "sketch-and-smart-ink.png",
+    "alt": "A diagram with a hand-drawn red circle around the orders database and a yellow highlighter swipe over the storefront.",
+    "platform": "shared"
+  },
+  {
+    "file": "starters-gallery.png",
+    "alt": "The Starters dialog previewing a starter from the public gallery.",
+    "platform": "shared"
+  }
+]

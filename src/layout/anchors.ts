@@ -30,7 +30,26 @@ export interface AnchorOptions {
   /** `unlabelled` (the repair's fallback) never bundles labelled connectors; `unshared` bundles them
    *  only on a side of their own, as it did before a fan could share one. Default `all`. */
   fans?: 'all' | 'unshared' | 'unlabelled';
+  /** By shape: the titles of the boundaries around it (`TitleSpan`). A connector reaching the shape's
+   *  top from outside one of them lands clear of its title. */
+  titles?: ReadonlyMap<string, readonly TitleSpan[]>;
 }
+
+/**
+ * Where a boundary's title sits across its top, and what is inside the boundary. A connector from
+ * outside reaching the top of a shape inside rises straight out of it through the boundary's header
+ * row, so a handle under the title draws the line through its words.
+ */
+export interface TitleSpan {
+  from: number;
+  to: number;
+  inside: ReadonlySet<string>;
+}
+
+/** How far past either end of a title a line keeps, so it never grazes the first or last letter. */
+const TITLE_CLEAR = 8;
+/** What landing under a boundary's title costs, against pixels of misalignment: never worth it. */
+const UNDER_TITLE = 1000;
 
 /** Labelled connectors that share a trunk each keep a caption on their branch: fewer than this and two
  *  separate lines read as well, with no bends. */
@@ -117,7 +136,7 @@ const CENTRE_PREFERENCE = 6;
  * to — a level neighbour then gets a straight line, not a jog of a few pixels the router would hang
  * a caption on. Order is kept, so connectors still never cross on the way out.
  */
-function alignedOffsets(own: AnchorRect, side: Side, others: Rect[]): number[] | undefined {
+function alignedOffsets(own: AnchorRect, side: Side, others: Rect[], barred: (index: number, offset: number) => boolean = () => false): number[] | undefined {
   const horizontal = side === 'top' || side === 'bottom';
   const start = horizontal ? own.x : (own.bandTop ?? own.y);
   const span = horizontal ? own.width : (own.bandBottom ?? own.y + own.height) - start;
@@ -128,7 +147,9 @@ function alignedOffsets(own: AnchorRect, side: Side, others: Rect[]): number[] |
   let bestCost = Infinity;
   const choose = (from: number, picked: number[]) => {
     if (picked.length === n) {
-      const cost = picked.reduce((sum, offset, i) => sum + Math.abs(target(others[i] as AnchorRect) - at(offset)), 0) + (n === 1 && picked[0] !== 0.5 ? CENTRE_PREFERENCE : 0);
+      const cost =
+        picked.reduce((sum, offset, i) => sum + Math.abs(target(others[i] as AnchorRect) - at(offset)) + (barred(i, offset) ? UNDER_TITLE : 0), 0) +
+        (n === 1 && picked[0] !== 0.5 ? CENTRE_PREFERENCE : 0);
       if (cost < bestCost - 0.01) {
         bestCost = cost;
         best = [...picked];
@@ -167,7 +188,12 @@ interface SideEntry {
   edge: string;
   end: 'source' | 'target';
   other: Rect;
+  /** The shape `other` is. */
+  otherId: string;
 }
+
+/** Whether a handle at `offset` would draw `entry`'s line through a title (see `TitleSpan`). */
+type Barred = (entry: SideEntry, offset: number) => boolean;
 
 /** Where along `side` of `own` a handle sits, on the axis across it (y for left/right). */
 function handleAt(own: AnchorRect, side: Side, offset: number): number {
@@ -184,7 +210,7 @@ function handleAt(own: AnchorRect, side: Side, offset: number): number {
  * the turn would cross the stem. Undefined when the side holds no fan, or more than its three handles'
  * worth.
  */
-function sharedFanHandles(own: AnchorRect, side: Side, entries: SideEntry[], fanOf: ReadonlyMap<string, string>): Map<SideEntry, number> | undefined {
+function sharedFanHandles(own: AnchorRect, side: Side, entries: SideEntry[], fanOf: ReadonlyMap<string, string>, barred: Barred): Map<SideEntry, number> | undefined {
   const units = new Map<string, SideEntry[]>();
   for (const entry of entries) {
     const unit = fanOf.get(`${entry.edge}\u0000${entry.end}`) ?? `${entry.edge}\u0000${entry.end}`;
@@ -205,6 +231,7 @@ function sharedFanHandles(own: AnchorRect, side: Side, entries: SideEntry[], fan
       let cost = 0;
       ordered.forEach((list, i) => {
         const y = at[i] as number;
+        if (list.some((entry) => barred(entry, used[i] as number))) cost += UNDER_TITLE;
         if (list.length === 1) {
           cost += Math.abs(y - across(list[0]!.other));
           return;
@@ -265,7 +292,7 @@ function branchClear(own: Rect, side: Side, hub: Rect, at: number, rects: Readon
  * would cross the branch. The other connectors line up with where they come from, as `alignedOffsets`
  * has them, in order.
  */
-function branchHandles(own: AnchorRect, side: Side, entries: SideEntry[], branchEnds: ReadonlyMap<string, Rect>, rects: ReadonlyMap<string, Rect>): Map<SideEntry, number> | undefined {
+function branchHandles(own: AnchorRect, side: Side, entries: SideEntry[], branchEnds: ReadonlyMap<string, Rect>, rects: ReadonlyMap<string, Rect>, barred: Barred): Map<SideEntry, number> | undefined {
   const horizontal = side === 'top' || side === 'bottom';
   const across = (r: Rect) => (horizontal ? centre(r).x : centre(r).y);
   const hubOf = (e: SideEntry) => branchEnds.get(`${e.edge}\u0000${e.end}`);
@@ -283,6 +310,7 @@ function branchHandles(own: AnchorRect, side: Side, entries: SideEntry[], branch
         // A branch is straight at any handle; only the others have somewhere to line up with.
         cost += (p.hub ? 0 : Math.abs(p.at - across(p.e.other))) + (used[k] === 0.5 ? 0 : CENTRE_PREFERENCE);
         if (p.hub && !clear(p.hub, p.at)) cost += BLOCKED_BRANCH;
+        if (barred(p.e, used[k] as number)) cost += UNDER_TITLE;
       });
       // A connector arriving from nearer by turns towards its handle in front of a branch from
       // further off (a direct one in the last gap, another trunk on its own trunk line): the branch
@@ -330,7 +358,7 @@ export function assignAnchors(
   options: AnchorOptions = {},
 ): Map<string, Anchors> {
   const sides = new Map<string, { source: Side; target: Side }>();
-  const onSide = new Map<string, { edge: string; end: 'source' | 'target'; other: Rect; pinnedOffset?: number }[]>();
+  const onSide = new Map<string, { edge: string; end: 'source' | 'target'; other: Rect; otherId: string; pinnedOffset?: number }[]>();
   // Which ordered pairs have a connector, once, so finding a twin is a lookup rather than a scan.
   const pairs = new Map<string, number>();
   for (const edge of edges) pairs.set(`${edge.source}\u0000${edge.target}`, (pairs.get(`${edge.source}\u0000${edge.target}`) ?? 0) + 1);
@@ -355,13 +383,13 @@ export function assignAnchors(
           target: reserved?.get(edge.target) === free.target ? (direction === 'right' ? 'left' : 'top') : free.target,
         };
     sides.set(edge.id, chosen);
-    for (const [end, node, side, other, offset] of [
-      ['source', edge.source, chosen.source, t, fixed?.sourceAnchor.offset],
-      ['target', edge.target, chosen.target, s, fixed?.targetAnchor.offset],
+    for (const [end, node, side, other, otherId, offset] of [
+      ['source', edge.source, chosen.source, t, edge.target, fixed?.sourceAnchor.offset],
+      ['target', edge.target, chosen.target, s, edge.source, fixed?.targetAnchor.offset],
     ] as const) {
       const key = `${node}\u0000${side}`;
       const list = onSide.get(key) ?? [];
-      list.push({ edge: edge.id, end, other, ...(offset !== undefined ? { pinnedOffset: offset } : {}) });
+      list.push({ edge: edge.id, end, other, otherId, ...(offset !== undefined ? { pinnedOffset: offset } : {}) });
       onSide.set(key, list);
     }
   }
@@ -449,6 +477,15 @@ export function assignAnchors(
     if (hub) branchEnds.set(`${edge}\u0000${end === 'source' ? 'target' : 'source'}`, hub);
   }
   for (const [key, list] of onSide) {
+    const node = key.slice(0, key.indexOf('\u0000'));
+    const side = key.slice(key.indexOf('\u0000') + 1) as Side;
+    const own = rects.get(node);
+    const titles = side === 'top' && own ? options.titles?.get(node) : undefined;
+    const barred: Barred = (entry, offset) => {
+      if (!titles || !own) return false;
+      const x = own.x + offset * own.width;
+      return titles.some((title) => !title.inside.has(entry.otherId) && x > title.from - TITLE_CLEAR && x < title.to + TITLE_CLEAR);
+    };
     const pinnedEntries = list.filter((e) => e.pinnedOffset !== undefined);
     for (const entry of pinnedEntries) offsets.set(`${entry.edge}\u0000${entry.end}`, entry.pinnedOffset as number);
     const free = list.filter((e) => e.pinnedOffset === undefined);
@@ -474,7 +511,6 @@ export function assignAnchors(
     const members = free.map((entry) => byId.get(entry.edge));
     const oneEnd = new Set(free.map((entry) => entry.end)).size === 1 && new Set(free.map((entry) => entry.other)).size === free.length;
     const fan = free.length >= 2 && oneEnd && members.every((m) => m && !m.label && m.semantic && m.semantic === members[0]?.semantic);
-    const side = key.slice(key.indexOf('\u0000') + 1) as Side;
     const horizontal = side === 'top' || side === 'bottom';
     // Labelled connectors bundle too, when enough of them leave one shape meaning the same thing and
     // reach shapes spread across the flow — every branch then carries its own words after the shared
@@ -488,23 +524,23 @@ export function assignAnchors(
       members.every((m) => m && m.label && compatibilityKey(m) === compatibilityKey(members[0] as AnchorEdge) && !!options.keepApart?.has(m.id) === !!options.keepApart?.has((members[0] as AnchorEdge).id)) &&
       Math.max(...free.map((e) => (horizontal ? centre(e.other).x : centre(e.other).y))) - Math.min(...free.map((e) => (horizontal ? centre(e.other).x : centre(e.other).y))) >= MIN_FAN_SPREAD;
     if (fan || labelledFan) {
-      for (const entry of free) offsets.set(`${entry.edge}\u0000${entry.end}`, 0.5);
+      // One point for the whole fan: the middle, unless that is under a title.
+      const point = [0.5, 0.75, 0.25].find((h) => !free.some((entry) => barred(entry, h))) ?? 0.5;
+      for (const entry of free) offsets.set(`${entry.edge}\u0000${entry.end}`, point);
       continue;
     }
-    const node = key.slice(0, key.indexOf('\u0000'));
-    const own = rects.get(node);
     free.sort((a, b) => {
       const ca = centre(a.other);
       const cb = centre(b.other);
       return (horizontal ? ca.x - cb.x : ca.y - cb.y) || (own ? nesting(own, side, ca, cb) : 0) || (a.edge < b.edge ? -1 : 1);
     });
     const n = free.length;
-    const shared = own && sharedFanHandles(own, side, free, fanOf);
+    const shared = own && sharedFanHandles(own, side, free, fanOf, barred);
     if (shared) {
       for (const [entry, offset] of shared) offsets.set(`${entry.edge}\u0000${entry.end}`, offset);
       continue;
     }
-    const branches = own && n <= 3 && free.some((e) => branchEnds.has(`${e.edge}\u0000${e.end}`)) ? branchHandles(own, side, free, branchEnds, rects) : undefined;
+    const branches = own && n <= 3 && free.some((e) => branchEnds.has(`${e.edge}\u0000${e.end}`)) ? branchHandles(own, side, free, branchEnds, rects, barred) : undefined;
     if (branches) {
       for (const [entry, offset] of branches) offsets.set(`${entry.edge}\u0000${entry.end}`, offset);
       continue;
@@ -512,7 +548,7 @@ export function assignAnchors(
     // Connectors to the same shape (a compensation twin) stay spread over the side: aligned on one
     // shared target they would land a few pixels apart, and so would their captions.
     const twins = new Set(free.map((e) => e.other)).size < free.length;
-    const chosen = own && n <= 3 && !twins ? alignedOffsets(own, side, free.map((e) => e.other)) : undefined;
+    const chosen = own && n <= 3 && !twins ? alignedOffsets(own, side, free.map((e) => e.other), (i, offset) => barred(free[i] as SideEntry, offset)) : undefined;
     free.forEach((entry, i) => {
       const offset = chosen?.[i] ?? (n <= 3 ? OFFSETS[n]?.[i] : OFFSETS[3]?.[Math.min(2, Math.floor((i * 3) / n))]) ?? 0.5;
       offsets.set(`${entry.edge}\u0000${entry.end}`, offset);

@@ -81,7 +81,7 @@ impl AppError {
         }
     }
 
-    fn at(mut self, path: Option<String>) -> Self {
+    pub(crate) fn at(mut self, path: Option<String>) -> Self {
         self.path = path;
         self
     }

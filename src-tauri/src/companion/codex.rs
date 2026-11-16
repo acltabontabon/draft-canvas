@@ -99,7 +99,6 @@ const NOT_FOR_A_CANVAS: &[&str] = &[
     "browser_use",
     "browser_use_external",
     "computer_use",
-    "code_mode",
     "goals",
     "hooks",
     "image_generation",
@@ -201,12 +200,27 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
             r#"sandbox_mode="read-only""#,
             "-c",
             r#"approval_policy="never""#,
+            // Feature flags alone leave multi-agent tools/instructions on some models.
+            "-c",
+            "agents.enabled=false",
+            // Nodi has no CLI planning mode or structured-question UI. Clarifications use chat;
+            // diagram approvals still go through the native broker, not these CLI helpers.
+            "-c",
+            "include_collaboration_mode_instructions=false",
+            "-c",
+            "tools.experimental_request_user_input.enabled=false",
         ]
         .map(String::from),
     );
     for feature in NOT_FOR_A_CANVAS.iter().filter(|f| available.contains(**f)) {
         args.push("--disable".into());
         args.push((*feature).to_string());
+    }
+    // Canvas operations are ordinary JSON tools. Dispatch them directly and exclude unused
+    // native file/resource tools from the nested surface on every inference. Keep the host
+    // below for model compatibility; permissions instructions and sandbox enforcement stay intact.
+    if available.contains("code_mode") {
+        args.extend(["-c".to_string(), r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions","clock"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()]);
     }
     // Some models expose MCP tools through exec even with the code_mode feature off. Its host is
     // the tool dispatcher, not an extra tool: disabling it leaves that exec visible but every call
@@ -220,6 +234,14 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
             "skip_host_skill_discovery".to_string(),
         ]);
     }
+    // The run already has its canvas brief and cannot use filesystem skills. Suppress the
+    // automatic skill catalog too: skip_host_skill_discovery only skips the host's discovery.
+    args.extend([
+        "-c".to_string(),
+        "skills.include_instructions=false".to_string(),
+        "-c".to_string(),
+        "skills.max_context_tokens=1".to_string(),
+    ]);
     // No web search: its tool goes with every call, and a canvas run answers from the diagram.
     args.push("-c".into());
     args.push(r#"web_search="disabled""#.into());
@@ -237,6 +259,13 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
         "model_instructions_file={}",
         toml_string(&spec.brief_file.to_string_lossy())
     ));
+    args.extend([
+        "--output-schema".into(),
+        spec.brief_file
+            .with_file_name("reply.schema.json")
+            .to_string_lossy()
+            .into_owned(),
+    ]);
     if let SessionArg::Resume(thread) = spec.session {
         args.push(thread.to_string());
     }
@@ -244,8 +273,11 @@ fn args(spec: &RunSpec, available: &HashSet<String>) -> Vec<String> {
     args
 }
 
-/// `{"draft-canvas"={command="…",args=[],env={DRAFT_CANVAS_RUN="…",…},default_tools_approval_mode="approve"}}`
+/// `{"draft-canvas"={command="…",args=[],env={DRAFT_CANVAS_RUN="…",…},tool_timeout_sec=150,default_tools_approval_mode="approve"}}`
 /// as an inline TOML table.
+///
+/// `tool_timeout_sec` for the same reason a connected Codex gets it (`CODEX_TOOL_TIMEOUT_SECS`):
+/// Codex's own 60 seconds would cut off a large layout before the sidecar's answer arrives.
 ///
 /// The tools are pre-approved for Codex because Draft Canvas is where the approval happens: the run
 /// policy lets a run change one diagram, by proposal unless the person chose direct, and a proposal
@@ -259,9 +291,10 @@ fn server_table(command: &Path, env: &[(&'static str, String)]) -> String {
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "{{{}={{command={},args=[],env={{{env}}},default_tools_approval_mode=\"approve\"}}}}",
+        "{{{}={{command={},args=[],env={{{env}}},tool_timeout_sec={},default_tools_approval_mode=\"approve\"}}}}",
         toml_string(SERVER_NAME),
-        toml_string(&command.to_string_lossy())
+        toml_string(&command.to_string_lossy()),
+        clients::CODEX_TOOL_TIMEOUT_SECS,
     )
 }
 
@@ -439,7 +472,11 @@ impl Jsonl {
                 if self.calls.insert(id.to_string()) {
                     events.push(RunEvent::ToolCall {
                         id: id.to_string(),
-                        tool: item["tool"].as_str().unwrap_or("tool").to_string(),
+                        tool: super::operation_name(
+                            item["tool"].as_str().unwrap_or("tool"),
+                            &item["arguments"],
+                        )
+                        .to_string(),
                         status: ToolStatus::InProgress,
                     });
                 }
@@ -718,7 +755,7 @@ mod tests {
 
     fn spec_args(session: SessionArg) -> Vec<String> {
         let env = vec![("DRAFT_CANVAS_RUN", "run-1".to_string())];
-        let available = features_of("browser_use stable true\nunified_exec stable true\nshell_tool stable true\nhooks stable true\nskill_mcp_dependency_install stable true\nworkspace_dependencies stable true\nin_app_local_automation stable true\nmemories stable false\nshell_snapshot stable true\ncode_mode_host stable true\nskip_host_skill_discovery under development false\n");
+        let available = features_of("browser_use stable true\nunified_exec stable true\nshell_tool stable true\nhooks stable true\nskill_mcp_dependency_install stable true\nworkspace_dependencies stable true\nin_app_local_automation stable true\nmemories stable false\nshell_snapshot stable true\ncode_mode stable false\ncode_mode_host stable true\nskip_host_skill_discovery under development false\n");
         args(
             &RunSpec {
                 program: Path::new("/bin/codex"),
@@ -787,7 +824,7 @@ mod tests {
         let servers = args.iter().find(|a| a.starts_with("mcp_servers=")).unwrap();
         assert_eq!(
             servers,
-            r#"mcp_servers={"draft-canvas"={command="/App/draft-canvas-mcp",args=[],env={DRAFT_CANVAS_RUN="run-1"},default_tools_approval_mode="approve"}}"#
+            r#"mcp_servers={"draft-canvas"={command="/App/draft-canvas-mcp",args=[],env={DRAFT_CANVAS_RUN="run-1"},tool_timeout_sec=150,default_tools_approval_mode="approve"}}"#
         );
         assert!(servers.parse::<toml_edit::DocumentMut>().is_ok());
         let brief = args
@@ -820,6 +857,9 @@ mod tests {
         assert!(!args
             .windows(2)
             .any(|w| w == ["--disable", "code_mode_host"]));
+        assert!(args.contains(&r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions","clock"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#.to_string()));
+        assert!(args.contains(&"skills.include_instructions=false".to_string()));
+        assert!(args.contains(&"skills.max_context_tokens=1".to_string()));
         assert!(args.contains(&r#"web_search="disabled""#.to_string()));
         assert_eq!(args.last().map(String::as_str), Some("-"));
         assert!(!args.contains(&"--ephemeral".to_string()));
@@ -829,7 +869,31 @@ mod tests {
     fn new_and_resumed_turns_keep_user_config_skills_and_side_effects_out() {
         for session in [SessionArg::New("fresh"), SessionArg::Resume("existing")] {
             let args = spec_args(session);
+            // with_file_name uses native separators on Windows; compare the path, not its spelling.
+            assert!(args.windows(2).any(|pair| {
+                pair[0] == "--output-schema"
+                    && Path::new(&pair[1]) == Path::new("/run/reply.schema.json")
+            }));
             assert!(args.contains(&"--ignore-user-config".to_string()));
+            for setting in [
+                "agents.enabled=false",
+                "include_collaboration_mode_instructions=false",
+                "tools.experimental_request_user_input.enabled=false",
+                r#"sandbox_mode="read-only""#,
+                r#"approval_policy="never""#,
+                r#"features.code_mode={enabled=false,excluded_tool_namespaces=["functions","clock"],direct_only_tool_namespaces=["mcp__draft-canvas","mcp__draft_canvas"]}"#,
+            ] {
+                assert!(
+                    args.windows(2).any(|pair| pair == ["-c", setting]),
+                    "{setting}"
+                );
+            }
+            assert!(!args
+                .iter()
+                .any(|arg| arg.starts_with("include_permissions_instructions=")));
+            assert!(!args
+                .iter()
+                .any(|arg| arg.starts_with("include_environment_context=")));
             for feature in [
                 "shell_tool",
                 "hooks",

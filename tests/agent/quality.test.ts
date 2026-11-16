@@ -12,6 +12,7 @@ import { describeContext } from '../../src/nodes/describe';
 import { LIGHT } from '../../src/render/theme/tokens';
 import { deserializeDocument } from '../../src/export/project';
 import type { DraftNode } from '../../src/document/types';
+import { RAIL_LIFT, RAIL_SIZE } from '../../src/document/markerRail';
 
 const report = (errors: number, warnings: number): QualityReport => ({
   errors: Array.from({ length: errors }, (_, i) => ({ kind: 'overlap' as const, ids: [`e${i}`], message: '' })),
@@ -24,7 +25,8 @@ describe('technology logo readability', () => {
     expect(smallestFontPresent([node], [])).toBe(14);
     expect(smallestFontPresent([{ ...node, technology: 'Internal engine' }], [])).toBe(14);
     expect(smallestFontPresent([{ ...node, description: 'Stores orders.' }], [])).toBe(11);
-    expect(renderedBoundsOf([node], [], describeContext(LIGHT))).toEqual({ width: node.width + 25, height: node.height });
+    // The logo sits in the marker rail above the shape's top-right corner: no wider, a rail taller.
+    expect(renderedBoundsOf([node], [], describeContext(LIGHT))).toEqual({ width: node.width, height: node.height + RAIL_SIZE + RAIL_LIFT });
   });
 });
 

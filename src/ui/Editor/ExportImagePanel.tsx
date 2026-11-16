@@ -31,11 +31,11 @@ interface ImagePanelProps {
   onEditableChange: (value: boolean) => void;
 }
 
-const DESCRIPTIONS: Record<ImageFormat, string> = {
-  png: 'High-resolution image for chat, docs and slides.',
-  svg: 'Scalable vector output for docs and READMEs.',
-};
-
+/**
+ * Two questions with answers to pick (format, look) and the rest as plain switches — in one label
+ * column, so the eye reads down the edge rather than across a paragraph. What each switch does in
+ * detail is its tooltip; the panel itself stays short.
+ */
 export function ExportImagePanel({
   format,
   onFormatChange,
@@ -62,117 +62,93 @@ export function ExportImagePanel({
 }: ImagePanelProps) {
   return (
     <div className="dc-export-panel">
-      <div className="dc-export-row">
+      <div className="dc-export-form">
+        <span className="dc-export-label" aria-hidden="true">Format</span>
+        <span className="dc-export-controls">
+          <SegmentedControl
+            name="image-format"
+            legend="Image format"
+            value={format}
+            onChange={onFormatChange}
+            options={[
+              { value: 'png', label: 'PNG' },
+              { value: 'svg', label: 'SVG' },
+            ]}
+          />
+          {format === 'png' && (
+            <SegmentedControl
+              name="png-scale"
+              legend="Scale"
+              value={scale}
+              onChange={onScaleChange}
+              options={PNG_SCALES.map((value) => ({ value, label: `${value}×` }))}
+            />
+          )}
+        </span>
+
+        <span className="dc-export-label" aria-hidden="true">Look</span>
         <SegmentedControl
-          name="image-format"
-          legend="Image format"
-          value={format}
-          onChange={onFormatChange}
+          name="image-palette"
+          legend="Palette"
+          value={paletteName}
+          onChange={onPaletteChange}
           options={[
-            { value: 'png', label: 'PNG' },
-            { value: 'svg', label: 'SVG' },
+            { value: 'light', label: 'Light' },
+            { value: 'dark', label: 'Dark' },
           ]}
         />
-        {format === 'png' && (
-          <SegmentedControl
-            name="png-scale"
-            legend="Scale"
-            value={scale}
-            onChange={onScaleChange}
-            options={PNG_SCALES.map((value) => ({ value, label: `${value}×` }))}
-          />
-        )}
-        <label className="dc-export-field">
-          <span>Palette</span>
-          <select
-            className="dc-select"
-            value={paletteName}
-            onChange={(event) => onPaletteChange(event.target.value as ThemeName)}
-          >
-            <option value="dark">Dark</option>
-            <option value="light">Light</option>
-          </select>
-        </label>
-      </div>
 
-      <div className="dc-export-checks">
-        <label className="dc-check">
-          <input
-            type="checkbox"
-            checked={transparent}
-            onChange={(event) => onTransparentChange(event.target.checked)}
-          />
-          <span>Transparent</span>
-        </label>
-
-        {hasBackground && (
-          <label className="dc-check">
-            <input
-              type="checkbox"
-              checked={includeBackground}
-              onChange={(event) => onIncludeBackgroundChange(event.target.checked)}
-            />
-            <span>Canvas background</span>
+        <span className="dc-export-label dc-export-label-top" aria-hidden="true">Options</span>
+        <div className="dc-export-checks">
+          <label className="dc-check" title="No canvas colour behind the diagram.">
+            <input type="checkbox" checked={transparent} onChange={(event) => onTransparentChange(event.target.checked)} />
+            <span>Transparent</span>
           </label>
-        )}
 
-        {hasOpenPoints && (
-          // Kept by default: an image that quietly dropped them would make every unsettled assumption
-          // look decided. Leaving them out is a plain choice about the picture, worded as one.
-          <label className="dc-check" title="The tabs marking what is still open, with a key naming them. Untick for an image without them.">
-            <input
-              type="checkbox"
-              checked={includeOpenPoints}
-              onChange={(event) => onIncludeOpenPointsChange(event.target.checked)}
-            />
-            <span>Open point markers</span>
-          </label>
-        )}
+          {hasBackground && (
+            <label className="dc-check" title="The canvas background image, behind the diagram.">
+              <input type="checkbox" checked={includeBackground} onChange={(event) => onIncludeBackgroundChange(event.target.checked)} />
+              <span>Canvas background</span>
+            </label>
+          )}
 
-        <label className="dc-check" data-disabled={selectionCount === 0 ? 'true' : undefined}>
-          <input
-            type="checkbox"
-            checked={selectionOnly}
-            disabled={selectionCount === 0}
-            onChange={(event) => onSelectionOnlyChange(event.target.checked)}
-          />
-          <span>
-            Selection only
-            {selectionCount > 0 && <span className="dc-muted"> ({selectionCount})</span>}
-          </span>
-        </label>
+          {hasOpenPoints && (
+            // Kept by default: an image that quietly dropped them would make every unsettled assumption
+            // look decided. Leaving them out is a plain choice about the picture, worded as one.
+            <label className="dc-check" title="The tabs marking what is still open, with a key naming them. Untick for an image without them.">
+              <input type="checkbox" checked={includeOpenPoints} onChange={(event) => onIncludeOpenPointsChange(event.target.checked)} />
+              <span>Open point markers</span>
+            </label>
+          )}
 
-        {!everyLevel && (
-          // The picture stays a picture to every viewer; Draft Canvas reads the diagram back out of
-          // it on import. On by default for SVG, where a few kilobytes of text cost nothing beside
-          // the markup; off for PNG, where an image is usually meant as just an image.
-          <label className="dc-check" title="The whole diagram travels inside the image, so importing the file reopens it as a diagram. Other viewers see only the picture.">
-            <input type="checkbox" checked={editable} onChange={(event) => onEditableChange(event.target.checked)} />
+          <label className="dc-check" data-disabled={selectionCount === 0 ? 'true' : undefined} title="Only the shapes selected on the canvas, and the connectors between them.">
+            <input type="checkbox" checked={selectionOnly} disabled={selectionCount === 0} onChange={(event) => onSelectionOnlyChange(event.target.checked)} />
             <span>
-              Editable
-              <span className="dc-muted"> — carries the diagram inside</span>
+              Selection only
+              {selectionCount > 0 && <span className="dc-muted"> ({selectionCount})</span>}
             </span>
           </label>
-        )}
 
-        {hasRooms && (
-          // Only offered when a room exists below this canvas: a flat diagram has one picture, and a
-          // checkbox for a second would be a question about a thing that is not in doubt.
-          <label className="dc-check" title="The canvas and every room inside it, one image each, in a ZIP archive.">
-            <input
-              type="checkbox"
-              checked={everyLevel}
-              onChange={(event) => onEveryLevelChange(event.target.checked)}
-            />
-            <span>
-              Every level
-              <span className="dc-muted"> — one image per room, zipped</span>
-            </span>
-          </label>
-        )}
+          {!everyLevel && (
+            // The picture stays a picture to every viewer; Draft Canvas reads the diagram back out of
+            // it on import. On by default for SVG, where a few kilobytes of text cost nothing beside
+            // the markup; off for PNG, where an image is usually meant as just an image.
+            <label className="dc-check" title="Carries the whole diagram inside the image, so importing the file reopens it as a diagram. Other viewers see only the picture.">
+              <input type="checkbox" checked={editable} onChange={(event) => onEditableChange(event.target.checked)} />
+              <span>Editable</span>
+            </label>
+          )}
+
+          {hasRooms && (
+            // Only offered when a room exists below this canvas: a flat diagram has one picture, and a
+            // checkbox for a second would be a question about a thing that is not in doubt.
+            <label className="dc-check" title="The canvas and every room inside it, one image each, in a ZIP archive.">
+              <input type="checkbox" checked={everyLevel} onChange={(event) => onEveryLevelChange(event.target.checked)} />
+              <span>Every level</span>
+            </label>
+          )}
+        </div>
       </div>
-
-      <p className="dc-export-panel-description">{DESCRIPTIONS[format]}</p>
     </div>
   );
 }

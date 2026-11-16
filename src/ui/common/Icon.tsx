@@ -6,6 +6,8 @@ import { memo } from 'react';
  */
 const PATHS = {
   back: 'M15 19l-7-7 7-7',
+  reply: 'M10 5l-6 6 6 6 M4 11h9a6 6 0 0 1 6 6v2',
+  swap: 'M4 8h16l-4-4 M20 16H4l4 4',
   arrowLeft: 'M19 12H5 M11 6l-6 6 6 6',
   forward: 'M9 5l7 7-7 7',
   up: 'M5 15l7-7 7 7',
@@ -24,6 +26,8 @@ const PATHS = {
   pause: 'M8 5v14 M16 5v14',
   layers: 'M12 3l9 5-9 5-9-5z M3 12l9 5 9-5 M3 16l9 5 9-5',
   file: 'M6 3h8l4 4v14H6z M14 3v4h4',
+  // A page with a picture set into its text: a diagram where documentation is read.
+  docs: 'M6 3h12v18H6z M9 7h6 M9 10.5h6v4H9z M9 18h4',
   upload: 'M12 20V9 M8 13l4-4 4 4 M4 5h16',
   alignLeft: 'M4 6h16 M4 12h10 M4 18h13',
   alignCenter: 'M4 6h16 M7 12h10 M5.5 18h13',

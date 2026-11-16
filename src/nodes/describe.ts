@@ -15,6 +15,7 @@ import { languageForFence, tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import { BOUNDARY_HEADER_HEIGHT } from '../document/boundaryHeader';
 import { DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreGlyphTop, dataStoreScale } from '../document/dataStoreGeometry';
 import { queueTubeSpan } from '../document/queueGeometry';
 import { roughenPath } from '../render/roughness/roughPath';
@@ -28,6 +29,8 @@ import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../theme/usePersonality';
 import { clamp } from '../lib/math';
 import { nodeTechnologyIcon, technologyIconSnapshot, technologyMarkBounds, TECHNOLOGY_MARK_SIZE, type TechnologyIconSnapshot } from './technology';
+import { describeSequence, naturalSequenceSize, sequenceFrame, sequenceLayoutOf, type SequenceKit } from './sequence';
+import type { SequenceLayout } from '../sequence/layout';
 
 /**
  * Turns a node from the document model into a display list.
@@ -168,8 +171,8 @@ function tagRow(inset = 5): number {
 
 /**
  * A small, muted corner tag — the one shared visual for every node variant. `inset` only exists
- * for a shape whose own silhouette intrudes on the default bottom-right corner (Adapter's notch);
- * every other caller keeps the plain 7/5 default.
+ * for a shape whose own silhouette intrudes on the default bottom-right corner (Adapter's notch,
+ * Worker's back card, External's frame); every other caller keeps the plain 7/5 default.
  */
 function variantCaption(
   node: DraftNode,
@@ -372,6 +375,31 @@ export function describeNode(node: DraftNode, ctx: DescribeContext): DisplayList
   return { width: node.width, height: node.height, shapes };
 }
 
+/** What a sequence borrows from here — see `SequenceKit` — so its heads are these same shapes. */
+const SEQUENCE_KIT: SequenceKit = {
+  describe: (node, ctx) => describeNode(node, ctx),
+  naturalSize: (node, ctx, bounds) => naturalArchitectureSize(node, ctx, bounds),
+  outline: (seedId, ctx, rect, paint) => outlineShape(seedId, ctx, rect, paint),
+};
+
+/** Where everything in a sequence node is drawn, at its current box. */
+export function sequenceLayoutFor(node: Pick<DraftNode, 'sequence' | 'text' | 'width' | 'height'>, ctx: DescribeContext): SequenceLayout {
+  return sequenceLayoutOf(node, ctx, SEQUENCE_KIT);
+}
+
+/** The size a sequence needs to show everything it holds. */
+export function naturalSequenceSizeFor(node: Pick<DraftNode, 'sequence' | 'text'>, ctx: DescribeContext): { width: number; height: number } {
+  return naturalSequenceSize(node, ctx, SEQUENCE_KIT);
+}
+
+/** A sequence's frame alone, and a few of its messages alone: what presentation lights and redraws. */
+export function describeSequenceFrame(node: DraftNode, ctx: DescribeContext): Shape[] {
+  return sequenceFrame(node, ctx, SEQUENCE_KIT);
+}
+export function describeSequenceMessages(node: DraftNode, ctx: DescribeContext, only: ReadonlySet<string>): Shape[] {
+  return describeSequence(node, ctx, SEQUENCE_KIT, { only });
+}
+
 function shapesFor(node: DraftNode, ctx: DescribeContext): Shape[] {
   switch (node.type) {
     case 'code':
@@ -391,9 +419,11 @@ function shapesFor(node: DraftNode, ctx: DescribeContext): Shape[] {
     case 'actor':
       return actor(node, ctx);
     case 'service':
-      return service(node, ctx);
+      return replicated(node, ctx);
     case 'component':
       return component(node, ctx);
+    case 'sequence':
+      return describeSequence(node, ctx, SEQUENCE_KIT);
     default:
       // Defensive fallback for a node type that somehow bypassed
       // `document/validate.ts` — every valid `DraftNodeType` is handled above.
@@ -602,6 +632,93 @@ function dotsGlyph(rightX: number, cy: number, count: number, color: string, lab
   return [{ t: 'group', children: dots }];
 }
 
+/* -------------------------------------------------------------- replicas -- */
+
+/** How far the card behind a replicated Service shows, matching Worker's own back card. */
+const REPLICA_OFFSET = 6;
+
+/**
+ * A Service that runs as several instances (`DraftNode.replicas`): its own card, in front of one
+ * more peeking out bottom-right, and a small `×N` in the front card's free bottom-left corner. A
+ * Worker is already drawn as a stack, so it only gains the mark — two back cards would read as
+ * something else. Every kind keeps its own silhouette on the front card.
+ */
+function replicated(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const count = node.replicas ?? 1;
+  if (count < 2) return service(node, ctx);
+  const ownStack = node.serviceKind === 'worker';
+  const frontWidth = node.width - REPLICA_OFFSET;
+  const frontHeight = node.height - REPLICA_OFFSET;
+  const shapes = ownStack ? service(node, ctx) : service({ ...node, width: frontWidth, height: frontHeight }, ctx);
+  const mark = replicaMark(frontWidth, frontHeight, count, ctx, shapes);
+  if (ownStack) return [...shapes, ...mark];
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const back = outlineShape(
+    `${node.id}:replicas`,
+    ctx,
+    { x: 0.75 + REPLICA_OFFSET, y: 0.75 + REPLICA_OFFSET, w: frontWidth - 1.5, h: frontHeight - 1.5, r: 8 },
+    { fill: palette.fill, stroke: backCardStroke(palette) },
+  );
+  return [back, ...shapes, ...mark];
+}
+
+/** The `×N` itself: the variant tag's font, muted, bottom-left of the front card. Left out when
+ *  a long name reaches that corner — the name wins over the mark, as it does over the corner dots. */
+function replicaMark(width: number, height: number, count: number, ctx: DescribeContext, shapes: readonly Shape[]): Shape[] {
+  const layout = layoutText(`×${count}`, {
+    font: FONTS.variantTag,
+    maxWidth: Math.max(16, width - 12),
+    lineHeight: FONTS.variantTag.size * LINE_HEIGHTS.label,
+    maxLines: 1,
+    measurer: ctx.measurer,
+  });
+  const x = 8;
+  const y = height - layout.height - 5;
+  const crowded = shapes.some(
+    (shape) =>
+      shape.t === 'text' &&
+      shape.layout !== layout &&
+      (() => {
+        const left = shape.align === 'middle' ? shape.x - shape.layout.width / 2 : shape.align === 'end' ? shape.x - shape.layout.width : shape.x;
+        return left < x + layout.width + 2 && left + shape.layout.width > x - 2 && shape.y < y + layout.height + 1 && shape.y + shape.layout.height > y - 1;
+      })(),
+  );
+  if (crowded) return [];
+  return [{ t: 'text', x, y, layout, font: FONTS.variantTag, fill: ctx.theme.textMuted, align: 'start' }];
+}
+
+/* ---------------------------------------------------------- shared weight -- */
+
+/**
+ * The Service family's cap: a band across the card's top in the outline's own colour, so it reads as
+ * that edge drawn thicker. It was 4px in the darker chip colour, which made a Service the heaviest
+ * thing in any diagram: a lid on a box, sitting next to a Queue and a Data Store drawn in outline
+ * alone. Small marks (the corner dots, a Scheduler's ticks, an Actor's bar) keep the chip colour:
+ * they are too small to weigh anything, and too small to read in the outline's lighter grey.
+ */
+const SERVICE_CAP = 3;
+
+function serviceCap(card: { x: number; y: number; w: number; h: number; r: number }, palette: AccentPalette): Shape {
+  // Clipped to the card's rounded top so it never overhangs. The clip stays the exact rounded rect
+  // at every preset (a `GroupShape` clip is analytic-only, never a jittered path), so the cap's
+  // edge stays crisp even when the outline above it wobbles.
+  return {
+    t: 'group',
+    clip: card,
+    children: [{ t: 'rect', x: card.x, y: card.y, w: card.w, h: SERVICE_CAP, fill: palette.line }],
+  };
+}
+
+/**
+ * The stroke of a card that only peeks out from behind another: a Worker's back layer, a replicated
+ * Service's second instance. Thinner than the card in front, so the pair reads as one shape with
+ * depth and weighs no more than a single outline. At the front card's own 1.5 the two edges ran
+ * side by side, six pixels apart, and read as a doubled border.
+ */
+function backCardStroke(palette: AccentPalette): Stroke {
+  return { color: palette.line, width: 1 };
+}
+
 /* ----------------------------------------------------------- dev presets -- */
 
 /**
@@ -633,7 +750,7 @@ function service(node: DraftNode, ctx: DescribeContext): Shape[] {
  *  one, so its own shape never changes once a kind gets its own function. */
 function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const capHeight = 4;
+  const capHeight = SERVICE_CAP;
   const label = centredLabel(node, ctx, { top: capHeight, bottom: 0, color: palette.text });
   return [
     outlineShape(
@@ -642,24 +759,7 @@ function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
       { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
       { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
     ),
-    // The cap is clipped to the card's rounded top so it never overhangs —
-    // the clip region itself always stays the exact rounded rect regardless
-    // of preset (a `GroupShape` clip is analytic-only, never a jittered
-    // path), so the cap's edge stays crisp even when the outline above wobbles.
-    {
-      t: 'group',
-      clip: { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
-      children: [
-        {
-          t: 'rect',
-          x: 0.75,
-          y: 0.75,
-          w: node.width - 1.5,
-          h: capHeight,
-          fill: palette.chip,
-        },
-      ],
-    },
+    serviceCap({ x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 }, palette),
     // Window-chrome dots, top-right: the family's "this is a running thing" cue. Generic gets the
     // full three; Worker gets two, so the two kinds stay distinguishable by the mark as well as
     // by the silhouette.
@@ -677,7 +777,7 @@ function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
  */
 function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const capHeight = 4;
+  const capHeight = SERVICE_CAP;
   const w = node.width - 1.5;
   const h = node.height - 1.5;
   const x = 0.75;
@@ -710,11 +810,7 @@ function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
 
   return [
     { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
-    {
-      t: 'group',
-      clip: { x, y, w, h, r },
-      children: [{ t: 'rect', x, y, w, h: capHeight, fill: palette.chip }],
-    },
+    serviceCap({ x, y, w, h, r }, palette),
     // No glyph, deliberately: API's whole identity is the socket cut into its own outline, and the
     // reference sheet leaves this one card iconless for exactly that reason — the silhouette has
     // already said it.
@@ -732,31 +828,29 @@ function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
  */
 function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const capHeight = 4;
+  const capHeight = SERVICE_CAP;
   const offset = 6;
   const stroke: Stroke = { color: palette.line, width: 1.5 };
   const back = { x: 0.75 + offset, y: 0.75 + offset, w: node.width - 1.5 - offset, h: node.height - 1.5 - offset, r: 8 };
   const front = { x: 0.75, y: 0.75, w: node.width - 1.5 - offset, h: node.height - 1.5 - offset, r: 8 };
   const label = centredLabel(node, ctx, {
     top: capHeight,
-    bottom: Math.max(offset, tagRow()),
+    bottom: Math.max(offset, tagRow(offset + 5)),
     color: palette.text,
     right: offset,
   });
   return [
-    outlineShape(`${node.id}:back`, ctx, back, { fill: palette.fill, stroke }),
+    outlineShape(`${node.id}:back`, ctx, back, { fill: palette.fill, stroke: backCardStroke(palette) }),
     outlineShape(node.id, ctx, front, { fill: palette.fill, stroke, shadow: true }),
-    {
-      t: 'group',
-      clip: { x: front.x, y: front.y, w: front.w, h: capHeight, r: front.r },
-      children: [{ t: 'rect', x: front.x, y: front.y, w: front.w, h: capHeight, fill: palette.chip }],
-    },
+    serviceCap(front, palette),
     // Two dots rather than Generic's three, so the mark itself distinguishes the two kinds. Kept
     // in the top-right corner: the bottom-right is where this kind's own `WORKER` caption sits,
     // and a dot cluster there would land on top of it.
     ...dotsGlyph(front.x + front.w - MARK_INSET, front.y + capHeight + 9, 2, palette.chip, label),
     ...label,
-    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.worker!, ctx.theme.textMuted),
+    // Measured from the front card's corner, not the node's: the back card fills the node's
+    // bottom-right, and a caption placed there sat on the front card's border.
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.worker!, ctx.theme.textMuted, { right: offset + 7, bottom: offset + 5 }),
   ];
 }
 
@@ -769,7 +863,7 @@ function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
  */
 function serviceExternal(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const capHeight = 4;
+  const capHeight = SERVICE_CAP;
   const inset = 6;
   const outer = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
   const inner = {
@@ -782,22 +876,21 @@ function serviceExternal(node: DraftNode, ctx: DescribeContext): Shape[] {
   return [
     outlineShape(`${node.id}:frame`, ctx, outer, {
       fill: 'none',
-      stroke: { color: palette.line, width: 1.25, dash: [4, 3] },
+      // A hair under the back-card weight would break up; at 1 the dashes still hold together.
+      stroke: { ...backCardStroke(palette), dash: [4, 3] },
     }),
     outlineShape(node.id, ctx, inner, { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true }),
-    {
-      t: 'group',
-      clip: { x: inner.x, y: inner.y, w: inner.w, h: capHeight, r: inner.r },
-      children: [{ t: 'rect', x: inner.x, y: inner.y, w: inner.w, h: capHeight, fill: palette.chip }],
-    },
+    serviceCap(inner, palette),
     ...centredLabel(node, ctx, {
       top: inset + capHeight,
-      bottom: Math.max(inset, tagRow()),
+      bottom: Math.max(inset, tagRow(inset + 5)),
       color: palette.text,
       left: inset,
       right: inset,
     }),
-    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.external!, ctx.theme.textMuted),
+    // Inside the inner card, like every other kind's caption: at the node's own corner it ran over
+    // the inner card's border into the gap before the dashed frame.
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.external!, ctx.theme.textMuted, { right: inset + 7, bottom: inset + 5 }),
   ];
 }
 
@@ -811,12 +904,12 @@ function serviceExternal(node: DraftNode, ctx: DescribeContext): Shape[] {
  */
 function serviceScheduler(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const capHeight = 4;
+  const capHeight = SERVICE_CAP;
   const outer = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
   const tickCount = 3;
   const tickW = 3;
   const gap = 4;
-  const tickH = 9;
+  const tickH = 7;
   // Right-aligned: the cluster ends a fixed inset from the card's right edge and grows leftward,
   // so it stays pinned to that corner at every node width.
   const endX = outer.x + outer.w - MARK_INSET;
@@ -2480,7 +2573,7 @@ const FONTS_BY_TEXT_ROLE: Record<TextRole, FontSpec> = {
 
 /**
  * A Text node's effective semantic role: an explicit `textRole` always wins; otherwise the legacy
- * `annotation` flag (still the only thing `src/starters/catalog.ts` ever sets) maps to `'label'`,
+ * `annotation` flag (still the only thing the starters gallery's files set) maps to `'label'`,
  * its one existing look. Absent of both is `'body'`. Shared by the renderer, the inline editor's
  * own CSS (`DraftNodeView.tsx`'s `editorStyle`), and the popover's role picker, so the three can
  * never disagree about what a node currently is.
@@ -2586,7 +2679,7 @@ function textInkOf(node: DraftNode, ctx: DescribeContext): TextInk {
   if (node.textBackground === 'card') {
     return { text: accented ? palette.text : ctx.theme.text, muted: accented ? palette.chip : ctx.theme.textMuted, knockout: false };
   }
-  if (effectiveTextRole(node) === 'label') return { text: ctx.theme.textFaint, muted: ctx.theme.textFaint, knockout: false };
+  if (effectiveTextRole(node) === 'label') return { text: ctx.theme.edgeText, muted: ctx.theme.edgeText, knockout: false };
   if (node.textBackground === 'marker') return { text: ctx.theme.text, muted: ctx.theme.textMuted, knockout: false };
   return { text: accented ? palette.chip : ctx.theme.text, muted: accented ? palette.chip : ctx.theme.textMuted, knockout: false };
 }
@@ -2897,7 +2990,6 @@ const BOUNDARY_BOOST: Record<PersonalityPreset, number> = { clean: 1, draft: 1.4
  *   and the plate's glyph all share one optical centre line whatever is or isn't there.
  */
 const BOUNDARY_RADIUS = 12;
-const BOUNDARY_HEADER_HEIGHT = 32;
 const BOUNDARY_ROW_MID = 1 + BOUNDARY_HEADER_HEIGHT / 2;
 const BOUNDARY_PLATE = 20;
 const BOUNDARY_PLATE_GAP = (BOUNDARY_HEADER_HEIGHT - BOUNDARY_PLATE) / 2;
@@ -2989,6 +3081,24 @@ export function naturalBoundaryWidth(node: DraftNode, ctx: DescribeContext): num
   });
   const rightInset = style.header === 'tab' ? 1 + BOUNDARY_RADIUS + BOUNDARY_INSET_X : BOUNDARY_INSET_X;
   return Math.ceil(boundaryTitleX(node) + title.width + rightInset);
+}
+
+/** The words in a boundary's header row (its title and kind caption), relative to its box — what a
+ *  connector's caption must keep off. `undefined` when the header shows no text. */
+export function boundaryHeaderTextBox(node: DraftNode, ctx: DescribeContext): { x: number; y: number; width: number; height: number } | undefined {
+  const style = BOUNDARY_STYLES[node.boundaryPreset ?? 'boundary'];
+  let left = Infinity;
+  let top = Infinity;
+  let right = -Infinity;
+  let bottom = -Infinity;
+  for (const shape of boundaryHeader(node, ctx, style, accentOf(ctx.theme, node.accent))) {
+    if (shape.t !== 'text') continue;
+    left = Math.min(left, shape.x);
+    top = Math.min(top, shape.y);
+    right = Math.max(right, shape.x + shape.layout.width);
+    bottom = Math.max(bottom, shape.y + shape.layout.height);
+  }
+  return right > left ? { x: left, y: top, width: right - left, height: bottom - top } : undefined;
 }
 
 function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundaryStyle, palette: AccentPalette): Shape[] {
@@ -3345,6 +3455,18 @@ export function naturalArchitectureSize(
     if (width >= bounds.maxWidth) break;
   }
   return best ? { ...best, fits: true } : { width: bounds.maxWidth, height: bounds.maxHeight, fits: false };
+}
+
+/** How many lines a shape's name is set in at its current size — what tells a long name typed into a
+ *  default-width box (grown taller line by line) from one that reads as a name. */
+export function nameLineCount(node: DraftNode, ctx: DescribeContext): number {
+  let lines = 0;
+  const visit = (shape: Shape) => {
+    if (shape.t === 'group') shape.children.forEach(visit);
+    else if (shape.t === 'text' && shape.role === 'label') lines = Math.max(lines, shape.layout.lines.length);
+  };
+  describeNode(node, ctx).shapes.forEach(visit);
+  return lines;
 }
 
 /** Whether every text in a shape's display list shows in full — the C4 detail drawn at all, not just

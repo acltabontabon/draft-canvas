@@ -16,6 +16,9 @@
  *   and straightened onto a line it obviously meant (`routing.ts`'s `levelOnto`).
  * - Straightening a spread end happens here, where its neighbours are known: only while it keeps its
  *   order and `MIN_SPACING` from them.
+ * - An automatic end whose line has something wrong with it — it crosses another, or runs into a
+ *   shape — may be better off on another side altogether. `sides.ts` decides that from the ends as
+ *   first placed here, and the ends it moves are placed again on their new sides.
  *
  * Presentation, like trunks and line jumps: nothing here is saved, and a pin is never moved (the pin
  * contract in `routing.ts`). Built once per document change, memoized like `routingPlan`.
@@ -23,10 +26,12 @@
 
 import type { DraftEdge, DraftNode, EdgeAnchor, Side } from '../document/types';
 import { routingPlan } from './bundles';
+import { labelLook } from './labelLook';
 import { obstaclesForEdge } from './obstacles';
 import { anchorPoint, flattenPath, laneIndex, rectOf, resolveSides, responseLaneFor, routeBetween, sideSpan, type Rect } from './routing';
 import { stepPolyline } from './waypoints';
-import { sameNodeGeometry, type PlanScope } from './sameGeometry';
+import { sameNodeGeometryAround, type PlanScope } from './sameGeometry';
+import { chooseEdgeSides, sameRect, sameRects, type EdgeSides } from './sides';
 
 /** Where a connector's automatic ends are drawn when the plan spread them; an end it left alone is absent. */
 export interface EdgeSpread {
@@ -100,7 +105,7 @@ export function endpointPlan(nodes: readonly DraftNode[], edges: readonly DraftE
   const known = (scope === 'canvas' ? cache : transientCache).get(nodes)?.get(edges) ?? cache.get(nodes)?.get(edges);
   if (known) return known;
   const previous = last;
-  const reusable = previous && previous.edges === edges && sameNodeGeometry(previous.nodes, nodes) ? previous.plan : null;
+  const reusable = previous && previous.edges === edges && sameNodeGeometryAround(previous.nodes, nodes, edges) ? previous.plan : null;
   const plan = reusable ?? compute(nodes, edges, scope);
   if (scope === 'canvas') last = { nodes, edges, plan };
   const store = scope === 'canvas' ? cache : transientCache;
@@ -120,14 +125,28 @@ function intern(edgeId: string, spread: EdgeSpread, scope: PlanScope): EdgeSprea
   return spread;
 }
 
-/** Everything that has to match for connectors leaving one shape to share one label — `labelGroups.ts`'s rule. */
-export function labelLook(edge: DraftEdge): string | null {
-  if (!edge.label?.trim() || edge.condition || edge.hasResponse || edge.response || edge.attachments?.length) return null;
-  return JSON.stringify([edge.label.trim(), edge.kind ?? null, Boolean(edge.async), edge.semantic ?? null, edge.directed, edge.routing, edge.accent ?? null]);
-}
-
 function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope: PlanScope): EndpointPlan {
   if (edges.length < 2) return EMPTY;
+  // Twice at most: first on the sides the shapes alone give every end, which is the picture the side
+  // plan judges; then, only if it moved any end to another side, again with those.
+  const first = place(nodes, edges, scope, NO_SIDES);
+  const chosen = chooseEdgeSides(nodes, edges, scope, (edgeId) => first.spreads.get(edgeId));
+  const { spreads, crowded } = chosen.size ? place(nodes, edges, scope, chosen) : first;
+  if (spreads.size === 0 && crowded.length === 0) return EMPTY;
+  const handed = new Map<string, EdgeSpread>();
+  for (const [id, spread] of spreads) handed.set(id, intern(id, spread, scope));
+  return planOf(handed, crowded);
+}
+
+const NO_SIDES: ReadonlyMap<string, EdgeSides> = new Map();
+
+/** Every end placed on its side: `chosenSides` moves an automatic end off the side its shapes give it. */
+function place(
+  nodes: readonly DraftNode[],
+  edges: readonly DraftEdge[],
+  scope: PlanScope,
+  chosenSides: ReadonlyMap<string, EdgeSides>,
+): { spreads: Map<string, EdgeSpread>; crowded: string[] } {
   const byId = new Map(nodes.map((node) => [node.id, node]));
   const spines = routingPlan(nodes, edges, scope);
   const lanes = laneIndex(edges);
@@ -140,20 +159,24 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
   };
   for (const edge of edges) {
     // Bent connectors face their bends and stay as drawn.
-    if (edge.waypoints?.length) continue;
+    if (edge.waypoints?.length || edge.sourceAnchor?.participantId || edge.targetAnchor?.participantId) continue;
     const source = byId.get(edge.source);
     const target = byId.get(edge.target);
     if (!source || !target || source.type === 'group' || target.type === 'group') continue;
     const sourceRect = rectOf(source);
     const targetRect = rectOf(target);
     const resolved = resolveSides(sourceRect, targetRect, { source: edge.sourceAnchor, target: edge.targetAnchor });
+    // An automatic end the side plan moved to clear a crossing or a shape: placed on that side like
+    // an end handed over from a full one — `home` is still where the shapes alone would put it.
+    const chosen = chosenSides.get(edge.id);
     const spine = spines.spineFor(edge.id);
     const look = labelLook(edge);
     const obstaclesOf = () => obstaclesForEdge(nodes, edge.source, edge.target, scope);
     for (const role of ['source', 'target'] as const) {
-      const [rect, otherRect, side, anchor, nodeId] = role === 'source'
+      const [rect, otherRect, home, anchor, nodeId] = role === 'source'
         ? [sourceRect, targetRect, resolved.source, edge.sourceAnchor, edge.source]
         : [targetRect, sourceRect, resolved.target, edge.targetAnchor, edge.target];
+      const side = (anchor ? undefined : chosen?.[role]) ?? home;
       const axis = along(side);
       const farCentre = { x: otherRect.x + otherRect.width / 2, y: otherRect.y + otherRect.height / 2 };
 
@@ -165,7 +188,7 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
         nodeId,
         rect,
         side,
-        home: side,
+        home,
         far: farCentre[axis],
         // A trunk's automatic stem moves like any automatic end — all its connectors with it, as one.
         fixed: anchor ? anchorPoint(rect, side, anchor.offset)[axis] : undefined,
@@ -201,7 +224,8 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
       const mover = takeLow ? ordered[0]! : ordered[ordered.length - 1]!;
       const to = takeLow ? low : high;
       if (!faces(first.rect, to, mover.farCentre)) break;
-      (takeLow ? ordered.shift() : ordered.pop());
+      if (takeLow) ordered.shift();
+      else ordered.pop();
       for (const end of mover.ends) {
         const moved = { ...end, side: to, far: end.farCentre[along(to)] };
         const key = `${end.nodeId}:${to}`;
@@ -250,10 +274,7 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
     spread[end.role] = { side, offset: Math.min(1, Math.max(0, offset)) };
     spreads.set(end.edge.id, spread);
   }
-  if (spreads.size === 0 && crowded.length === 0) return EMPTY;
-  const handed = new Map<string, EdgeSpread>();
-  for (const [id, spread] of spreads) handed.set(id, intern(id, spread, scope));
-  return planOf(handed, crowded);
+  return { spreads, crowded };
 }
 
 /** Built outside `compute`, so the plan keeps the answers and none of the working state. */
@@ -325,17 +346,44 @@ function sharePins(occupants: readonly Occupant[], first: End, placed: Map<End, 
 /** Two lines leaving one point read as one past this — the agent's `SHARED_RUN`. */
 const SHARED_RUN = 30;
 
-/** How an end's line leaves it, drawn the quick way: how far it runs straight out, and which way
- *  (−1, 0, +1 along the side) it first turns. */
-function leavingOf(end: End): { leg: number; turn: number } {
-  const { edge, line } = end;
+/**
+ * A connector's quick line, as `leavingOf` reads it, and everything it was drawn from. Routing it is
+ * most of what placing the ends costs — it is done for every connector that shares a pinned point —
+ * and it depends on the connector's own shapes and the shapes near it, nothing else, so a connector
+ * none of those has moved for keeps its line from one plan to the next. Compared by value, like
+ * `sides.ts`'s memo of the same lines; a changed connector is a new object, so it never matches.
+ */
+interface QuickLine {
+  sourceRect: Rect;
+  targetRect: Rect;
+  lane: number;
+  obstacles: readonly Rect[];
+  /** The line's corners, source to target. */
+  corners: { x: number; y: number }[];
+}
+const quickLines = new WeakMap<DraftEdge, QuickLine>();
+
+function quickCornersOf(edge: DraftEdge, line: End['line']): { x: number; y: number }[] {
+  const obstacles = line.obstacles();
+  const known = quickLines.get(edge);
+  if (known && known.lane === line.lane && sameRect(known.sourceRect, line.sourceRect) && sameRect(known.targetRect, line.targetRect) && sameRects(known.obstacles, obstacles)) {
+    return known.corners;
+  }
   const route = routeBetween(line.sourceRect, line.targetRect, edge.routing, {
     anchors: { source: edge.sourceAnchor, target: edge.targetAnchor },
     lane: line.lane,
-    obstacles: line.obstacles(),
+    obstacles,
     mode: 'gesture',
   });
   const corners = edge.routing === 'smoothstep' ? stepPolyline(route.d) : flattenPath(route.d);
+  quickLines.set(edge, { sourceRect: line.sourceRect, targetRect: line.targetRect, lane: line.lane, obstacles, corners });
+  return corners;
+}
+
+/** How an end's line leaves it, drawn the quick way: how far it runs straight out, and which way
+ *  (−1, 0, +1 along the side) it first turns. */
+function leavingOf(end: End): { leg: number; turn: number } {
+  const corners = quickCornersOf(end.edge, end.line);
   const out = end.role === 'source' ? corners : [...corners].reverse();
   if (out.length < 2) return { leg: 0, turn: 0 };
   const [a, b] = [out[0]!, out[1]!];
@@ -429,6 +477,24 @@ function straighten(placed: Map<End, { side: Side; at: number }>, sides: Readonl
     pair.set(end.role, end);
     partnerOf.set(end.edge.id, pair);
   }
+  // Where each end of a side is, found once: asking every other end of the diagram for each end made
+  // this quadratic, most of what a plan of a thousand shapes spent here. Sides do not change in this
+  // pass, only points, so the lists hold for it — and each answer is read from `placed` as it stands.
+  const onSide = new Map<string, End[]>();
+  for (const [end, where] of placed) {
+    const key = `${end.nodeId}:${where.side}`;
+    const list = onSide.get(key);
+    if (list) list.push(end);
+    else onSide.set(key, [end]);
+  }
+  const ends = new Map<DraftEdge, Map<'source' | 'target', End>>();
+  for (const list of sides.values()) {
+    for (const end of list) {
+      const pair = ends.get(end.edge) ?? new Map<'source' | 'target', End>();
+      if (!pair.has(end.role)) pair.set(end.role, end);
+      ends.set(end.edge, pair);
+    }
+  }
   const pointOf = (end: End, side: Side) => {
     const known = placed.get(end);
     if (known) return known.at;
@@ -443,7 +509,7 @@ function straighten(placed: Map<End, { side: Side; at: number }>, sides: Readonl
     const pair = partnerOf.get(end.edge.id);
     if (end.role === 'source' && pair?.get('target') && pair.get('target')!.fixed === undefined) continue;
     const partnerRole = end.role === 'source' ? 'target' : 'source';
-    const partner = pair?.get(partnerRole) ?? findEnd(sides, end.edge, partnerRole);
+    const partner = pair?.get(partnerRole) ?? ends.get(end.edge)?.get(partnerRole);
     if (!partner) continue;
     const partnerSide = placed.get(partner)?.side ?? partner.side;
     if (partnerSide !== OPPOSITE[mine.side]) continue;
@@ -451,19 +517,12 @@ function straighten(placed: Map<End, { side: Side; at: number }>, sides: Readonl
     if (Math.abs(goal - mine.at) > NEAR_LEVEL || Math.abs(goal - mine.at) < 0.01) continue;
     const band = bandOf(end.rect, mine.side);
     if (goal < band.start || goal > band.start + band.length) continue;
-    const neighbours = [...placed.entries()].filter(([other, where]) => other !== end && other.nodeId === end.nodeId && where.side === mine.side && other.key !== end.key);
-    const keepsOrder = neighbours.every(([, where]) => Math.sign(where.at - mine.at) === Math.sign(where.at - goal) || where.at === mine.at);
-    const keepsRoom = neighbours.every(([, where]) => Math.abs(where.at - goal) >= MIN_SPACING);
+    const neighbours = (onSide.get(`${end.nodeId}:${mine.side}`) ?? []).filter((other) => other !== end && other.key !== end.key);
+    const at = (other: End) => placed.get(other)!.at;
+    const keepsOrder = neighbours.every((other) => Math.sign(at(other) - mine.at) === Math.sign(at(other) - goal) || at(other) === mine.at);
+    const keepsRoom = neighbours.every((other) => Math.abs(at(other) - goal) >= MIN_SPACING);
     if (keepsOrder && keepsRoom) placed.set(end, { side: mine.side, at: goal });
   }
-}
-
-function findEnd(sides: ReadonlyMap<string, End[]>, edge: DraftEdge, role: 'source' | 'target'): End | undefined {
-  for (const ends of sides.values()) {
-    const found = ends.find((end) => end.edge === edge && end.role === role);
-    if (found) return found;
-  }
-  return undefined;
 }
 
 export { MIN_SPACING as ENDPOINT_MIN_SPACING };

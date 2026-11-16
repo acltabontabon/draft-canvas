@@ -18,6 +18,36 @@ export function ToolGlyph({ id }: { id: string }) {
 
 const GLYPHS: Record<string, ReactElement> = {
   select: <path d="M5.5 3.5 5.5 15.5 8.7 12.6 11 17 12.9 16.1 10.7 11.7 15 11.4Z" />,
+  // The Pencil: a pencil, and the line it has just drawn.
+  pencil: (
+    <>
+      <path d="M5.2 13.6 6 10.4 12.6 3.8a1.7 1.7 0 0 1 2.4 2.4L8.4 12.8Z" />
+      <path d="M11.3 5.1l2.4 2.4" />
+      <path d="M3 17.2c1.6-1 3-1 4.4-.1s2.9.9 4.4 0" />
+    </>
+  ),
+  // Smart Ink: the pencil, and the clean shape its rough line became.
+  smart: (
+    <>
+      <path d="M3.4 11.6 4.1 8.9 9.6 3.4a1.5 1.5 0 0 1 2.1 2.1L6.2 11Z" />
+      <path d="M8.5 4.5l2 2" />
+      <rect x="10.5" y="11" width="7" height="5.6" rx="1.3" />
+    </>
+  ),
+  highlighter: (
+    <>
+      <path d="M6.3 12.9 12.9 6.3a1.7 1.7 0 0 1 2.4 0l.4.4a1.7 1.7 0 0 1 0 2.4l-6.6 6.6Z" />
+      <path d="M6.3 12.9 4.4 16.4h3.2l1.5-.7" />
+      <path d="M11 17.6h6.5" strokeWidth="2.6" opacity="0.5" />
+    </>
+  ),
+  eraser: (
+    <>
+      <path d="M3.9 12.4 10.9 5.4a1.5 1.5 0 0 1 2.1 0l3.2 3.2a1.5 1.5 0 0 1 0 2.1l-5.8 5.8H7.6Z" />
+      <path d="M7.4 8.9l5.3 5.3" />
+      <path d="M11.4 16.5h5.8" />
+    </>
+  ),
   text: (
     <>
       <path d="M4.5 5.5V4h11v1.5" />
@@ -78,6 +108,16 @@ const GLYPHS: Record<string, ReactElement> = {
     <>
       <circle cx="10" cy="10" r="3.2" />
       <path d="M2.5 10h4.3M13.2 10h4.3M10 2.5v4.3" />
+    </>
+  ),
+  // A sequence: two participants, their lifelines, a call across and the reply back.
+  sequence: (
+    <>
+      <rect x="2.8" y="3.2" width="5.4" height="3.2" rx="0.9" />
+      <rect x="11.8" y="3.2" width="5.4" height="3.2" rx="0.9" />
+      <path d="M5.5 6.4V17M14.5 6.4V17" strokeDasharray="1.5 1.7" />
+      <path d="M5.5 9.8h8.6M12.2 8.2l2 1.6-2 1.6" />
+      <path d="M14.5 14.2H6.2" strokeDasharray="1.8 1.5" />
     </>
   ),
   // A component: the UML box with its two tabs.

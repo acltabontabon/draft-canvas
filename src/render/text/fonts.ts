@@ -68,19 +68,27 @@ export const TEXT_SIZES = {
   code: 12.5,
   /** A connector's own words and its relationship caption are one style — the same size, and the
    *  same muted tone on the canvas and in exports — so a typed label replacing a caption reads as
-   *  the same kind of text. Held equal by `tests/connector-text.test.ts`. */
-  edgeLabel: 9.5,
+   *  the same kind of text. Held equal by `tests/connector-text.test.ts`.
+   *
+   *  10.5, up from 9.5: at the zoom a whole ordinary diagram fits a laptop screen (60–80%), 9.5 drew
+   *  under 7.5px and a request could not be followed without zooming in to read each relationship.
+   *  The layout sizes its gaps from the measured caption, so the room this needs is given, not taken. */
+  edgeLabel: 10.5,
   sequenceBadge: 11,
   groupTitle: 12,
   /** A Boundary title only ever shrinks this one step — see the `group()` doc comment on why it
    *  doesn't also wrap. */
   groupTitleMin: 11,
-  connectorCaption: 9.5,
+  connectorCaption: 10.5,
   /** A shape's C4 `[technology]` line — small and muted, under the name. */
   nodeTechnology: 10,
   /** A shape's C4 description. The smallest body text on the canvas that is still meant to be read
    *  rather than glanced at; below this it stops being legible across a meeting room. */
   nodeDescription: 11,
+  sequenceMessage: 12,
+  sequenceGuard: 11,
+  sequenceOperator: 10.5,
+  sequenceNote: 11.5,
 } as const;
 
 /** Line heights are absolute multiples so the exporter can reproduce them exactly. */
@@ -108,4 +116,9 @@ export const FONTS = {
   connectorCaption: { stack: 'sans', size: TEXT_SIZES.connectorCaption, weight: 500 } satisfies FontSpec,
   nodeTechnology: { stack: 'sans', size: TEXT_SIZES.nodeTechnology, weight: 500 } satisfies FontSpec,
   nodeDescription: { stack: 'sans', size: TEXT_SIZES.nodeDescription, weight: 400 } satisfies FontSpec,
+  /** A sequence's messages are what it is read for, so they sit a step above a connector's label. */
+  sequenceMessage: { stack: 'sans', size: TEXT_SIZES.sequenceMessage, weight: 500 } satisfies FontSpec,
+  sequenceGuard: { stack: 'sans', size: TEXT_SIZES.sequenceGuard, weight: 500 } satisfies FontSpec,
+  sequenceOperator: { stack: 'sans', size: TEXT_SIZES.sequenceOperator, weight: 700 } satisfies FontSpec,
+  sequenceNote: { stack: 'sans', size: TEXT_SIZES.sequenceNote, weight: 400 } satisfies FontSpec,
 } as const;

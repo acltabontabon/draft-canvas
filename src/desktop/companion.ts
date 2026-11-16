@@ -1,7 +1,7 @@
 /**
  * The agent companion's conversations (desktop only): what the person asked on each diagram and what
  * their agent did about it, folded from the shell's `companion` events. In memory only — never saved,
- * undone or exported, like `agentActivity.ts`. The shell keeps which agent session to resume.
+ * undone or exported, like `agentActivity.ts`. The shell keeps bounded local chat context on demand.
  *
  * No React here: `ui/Companion.tsx` reads it through `subscribe`/`snapshot`.
  */
@@ -87,7 +87,8 @@ const STEP_TEXT: Record<string, string> = {
 };
 
 export function stepText(tool: string): string {
-  return STEP_TEXT[tool] ?? tool;
+  // Own names only: a tool the agent calls "constructor" is not Object's.
+  return Object.hasOwn(STEP_TEXT, tool) ? STEP_TEXT[tool]! : tool;
 }
 
 /** What a step did, said once the turn is over. Getting ready is left out: it is the agent's own
@@ -131,7 +132,7 @@ export function activityOf(steps: readonly Step[], running: boolean): Activity {
   const said = new Set<string>();
   for (const step of steps) {
     if (step.status !== 'completed') continue;
-    const text = step.tool in DONE_TEXT ? DONE_TEXT[step.tool] : step.tool;
+    const text = Object.hasOwn(DONE_TEXT, step.tool) ? DONE_TEXT[step.tool] : step.tool;
     if (text && !said.has(text)) {
       said.add(text);
       done.push(text);

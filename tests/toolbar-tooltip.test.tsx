@@ -37,7 +37,13 @@ describe('Toolbar primitive tooltips', () => {
     try {
       renderToolbar();
       for (const content of ALL_TOOLTIPS) {
-        const button = screen.getByRole('button', { name: content.title });
+        // A shape without a button of its own on the rail is taught where it shows while in hand:
+        // the Shapes slot at the rail's end.
+        let button = screen.queryByRole('button', { name: content.title });
+        if (!button) {
+          act(() => useUiStore.setState({ armed: ALL_PRESETS.find((preset) => preset.label === content.title) }));
+          button = screen.getByRole('button', { name: `${content.title} — all shapes` });
+        }
 
         fireEvent.mouseEnter(button);
         expect(screen.queryByRole('tooltip')).toBeNull();

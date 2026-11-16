@@ -158,6 +158,16 @@ describe('update_diagram operations', () => {
     expect(room.nodes.map((n) => n.id)).toContain('validator');
     expect(next.edges).toEqual(file.edges);
   });
+
+  it('says what else goes when a shape with an inside view is removed', () => {
+    const inner = [createNode({ id: 'a', type: 'component', x: 0, y: 0 }), createNode({ id: 'b', type: 'component', x: 200, y: 0 })];
+    const owner = { ...createNode({ id: 'owner', type: 'service', x: 0, y: 0, text: 'Payments' }), inside: { nodes: inner, edges: [createEdge({ id: 'ab', source: 'a', target: 'b' })], flows: [], viewport: { x: 0, y: 0, zoom: 1 } } };
+    const file: DraftDocument = { ...createDocument('Nested'), nodes: [owner, createNode({ id: 'other', type: 'database', x: 300, y: 0 })], edges: [] };
+    const { file: next, counts, advisories } = applyUpdate(file, [], [{ op: 'remove', ids: ['owner'] }], undefined);
+    expect(next.nodes.map((n) => n.id)).toEqual(['other']);
+    expect(counts.removed).toBe(1);
+    expect(advisories).toContain('Removing "owner" also removes the view inside it: 2 shapes, 1 connector and 0 flows.');
+  });
 });
 
 describe('notes and flows through update_diagram', () => {

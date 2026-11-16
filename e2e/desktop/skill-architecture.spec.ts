@@ -26,8 +26,6 @@ test('skill maps Draft Canvas through MCP and renders every view', async ({ page
   const { client } = connection;
   const report: Record<string, unknown> = {};
   try {
-    const capabilities = await client.call('get_capabilities', { topics: ['readability'] });
-    expect(capabilities.ok, JSON.stringify(capabilities.value)).toBe(true);
     const created = await client.call('create_diagram', { ...request, requestId: randomUUID() });
     report.created = created.value;
     writeFileSync(test.info().outputPath('receipt.json'), JSON.stringify(report, null, 2));
@@ -37,8 +35,9 @@ test('skill maps Draft Canvas through MCP and renders every view', async ({ page
     await page.getByRole('button', { name: 'Open file…' }).click();
     await chooseWorkFile(page, request.title);
     await expect(page.locator('.dc-editor')).toBeVisible();
-    const initial = await client.call('read_diagram', { diagramId, include: ['views', 'geometry'] });
+    const initial = await client.call('read_diagram', { diagramId, format: 'outline' });
     expect(initial.ok).toBe(true);
+    expect(initial.value).not.toHaveProperty('elements');
     expect((initial.value.views as { inside: string[] }[]).map(view => view.inside)).toEqual(rooms(request).slice(1).map(view => view.path));
     report.initial = initial.value;
     const before = await client.call('read_diagram', { diagramId, view: { inside: ['editor'] }, include: ['geometry'] });

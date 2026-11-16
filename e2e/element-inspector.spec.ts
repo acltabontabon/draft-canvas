@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { cameraAtRest, create, newCanvas } from './canvas';
+import { cameraAtRest, create, newCanvas, nextFrames } from './canvas';
 
 /** Contextual popover for a single selected element, anchored at the element instead of docked
  *  at the bottom of the screen — mirrors `connector-semantics.spec.ts`'s coverage of the
@@ -49,7 +49,7 @@ test.describe('element inspector popover', () => {
     // One row: colour, kind, technology and the two unambiguous actions — no overflow hop needed.
     const inspector = page.locator('.dc-element-inspector');
     await expect(inspector.locator('.dc-element-action-row')).toBeVisible();
-    expect((await inspector.boundingBox())!.width).toBeLessThanOrEqual(340);
+    expect((await inspector.boundingBox())!.width).toBeLessThanOrEqual(400);
     await expect(inspector.locator('.dc-popover-inner')).toHaveCSS('overflow-y', 'visible');
     await expect(inspector.getByRole('button', { name: 'Actions' })).toHaveCount(0);
     await expect(inspector.getByRole('button', { name: 'Edit text' })).toBeVisible();
@@ -137,6 +137,9 @@ test.describe('element inspector popover', () => {
     // there visibly detached from the moving element — hidden outright instead.
     await expect(popover).toBeHidden();
 
+    // WebKit coalesces the burst of moves into the next frame; releasing before it renders dropped
+    // the shape short of the pointer (exactly 60px on, failing the check below).
+    await nextFrames(page);
     await page.mouse.up();
 
     await expect(popover).toBeVisible();
@@ -172,7 +175,12 @@ test.describe('element inspector popover', () => {
     const beforeNodeDrag = (await node.boundingBox())!;
     await page.mouse.move(beforeNodeDrag.x + beforeNodeDrag.width / 2, beforeNodeDrag.y + beforeNodeDrag.height / 2);
     await page.mouse.down();
-    await page.mouse.move(beforeNodeDrag.x + beforeNodeDrag.width / 2 + 100, beforeNodeDrag.y + beforeNodeDrag.height / 2 + 70, { steps: 5 });
+    // WebKit can drop the first moves of a drag while React Flow arms it: seen landing 40px along a
+    // 100px drag. Small steps, then one more move at the target, so the drag ends where it was aimed.
+    const target = { x: beforeNodeDrag.x + beforeNodeDrag.width / 2 + 100, y: beforeNodeDrag.y + beforeNodeDrag.height / 2 + 70 };
+    await page.mouse.move(target.x, target.y, { steps: 15 });
+    await page.mouse.move(target.x + 1, target.y + 1);
+    await page.mouse.move(target.x, target.y);
     await page.mouse.up();
     await expect.poll(async () => (await node.boundingBox())!.x).toBeGreaterThan(beforeNodeDrag.x + 50);
   });
@@ -212,10 +220,57 @@ test.describe('element inspector popover', () => {
     const card = page.locator('.dc-element-inspector');
     const technology = card.getByRole('button', { name: 'Details' });
     await expect(technology).toBeVisible();
-    await expect(technology.locator('span')).toHaveCSS('display', 'none');
+    await expect(technology.locator('span')).toHaveCount(0);
     expect((await technology.boundingBox())!.width).toBeLessThan(35);
     await technology.hover();
     await expect(page.getByRole('tooltip')).toContainText('Element details');
+  });
+
+  // Regression: the card was capped at 340px, so on every default Service the kind select and the
+  // Details label ellipsised to "Gene…" and "Deta…". Measured, not eyeballed: no label in the
+  // identity row may be clipped on any default shape, at desktop width and at the narrow break.
+  for (const width of [1280, 720]) {
+    test(`no identity-row label is clipped on a default shape at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 800 });
+      await newCanvas(page, `Identity row ${width}`);
+      const clipped = async () =>
+        page.locator('.dc-element-identity-row').evaluate((row) =>
+          [...row.querySelectorAll<HTMLElement>('.dc-inspector-select-value, .dc-element-technology span, .dc-element-replicas > span')]
+            .filter((el) => getComputedStyle(el).display !== 'none' && el.scrollWidth > el.clientWidth)
+            .map((el) => `${el.className}: ${el.textContent} ${el.scrollWidth}>${el.clientWidth}`),
+        );
+      for (const tool of ['Service', 'Actor', 'Queue', 'Data Store']) {
+        await create(page, tool, { x: Math.min(380, width / 2), y: 300 });
+        await page.locator('.dc-node').last().click();
+        await expect(page.locator('.dc-element-inspector .dc-element-identity-row')).toBeVisible();
+        expect(await clipped(), `${tool} at ${width}px`).toEqual([]);
+        // Details is an icon until a technology is set, so a default shape spends no label on it.
+        const details = page.locator('.dc-element-inspector').getByRole('button', { name: 'Details' });
+        await expect(details).toHaveAttribute('data-empty', 'true');
+        expect((await details.boundingBox())!.width).toBeLessThan(35);
+        await page.keyboard.press('Delete');
+        await expect(page.locator('.dc-node')).toHaveCount(0);
+      }
+    });
+  }
+
+  test('a popover does not float over empty canvas once its shape is out of view after the window shrinks', async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await newCanvas(page, 'Popover after shrink');
+    await create(page, 'Queue', { x: 900, y: 300 });
+    await page.locator('.dc-node').first().click();
+    const popover = page.locator('.dc-element-inspector');
+    await expect(popover).toBeVisible();
+
+    // The camera is not refit by a resize, so the queue is now past the right edge. Clamped on
+    // screen the popover used to hover over bare canvas, its caret pointing at nothing.
+    await page.setViewportSize({ width: 375, height: 700 });
+    await expect.poll(async () => (await page.locator('.dc-node').first().boundingBox())!.x).toBeGreaterThan(375);
+    await expect(popover).toBeHidden();
+
+    // Back to the size it was: the shape is in view again, and so is its popover.
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await expect(popover).toBeVisible();
   });
 
   test('the description field can be resized without moving its popup', async ({ page, browserName }) => {
@@ -255,7 +310,7 @@ test.describe('element inspector popover', () => {
 
     await page.locator('.dc-node').nth(1).click({ modifiers: ['Shift'] });
 
-    await expect(page.locator('.dc-inspector')).toContainText('2 elements');
+    await expect(page.locator('.dc-inspector')).toContainText('2 shapes');
     await expect(page.locator('.dc-element-inspector')).toHaveCount(0);
   });
 

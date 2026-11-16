@@ -32,17 +32,17 @@ persistence policy stay in the app.
 
 `npm run adoption:compare` lays out the agent gallery's `create` cases with ELK and with the current
 pipeline, and writes a report, standalone Ajv validation code and SVGs for both themes to
-`benchmark/results/adoption/` (ignored). Both outputs go through the app's quality checker. The harness
-screens ELK adapters, not ELK itself: a shipping adapter would also have to preserve primary flows,
-shared trunks, label placement and layout inside nested rooms, and pass the browser gallery.
+`benchmark/results/adoption/` (ignored). Both outputs pass through the app's quality checker.
 
-Ajv stays a dev dependency: the published transport schema and the app's reader have different jobs
-(request ids, defaults, semantic references, repair), and runtime code generation is not allowed.
+- **ELK is not adopted.** The harness screens ELK adapters, not ELK. A shipping adapter would also
+  have to preserve primary flows, shared trunks, label placement and layout inside nested rooms, and
+  pass the browser gallery.
+- **Ajv stays a dev dependency.** The published transport schema and the app's reader do different
+  jobs (request ids, defaults, semantic references, repair), and runtime code generation is not allowed.
+- **Bar for any layout or routing library:** improve the rendered picture while preserving authored
+  routes, semantics, caption readability and canvas/export parity. Replacing a pathfinder alone does
+  not establish that.
 
-A candidate layout or routing library must improve the rendered picture while preserving authored
-routes, semantics, caption readability and canvas/export parity. Replacing a pathfinder alone does not
-establish that.
-
-For now, native repair checks the whole drawing before accepting a candidate and polishes crossings
-and detours after layout selection. Keep an already clean diagram unchanged; leave unresolved cases
-in the receipt so an agent can explain them instead of repeatedly arranging the same view.
+Native repair meanwhile checks the whole drawing before accepting a candidate and polishes crossings
+and detours after layout selection. It leaves an already clean diagram unchanged and reports
+unresolved cases in the receipt, so an agent can explain them instead of re-arranging the same view.

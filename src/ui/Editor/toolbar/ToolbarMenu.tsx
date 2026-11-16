@@ -183,6 +183,8 @@ export function ToolbarMenu({ label = 'More', anchorRect, trigger, items, onDism
       aria-label={label}
       aria-activedescendant={`dc-toolbar-menu-item-${highlight}`}
       tabIndex={-1}
+      // Which side of its button the menu opened on, so it arrives from that button (app.css).
+      data-placement={placement}
       style={{ transform }}
     >
       {heading && (

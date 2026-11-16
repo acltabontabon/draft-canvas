@@ -165,9 +165,40 @@ Each Sequence Diagram message is `sync`, `async` or `response` (`InteractionKind
 Structural relationships produce no message. `STRUCTURAL_SEMANTICS` (`dependsOn`, `implementedBy`, `implements`)
 is in `src/sequence/structural.ts`. Their endpoints can still appear through other connectors.
 
-## Intent Continuation rules
+## Native sequences
 
-Next moves for a selected node (`src/continuation/`). Connectors a rule adds are inferred from
+A [sequence](../guides/sequence-diagrams.md) stores what happens, never where it is drawn
+(`src/document/sequenceModel.ts`, `sequenceOps.ts`). What is derived, and what is only offered:
+
+- **Work bars are derived** (`src/sequence/executions.ts`). A message with `activate` opens one on
+  its receiver; one with `deactivate` closes the sender's. A reply closes the bar its own call
+  (`replyTo`) opened and any opened above it. A bar left open ends after its participant's last
+  message in the part where it began. Branches of a fragment each start from the bars open when the
+  fragment began.
+- **Defaults are written when a message is made, then left alone.** A call between two participants
+  starts work; a reply ends it; a message to itself starts none. A reply is never inserted.
+- **Kind is suggested, never assumed** (`src/sequence/suggest.ts`). A new message is a call. Where
+  the capability matrix says the pairing is normally asynchronous (into a queue or topic, or an
+  event), Asynchronous is marked as suggested; choosing a kind stamps `kindOrigin: 'explicit'` and
+  ends the suggestion.
+- **New message labels** use the same relationship caption as a canvas connector when the
+  participants have a known pairing. Replies, self-messages and lifecycle messages start blank.
+  Labels from linked connectors and earlier messages are available as suggestions in the editor.
+- **The next message** offered after a call is its reply (between two services) or the onward call
+  (from a person), then a call to itself; after a reply, the reply still owed further back.
+- **Checks never change anything** (`src/sequence/check.ts`): a message before its participant is
+  created or after it is destroyed, a second create, a reply before or without its call, work ended
+  that never started. An unfinished sequence produces none. A move that would cause one is refused.
+- **A linked participant and its shape are one identity** (`src/document/sequenceLinks.ts`): name,
+  kind, technology and colour. Either end changed updates the other in the same undo step; where
+  both changed, the shape is believed. Position, connectors and what is inside stay the
+  architecture's.
+- **Order is never inferred** from connectors or layout. A sequence made from selected shapes has
+  no messages; one made from a flow takes the flow's own order.
+
+## Next-shape suggestion rules
+
+Next-shape suggestions for a selected node (Settings → Canvas; `src/continuation/`, where the code calls them continuations). Connectors a rule adds are inferred from
 the matrix; a pairing it does not offer, or marks unusual, is dropped.
 
 - **High confidence** (may ghost unprompted): a `primary` rule whose evidence holds and that
@@ -177,6 +208,9 @@ the matrix; a pairing it does not offer, or marks unusual, is dropped.
 - **Keyboard only**: the `service-*`, `actor-*`, `person-*` and `component-*` rules
   (`surfaces: 'invoke'`) never appear in that picker or unprompted.
 
+A suggestion's pill carries the rule's reason (the last column below) as its tooltip, with `Esc` to
+dismiss; the screen-reader announcement reads it too.
+
 <!-- continuation-rules:start — generated from `src/continuation/rules.ts`; `tests/continuation.test.ts` fails on drift -->
 | Rule | Tier | Adds | Reason |
 | --- | --- | --- | --- |
@@ -184,14 +218,14 @@ the matrix; a pairing it does not offer, or marks unusual, is dropped.
 | `topic-subscriber` | secondary | Queue → Worker | A subscriber: its own queue and the worker consuming it. |
 | `topic-fan-out-worker` | secondary | Worker | Subscribers can also receive directly from the topic. |
 | `queue-consumer` | primary | Worker | This queue has no consumer. |
-| `queue-dead-letter` | secondary | Dead-letter queue | This queue has a consumer but no dead-letter path. |
-| `stream-consumer-dead-letter` | secondary | Dead-letter queue | This consumer reads a stream but has nowhere to park a record it cannot process. |
-| `gateway-route` | primary | Service | This gateway doesn't route to anything yet. |
-| `scheduler-trigger-service` | primary | Service | This scheduler doesn't trigger anything yet. |
-| `scheduler-trigger-worker` | secondary | Worker | A scheduled job is usually a Worker. |
+| `queue-dead-letter` | secondary | Dead-Letter Queue | This queue has a consumer but no dead-letter path. |
+| `stream-consumer-dead-letter` | secondary | Dead-Letter Queue | This consumer reads a stream but has nowhere to park a record it cannot process. |
+| `gateway-route` | primary | API | This gateway doesn’t route to anything yet. |
+| `scheduler-trigger-worker` | primary | Worker | This scheduler doesn’t trigger anything yet. |
+| `scheduler-trigger-service` | secondary | Service | Or a service, for work that is more than a job. |
 | `object-storage-fan-out-queue` | primary | Queue | Uploads here have nowhere to notify yet. |
 | `object-storage-fan-out-topic` | secondary | Topic | Multiple subscribers can watch this bucket through a topic instead. |
-| `port-implementation-component` | primary | Component | This port isn't implemented by anything yet. |
+| `port-implementation-component` | primary | Component | This port isn’t implemented by anything yet. |
 | `port-implementation-service` | secondary | Service | A port can also be implemented by a whole service. |
 | `adapter-port` | secondary | Port | The contract this adapter sits behind. |
 | `table-next-stage` | secondary | Table | The next stage of the pipeline this table is part of. |
@@ -201,10 +235,11 @@ the matrix; a pairing it does not offer, or marks unusual, is dropped.
 | `service-service` | secondary | Service | Call another service. |
 | `service-cache` | secondary | Cache | Keep hot reads close. |
 | `service-external` | secondary | External System | Call a system outside this one. |
-| `service-search-index` | secondary | Search Index | Queries its data store can't answer. |
-| `worker-indexes` | secondary | Search Index | This worker doesn't index anything yet. |
+| `service-search-index` | secondary | Search Index | Queries its data store can’t answer. |
+| `worker-indexes` | secondary | Search Index | This worker doesn’t index anything yet. |
 | `actor-gateway` | secondary | Gateway | Requests usually enter through a gateway. |
 | `actor-api` | secondary | API | Or call an API directly. |
+| `actor-web-app` | secondary | Web App | Or the app they use, which then calls the system. |
 | `person-system` | secondary | System | The system this person uses. |
 | `person-external` | secondary | External System | Or a system someone else runs. |
 | `component-component` | secondary | Component | The next part of this one — a use case, a domain model, a repository. |
@@ -213,7 +248,7 @@ the matrix; a pairing it does not offer, or marks unusual, is dropped.
 <!-- continuation-rules:end -->
 
 Nothing starts unprompted from a plain Service, an Actor, a Data Store, a Cache, a File System, a
-Search Index or a non-Port Component: each has too many valid next moves. Services and Actors get
+Search Index or a non-Port Component: each has too many valid next shapes. Services and Actors get
 a short list when asked. A Table gets one only when another store already `ingests` or
 `transforms` into it.
 
@@ -231,7 +266,7 @@ For these shapes, `]` opens the add-element picker with a one-line reason
 | `cache` | Cache | A cache is usually where a path ends — anything after it is your call. |
 | `file-system` | File System | Files here could feed a job, a service or nothing at all. |
 | `search-index` | Search Index | A search index is usually where a path ends — anything after it is your call. |
-| `dead-letter` | Dead-letter queue | Re-driving dead letters is a choice, not a default — many never leave the queue. |
+| `dead-letter` | Dead-Letter Queue | Re-driving dead letters is a choice, not a default — many never leave the queue. |
 | `external` | External System | What a system someone else runs talks to is mostly outside this diagram. |
 | `component` | Component | A controller, a use case and a repository all look alike — nothing here says which this is. |
 <!-- continuation-ambiguous:end -->
@@ -262,6 +297,18 @@ Confidence comes first. Within a confidence level, signals in `src/continuation/
 
 This only reorders; it never adds, removes or surfaces a candidate. **Search Index** is offered to
 a Service only once it writes to a Data Store.
+
+### Where it lands
+
+- Beside the anchor in the direction the diagram already flows at it — right, or below when its
+  connectors run vertically — and nowhere that would sit on one of your shapes. No clear place, no
+  suggestion.
+- Placed so the connector between the two is straight: what lines up is where connectors meet each
+  shape (a Queue's tube, a Data Store's glyph), not the edges of the boxes. The gap is sized so the
+  connector's caption fits whole.
+- Inside the anchor's boundary when it fits there. A spot that would straddle the boundary's edge
+  is tried after any spot wholly outside it, and the boundary's title row and the connectors
+  already drawn are avoided when there is room.
 
 ### Connecting to what's already there
 
@@ -300,4 +347,10 @@ never stored. The status bar and depth map show the level in force.
 - `levels`: a rule offered only where the level is known (`person-*` at context, `component-*` at
   component).
 
-Continuation is off during a flow lens, presentation or focus mode. Accepting never changes a Flow.
+### When it stays quiet
+
+Next-shape suggestions are off during a flow lens, presentation, focus mode and Traffic; while a gesture is
+under way (a drag, a resize, a connector being repointed) or the Pencil is in hand; and while the
+picker a dropped connector opens is showing. A suggestion appears a quarter of a second after the
+selection settles, so passing through shapes shows none; `]` asks at once. Nothing is suggested
+that would not fit in the file's size limits (`]` says so). Accepting never changes a Flow.

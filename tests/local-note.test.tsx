@@ -13,7 +13,7 @@ beforeEach(() => writePreference(LAST_BACKUP_PREFERENCE, ''));
 
 describe('backup reminder', () => {
   it('keeps the backup action visible while the longer explanation stays behind Details', async () => {
-    render(<LocalNote hasDocuments durable repository={new MemoryRepository()} />);
+    render(<LocalNote backupWorthwhile durable repository={new MemoryRepository()} />);
     const details = screen.getByRole('button', { name: /Stored on this device/ });
     expect(details).toHaveAttribute('aria-expanded', 'false');
     expect(screen.getByText('No recent backup')).toBeVisible();
@@ -25,14 +25,14 @@ describe('backup reminder', () => {
   });
 
   it('still offers a separate backup when persistent storage has been granted', () => {
-    render(<LocalNote hasDocuments durable repository={new MemoryRepository()} />);
+    render(<LocalNote backupWorthwhile durable repository={new MemoryRepository()} />);
     expect(screen.getByRole('button', { name: 'Back up now' })).toBeVisible();
   });
 
   it('does not remind an empty library, and refreshes after a backup from another control', () => {
-    const { rerender } = render(<LocalNote hasDocuments={false} durable repository={new MemoryRepository()} />);
+    const { rerender } = render(<LocalNote backupWorthwhile={false} durable repository={new MemoryRepository()} />);
     expect(screen.queryByRole('button', { name: 'Back up now' })).not.toBeInTheDocument();
-    rerender(<LocalNote hasDocuments durable repository={new MemoryRepository()} />);
+    rerender(<LocalNote backupWorthwhile durable repository={new MemoryRepository()} />);
     expect(screen.getByRole('button', { name: 'Back up now' })).toBeVisible();
     act(() => {
       writePreference(LAST_BACKUP_PREFERENCE, new Date().toISOString());
@@ -42,11 +42,11 @@ describe('backup reminder', () => {
   });
 
   it('does not offer a stored-library backup for memory-only storage or after a recent backup', () => {
-    const { rerender } = render(<LocalNote hasDocuments durable={false} repository={new MemoryRepository()} />);
+    const { rerender } = render(<LocalNote backupWorthwhile durable={false} repository={new MemoryRepository()} />);
     expect(screen.queryByRole('button', { name: 'Back up now' })).not.toBeInTheDocument();
     writePreference(LAST_BACKUP_PREFERENCE, new Date().toISOString());
     // A fresh mounted note reads the preference, as reopening the Library does.
-    rerender(<LocalNote hasDocuments key="new-library" durable repository={new MemoryRepository()} />);
+    rerender(<LocalNote backupWorthwhile key="new-library" durable repository={new MemoryRepository()} />);
     expect(screen.queryByRole('button', { name: 'Back up now' })).not.toBeInTheDocument();
   });
 });

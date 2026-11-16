@@ -1,4 +1,4 @@
-import { useId, useRef, type ComponentType, type KeyboardEvent } from 'react';
+import { useEffect, useId, useRef, type ComponentType, type KeyboardEvent } from 'react';
 import { Icon, type IconName } from '../common/Icon';
 import { Modal } from '../common/Modal';
 import '../Library/library-theme.css';
@@ -25,10 +25,19 @@ interface SettingsDialogProps<Id extends string> {
 /**
  * The one Settings dialog: the desktop app's (General, Canvas, AI agents, Updates, Support) and the
  * web's (Canvas). A rail of pages beside the one showing; the page is the only thing that scrolls.
+ * With a single page (the web's) there is nothing to choose between, so there is no rail either: a
+ * sidebar holding one entry that is already open only spent a fifth of the dialog on saying so.
  */
 export function SettingsDialog<Id extends string>({ categories, current: currentId, onSelect, onClose }: SettingsDialogProps<Id>) {
   const baseId = useId();
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
+  const panel = useRef<HTMLDivElement>(null);
+  const single = categories.length === 1;
+  // Where focus starts with no tab to put it on: the page itself, so the first Tab reaches its first
+  // control and Escape and the arrows behave as they do from the rail.
+  useEffect(() => {
+    if (single) panel.current?.focus();
+  }, [single]);
 
   const index = Math.max(
     0,
@@ -52,8 +61,8 @@ export function SettingsDialog<Id extends string>({ categories, current: current
   };
 
   return (
-    <Modal title="Settings" onClose={onClose} width={900} className="dc-modal-settings dc-project-dialog">
-      <nav className="dc-prefs-rail" aria-label="Settings">
+    <Modal title="Settings" onClose={onClose} width={single ? 720 : 900} className={`dc-modal-settings dc-project-dialog${single ? ' dc-modal-settings-single' : ''}`}>
+      {!single && <nav className="dc-prefs-rail" aria-label="Settings">
         <div role="tablist" aria-label="Settings category" aria-orientation="vertical" onKeyDown={onKeyDown}>
           {categories.map((category, i) => {
             const selected = i === index;
@@ -80,13 +89,14 @@ export function SettingsDialog<Id extends string>({ categories, current: current
             );
           })}
         </div>
-      </nav>
+      </nav>}
       <div
         // Keyed by page, so each one opens at its top rather than wherever the last one was scrolled to.
         key={current.id}
-        role="tabpanel"
-        id={`${baseId}-panel`}
-        aria-labelledby={`${baseId}-tab-${current.id}`}
+        ref={panel}
+        {...(single
+          ? { role: 'region', 'aria-label': current.label, tabIndex: -1 }
+          : { role: 'tabpanel', id: `${baseId}-panel`, 'aria-labelledby': `${baseId}-tab-${current.id}` })}
         className="dc-prefs-panel"
       >
         <current.Page />

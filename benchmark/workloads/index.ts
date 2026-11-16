@@ -1,4 +1,4 @@
-import type { StarterId } from '../../src/starters';
+import type { StarterId } from '../../tests/fixtures/starters-v1';
 import type { WorkloadName } from '../types';
 
 export interface WorkloadSpec {

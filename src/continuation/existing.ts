@@ -119,6 +119,7 @@ export function existingTargetCandidates(doc: DraftDocument, nb: Neighborhood): 
       // The pill must not read like a new node called that: it says what happens.
       label: `Connect to ${name}`,
       actionLabel: `Connect to ${name}`,
+      reason: `${name} is already on the canvas, close by and not yet connected to this.`,
       fragment: { nodes: [], edges: [{ from: 'anchor', to: 'target' }], existing: [{ key: 'target', nodeId: node.id }] },
       anchorId: anchor.id,
       neighborhoodKey: nb.key,
@@ -153,14 +154,27 @@ function wordsOf(text: string | undefined): Set<string> {
   const words = new Set<string>();
   for (const raw of (text ?? '').toLowerCase().split(/[^a-z0-9]+/)) {
     if (raw.length < 3) continue;
-    // Singular first, so "Streams" is filtered as the kind word it is, not kept as a shared name.
+    // Singular first, so "Streams" is filtered as the kind word it is, not kept as a shared name —
+    // but the word as written is looked up too: "bus" is a kind word whose "singular" ("bu") is
+    // nothing, and two "… Bus" shapes must not share a name for it.
     const word = raw.endsWith('ies') ? `${raw.slice(0, -3)}y` : raw.endsWith('s') && !raw.endsWith('ss') ? raw.slice(0, -1) : raw;
-    if (KIND_WORDS.has(word)) continue;
+    if (KIND_WORDS.has(raw) || KIND_WORDS.has(word)) continue;
     words.add(word);
   }
   return words;
 }
 
+/**
+ * Words that name a kind of box, or a kind of anything, so sharing one says nothing about what two
+ * shapes are about. Singular, as `wordsOf` looks both the written word and its singular up — so
+ * "Workers" and "Queues" are covered by "worker" and "queue" — plus "bus", which does not singularise.
+ *
+ * "data" and "user" are here on purpose, not by omission: "data" is in the name of half the stores
+ * there are ("Data Store", "Data Lake") and "user" is what every person-shaped Actor is called, so a
+ * shared one would connect a plain "User" actor to every "User Service" nearby unprompted. The price
+ * is that "User Service" and "Users DB" get no name affinity from it; one such pair beside nothing
+ * else is still the only candidate and is still offered.
+ */
 const KIND_WORDS: ReadonlySet<string> = new Set([
   'api',
   'app',
@@ -172,22 +186,18 @@ const KIND_WORDS: ReadonlySet<string> = new Set([
   'data',
   'database',
   'event',
-  'events',
   'external',
   'gateway',
   'handler',
   'index',
   'job',
-  'jobs',
   'module',
   'port',
   'producer',
   'queue',
-  'queues',
   'scheduler',
   'search',
   'service',
-  'services',
   'storage',
   'store',
   'stream',
@@ -196,8 +206,6 @@ const KIND_WORDS: ReadonlySet<string> = new Set([
   'table',
   'the',
   'topic',
-  'topics',
   'user',
   'worker',
-  'workers',
 ]);

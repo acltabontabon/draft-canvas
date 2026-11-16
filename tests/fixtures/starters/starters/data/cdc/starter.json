@@ -1,0 +1,30 @@
+{
+  "id": "cdc",
+  "name": "Change Data Capture",
+  "category": "data",
+  "summary": "Capture committed changes once, fan out to derived views",
+  "aliases": [
+    "cdc",
+    "change data capture",
+    "cdc pipeline",
+    "change stream",
+    "log-based replication",
+    "debezium"
+  ],
+  "tags": [
+    "change data capture",
+    "replication",
+    "derived views",
+    "search index"
+  ],
+  "useWhen": [
+    "Keeping other systems in sync with a database without dual writes.",
+    "Feeding search, caches or analytics from the source of truth."
+  ],
+  "watchOutFor": [
+    "Derived views are eventually consistent.",
+    "Schema changes in the source ripple to every consumer."
+  ],
+  "featured": false,
+  "order": 100
+}

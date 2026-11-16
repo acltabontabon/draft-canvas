@@ -13,7 +13,9 @@
  * carry, so a hostile 10k-node file is refused in one pass rather than laid out for a minute.
  */
 
-import { FRONT_MATTER, HEADER, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
+import { LIMITS } from '../../document/limits';
+import { CONTROL_CHARS, cleanTitle } from '../../document/sanitize';
+import { DEFAULT_IMPORT_TITLE, FRONT_MATTER, HEADER, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
 
 export { looksLikeMermaid } from './sniff';
 
@@ -56,6 +58,8 @@ export const MERMAID_LIMITS = {
   nodes: 300,
   relationships: 600,
   groups: 60,
+  /** Boundaries nested deeper than a file keeps (`LIMITS.maxGroupDepth`) would be repaired away on the next open. */
+  groupDepth: LIMITS.maxGroupDepth,
   labelLength: 120,
   relationshipLabelLength: 80,
   groupLabelLength: 80,
@@ -111,6 +115,13 @@ const SHAPES: { open: string; close: string; type: MermaidElement['type'] }[] = 
 
 // `A -- text --> B` and `A -. text .-> B` and `A == text ==> B`: an opener, words, a closer.
 const TEXT_ARROW_SPAN = 600;
+/**
+ * How far a shape's closing bracket is looked for. An opener without its closer was read to the end
+ * of the statement once per candidate shape and per `&`-joined node, so `A((( x ) & A((( x ) & …`
+ * took seconds at 88 KB and minutes at the 512 KB cap. Labels are cut at 120 characters anyway, so
+ * the same bound as a text arrow's leaves every label anyone wrote by hand readable.
+ */
+const BRACKET_SPAN = TEXT_ARROW_SPAN;
 const TEXT_ARROW = /^\s*(<)?(x|o)?(--|-\.|==)\s+(.+?)\s+(-{2,}|\.+-|={2,})(>|x|o)?(?=\s|$|\|)/;
 // `-->`, `---`, `-.->`, `==>`, `--x`, `--o`, `<-->`, `~~~` and every longer spelling of each.
 const PLAIN_ARROW = /^\s*(<)?(x|o)?(-{2,}|={2,}|-\.+-|~{3,})(>|x|o)?(?=\s|$|\||[\p{L}\p{N}_("[{>])/u;
@@ -206,7 +217,10 @@ function cleanLabel(raw: string, unsupported: Unsupported): string {
       text = text.replace(/<\/?[a-z][^>]*>/gi, '');
     } while (text !== previous);
   }
+  // After decoding, since `#1;` decodes to one. The agent's reader strips these too, so a label of
+  // nothing else reached it empty and refused the whole import; here it falls back to the id.
   return decodeEntities(text)
+    .replace(CONTROL_CHARS, '')
     .split('\n')
     .map((line) => line.trim())
     .join('\n')
@@ -221,11 +235,13 @@ function fit(text: string, max: number, unsupported: Unsupported): string {
 
 /**
  * Reads the text between a shape's brackets, honouring quotes so a `]` inside `"…"` does not end
- * the label. Returns the label and where the closer ends, or null when the closer never comes.
+ * the label. Returns the label and where the closer ends, or null when the closer does not come
+ * within `BRACKET_SPAN`.
  */
 function readBracketed(text: string, from: number, close: string): { raw: string; end: number } | null {
   let quoted = false;
-  for (let i = from; i < text.length; i += 1) {
+  const last = Math.min(text.length, from + BRACKET_SPAN);
+  for (let i = from; i < last; i += 1) {
     const ch = text[i]!;
     if (ch === '"') quoted = !quoted;
     else if (!quoted && text.startsWith(close, i)) return { raw: text.slice(from, i), end: i + close.length };
@@ -286,6 +302,18 @@ function readNodeGroup(text: string, unsupported: Unsupported): { refs: NodeRef[
     if (!amp) return { refs, rest };
     rest = rest.slice(amp[0].length);
   }
+}
+
+/**
+ * A second arrow between the same two shapes, folded into the first. Labels are joined (each said
+ * once); the connector is solid and headed if either arrow was, since that is the stronger claim.
+ */
+function mergeArrow(into: Arrow, other: Arrow): void {
+  if (other.label && !(into.label ?? '').split(' / ').includes(other.label)) into.label = into.label ? `${into.label} / ${other.label}` : other.label;
+  into.dotted &&= other.dotted;
+  into.headed ||= other.headed;
+  into.bidirectional ||= other.bidirectional;
+  into.marker ||= other.marker;
 }
 
 interface Arrow {
@@ -388,13 +416,17 @@ export function parseMermaidFlowchart(text: string): MermaidParse {
   const nodes = new Map<string, NodeRecord>();
   const subgraphs = new Map<string, SubgraphRecord>();
   const relationships: { from: string; to: string; arrow: Arrow }[] = [];
+  /** Where each ordered pair's one connector is in `relationships` — a diagram has one line per pair. */
+  const pairAt = new Map<string, number>();
+  /** Subgraphs below `MERMAID_LIMITS.groupDepth`: not drawn as boundaries, their shapes join the deepest one. */
+  const flattened = new Set<string>();
   const stack: string[] = [];
 
   const declare = (ref: NodeRef): NodeRecord | null => {
     const group = stack.length ? stack[stack.length - 1] : undefined;
     let node = nodes.get(ref.id);
     if (!node) {
-      if (subgraphs.has(ref.id)) return null;
+      if (subgraphs.has(ref.id) || flattened.has(ref.id)) return null;
       if (nodes.size >= MERMAID_LIMITS.nodes) throw new Limit(`This flowchart has more than ${MERMAID_LIMITS.nodes} shapes; Draft Canvas imports up to ${MERMAID_LIMITS.nodes} at a time.`);
       node = { id: ref.id, type: ref.type ?? 'service', label: ref.label ?? ref.id, shaped: ref.type !== undefined, group };
       nodes.set(ref.id, node);
@@ -419,6 +451,14 @@ export function parseMermaidFlowchart(text: string): MermaidParse {
       }
       if (/^subgraph\b/i.test(statement)) {
         const { id, label } = readSubgraphHeader(statement, unsupported);
+        if (stack.length >= MERMAID_LIMITS.groupDepth) {
+          // Too deep to keep as a boundary: it still has an `end`, so it still takes a place on the
+          // stack — as the boundary it sits in, so what is declared inside lands there.
+          flattened.add(id);
+          unsupported.add(`subgraphs nested more than ${MERMAID_LIMITS.groupDepth} deep (the shapes inside are kept in the ${MERMAID_LIMITS.groupDepth}th)`);
+          stack.push(stack[stack.length - 1]!);
+          continue;
+        }
         if (!subgraphs.has(id)) {
           if (subgraphs.size >= MERMAID_LIMITS.groups) throw new Limit(`This flowchart has more than ${MERMAID_LIMITS.groups} subgraphs; Draft Canvas imports up to ${MERMAID_LIMITS.groups} at a time.`);
           subgraphs.set(id, { id, label: label || id, parent: stack.length ? stack[stack.length - 1] : undefined });
@@ -433,7 +473,7 @@ export function parseMermaidFlowchart(text: string): MermaidParse {
       }
       const first = readNodeGroup(statement, unsupported);
       if (!first) {
-        unsupported.add(`a line that could not be read: "${statement.slice(0, 40)}"`);
+        unsupported.add(`a line that couldn’t be read: "${statement.slice(0, 40)}"`);
         continue;
       }
       let sources = first.refs.map(declare);
@@ -457,14 +497,31 @@ export function parseMermaidFlowchart(text: string): MermaidParse {
               unsupported.add('invisible links (~~~)');
               continue;
             }
+            // The agent's reader refuses a relationship to itself, and that refusal failed the
+            // whole import for one retry loop.
+            if (from.id === to.id) {
+              unsupported.add(`${from.id.slice(0, 40)} → ${to.id.slice(0, 40)}: a connector from a shape to itself`);
+              continue;
+            }
+            // A diagram draws one connector per ordered pair (the agent's reader refuses a second), and
+            // Mermaid happily draws `A -->|read| B` beside `A -->|write| B`. They become one, labels
+            // joined, and the import says so — refusing the whole chart over it was the old behaviour.
+            const pair = `${from.id}\u0000${to.id}`;
+            const earlier = pairAt.get(pair);
+            if (earlier !== undefined) {
+              mergeArrow(relationships[earlier]!.arrow, arrow.arrow);
+              unsupported.add(`more than one arrow from ${from.id.slice(0, 40)} to ${to.id.slice(0, 40)} (drawn as one connector, labels joined)`);
+              continue;
+            }
             if (relationships.length >= MERMAID_LIMITS.relationships) throw new Limit(`This flowchart has more than ${MERMAID_LIMITS.relationships} arrows; Draft Canvas imports up to ${MERMAID_LIMITS.relationships} at a time.`);
-            relationships.push({ from: from.id, to: to.id, arrow: arrow.arrow });
+            pairAt.set(pair, relationships.length);
+            relationships.push({ from: from.id, to: to.id, arrow: { ...arrow.arrow } });
           }
         }
         sources = targets;
         rest = next.rest;
       }
-      if (rest.trim() !== '') unsupported.add(`text after a shape that could not be read: "${rest.trim().slice(0, 40)}"`);
+      if (rest.trim() !== '') unsupported.add(`text after a shape that couldn’t be read: "${rest.trim().slice(0, 40)}"`);
     }
   } catch (error) {
     if (error instanceof Limit) return { ok: false, error: error.message };
@@ -507,10 +564,13 @@ export function parseMermaidFlowchart(text: string): MermaidParse {
     return relationship;
   });
 
+  // A file name or a front-matter line can be any length; a title is held to what a diagram keeps.
+  const heading = cleanTitle(title ?? '', DEFAULT_IMPORT_TITLE);
+  if (title && heading !== title.trim()) unsupported.add(`a title longer than ${LIMITS.maxTitleLength} characters (shortened)`);
   return {
     ok: true,
     create: {
-      title: title || 'Imported flowchart',
+      title: heading,
       nodes: elements,
       relationships: out,
       groups,

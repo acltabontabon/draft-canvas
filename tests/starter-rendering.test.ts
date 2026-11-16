@@ -6,8 +6,8 @@ import type { Shape, TextShape } from '../src/render/displayList';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { THEMES, type ThemeName } from '../src/render/theme/tokens';
 import { PERSONALITY_PRESETS } from '../src/theme/usePersonality';
-import { ARCHITECTURE_STARTERS } from '../src/starters';
-import { buildStarter } from '../src/starters/build';
+import { ARCHITECTURE_STARTERS } from './fixtures/starters-v1';
+import { buildStarter } from './fixtures/starters-v1/build';
 
 /**
  * A starter sets document content and nothing else — no colour, no font, no personality — so it is

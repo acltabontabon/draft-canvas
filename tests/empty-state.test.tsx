@@ -2,7 +2,12 @@ import { act, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createDocument } from '../src/document/factory';
-import { ARCHITECTURE_STARTERS, PRIMARY_STARTERS } from '../src/starters';
+import { libraryShapeOf } from '../src/document/shape';
+import type { GalleryStarter } from '../src/gallery';
+import { useGalleryStore } from '../src/store/galleryStore';
+import { useUiStore } from '../src/store/uiStore';
+import { ALL_PRESETS } from '../src/lib/presets';
+import { ARCHITECTURE_STARTERS, PRIMARY_STARTERS, buildStarter } from './fixtures/starters-v1';
 import { EmptyState } from '../src/ui/Editor/EmptyState';
 import { useEditorStore } from '../src/store/editorStore';
 
@@ -13,13 +18,38 @@ import { useEditorStore } from '../src/store/editorStore';
  * from the keyboard for anyone who doesn't use a mouse.
  */
 
-beforeEach(() => {
-  useEditorStore.setState({ document: createDocument('Empty'), mode: 'edit' });
+/** The downloaded gallery, as the store holds it: every starter, five of them featured. */
+const GALLERY: GalleryStarter[] = ARCHITECTURE_STARTERS.map((starter, order) => {
+  const { nodes, edges } = buildStarter(starter, { x: 0, y: 0 });
+  return {
+    id: starter.id,
+    name: starter.name,
+    category: starter.category,
+    summary: starter.description,
+    aliases: [],
+    tags: [],
+    useWhen: [],
+    watchOutFor: [],
+    featured: PRIMARY_STARTERS.includes(starter),
+    order,
+    path: `starters/x/${starter.id}/${starter.id}.draftcanvas`,
+    sha256: String(order).padStart(64, '0'),
+    bytes: 1,
+    formatVersion: 1,
+    updated: '2026-11-12',
+    availability: 'ready',
+    shape: libraryShapeOf(nodes, edges),
+  };
 });
 
-const renderEmpty = (onInsertStarter = vi.fn()) => ({
-  onInsertStarter,
-  ...render(<EmptyState onInsertStarter={onInsertStarter} />),
+beforeEach(() => {
+  useEditorStore.setState({ document: createDocument('Empty'), mode: 'edit' });
+  useGalleryStore.setState({ enabled: true, snapshot: { starters: GALLERY, fetchedAt: Date.now() }, failure: null, status: 'idle', dialog: { open: false } });
+});
+
+const renderEmpty = (onAddStarter = vi.fn()) => ({
+  onAddStarter,
+  ...render(<EmptyState onAddStarter={onAddStarter} />),
 });
 
 const firstFeatured = PRIMARY_STARTERS[0]!;
@@ -41,17 +71,17 @@ describe('EmptyState', () => {
   });
 
   it('inserts the starter it draws', async () => {
-    const { onInsertStarter } = renderEmpty();
+    const { onAddStarter } = renderEmpty();
     await userEvent.click(screen.getByRole('button', { name: `Start from ${firstFeatured.name}` }));
-    expect(onInsertStarter).toHaveBeenCalledWith(firstFeatured.id);
+    expect(onAddStarter).toHaveBeenCalledWith(firstFeatured.id);
   });
 
   it('is reachable without a mouse, starters first', async () => {
-    const { onInsertStarter } = renderEmpty();
+    const { onAddStarter } = renderEmpty();
     await userEvent.tab();
     expect(screen.getByRole('button', { name: `Start from ${firstFeatured.name}` })).toHaveFocus();
     await userEvent.keyboard('{Enter}');
-    expect(onInsertStarter).toHaveBeenCalledWith(firstFeatured.id);
+    expect(onAddStarter).toHaveBeenCalledWith(firstFeatured.id);
   });
 
   it('vanishes as soon as the canvas has anything on it', () => {
@@ -63,7 +93,7 @@ describe('EmptyState', () => {
       act(() => {
         useEditorStore.getState().addNode({ type: 'note', x: 0, y: 0, text: 'x' });
       });
-      rerender(<EmptyState onInsertStarter={vi.fn()} />);
+      rerender(<EmptyState onAddStarter={vi.fn()} />);
       // It lingers for one fade — but stops taking clicks on the very render content appeared.
       expect(document.querySelector('.dc-empty')).toHaveAttribute('data-leaving', 'true');
       act(() => void vi.runAllTimers());
@@ -73,18 +103,50 @@ describe('EmptyState', () => {
     }
   });
 
+  it('before the gallery is loaded, offers it in one card and nothing else', async () => {
+    useGalleryStore.setState({ enabled: false, snapshot: null });
+    const { onAddStarter } = renderEmpty();
+    expect(screen.queryByRole('group', { name: 'Suggested starters' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /Browse the starters gallery/ }));
+    expect(useGalleryStore.getState().dialog.open).toBe(true);
+    expect(onAddStarter).not.toHaveBeenCalled();
+  });
+
+  it('offers the bundled example whether or not the gallery is loaded', async () => {
+    useGalleryStore.setState({ enabled: false, snapshot: null });
+    useUiStore.setState({ newCanvasRequest: null });
+    renderEmpty();
+    await userEvent.click(screen.getByRole('button', { name: 'Try an example' }));
+    expect(useUiStore.getState().newCanvasRequest).toEqual({ kind: 'example' });
+  });
+
   it('stays away during a presentation', () => {
     useEditorStore.setState({ mode: 'present' });
     renderEmpty();
     expect(screen.queryByRole('group', { name: 'Suggested starters' })).not.toBeInTheDocument();
   });
 
-  it('keeps the surrounding copy decorative, so nothing but the controls is announced', () => {
+  it('reads the blank-canvas keys out as a polite status, naming the keys that really exist', () => {
     const { container } = renderEmpty();
-    const paragraphs = [...container.querySelectorAll('p')];
-    expect(paragraphs.length).toBeGreaterThan(0);
-    for (const paragraph of paragraphs) {
-      expect(paragraph.closest('[aria-hidden="true"]')).not.toBeNull();
-    }
+    const hint = container.querySelector('.dc-empty-start')!;
+    // Real text for assistive technology, not hidden: it is the only instruction a blank canvas carries.
+    expect(hint.closest('[aria-hidden="true"]')).toBeNull();
+    expect(hint).toHaveAttribute('role', 'status');
+    // The sentence about double-click and long-press is gone from the canvas on purpose (the Getting
+    // started guide teaches those gestures); what stays are the letters the creation shortcuts use.
+    expect(hint).not.toHaveTextContent(/double-click|long-press/i);
+    const keys = [...hint.querySelectorAll('kbd')].map((key) => key.textContent);
+    expect(keys).toEqual(['S', 'D', 'Q']);
+    for (const letter of keys) expect(ALL_PRESETS.some((preset) => preset.shortcut === letter)).toBe(true);
+  });
+
+  it('puts the hint away (and out of the accessibility tree) while the first-shape chooser is open', () => {
+    const { container } = renderEmpty();
+    const hint = container.querySelector('.dc-empty-start')!;
+    expect(hint).not.toHaveAttribute('data-chooser');
+    act(() => useUiStore.getState().setQuickConnect({ flowPosition: { x: 0, y: 0 }, screenPosition: { x: 300, y: 300 } }));
+    expect(hint).toHaveAttribute('data-chooser', 'true');
+    act(() => useUiStore.getState().setQuickConnect(null));
+    expect(hint).not.toHaveAttribute('data-chooser');
   });
 });

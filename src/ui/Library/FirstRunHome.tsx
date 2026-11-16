@@ -1,13 +1,16 @@
 import { useId, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import type { DraftSummary } from '../../document/types';
 import type { DocumentSession } from '../../store/useDocumentSession';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { relativeTime } from '../../lib/relativeTime';
+import { worthBackingUp } from '../../storage/backupStatus';
 import { warmModal } from '../common/modalLoader';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
 import { WebHomeScene } from './WebHomeScene';
+import { DeleteDialog, RenameDialog } from './DiagramDialogs';
 import { DocumentPreview } from './DocumentPreview';
 import { ProjectNameDialog } from './ProjectSidebar';
 import type { LibraryView } from './libraryFilter';
@@ -29,8 +32,11 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
   const shelfRef = useRef<HTMLElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const importHintId = useId();
+  const startHintId = useId();
   const [chosen, setChosen] = useState<HomeView | null>(null);
   const [creating, setCreating] = useState(false);
+  const [renaming, setRenaming] = useState<DraftSummary | null>(null);
+  const [deleting, setDeleting] = useState<DraftSummary | null>(null);
   const [capacity, setCapacity] = useState(3);
   const hasDiagrams = session.library.length > 0;
   const sources: { id: HomeView; label: string }[] = [
@@ -59,12 +65,12 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
       if (event.repeat || event.defaultPrevented || isImeKeyEvent(event)) return;
       if (document.querySelector('[role="dialog"]')) return;
       if (event.target !== document.body && event.target !== document.documentElement) return;
+      // Enter is deliberately not claimed here: with nothing focused it used to start a blank
+      // canvas, so a stray press (a key left over from another window, a dismissed dialog) added an
+      // "Untitled diagram". Quick Draft starts one on Enter when it has focus, like any button.
       if ((event.key === '/' || (event.key === 'f' && (event.metaKey || event.ctrlKey))) && currentActions.current.hasDiagrams) {
         event.preventDefault();
         currentActions.current.onBrowse({ kind: 'all' }, true);
-      } else if (event.key === 'Enter' && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey) {
-        event.preventDefault();
-        void currentActions.current.session.newDocument();
       }
     };
     window.addEventListener('keydown', onKeyDown);
@@ -83,7 +89,7 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
     else if (event.key === 'ArrowUp') { event.preventDefault(); sheetRef.current?.focus(); }
   };
   const onTileKey = (event: KeyboardEvent<HTMLButtonElement>) => {
-    const tiles = [...(rowRef.current?.querySelectorAll<HTMLButtonElement>('button') ?? [])];
+    const tiles = [...(rowRef.current?.querySelectorAll<HTMLButtonElement>('.dc-home-draft') ?? [])];
     const index = tiles.indexOf(event.currentTarget);
     if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
       const next = tiles[index + (event.key === 'ArrowRight' ? 1 : -1)];
@@ -104,7 +110,7 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
         {notice}
         <WebHomeScene
           start={
-            <button ref={sheetRef} type="button" className="dc-web-start" aria-label="New canvas"
+            <button ref={sheetRef} type="button" className="dc-web-start" aria-label="Quick Draft" aria-describedby={startHintId}
               onClick={() => void session.newDocument()}
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowDown') return;
@@ -114,10 +120,10 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
               }}>
               <span className="dc-web-start-mark" aria-hidden="true"><Icon name="plus" size={28} /></span>
               <span className="dc-web-start-name">Quick Draft<Icon name="forward" size={18} /></span>
-              <span className="dc-web-start-hint">No title needed. Just begin.</span>
+              <span id={startHintId} className="dc-web-start-hint">No title needed. Just begin.</span>
             </button>
           }
-          example={<Button variant="quiet" icon="flow" onClick={() => void session.newDocument(undefined, 'order-processing')}>Try an example</Button>}
+          example={<Button variant="quiet" icon="flow" onClick={() => void session.newDocument(undefined, 'example')}>Try an example</Button>}
           importFile={<Button variant="quiet" icon="upload" onClick={onImport} aria-describedby={importHintId}>Import a file</Button>}
         />
         <span id={importHintId} className="dc-sr-only">Opens a .draftcanvas, .json or secure .dcenc file, an editable PNG or SVG export, or a Mermaid flowchart.</span>
@@ -141,9 +147,17 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
                 {diagrams[0] ? <DocumentPreview shape={diagrams[0].shape} /> : <span className="dc-gallery-preview"><Icon name="folder" size={38} /></span>}
                 <span className="dc-home-draft-name">{project.name}</span><span className="dc-home-draft-meta">{diagrams.length ? `${diagrams.length} ${diagrams.length === 1 ? 'diagram' : 'diagrams'}` : 'No diagrams yet'}</span>
               </button>;
-            }) : recent.slice(0, capacity).map((entry) => <button type="button" className="dc-home-draft" key={entry.id} aria-label={`Open ${entry.title}`} onKeyDown={onTileKey} onClick={() => void session.openDocument(entry.id)}>
-              <DocumentPreview shape={entry.shape} paper /><span className="dc-home-draft-name">{entry.title}</span><span className="dc-home-draft-meta">{relativeTime(entry.updatedAt)}</span>
-            </button>)}
+            }) : recent.slice(0, capacity).map((entry) => <div className="dc-home-card" key={entry.id}>
+              <button type="button" className="dc-home-draft" aria-label={`Open ${entry.title}`} onKeyDown={onTileKey} onClick={() => void session.openDocument(entry.id)}>
+                <DocumentPreview shape={entry.shape} paper /><span className="dc-home-draft-name">{entry.title}</span><span className="dc-home-draft-meta">{relativeTime(entry.updatedAt)}</span>
+              </button>
+              {/* Tucked into the paper's corner: there on hover or focus, always there on touch. */}
+              <div className="dc-home-card-actions">
+                <Button icon="pencil" variant="quiet" aria-label={`Rename ${entry.title}`} title="Rename" onPointerEnter={warmModal} onFocus={warmModal} onClick={() => setRenaming(entry)} />
+                <Button icon="copy" variant="quiet" aria-label={`Duplicate ${entry.title}`} title="Duplicate" onClick={() => void session.duplicateDocument(entry.id)} />
+                <Button icon="trash" variant="quiet" aria-label={`Delete ${entry.title}`} title="Delete" onPointerEnter={warmModal} onFocus={warmModal} onClick={() => setDeleting(entry)} />
+              </div>
+            </div>)}
             {active.id === 'projects' && session.projects.length === 0 && <div className="dc-home-project-welcome">
               <span className="dc-home-project-art" aria-hidden="true"><Icon name="folder" size={56} /></span>
               <div><h2>A home for related ideas.</h2><p>Keep diagrams together in a project.</p></div>
@@ -151,10 +165,24 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
             </div>}
           </div>
         </section>
-        {(!session.durable || hasDiagrams) && <div className={session.durable ? 'dc-home-status' : 'dc-home-warn'}><LocalNote durable={session.durable} repository={session.repository} hasDocuments={hasDiagrams} /></div>}
+        {(!session.durable || hasDiagrams) && <div className={session.durable ? 'dc-home-status' : 'dc-home-warn'}><LocalNote durable={session.durable} repository={session.repository} backupWorthwhile={worthBackingUp(session.library)} /></div>}
       </div>
       {creating && <ProjectNameDialog title="New project" submitLabel="Create" submitIcon="plus" initialValue="" onClose={() => setCreating(false)}
         onSubmit={(name) => { void session.createProject(name); setCreating(false); }} />}
+      {renaming && <RenameDialog entry={renaming} onClose={() => setRenaming(null)}
+        onSubmit={(title) => { void session.renameDocument(renaming.id, title); setRenaming(null); }} />}
+      {deleting && <DeleteDialog entry={deleting} onClose={() => setDeleting(null)}
+        onConfirm={() => {
+          const index = recent.findIndex((entry) => entry.id === deleting.id);
+          setDeleting(null);
+          // The trash button the dialog would return focus to is gone with its card, so land on
+          // the card that took its place, or on Quick Draft when the shelf is now empty.
+          void session.deleteDocument(deleting.id).then(() => requestAnimationFrame(() => {
+            const tiles = rowRef.current?.querySelectorAll<HTMLButtonElement>('.dc-home-draft') ?? [];
+            const next = tiles[Math.min(index, tiles.length - 1)] ?? sheetRef.current;
+            if (next && document.activeElement === document.body) next.focus();
+          }));
+        }} />}
     </div>
   );
 }

@@ -25,7 +25,7 @@ test('web saving uses local autosave and portable export/import even when native
   const dialog = page.getByRole('dialog', { name: /export/i });
   await dialog.locator('[data-mode="document"]').click();
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Export document', exact: true }).click();
+  await page.getByRole('button', { name: 'Export file', exact: true }).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('portable-export.draftcanvas');
   const bytes = readFileSync((await file.path())!);
@@ -36,7 +36,9 @@ test('web saving uses local autosave and portable export/import even when native
   await page.getByRole('button', { name: 'Back to your diagrams' }).click();
   await openGallery(page);
   await page.locator('input[type="file"][accept*=".draftcanvas"]').setInputFiles({ name: file.suggestedFilename(), mimeType: 'application/json', buffer: bytes });
-  await expect(page.getByLabel('Diagram title')).toHaveValue('Portable export');
+  // The original is still in the library, so the import is a second diagram with the same id: it comes in
+  // as a copy and says so in its title (a clash used to keep the identical title).
+  await expect(page.getByLabel('Diagram title')).toHaveValue('Portable export copy');
   await expect(page.locator('.dc-node')).toHaveCount(4);
   await expect(page.getByRole('button', { name: 'File', exact: true })).toHaveCount(0);
 });

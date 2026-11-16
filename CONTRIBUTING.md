@@ -4,7 +4,7 @@ Keep changes focused and the editor local-first.
 
 ## Setup
 
-Needs **Node 22.22+** and **npm**. No backend or environment variables.
+Needs **Node 22.22.2+** and **npm**. No backend or environment variables.
 
 ```bash
 git clone https://github.com/acltabontabon/draft-canvas.git
@@ -55,7 +55,7 @@ Report only checks you ran; pending CI has not passed.
 | `src/nodes/`, `src/edges/`, `src/render/` | Drawing, connector routing and text layout |
 | `src/commands/` | Command palette, context menus and jump targets |
 | `src/presentation/`, `src/sequence/` | Presentation camera and callouts; sequence export |
-| `src/starters/`, `src/continuation/`, `src/openPoints/`, `src/traffic/` | Starters, next-step suggestions, open points, Traffic |
+| `src/gallery/`, `src/continuation/`, `src/openPoints/`, `src/traffic/` | Starters gallery, next-step suggestions, open points, Traffic |
 | `src/storage/`, `src/crypto/`, `src/export/`, `src/import/`, `src/share/` | Persistence, exports, Mermaid import, share links |
 | `src/collab/` | Live collaboration; network code only in `src/collab/transport/` |
 | `src/agent/`, `src/layout/` | Agent operations and automatic layout |
@@ -94,9 +94,4 @@ helps and contains nothing private. **Feature requests:** describe the problem.
 
 ## Releases
 
-1. Turn `[Unreleased]` in `CHANGELOG.md` into `## [X.Y.Z] - YYYY-MM-DD` and add a fresh `[Unreleased]`.
-2. Set `X.Y.Z` in `package.json` and its lockfile (the desktop app takes its version from here).
-3. Preview notes with `npm run release:notes -- vX.Y.Z` and `npm run release:whats-new -- desktop`.
-4. Push the commit, then the `vX.Y.Z` tag. CI verifies, packages and publishes.
-
-Full steps and checks: [Releases](docs/reference/releases.md).
+Maintainers cut releases from `main` by tagging `vX.Y.Z`; the steps are in [Releases](docs/reference/releases.md).

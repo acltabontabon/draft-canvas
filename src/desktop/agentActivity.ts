@@ -129,6 +129,14 @@ export const agentActivity = {
     patch(id, { applying: true, stage: 'finishing' });
   },
 
+  /** In the editor: the change is real, so its provisional layer goes while the save finishes. */
+  committed(id: number): void {
+    const op = ops.find((o) => o.id === id);
+    if (!op?.candidate) return;
+    const { candidate: _drawn, ...rest } = op;
+    emit(ops.map((o) => (o.id === id ? rest : o)));
+  },
+
   /** Answered, one way or another: gone, and its preview with it. */
   end(id: number): void {
     clearTimeout(timers.get(id));

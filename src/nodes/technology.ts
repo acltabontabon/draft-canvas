@@ -1,5 +1,6 @@
 import type { SimpleIcon } from 'simple-icons';
 import { dataStoreGlyphBounds } from '../document/dataStoreGeometry';
+import { RAIL_SIZE, markerRail } from '../document/markerRail';
 import { C4_TEXT_TYPES, type DraftNode } from '../document/types';
 import catalog from './technologyCatalog/index.json';
 import { TECHNOLOGY_PATH_LOADERS } from './technologyCatalog/loaders';
@@ -47,6 +48,16 @@ const ALIASES: readonly (readonly [string, string])[] = [
   ['springboot', 'springboot'],
   ['rabbit mq', 'rabbitmq'],
   ['kafka', 'apachekafka'],
+  // Databricks' own products carry its mark. Delta Lake doesn't: the catalog's "Delta" is an airline.
+  ['auto loader', 'databricks'],
+  ['databricks sql', 'databricks'],
+  ['databricks workflows', 'databricks'],
+  ['delta live tables', 'databricks'],
+  ['lakeflow', 'databricks'],
+  ['unity catalog', 'databricks'],
+  ['airflow', 'apacheairflow'],
+  ['spark', 'apachespark'],
+  ['bigquery', 'googlebigquery'],
   ['react.js', 'react'],
   ['reactjs', 'react'],
   ['vue', 'vuedotjs'],
@@ -173,8 +184,17 @@ export function subscribeTechnologyIcon(technology: string | undefined, listener
 
 /** Preflight asynchronous image exports so even a never-opened room uses its real logos. */
 export async function loadTechnologyIcons(nodes: readonly DraftNode[]): Promise<void> {
-  const values = new Set(nodes.filter((node) => (C4_TEXT_TYPES as readonly string[]).includes(node.type)).map((node) => node.technology));
-  await Promise.all([...values].map(loadTechnologyIcon));
+  await Promise.all([...technologiesIn(nodes)].map(loadTechnologyIcon));
+}
+
+/** Every technology these shapes are drawn with: their own, and those of a sequence's participants. */
+export function technologiesIn(nodes: readonly DraftNode[]): Set<string | undefined> {
+  const values = new Set<string | undefined>();
+  for (const node of nodes) {
+    if ((C4_TEXT_TYPES as readonly string[]).includes(node.type)) values.add(node.technology);
+    for (const participant of node.sequence?.participants ?? []) values.add(participant.technology);
+  }
+  return values;
 }
 
 /** Exact names/slugs and known aliases are recognized; mixed stacks never borrow a single logo. */
@@ -197,14 +217,18 @@ export function nodeTechnologyIcon(node: DraftNode, snapshot: TechnologyIconSnap
   return (C4_TEXT_TYPES as readonly string[]).includes(node.type) ? technologyIcon(node.technology, snapshot) : undefined;
 }
 
-export const TECHNOLOGY_MARK_SIZE = 16;
+export const TECHNOLOGY_MARK_SIZE = RAIL_SIZE;
 
 /** Node-local visual extent only. The mark never changes sizing, handles or routing obstacles.
- * Data stores attach to their compact glyph; other architecture shapes use their box's corner. */
+ * Data stores attach to their compact glyph; every other architecture shape carries it at the
+ * corner end of its marker rail, above the top-right corner (`document/markerRail.ts`). It used to
+ * sit beside the right edge, on top of the label of any connector leaving that side. */
 export function technologyMarkBounds(node: DraftNode, snapshot: TechnologyIconSnapshot = bySlug): { x: number; y: number; width: number; height: number } | undefined {
   if (!nodeTechnologyIcon(node, snapshot)) return undefined;
-  const glyph = node.type === 'database'
-    ? dataStoreGlyphBounds({ ...node, x: 0, y: 0 })
-    : { right: node.width, top: 0 };
-  return { x: glyph.right + 9, y: glyph.top + 2, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
+  if (node.type === 'database') {
+    const glyph = dataStoreGlyphBounds({ ...node, x: 0, y: 0 });
+    return { x: glyph.right + 9, y: glyph.top + 2, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
+  }
+  const at = markerRail(node, { technology: true }).technology!;
+  return { x: at.x, y: at.y, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
 }

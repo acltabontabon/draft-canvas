@@ -68,7 +68,7 @@ const required = [
   ['site/index.html', 'the landing page'],
   ['site/404.html', 'the page Cloudflare serves for a missing path'],
   ['site/_redirects', 'the redirect from the old /editor/ layout to app.draftcanvas.dev'],
-  ['site/docs/index.html', "the documentation, which the app's Documentation menu opens"],
+  ['site/docs/index.html', 'the redirect to Getting started'],
   ['site/docs/getting-started/index.html', 'the first guide, which every other page links to'],
   ['app/index.html', 'the editor entry document'],
   ['app/sw.js', "the editor's own service worker"],

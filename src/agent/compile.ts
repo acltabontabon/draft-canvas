@@ -17,8 +17,10 @@ import { captionSizer, measureContext, placeRoom, type PlacedRoom } from './plac
 import { silent, type Report } from './progress';
 import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
 import { pastDeadline, relaxLayoutAnchors, repairAnchors, withDeadline, type KeptPin } from './route';
-import { buildFromStarter } from './starter';
+import { buildFromStarter, type AgentStarter } from './starter';
 import { legibilityCost, legibilityOf, type Legibility } from './legibility';
+import { proportionAdvice, proportionFindings, proportionReceipt, type ProportionFinding } from './proportion';
+import type { DescribeContext } from '../nodes/describe';
 import { reviewFile } from './review';
 import { adviceFor } from './advice';
 import { routingPlan } from '../edges/bundles';
@@ -37,16 +39,18 @@ export interface ComposeOptions {
   deadline?: number;
   /** Told each stage, and each whole candidate arrangement as it is judged (see `progress.ts`). */
   report?: Report;
+  /** The gallery starter the request names, resolved by the page from its downloaded gallery. */
+  starter?: AgentStarter;
 }
 
 export function compose(raw: unknown, diagramId: string, options: ComposeOptions = {}): Composed {
   const deadline = options.deadline ?? Number.POSITIVE_INFINITY;
-  return withDeadline(deadline, () => composeWithin(raw, diagramId, options.report ?? silent));
+  return withDeadline(deadline, () => composeWithin(raw, diagramId, options.report ?? silent, options.starter));
 }
 
-function composeWithin(raw: unknown, diagramId: string, report: Report): Composed {
+function composeWithin(raw: unknown, diagramId: string, report: Report, starter?: AgentStarter): Composed {
   report('preparing');
-  const spec = readCreate(raw);
+  const spec = readCreate(raw, starter);
   const ctx = measureContext();
   // A brand-new diagram has nothing manual to preserve, so peer sizing defaults on unless the
   // request explicitly turned it off.
@@ -57,7 +61,7 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   const rooms = new Map<RoomSpec, PlacedRoom>();
   planInsideViews(spec, layout0, ctx, rooms);
   const { candidate, repaired, outOfTime } = chooseArrangement(spec, layout0, ctx,
-    (layout) => spec.starter ? buildFromStarter(spec, layout, ctx, rooms) : placeRoom(spec, layout, ctx, undefined, rooms), report, true, !!spec.starter);
+    (layout) => spec.starter ? buildFromStarter(spec, layout, ctx, rooms, starter) : placeRoom(spec, layout, ctx, undefined, rooms), report, true, !!spec.starter);
   const { layout: used } = candidate;
   // Release provisional layout pins for the same or a measurably simpler readable picture, so
   // generated diagrams follow moved shapes. A starter's pins are authored; kept.
@@ -86,7 +90,9 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
   // Every inside view measured as the top one is: a container view one level down that crosses itself
   // is as much the agent's to fix as the top, and without its numbers it could only find out by
   // rendering each view and looking.
-  const insides = insideLegibility(spec, placed);
+  const insides = insideLegibility(spec, placed, ctx);
+  // Names, captions, boundaries and spacing that read badly although every line is clean.
+  const proportion = proportionFindings(placed, ctx);
   // What the request itself could change for a clearer diagram comes first: it is the advice the agent
   // can act on in this same turn (see `advice.ts`). An inside view's advice says which view it is about.
   const advice = [
@@ -94,6 +100,10 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
     // Judged against the inside view's own main path, which it was laid out around: advice to name one
     // when it already leads the view sent agents looking for a primaryFlow they had already given.
     ...(spec.starter ? [] : insides.flatMap(({ path, room, legibility: l }) => adviceFor(room, l, mainFlowOf(room)?.id).map((a) => `Inside ${path.join(' ▸ ')}: ${a}`))),
+    // A small overview is reported (`legibility.smallOverview`) but not advised here: a new diagram
+    // was just laid out, and `fit` already speaks for a request that named its viewport.
+    ...(spec.starter ? [] : proportionAdvice(proportion, undefined, false)),
+    ...(spec.starter ? [] : insides.flatMap(({ path, proportion: p }) => proportionAdvice(p, undefined, false).map((a) => `Inside ${path.join(' ▸ ')}: ${a}`))),
     ...levelAdvisories(document.nodes, document.level),
     ...placed.advisories,
   ];
@@ -110,8 +120,8 @@ function composeWithin(raw: unknown, diagramId: string, report: Report): Compose
       ...(issues.length || (fit && !fit.readable) ? { degraded: true } : {}),
       quality: qualityReceipt('whole-diagram', found),
       legibility: {
-        ...legibilityReceipt(legibility),
-        ...(insides.length ? { views: insides.map(({ path, legibility: l }) => ({ view: path, ...legibilityReceipt(l) })) } : {}),
+        ...legibilityReceipt(legibility, proportion),
+        ...(insides.length ? { views: insides.map(({ path, legibility: l, proportion: p }) => ({ view: path, ...legibilityReceipt(l, p) })) } : {}),
       },
       ...(fit ? { fit } : {}),
       ...(relaxed.kept.length ? { pinned: relaxed.kept.slice(0, 20) } : {}),
@@ -257,7 +267,7 @@ function chooseArrangement(
   if (!starter && !pastDeadline()) {
     const explicitRoutes = new Set(room.relationships.filter((r) => r.route).map((r) => r.id));
     const edges = best.placed.edges.map((e) => ({ ...e }));
-    repairAnchors(edges.filter((e) => !explicitRoutes.has(e.id)), best.placed.nodes, captionSizer(best.placed.nodes, ctx), edges, undefined, true);
+    repairAnchors(edges.filter((e) => !explicitRoutes.has(e.id)), best.placed.nodes, captionSizer(best.placed.nodes, ctx), edges, true);
     const placed = { ...best.placed, edges };
     const polished: Candidate = {
       ...best,
@@ -325,6 +335,56 @@ export function clearlyBetterDirection(other: number, same: number, uncrosses = 
   return other < same * CLEARLY_BETTER && (uncrosses || same - other > MIN_GAIN);
 }
 
+/** A laptop screen's canvas, what a diagram is judged against when no viewport is given. */
+const SCREEN: readonly [number, number] = [1440, 900];
+/** Proportion counts only for a diagram this big against the view (its larger share of either side):
+ *  a small one is shown at full size whichever way it reads, and two shapes read across, not down. */
+const FILL_MATTERS = 0.75;
+/** The other reading direction wins on proportion alone only when it fills that much more of the view… */
+const FILL_GAIN = 1.3;
+/** …the preferred one leaves at least this much of it empty — a diagram that already fits
+ *  comfortably isn't turned over to fill a little more… */
+const FILL_ENOUGH = 0.7;
+/** …and turned, it fills at least this much: a chain is a strip either way, and reads along. */
+const FILL_TURNED = 0.5;
+
+/** What `fitsClearlyBetter` weighs: a diagram's extent and how it reads. */
+export interface Proportioned {
+  width: number;
+  height: number;
+  /** `legibilityCost` plus jogs, as `clearlyBetterDirection` takes it. */
+  cost: number;
+  crossings: number;
+  /** The view it will be shown in, `[width, height]` (`LayoutSpec.viewport`). */
+  viewport?: readonly [number, number];
+}
+
+/** How much of a view a diagram fills when fitted to it: 1 when their proportions match. */
+export function fillOf(width: number, height: number, viewport?: readonly [number, number]): number {
+  const [w, h] = viewOf(viewport);
+  const aspect = w / h;
+  const ratio = width / Math.max(1, height);
+  return ratio < aspect ? ratio / aspect : aspect / ratio;
+}
+
+function viewOf(viewport?: readonly [number, number]): readonly [number, number] {
+  return viewport && viewport[0] > 0 && viewport[1] > 0 ? viewport : SCREEN;
+}
+
+/**
+ * Whether the other reading direction is worth it for its proportions: a diagram five layers deep
+ * reading down is a tall strip on a wide screen, fitted small with most of the view empty, where
+ * reading across it fills the view. Only with no more crossings and no clearly worse legibility —
+ * proportion never buys a line that is harder to follow.
+ */
+export function fitsClearlyBetter(other: Proportioned, same: Proportioned): boolean {
+  const otherFill = fillOf(other.width, other.height, other.viewport);
+  const sameFill = fillOf(same.width, same.height, same.viewport);
+  const [w, h] = viewOf(same.viewport);
+  if (Math.max(same.width / w, same.height / h) < FILL_MATTERS) return false;
+  return sameFill < FILL_ENOUGH && otherFill >= Math.max(FILL_TURNED, sameFill * FILL_GAIN) && other.crossings <= same.crossings && other.cost <= same.cost + MIN_GAIN;
+}
+
 /**
  * Whether `a` should be kept over `b`. Hidden content and fit decide first, exactly as
  * `isBetterCandidate` has them; only between equally readable arrangements does legibility (with
@@ -338,9 +398,20 @@ function isBetterArrangement(a: Candidate, b: Candidate, preferred?: LayoutSpec[
   const cost = (c: Candidate) => legibilityCost(c.legibility) + c.found.warnings.length * JOG_COST;
   const [ca, cb] = [cost(a), cost(b)];
   if (preferred === undefined || a.layout.direction === b.layout.direction) return ca < cb;
+  const proportioned = (c: Candidate, cost: number): Proportioned => ({ ...extentOf(c.placed.nodes), cost, crossings: c.legibility.crossings, viewport: c.layout.viewport });
   return a.layout.direction === preferred
-    ? !clearlyBetterDirection(cb, ca, b.legibility.crossings < a.legibility.crossings)
-    : clearlyBetterDirection(ca, cb, a.legibility.crossings < b.legibility.crossings);
+    ? !clearlyBetterDirection(cb, ca, b.legibility.crossings < a.legibility.crossings) && !fitsClearlyBetter(proportioned(b, cb), proportioned(a, ca))
+    : clearlyBetterDirection(ca, cb, a.legibility.crossings < b.legibility.crossings) || fitsClearlyBetter(proportioned(a, ca), proportioned(b, cb));
+}
+
+function extentOf(all: readonly DraftNode[]): { width: number; height: number } {
+  // A sequence stands below the architecture whichever way that reads: it says nothing about which
+  // direction fits a screen better.
+  const nodes = all.filter((n) => n.type !== 'sequence');
+  if (!nodes.length) return { width: 1, height: 1 };
+  const left = Math.min(...nodes.map((n) => n.x));
+  const top = Math.min(...nodes.map((n) => n.y));
+  return { width: Math.max(1, Math.max(...nodes.map((n) => n.x + n.width)) - left), height: Math.max(1, Math.max(...nodes.map((n) => n.y + n.height)) - top) };
 }
 
 /** Whether any labelled connector shares a Smart Routing trunk here (see `assignAnchors`'s labelled fan). */
@@ -391,8 +462,10 @@ function relaxPlaced(room: RoomSpec, placed: PlacedRoom, ctx: ReturnType<typeof 
 }
 
 /** What a receipt says about legibility: the counts, and which connectors or notes to look at. */
-export function legibilityReceipt(l: Legibility) {
+export function legibilityReceipt(l: Legibility, proportion: readonly ProportionFinding[] = []) {
   return {
+    // Whether the view explains itself, beyond clean lines (`proportion.ts`): by id, only when found.
+    ...proportionReceipt(proportion),
     crossings: l.crossings,
     // Which ones, so an agent can see what crosses instead of re-arranging until the count moves.
     ...(l.crossed.length ? { crossed: l.crossed.slice(0, 8) } : {}),
@@ -412,14 +485,14 @@ function aboutOf(room: RoomSpec): Map<string, string> {
 }
 
 /** The legibility of every inside view, depth first, by the element ids leading down to it. */
-function insideLegibility(spec: RoomSpec, placed: PlacedRoom): { path: string[]; room: RoomSpec; legibility: Legibility }[] {
-  const out: { path: string[]; room: RoomSpec; legibility: Legibility }[] = [];
+function insideLegibility(spec: RoomSpec, placed: PlacedRoom, ctx: DescribeContext): { path: string[]; room: RoomSpec; legibility: Legibility; proportion: ProportionFinding[] }[] {
+  const out: { path: string[]; room: RoomSpec; legibility: Legibility; proportion: ProportionFinding[] }[] = [];
   const visit = (room: RoomSpec, nodes: readonly DraftNode[], path: string[]) => {
     for (const node of nodes) {
       const inner = node.inside && room.nodes.find((n) => n.id === node.id)?.inside;
       if (!node.inside || !inner) continue;
       const here = [...path, node.id];
-      out.push({ path: here, room: inner, legibility: legibilityOf(node.inside.nodes, node.inside.edges, aboutOf(inner)) });
+      out.push({ path: here, room: inner, legibility: legibilityOf(node.inside.nodes, node.inside.edges, aboutOf(inner)), proportion: proportionFindings(node.inside, ctx) });
       visit(inner, node.inside.nodes, here);
     }
   };
@@ -475,6 +548,7 @@ export function countAll(document: DraftDocument) {
   let elements = 0;
   let groups = 0;
   let notes = 0;
+  let sequences = 0;
   let attachments = 0;
   let relationships = 0;
   let flows = 0;
@@ -485,6 +559,7 @@ export function countAll(document: DraftDocument) {
       attachments += node.attachments?.length ?? 0;
       if (node.type === 'group') groups += 1;
       else if (node.type === 'note' || node.type === 'text' || node.type === 'code') notes += 1;
+      else if (node.type === 'sequence') sequences += 1;
       else elements += 1;
     }
     relationships += graph.edges.length;
@@ -493,7 +568,7 @@ export function countAll(document: DraftDocument) {
   });
   // Notes attached to elements and connectors are not graph nodes; report them separately so a
   // successful create never looks as if it dropped all the notes the agent asked for.
-  return { elements, relationships, groups, flows, notes, ...(attachments ? { attachments } : {}), insideViews: views };
+  return { elements, relationships, groups, flows, notes, ...(sequences ? { sequences } : {}), ...(attachments ? { attachments } : {}), insideViews: views };
 }
 
 /**

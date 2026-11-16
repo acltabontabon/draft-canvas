@@ -52,13 +52,25 @@ export function quickConnectItems(
   return [...suggestions, ...presets];
 }
 
-/** A suggested plain Queue *is* the Queue preset; a suggested Worker is not the Service preset,
- *  and a multi-node suggestion (Queue → Worker) stands in for no single preset. */
+/**
+ * Whether a suggestion *is* a preset's shape, so listing both would be the same row twice: a plain
+ * Queue is the Queue preset. Strict about "plain" — any kind, role or name of its own makes it
+ * another shape: a Worker, an API, a Topic, a dead-letter queue or a "Web App" is not what the
+ * Service, Queue or Data Store row would draw, and the row must stay when only they are on offer. A
+ * multi-node suggestion (Queue → Worker) stands in for no single preset.
+ */
 function representsPreset(item: QuickConnectItem, preset: Preset): boolean {
   const spec = item.node;
   if (item.kind === 'continuation' && item.continuation.fragment.nodes.length !== 1) return false;
   if (spec.type !== preset.type || spec.deliveryRole !== undefined) return false;
-  return spec.type !== 'service' || spec.serviceKind !== 'worker';
+  if (spec.text !== undefined && spec.text !== preset.text) return false;
+  return (
+    (spec.serviceKind ?? 'generic') === 'generic' &&
+    (spec.databaseKind ?? 'generic') === 'generic' &&
+    (spec.queueKind ?? 'queue') === 'queue' &&
+    spec.actorKind === undefined &&
+    spec.componentKind === undefined
+  );
 }
 
 /**

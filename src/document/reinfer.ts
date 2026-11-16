@@ -11,6 +11,7 @@ import {
   inferredJunctionSemantic,
   inferRelationship,
   isEligibleForReinference,
+  refinementBetween,
   resolveTransparentCategory,
 } from './connectorSemantics';
 import { updateEdge } from './operations';
@@ -32,6 +33,8 @@ export function inferRelationshipThroughJunctions(
   sourceNode: DraftNode,
   targetNode: DraftNode,
 ): ReturnType<typeof inferRelationship> {
+  const refined = refinementBetween(sourceNode, targetNode);
+  if (refined) return refined;
   const sourceCategory = resolveTransparentCategory(graph, sourceNode.id, 'source');
   const targetCategory = resolveTransparentCategory(graph, targetNode.id, 'target');
   const capability = capabilityFor(sourceCategory, targetCategory);

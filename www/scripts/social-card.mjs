@@ -7,10 +7,8 @@
  * Uses the Chromium that Playwright already installs for the app's e2e suite, so regenerating them
  * needs nothing new — the same trick scripts/render-desktop-icons.mjs uses for the desktop icons.
  *
- * The committed `og-illustration.png` follows a charcoal sketch direction. Keep
- * lettering out of that artwork: the renderer adds the headline and current package version, so
- * typography stays editable and regenerating the card cannot retain an old release number.
- * Both the source artwork and the rendered output are committed; deployment needs no browser.
+ * The social image uses the same exported diagram as the landing page.
+ * Both generated files are committed, so deployment needs no browser.
  */
 
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -21,26 +19,21 @@ import { chromium } from '@playwright/test';
 const www = join(dirname(fileURLToPath(import.meta.url)), '..');
 const out = join(www, 'public');
 
-const { version } = JSON.parse(readFileSync(join(www, '..', 'package.json'), 'utf8'));
-const illustration = `data:image/png;base64,${readFileSync(join(www, 'scripts', 'og-illustration.png')).toString('base64')}`;
+const { checkout } = JSON.parse(readFileSync(join(www, 'src', 'checkout-views.json'), 'utf8'));
 
 const card = `<!doctype html><html><head><meta charset="utf-8"><style>
-  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: #101113; }
-  .card { position: relative; height: 630px; color: #c9c7c0; }
-  .illustration { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-  .brand { position: absolute; left: 64px; top: 46px;
-    font: 22px/1.4 ui-monospace, 'Courier New', monospace; letter-spacing: 0.2em; color: #e8e6df; }
-  .version { margin: 8px 0 0; font-size: 18px; letter-spacing: 0.16em; color: #9acfc3; }
-  /* One quiet line, clear of the illustration and comfortably inside social-preview crops. */
-  h1 { position: absolute; left: 64px; right: 64px; top: 414px; margin: 0;
-    font: 400 64px/1.16 Georgia, 'Times New Roman', serif; letter-spacing: -0.035em; white-space: nowrap; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; background: #101217; }
+  .card { height: 100%; padding: 48px 65px; color: #eff0f1;
+    background: radial-gradient(#282e37 0.9px, transparent 0.9px) center / 17px 17px; }
+  .brand { margin: 0 0 10px; color: #b8e6de;
+    font: 600 16px/1.4 ui-monospace, 'Courier New', monospace; letter-spacing: 0.12em; }
+  h1 { margin: 0; font: 640 52px/1.05 system-ui, sans-serif; letter-spacing: -0.06em; }
+  .system-graph { display: block; width: 100%; height: 430px; margin-top: 15px; }
 </style></head><body>
   <div class="card">
-    <img class="illustration" src="${illustration}" alt="">
-    <div class="brand">DRAFT CANVAS
-      <p class="version">${version} RELEASE</p>
-    </div>
-    <h1>Nodi + live collaboration</h1>
+    <div><p class="brand">DRAFT CANVAS</p><h1>Draw software systems.</h1></div>
+    ${checkout.system}
   </div>
 </body></html>`;
 
@@ -49,7 +42,6 @@ try {
   const page = await browser.newPage({ viewport: { width: 1200, height: 630 }, deviceScaleFactor: 1 });
   await page.emulateMedia({ colorScheme: 'dark', reducedMotion: 'reduce' });
   await page.setContent(card);
-  await page.locator('.illustration').evaluate((image) => image.decode());
   writeFileSync(join(out, 'og-image.png'), await page.screenshot({ clip: { x: 0, y: 0, width: 1200, height: 630 } }));
   console.log('social-card: og-image.png 1200x630');
 

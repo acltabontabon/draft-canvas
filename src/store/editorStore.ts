@@ -1,9 +1,12 @@
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { create } from 'zustand';
 import { reconnectProblem } from '../document/reconnect';
 import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // UI feedback for document limits and rejected reconnects stays outside document operations.
-import { PRESENTATION_AT_REST, useUiStore } from './uiStore';
-import { edgeIndex, nodeIndex } from './selectors';
+import type { ArrangePreset } from '../agent/layoutPlan';
+import type { Job, JobResult } from '../agent/jobs';
+import { PRESENTATION_AT_REST, useUiStore, type ArrangePreview, type TidyNothing, type TidyPreview } from './uiStore';
+import { edgeIndex, nodeIndex, selectSequenceMessage } from './selectors';
 import {
   createAttachment,
   createDocument,
@@ -26,10 +29,14 @@ import {
   samePath,
   totals,
   viewOf,
+  withCamerasOf,
   type DepthPath,
 } from '../depth/tree';
 import { getMeasurer } from '../render/text/measure';
-import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalTextHeight } from '../nodes/describe';
+import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight } from '../nodes/describe';
+import { fitSequences, recoverCappedSequence } from '../nodes/sequenceFit';
+import { liveSequenceFocus, sequenceEditStillThere } from '../sequence/focus';
+import { syncLinks } from '../document/sequenceLinks';
 import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
@@ -45,13 +52,16 @@ import {
   detachFromEdge as detachFromEdgeOp,
   detachFromNode,
   distributeNodes,
+  matchNodeSizes,
   extractFragment,
   freeOriginFor,
   hasAttachmentRoom,
   moveNodes,
+  pasteDocument,
   pasteFragment,
   placeNear,
   enclosingParentId,
+  fitsGroupDepth,
   reconnectEdge as reconnectEdgeOp,
   reverseEdge as reverseEdgeOp,
   removeAttachment as removeAttachmentOp,
@@ -82,8 +92,6 @@ import {
   type Clipboard,
   type ReplaceOptions,
 } from '../document/operations';
-import { buildStarter, starterSize } from '../starters/build';
-import type { ArchitectureStarter } from '../starters/types';
 import {
   addFlow,
   appendFlowTrace,
@@ -124,7 +132,7 @@ import {
 } from '../document/openPoints';
 import { defaultResponseFor, relationshipCaptionLabel } from '../document/edgeSemantics';
 import { DEFAULTS, LIMITS } from '../document/limits';
-import { cleanText, cleanTextFields } from '../document/sanitize';
+import { cleanDescription, cleanEdgeLabel, cleanTechnology, cleanTextFields, DEFAULT_TITLE } from '../document/sanitize';
 import {
   capabilityFor,
   categoryOf,
@@ -132,6 +140,12 @@ import {
   inferRelationship,
 } from '../document/connectorSemantics';
 import { inferRelationshipThroughJunctions, reinferIfEligible } from '../document/reinfer';
+import { plainShortcut } from '../lib/platform';
+import { technologyKindPatch } from '../document/technologyKind';
+import { lineageOf } from '../document/dataFlow';
+import { replicasField, splitReplicaCount } from '../document/replicas';
+import { CONVERTIBLE_TYPE_NAMES, convertNodeType, isConvertibleType, type ConvertibleType } from '../document/convert';
+import { bridgeProblems, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
 import type {
   Accent,
   AttachableType,
@@ -139,8 +153,10 @@ import type {
   DraftDocument,
   DraftEdge,
   DraftFlow,
+  DraftInk,
   DraftMetadata,
   DraftNode,
+  DraftOrigin,
   DraftPoint,
   EdgeAnchor,
   ConnectorKind,
@@ -157,9 +173,14 @@ import type {
   ViewLevel,
 } from '../document/types';
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
+import { addInk, INK_ID_PREFIX, inkOf, inkUnionBounds, removeInk, translateInk } from '../document/ink';
+import { createId } from '../document/ids';
+import { boxForChoice, INK_CHOICE_LABEL, INK_CHOICE_TYPE, type InkShapeChoice } from '../ink/choices';
+import type { Box } from '../ink/geometry';
 import { routingPlan } from '../edges/bundles';
 import { anchorOnSide, anchorPoint, rectOf, trunkCoordinate } from '../edges/routing';
 import { connectorRoutes } from '../edges/connectorRoutes';
+import { straightenConnectors } from '../edges/straighten';
 import { recoveryBranchAnchor } from '../edges/compensationMarker';
 import { centerOf, clamp } from '../lib/math';
 import {
@@ -193,6 +214,7 @@ export type EditorMode = 'edit' | 'present';
 export interface FlowPlaybackState {
   active: boolean;
   flowId: string | null;
+  sequenceNodeId?: string;
   step: number;
   /**
    * Which half of the current step's exchange is animating — irrelevant (and never read) unless
@@ -302,6 +324,8 @@ export function ownsData(node: Pick<DraftNode, 'type' | 'serviceKind'>): boolean
   return kind === 'generic' || kind === 'api' || kind === 'worker';
 }
 
+export type { ArrangePreset };
+
 export interface EditorStore {
   /**
    * The room being edited — the whole file at the root (by identity), and one shape's inside
@@ -387,25 +411,49 @@ export interface EditorStore {
   /** `label` overrides the one `beginInteraction` opened with, when the gesture turned out to be
    *  something else (a drag that ended as an attach). */
   endInteraction: (label?: string) => void;
+  /**
+   * Gives up the step `beginInteraction` opened: the document goes back to exactly what it was when
+   * it began, and nothing is recorded. For a thing made and then let go before it was finished — a
+   * participant added and left unnamed — where putting things back by hand would leave an undo step
+   * that does nothing.
+   */
+  abandonInteraction: () => void;
 
   /* Editing commands */
   addNode: (input: CreateNodeInput) => DraftNode;
+
+  /* Sketches (`DraftInk`) and Smart Ink */
+  /** Keeps a finished stroke. False when it could not be kept (the canvas is full, or the room is empty). */
+  drawInk: (stroke: DraftInk) => boolean;
+  eraseInk: (ids: readonly string[]) => void;
+  moveInk: (ids: readonly string[], dx: number, dy: number) => void;
+  /**
+   * Turns strokes into a shape, as one undo step that undo reverses back to the strokes. Returns
+   * the shape's id, or null when nothing was made.
+   */
+  inkToShape: (strokeIds: readonly string[], choice: InkShapeChoice, drawn: Box, encloses: readonly string[]) => string | null;
+  /** The shape a drawing just became, made as another choice instead — revising that same step. */
+  retypeInkShape: (nodeId: string, strokes: readonly DraftInk[], choice: InkShapeChoice, drawn: Box, encloses: readonly string[]) => void;
+  /** The shape a drawing became, back to the drawing. */
+  revertInkShape: (nodeId: string, strokes: readonly DraftInk[]) => void;
+  /** Turns strokes into a connector between two shapes, as one undo step. Returns its id, or null. */
+  inkToConnector: (strokeIds: readonly string[], source: string, target: string, directed: boolean) => string | null;
   /** One undoable bulk add. `flows` (a starter's predefined walkthroughs) join the same entry, so
    *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. False
    *  (and nothing added) when the result would pass the document limits. */
   addNodesWithEdges: (nodes: DraftNode[], edges: DraftEdge[], label: string, flows?: DraftFlow[], title?: string) => boolean;
-  /**
-   * Inserts a Starter — a composed opening diagram — as one undoable action, clear of
-   * whatever is already on the canvas, and leaves it selected. Returns the nodes it created, the
-   * way `addNode` returns the one it created: a caller that wants to move the camera onto them
-   * cannot find them in its own `CommandContext`, whose document predates this call. See
-   * `src/starters/`.
-   */
-  insertStarter: (starter: ArchitectureStarter, title?: string) => DraftNode[];
   /** Adds a laid-out document's shapes and connectors to this room, at the free origin, as one
    *  undo step with the new shapes selected — how an imported flowchart lands in an open diagram.
    *  Ids are reissued, so the same document can be inserted twice. Returns the new node ids. */
   insertComposed: (composed: DraftDocument, label: string, title?: string) => string[];
+  /**
+   * Adds a whole starter document — shapes, connectors and its flows — clear of whatever is already
+   * on the canvas, as one undo step, with fresh ids and the new shapes selected. Returns the new
+   * node ids: a caller that wants to move the camera onto them cannot find them in its own
+   * `CommandContext`, whose document predates this call. `origin` records the starter on the file
+   * (`metadata.origin`) in the same step. See `src/gallery/`.
+   */
+  insertStarterDocument: (starter: DraftDocument, name: string, options?: { title?: string; origin?: DraftOrigin }) => string[];
   /**
    * Accepts an Intent Continuation offer (see `src/continuation/`): the previewed nodes and
    * connectors become real in one undoable step, the node the fragment ends on is selected (so the
@@ -421,6 +469,10 @@ export interface EditorStore {
     sourceOffset?: number,
     targetOffset?: number,
   ) => DraftEdge | null;
+  /** Connects every one of `sources` to `target` as one undo step — the fan-in a drag from one of
+   *  several selected shapes makes. Pairs already connected, and `target` itself, are skipped; the
+   *  new connectors come back selected. Empty when nothing could be connected. */
+  connectMany: (sources: readonly string[], target: string) => DraftEdge[];
   updateNodeById: (id: string, patch: Partial<Omit<DraftNode, 'id'>>, label?: string) => void;
   /** Sets or clears (with `''`) an architecture shape's C4 technology/description, growing the
    *  shape — never shrinking it — so what was typed shows in full. */
@@ -453,6 +505,9 @@ export interface EditorStore {
    *  worker→target), their semantics drawn from the same capability matrix as everywhere else —
    *  one undo step. A no-op if the edge or either endpoint no longer resolves. */
   insertWorkerOnEdge: (edgeId: string) => void;
+  /** Puts an existing shape into the middle of a connector: `A → B` becomes `A → node → B`.
+   *  False (and nothing changes) when that shape can't stand there — see `canSpliceInto`. */
+  spliceIntoEdge: (nodeId: string, edgeId: string) => boolean;
   /** "Add DLQ" — creates a compact, connected Dead Letter Queue companion for a plain Queue. A
    *  no-op if the node isn't a plain queue, is itself a generated DLQ, or already has one. */
   addDeadLetterQueue: (queueId: string) => void;
@@ -497,6 +552,10 @@ export interface EditorStore {
    *  edge has none, and never touches `accent`. See `document/edgeSemantics.ts`. */
   setEdgeSemantic: (id: string, semantic: EdgeSemantic | undefined) => void;
   /** Free-text condition chip, e.g. "approved" — display only, never evaluated. */
+  /** How often a connector moves its data ("hourly"); empty clears it. */
+  setEdgeCadence: (id: string, cadence: string | undefined) => void;
+  /** Spotlights everything `nodeId`'s data comes from and everything it feeds (`lineageOf`). */
+  showLineage: (nodeId: string) => void;
   setEdgeCondition: (id: string, condition: string) => void;
   /** Free-text response chip, e.g. "200 Customer" — display only, see `DraftEdge.response`. */
   setEdgeResponse: (id: string, response: string) => void;
@@ -517,14 +576,39 @@ export interface EditorStore {
   /** Pins connectors' automatic ends exactly where they are drawn now, in one undo step. */
   pinEnds: (ids: readonly string[], end: EdgeEnd) => void;
   /**
-   * Lays the room on screen out again with the layout engine the AI agent's `{op:"arrange"}` uses
-   * — same request, same reading direction — as one undo step labelled "Arrange". Every id, note,
-   * flow and the selection survive; only positions (and connector anchors) change. Resolves `true`
-   * when something moved. The engine is loaded on demand, so a canvas that never arranges never
-   * pays for it.
+   * Works out what Arrange would do and applies none of it: the room on screen laid out again from
+   * scratch (or, with `selection`, the selected shapes), reading each way the person may choose
+   * between, for `ArrangeBar` to show. The engine is the AI agent's `{op:"arrange"}`, loaded on
+   * demand and run on a worker thread (`agent/offThread.ts`) so the page stays free; `signal` cancels
+   * it. A `preset` (Nodi's layout skills) names what the default leaves to the engine: a reading
+   * direction kept as asked, the spacing, or a flow to lay out straight. Resolves the preview,
+   * `'unchanged'` when arranging moves nothing, `'no-room'` when a selection can't be put back without
+   * running into its surroundings, or `null` when the room changed while it was worked out, the work
+   * was cancelled, or it can't be edited right now.
    */
-  arrangeRoom: () => Promise<boolean>;
-  arrangeSelection: () => Promise<boolean>;
+  planArrange: (selection?: boolean, options?: { preset?: ArrangePreset; signal?: AbortSignal }) => Promise<ArrangePreview | 'unchanged' | 'no-room' | null>;
+  /**
+   * Applies the direction a preview from `planArrange` shows, as one undo step labelled "Arrange".
+   * False, and nothing applied, when the room has changed since it was worked out. The only way an
+   * Arrange reaches the diagram.
+   */
+  commitArrange: (preview: ArrangePreview) => boolean;
+  /**
+   * Works out what Tidy up would do and applies none of it: the gentle cleanup of `agent/tidy.ts`
+   * (straighten connectors that draw a visible kink, re-attach ones drawn through a shape) on the room
+   * on screen, or on the selection's neighbourhood when shapes are selected. Run like `planArrange`.
+   * Resolves the preview to show, `{ nothing }` when there is nothing to tidy (`stopped`: it ran out of
+   * its work budget on a large diagram before it could tell; `reads`: what reads badly all the same,
+   * which laying the room out again may fix), or `null` when the room changed, the work was cancelled,
+   * or it cannot be edited right now.
+   */
+  planTidy: (options?: { signal?: AbortSignal }) => Promise<TidyPreview | TidyNothing | null>;
+  /**
+   * Applies a preview from `planTidy` as one undo step labelled "Tidy up". False, and nothing
+   * applied, when the room has changed since it was worked out: the preview describes a room that
+   * no longer exists.
+   */
+  commitTidy: (preview: TidyPreview) => boolean;
   /**
    * Replaces `find` with `replace` in every label of every room of the file (shape names, connector
    * labels, attachment text, flow titles) as one undo step, staying in the room on screen. Returns
@@ -541,8 +625,16 @@ export interface EditorStore {
   setEdgeKind: (id: string, kind: ConnectorKind | undefined) => void;
   commitPositions: (positions: Map<string, { x: number; y: number }>) => void;
   /** Moves every selected node by a pixel delta — repeated taps coalesce. */
-  nudgeSelection: (dx: number, dy: number) => void;
+  /** Moves the selection by `(dx, dy)` — or the shapes `ids`, when the keys that asked were pressed on
+   *  a selection that has changed since (`nudgeCoalescer.ts` applies a frame late). */
+  nudgeSelection: (dx: number, dy: number, ids?: readonly string[]) => void;
   deleteSelection: () => void;
+  /** Deletes the selection and joins the lines through each removed shape back up
+   *  (`removeAndBridge`). Refused with a toast when a shape has several ways in and out. */
+  deleteSelectionKeepingLines: () => void;
+  /** Turns every selected architecture shape into `type` in place, keeping its connectors, flows,
+   *  attachments and room (`convertNodeType`). One undo step; nothing happens if none changes. */
+  convertSelection: (type: ConvertibleType) => void;
   duplicateSelection: () => void;
   /** Returns what went onto the clipboard, encoded, or `null` when nothing was copied — so a
    *  native `copy` event can also hand it to the system clipboard (see `EditorScreen`). */
@@ -573,6 +665,15 @@ export interface EditorStore {
   syncClipboardFromSystem: () => Promise<boolean>;
   align: (edge: AlignEdge) => void;
   distribute: (axis: 'x' | 'y') => void;
+  /** Gives the selected shapes the largest width (or height) among them — one undo step. */
+  matchSize: (dimension: 'width' | 'height') => void;
+  /**
+   * Nudges shapes a few pixels so every connector that is drawn with a kink of no more than
+   * `STRAIGHTEN_LIMIT` runs straight (one the router already draws level is left alone) — the light
+   * alternative to Arrange. Only the selected shapes move when there is a selection. One undo step;
+   * false when there was nothing to straighten.
+   */
+  straighten: () => boolean;
   groupSelection: () => void;
   ungroupSelection: () => void;
   raise: (toFront?: boolean) => void;
@@ -703,6 +804,8 @@ export interface EditorStore {
 export interface ApplyOptions {
   /** Entries with the same key merge, so text editing is one undo step. */
   coalesceKey?: string;
+  /** Replaces the last entry if it carries the same key, at any distance in time (`HistoryEntry.amendKey`). */
+  amendKey?: string;
   selection?: Selection;
   /** See `FlowSessionSnapshot` in `history/HistoryStack.ts`. Only `deleteFlow` sets these. */
   flowSessionBefore?: FlowSessionSnapshot;
@@ -808,7 +911,6 @@ let lastSystemClipboardText: string | null = null;
  * How long (ms) "Arrange" may keep the page busy laying out and repairing connectors. Unbounded, a
  * 100-shape room took tens of seconds on the main thread; past this the best layout so far is kept.
  */
-const ARRANGE_BUDGET_MS = 1500;
 
 const PASTE_STAGGER_STEP = 16;
 /** Where the last paste was aimed — see `paste`. */
@@ -818,15 +920,22 @@ const CONNECTORS_NEED_SHAPES = 'Connectors are copied with the shapes they join 
 /**
  * The selection with anything the edit removed taken out — a command that deletes elements without
  * naming a new selection (removing a DLQ, say) must not leave the store, and every redo, holding ids
- * that no longer exist. Only checked when something was actually removed.
+ * that no longer exist.
+ *
+ * Judged by the ids themselves, never by counting: an edit that removes one shape and adds another
+ * leaves the totals where they were and a selected id gone. Each selected id is looked up in the
+ * index its array already has, so the cost is the selection's, not the document's — and an edit that
+ * touched neither array (a rename of the title, a flow) is answered without a lookup at all.
  */
 function selectionIn(next: DraftDocument, before: DraftDocument, selection: Selection): Selection {
-  if (next.nodes.length >= before.nodes.length && next.edges.length >= before.edges.length) return selection;
   if (selection.nodes.length === 0 && selection.edges.length === 0) return selection;
-  const nodeIds = new Set(next.nodes.map((n) => n.id));
-  const edgeIds = new Set(next.edges.map((e) => e.id));
-  const nodes = selection.nodes.filter((id) => nodeIds.has(id));
-  const edges = selection.edges.filter((id) => edgeIds.has(id));
+  const nodesChanged = next.nodes !== before.nodes;
+  const edgesChanged = next.edges !== before.edges;
+  if (!nodesChanged && !edgesChanged) return selection;
+  const nodeIds = nodesChanged ? nodeIndex(next.nodes) : null;
+  const edgeIds = edgesChanged ? edgeIndex(next.edges) : null;
+  const nodes = nodeIds ? selection.nodes.filter((id) => nodeIds.has(id)) : selection.nodes;
+  const edges = edgeIds ? selection.edges.filter((id) => edgeIds.has(id)) : selection.edges;
   return nodes.length === selection.nodes.length && edges.length === selection.edges.length ? selection : { nodes, edges };
 }
 
@@ -866,17 +975,38 @@ function carryAdoptedMetadata(
  * attachment that's gone keeps showing the rest, as before.
  */
 function closeStaleAttachmentDetail(doc: DraftDocument): void {
+  closeStaleSequenceFocus(doc);
   const detail = useUiStore.getState().openAttachmentDetail;
   if (!detail) return;
   const host =
     detail.hostKind === 'node'
       ? nodeIndex(doc.nodes).get(detail.hostId)
-      : edgeIndex(doc.edges).get(detail.hostId);
+      : detail.hostKind === 'edge'
+        ? edgeIndex(doc.edges).get(detail.hostId)
+        : selectSequenceMessage(doc, detail.hostId, detail.messageId);
   const attachments = host?.attachments ?? [];
   const alive =
     attachments.length > 0 &&
     (detail.hostKind === 'node' || detail.attachmentId === null || attachments.some((a) => a.id === detail.attachmentId));
   if (!alive) useUiStore.getState().setOpenAttachmentDetail(null);
+}
+
+/** `after` with every link between a participant and its shape brought back into step. */
+function linksInStep(before: DraftDocument, after: DraftDocument): DraftDocument {
+  const synced = syncLinks(before, after);
+  // A shape renamed from inside a sequence may need more room for its new name, as if it had been renamed where it stands.
+  return synced.shapes.reduce((doc, id) => growArchitectureToFit(doc, id), synced.doc);
+}
+
+/** After an edit, an undo or someone else's change: what was selected inside a sequence may be gone. */
+function closeStaleSequenceFocus(doc: DraftDocument): void {
+  const ui = useUiStore.getState();
+  if (!ui.sequenceFocus && !ui.sequenceEdit) return;
+  const hostId = ui.sequenceFocus?.nodeId ?? ui.sequenceEdit?.nodeId;
+  const host = hostId ? nodeIndex(doc.nodes).get(hostId) : undefined;
+  const focus = ui.sequenceFocus && host?.sequence ? liveSequenceFocus(host.sequence, ui.sequenceFocus) : null;
+  if (focus !== ui.sequenceFocus) ui.setSequenceFocus(focus);
+  if (ui.sequenceEdit && (!host?.sequence || !sequenceEditStillThere(host.sequence, ui.sequenceEdit.target))) ui.setSequenceEdit(null);
 }
 
 /** `document` carrying a stored title/project — the one place both fields are written together. */
@@ -1014,6 +1144,11 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
   ui.arm(null);
   useUiStore.setState({
     openAttachmentDetail: null,
+    sequenceFocus: null,
+    sequenceEdit: null,
+    sequenceAttachmentTarget: null,
+    sequenceDropTarget: null,
+    sequenceLinkTarget: null,
     quickConnect: null,
     contextMenu: null,
     presentationReveal: null,
@@ -1030,6 +1165,10 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     depthPlateFocusId: null,
     // Anchored to an element of the canvas being left.
     openPointPopover: null,
+    // Strokes and a drawing's offer belong to the room being left.
+    inkSelection: [],
+    inkSuggestion: null,
+    inkResolving: null,
   });
   return {
     selection: EMPTY_SELECTION,
@@ -1087,7 +1226,7 @@ export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefin
   const flow =
     lensFlow(state) ??
     (state.flowPlayback.active && state.flowPlayback.flowId
-      ? findFlow(state.document, state.flowPlayback.flowId)
+      ? playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)
       : undefined);
   if (!flow) return undefined;
   const ids = flowMemberNodeIds(state.document, flow);
@@ -1143,11 +1282,12 @@ export function outermostSelected(nodes: readonly DraftNode[], selectedIds: read
 
 /**
  * The name a blank diagram takes from what is first put on it — a starter's name, an imported
- * flowchart's title — so it isn't left "Untitled canvas" in the Library. Only for an empty file at
- * the top level that still has the default name: a name someone chose, or any drawing, is kept.
+ * flowchart's title — so it isn't left "Untitled diagram" in the Library. Only for an empty file at
+ * the top level that still has the default name (this one, or the one diagrams made before it were
+ * given): a name someone chose, or any drawing, is kept.
  */
 function namingBlank(state: EditorStore, title: string | undefined): string | undefined {
-  if (!title || state.path.length > 0 || state.document.metadata.title !== 'Untitled canvas') return undefined;
+  if (!title || state.path.length > 0 || (state.document.metadata.title !== DEFAULT_TITLE && state.document.metadata.title !== 'Untitled canvas')) return undefined;
   return totals(fileOf(state)).nodes === 0 ? title : undefined;
 }
 
@@ -1162,17 +1302,26 @@ function notifyNothingAdded(tooDeep: boolean): void {
     );
 }
 
-export function roomFor(nodeCount: number, edgeCount: number, flowCount = 0): boolean {
-  // Counted across every room, not just the one being edited: the limits bound what a file can
-  // hold, and a load that kept the first 5000 nodes would silently lose whichever rooms came last.
+/** How much more the file can hold. Counted across every room, not just the one being edited: the
+ *  limits bound what a file can hold, and a load that kept the first 5000 nodes would silently lose
+ *  whichever rooms came last. */
+export function spareRoom(): { nodes: number; edges: number; flows: number } {
   const used = totals(fileOf(useEditorStore.getState()));
-  if (
-    used.nodes + nodeCount <= LIMITS.maxNodes &&
-    used.edges + edgeCount <= LIMITS.maxEdges &&
-    used.flows + flowCount <= LIMITS.maxFlows
-  ) {
-    return true;
-  }
+  return { nodes: LIMITS.maxNodes - used.nodes, edges: LIMITS.maxEdges - used.edges, flows: LIMITS.maxFlows - used.flows };
+}
+
+/**
+ * Whether the file can take this much more, without saying so: what a ghost asks before it is shown,
+ * so it is never offered where accepting it would only be refused.
+ */
+export function hasRoomFor(nodeCount: number, edgeCount: number, flowCount = 0): boolean {
+  const spare = spareRoom();
+  return nodeCount <= spare.nodes && edgeCount <= spare.edges && flowCount <= spare.flows;
+}
+
+/** `hasRoomFor`, telling the person when the answer is no — what every command that adds to the file asks. */
+export function roomFor(nodeCount: number, edgeCount: number, flowCount = 0): boolean {
+  if (hasRoomFor(nodeCount, edgeCount, flowCount)) return true;
   useUiStore.getState().notify('Nothing added — that would make this diagram too large.', 'error');
   return false;
 }
@@ -1192,8 +1341,8 @@ function selectionThatExists(document: DraftDocument, selection: Selection): Sel
 }
 
 /**
- * Closes what is open on an element somebody else just removed: a menu, a quick-connect from it, an
- * open-point popover beside it, a pending request to start editing it. Editing here closes these by
+ * Closes what is open on an element somebody else just removed: a menu, a quick-connect from it (and
+ * the suggestion it was previewing), an open-point popover beside it, a pending request to start editing it. Editing here closes these by
  * the same gesture that removes the element; an edit from elsewhere has no gesture to do it.
  */
 function closeWhatPointsAtRemoved(document: DraftDocument): void {
@@ -1205,6 +1354,10 @@ function closeWhatPointsAtRemoved(document: DraftDocument): void {
   const patch: Partial<ReturnType<typeof useUiStore.getState>> = {};
   if (ui.contextMenu && gone(ui.contextMenu.target)) patch.contextMenu = null;
   if (ui.quickConnect?.source !== undefined && !nodes.has(ui.quickConnect.source)) patch.quickConnect = null;
+  // The picker's live preview goes with it. Left behind, a `'drop'` offer for a vanished source
+  // keeps the quiet suggestions switched off (`useContinuation` leaves a drop offer alone), and
+  // undoing the removal brings back a ghost with no menu to own it.
+  if (ui.continuation && !nodes.has(ui.continuation.anchorId)) patch.continuation = null;
   if (ui.openPointPopover && gone(ui.openPointPopover.anchor)) patch.openPointPopover = null;
   if (ui.editRequestId !== null && !nodes.has(ui.editRequestId) && !edges.has(ui.editRequestId)) patch.editRequestId = null;
   if (ui.recoveryRequestEdgeId !== null && !edges.has(ui.recoveryRequestEdgeId)) patch.recoveryRequestEdgeId = null;
@@ -1232,7 +1385,7 @@ function selectiveStep(set: SetEditorState, get: GetEditorState, direction: 'und
     // Dropped rather than kept: left on the stack it would block every step behind it.
     const { past, future } = state.history;
     set({ history: direction === 'undo' ? { past: past.slice(0, -1), future } : { past, future: future.slice(1) } });
-    notify(`Couldn't ${direction} "${entry.label}" — someone else has built on it since.`);
+    notify(`Couldn’t ${direction} "${entry.label}" — someone else has built on it since.`);
     return;
   }
   if (result.file === current) {
@@ -1283,14 +1436,17 @@ function restoreSnapshot(
   // older one it was taken at: a reload right after Ctrl+Z then judged the stashed (undone) copy older
   // than the autosaved edit (`openDocument`) and brought the undone edit back, and the Library's
   // "edited" time ran backwards.
-  const touched = touch(restored.file);
+  // Undo moves content, not the camera: every room keeps the camera it has now — the one on screen
+  // for this room (`liveViewport`), the last one folded in for the others. The snapshot's cameras are
+  // those of its moment, and restoring them left the stored camera somewhere the person no longer
+  // was (pan, step into a shape, back out, undo: the next save kept the old one). It also covers
+  // leaving a room by undo, which has to carry the panned view with it as `navigateTo` does.
+  const touched = touch(withCamerasOf(restored.file, fileWithLiveViewport(state)));
   const path = resolvePath(touched, restored.path);
   const target = (path.length > 0 ? viewOf(touched, path) : touched) ?? touched;
   const inside = target !== touched;
   const moved = pathKey(inside ? path : ROOT_PATH) !== pathKey(state.path);
-  // Leaving a room folds its camera into it first, as `navigateTo` does. Clearing `liveViewport`
-  // alone dropped the view panned in the room being left, which came back with the snapshot's.
-  const file = moved && state.liveViewport ? withRoomViewport(touched, state.path, state.liveViewport) : touched;
+  const file = touched;
   const view = !inside ? file : file === touched ? target : (viewOf(file, path) ?? file);
   const cleared = moved ? resetViewSession() : undefined;
   set((s) => ({
@@ -1310,14 +1466,7 @@ function restoreSnapshot(
     ...(restored.flowSession ?? {}),
   }));
   closeStaleAttachmentDetail(get().document);
-}
-
-/** `file` with the room at `path` showing `viewport` — unchanged when the room isn't in it. */
-function withRoomViewport(file: DraftDocument, path: DepthPath, viewport: DraftDocument['viewport']): DraftDocument {
-  if (path.length === 0) return { ...file, viewport };
-  if (!samePath(resolvePath(file, path), path)) return file;
-  const room = viewOf(file, path);
-  return room ? fileOf({ document: { ...room, viewport }, path, outer: file }) : file;
+  pruneInkSelection(get().document);
 }
 
 /**
@@ -1368,6 +1517,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   liveViewport: null,
 
   setDocument(document, options) {
+    const context = describeContext(LIGHT);
+    document = mapRooms(document, (graph) => {
+      const nodes = graph.nodes.map((node) => recoverCappedSequence(node, context));
+      return nodes.some((node, index) => node !== graph.nodes[index]) ? { ...graph, nodes } : graph;
+    });
     documentLoads.all += 1;
     if (!options?.keepPath) documentLoads.openings += 1;
     interaction = null;
@@ -1405,7 +1559,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return;
     const state = get();
     const before = state.document;
-    const next = touch(recipe(before));
+    // A sequence is sized by what it holds, whichever edit changed that — typing a message, a paste,
+    // a renamed title — so it is done here, once, rather than remembered by every action.
+    // And a participant that stands for a shape is that shape: renaming either renames both, here,
+    // in the same step (`sequenceLinks.ts`).
+    const next = touch(fitSequences(before, linksInStep(before, recipe(before)), () => describeContext(LIGHT)));
     // Structural sharing means an operation that changed nothing returns the
     // same object, so no-op commands never create a dead undo step.
     if (next === before || shallowEqualDocument(next, before)) return;
@@ -1440,6 +1598,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         selectionAfter,
         at: Date.now(),
         coalesceKey: options?.coalesceKey,
+        amendKey: options?.amendKey,
         flowSessionBefore: options?.flowSessionBefore,
         flowSessionAfter: options?.flowSessionAfter,
         ...keys,
@@ -1571,6 +1730,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }));
   },
 
+  abandonInteraction() {
+    const active = interaction;
+    interaction = null;
+    if (!active) return;
+    // Only in the room it began in; anywhere else the baseline is no longer ours to put back.
+    if (get().document === active.document || !samePath(active.path, get().path)) return;
+    set((s) => ({ document: active.document, selection: active.selection, revision: s.revision + 1 }));
+    closeStaleAttachmentDetail(active.document);
+  },
+
   addNode(input) {
     const node = createNode(input);
     // Made inside a boundary (a key pressed over it, a tool clicked on it), it belongs to it, by the
@@ -1581,6 +1750,116 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: { nodes: [node.id], edges: [] },
     });
     return node;
+  },
+
+  drawInk(stroke) {
+    const state = get();
+    // A room exists only while it holds a shape (`depth/tree.ts`); a sketch alone in an empty one
+    // would vanish on the way out. Say so instead of keeping a stroke that would be lost.
+    if (state.path.length > 0 && state.document.nodes.length === 0) {
+      useUiStore.getState().notify('Sketches sit over a view’s shapes — add a shape here first.');
+      return false;
+    }
+    if (totals(fileOf(state)).ink >= LIMITS.maxInkStrokes) {
+      useUiStore.getState().notify('This canvas holds as many sketch strokes as it can. Erase some to draw more.', 'error');
+      return false;
+    }
+    state.apply('Sketch', (doc) => addInk(doc, [stroke]), { selection: state.selection });
+    return inkOf(get().document).some((existing) => existing.id === stroke.id);
+  },
+
+  eraseInk(ids) {
+    if (ids.length === 0) return;
+    get().apply(ids.length === 1 ? 'Erase stroke' : 'Erase strokes', (doc) => removeInk(doc, ids));
+    pruneInkSelection(get().document);
+  },
+
+  moveInk(ids, dx, dy) {
+    if (ids.length === 0) return;
+    get().apply('Move sketch', (doc) => translateInk(doc, ids, dx, dy));
+  },
+
+  inkToShape(strokeIds, choice, drawn, encloses) {
+    const state = get();
+    if (!roomFor(1, 0)) return null;
+    const node = inkShapeNode(state.document, choice, drawn, encloses);
+    const before = state.document;
+    state.apply(`Draw ${INK_CHOICE_LABEL[choice]}`, (doc) => placeInkShape(removeInk(doc, strokeIds), node, choice, encloses), {
+      selection: EMPTY_SELECTION,
+      amendKey: inkAmendKey(node.id),
+    });
+    return get().document !== before && get().document.nodes.some((n) => n.id === node.id) ? node.id : null;
+  },
+
+  retypeInkShape(nodeId, strokes, choice, drawn, encloses) {
+    const state = get();
+    const current = state.document.nodes.find((n) => n.id === nodeId);
+    if (!current) return;
+    const label = `Draw ${INK_CHOICE_LABEL[choice]}`;
+    const top = state.history.past[state.history.past.length - 1];
+    if (top?.amendKey === inkAmendKey(nodeId) && samePath(top.path, state.path)) {
+      // The drawing's own step is still the last one: make the drawing into the new choice from
+      // scratch, revising that step — undo still takes it straight back to the strokes.
+      const base = viewOf(top.before, state.path);
+      if (!base) return;
+      const strokeIds = strokes.map((stroke) => stroke.id);
+      const node = { ...inkShapeNode(base, choice, drawn, encloses), id: nodeId };
+      state.apply(label, () => placeInkShape(removeInk(base, strokeIds), node, choice, encloses), {
+        selection: EMPTY_SELECTION,
+        amendKey: inkAmendKey(nodeId),
+      });
+      return;
+    }
+    // Something else happened since: change the shape where it stands, keeping its id, name and
+    // connectors, as a step of its own.
+    const fresh = inkShapeNode(state.document, choice, { x: current.x, y: current.y, width: current.width, height: current.height }, encloses);
+    const explicitText = current.textOrigin !== 'auto' && current.text ? { text: current.text, textOrigin: current.textOrigin } : {};
+    const next: DraftNode = { ...fresh, ...explicitText, id: nodeId, ...(current.parentId ? { parentId: current.parentId } : {}) };
+    state.apply(label, (doc) => {
+      const released = current.type === 'group' && choice !== 'boundary' ? setParent(doc, doc.nodes.filter((n) => n.parentId === nodeId).map((n) => n.id), current.parentId) : doc;
+      const nodes = released.nodes.map((n) => (n.id === nodeId ? next : n));
+      const replaced = { ...released, nodes };
+      return choice === 'boundary' ? reconcileMembershipOp(replaced, [nodeId, ...encloses]) : replaced;
+    }, { selection: EMPTY_SELECTION });
+  },
+
+  revertInkShape(nodeId, strokes) {
+    const state = get();
+    const top = state.history.past[state.history.past.length - 1];
+    if (top?.amendKey === inkAmendKey(nodeId) && samePath(top.path, state.path)) {
+      // Back exactly to before the drawing became a shape — and redo can still make it one again.
+      state.undo();
+      return;
+    }
+    if (!state.document.nodes.some((n) => n.id === nodeId)) return;
+    state.apply('Back to sketch', (doc) => addInk(removeElements(doc, [nodeId], []), strokes), { selection: EMPTY_SELECTION });
+  },
+
+  inkToConnector(strokeIds, source, target, directed) {
+    const state = get();
+    const sourceNode = state.document.nodes.find((n) => n.id === source);
+    const targetNode = state.document.nodes.find((n) => n.id === target);
+    if (!sourceNode || !targetNode || source === target) return null;
+    const joined = state.document.edges.some((e) => (e.source === source && e.target === target) || (e.source === target && e.target === source));
+    if (joined) {
+      useUiStore.getState().notify('Those two are already connected — your line stays a sketch.');
+      return null;
+    }
+    if (!roomFor(0, 1)) return null;
+    // An arrow says which way; what it carries is inferred exactly as a dragged connector's is. A
+    // plain line says only that the two are related, so it stays a plain association.
+    const relationship = directed ? inferRelationshipThroughJunctions(state.document, sourceNode, targetNode) : undefined;
+    const edge = createEdge({
+      source,
+      target,
+      directed,
+      kind: relationship?.kind,
+      semantic: relationship?.semantic,
+      async: relationship?.async,
+      semanticsOrigin: relationship ? 'inferred' : undefined,
+    });
+    state.apply(directed ? 'Draw connector' : 'Draw line', (doc) => addEdges(removeInk(doc, strokeIds), [edge]), { selection: EMPTY_SELECTION });
+    return get().document.edges.some((e) => e.id === edge.id) ? edge.id : null;
   },
 
   addNodesWithEdges(nodes, edges, label, flows = [], title) {
@@ -1626,16 +1905,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
   },
 
-  insertStarter(starter, title) {
-    const state = get();
-    // Everything a starter needs is decided before a single node exists: where it can land
-    // (`freeOriginFor`, one pass over the document) and what it contains (`buildStarter`, pure).
-    // The insert itself is then the plainest bulk add there is, which is what makes one ⌘Z undo
-    // the whole architecture and one ⌘⇧Z bring it back.
-    const { nodes, edges, flows } = buildStarter(starter, freeOriginFor(state.document, starterSize(starter)));
-    return state.addNodesWithEdges(nodes, edges, `Insert ${starter.name}`, flows, namingBlank(state, title)) ? nodes : [];
-  },
-
   insertComposed(composed, label, title) {
     const state = get();
     const bounds = boundsOf(composed.nodes);
@@ -1657,6 +1926,33 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const named = namingBlank(state, title);
     state.apply(label, () => (named ? setTitle(result.doc, named) : result.doc), { selection: { nodes: result.nodeIds, edges: result.edgeIds } });
     if (result.truncated) useUiStore.getState().notify('Imported the first part — the rest would make this diagram too large.');
+    return result.nodeIds;
+  },
+
+  insertStarterDocument(starter, name, options = {}) {
+    const state = get();
+    const bounds = boundsOf(starter.nodes);
+    if (!bounds) return [];
+    // A paste of the whole file (`pasteDocument`), flows included, onto the free space beside what
+    // is drawn — the same spot `insertComposed` lands at.
+    const origin = freeOriginFor(state.document, { width: bounds.width, height: bounds.height });
+    const offset = { x: origin.x - bounds.x, y: origin.y - bounds.y };
+    const result = pasteDocument(state.document, starter, offset, { ...totals(fileOf(state)), depth: state.path.length });
+    // A starter is all or nothing: half an architecture, cut off by the file's caps, is a broken one.
+    if (result.nodeIds.length === 0 || result.truncated) {
+      notifyNothingAdded(result.tooDeep);
+      return [];
+    }
+    const named = namingBlank(state, options.title);
+    const startedAs = options.origin;
+    state.apply(
+      `Insert ${name}`,
+      () => {
+        const titled = named ? setTitle(result.doc, named) : result.doc;
+        return startedAs ? { ...titled, metadata: { ...titled.metadata, origin: startedAs } } : titled;
+      },
+      { selection: { nodes: result.nodeIds, edges: [] } },
+    );
     return result.nodeIds;
   },
 
@@ -1722,11 +2018,46 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return edge;
   },
 
-  updateNodeById(id, patch, label = 'Change node') {
+  connectMany(sources, target) {
+    const state = get();
+    const targetNode = state.document.nodes.find((n) => n.id === target);
+    if (!targetNode) return [];
+    const unique = [...new Set(sources)].filter((id) => id !== target);
+    const fresh = unique.filter((id) => !state.document.edges.some((e) => e.source === id && e.target === target));
+    const skipped = unique.length - fresh.length;
+    const sourceNodes = fresh.flatMap((id) => {
+      const node = state.document.nodes.find((n) => n.id === id);
+      return node ? [node] : [];
+    });
+    if (sourceNodes.length === 0) {
+      if (skipped > 0) useUiStore.getState().notify('Already connected.');
+      return [];
+    }
+    if (!roomFor(0, sourceNodes.length)) return [];
+    // Each connector means what a single drag between that pair would have meant.
+    const edges = sourceNodes.map((sourceNode) => {
+      const relationship = inferRelationshipThroughJunctions(state.document, sourceNode, targetNode);
+      return createEdge({
+        source: sourceNode.id,
+        target,
+        kind: relationship?.kind,
+        semantic: relationship?.semantic,
+        async: relationship?.async,
+        semanticsOrigin: relationship ? 'inferred' : undefined,
+      });
+    });
+    state.apply('Connect', (doc) => addEdges(doc, edges), { selection: { nodes: [], edges: edges.map((e) => e.id) } });
+    if (skipped > 0) useUiStore.getState().notify(`Connected ${edges.length} · ${skipped} already connected.`);
+    return edges;
+  },
+
+  updateNodeById(id, patch, label = 'Change shape') {
     noticeTruncation(patch);
+    // A kind picked here is the person's from now on: a later technology no longer moves it.
+    const picked = KIND_FIELDS.some((field) => field in patch) && !('kindOrigin' in patch);
     get().apply(label, (doc) => {
       const before = doc.nodes.find((n) => n.id === id);
-      let next = updateNode(doc, id, patch);
+      let next = updateNode(doc, id, picked && before?.kindOrigin ? { ...patch, kindOrigin: undefined } : patch);
       if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
       if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
       if (before && 'actorKind' in patch) next = applyActorAutoLabel(next, id, before, patch);
@@ -1735,22 +2066,32 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         next = growTextToFit(next, id);
       }
       const changesKind = KIND_FIELDS.some((field) => field in patch);
-      if (changesKind || 'text' in patch) next = growArchitectureToFit(next, id);
+      // A replica stack takes a little of the box, so it can need room too.
+      if (changesKind || 'text' in patch || 'replicas' in patch) next = growArchitectureToFit(next, id);
       return changesKind ? reinferIncidentEdges(next, id, doc) : next;
     });
   },
 
   setNodeC4Text(id, patch) {
+    // The same rule a load and a patch to the node follow (`cleanTechnology`, `cleanDescription`).
     const fields: Partial<DraftNode> = {};
-    if (patch.technology !== undefined) {
-      fields.technology = patch.technology.replace(/\s+/g, ' ').trim().slice(0, LIMITS.maxTechnologyLength) || undefined;
-    }
-    if (patch.description !== undefined) {
-      fields.description = patch.description.trim().slice(0, LIMITS.maxDescriptionLength) || undefined;
-    }
+    if (patch.technology !== undefined) fields.technology = cleanTechnology(patch.technology);
+    if (patch.description !== undefined) fields.description = cleanDescription(patch.description);
     get().apply(
       patch.description !== undefined ? 'Edit description' : 'Edit technology',
-      (doc) => growArchitectureToFit(updateNode(doc, id, fields), id),
+      (doc) => {
+        const before = doc.nodes.find((n) => n.id === id);
+        // The technology can fix the kind: Redis makes a Data Store a cache (`technologyKind.ts`).
+        const kind = before && 'technology' in fields ? technologyKindPatch(before, fields.technology) : null;
+        let next = updateNode(doc, id, kind ? { ...fields, ...kind } : fields);
+        if (kind && before) {
+          // The same follow-ups as a kind picked in the inspector: an automatic name follows the
+          // kind, and connectors whose meaning was inferred are inferred again.
+          next = applyServiceAutoLabel(next, id, before, kind);
+          next = reinferIncidentEdges(next, id, doc);
+        }
+        return growArchitectureToFit(next, id);
+      },
       { coalesceKey: `node-c4:${id}` },
     );
   },
@@ -1767,6 +2108,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       (doc) => {
         const patch: Partial<DraftNode> = { text, textOrigin: 'explicit' };
         if (options?.height !== undefined) patch.height = options.height;
+        // "Fulfilment ×3" on a Service is a name and a replica count; the count is kept apart.
+        const replicas = doc.nodes.find((n) => n.id === id)?.type === 'service' ? splitReplicaCount(text) : null;
+        if (replicas) {
+          patch.text = replicas.name;
+          patch.replicas = replicasField(replicas.count);
+        }
         // A queue-family node's name stacks above its kind caption under the tube, so naming one
         // moves it between the two default boxes (`DEFAULTS.queueHeight`/`queueNamedHeight`):
         // grow when a name first appears, shrink back only when the name is cleared from a box
@@ -1888,60 +2235,25 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       }),
     });
 
-    // Both new edges' semantics come from the same capability matrix everything else reads —
-    // never hardcoded — so `Queue → Worker`/`Worker → Topic` fall out as `consumes`/`publishes`
-    // without this action needing to know that itself.
-    const toWorker = capabilityFor(categoryOf(source), categoryOf(worker));
-    const fromWorker = capabilityFor(categoryOf(worker), categoryOf(target));
-    const edgeToWorker = createEdge({
-      source: edge.source,
-      target: worker.id,
-      semantic: toWorker?.defaultRelation,
-      kind: toWorker?.defaultBehavior,
-      async: toWorker?.defaultAsync,
-      semanticsOrigin: toWorker?.defaultRelation ? 'inferred' : undefined,
-      // What the user wrote about the message rides on the leg it enters the worker by. The
-      // response fields don't carry over — a worker in between makes the hop asynchronous.
-      label: edge.label,
-      condition: edge.condition,
-      accent: edge.accent,
-    });
-    if (edge.attachments) edgeToWorker.attachments = edge.attachments;
-    // So do its details and the source it was drawn from: the relationship is still that message,
-    // and dropping them lost what an author or agent had recorded about it.
-    if (edge.details) edgeToWorker.details = edge.details;
-    if (edge.evidence) edgeToWorker.evidence = edge.evidence;
-    const edgeFromWorker = createEdge({
-      source: worker.id,
-      target: edge.target,
-      semantic: fromWorker?.defaultRelation,
-      kind: fromWorker?.defaultBehavior,
-      async: fromWorker?.defaultAsync,
-      semanticsOrigin: fromWorker?.defaultRelation ? 'inferred' : undefined,
-    });
-
+    // What the connector said rides on the leg into the worker, and both legs' meanings come from
+    // the capability matrix, so `Queue → Worker`/`Worker → Topic` fall out as `consumes`/
+    // `publishes` — the same splice a shape dropped onto a connector makes (`spliceNodeIntoEdge`).
     state.apply(
       'Insert worker',
-      // Replacements are added and spliced into any flow steps *before* the original connector
-      // goes, so a flow that told `A → B` now tells `A → W`, `W → B` instead of losing the beat.
-      // An open point about the connector rides on the leg the message enters the worker by, the
-      // same leg its label and attachments ride — never silently lost with the connector it was on.
-      (doc) =>
-        removeElements(
-          retargetOpenPoints(
-            spliceEdgeInFlows(
-              addEdges(addNodes(doc, [worker]), [edgeToWorker, edgeFromWorker]),
-              edgeId,
-              [edgeToWorker.id, edgeFromWorker.id],
-            ),
-            { kind: 'edge', id: edgeId },
-            { kind: 'edge', id: edgeToWorker.id },
-          ),
-          [],
-          [edgeId],
-        ),
+      (doc) => spliceNodeIntoEdge(addNodes(doc, [worker]), edgeId, worker.id).doc,
       { selection: { nodes: [worker.id], edges: [] } },
     );
+  },
+
+  spliceIntoEdge(nodeId, edgeId) {
+    const state = get();
+    if (!canSpliceInto(state.document, edgeId, nodeId)) return false;
+    // One connector becomes two.
+    if (!roomFor(0, 1)) return false;
+    state.apply('Insert into connector', (doc) => spliceNodeIntoEdge(doc, edgeId, nodeId).doc, {
+      selection: { nodes: [nodeId], edges: [] },
+    });
+    return true;
   },
 
   addDeadLetterQueue(queueId) {
@@ -2127,13 +2439,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   updateEdgeLabel(id, rawLabel) {
-    // Held to what a load keeps (`parseDocument`), so a save never holds text the next open trims.
+    // Held to what a load keeps (`parseDocument`), so a save never holds text the next open trims:
+    // trimmed like the other connector texts, and none at all when nothing is left — an unlabeled
+    // connector committed empty is the same connector, not one with a field that reads blank.
     noticeTruncation({ label: rawLabel });
-    const label = cleanText(rawLabel, LIMITS.maxLabelLength);
-    // An unlabeled connector committed empty is the same connector — `''` and absent both read blank.
+    const label = cleanEdgeLabel(rawLabel);
     get().apply(
       'Label connector',
-      (doc) => ((doc.edges.find((e) => e.id === id)?.label ?? '') === label ? doc : updateEdge(doc, id, { label })),
+      (doc) => ((doc.edges.find((e) => e.id === id)?.label ?? undefined) === label ? doc : updateEdge(doc, id, { label })),
       { coalesceKey: `edge-label:${id}` },
     );
   },
@@ -2146,6 +2459,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // the connector is reversed. `label` stays the user's own text, which always wins.
     const patch: Partial<Omit<DraftEdge, 'id' | 'source' | 'target'>> = { semantic, semanticsOrigin: 'explicit' };
     get().apply('Set connector type', (doc) => updateEdge(doc, id, patch));
+  },
+
+  setEdgeCadence(id, cadence) {
+    const value = cadence?.slice(0, LIMITS.maxCadenceLength).trim() || undefined;
+    get().apply('Set cadence', (doc) => updateEdge(doc, id, { cadence: value }), { coalesceKey: `edge-cadence:${id}` });
+  },
+
+  showLineage(nodeId) {
+    const { nodeIds, edgeIds } = lineageOf(get().document, nodeId);
+    get().enterFocus(nodeIds, edgeIds);
   },
 
   setEdgeCondition(id, condition) {
@@ -2165,7 +2488,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setEdgeHasResponse(id, hasResponse) {
     const state = get();
     const edge = state.document.edges.find((item) => item.id === id);
-    if (hasResponse && edge?.kind === 'async' && isServiceInteraction(state.document, edge)) return;
+    if (!edge) return;
+    if (hasResponse && edge.kind === 'async' && isServiceInteraction(state.document, edge)) return;
+    // Already as asked: nothing to toggle. Left to run, it still recorded a step, and marked an
+    // inferred connector explicit for a choice that changed nothing.
+    if (hasResponse ? edge.hasResponse === true && Boolean(edge.response) : edge.hasResponse !== true) return;
     get().apply('Toggle response', (doc) =>
       updateEdge(doc, id, {
         hasResponse: hasResponse || undefined,
@@ -2227,72 +2554,88 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  async arrangeSelection() {
+  async planTidy(options = {}) {
     const before = get();
-    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace || !before.selection.nodes.length) return false;
-    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }, { withDeadline }] = await Promise.all([
-      import('../agent/arrange'), import('../agent/place'), import('../agent/errors'), import('../agent/route'),
-    ]);
+    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    const [{ runOffThread, cancelled }, { reuseOf }] = await Promise.all([import('../agent/offThread'), import('../agent/layoutPlan')]);
     const current = get();
-    if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) {
-      useUiStore.getState().notify('Selection changed. Choose Arrange selection again.');
-      return false;
-    }
-    const arranged = withDeadline(performance.now() + ARRANGE_BUDGET_MS, () => arrangeView(current.document, {
-      scope: { nodes: [...current.selection.nodes] }, keepOutsideFixed: true, connectors: 'tidy', move: true,
-      layout: { direction: readingDirectionOf(current.document), directionChosen: true, spacing: 'comfortable', allowDegraded: false, normalizePeerSizes: false },
-    }, measureContext(), new Problems(), '/arrange'));
-    if (!arranged) {
-      useUiStore.getState().notify('There is not enough room. Arrange a larger selection or the whole diagram.');
-      return false;
-    }
-    if (!arranged.touched.size) {
-      // Said, so the command doesn't look like it did nothing.
-      useUiStore.getState().notify('Already tidy.');
-      return false;
-    }
-    current.apply('Arrange selection', () => arranged.view);
-    return get().document !== current.document;
+    // The room, or what is selected in it, changed while the engine loaded: what was asked for is
+    // no longer what is on screen, so nothing is offered rather than a cleanup of something else.
+    if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) return null;
+    const scope = current.selection.nodes.length > 0 ? [...current.selection.nodes] : undefined;
+    const done = await runLayoutJob({ kind: 'tidy', doc: current.document, ...(scope ? { scope } : {}) }, options.signal, runOffThread, cancelled);
+    if (done === null || done.kind !== 'tidy') return null;
+    if (roomChanged(current)) return null;
+    const result = done.result;
+    if (result.kind === 'unchanged') return { nothing: true, stopped: result.partial, reads: result.reads };
+    const view = reuseOf(current.document, result.plan.view);
+    if (view === current.document) return { nothing: true, stopped: result.plan.partial, reads: [] };
+    return {
+      path: current.path,
+      base: current.document,
+      view,
+      moved: result.plan.moved,
+      reattached: result.plan.reattached,
+      scoped: Boolean(scope),
+      partial: result.plan.partial,
+      sketches: inkOf(current.document).length,
+    };
   },
 
-  async arrangeRoom() {
-    if (interaction) return false;
-    // The layout engine is the agent's chunk, loaded here on demand: the store must not pull it into
-    // the editor's bundle, and the agent must never reach back into the store — one direction.
-    const [{ arrangeView, readingDirectionOf }, { measureContext }, { Problems }, { withDeadline }] = await Promise.all([
-      import('../agent/arrange'),
-      import('../agent/place'),
-      import('../agent/errors'),
-      import('../agent/route'),
-    ]);
-    // Again after the import, as `arrangeSelection` does: a drag begun while the chunk loaded would
-    // otherwise absorb the arrangement into its own gesture, with no undo step of its own.
-    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return false;
-    // Read inside the recipe, not before the import: the room may have changed while the engine
-    // loaded, and `apply` hands the recipe the document as it is at commit time.
-    let moved = false;
-    get().apply('Arrange', (doc) => {
-      // Bounded like an agent request: past the budget the engine keeps the best candidate so far and
-      // leaves the remaining anchor repairs undone, instead of holding the page for tens of seconds.
-      const arranged = withDeadline(performance.now() + ARRANGE_BUDGET_MS, () => arrangeView(
-        doc,
-        {
-          connectors: 'tidy',
-          move: true,
-          // The same defaults the agent's `{op:"arrange"}` resolves to when it names nothing: the
-          // room keeps the way it already reads, manual sizes are kept, and the engine may try the
-          // other direction only when it reads clearly better.
-          layout: { direction: readingDirectionOf(doc), spacing: 'comfortable', allowDegraded: false, normalizePeerSizes: false },
-        },
-        measureContext(),
-        new Problems(),
-        '/arrange',
-      ));
-      if (!arranged || arranged.touched.size === 0) return doc;
-      moved = true;
-      return arranged.view;
-    });
-    return moved;
+  async planArrange(selection = false, options = {}) {
+    const before = get();
+    if (selection && before.selection.nodes.length === 0) return null;
+    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    const [{ runOffThread, cancelled }, { reuseOf }] = await Promise.all([import('../agent/offThread'), import('../agent/layoutPlan')]);
+    const current = get();
+    // As `planTidy`: what was asked about is no longer what is on screen.
+    if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) return null;
+    if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    const done = await runLayoutJob(
+      { kind: 'arrange', doc: current.document, ...(selection ? { selection: [...current.selection.nodes] } : {}), ...(options.preset ? { preset: options.preset } : {}) },
+      options.signal,
+      runOffThread,
+      cancelled,
+    );
+    if (done === null || done.kind !== 'arrange') return null;
+    if (roomChanged(current)) return null;
+    const result = done.result;
+    if (result.kind !== 'plan') return result.kind;
+    const { plan } = result;
+    const options2: ArrangePreview['options'] = {};
+    for (const direction of ['right', 'down'] as const) {
+      const view = plan.options[direction];
+      if (view) options2[direction] = reuseOf(current.document, view);
+    }
+    return {
+      path: current.path,
+      base: current.document,
+      options: options2,
+      direction: plan.direction,
+      suggested: plan.suggested,
+      current: plan.current,
+      scoped: plan.scoped,
+      show: 'result',
+      fixes: plan.fixes,
+      partial: plan.partial,
+      alternativeSkipped: plan.alternativeSkipped,
+      sketches: inkOf(current.document).length,
+    };
+  },
+
+  commitArrange(preview) {
+    const state = get();
+    const view = preview.options[preview.direction];
+    if (interaction || !view || state.document !== preview.base || state.path !== preview.path) return false;
+    state.apply(preview.scoped ? 'Arrange selection' : 'Arrange', () => view);
+    return get().document !== preview.base;
+  },
+
+  commitTidy(preview) {
+    const state = get();
+    if (interaction || state.document !== preview.base || state.path !== preview.path) return false;
+    state.apply('Tidy up', () => preview.view);
+    return get().document !== preview.base;
   },
 
   findAndReplace(find, replace, options) {
@@ -2461,7 +2804,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   resizeNode(id, box) {
-    get().apply('Resize', (doc) => reconcileAfterResize(updateNode(doc, id, box), id));
+    get().apply('Resize', (doc) => {
+      // A sequence can be given room, never less than it needs: its text does not shrink to fit.
+      const node = doc.nodes.find((candidate) => candidate.id === id);
+      const floor = node?.type === 'sequence' ? naturalSequenceSizeFor(node, describeContext(LIGHT)) : null;
+      const held = floor ? { ...box, width: Math.max(box.width, floor.width), height: Math.max(box.height, floor.height) } : box;
+      return reconcileAfterResize(updateNode(doc, id, held), id);
+    });
   },
 
   fitSelectedLabels() {
@@ -2470,12 +2819,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Fit shapes to text', (doc) => ids.reduce((next, id) => growArchitectureToFit(next, id), doc));
   },
 
-  nudgeSelection(dx, dy) {
+  nudgeSelection(dx, dy, ids) {
     const state = get();
-    if (state.selection.nodes.length === 0) return;
+    const nudged = ids ?? state.selection.nodes;
+    if (nudged.length === 0) return;
     const byId = nodeIndex(state.document.nodes);
     const positions = new Map(
-      state.selection.nodes
+      nudged
         .map((id) => byId.get(id))
         .filter((node) => node !== undefined)
         .map((node) => [node.id, { x: node.x + dx, y: node.y + dy }] as const),
@@ -2492,15 +2842,61 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   deleteSelection() {
     const { selection, apply } = get();
+    const ink = useUiStore.getState().inkSelection;
+    if (selection.nodes.length === 0 && selection.edges.length === 0 && ink.length === 0) return;
+    const onlyInk = selection.nodes.length === 0 && selection.edges.length === 0;
+    apply(onlyInk ? (ink.length === 1 ? 'Erase stroke' : 'Erase strokes') : 'Delete', (doc) => removeInk(removeElements(doc, selection.nodes, selection.edges), ink), {
+      selection: EMPTY_SELECTION,
+    });
+    if (ink.length > 0) useUiStore.getState().setInkSelection([]);
+  },
+
+  convertSelection(type) {
+    const { selection, apply, document } = get();
+    const ids = selection.nodes.filter((id) => {
+      const node = document.nodes.find((n) => n.id === id);
+      return node !== undefined && node.type !== type && isConvertibleType(node.type);
+    });
+    if (ids.length === 0) return;
+    apply(`Turn into ${CONVERTIBLE_TYPE_NAMES[type]}`, (doc) =>
+      ids.reduce((next, id) => {
+        const converted = growArchitectureToFit(convertNodeType(next, id, type), id);
+        // The shape's category changed, so every connector whose meaning was inferred is inferred
+        // again — exactly what a kind change does. A relationship the person chose stays.
+        return reinferIncidentEdges(converted, id, next);
+      }, doc),
+    );
+  },
+
+  deleteSelectionKeepingLines() {
+    const { selection, apply, document } = get();
     if (selection.nodes.length === 0 && selection.edges.length === 0) return;
-    apply('Delete', (doc) => removeElements(doc, selection.nodes, selection.edges), {
+    // Connectors picked alongside the shapes go first: a connector the person chose to delete is
+    // not one to join through.
+    const withoutEdges = removeElements(document, [], selection.edges);
+    if (bridgeProblems(withoutEdges, selection.nodes).length > 0 || !removeAndBridge(withoutEdges, selection.nodes)) {
+      useUiStore.getState().notify(
+        `${plainShortcut('Alt Backspace')} joins up shapes with one way in or one way out. ${plainShortcut('Backspace')} deletes without joining.`,
+      );
+      return;
+    }
+    apply('Delete', (doc) => removeAndBridge(removeElements(doc, [], selection.edges), selection.nodes)?.doc ?? doc, {
       selection: EMPTY_SELECTION,
     });
   },
 
   duplicateSelection() {
     const state = get();
-    if (state.selection.nodes.length === 0) return;
+    if (state.selection.nodes.length === 0) {
+      // Chosen sketch strokes duplicate beside themselves, like shapes do.
+      const strokes = chosenInk(state.document);
+      if (strokes.length === 0) return;
+      const copies = reissueInk(strokes, 24, 24);
+      if (totals(fileOf(state)).ink + copies.length > LIMITS.maxInkStrokes) return;
+      state.apply('Duplicate sketch', (doc) => addInk(doc, copies), { selection: EMPTY_SELECTION });
+      useUiStore.getState().setInkSelection(copies.map((stroke) => stroke.id));
+      return;
+    }
     const fragment = extractFragment(state.document, state.selection.nodes);
     const result = pasteFragment(state.document, fragment, { x: 24, y: 24 }, { ...totals(fileOf(state)), depth: state.path.length });
     if (result.nodeIds.length === 0) {
@@ -2519,13 +2915,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   copySelection() {
     const state = get();
+    const strokes = chosenInk(state.document);
+    if (state.selection.nodes.length === 0 && strokes.length > 0) {
+      const fragment = { nodes: [], edges: [], ink: strokes };
+      const text = encodeClipboard(fragment);
+      lastSystemClipboardText = text;
+      set({ clipboard: fragment, pasteRepeat: 0 });
+      void writeSystemClipboard(text);
+      return text;
+    }
     if (state.selection.nodes.length === 0) {
       // A connector can't be pasted without the shapes at its ends. Said, rather than leaving an
       // older copy on the clipboard for the next paste to drop in unexpectedly.
       if (state.selection.edges.length > 0) useUiStore.getState().notify(CONNECTORS_NEED_SHAPES);
       return null;
     }
-    const fragment = extractFragment(state.document, state.selection.nodes);
+    const fragment = withChosenInk(extractFragment(state.document, state.selection.nodes), strokes);
     const text = encodeClipboard(fragment);
     // Remembered so the paste of this very text keeps the in-memory fragment: decoding it back
     // (`applyExternalClipboardText`) drops a `parentId` whose boundary wasn't copied.
@@ -2538,30 +2943,39 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   cutSelection() {
     const state = get();
     const { selection } = state;
-    if (selection.nodes.length === 0 && selection.edges.length === 0) return null;
+    const strokes = chosenInk(state.document);
+    if (selection.nodes.length === 0 && selection.edges.length === 0) {
+      if (strokes.length === 0) return null;
+      const text = get().copySelection();
+      state.apply('Cut sketch', (doc) => removeInk(doc, strokes.map((stroke) => stroke.id)), { selection: EMPTY_SELECTION });
+      useUiStore.getState().setInkSelection([]);
+      return text;
+    }
     // Only a node-bearing selection has a meaningful, self-contained
     // fragment to put on the clipboard — an edge-only cut, like an
     // edge-only copy, just removes what's selected. See `copySelection`.
     let text: string | null = null;
     if (selection.nodes.length === 0) useUiStore.getState().notify(`Deleted — ${CONNECTORS_NEED_SHAPES.charAt(0).toLowerCase()}${CONNECTORS_NEED_SHAPES.slice(1)}`);
     if (selection.nodes.length > 0) {
-      const fragment = extractFragment(state.document, selection.nodes);
+      const fragment = withChosenInk(extractFragment(state.document, selection.nodes), strokes);
       text = encodeClipboard(fragment);
       lastSystemClipboardText = text;
       set({ clipboard: fragment, pasteRepeat: 0 });
       void writeSystemClipboard(text);
     }
-    state.apply('Cut', (doc) => removeElements(doc, selection.nodes, selection.edges), {
+    state.apply('Cut', (doc) => removeInk(removeElements(doc, selection.nodes, selection.edges), strokes.map((stroke) => stroke.id)), {
       selection: EMPTY_SELECTION,
     });
+    if (strokes.length > 0) useUiStore.getState().setInkSelection([]);
     return text;
   },
 
   paste(targetCenter, options) {
     const state = get();
     const fragment = state.clipboard;
-    if (!fragment || fragment.nodes.length === 0) return;
-    const bounds = boundsOf(fragment.nodes);
+    if (!fragment || (fragment.nodes.length === 0 && !fragment.ink?.length)) return;
+    const inkBox = fragment.ink?.length ? inkUnionBounds(fragment.ink) : null;
+    const bounds = boundsOf([...fragment.nodes, ...(inkBox ? [inkBox] : [])]);
     const fragmentCenter = bounds ? centerOf(bounds) : { x: 0, y: 0 };
     const target = targetCenter ?? { x: fragmentCenter.x + 32, y: fragmentCenter.y + 32 };
     // Consecutive pastes of the same clipboard content step diagonally so they don't perfectly
@@ -2578,16 +2992,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       x: target.x - fragmentCenter.x + stagger,
       y: target.y - fragmentCenter.y + stagger,
     };
+    // Sketch strokes ride along with the shapes they were copied with, at the same offset.
+    const inkRoom = LIMITS.maxInkStrokes - totals(fileOf(state)).ink;
+    const pastedInk = reissueInk((fragment.ink ?? []).slice(0, Math.max(0, inkRoom)), offset.x, offset.y);
+    if (fragment.nodes.length === 0) {
+      if (pastedInk.length === 0) {
+        useUiStore.getState().notify('This canvas holds as many sketch strokes as it can.', 'error');
+        return;
+      }
+      state.apply('Paste sketch', (doc) => addInk(doc, pastedInk), { selection: EMPTY_SELECTION });
+      useUiStore.getState().setInkSelection(pastedInk.map((stroke) => stroke.id));
+      set({ pasteRepeat: repeat + 1 });
+      return;
+    }
     const result = pasteFragment(state.document, fragment, offset, { ...totals(fileOf(state)), depth: state.path.length });
     if (result.nodeIds.length === 0) {
       notifyNothingAdded(result.tooDeep);
       return;
     }
     // Pasted onto a boundary, the copy joins it, as a shape dropped there does.
-    const homed = reconcileMembershipOp(result.doc, result.nodeIds);
+    const homed = addInk(reconcileMembershipOp(result.doc, result.nodeIds), pastedInk);
     state.apply('Paste', () => homed, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
+    if (pastedInk.length > 0) useUiStore.getState().setInkSelection(pastedInk.map((stroke) => stroke.id));
     set({ pasteRepeat: repeat + 1 });
     if (result.truncated) {
       useUiStore.getState().notify(result.tooDeep
@@ -2602,7 +3030,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // so a large one isn't parsed again on every ⌘V.
     if (text === lastSystemClipboardText && get().clipboard) return true;
     const fragment = decodeClipboard(text);
-    if (!fragment || fragment.nodes.length === 0) return false;
+    if (!fragment || (fragment.nodes.length === 0 && !fragment.ink?.length)) return false;
     // A repeat paste of unchanged text is still a real paste (still returns `true`) — this
     // dedup guard only decides whether to re-`set` identical content and reset the stagger.
     if (text !== lastSystemClipboardText) {
@@ -2637,6 +3065,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const { selection, document, apply } = get();
     const ids = outermostSelected(document.nodes, selection.nodes).map((node) => node.id);
     apply('Distribute', (doc) => reconcileMembershipOp(carryDescendants(doc, distributeNodes(doc, ids, axis), ids), ids));
+  },
+
+  matchSize(dimension) {
+    const { selection, document, apply } = get();
+    const ids = outermostSelected(document.nodes, selection.nodes).map((node) => node.id);
+    // Each resized shape settles its membership as a hand resize does: a boundary that grew may now
+    // hold shapes it covers, and a shape that grew out of one leaves it.
+    apply(dimension === 'width' ? 'Same width' : 'Same height', (doc) => {
+      const matched = matchNodeSizes(doc, ids, dimension);
+      return matched === doc ? doc : ids.reduce((next, id) => reconcileAfterResize(next, id), matched);
+    });
+  },
+
+  straighten() {
+    if (interaction) return false;
+    const { selection, apply } = get();
+    const movable = selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
+    let moved = false;
+    apply('Straighten', (doc) => {
+      const next = straightenConnectors(doc, movable);
+      moved = next !== doc;
+      return next;
+    });
+    return moved;
   },
 
   groupSelection() {
@@ -2691,9 +3143,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...(sharedParent ? { parentId: sharedParent } : {}),
     });
 
+    // Boundaries nest only so far (`LIMITS.maxGroupDepth`): past it the next open would repair the
+    // grouping away, and in a live session the owner's nesting was silently undone. Said, like the cap above.
+    const memberIds = members.map((n) => n.id);
+    if (!fitsGroupDepth(addNodes(state.document, [boundary]), memberIds, boundary.id)) {
+      useUiStore.getState().notify(`Nothing grouped — boundaries can be nested ${LIMITS.maxGroupDepth} levels deep at most.`, 'error');
+      return;
+    }
     state.apply(
       'Group',
-      (doc) => setParent(addNodes(doc, [boundary]), members.map((n) => n.id), boundary.id),
+      (doc) => setParent(addNodes(doc, [boundary]), memberIds, boundary.id),
       { selection: { nodes: [boundary.id], edges: [] } },
     );
     if (leftBehind.length > 0) {
@@ -3074,7 +3533,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // no `updatedAt`. See `liveViewport`.
     const state = get();
     const current = state.liveViewport ?? state.document.viewport;
-    const next = setViewport(state.document, viewport).viewport;
+    // Clamped and finite like a loaded camera; a part that is not a number stays where it was.
+    const next = setViewport({ ...state.document, viewport: current }, viewport).viewport;
     if (next.x === current.x && next.y === current.y && next.zoom === current.zoom) return;
     set({ liveViewport: next });
   },
@@ -3131,6 +3591,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     }
     // A tap on empty canvas with nothing selected, or a click on what is already selected, writes
     // nothing: every subscriber would otherwise run for a selection that did not change.
+    // What is selected inside a sequence belongs to a selection of that sequence alone.
+    const inside = useUiStore.getState().sequenceFocus;
+    if (inside && !(selection.nodes.length === 1 && selection.edges.length === 0 && selection.nodes[0] === inside.nodeId)) {
+      useUiStore.setState({ sequenceFocus: null, sequenceEdit: null });
+    }
+    // Choosing shapes or connectors puts any chosen sketch strokes down: one selection at a time.
+    if (selection.nodes.length > 0 || selection.edges.length > 0) useUiStore.getState().setInkSelection([]);
     const current = get().selection;
     if (sameIdList(current.nodes, selection.nodes) && sameIdList(current.edges, selection.edges)) return;
     set({ selection });
@@ -3357,6 +3824,61 @@ function sameIdList(a: readonly string[], b: readonly string[]): boolean {
   return true;
 }
 
+/* ----------------------------------------------------------- Smart Ink -- */
+
+/** The chosen sketch strokes, as they are in the room. */
+function chosenInk(document: DraftDocument): DraftInk[] {
+  const chosen = new Set(useUiStore.getState().inkSelection);
+  return chosen.size === 0 ? [] : inkOf(document).filter((stroke) => chosen.has(stroke.id));
+}
+
+function withChosenInk<T extends { ink?: DraftInk[] }>(fragment: T, strokes: DraftInk[]): T {
+  return strokes.length > 0 ? { ...fragment, ink: strokes } : fragment;
+}
+
+/** Copies of strokes under new ids, moved by `dx`/`dy` — what a paste or duplicate adds. */
+function reissueInk(strokes: readonly DraftInk[], dx: number, dy: number): DraftInk[] {
+  return strokes.map((stroke) => ({ ...stroke, id: createId(INK_ID_PREFIX), x: Math.round((stroke.x + dx) * 10) / 10, y: Math.round((stroke.y + dy) * 10) / 10 }));
+}
+
+function inkAmendKey(nodeId: string): string {
+  return `ink:${nodeId}`;
+}
+
+/** Ink selection that still names strokes in the room — after an erase, an undo, a remote change. */
+function pruneInkSelection(document: DraftDocument): void {
+  const ui = useUiStore.getState();
+  if (ui.inkSelection.length === 0) return;
+  const present = new Set(inkOf(document).map((stroke) => stroke.id));
+  const kept = ui.inkSelection.filter((id) => present.has(id));
+  if (kept.length !== ui.inkSelection.length) ui.setInkSelection(kept);
+}
+
+/**
+ * The element a drawing becomes. A Boundary drawn round shapes stacks beneath every boundary it
+ * goes round, so it never covers them; everything else takes the next place on top.
+ */
+function inkShapeNode(doc: DraftDocument, choice: InkShapeChoice, drawn: Box, encloses: readonly string[]): DraftNode {
+  const type = INK_CHOICE_TYPE[choice];
+  const box = boxForChoice(choice, drawn, defaultSizeFor(type));
+  const inside = new Set(encloses);
+  const enclosedBoundaries = doc.nodes.filter((n) => n.type === 'group' && inside.has(n.id));
+  const z =
+    choice === 'boundary'
+      ? enclosedBoundaries.length > 0
+        ? Math.min(...enclosedBoundaries.map((n) => n.z)) - 1
+        : Math.min(0, ...doc.nodes.filter((n) => inside.has(n.id)).map((n) => n.z)) - (encloses.length > 0 ? 1 : 0)
+      : doc.nodes.reduce((top, n) => Math.max(top, n.z), 0) + 1;
+  return createNode({ type, x: box.x, y: box.y, width: box.width, height: box.height, z, ...(choice === 'boundary' ? { text: 'Boundary' } : {}) });
+}
+
+/** Adds the shape a drawing became, homed by the rule a placed shape follows — and, for a Boundary,
+ *  taking in the shapes drawn round. */
+function placeInkShape(doc: DraftDocument, node: DraftNode, choice: InkShapeChoice, encloses: readonly string[]): DraftDocument {
+  const homed = choice === 'boundary' ? [node.id, ...encloses] : [node.id];
+  return reconcileMembershipOp(addNodes(doc, [node]), homed);
+}
+
 /**
  * Guards against writes that produce an equal-but-new document object, which
  * would otherwise fill the undo stack with entries that change nothing.
@@ -3366,6 +3888,8 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
     a.nodes === b.nodes &&
     a.edges === b.edges &&
     a.flows === b.flows &&
+    // Sketches are content: drawing, erasing or moving one is an edit like any other.
+    a.ink === b.ink &&
     a.settings === b.settings &&
     a.viewport === b.viewport &&
     // Raising, editing or resolving an open point touches nothing on the canvas, so leaving this out
@@ -3388,6 +3912,11 @@ export function isInteracting(): boolean {
   return interaction !== null;
 }
 
+/** Whether a gesture (a drag, a resize) is holding the document: nothing may be applied until it ends. */
+export function gestureInProgress(): boolean {
+  return interaction !== null;
+}
+
 /** Test seam: interaction state lives outside the store, so it needs resetting. */
 export function __resetInteraction(): void {
   interaction = null;
@@ -3397,6 +3926,34 @@ export function __resetInteraction(): void {
 export function __resetClipboardSync(): void {
   lastSystemClipboardText = null;
   lastPasteTarget = null;
+}
+
+/**
+ * Runs an Arrange or Tidy job off the page's thread (`agent/offThread.ts`), with a visible busy state
+ * and a Cancel for as long as it takes. `null` when it was cancelled; a failure rejects. The editor
+ * itself keeps no state for it beyond `uiStore.layoutBusy`, so a job that outlives its room costs
+ * nothing: `roomChanged` is asked when it is back.
+ */
+async function runLayoutJob(
+  job: Job,
+  signal: AbortSignal | undefined,
+  run: typeof import('../agent/offThread').runOffThread,
+  cancelled: typeof import('../agent/offThread').cancelled,
+): Promise<JobResult | null> {
+  try {
+    return await run(job, undefined, signal);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === cancelled().name) return null;
+    throw error;
+  }
+}
+
+/** Whether the room on screen is no longer the one a job was started for: said, since the person asked. */
+function roomChanged(was: Pick<EditorStore, 'document' | 'path'>): boolean {
+  const now = useEditorStore.getState();
+  if (now.document === was.document && now.path === was.path) return false;
+  useUiStore.getState().notify('The diagram changed while it was being worked out. Choose it again.');
+  return true;
 }
 
 /**

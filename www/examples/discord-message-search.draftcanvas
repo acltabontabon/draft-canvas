@@ -1,0 +1,473 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "example-discord-message-search",
+    "title": "Discord message search",
+    "createdAt": 1794614400000,
+    "updatedAt": 1794614400000
+  },
+  "nodes": [
+    {
+      "id": "guild-cluster",
+      "type": "group",
+      "text": "Guild search cell \u00b7 one Elasticsearch cluster",
+      "x": 962,
+      "y": 15,
+      "width": 623,
+      "height": 540,
+      "z": 0,
+      "accent": "teal",
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "zone-a",
+      "type": "group",
+      "text": "Zone A",
+      "x": 1040,
+      "y": 390,
+      "width": 188,
+      "height": 138,
+      "z": 0,
+      "accent": "blue",
+      "boundaryPreset": "deployment",
+      "parentId": "guild-cluster"
+    },
+    {
+      "id": "zone-b",
+      "type": "group",
+      "text": "Zone B",
+      "x": 1340,
+      "y": 390,
+      "width": 188,
+      "height": 138,
+      "z": 0,
+      "accent": "violet",
+      "boundaryPreset": "deployment",
+      "parentId": "guild-cluster"
+    },
+    {
+      "id": "client",
+      "type": "actor",
+      "text": "Discord client",
+      "x": 0,
+      "y": 61,
+      "width": 121,
+      "height": 88,
+      "z": 0,
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "search",
+      "type": "service",
+      "text": "Message search",
+      "x": 247,
+      "y": 63,
+      "width": 189,
+      "height": 84,
+      "z": 0,
+      "accent": "blue",
+      "serviceKind": "api",
+      "description": "Selects the search scope"
+    },
+    {
+      "id": "new-messages",
+      "type": "service",
+      "text": "New messages",
+      "x": 0,
+      "y": 431,
+      "width": 144,
+      "height": 84,
+      "z": 0,
+      "accent": "neutral",
+      "serviceKind": "external",
+      "description": "Server and DM events"
+    },
+    {
+      "id": "index-queue",
+      "type": "queue",
+      "text": "Indexing queue",
+      "x": 247,
+      "y": 456.25,
+      "width": 189,
+      "height": 87,
+      "z": 0,
+      "accent": "amber",
+      "queueKind": "queue",
+      "technology": "Google Pub/Sub"
+    },
+    {
+      "id": "destination-router",
+      "type": "service",
+      "text": "Destination router",
+      "x": 545,
+      "y": 431,
+      "width": 190,
+      "height": 84,
+      "z": 0,
+      "accent": "amber",
+      "serviceKind": "worker",
+      "description": "Batches by cluster + index",
+      "technology": "Rust"
+    },
+    {
+      "id": "dm-cell",
+      "type": "service",
+      "text": "DM search cell",
+      "x": 685,
+      "y": 230,
+      "width": 175,
+      "height": 108,
+      "z": 0,
+      "accent": "violet",
+      "description": "DMs indexed by user"
+    },
+    {
+      "id": "ingest-nodes",
+      "type": "service",
+      "text": "Ingest nodes",
+      "x": 1025,
+      "y": 237,
+      "width": 194,
+      "height": 94,
+      "z": 0,
+      "accent": "teal",
+      "replicas": 3,
+      "description": "Stateless entry points",
+      "technology": "Elasticsearch",
+      "parentId": "guild-cluster"
+    },
+    {
+      "id": "master-nodes",
+      "type": "service",
+      "text": "Master-eligible nodes",
+      "x": 1326,
+      "y": 87,
+      "width": 210,
+      "height": 90,
+      "z": 0,
+      "accent": "blue",
+      "replicas": 3,
+      "description": "One per zone",
+      "parentId": "guild-cluster"
+    },
+    {
+      "id": "data-nodes",
+      "type": "service",
+      "text": "Data nodes",
+      "x": 1326,
+      "y": 237,
+      "width": 210,
+      "height": 94,
+      "z": 0,
+      "accent": "teal",
+      "replicas": 5,
+      "description": "Serve queries and writes",
+      "parentId": "guild-cluster"
+    },
+    {
+      "id": "primary-shard",
+      "type": "database",
+      "text": "Primary shard",
+      "x": 1051,
+      "y": 432,
+      "width": 166,
+      "height": 88,
+      "z": 0,
+      "accent": "blue",
+      "databaseKind": "search-index",
+      "parentId": "zone-a"
+    },
+    {
+      "id": "replica-shard",
+      "type": "database",
+      "text": "Replica shard",
+      "x": 1351,
+      "y": 432,
+      "width": 166,
+      "height": 88,
+      "z": 0,
+      "accent": "violet",
+      "databaseKind": "search-index",
+      "parentId": "zone-b"
+    }
+  ],
+  "edges": [
+    {
+      "id": "search-request",
+      "source": "client",
+      "target": "search",
+      "label": "searches messages",
+      "semantic": "calls",
+      "accent": "blue",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "query-dm",
+      "source": "search",
+      "target": "dm-cell",
+      "label": "all DMs by user",
+      "semantic": "searches",
+      "accent": "violet",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.85
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.33
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 591,
+          "y": 134.4
+        },
+        {
+          "x": 591,
+          "y": 265.64
+        }
+      ]
+    },
+    {
+      "id": "query-guild",
+      "source": "search",
+      "target": "ingest-nodes",
+      "label": "server search by guild",
+      "semantic": "searches",
+      "accent": "blue",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 1122,
+          "y": 105
+        }
+      ]
+    },
+    {
+      "id": "enqueue",
+      "source": "new-messages",
+      "target": "index-queue",
+      "label": "queues for indexing",
+      "semantic": "publishes",
+      "accent": "amber",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "async": true
+    },
+    {
+      "id": "pull",
+      "source": "index-queue",
+      "target": "destination-router",
+      "label": "pulls messages",
+      "semantic": "deliversTo",
+      "accent": "amber",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "async": true
+    },
+    {
+      "id": "bulk-dm",
+      "source": "destination-router",
+      "target": "dm-cell",
+      "label": "DM batches",
+      "semantic": "indexes",
+      "accent": "violet",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.85
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 706.5,
+          "y": 374
+        },
+        {
+          "x": 772.5,
+          "y": 374
+        }
+      ],
+      "async": true
+    },
+    {
+      "id": "bulk-guild",
+      "source": "destination-router",
+      "target": "ingest-nodes",
+      "label": "server batches by index",
+      "semantic": "indexes",
+      "accent": "amber",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 925,
+          "y": 473
+        },
+        {
+          "x": 925,
+          "y": 352
+        },
+        {
+          "x": 1122,
+          "y": 352
+        }
+      ],
+      "async": true
+    },
+    {
+      "id": "route-to-data",
+      "source": "ingest-nodes",
+      "target": "data-nodes",
+      "label": "routes by shard",
+      "semantic": "routes",
+      "accent": "teal",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "cluster-state",
+      "source": "master-nodes",
+      "target": "data-nodes",
+      "label": "cluster state",
+      "semantic": "syncs",
+      "accent": "blue",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "host-primary",
+      "source": "data-nodes",
+      "target": "primary-shard",
+      "label": "hosts shard",
+      "semantic": "uses",
+      "accent": "neutral",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.18
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "routeMode": "direct",
+      "waypoints": [
+        {
+          "x": 1363.8,
+          "y": 372
+        },
+        {
+          "x": 1134,
+          "y": 372
+        }
+      ]
+    },
+    {
+      "id": "host-replica",
+      "source": "data-nodes",
+      "target": "replica-shard",
+      "label": "hosts shard",
+      "semantic": "uses",
+      "accent": "neutral",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5142857142857142
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "replicate",
+      "source": "primary-shard",
+      "target": "replica-shard",
+      "label": "replicates writes",
+      "semantic": "replicates",
+      "accent": "violet",
+      "directed": true,
+      "routing": "straight",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    }
+  ],
+  "notes": []
+}

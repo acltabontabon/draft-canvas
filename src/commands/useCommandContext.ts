@@ -12,7 +12,7 @@ export interface UseCommandContextParams {
   createAt: (preset: Preset, position: { x: number; y: number }, autoEdit?: boolean) => DraftNode | null;
   createAtPointer: (preset: Preset) => DraftNode | null;
   playback: FlowPlaybackController;
-  onPresent: (flowId?: string) => void;
+  onPresent: (flowId?: string, sequenceNodeId?: string) => void;
 }
 
 /**

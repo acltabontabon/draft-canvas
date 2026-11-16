@@ -65,11 +65,16 @@ describe('contextMenuCommandsFor — empty canvas', () => {
     expect(grid.items.map((item) => item.label).slice(0, 3)).toEqual(['Service', 'Data Store', 'Queue']);
   });
 
-  it('offers Undo and Tidy up layout once there is something to undo and arrange', () => {
+  it('offers Undo, Tidy up and Rearrange layout once there is something to undo and arrange', () => {
     useEditorStore.getState().addNode({ type: 'service', x: 0, y: 0 });
+    // A new shape arrives selected; with nothing selected the menu speaks of the whole view.
+    useEditorStore.getState().setSelection({ nodes: [], edges: [] });
     const entries = pane(stubContext());
-    expect(idsOf(entries)).toEqual(expect.arrayContaining(['undo', 'select-all', 'fit', 'arrange']));
-    expect(itemFor(entries, 'arrange').label).toBe('Tidy up layout');
+    expect(idsOf(entries)).toEqual(expect.arrayContaining(['undo', 'select-all', 'fit', 'tidy', 'arrange']));
+    // The gentle, previewed cleanup comes first; laying everything out again says that it does.
+    expect(idsOf(entries).indexOf('tidy')).toBeLessThan(idsOf(entries).indexOf('arrange'));
+    expect(itemFor(entries, 'tidy').label).toBe('Tidy up');
+    expect(itemFor(entries, 'arrange').label).toBe('Rearrange layout');
   });
 
   it('still offers Paste when the in-app clipboard is empty, since the OS clipboard may hold something', () => {
@@ -192,6 +197,7 @@ describe('contextMenuCommandsFor — a regular node', () => {
       'send-to-back',
       'sep',
       'spotlight',
+      'show-lineage',
       'sep',
       'delete',
     ]);
@@ -427,7 +433,7 @@ describe('contextMenuCommandsFor — a multi-selection', () => {
     state.setSelection({ nodes: [a.id, b.id, c.id], edges: [] });
     ids = idsOf(selectionMenu());
     // Align and distribute share one row of icons under a header that counts the selection.
-    expect(selectionMenu()[0]).toEqual({ type: 'header', title: '3 elements' });
+    expect(selectionMenu()[0]).toEqual({ type: 'header', title: '3 shapes' });
     expect(selectionMenu().find((entry) => entry.type === 'icons')?.items).toHaveLength(8);
     expect(ids).toContain('align-left');
     expect(ids).toContain('distribute-x');

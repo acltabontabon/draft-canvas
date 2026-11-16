@@ -88,14 +88,15 @@ test('the status bar opens Settings at Canvas, which tabs through every visible 
   await newCanvas(page, 'Settings focus');
   await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
   const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-  // Focus starts on the page it opened at.
-  await expect(settings.getByRole('tab', { name: 'Canvas', exact: true })).toBeFocused();
+  // One page, so no rail of one; focus starts on the page itself and the first Tab reaches its first control.
+  await expect(settings.getByRole('tab')).toHaveCount(0);
+  await expect(settings.getByRole('region', { name: 'Canvas', exact: true })).toBeFocused();
   // One stop for the drawing styles (a radio group), then the suggestions switch, then the image
   // chooser — never the hidden file input behind it.
   await page.keyboard.press('Tab');
   await expect(settings.getByRole('radio', { name: /^Clean/ })).toBeFocused();
   await page.keyboard.press('Tab');
-  await expect(settings.getByRole('switch', { name: 'Suggest the next move while drawing' })).toBeFocused();
+  await expect(settings.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(settings.getByRole('button', { name: 'Choose image…', exact: true })).toBeFocused();
 });
@@ -164,7 +165,8 @@ test('long diagram and project names stay readable in narrow layouts', async ({ 
     if (width === 375) expect(titleWidth).toBeLessThan(wideTitleWidth);
   }
   await page.setViewportSize({ width: 375, height: 450 });
-  await expect(page.getByRole('button', { name: 'View all starters', exact: true })).toBeVisible();
+  // Before the starters gallery is loaded, one card offers it — folded to a link on a short canvas.
+  await expect(page.getByRole('button', { name: /^Browse (the )?starters/ })).toBeVisible();
   await expect.poll(() => page.locator('.dc-empty-stage').evaluate((element) => {
     const stage = element.getBoundingClientRect();
     const canvas = document.querySelector('.dc-canvas')!.getBoundingClientRect();
@@ -277,4 +279,25 @@ test('long presentation details remain scrollable within the camera footprint', 
   })).toBe(true);
   await nextFlowButton.click();
   await expect(page.locator('.dc-explain-flow-title')).toHaveText(nextTitle);
+});
+
+test('a technology typed into Shapes places the shape it is', async ({ page }) => {
+  await newCanvas(page, 'Shapes by technology');
+  await page.getByRole('button', { name: 'All shapes' }).click();
+  await page.getByRole('combobox', { name: 'Search shapes' }).fill('kafka');
+  await expect(page.getByRole('option', { selected: true })).toContainText('Apache Kafka');
+  await page.keyboard.press('Enter');
+  // No button of its own on the rail: the Shapes slot shows what is in hand.
+  await expect(page.getByRole('button', { name: 'Apache Kafka — all shapes' })).toHaveAttribute('aria-pressed', 'true');
+
+  const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+  await page.mouse.click(pane.x + 420, pane.y + 420);
+  await page.keyboard.press('Escape');
+  const node = page.locator('.dc-node[data-type="queue"]');
+  await expect(node).toHaveCount(1);
+  // It arrives as what Kafka is — a topic — with the technology on it.
+  const inspector = page.locator('.dc-element-inspector');
+  await expect(inspector).toContainText('Topic');
+  await expect(inspector).toContainText('Apache Kafka');
+  await expect(page.getByRole('button', { name: 'All shapes' })).toBeVisible();
 });

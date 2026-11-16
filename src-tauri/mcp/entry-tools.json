@@ -1,0 +1,27 @@
+[
+  {
+    "name": "diagram_tool",
+    "description": "Rename once: tool=rename_element, args={diagramId,requestId:UUID,from:exactLabel,to:newLabel,view?}. help: {} lists operations; {tool:NAME} gives arguments.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tool": {
+          "type": "string"
+        },
+        "args": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "tool",
+        "args"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "readOnlyHint": false,
+      "destructiveHint": true,
+      "openWorldHint": false
+    }
+  }
+]

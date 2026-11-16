@@ -2,14 +2,14 @@
 
 Edit one canvas together and see each other's changes, pointers and selections as they happen.
 
-- No account. **Draft Canvas never receives your diagram.**
-- The person who starts the session, the **owner**, hosts it from their own tab or desktop app.
-  Their copy is the one that is saved.
+- No account, and **Draft Canvas never receives your diagram.**
+- Whoever starts the session is the **owner**. It runs from their tab or desktop app, and their copy
+  is the one that is saved.
 - A session holds the owner and up to 10 collaborators.
 
 ## Start a session
 
-1. Choose **Share → Draw together, live**, or run **Collaborate…** in `⌘K`.
+1. Choose **Share → Collaborate…**, or run **Collaborate…** in `⌘K`.
 2. Write your name on the name tag. Others see it beside your pointer.
 3. Choose who can join:
    - **Anyone with the link** (default): works across different networks. You get a session link,
@@ -20,7 +20,7 @@ Edit one canvas together and see each other's changes, pointers and selections a
 
 ![The Collaborate dialog before a session, with the name tag, the two network choices and Start session.](../media/guides/collab-start.png)
 
-The lock on the dialog's sketch explains what stays private, and lets you set your own STUN server.
+The lock on the dialog's sketch explains what stays private and lets you set your own STUN server.
 
 ## Invite people
 
@@ -47,13 +47,12 @@ them a one-time link; they send back a reply code for you to paste.
 With a direct invite, you get a reply code instead (copied for you where the browser allows). Send
 it back to the owner.
 
-Your copy is never saved. When the session ends on you — the owner ends it, closes the canvas,
-removes you, or the connection is lost — your canvas closes behind a card that says why. Choose
-**Keep a copy** to carry on with an editable copy in this browser, or **Back to home**. Someone the
-owner removes gets **Back to home** only: no copy of the owner's canvas leaves with them. Joined
-over a desktop's local network link, you get **Export a copy** instead: a copy kept in the browser
-at that plain `http://` address could be read by whatever answers there later. You can also ask the
-owner for an export.
+Your copy is never saved. When the session ends for you (the owner ends it or closes the canvas, removes
+you, or the connection is lost) your canvas closes behind a card that says why. Choose **Keep a copy**
+to carry on with an editable copy in this browser, or **Back to home**. Someone the owner removes
+gets **Back to home** only. If you joined over a desktop's local network link, you get **Export a
+copy** instead, because a copy kept at a plain `http://` address could be read by whatever answers
+there later.
 
 ![A collaborator's canvas greyed out behind a card: Ada's line to the canvas snipped, her seat empty, the sheet stamped Session ended, with Keep a copy and Back to home.](../media/guides/collab-ended.png)
 
@@ -64,12 +63,12 @@ owner for an export.
 - **Edits** reach everyone when committed. Changes from others wait while you drag or resize.
 - **Undo** takes back only your own edits. If someone changed or built on the same thing since,
   their work stays and Draft Canvas says why.
-- **People column** (top right): everyone in the session, each in a colour. Hover a face to see
-  where they are; **Find** takes you there.
-- **Pointers and selections** show for people in the same room as you.
-- **Follow**: when the owner presents, collaborators can follow along. Moving the canvas, or stepping into
+- **People column** (top right): everyone in the session, each in a colour. Hover a face to see where
+  they are; **Find** takes you there.
+- **Pointers and selections** show for people inside the same shape (level) as you.
+- **Follow:** collaborators can follow the owner's presentation. Moving the canvas, or stepping into
   or out of a shape, stops following.
-- **Same shape, same moment**: the last change to reach the owner wins for that shape.
+- **Same shape, same moment:** the last change to reach the owner wins.
 
 ## Owner controls
 
@@ -83,22 +82,21 @@ Hover a face in the people column, or open the faces beside **Share** in the too
 | **Re-invite** | Makes a new direct invite for someone who joined by one |
 | **End session** | Disconnects everyone; their canvases close |
 
-Closing the canvas or the tab, reloading or opening another canvas also ends the session. Your canvas keeps
-saving as usual. A collaborator whose connection drops rejoins on their own, in the same role —
-except over the desktop local network link, where they ask to join again and you let them back in.
+Closing the canvas or tab, reloading or opening another canvas also ends the session. A collaborator
+whose connection drops rejoins on their own, in the same role; over the desktop local network link
+they ask to join again and you let them back in.
 
-Edits awaiting confirmation stay in memory (up to 8,192 edits or 32 MiB of change payloads), including
-during reconnection or while the owner holds a drag. If that backlog fills, Draft Canvas takes back the latest edit and tells you to
-wait for the connection to catch up. Earlier pending edits stay queued and are sent on reconnection.
+Edits waiting for confirmation are held in memory, up to 8,192 edits or 32 MiB. If that backlog
+fills, Draft Canvas takes back the latest edit and asks you to wait for the connection to catch up;
+earlier pending edits are sent on reconnection.
 
-**Undo changes** keeps a bounded history for the session. In a long or busy session, older changes
-may no longer be available to take back; Draft Canvas says when some were forgotten. The oldest
-recovery entries eventually leave that list too. Keep a saved copy before a session if you need a
+**Undo changes** keeps a bounded history. In a long or busy session older changes may no longer be
+available, and Draft Canvas says when some were forgotten. Save a copy before a session if you need a
 complete record to return to.
 
 ## Desktop: share on your local network
 
-For a room on the same Wi-Fi, the desktop app can serve the editor itself:
+For people on the same Wi-Fi, the desktop app can serve the editor itself:
 
 1. During a session, open the faces beside **Share**.
 2. Turn on **Also share on this network**.
@@ -128,5 +126,5 @@ The link stops when you turn it off or end the session.
 - Direct invite links and reply codes contain IP addresses: send them only to the people you mean.
 - The desktop local network link is the one unencrypted option.
 
-Details: [Privacy](../reference/privacy.md#live-collaboration) and
-[Security](../../SECURITY.md#live-collaboration).
+See [Privacy and security](../reference/privacy.md#live-collaboration) for what each part of a
+session can see.

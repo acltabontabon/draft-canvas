@@ -35,7 +35,7 @@ createRoot(container).render(
 /** A reload with unsaved work would silently drop it (a pending cross-tab conflict, a full disk, a
  *  closed connection) — so it stays a choice the user makes, with Export still one click away. */
 function warnUnsavedBeforeReload(reloadAnyway: () => void): void {
-  useUiStore.getState().notify("Your latest changes aren't saved. Export the diagram first, or reload anyway.", 'error', {
+  useUiStore.getState().notify("Your latest changes aren’t saved. Export the diagram first, or reload anyway.", 'error', {
     label: 'Reload anyway',
     run: reloadAnyway,
   });

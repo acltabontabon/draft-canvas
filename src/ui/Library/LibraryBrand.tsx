@@ -16,7 +16,7 @@ export function LibraryBrand() {
   const aboutLabel = updateReady
     ? 'About Draft Canvas — update ready'
     : hasUnreadNotes
-      ? "About Draft Canvas — what's new"
+      ? "About Draft Canvas — what’s new"
       : 'About Draft Canvas';
 
   return (

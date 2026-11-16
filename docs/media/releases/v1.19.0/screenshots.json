@@ -1,0 +1,17 @@
+[
+  {
+    "file": "use-in-docs.png",
+    "alt": "Use in docs: the online store diagram as a light SVG for a README, with its editable file beside it and the Markdown line to paste.",
+    "platform": "shared"
+  },
+  {
+    "file": "nodis-skills.png",
+    "alt": "Nodi's skills: typing / in Nodi's box lists layout skills such as left to right, top down and tidy connectors.",
+    "platform": "desktop"
+  },
+  {
+    "file": "straight-snapping.png",
+    "alt": "Dragging the Orders queue: it snaps where its connectors run straight, with a guide through the middle of the tube.",
+    "platform": "shared"
+  }
+]

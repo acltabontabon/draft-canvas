@@ -45,6 +45,8 @@ for (const colorScheme of ['light', 'dark'] as const) {
       await choose(page, 'Interaction type', 'Reads');
       await page.keyboard.press('Escape');
       await page.locator('.dc-node').nth(1).click();
+      // A suggestion waits for the selection to settle (250 ms): wait it out, or "none" passes before one could show.
+      await page.waitForTimeout(450);
       await expect(page.locator('.dc-ghost')).toHaveCount(0);
       await page.keyboard.press(']');
       await expect(page.locator('.dc-ghost-node')).toHaveAttribute('data-type', 'queue');

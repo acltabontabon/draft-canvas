@@ -8,7 +8,7 @@
 
 import { capabilityFor, categoryOf, inferRelationship, isSyncPairing } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
-import { createAttachment, createDocument, createEdge, createNode } from '../document/factory';
+import { createAttachment, createDocument, createEdge, createNode, defaultSizeFor } from '../document/factory';
 import { createFlow, setFlowVariantOf } from '../document/flow';
 import { DEFAULTS } from '../document/limits';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode, DraftNodeType, Side, ViewLevel } from '../document/types';
@@ -16,16 +16,17 @@ import { hasAttachmentRoom } from '../document/operations';
 import { anchorBandOf } from '../document/queueGeometry';
 import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
-import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect } from '../layout/anchors';
+import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect, type TitleSpan } from '../layout/anchors';
 import { compatibilityKey } from '../edges/bundles';
-import { describeContext, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext } from '../nodes/describe';
+import { boundaryHeaderTextBox, describeContext, nameLineCount, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext } from '../nodes/describe';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { getMeasurer } from '../render/text/measure';
 import { LIGHT } from '../render/theme/tokens';
-import { BAND, BOUNDARY_HEADER, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD, GUTTER } from '../starters/compose';
+import { BAND, BOUNDARY_HEADER, INNER_BAND, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD, GUTTER } from './compose';
 import { AgentError } from './errors';
 import type { AttachmentSpec, FlowSpec, LayoutSpec, NodeSpec, NoteSpec, RelationshipSpec, RoomSpec } from './input';
+import { sequenceNode } from './sequences';
 import { drawnRoute, repairAnchors, segmentHitsBox } from './route';
 import { GROUP_KINDS, LINE_STYLES } from './vocabulary';
 import { applyRoutes } from './placement';
@@ -49,10 +50,39 @@ export function measureContext(): DescribeContext {
   return { ...describeContext(LIGHT), measurer: getMeasurer() };
 }
 
+/**
+ * By shape, the titles of the boundaries around it, where they sit now: a connector reaching a shape's
+ * top from outside its boundary keeps its line out of the title's words (`assignAnchors`).
+ */
+export function titlesOf(nodes: readonly DraftNode[], ctx: DescribeContext): Map<string, TitleSpan[]> {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const inside = new Map<string, Set<string>>();
+  for (const node of nodes) {
+    const seen = new Set<string>();
+    for (let at = node.parentId; at && !seen.has(at); at = byId.get(at)?.parentId) {
+      seen.add(at);
+      if (byId.get(at)?.type !== 'group') continue;
+      const members = inside.get(at) ?? new Set<string>();
+      members.add(node.id);
+      inside.set(at, members);
+    }
+  }
+  const out = new Map<string, TitleSpan[]>();
+  for (const [id, members] of inside) {
+    const group = byId.get(id)!;
+    const box = boundaryHeaderTextBox(group, ctx);
+    if (!box) continue;
+    const span: TitleSpan = { from: group.x + box.x, to: group.x + box.x + box.width, inside: members };
+    for (const member of members) out.set(member, [...(out.get(member) ?? []), span]);
+  }
+  return out;
+}
+
 export function spacingOf(layout: Pick<LayoutSpec, 'spacing'>) {
   const f = SPACING_FACTOR[layout.spacing];
   return {
     layer: Math.round(BAND * f),
+    tight: Math.round(INNER_BAND * f),
     sibling: Math.round(GUTTER * 0.75 * f),
     pad: BOUNDARY_PAD,
     component: Math.round(GUTTER * 1.5 * f),
@@ -89,6 +119,7 @@ function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: string): Dr
     ...(parentId ? { parentId } : {}),
   });
   if (spec.evidence?.length) node.evidence = spec.evidence;
+  if (spec.replicas && node.type === 'service') node.replicas = spec.replicas;
   const attachments = attachmentsOf(spec.attachments);
   if (attachments.length) node.attachments = attachments;
   return sizeToFit(node, ctx);
@@ -174,7 +205,14 @@ export function peerNormalize(elements: Map<string, DraftNode>, edges: readonly 
     if (members.length < 2) continue;
     const medianWidth = median(members.map((n) => n.width));
     const medianHeight = median(members.map((n) => n.height));
-    const core = members.filter((n) => n.width <= medianWidth * PEER_OUTLIER_FACTOR && n.height <= medianHeight * PEER_OUTLIER_FACTOR);
+    // Area too, not just each side: a long description can grow a box a little wider and a lot
+    // taller, staying under the factor on both sides while being half as big again.
+    const core = members.filter(
+      (n) =>
+        n.width <= medianWidth * PEER_OUTLIER_FACTOR &&
+        n.height <= medianHeight * PEER_OUTLIER_FACTOR &&
+        n.width * n.height <= medianWidth * medianHeight * PEER_OUTLIER_FACTOR,
+    );
     if (core.length < 2) continue;
     const sharedWidth = Math.max(...core.map((n) => n.width));
     const sharedHeight = Math.max(...core.map((n) => n.height));
@@ -198,14 +236,69 @@ export function sizeToFit(node: DraftNode, ctx: DescribeContext): DraftNode {
     const height = Math.max(node.height, naturalNoteHeight(node, node.text ?? '', { measurer: ctx.measurer }));
     return { ...node, height };
   }
-  const natural = naturalArchitectureSize(node, ctx);
-  if (!natural.fits) {
+  const natural = balancedSize(node, ctx);
+  if (!natural) {
     throw new AgentError('LIMIT_EXCEEDED', `"${node.text}" is too long to show in full on one shape.`, {
       hint: 'Shorten the label or description; keep long explanations in a note.',
       details: { id: node.id },
     });
   }
   return { ...node, width: natural.width, height: natural.height };
+}
+
+/** The usual widest box for a name in two lines… */
+const NAME_WIDTH = 280;
+/** …and how much wider a long name may make it before it takes a third line. */
+const LONG_NAME_WIDTH = 360;
+const NAME_HEIGHT = 320;
+
+/**
+ * The box a shape's text reads best in, grown from its current size: the usual one when the name
+ * fits two lines in `NAME_WIDTH`; for a longer name, a wider box first, and a third line only when
+ * even that is not enough. A long name set as a narrow column (five lines in a default-width box)
+ * reads as a paragraph and makes its layer as deep as three of its neighbours; set wider, it reads
+ * as a name. `undefined` when nothing in reach shows everything.
+ */
+export function balancedSize(node: DraftNode, ctx: DescribeContext): { width: number; height: number } | undefined {
+  for (const bounds of [
+    { maxWidth: NAME_WIDTH, maxHeight: NAME_HEIGHT },
+    { maxWidth: LONG_NAME_WIDTH, maxHeight: NAME_HEIGHT },
+    { maxWidth: LONG_NAME_WIDTH, maxHeight: NAME_HEIGHT, maxNameLines: 3 },
+  ]) {
+    const natural = naturalArchitectureSize(node, ctx, bounds);
+    if (natural.fits) return { width: natural.width, height: natural.height };
+  }
+  return undefined;
+}
+
+/**
+ * A shape as Arrange gives it: at least as big as it was and big enough for its text — except that a
+ * name wrapped onto more lines than a balanced box needs is re-proportioned. Typing a long name grows
+ * a default-width box taller line by line; laying the view out again from scratch is the moment to
+ * give it the wider, shorter box its name reads best in (`balancedSize`). A box that is tall for any
+ * other reason (a description, a hand-set size) keeps its height.
+ */
+export function arrangedSize(node: DraftNode, ctx: DescribeContext): { width: number; height: number } {
+  const own = { width: node.width, height: node.height };
+  if (node.type === 'ellipse' || node.type === 'group' || node.type === 'text' || node.type === 'code' || node.type === 'note') {
+    try {
+      const sized = sizeToFit(node, ctx);
+      return { width: Math.max(node.width, sized.width), height: Math.max(node.height, sized.height) };
+    } catch {
+      return own;
+    }
+  }
+  const lines = node.text?.trim() ? nameLineCount(node, ctx) : 0;
+  if (lines > 2) {
+    // From the type's own height, so the search can find a shorter box than the column it was.
+    const floor = Math.min(node.height, defaultSizeFor(node.type).height);
+    const balanced = balancedSize({ ...node, height: floor }, ctx);
+    if (balanced && nameLineCount({ ...node, ...balanced }, ctx) < lines) {
+      return { width: Math.max(node.width, balanced.width), height: balanced.height };
+    }
+  }
+  const sized = balancedSize(node, ctx);
+  return sized ? { width: Math.max(node.width, sized.width), height: Math.max(node.height, sized.height) } : own;
 }
 
 /** A native connector for a spec: the matrix's semantics unless the request named ones it offers. */
@@ -308,8 +401,11 @@ const JOG = { align: 72, balance: 10 } as const;
  * inside its boundary, and leaves more of that shape's connectors straight than before (a shape can
  * line up with only so many neighbours; moving it for one must not skew two others).
  */
-function snapLevelJogs(edges: DraftEdge[], elements: Map<string, DraftNode>, groups: Map<string, DraftNode>, limit: number, besideNotes: ReadonlyMap<string, DraftNode[]> = new Map()): void {
-  const all = () => [...elements.values(), ...[...besideNotes.values()].flat()];
+export function snapLevelJogs(edges: DraftEdge[], elements: Map<string, DraftNode>, groups: Map<string, DraftNode>, limit: number, besideNotes: ReadonlyMap<string, DraftNode[]> = new Map(), memberNotes: ReadonlyMap<string, DraftNode> = new Map()): void {
+  // What a nudged shape must keep clear of. A boundary's heading note (`memberNotes`) is placed by the
+  // layout like a shape and stays where it is: left out of this list, a shape nudged sideways to meet
+  // a neighbour's line ran into the heading beside it (a 200 px Text over "Query API").
+  const all = () => [...elements.values(), ...[...besideNotes.values()].flat(), ...memberNotes.values()];
   // A shape moves with the notes about it, as the one box the layout placed.
   const unit = (node: DraftNode) => [node, ...(besideNotes.get(node.id) ?? [])];
   const free = (node: DraftNode, dx: number, dy: number) => {
@@ -415,7 +511,7 @@ export interface RoomParts {
 const COMPANION_GAP = 72;
 /** Between a shape and a note about it, and between two notes about one shape. No connector runs
  *  there (the side is reserved, see `assignAnchors`), so it only has to read as "this one's". */
-const NOTE_GAP = 20;
+export const NOTE_GAP = 20;
 
 /**
  * Loop companions, by host: a shape joined to exactly one other, by connectors both ways — a retry
@@ -627,7 +723,12 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
   // A shape's note side is taken: no connector may leave or arrive there, or it would run through the note.
   const noteSide: Side = right ? 'top' : 'left';
   const reserved = new Map([...besideNotes.keys()].filter((id) => besideNotes.get(id)?.length).map((id) => [id, noteSide]));
-  const anchors = assignAnchors(edges, rects, layout.direction, undefined, reserved, { keepApart: primaryEdges, sides: placed.sides, ...(layout.fans ? { fans: layout.fans } : {}) });
+  const anchors = assignAnchors(edges, rects, layout.direction, undefined, reserved, {
+    keepApart: primaryEdges,
+    sides: placed.sides,
+    titles: titlesOf([...elements.values(), ...groups.values()], ctx),
+    ...(layout.fans ? { fans: layout.fans } : {}),
+  });
   for (const edge of edges) {
     const a = anchors.get(edge.id);
     if (a) {
@@ -635,7 +736,7 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
       edge.targetAnchor = a.targetAnchor;
     }
   }
-  snapLevelJogs(edges, elements, groups, JOG[layout.ties ?? 'align'], besideNotes);
+  snapLevelJogs(edges, elements, groups, JOG[layout.ties ?? 'align'], besideNotes, memberNotes);
   return { width: placed.width, height: placed.height };
 }
 
@@ -693,6 +794,7 @@ export function placeRoom(room: RoomSpec, layout: LayoutSpec, ctx: DescribeConte
   const placed = arrangeParts({ elements, groups: groupNodes, memberNotes, besideNotes, edges, primaryEdges: new Set(primary?.steps.flatMap((s) => (s.relationship ? [s.relationship] : [])) ?? []) }, layout, ctx);
   let nodes = [...groupNodes.values(), ...elements.values(), ...memberNotes.values(), ...[...besideNotes.values()].flat()];
   nodes.push(...placeNotes(room, nodes, edges, placed.width, placed.height, layout.direction, ctx));
+  nodes.push(...placeSequences(room, nodes, ctx, advisories));
   // What the request placed or routed itself goes where it said, over the layout's choice.
   const places = new Map(room.nodes.flatMap((n) => (n.place ? [[n.id, n.place] as const] : [])));
   const routes = new Map(room.relationships.flatMap((e) => (e.route ? [[e.id, e.route] as const] : [])));
@@ -858,6 +960,22 @@ export function attachNote(host: { id: string; attachments?: Attachment[] } | un
 
 /** Notes beside what they're about when they say (placed clear of shapes and connectors, the way
  *  Intent Continuation places a companion); the rest in a column after the diagram. */
+/**
+ * A room's sequences, below everything else in it, side by side. A sequence is about the
+ * architecture and not part of its graph: it takes no part in the layout above and moves nothing in it.
+ */
+function placeSequences(room: RoomSpec, placed: readonly DraftNode[], ctx: DescribeContext, advisories: string[]): DraftNode[] {
+  if (room.sequences.length === 0) return [];
+  const shapes = new Map(placed.map((n) => [n.id, n]));
+  let x = placed.length ? Math.min(...placed.map((n) => n.x)) : 0;
+  const y = placed.length ? Math.max(...placed.map((n) => n.y + n.height)) + GUTTER : 0;
+  return room.sequences.map((spec) => {
+    const node = { ...sequenceNode(spec, shapes, ctx, advisories), x: Math.round(x), y: Math.round(y) };
+    x += node.width + GUTTER;
+    return node;
+  });
+}
+
 function placeNotes(room: RoomSpec, placed: DraftNode[], edges: DraftEdge[], width: number, height: number, direction: Direction, ctx: DescribeContext): DraftNode[] {
   const out: DraftNode[] = [];
   let loose = 0;

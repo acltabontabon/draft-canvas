@@ -15,7 +15,7 @@
  */
 
 import type { DraftDocument, DraftEdge, DraftNode } from '../document/types';
-import { naturalArchitectureSize, type DescribeContext } from '../nodes/describe';
+import { boundaryHeaderTextBox, naturalArchitectureSize, type DescribeContext } from '../nodes/describe';
 import { nodeTechnologyIcon, technologyMarkBounds } from '../nodes/technology';
 import { isC4Element } from '../depth/c4';
 import { TEXT_SIZES } from '../render/text/fonts';
@@ -127,7 +127,11 @@ export function renderedBoundsOf(nodes: readonly DraftNode[], edges: readonly Dr
     grow(node.x, node.y);
     grow(node.x + node.width, node.y + node.height);
     const mark = technologyMarkBounds(node);
-    if (mark) grow(node.x + mark.x + mark.width, node.y + mark.y + mark.height);
+    if (mark) {
+      // Both corners: the mark sits above a shape's top edge in its marker rail, beside a data store's glyph.
+      grow(node.x + mark.x, node.y + mark.y);
+      grow(node.x + mark.x + mark.width, node.y + mark.y + mark.height);
+    }
   }
   const caption = captionSizer(nodes, ctx);
   const byId = new Map(nodes.map((n) => [n.id, n]));
@@ -247,10 +251,22 @@ export function checkQuality(
     // `byId`, not a map of the whole view rebuilt per connector.
     const problem = judged(edge.id, edge.source, edge.target) ? routeProblem(edge, nodes, edges, caption, undefined, byId) : undefined;
     if (problem?.kind === 'through-node') errors.push({ kind: 'through-node', ids: [edge.id, problem.node], message: `connector ${edge.id} runs through ${problem.node}.` });
+    if (problem?.kind === 'through-title') errors.push({ kind: 'through-node', ids: [edge.id, problem.node], message: `connector ${edge.id} runs through the title of ${problem.node}.` });
     if (problem?.kind === 'label-over-node') errors.push({ kind: 'label-over-node', ids: [edge.id, problem.node], message: `the caption of ${edge.id} covers ${problem.node}.` });
   }
   const drawn = othersOf(nodes, edges, caption, undefined, byId);
   const drawnById = new Map(drawn.map((o) => [o.id, o]));
+  // A caption in a boundary's header row reads as part of the header — beside the title, it names
+  // the boundary twice; over it, neither reads. (The row the boundary's own shapes keep clear of.)
+  const titles = groups.flatMap((group) => {
+    const box = boundaryHeaderTextBox(group, ctx);
+    return box ? [{ id: group.id, box: { x: group.x, y: group.y + box.y - 2, width: group.width, height: box.height + 4 } }] : [];
+  });
+  for (const route of drawn) {
+    if (!route.chip || !judged(route.id)) continue;
+    const covered = titles.find((title) => overlaps(route.chip!, title.box));
+    if (covered) errors.push({ kind: 'label-over-node', ids: [route.id, covered.id], message: `the caption of ${route.id} sits in the header of ${covered.id}.` });
+  }
   // A connector between two facing sides that still steps sideways on its way reads as skewed. Only
   // one of several connectors leaving (or reaching) the same side can be straight — the rest of a
   // fan must step — so only a connector alone on both its sides counts.

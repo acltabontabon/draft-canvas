@@ -63,7 +63,7 @@ test.describe('drag capsule', () => {
     await expect(page.locator('.dc-node[data-attach-target="true"]')).toHaveCount(1);
     await page.mouse.up();
     await expect(capsule(page)).toHaveCount(0);
-    await expect(page.locator('.dc-attachment-badge')).toContainText('1');
+    await expect(page.locator('.dc-attachment-badge')).toHaveAccessibleName('1 attachment');
   });
 
   test('a Code card carries its language, not a generic label', async ({ page }) => {

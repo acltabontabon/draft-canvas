@@ -9,7 +9,9 @@ import { addOpenPoint, createOpenPoint, removeOpenPoint } from '../../src/docume
 import { addEdges, addNodes, insideHeight, removeElements, setParent, setSettings, setTitle, updateEdge, updateNode } from '../../src/document/operations';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import { LIMITS } from '../../src/document/limits';
-import type { DraftDocument, DraftInside, DraftNode, ViewLevel } from '../../src/document/types';
+import { addParticipant, createMessage, insertItem, updateSequence, wrapItems } from '../../src/document/sequenceOps';
+import { addInk, inkOf, removeInk, translateInk, withInk } from '../../src/document/ink';
+import type { DraftDocument, DraftInside, DraftNode, DraftSequence, ViewLevel } from '../../src/document/types';
 import { canHoldInside } from '../../src/collab/apply';
 import type { CollabTransport, TransportState } from '../../src/collab/transport/types';
 
@@ -31,7 +33,7 @@ function pick<T>(rng: Rng, items: readonly T[]): T | undefined {
   return items.length === 0 ? undefined : items[Math.floor(rng() * items.length)];
 }
 
-const TYPES = ['service', 'component', 'database', 'queue', 'note', 'group', 'actor'] as const;
+const TYPES = ['service', 'component', 'database', 'queue', 'note', 'group', 'actor', 'sequence'] as const;
 const LEVELS: ViewLevel[] = ['context', 'container', 'component', 'none'];
 
 /** Mostly a room that has shapes to work with; sometimes an empty one inside a shape that could hold one. */
@@ -55,6 +57,17 @@ function inRoom(file: DraftDocument, path: DepthPath, fn: (room: DraftDocument) 
 
 let counter = 0;
 
+function growSequence(sequence: DraftSequence, n: number): DraftSequence {
+  if (sequence.participants.length < 3) {
+    return addParticipant(sequence, { id: `sp_${n}`, name: `Participant ${n}`, type: 'service', serviceKind: 'generic' });
+  }
+  const from = sequence.participants[n % sequence.participants.length]!.id;
+  const to = sequence.participants[(n + 1) % sequence.participants.length]!.id;
+  const message = createMessage({ id: `sm_${n}`, from, to, label: `call ${n}` });
+  const grown = insertItem(sequence, message, { operandId: null, index: sequence.items.length });
+  return n % 4 === 0 ? wrapItems(grown, [message.id], { id: `sf_${n}`, operator: 'opt', guard: `case ${n}` }) : grown;
+}
+
 /** One random edit, made with the document's own operations. Returns the file unchanged when the dice pick something impossible. */
 export function randomEdit(file: DraftDocument, rng: Rng): DraftDocument {
   const path = chooseRoom(file, rng);
@@ -65,7 +78,20 @@ export function randomEdit(file: DraftDocument, rng: Rng): DraftDocument {
   const flow = pick(rng, room.flows);
   counter += 1;
 
-  switch (Math.floor(rng() * 18)) {
+  const stroke = pick(rng, inkOf(room));
+  switch (Math.floor(rng() * 21)) {
+    // Sketches: drawn, moved, erased and restacked, in whichever room the edit lands in. A room with
+    // no shapes holds no sketches (it does not exist), so nothing is drawn there.
+    case 18: {
+      if (path.length > 0 && room.nodes.length === 0) return file;
+      const drawn = { id: `k_${counter}_${Math.floor(rng() * 1e6)}`, tool: 'pen' as const, color: 'red' as const, size: 3, x: Math.round(rng() * 800), y: Math.round(rng() * 600), points: [0, 0, 10, 4, 22, 9] };
+      return inRoom(file, path, (view) => addInk(view, [drawn]));
+    }
+    case 19:
+      if (!stroke) return file;
+      return rng() < 0.5 ? inRoom(file, path, (view) => translateInk(view, [stroke.id], 12, -7)) : inRoom(file, path, (view) => removeInk(view, [stroke.id]));
+    case 20:
+      return inkOf(room).length > 1 ? inRoom(file, path, (view) => withInk(view, [...inkOf(view)].reverse())) : file;
     case 16:
     case 17:
       if (!node || !other) return file;
@@ -77,6 +103,8 @@ export function randomEdit(file: DraftDocument, rng: Rng): DraftDocument {
       return inRoom(file, path, (view) => addNodes(view, [created]));
     }
     case 2:
+      // A sequence is edited the way it is on the canvas: a lifeline, then messages between them.
+      if (node?.type === 'sequence') return inRoom(file, path, (view) => updateSequence(view, node.id, (sequence) => growSequence(sequence, counter)));
       return node ? inRoom(file, path, (view) => updateNode(view, node.id, { text: `renamed ${counter}` })) : file;
     case 3:
       return node ? inRoom(file, path, (view) => updateNode(view, node.id, { x: node.x + 10, y: node.y - 5 })) : file;

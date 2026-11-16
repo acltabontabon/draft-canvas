@@ -6,6 +6,7 @@ mod commands;
 mod companion;
 mod dialogs;
 mod docio;
+mod docs;
 mod errors;
 mod explorer;
 mod grants;
@@ -64,6 +65,11 @@ pub fn run() {
             commands::documents::sidecar_read,
             commands::documents::sidecar_write,
             commands::documents::sidecar_remove,
+            commands::docs::docs_status,
+            commands::docs::docs_publish,
+            commands::docs::docs_pick_markdown,
+            commands::docs::docs_add_to_markdown,
+            commands::docs::docs_reveal,
             commands::peek::peek_document,
             commands::peek::project_peek,
             commands::explorer::explorer_open,

@@ -126,7 +126,7 @@ export interface ContinuationRule {
   /** Stable id: named in tests, dismissals, and the reasons table in `docs/reference/semantics.md`. */
   id: string;
   tier: ContinuationTier;
-  /** What the offer is called: "Queue", "Worker", "Dead-letter queue". */
+  /** What the offer is called: "Queue", "Worker", "Dead-Letter Queue". */
   label: string;
   /** One authored sentence saying why — never generated. Kept for tests and `docs/reference/semantics.md`. */
   reason: string;
@@ -181,6 +181,13 @@ export interface Continuation {
   label: string;
   /** What accepting does, as a command: "Add Queue", "Connect to Order Events". */
   actionLabel: string;
+  /**
+   * One authored sentence saying why this is on offer ("This queue has no consumer."). The ghost's
+   * pill carries it as its tooltip and the screen-reader announcement reads it, so the suggestion
+   * teaches the rule behind it. Absent for a standing preset row, which is a choice, not a reading
+   * of the graph.
+   */
+  reason?: string;
   fragment: Fragment;
   /** Carried from the rule for ranking — see `ContinuationRule.branches`. */
   branches?: boolean;

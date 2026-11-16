@@ -97,7 +97,11 @@ const contentSecurityPolicyFor = (relay: string) => [
   "form-action 'none'",
   "base-uri 'self'",
   "object-src 'none'",
-].join('; ');
+].join('; ')
+  // The opt-in starters gallery (`src/gallery/remote.ts`) reads public files from GitHub's raw host.
+  // Added here rather than in the list, which the desktop's local-network guest page reuses
+  // (`src-tauri/src/collab/server.rs`): a page served over the LAN never reaches the internet.
+  .replace("connect-src 'self'", "connect-src 'self' https://raw.githubusercontent.com");
 
 /**
  * Ships THIRD_PARTY_LICENSES.txt beside the app (web, Pages and the desktop bundle all take

@@ -19,8 +19,10 @@ import type {
   DraftEdge,
   DraftFlow,
   DraftFlowStep,
+  DraftInk,
   DraftInside,
   DraftNode,
+  DraftSequence,
   DraftSettings,
   DraftViewport,
   EdgeAnchor,
@@ -28,6 +30,12 @@ import type {
   EmbeddedBackgroundImage,
   OpenPoint,
   OpenPointTarget,
+  SeqFragment,
+  SeqGroup,
+  SeqMessage,
+  SeqNote,
+  SeqOperand,
+  SeqParticipant,
 } from '../document/types';
 
 type Plain = Record<string, unknown>;
@@ -36,7 +44,7 @@ type Plain = Record<string, unknown>;
 type KeysOf<T> = readonly (keyof T & string)[];
 
 const VIEWPORT_KEYS = ['x', 'y', 'zoom'] as const satisfies KeysOf<DraftViewport>;
-const ANCHOR_KEYS = ['side', 'offset'] as const satisfies KeysOf<EdgeAnchor>;
+const ANCHOR_KEYS = ['side', 'offset', 'participantId'] as const satisfies KeysOf<EdgeAnchor>;
 const EDGE_DETAILS_KEYS = ['language', 'code'] as const satisfies KeysOf<EdgeDetails>;
 const ATTACHMENT_KEYS = ['id', 'type', 'text', 'noteKind', 'language', 'code', 'accent', 'width', 'height'] as const satisfies KeysOf<Attachment>;
 const NODE_KEYS = [
@@ -51,12 +59,14 @@ const NODE_KEYS = [
   'text',
   'description',
   'technology',
+  'kindOrigin',
   'textOrigin',
   'accent',
   'noteKind',
   'language',
   'code',
   'serviceKind',
+  'replicas',
   'databaseKind',
   'queueKind',
   'actorKind',
@@ -74,7 +84,46 @@ const NODE_KEYS = [
   'textFont',
   'textBackground',
   'inside',
+  'sequence',
 ] as const satisfies KeysOf<DraftNode>;
+const SEQUENCE_KEYS = ['participants', 'groups', 'items', 'numberMessages'] as const satisfies KeysOf<DraftSequence>;
+const SEQ_PARTICIPANT_KEYS = [
+  'id',
+  'name',
+  'type',
+  'serviceKind',
+  'databaseKind',
+  'queueKind',
+  'deliveryRole',
+  'actorKind',
+  'componentKind',
+  'technology',
+  'kindOrigin',
+  'accent',
+  'ref',
+] as const satisfies KeysOf<SeqParticipant>;
+const SEQ_GROUP_KEYS = ['id', 'name', 'accent', 'participantIds'] as const satisfies KeysOf<SeqGroup>;
+// One order for the three kinds of item, so every item starts `id`, `t` and reads on from there.
+const SEQ_ITEM_KEYS = [
+  'id',
+  't',
+  'from',
+  'to',
+  'kind',
+  'label',
+  'replyTo',
+  'attachments',
+  'activate',
+  'deactivate',
+  'kindOrigin',
+  'operator',
+  'covers',
+  'operands',
+  'text',
+  'over',
+  'side',
+] as const satisfies readonly (keyof SeqMessage | keyof SeqFragment | keyof SeqNote)[];
+const SEQ_OPERAND_KEYS = ['id', 'guard', 'items'] as const satisfies KeysOf<SeqOperand>;
 const EDGE_KEYS = [
   'id',
   'source',
@@ -91,6 +140,7 @@ const EDGE_KEYS = [
   'compensationProtocol',
   'compensationDescription',
   'condition',
+  'cadence',
   'response',
   'hasResponse',
   'kind',
@@ -106,7 +156,8 @@ const EDGE_KEYS = [
 ] as const satisfies KeysOf<DraftEdge>;
 const STEP_KEYS = ['id', 'edgeId', 'extraEdgeIds', 'extraNodeIds', 'viewport', 'caption'] as const satisfies KeysOf<DraftFlowStep>;
 const FLOW_KEYS = ['id', 'title', 'steps', 'accent', 'variantOf'] as const satisfies KeysOf<DraftFlow>;
-const INSIDE_KEYS = ['nodes', 'edges', 'flows', 'viewport', 'level'] as const satisfies KeysOf<DraftInside>;
+const INSIDE_KEYS = ['nodes', 'edges', 'flows', 'ink', 'viewport', 'level'] as const satisfies KeysOf<DraftInside>;
+const INK_KEYS = ['id', 'tool', 'color', 'size', 'x', 'y', 'points', 'pressure'] as const satisfies KeysOf<DraftInk>;
 const EMBEDDED_IMAGE_KEYS = ['dataUri', 'width', 'height'] as const satisfies KeysOf<EmbeddedBackgroundImage>;
 const BACKGROUND_KEYS = ['enabled', 'fit', 'dim', 'blur', 'imageId', 'image'] as const satisfies KeysOf<BackgroundSettings>;
 const SETTINGS_KEYS = ['showSequence', 'grid', 'background'] as const satisfies KeysOf<DraftSettings>;
@@ -172,14 +223,28 @@ const step = orderedIfObject(STEP_KEYS, { viewport });
 const flow = orderedIfObject(FLOW_KEYS, { steps: list(step) });
 const flows = list(flow);
 const edges = list(edge);
+const ink = list(orderedIfObject(INK_KEYS));
 const openPoint = orderedIfObject(OPEN_POINT_KEYS, { targets: list(orderedIfObject(OPEN_POINT_TARGET_KEYS)) });
+
+// An item may be a fragment, whose branches hold items.
+function sequenceItem(value: unknown): unknown {
+  return orderedIfObject(SEQ_ITEM_KEYS, {
+    attachments,
+    operands: list(orderedIfObject(SEQ_OPERAND_KEYS, { items: list(sequenceItem) })),
+  })(value);
+}
+const sequence = orderedIfObject(SEQUENCE_KEYS, {
+  participants: list(orderedIfObject(SEQ_PARTICIPANT_KEYS)),
+  groups: list(orderedIfObject(SEQ_GROUP_KEYS)),
+  items: list(sequenceItem),
+});
 
 // `node` and `inside` refer to each other: a room holds nodes, and a node may hold a room.
 function node(value: unknown): unknown {
-  return orderedIfObject(NODE_KEYS, { attachments, evidence: deepSorted, inside })(value);
+  return orderedIfObject(NODE_KEYS, { attachments, evidence: deepSorted, inside, sequence })(value);
 }
 function inside(value: unknown): unknown {
-  return orderedIfObject(INSIDE_KEYS, { nodes: list(node), edges, flows, viewport })(value);
+  return orderedIfObject(INSIDE_KEYS, { nodes: list(node), edges, flows, ink, viewport })(value);
 }
 
 const background = orderedIfObject(BACKGROUND_KEYS, { image: orderedIfObject(EMBEDDED_IMAGE_KEYS) });
@@ -193,5 +258,6 @@ export const canonical = {
   viewport: viewport as (viewport: DraftViewport) => unknown,
   settings: settings as (settings: DraftSettings) => unknown,
   flows: flows as (flows: DraftFlow[]) => unknown,
+  ink: ink as (strokes: DraftInk[]) => unknown,
   openPoints: list(openPoint) as (points: OpenPoint[]) => unknown,
 } satisfies Partial<Record<keyof DraftDocument, unknown>>;

@@ -229,7 +229,14 @@ export function useProposalReview(proposal: Proposal, onChanged: ProposalChanged
     // The panel follows the open diagram, but a switch can land while this panel still shows the one
     // left: a proposal is only ever accepted into the diagram it was written for.
     if (file.metadata.id !== proposal.diagramId) return { error: 'This proposal is for a different diagram than the one open now. Nothing was committed.' };
-    const result = applyUpdate(file, proposal.path, proposal.ops, proposal.layout ?? undefined, proposal.scope ?? undefined);
+    // The diagram is still the one the dry run worked on: commit exactly what was reviewed (the diff
+    // and the canvas ghost came from it), as `update_diagram` commits the worker's result. Worked
+    // out again here, on the main thread and without the worker's budget, a large proposal froze
+    // the editor on Accept and could even land other geometry than the ghost the person approved.
+    const reviewed = dryRun.base === file && dryRun.resultFile && !dryRun.dryRunProblem ? dryRun.resultFile : null;
+    const result = reviewed
+      ? { file: reviewed, quality: { errors: [] as readonly unknown[] } }
+      : applyUpdate(file, proposal.path, proposal.ops, proposal.layout ?? undefined, proposal.scope ?? undefined);
     if (result.quality.errors.length) return { error: 'This proposal would leave unreadable content. Ask the agent to revise it.' };
     if (preconditionConflicts(file, proposal.path, proposal.preconditions, result.file).length > 0) {
       return { error: 'The diagram changed in a way this proposal conflicts with. Ask the agent to revise it.' };

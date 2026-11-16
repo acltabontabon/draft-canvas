@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, nextFrames } from './canvas';
+import { armTool, newCanvas, nextFrames } from './canvas';
 
 /**
  * Alt+Arrow (spatial navigation between nearby elements) and Alt+Shift+Left/Right (relationship
@@ -18,7 +18,7 @@ import { newCanvas, nextFrames } from './canvas';
  * there. The layer on its way out has already stopped taking pointer events.
  */
 async function createNode(page: Page, tool: string, at: { x: number; y: number }) {
-  await page.getByRole('button', { name: tool, exact: true }).click();
+  await armTool(page, tool);
   const pane = (await page.locator('.react-flow__pane').boundingBox())!;
   const blocked = await page.evaluate(
     ([x, y]) => document.elementFromPoint(x, y)?.closest('.dc-empty')?.className ?? null,

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { agentStarters } from '../fixtures/gallery';
 import { capabilities } from '../../src/agent/capabilities';
 import { compose } from '../../src/agent/compile';
 import { readDiagram } from '../../src/agent/read';
@@ -30,7 +31,7 @@ const file = () =>
 describe('compact agent output', () => {
   it('answers get_capabilities without topics with an index and the common words, not every topic', () => {
     const index = capabilities({});
-    expect(Object.keys(index.topics as object)).toEqual(['types', 'relationships', 'c4', 'flows', 'notes', 'starters', 'limits', 'layout', 'readability']);
+    expect(Object.keys(index.topics as object)).toEqual(['types', 'relationships', 'c4', 'flows', 'notes', 'sequences', 'starters', 'limits', 'layout', 'readability']);
     expect(index.types).toContain('api');
     expect(index.noteKinds).toEqual(['note', 'question', 'warning', 'decision', 'code', 'label']);
     expect(index.readability).toBeUndefined();
@@ -45,7 +46,7 @@ describe('compact agent output', () => {
   });
 
   it('answers a starter and topics asked for together', () => {
-    const both = capabilities({ topics: ['limits'], starter: 'monolith' });
+    const both = capabilities({ topics: ['limits'], starter: 'monolith' }, agentStarters());
     expect(both.starter).toMatchObject({ id: 'monolith' });
     expect(both.limits).toBeDefined();
   });

@@ -109,18 +109,20 @@ describe('the companion across diagrams', () => {
     expect(controller.companionSend).not.toHaveBeenCalled();
   });
 
-  it('walks on and says hello on each diagram opened this run, the editor staying mounted', async () => {
+  it('comes up and says hello on each diagram opened this run, the editor staying mounted', async () => {
     // Diagrams not opened before in this file: each is greeted once per app run.
     useEditorStore.setState({ document: { ...createDocument('Inventory') } });
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     mount();
     await act(() => vi.advanceTimersByTimeAsync(10));
-    expect(screen.getByRole('img', { name: 'Nodi, on the way' })).toBeTruthy();
-    // Arrived (the walk's own end never plays in jsdom: its fallback timer stands in).
-    await act(() => vi.advanceTimersByTimeAsync(3000));
-    expect(screen.queryByRole('img', { name: 'Nodi, on the way' })).toBeNull();
+    // Up on the canvas (no status bar here to jump from, so simply there), saying hello.
+    const hello = () => document.querySelector('.dc-companion-say[data-shown="true"]');
+    expect(screen.getByRole('button', { name: 'Open Nodi' })).toBeTruthy();
+    expect(hello()).toBeTruthy();
     act(() => useEditorStore.setState({ document: { ...createDocument('Shipping') }, selection: { nodes: [], edges: [] } }));
-    expect(screen.getByRole('img', { name: 'Nodi, on the way' })).toBeTruthy();
+    await act(() => vi.advanceTimersByTimeAsync(10));
+    expect(hello()).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open Nodi' })).toBeTruthy();
   });
 });
 

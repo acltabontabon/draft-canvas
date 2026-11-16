@@ -17,6 +17,17 @@ import type { Candidate, Stage } from './progress';
 export const SOFT_BUDGET_MS = 6_000;
 /** A worker still busy by now is stopped. Below the shell's 30 s budget before a commit. */
 export const HARD_LIMIT_MS = 20_000;
+/**
+ * The same for the editor's Arrange and Tidy up. Nothing waits on them but a person who can press
+ * Cancel, and their own budget (`layoutPlan.ts`) ends the search long before; this is only the net
+ * under a layout that does not end at all.
+ */
+export const LAYOUT_HARD_LIMIT_MS = 90_000;
+
+const hardLimitOf = (job: Job) => (job.kind === 'arrange' || job.kind === 'tidy' ? LAYOUT_HARD_LIMIT_MS : HARD_LIMIT_MS);
+
+/** What `runOffThread` rejects with when its `signal` aborts: nothing was changed or kept. */
+export const cancelled = () => new DOMException('The job was cancelled.', 'AbortError');
 
 export interface Progress {
   /** Increases with every report of one job: an older one arriving late is ignored. */
@@ -86,10 +97,16 @@ function stopWorker(reason: 'unusable' | 'stopped') {
   pending.clear();
 }
 
-const onPage = async (job: Job, progress?: (progress: Progress) => void): Promise<JobResult> => {
+const onPage = async (job: Job, progress?: (progress: Progress) => void, signal?: AbortSignal): Promise<JobResult> => {
+  // One turn of the event loop first, so what asked for the job (a busy state, a Cancel) paints and
+  // can be pressed before the page is held. A Cancel that lands in that turn stops it before it starts;
+  // once it runs, the page runs it through.
   await new Promise((resolve) => setTimeout(resolve, 0));
+  if (signal?.aborted) throw cancelled();
   let seq = 0;
-  return runJob(job, performance.now() + SOFT_BUDGET_MS, (stage, candidate) => progress?.({ seq: (seq += 1), stage, ...(candidate ? { candidate } : {}) }));
+  const result = runJob(job, performance.now() + SOFT_BUDGET_MS, (stage, candidate) => progress?.({ seq: (seq += 1), stage, ...(candidate ? { candidate } : {}) }));
+  if (signal?.aborted) throw cancelled();
+  return result;
 };
 
 /**
@@ -100,23 +117,38 @@ const onPage = async (job: Job, progress?: (progress: Progress) => void): Promis
  */
 let turn: Promise<unknown> = Promise.resolve();
 
-export function runOffThread(job: Job, progress?: (progress: Progress) => void): Promise<JobResult> {
-  const run = turn.then(() => runNow(job, progress));
+/**
+ * Runs `job` on the worker, or on the page when there is none. `signal` cancels it: the worker is
+ * stopped (the only way to stop a computation) and this rejects with `cancelled()`, nothing kept; a job
+ * still waiting its turn never starts.
+ */
+export function runOffThread(job: Job, progress?: (progress: Progress) => void, signal?: AbortSignal): Promise<JobResult> {
+  const run = turn.then(() => runNow(job, progress, signal));
   turn = run.catch(() => undefined);
   return run;
 }
 
-async function runNow(job: Job, progress?: (progress: Progress) => void): Promise<JobResult> {
+async function runNow(job: Job, progress?: (progress: Progress) => void, signal?: AbortSignal): Promise<JobResult> {
+  if (signal?.aborted) throw cancelled();
   const thread = startWorker();
-  if (!thread) return onPage(job, progress);
+  if (!thread) return onPage(job, progress, signal);
   const id = nextId++;
+  const limit = hardLimitOf(job);
+  let stopOnAbort: (() => void) | undefined;
   const reply = await new Promise<Exclude<Reply, { progress: Progress }> | 'timeout'>((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(id);
       // The only way to stop a runaway computation: the next request starts a fresh worker.
       stopWorker('stopped');
       resolve('timeout');
-    }, HARD_LIMIT_MS);
+    }, limit);
+    stopOnAbort = () => {
+      clearTimeout(timer);
+      // Jobs take turns, so the worker holds only this one: stopping it stops nothing else.
+      if (pending.has(id)) stopWorker('stopped');
+      resolve('timeout');
+    };
+    signal?.addEventListener('abort', stopOnAbort, { once: true });
     pending.set(id, {
       resolve: (answer) => {
         clearTimeout(timer);
@@ -133,16 +165,20 @@ async function runNow(job: Job, progress?: (progress: Progress) => void): Promis
       reject(error);
     }
   });
+  if (stopOnAbort) signal?.removeEventListener('abort', stopOnAbort);
+  // Cancelled while it ran (or while a stopped worker's job was about to start over): not a timeout,
+  // not a retry.
+  if (signal?.aborted) throw cancelled();
   if (reply === 'timeout') {
-    throw new AgentError('LAYOUT_FAILED', `Arranging this took longer than ${HARD_LIMIT_MS / 1000} s and was stopped. Nothing changed.`, {
-      hint: 'Send fewer elements per request — build the diagram in steps, or split it into views with inside.',
+    throw new AgentError('LAYOUT_FAILED', `Arranging this took longer than ${limit / 1000} s and was stopped. Nothing changed.`, {
+      hint: job.kind === 'arrange' || job.kind === 'tidy' ? 'Arrange or tidy a selection instead, or split the diagram into views with inside.' : 'Send fewer elements per request — build the diagram in steps, or split it into views with inside.',
     });
   }
-  if ('stopped' in reply) return runNow(job, progress);
+  if ('stopped' in reply) return runNow(job, progress, signal);
   if ('unsupported' in reply) {
     workerUnusable = true;
     stopWorker('unusable');
-    return onPage(job, progress);
+    return onPage(job, progress, signal);
   }
   if (!reply.ok) throw new AgentError(reply.error.code, reply.error.message, { hint: reply.error.hint, retryable: reply.error.retryable, details: reply.error.details });
   return reply.value;

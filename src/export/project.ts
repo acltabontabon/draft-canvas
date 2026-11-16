@@ -23,12 +23,15 @@ export function serializeDocument(document: DraftDocument): string {
       title: document.metadata.title,
       createdAt: document.metadata.createdAt,
       updatedAt: document.metadata.updatedAt,
+      ...(document.metadata.origin ? { origin: document.metadata.origin } : {}),
     },
     nodes: canonical.nodes(document.nodes),
     edges: canonical.edges(document.edges),
     viewport: canonical.viewport(document.viewport),
     settings: canonical.settings(document.settings),
     flows: canonical.flows(document.flows),
+    // Sketches only when there are some: a canvas nobody drew on writes exactly the bytes it did.
+    ...((document.ink?.length ?? 0) === 0 ? {} : { ink: canonical.ink(document.ink!) }),
     // Same rule as `level` below, and for the same reason: most canvases never raise a point, and an
     // empty array written into every one of them would change the bytes of every file in every
     // repository the moment this shipped. Absent is what `normalizeDocument` reads as none.
@@ -77,7 +80,7 @@ export async function readImportText(file: File): Promise<{ ok: true; text: stri
   } catch (error) {
     return {
       ok: false,
-      error: error instanceof Error ? error.message : 'That file could not be read.',
+      error: error instanceof Error ? error.message : 'That file couldn’t be read.',
     };
   }
 }

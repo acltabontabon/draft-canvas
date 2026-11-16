@@ -7,11 +7,11 @@ descriptions themselves are the contract; this is the working knowledge around t
 
 | Step | Call | Keep |
 | --- | --- | --- |
-| Learn the rules once | `get_capabilities({topics: ["readability"]})` | — |
+| Look up unfamiliar layout guidance | `get_capabilities({topics: ["readability"]})` | — |
 | Find an existing diagram | `list_diagrams({query: "<system name>"})` | `diagramId`, `revision` |
 | Read it | `read_diagram({diagramId, view?: {inside: [...]}})` | ids, `revision` |
 | Draw it | `create_diagram({requestId, title, …, open: true})` | `diagramId`, `revision` |
-| Look at it | `render_diagram({diagramId, view?, format: "png", scale: 1})` | — |
+| Check a visual change | `render_diagram({diagramId, view?, format: "png", scale: 1})` | — |
 | Change it | `update_diagram({requestId, diagramId, expectedRevision, view?, ops})` | new `revision` |
 | Try a change first | `preview_diagram({diagramId, expectedRevision, view?, ops})` | `previewId` |
 | Propose instead of apply | `submit_proposal({requestId, diagramId, expectedRevision, ops, summary, rationale})` | `proposalId` |
@@ -23,8 +23,8 @@ descriptions themselves are the contract; this is the working knowledge around t
 
 ## Read only what the task needs
 
-`read_diagram({diagramId, include: ["views"]})` includes the view outline. Use its paths to address
-rooms; `focus: {nodes: [ids]}`, `{group: id}` or `{flow: id}` narrows a read within one view. A focused
+`read_diagram({diagramId, format: "outline"})` lists nested views without their contents.
+Use `include: ["views"]` when you also need the current view. Use the returned paths to address rooms; `focus: {nodes: [ids]}`, `{group: id}` or `{flow: id}` narrows a read within one view. A focused
 read is not the entire diagram: do not remove elements because they are absent from that response.
 Follow its cursor when paginated. Request `include: ["geometry"]` for positioning, not routine edits.
 Use `read_attachment` with the same revision and returned `nextOffset` when an attachment is truncated.
@@ -59,13 +59,14 @@ without moving shapes again or sacrificing readable neighbours and shared trunks
 and explicitly requested create pins stay as authored. A clean receipt needs no extra arrange pass.
 
 Apply the advisories that make sense in **one** `update_diagram` per affected view, carrying each
-returned file revision into the next call, then render. Two rounds of polish
-is plenty; past that, tell the person what you would still change.
+returned file revision into the next call. When geometry matters, render the result. After two
+polish rounds, tell the person what you would still change.
 
 ## Look before you finish
 
 `render_diagram` returns the PNG the person would export. For a new map, render the top view and
-every inside view. For edits, render only affected views.
+each inside view that needs a visual check. For edits, render affected regions when placement,
+routing or legibility needs visual verification. A clean receipt verifies routine text or metadata edits.
 Judge it as a reader:
 
 - Does the main path read in one direction, mostly straight?
@@ -139,8 +140,16 @@ Every refusal carries a `hint` saying what to do; this is the short version.
 | `BUSY`, `TIMEOUT`, `APP_UNRESPONSIVE` | Nothing was changed | Retry the identical request with the same `requestId`, at most twice |
 | `OUTCOME_UNKNOWN` | The app stopped answering mid-change | `read_diagram` and compare before sending anything again |
 | `READ_ONLY` | The diagram is read-only (on disk, or opened read-only) | Don't retry. Tell the person; it changes only once they can edit it |
-| `DOCUMENT_BUSY` | The person has unsaved or recovered changes to that diagram, or the file changed on disk under them | Don't retry. Ask them to save or discard, then `read_diagram` and rebuild the change |
+| `DOCUMENT_BUSY` | The open diagram changed while the request waited; or the person has unsaved or recovered changes the file on disk disagrees with; or `activate` couldn't open it | Changed while waiting: `read_diagram` and send the change again. Unsaved or recovered changes: ask the person to save or discard, then `read_diagram` and rebuild it. `activate`: leave it out to change the file without opening it |
 | `NOT_FOUND` | No such diagram or view | `list_diagrams` again |
+| `NOT_ACTIVE` | `read_selection` or a selection render, but that diagram isn't open | Ask the person to open it and select, or read the whole view with `read_diagram` |
+| `SCOPE_TARGET_MISSING` | An id in `scope` is gone since the selection was captured | `read_selection` again |
+| `CURSOR_STALE` | The diagram changed between pages of a paged read | Read again from the first page |
+| `DUPLICATE_FLOW`, `CONTAINMENT_CYCLE` | Moving inside or out would clash with a flow's title, or put a shape inside itself | Rename the flow first, or pick another owner |
+| `REQUEST_ID_MISMATCH` | That `requestId` was used for a different request | Use a fresh UUID for every new change; reuse one only to retry the identical request |
+| `CANCELLED` | The person stopped the request | Ask before sending it again |
+| `PROPOSAL_ONLY`, `RUN_LIMIT` | In a Nodi run: changes go through review, and only to the run's diagram | Send the same ops with `submit_proposal`; work only on that diagram |
+| `UNSUPPORTED` | The file isn't a diagram Draft Canvas can read | Tell the person; don't overwrite it |
 
 Never answer a failed update by creating a new diagram.
 
@@ -150,6 +159,26 @@ When the person asks to *review* a change against the diagram ("what does this P
 architecturally? don't apply it"), send the ops through `submit_proposal` with a `summary`, a
 `rationale`, `assumptions` and `openQuestions`. Draft Canvas shows it for them to accept or reject;
 don't wait for the decision. `ops: []` with a summary is a valid "no architectural impact" answer.
+
+## Sequences
+
+A sequence is a native element beside the architecture: participants, messages in order, replies,
+conditions, loops and parallel branches, laid out by the app. Send one when the order, the replies or
+the conditions go beyond what the relationships say (a protocol, a saga, an error path) — and only
+from an order the person or the code gives. Write it as a Mermaid `sequenceDiagram`; `links` makes a
+participant stand for an element of the same view, so it takes that element's name, kind and
+technology and follows it:
+
+```json
+{ "op": "add", "sequences": [ { "id": "place-order", "title": "Place an order",
+  "mermaid": "sequenceDiagram\n  actor shopper as Shopper\n  participant api as Orders API\n  participant db as Orders\n  shopper->>+api: POST /orders\n  api->>+db: INSERT order\n  db-->>-api: order id\n  alt payment accepted\n    api-->>shopper: 201 Created\n  else declined\n    api-->>-shopper: 402 Payment Required\n  end",
+  "links": { "api": "orders-api", "db": "orders-db" } } ] }
+```
+
+`read_diagram` returns each sequence the same way (`mermaid`, `links`). `set.mermaid` replaces what
+it holds and keeps the links of participants still written under the same ids; `set.title` renames
+it; `set.links` re-links. A receipt advisory names anything in the text that is not drawn
+(`autonumber`, `rect`, lost messages). `get_capabilities` topic `sequences` has the rest.
 
 ## Styled labels
 

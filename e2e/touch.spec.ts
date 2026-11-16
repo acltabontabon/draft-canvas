@@ -109,7 +109,7 @@ test.describe('touch', () => {
   test('a long-press on empty canvas opens the Add menu', async ({ page, browserName }) => {
     await newCanvas(page, 'Touch long-press pane');
     await addService(page);
-    await hold(page, browserName, { x: 40, y: 860 }, 700);
+    await hold(page, browserName, { x: 40, y: 760 }, 700);
     const menu = page.locator('.dc-context-menu');
     await expect(menu).toBeVisible();
     await expect(menu.getByRole('menuitem', { name: 'Service', exact: true })).toBeVisible();

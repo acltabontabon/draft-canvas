@@ -16,10 +16,12 @@ import {
   sharedMetadataOf,
   summarize,
   type DraftRepository,
+  type LoadFailure,
   type SaveOptions,
   type SharedMetadata,
 } from './DraftRepository';
 import { createId } from '../document/ids';
+import { cleanTitle } from '../document/sanitize';
 import { isLibraryShape, libraryShapeOf } from '../document/shape';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { isRecord } from '../lib/isRecord';
@@ -134,6 +136,8 @@ export class IndexedDbRepository implements DraftRepository {
   private readonly writingStamps = new Map<string, string>();
   /** See `DraftRepository.takeRepairs`. */
   private readonly repairs = new Map<string, string[]>();
+  /** See `DraftRepository.takeLoadFailure`. */
+  private readonly loadFailures = new Map<string, LoadFailure>();
 
   private constructor(db: IDBPDatabase<DraftDb>) {
     this.db = db;
@@ -186,6 +190,12 @@ export class IndexedDbRepository implements DraftRepository {
     return found;
   }
 
+  takeLoadFailure(id: string): LoadFailure | undefined {
+    const found = this.loadFailures.get(id);
+    this.loadFailures.delete(id);
+    return found;
+  }
+
   knownContentStamp(id: string): string | undefined {
     return this.stamps.get(id);
   }
@@ -226,6 +236,7 @@ export class IndexedDbRepository implements DraftRepository {
     // making this tab's next save report a spurious conflict against its own just-loaded content.
     let summary: DraftSummary | undefined;
     let fetchedBody: BodyRow | undefined;
+    this.loadFailures.delete(id);
     try {
       const tx = this.db.transaction(['documents', 'bodies'], 'readonly');
       [summary, fetchedBody] = await Promise.all([
@@ -235,6 +246,7 @@ export class IndexedDbRepository implements DraftRepository {
       await tx.done;
     } catch (error) {
       console.warn(`[draft-canvas] Local record ${id} could not be read from IndexedDB:`, error);
+      this.loadFailures.set(id, 'unreadable');
       return null;
     }
     if (!fetchedBody) return null;
@@ -295,6 +307,7 @@ export class IndexedDbRepository implements DraftRepository {
     row: BodyRow;
   } | null> {
     let rawDocument: unknown;
+    this.loadFailures.set(id, 'unreadable');
     if (isPlainBody(row)) {
       rawDocument = row.document;
     } else if (isEncryptedBody(row)) {
@@ -320,8 +333,10 @@ export class IndexedDbRepository implements DraftRepository {
     const result = parseDocument(rawDocument);
     if (!result.ok) {
       console.warn(`[draft-canvas] Local record ${id} is unreadable: ${result.error}`);
+      this.loadFailures.set(id, result.reason === 'newer' ? 'newer' : 'unreadable');
       return null;
     }
+    this.loadFailures.delete(id);
 
     const priorVersion = isRecord(rawDocument) ? rawDocument.version : undefined;
     const changed = result.repairs.filter((line) => !line.startsWith('Upgraded document format'));
@@ -560,7 +575,9 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   async rename(id: string, title: string): Promise<void> {
-    await this.updateMetadata(id, (metadata) => ({ ...metadata, title }));
+    // The one rule every title follows (`cleanTitle`), whichever door it came through.
+    const clean = cleanTitle(title);
+    await this.updateMetadata(id, (metadata) => ({ ...metadata, title: clean }));
   }
 
   async listProjects(): Promise<Project[]> {

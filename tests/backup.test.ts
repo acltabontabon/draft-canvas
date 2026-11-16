@@ -3,7 +3,7 @@ import { createDocument, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
 import type { DraftDocument } from '../src/document/types';
 import { unzipFiles } from '../src/export/zip';
-import { backupFileName, backupIsStale, buildBackup, describeRestore, restoreBackup } from '../src/storage/backup';
+import { backupFileName, backupIsStale, buildBackup, describeRestore, restoreBackup, worthBackingUp } from '../src/storage/backup';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
 import { setFileSaver } from '../src/export/download';
 import { backUpLibrary } from '../src/ui/Library/backupActions';
@@ -135,7 +135,7 @@ describe('restoreBackup', () => {
     expect(list).toHaveLength(4);
     // The newer local copy is untouched; the restored one sits beside it, in the same project.
     expect((await repository.load(orders.metadata.id))!.nodes).toHaveLength(0);
-    const copy = list.find((entry) => entry.title === 'Orders' && entry.id !== orders.metadata.id)!;
+    const copy = list.find((entry) => entry.title === 'Orders copy' && entry.id !== orders.metadata.id)!;
     expect((await repository.load(copy.id))!.nodes[0]!.text).toBe('Orders API');
     expect(copy.projectId).toBe('p_shop');
     expect((await repository.listProjects())[0]!.name).toBe('Shop (renamed)');
@@ -173,7 +173,7 @@ describe('restoreBackup', () => {
     const result = await restoreBackup(fresh, tampered);
     expect(result.restored).toBe(2);
     expect(result.skipped).toEqual(['junk-d_x.draftcanvas']);
-    expect(describeRestore(result)).toBe("Restored 2 diagrams; 1 file couldn't be read.");
+    expect(describeRestore(result)).toBe('Restored 2 diagrams; 1 file couldn’t be read.');
     await expect(restoreBackup(fresh, broken)).rejects.toThrow(/ZIP/);
   });
 
@@ -191,6 +191,32 @@ describe('restoreBackup', () => {
     const result = await restoreBackup(fresh, zipFiles(files));
     expect(result).toEqual({ restored: 3, renamed: 0, skipped: [] });
     expect((await fresh.list()).map((entry) => entry.title).sort()).toEqual(['A', 'B', 'C']);
+  });
+
+  it('restores the rest of an archive when one entry is compressed or corrupt, and names it', async () => {
+    const { repository } = await seeded();
+    const { bytes } = await buildBackup(repository);
+    const damaged = new Uint8Array(bytes);
+    const view = new DataView(damaged.buffer);
+    // The first diagram's central directory entry claims Deflate — what another tool's re-zip writes.
+    const centralStart = view.getUint32(damaged.length - 22 + 16, true);
+    view.setUint16(centralStart + 10, 8, true);
+    const fresh = new MemoryRepository();
+    const result = await restoreBackup(fresh, damaged);
+    expect(result.restored).toBe(1);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0]).toMatch(/\.draftcanvas$/);
+    expect(describeRestore(result)).toBe('Restored 1 diagram; 1 file couldn’t be read.');
+    expect(await fresh.list()).toHaveLength(1);
+  });
+
+  it('gives a diagram restored beside its twin a title that tells the two apart', async () => {
+    const { repository } = await seeded();
+    const { bytes } = await buildBackup(repository);
+    const result = await restoreBackup(repository, bytes);
+    expect(result.renamed).toBe(2);
+    const titles = (await repository.list()).map((entry) => entry.title).sort();
+    expect(titles).toEqual(['Billing', 'Billing copy', 'Orders', 'Orders copy']);
   });
 
   it('reports one failing entry as skipped and still restores the rest', async () => {
@@ -221,6 +247,35 @@ describe('restoreBackup', () => {
     vi.restoreAllMocks();
     expect((await target.listProjects())[0]!.name).toBe('Shop (renamed)');
   });
+
+  it('stores only a clean copy of each manifest project, never the archive\'s object as written', async () => {
+    const { zipFiles } = await import('../src/export/zip');
+    const manifest = {
+      projects: [
+        { id: 'p_extra', name: '  Sh\u0000op\u0007  ', createdAt: 10, updatedAt: 20, injected: { big: 'x'.repeat(1000) } },
+        { id: 'p_long', name: 'n'.repeat(5000), createdAt: Number.NaN, updatedAt: 30 },
+        { id: 'p_blank', name: '\u0001\u0002', createdAt: 'yesterday', updatedAt: Infinity },
+        { id: '', name: 'No id', createdAt: 1, updatedAt: 1 },
+        { name: 'Missing id', createdAt: 1, updatedAt: 1 },
+        null,
+      ],
+      membership: {},
+    };
+    const bytes = zipFiles([{ name: 'projects.json', data: JSON.stringify(manifest) }]);
+    const target = new MemoryRepository();
+    const saveProject = vi.spyOn(target, 'saveProject');
+    const before = Date.now();
+    await restoreBackup(target, bytes);
+    const saved = saveProject.mock.calls.map(([project]) => project);
+    vi.restoreAllMocks();
+    expect(saved.map((p) => p.id)).toEqual(['p_extra', 'p_long', 'p_blank']);
+    for (const project of saved) expect(Object.keys(project).sort()).toEqual(['createdAt', 'id', 'name', 'updatedAt']);
+    expect(saved[0]).toEqual({ id: 'p_extra', name: 'Shop', createdAt: 10, updatedAt: 20 });
+    expect(saved[1]).toMatchObject({ name: 'n'.repeat(200), createdAt: 30, updatedAt: 30 });
+    expect(saved[2]!.name).toBe('Untitled project');
+    expect(saved[2]!.createdAt).toBeGreaterThanOrEqual(before);
+    expect(saved[2]!.updatedAt).toBe(saved[2]!.createdAt);
+  });
 });
 
 describe('backupIsStale', () => {
@@ -230,5 +285,16 @@ describe('backupIsStale', () => {
     expect(backupIsStale('yesterday', now)).toBe(true);
     expect(backupIsStale('2026-09-20T12:00:00Z', now)).toBe(true);
     expect(backupIsStale('2026-09-28T12:00:00Z', now)).toBe(false);
+  });
+});
+
+describe('worthBackingUp', () => {
+  it('waits for a few diagrams, or one that has outlived the day it was made', () => {
+    const now = Date.parse('2026-10-01T12:00:00Z');
+    const fresh = { createdAt: now - 60_000 };
+    expect(worthBackingUp([], now)).toBe(false);
+    expect(worthBackingUp([fresh], now)).toBe(false);
+    expect(worthBackingUp([fresh, fresh, fresh], now)).toBe(true);
+    expect(worthBackingUp([{ createdAt: now - 25 * 60 * 60 * 1000 }], now)).toBe(true);
   });
 });

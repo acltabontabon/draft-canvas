@@ -37,6 +37,8 @@ Choose **Quick Draft** on Home (`⌘N`) and start drawing; no name or folder nee
 | Rename, revert, find on disk | **File → Rename File…**, **Revert to Saved…**, **Reveal in Finder** / **File Explorer** |
 
 - The file changes only when you save. Unsaved work has a recovery copy, and closing asks first.
+- A diagram published for docs keeps its SVG beside it updated on save; see
+  [Diagrams in your docs](diagrams-in-docs.md#on-the-desktop).
 - If another app changes the file, it reloads when you have no unsaved edits; otherwise Draft Canvas
   asks before overwriting.
 
@@ -54,15 +56,15 @@ current folder. **Find a diagram** (`⌘F` on Home) searches projects, recent fi
 
 To move a diagram to another project, point at its tile on Home or in **Find a diagram** and choose
 **Move to a project**, or drag the tile onto a project's name above the grid. For the open diagram,
-use **File → Move to Project…**. The diagram moves into the project's top folder with its name and
-background image. If that project already has a diagram with the same name, Draft Canvas asks first:
-**Keep both** adds a number to the moved diagram's name, and nothing is replaced.
+use **File → Move to Project…**. It lands in the project's top folder with its background image. If
+the project already has a diagram with that name, Draft Canvas asks first; **Keep both** numbers the
+moved one, and nothing is replaced.
 
 ![Move "checkout": the project it is in now, and Payments asking to keep both copies.](../media/guides/desktop-move.png)
 
 ![A diagram dragged onto the Fulfilment project in Find a diagram.](../media/guides/desktop-move-drag.png)
 
-To bring a browser diagram here, use **Export → Document → Editable** and open the file. Encrypted
+To bring a browser diagram here, use **Export → Save an editable file → Editable** and open the file. Encrypted
 `.dcenc` files open only in the web app.
 
 ## Menu bar and system tray
@@ -74,18 +76,20 @@ For coding agents, see [Connect an AI agent](connect-an-ai-agent.md).
 
 ## Nodi
 
-Nodi, in the canvas corner, asks your own Claude Code or Codex about the open diagram: explain it, find
-its risks, or propose a change you review on the canvas. It shows up once one of them is installed;
-⌘J opens it. See [Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas).
+Nodi asks your own Claude Code or Codex about the open diagram: explain it, find its risks, or
+propose a change you review on the canvas. It appears at the right end of the status bar once one of
+them is installed; click it or press `⌘J`. See
+[Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas).
 
-![Nodi in the canvas corner, saying hello.](../media/guides/nodi-rest.png)
+![Nodi up on the canvas, saying hello.](../media/guides/nodi-rest.png)
 
 ## Settings
 
 **Settings…** (`⌘,`) has five pages: **General** (closing the window), **Canvas** (drawing style,
 next-shape suggestions and the open diagram's background), **AI agents**, **Updates** and **Support**
 (a diagnostic report with no diagram content or file paths, never sent automatically).
-**Canvas Settings…** in the menu bar and the sliders button in the status bar open it at **Canvas**. Licences are under **About Draft Canvas**.
+**Canvas Settings…** in the menu bar and the sliders button in the status bar open it at **Canvas**.
+Licences are under **About Draft Canvas**.
 
 ## Updates
 
@@ -110,12 +114,13 @@ Uninstalling keeps your diagrams and recovery data.
 | `⌘F` on Home | Find a diagram |
 | `⌘W` / `⌘Q` | Close window / quit |
 | `⌘,` | Settings |
+| `⌘J` | Nodi: open or put back to rest |
 
 On Windows, use `Ctrl`. Editor keys: [keyboard shortcuts](keyboard-and-commands.md).
 
 ## Building it yourself
 
-Install Node 22.22+, [Rust](https://www.rust-lang.org/tools/install) and
+Install Node 22.22.2+, [Rust](https://www.rust-lang.org/tools/install) and
 [Tauri's prerequisites](https://v2.tauri.app/start/prerequisites/), then:
 
 ```bash

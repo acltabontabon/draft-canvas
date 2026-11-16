@@ -4,6 +4,7 @@ import { useHostDocument } from './host/useHostDocument';
 import { useDocumentSession } from './store/useDocumentSession';
 import { LibraryScreen } from './ui/Library/LibraryScreen';
 import { useHandoffReceiver } from './ui/Library/useHandoffReceiver';
+import { DrawingLoader } from './ui/common/DrawingLoader';
 import { ErrorBoundary } from './ui/common/ErrorBoundary';
 import { PanelBoundary } from './ui/common/PanelBoundary';
 import { retryableLazy } from './ui/common/retryableLazy';
@@ -79,16 +80,19 @@ function Shell() {
   const host = useHostDocument(session, currentDesktopHost()?.channel);
   // Diagrams arriving from the editor's old address, when it opened this tab to send them.
   useHandoffReceiver(session);
-  const exampleRequested = useUiStore((state) => state.exampleRequested);
+  // "Try an example" and a gallery starter's "Open as new diagram": a canvas made the way this host
+  // makes one — a Quick Draft on desktop, a Library document on the web.
+  const newCanvasRequest = useUiStore((state) => state.newCanvasRequest);
   useEffect(() => {
-    if (!exampleRequested) return;
-    useUiStore.setState({ exampleRequested: false });
+    if (!newCanvasRequest) return;
+    useUiStore.setState({ newCanvasRequest: null });
+    const starter = newCanvasRequest.kind === 'example' ? 'example' as const : newCanvasRequest.document;
     if (__DESKTOP__ && hostKind() === 'desktop') {
-      void import('./desktop/useDesktop').then(({ getDesktopController }) => getDesktopController().newQuickDraft('order-processing'));
+      void import('./desktop/useDesktop').then(({ getDesktopController }) => getDesktopController().newQuickDraft(starter));
     } else {
-      void session.closeDocument().then((closed) => { if (closed) return session.newDocument(undefined, 'order-processing'); });
+      void session.closeDocument().then((closed) => { if (closed) return session.newDocument(undefined, starter); });
     }
-  }, [exampleRequested, session]);
+  }, [newCanvasRequest, session]);
 
   // An invite link (`#join=…`): read once, taken off the address, and offered as a dialog. The web
   // app only — an invite opens in a browser, never in the desktop app's own window.
@@ -140,11 +144,11 @@ function Shell() {
         {session.sharedLink?.locked ? (
           <SharedUnlockScreen link={session.sharedLink} ready={session.ready} />
         ) : session.openId ? (
-          <Suspense fallback={<div className="dc-editor-loading" aria-busy="true" />}>
+          <Suspense fallback={<DrawingLoader />}>
             <EditorChunk.Component session={session} />
           </Suspense>
         ) : hostKind() === 'desktop' && DesktopHomeChunk ? (
-          <Suspense fallback={<div className="dc-editor-loading" aria-busy="true" />}>
+          <Suspense fallback={<DrawingLoader />}>
             <DesktopHomeChunk.Component />
           </Suspense>
         ) : (

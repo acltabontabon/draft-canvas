@@ -226,6 +226,17 @@ describe('v21: plain text written before Markdown reads the same', () => {
     expect(nodes[2]!.attachments[0]!.text).toBe('\\*x\\*');
     expect(nodes[2]!.inside.nodes[0]!.text).toBe('\\# h');
   });
+
+  it('migrates a Text attachment on a connector, which an agent could once put there', () => {
+    const { doc } = migrateToCurrent({
+      version: 20,
+      nodes: [{ id: 'a', type: 'service', text: 'A' }, { id: 'b', type: 'service', text: 'B' }],
+      edges: [{ id: 'e', source: 'a', target: 'b', attachments: [{ id: 't', type: 'text', text: '- item' }, { id: 'n', type: 'note', text: '- item' }] }],
+      flows: [],
+    });
+    const attachments = (doc.edges as { attachments: { text: string }[] }[])[0]!.attachments;
+    expect(attachments.map((a) => a.text)).toEqual(['\\- item', '- item']);
+  });
 });
 
 describe('Format bar edits', () => {

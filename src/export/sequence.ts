@@ -10,8 +10,10 @@
  * did, comment and all.
  */
 import { flowIsPlayable } from '../document/flow';
-import type { DraftDocument } from '../document/types';
+import type { DraftDocument, DraftNode } from '../document/types';
 import { buildSequenceModel, toMermaid, toPlantUml } from '../sequence';
+import { sequenceToMermaid } from '../sequence/native/mermaid';
+import { sequenceToPlantUml } from '../sequence/native/plantuml';
 import { escapeMermaidText } from '../sequence/mermaid';
 import { collectRooms, roomTitleFor } from './rooms';
 
@@ -48,12 +50,29 @@ export function countPlayableFlows(document: DraftDocument): number {
  */
 export function sequenceSourceFor(document: DraftDocument, format: SequenceFormat): string {
   const rooms = collectRooms(document);
-  if (rooms.length === 1) return render(document, format);
-  const sections = rooms
-    .filter((room) => playableCount(room.document) > 0)
-    .map((room) => `${COMMENT[format]} Room: ${roomLabel(room, format)}\n${render(room.document, format)}`);
+  const sections: string[] = [];
+  for (const room of rooms) {
+    // A room's Flows as one diagram, then each sequence drawn in it as a diagram of its own — a
+    // sequence is already a whole interaction, not a group inside someone else's.
+    const diagrams: string[] = [];
+    if (playableCount(room.document) > 0) diagrams.push(render(room.document, format));
+    for (const node of sequencesIn(room.document)) diagrams.push(format === 'mermaid' ? sequenceToMermaid(node) : sequenceToPlantUml(node));
+    if (diagrams.length === 0) continue;
+    // Each diagram already ends in a newline; one more leaves a blank line between them.
+    const body = diagrams.join('\n');
+    sections.push(rooms.length === 1 ? body : `${COMMENT[format]} Room: ${roomLabel(room, format)}\n${body}`);
+  }
   // Nothing to play anywhere: the same empty diagram a flat canvas without Flows produces.
   if (sections.length === 0) return render(document, format);
-  // Each section already ends in a newline; one more leaves a blank line between diagrams.
   return sections.join('\n');
+}
+
+/** The sequences a view holds that have anyone in them: an empty frame is not yet a diagram. */
+function sequencesIn(document: DraftDocument): DraftNode[] {
+  return document.nodes.filter((node) => node.type === 'sequence' && (node.sequence?.participants.length ?? 0) > 0);
+}
+
+/** How many sequences the source will carry — across every room, since the source does. */
+export function countSequences(document: DraftDocument): number {
+  return collectRooms(document).reduce((sum, room) => sum + sequencesIn(room.document).length, 0);
 }

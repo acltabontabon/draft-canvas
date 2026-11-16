@@ -15,7 +15,7 @@ export function FocusIndicator() {
 
   const parts: string[] = [];
   if (focus.nodeIds.length > 0) {
-    parts.push(`${focus.nodeIds.length} ${focus.nodeIds.length === 1 ? 'node' : 'nodes'}`);
+    parts.push(`${focus.nodeIds.length} ${focus.nodeIds.length === 1 ? 'shape' : 'shapes'}`);
   }
   if (focus.edgeIds.length > 0) {
     parts.push(`${focus.edgeIds.length} ${focus.edgeIds.length === 1 ? 'connector' : 'connectors'}`);
@@ -23,8 +23,8 @@ export function FocusIndicator() {
 
   return (
     <div className="dc-focus-indicator" role="status">
-      <span>Focus{parts.length > 0 ? ` · ${parts.join(', ')}` : ''}</span>
-      <Button icon="close" variant="quiet" aria-label="Exit focus" title="Exit focus (Esc)" onClick={exitFocus} />
+      <span>Spotlight{parts.length > 0 ? ` · ${parts.join(', ')}` : ''}</span>
+      <Button icon="close" variant="quiet" aria-label="Exit spotlight" title="Exit spotlight (Esc)" onClick={exitFocus} />
     </div>
   );
 }

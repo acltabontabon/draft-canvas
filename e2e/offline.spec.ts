@@ -15,7 +15,7 @@ test.describe('offline availability', () => {
     // reload with an internal error, Firefox has no service-worker support in its driver).
     test.skip(browserName !== 'chromium', 'offline emulation with a service worker is Chromium-only in Playwright');
     await page.goto('/');
-    await expect(page.getByRole('button', { name: 'New canvas' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Quick Draft' })).toBeVisible();
 
     // Let the Service Worker finish precaching the shell before going offline
     // — the same thing a real first visit waits through, just made explicit.
@@ -25,7 +25,7 @@ test.describe('offline availability', () => {
       .poll(() => page.evaluate(async () => !!(await navigator.serviceWorker.ready).active), { timeout: 30_000 })
       .toBe(true);
 
-    await page.getByRole('button', { name: 'New canvas' }).click();
+    await page.getByRole('button', { name: 'Quick Draft' }).click();
     await expect(page.locator('.dc-editor')).toBeVisible();
     await page.getByLabel('Diagram title').fill('Offline Test');
     await page.getByLabel('Diagram title').blur();

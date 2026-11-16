@@ -3,7 +3,7 @@ import { expect, test } from '@playwright/test';
 test('About keeps bundled licences in its credits without a donation footer', async ({ page }) => {
   await page.goto('/');
   // The loading header is replaced once storage opens; wait before giving its trigger focus.
-  await expect(page.getByRole('button', { name: 'New canvas', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Quick Draft', exact: true })).toBeVisible();
   const trigger = page.getByRole('button', { name: 'About Draft Canvas' });
   // Safari mouse clicks do not focus buttons; use keyboard activation to test focus return.
   await trigger.press('Enter');

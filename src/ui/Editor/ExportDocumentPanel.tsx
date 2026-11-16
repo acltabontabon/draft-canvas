@@ -1,9 +1,10 @@
 import { SegmentedControl } from '../common/SegmentedControl';
 import type { DocumentFormat } from '../../export/exportTypes';
 
-const DESCRIPTIONS: Record<DocumentFormat, string> = {
-  editable: 'Plain, diffable JSON. Reopen it in Draft Canvas and keep editing.',
-  secure: "Locked with a passphrase you choose. Lose it, and the file can't be opened.",
+/** One short line under the choice: what you can do with the file you'll get. */
+const HINTS: Record<DocumentFormat, string> = {
+  editable: 'Plain JSON that opens again in Draft Canvas.',
+  secure: 'Needs its passphrase, which can’t be recovered.',
 };
 
 export function ExportDocumentPanel({
@@ -15,17 +16,21 @@ export function ExportDocumentPanel({
 }) {
   return (
     <div className="dc-export-panel">
-      <SegmentedControl
-        name="document-format"
-        legend="Document type"
-        value={format}
-        onChange={onChange}
-        options={[
-          { value: 'editable', label: 'Editable' },
-          { value: 'secure', label: 'Encrypted' },
-        ]}
-      />
-      <p className="dc-export-panel-description">{DESCRIPTIONS[format]}</p>
+      <div className="dc-export-form">
+        <span className="dc-export-label" aria-hidden="true">Format</span>
+        <SegmentedControl
+          name="document-format"
+          legend="Document type"
+          value={format}
+          onChange={onChange}
+          options={[
+            { value: 'editable', label: 'Editable' },
+            { value: 'secure', label: 'Encrypted' },
+          ]}
+        />
+        <span aria-hidden="true" />
+        <p className="dc-export-hint">{HINTS[format]}</p>
+      </div>
     </div>
   );
 }

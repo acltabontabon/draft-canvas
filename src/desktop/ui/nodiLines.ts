@@ -51,37 +51,25 @@ export interface RestingState {
   arrival?: string;
   /** A new version of the app to mention, now and then (`updateLine`). */
   update?: string;
-  /** Saying goodbye before wandering off, or hello after coming back. */
-  departure?: boolean;
-  returning?: boolean;
+  /** Saying where it will be, on its way back down to the status bar; `'first'` the first time. */
+  departure?: boolean | 'first';
 }
 
+/** Said on the way back down to the status bar, where Nodi waits until it is wanted. The first is the
+ *  one said the first time this app run: the promise the rest only vary. */
 const GOODBYES = [
-  'I’ll see you later, boss.',
-  'Going for coffee, boss. Shout if prod catches fire.',
-  'Off to read some RFCs, boss. Call me if anything pages.',
-  'Taking five, boss. The diagram can’t break itself. Probably.',
-  'Stretching my pixels, boss. All of them. Occupational hazard.',
-  'Going to stare at a different rectangle, boss. Personal growth.',
-  'Off to interview a rubber duck, boss. It knows too much.',
+  'Boss, if you need me, I’m just here.',
+  'I’ll be down in the status bar, boss. One click and I’m up.',
+  'Going below deck, boss. Click me if prod catches fire.',
+  'Back to my bunk by the zoom, boss. It’s 24 pixels wide and I love it.',
+  'I’ll be right down here, boss. Pretending to be a status icon.',
+  'Off to guard the status bar, boss. Nothing gets past me. Except packets.',
+  'Ducking down, boss. Shout if anything pages.',
 ];
 
-const RETURNS = [
-  'I’m here if you need me, boss.',
-  'Back, boss! Did anything break? Don’t answer that.',
-  'Missed me, boss? I missed the pager. A little.',
-  'Back from coffee, boss. My pixels are vibrating at unsafe frequencies.',
-  'Reporting for duty, boss. The rubber duck has requested a lawyer.',
-  'You moved, boss. I assumed an incident. Force of habit.',
-  'Back, boss. The RFC had an appendix. I barely escaped.',
-];
-
-export function goodbyeLine(seed: number): string {
-  return pick(GOODBYES, seed);
-}
-
-export function returnLine(seed: number): string {
-  return pick(RETURNS, seed);
+/** What Nodi says as it goes back down to the status bar: the promise itself the first time. */
+export function goodbyeLine(seed: number, first = false): string {
+  return first ? GOODBYES[0]! : pick(GOODBYES, seed);
 }
 
 /** An invitation now and then, and in between, what a companion who has seen too many incidents
@@ -449,8 +437,7 @@ export function restingLine(state: RestingState): RestingLine {
   if (state.unseen) return { tone: 'done', text: pick(DONE, runSeed), hint: 'Open', stays: true };
   if (state.poked) return { tone: 'poked', text: pick(POKED, seed), hint: 'Click to chat', stays: true };
   if (state.update) return { tone: 'update', text: state.update, hint: 'What’s new', stays: false };
-  if (state.departure) return { tone: 'greet', text: goodbyeLine(seed), hint: 'Click to chat', stays: true };
-  if (state.returning) return { tone: 'greet', text: returnLine(seed), hint: 'Click to chat', stays: false };
+  if (state.departure) return { tone: 'greet', text: goodbyeLine(seed, state.departure === 'first'), hint: 'Click to chat', stays: true };
   if (state.arrival) return { tone: 'greet', text: state.arrival, hint: 'Click to chat', stays: false };
   if (state.selected) return { tone: 'selected', text: selectedLine(state.selected, state.selectedKind, seed), hint: 'Ask me', stays: false };
   // Every other greeting is about this diagram, when Nodi has something to say about it; of the

@@ -282,13 +282,18 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
         </span>
         <div className="dc-explain-bar">
           {manyFlows && (
-            <Button
-              icon="flowPrevious"
-              variant="quiet"
-              aria-label="Previous flow"
-              disabled={flowIndex <= 0}
-              onClick={playback.previousFlow}
-            />
+            <Tooltip content={{ title: 'Previous flow', shortcut: 'Shift ←' }}>
+              {(tip) => (
+                <Button
+                  {...tip}
+                  icon="flowPrevious"
+                  variant="quiet"
+                  aria-label="Previous flow"
+                  disabled={flowIndex <= 0}
+                  onClick={playback.previousFlow}
+                />
+              )}
+            </Tooltip>
           )}
           <button
             ref={pickToggleRef}
@@ -308,37 +313,52 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
             <Icon name="down" size={13} />
           </button>
           {manyFlows && (
-            <Button
-              icon="flowNext"
-              variant="quiet"
-              className="dc-explain-next-flow-button"
-              // At the end of a flow the next one names itself: the hand-off is the thing the
-              // presenter is about to say out loud, not a bare arrow they have to remember.
-              aria-label={upcoming ? `Next flow: ${upcoming.title}` : 'Next flow'}
-              disabled={!upcoming}
-              onClick={playback.nextFlow}
-            >
-              {stage === 'closing' && upcoming ? <span className="dc-explain-next-flow">{upcoming.title}</span> : undefined}
-            </Button>
+            <Tooltip content={{ title: upcoming ? `Next flow: ${upcoming.title}` : 'Next flow', shortcut: 'Shift →' }}>
+              {(tip) => (
+                <Button
+                  {...tip}
+                  icon="flowNext"
+                  variant="quiet"
+                  className="dc-explain-next-flow-button"
+                  // At the end of a flow the next one names itself: the hand-off is the thing the
+                  // presenter is about to say out loud, not a bare arrow they have to remember.
+                  aria-label={upcoming ? `Next flow: ${upcoming.title}` : 'Next flow'}
+                  disabled={!upcoming}
+                  onClick={playback.nextFlow}
+                >
+                  {stage === 'closing' && upcoming ? <span className="dc-explain-next-flow">{upcoming.title}</span> : undefined}
+                </Button>
+              )}
+            </Tooltip>
           )}
           <span className="dc-inspector-divider" />
-          <Button
-            icon="back"
-            variant="quiet"
-            aria-label="Previous step"
-            disabled={stage === 'opening'}
-            onClick={playback.previous}
-          />
+          <Tooltip content={{ title: 'Previous step', shortcut: '←' }}>
+            {(tip) => (
+              <Button
+                {...tip}
+                icon="back"
+                variant="quiet"
+                aria-label="Previous step"
+                disabled={stage === 'opening'}
+                onClick={playback.previous}
+              />
+            )}
+          </Tooltip>
           <Timeline playback={playback} nodes={nodes} />
           {playback.atEnd ? (
             <span className="dc-explain-end">End</span>
           ) : (
-            <Button
-              icon="forward"
-              variant="quiet"
-              aria-label={stage === 'opening' ? 'Begin' : stage === 'closing' ? (upcoming ? `Next flow: ${upcoming.title}` : 'Next step') : 'Next step'}
-              onClick={playback.next}
-            />
+            <Tooltip content={{ title: stage === 'opening' ? 'Begin' : 'Next step', shortcut: '→' }}>
+              {(tip) => (
+                <Button
+                  {...tip}
+                  icon="forward"
+                  variant="quiet"
+                  aria-label={stage === 'opening' ? 'Begin' : stage === 'closing' ? (upcoming ? `Next flow: ${upcoming.title}` : 'Next step') : 'Next step'}
+                  onClick={playback.next}
+                />
+              )}
+            </Tooltip>
           )}
           <span className="dc-explain-count" aria-hidden="true">
             {stage === 'step' ? `Step ${playback.step} / ${total}` : count(total, 'step')}
@@ -376,9 +396,13 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
           <Tooltip content={{ title: pointer ? 'Pointer off' : 'Pointer', shortcut: 'P' }}>
             {(tip) => <Button {...tip} icon="pointer" variant="quiet" active={pointer} aria-label="Pointer" onClick={togglePointer} />}
           </Tooltip>
-          <Button variant="quiet" onClick={leave}>
-            Exit
-          </Button>
+          <Tooltip content={{ title: 'Exit presentation', shortcut: 'Esc' }}>
+            {(tip) => (
+              <Button {...tip} variant="quiet" onClick={leave}>
+                Exit
+              </Button>
+            )}
+          </Tooltip>
         </div>
       </div>
     </>

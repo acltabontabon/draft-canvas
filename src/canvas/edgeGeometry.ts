@@ -38,7 +38,7 @@ export function rectOfInternal(node: InternalNode, type?: DraftNodeType): Rect |
 
 // The chip row's placement moved beside the exporter's copy of the row (`edges/attachmentChips.ts`),
 // so the canvas and the picture hang it off the same point by the same rule.
-export { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget, captionSideOf } from '../edges/attachmentChips';
+export { ATTACHMENT_ROW_GAP, attachmentRowBelowsSourceOrTarget } from '../edges/attachmentChips';
 
 /**
  * A connector's label point, routed exactly as `DraftEdgeView` draws it — obstacles, lane, bundle

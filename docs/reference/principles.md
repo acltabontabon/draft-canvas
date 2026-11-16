@@ -26,5 +26,5 @@ what changes.
 - An agent is limited to what the person allowed, and Draft Canvas enforces that limit itself rather
   than trusting the agent's prompt to respect it.
 
-See [Agent integration](agent-integration.md) and [Privacy](privacy.md) for how each of these is held
-in place.
+See [Connect an AI agent](../guides/connect-an-ai-agent.md) for setup and review, and [Privacy](privacy.md)
+for how Draft Canvas handles your data.

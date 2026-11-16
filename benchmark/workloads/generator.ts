@@ -5,7 +5,7 @@
  * `benchmark/workloads/layout.ts` for placement.
  */
 
-import { buildStarter, starterById, starterSize } from '../../src/starters';
+import { buildStarter, starterById, starterSize } from '../../tests/fixtures/starters-v1';
 import { categoryOf, inferRelationship } from '../../src/document/connectorSemantics';
 import { createDocument, createEdge } from '../../src/document/factory';
 import type { DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../../src/document/types';

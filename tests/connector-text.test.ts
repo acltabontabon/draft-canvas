@@ -30,8 +30,8 @@ describe('connector text', () => {
     const label = rule('.dc-edge-label');
     expect(declaration(label, 'font-size')).toBe(`${TEXT_SIZES.edgeLabel}px`);
     expect(declaration(label, 'font-weight')).toBe(String(FONTS.edgeLabel.weight));
-    // The caption is filled with `theme.textFaint` (`--dc-text-faint`); the label matches it.
-    expect(declaration(label, 'color')).toBe('var(--dc-text-faint)');
+    // The caption is filled with `theme.edgeText` (`--dc-edge-text`); the label matches it.
+    expect(declaration(label, 'color')).toBe('var(--dc-edge-text)');
   });
 
   it('draws the reply label at that size too', () => {

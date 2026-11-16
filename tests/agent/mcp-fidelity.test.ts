@@ -6,7 +6,7 @@ import { readAttachment, readDiagram, READ_LIMITS } from '../../src/agent/read';
 import { applyUpdate } from '../../src/agent/patch';
 import { diffForReview, prepareProposal, preconditionConflicts } from '../../src/agent/proposal';
 import { schemaProblems, validateToolInput } from '../../src/agent/contract';
-import { TOOLS } from '../../src/agent/schema';
+import { FULL_TOOLS as TOOLS } from '../../src/agent/schema';
 import { renderFocus } from '../../src/agent/focus';
 import { routeGeometry } from '../../src/agent/route';
 import { viewOf } from '../../src/depth/tree';

@@ -124,6 +124,10 @@ test('Arrange selection leaves a fixed neighbor in place', async ({ page }) => {
     return JSON.stringify(nodes.slice(2));
   });
   await command(page, 'Arrange selection');
+  // Shown first, in the view's own direction: nothing moves until Apply.
+  const bar = page.getByRole('region', { name: 'Arrange preview' });
+  await expect(bar).toContainText('Arrange selection');
+  await bar.getByRole('button', { name: 'Apply' }).click();
   await expect.poll(() => page.evaluate(async () => (await import('/src/store/editorStore.ts')).useEditorStore.getState().history.past.at(-1)?.label)).toBe('Arrange selection');
   expect(await page.evaluate(async () => JSON.stringify((await import('/src/store/editorStore.ts')).useEditorStore.getState().document.nodes.slice(2)))).toBe(before);
 });

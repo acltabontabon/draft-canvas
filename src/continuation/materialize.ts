@@ -1,8 +1,10 @@
 import { capabilityFor, categoryOf, inferRelationship } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
+import { BOUNDARY_HEADER_BAND } from '../document/boundaryHeader';
 import { createEdge, createNode, defaultSizeFor } from '../document/factory';
 import {
   addNodes,
+  anchorOffsetY,
   COMPANION_GAP,
   companionRegion,
   enclosingParentId,
@@ -12,7 +14,7 @@ import {
 import type { DraftDocument, DraftEdge, DraftNode, EdgeAnchor } from '../document/types';
 import { connectorClearance } from '../edges/clearance';
 import { recoveryBranchAnchor } from '../edges/compensationMarker';
-import { chooseSides, type Rect } from '../edges/routing';
+import { LABEL_ARROW_CLEARANCE, chooseSides, type Rect } from '../edges/routing';
 import { FONTS } from '../render/text/fonts';
 import { getMeasurer } from '../render/text/measure';
 import { derivedName } from './naming';
@@ -75,18 +77,26 @@ export function materialize(
         : undefined;
 
     const gap = gapForCaption(caption);
+    // The two ends of the connector into this node, level: its anchor is a Queue's tube or a Data
+    // Store's glyph, not its box's middle, so top-aligning the boxes drew most suggestions' connectors
+    // with a jog — and a jog is where a caption loses its room.
+    const align = { host: anchorOffsetY(host), self: anchorOffsetY({ type: spec.type, ...size }) };
     // Where the connectors already drawn through here are, so a candidate that would sit on one
     // ranks behind a candidate that wouldn't. A preference only: see `PlaceNearOptions.avoid`.
     // `doc` has neither the nodes placed so far nor the fragment's own new connectors, so a chain is
     // never asked to dodge the connector it is about to draw to itself. It is also the document whose
     // routes the canvas already cached: a `working` that differs by a node re-routes every connector
-    // in the diagram on each fragment node (half a second at 1000 nodes).
-    const avoid = connectorClearance(doc, companionRegion(host, size, gap, direction));
+    // in the diagram on each fragment node (half a second at 1000 nodes). The boundary's title row
+    // is on the list too: a shape set down in it reads as part of the heading.
+    const avoid = [
+      ...connectorClearance(doc, companionRegion(host, size, gap, direction, align)),
+      ...(parent ? [{ x: parent.x, y: parent.y, width: parent.width, height: BOUNDARY_HEADER_BAND }] : []),
+    ];
 
     const position =
       index === 0 && options.at
         ? { x: Math.round(options.at.x), y: Math.round(options.at.y) }
-        : tryPlaceNear(working, host, size, gap, { direction, parent, avoid });
+        : tryPlaceNear(working, host, size, gap, { direction, parent, avoid, align });
     if (!position) return undefined;
 
     const derived = spec.text === undefined ? derivedName(hostForGap, spec) : undefined;
@@ -226,9 +236,15 @@ export function horizontalAnchorsFor(
   };
 }
 
-/** Comfortable clearance on each side of a connector's own caption, so it never reads as crowding
- *  either endpoint it sits between. */
-const CAPTION_CLEARANCE = 16;
+/**
+ * Clearance kept on each side of a connector's own caption, past what routing itself holds back.
+ * Routing keeps a caption `LABEL_ARROW_CLEARANCE` clear of the arrowhead and, symmetrically about
+ * the line's middle, of the shape at the other end — so the room a caption is laid out in is the gap
+ * less twice that, and a gap of the caption's width plus 16 on each side left it four pixels of room,
+ * which any jog took away and an ellipsis ("sends…") filled. 8 more than the arrow's clearance gives
+ * the caption its whole width and 16 to spare on a straight run.
+ */
+const CAPTION_CLEARANCE = LABEL_ARROW_CLEARANCE + 8;
 
 /**
  * How far apart a generated companion needs to land so its connector's own caption — "after 3

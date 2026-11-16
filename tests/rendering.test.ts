@@ -13,6 +13,7 @@ import { layoutText, baselineOf } from '../src/render/text/layout';
 import { StaticTextMeasurer } from '../src/render/text/measure';
 import { FONTS } from '../src/render/text/fonts';
 import { DARK, LIGHT } from '../src/render/theme/tokens';
+import { describeAttachmentTab } from '../src/edges/attachmentChips';
 import { routeBetween, chooseSides, rectOf } from '../src/edges/routing';
 
 const measurer = new StaticTextMeasurer();
@@ -516,7 +517,9 @@ describe('SVG export shows attachments the way the canvas does at rest', () => {
     const edge = { ...createEdge({ source: a.id, target: b.id }), attachments: [createAttachment({ type: 'note', text: 'retries' })] };
     const doc = addEdges(addNodes(createDocument('Attachments'), [a, b]), [edge]);
     const { svg } = renderDocumentSvg(doc);
-    expect(svg).toContain('&lt;&gt; 1');
+    // The shape's attachment tab: the paperclip `describeAttachmentTab` draws, in the marker rail.
+    const clip = describeAttachmentTab(1, { theme: LIGHT }).flatMap((shape) => (shape.t === 'group' ? shape.children : [])).find((shape) => shape.t === 'path');
+    expect(clip && clip.t === 'path' && svg.includes(clip.d)).toBe(true);
     expect(svg).toContain('>NOTE<');
     expect(parseSvg(svg).querySelector('parsererror')).toBeNull();
   });

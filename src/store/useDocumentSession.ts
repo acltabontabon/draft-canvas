@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { cloneDocumentAsNew, createDocument } from '../document/factory';
+import { DEFAULT_TITLE, titleWithSuffix } from '../document/sanitize';
 import { createId } from '../document/ids';
 import { totals } from '../depth/tree';
 import { LIMITS } from '../document/limits';
@@ -12,15 +13,19 @@ import { holdOpen, openAnywhere } from '../storage/openPresence';
 import { discardReloadStash, stashForReload, takeReloadStash } from '../storage/reloadStash';
 import { logDiagnostic } from '../lib/diagnostics';
 import { loadFailureNotice } from '../lib/staleChunk';
-import type { StarterId } from '../starters';
-import { loadStarters } from '../starters/load';
+import { exampleCanvas } from '../gallery/example';
 import { Autosave } from '../storage/autosave';
+import { storageFailureNotice } from '../storage/saveFailure';
 import { getRepository, reconcileMetadata, type DraftRepository } from '../storage';
 import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
 import { useCollabStore } from './collabStore';
 import { useUiStore } from './uiStore';
 
 type EditorStoreModule = typeof import('./editorStore');
+
+/** What stays on screen when a failed save keeps the diagram open: the status bar has the way out. */
+const UNSAVED_STAYS_OPEN =
+  'Your latest changes couldn’t be saved to this browser. Use the status bar to retry, export a copy, or leave without saving.';
 
 /**
  * The editor store — with the node renderer, routing, and starter builder it pulls in — is most of
@@ -33,14 +38,6 @@ async function loadEditorStore(): Promise<EditorStoreModule> {
   return editorStoreModule;
 }
 
-/**
- * Fit a canvas as it arrives, when that is what arriving means.
- *
- * Shared by every path that puts a stored document into the editor — opening from the Library,
- * adopting an import, and the desktop host — so the rule lives in one place rather than being
- * re-derived at each door. Must be called *after* `setDocument`, which clears the request it sets
- * along with the rest of the outgoing canvas's UI state.
- */
 /** How often, at most, a save measures the file it wrote. Serializing a large diagram costs a few
  *  tens of milliseconds, which is fine now and then, not after every burst of typing. */
 const SIZE_CHECK_INTERVAL_MS = 15_000;
@@ -112,12 +109,20 @@ function warnSize(bytes: number, notify: (message: string, tone?: 'info' | 'erro
   const mb = (bytes / 1024 / 1024).toFixed(1);
   notify(
     bytes >= LIMITS.maxFileBytes
-      ? `This canvas is ${mb} MB — more than a file can hold (${LIMITS.maxFileBytes / 1024 / 1024} MB), so its export won't open again. Move parts into their own canvases.`
-      : `This canvas is ${mb} MB, close to the ${LIMITS.maxFileBytes / 1024 / 1024} MB a file can hold. Consider moving parts into their own canvases.`,
+      ? `This diagram is ${mb} MB — more than a file can hold (${LIMITS.maxFileBytes / 1024 / 1024} MB), so its export won’t open again. Move parts into their own diagrams.`
+      : `This diagram is ${mb} MB, close to the ${LIMITS.maxFileBytes / 1024 / 1024} MB a file can hold. Consider moving parts into their own diagrams.`,
     bytes >= LIMITS.maxFileBytes ? 'error' : 'info',
   );
 }
 
+/**
+ * Fit a canvas as it arrives, when that is what arriving means.
+ *
+ * Shared by every path that puts a stored document into the editor — opening from the Library,
+ * adopting an import, and the desktop host — so the rule lives in one place rather than being
+ * re-derived at each door. Must be called *after* `setDocument`, which clears the request it sets
+ * along with the rest of the outgoing canvas's UI state.
+ */
 export function arriveWith(document: DraftDocument, context: { reopening: boolean; fresh?: boolean }): void {
   const ui = useUiStore.getState();
   // A canvas just created (blank, or seeded by a Starter) already opens at the right viewport —
@@ -148,7 +153,7 @@ export interface DocumentSession {
   /** A blank canvas, or — given a `starterId` — one already holding that
    *  Architecture Starter, titled after it unless `title` says otherwise. */
   /** `projectId`: made from a project's view, the canvas belongs to that project. */
-  newDocument: (title?: string, starterId?: StarterId, projectId?: string) => Promise<void>;
+  newDocument: (title?: string, starter?: 'example' | DraftDocument, projectId?: string) => Promise<void>;
   adoptDocument: (document: DraftDocument, options?: { fresh?: boolean }) => Promise<void>;
   /**
    * Shows a diagram that arrived by share link (`src/share/`): read-only (`uiStore.readOnly`), never
@@ -170,6 +175,15 @@ export interface DocumentSession {
    * `discard` reloads the stored copy, or closes the canvas when it was deleted.
    */
   resolveConflict: (choice: 'keep' | 'discard') => Promise<void>;
+  /** After a failed save: writes what is waiting again. Resolves whether it reached storage. */
+  retrySave: () => Promise<boolean>;
+  /**
+   * After a failed save: downloads the diagram on screen as a `.draftcanvas` file — the live copy,
+   * whatever did or did not reach storage — so leaving costs nothing.
+   */
+  exportUnsaved: () => Promise<void>;
+  /** After a failed save: gives up the changes that could not be stored and returns to the Library. */
+  leaveWithoutSaving: () => Promise<void>;
   renameDocument: (id: string, title: string) => Promise<void>;
   duplicateDocument: (id: string) => Promise<void>;
   deleteDocument: (id: string) => Promise<void>;
@@ -273,7 +287,7 @@ export function useDocumentSession(): DocumentSession {
         // false forever — the Library screen shows "Opening local
         // storage…" indefinitely, with no error and no way to retry.
         logDiagnostic(error, { operation: 'library-startup' });
-        notify('Could not read your local diagrams. Try reloading the page.', 'error');
+        notify('Couldn’t read the diagrams stored in this browser. Try reloading the page.', 'error');
       }
       if (cancelled) return;
       setReady(true);
@@ -307,8 +321,8 @@ export function useDocumentSession(): DocumentSession {
       onStorageSuperseded((reason) =>
         notify(
           reason === 'lost'
-            ? "Lost the connection to this browser's storage, so this tab can't save any more. Export recent changes, then reload."
-            : "Draft Canvas was updated in another tab, so this tab can't save any more. Export recent changes, then reload.",
+            ? 'Lost the connection to this browser’s storage, so this tab can’t save any more. Export recent changes, then reload.'
+            : 'Draft Canvas was updated in another tab, so this tab can’t save any more. Export recent changes, then reload.',
           'error',
         ),
       ),
@@ -333,8 +347,8 @@ export function useDocumentSession(): DocumentSession {
       onConflict: (_id, kind) =>
         notify(
           kind === 'deleted'
-            ? 'This canvas was deleted in another tab. Your changes here aren’t saved — keep them from the status bar, or export.'
-            : 'This canvas was changed in another tab. Choose which copy to keep from the status bar.',
+            ? 'This diagram was deleted in another tab. Your changes here aren’t saved — keep them from the status bar, or export.'
+            : 'This diagram was changed in another tab. Choose which copy to keep from the status bar.',
           'error',
         ),
     });
@@ -463,8 +477,8 @@ export function useDocumentSession(): DocumentSession {
       const conflict = editorStoreModule?.useEditorStore.getState().save.conflict;
       notify(
         conflict
-          ? 'Choose which copy to keep in the status bar before opening another canvas.'
-          : 'Your latest changes could not be saved to this browser. Export the diagram to keep a copy before opening another.',
+          ? 'Choose which copy to keep in the status bar before opening another diagram.'
+          : UNSAVED_STAYS_OPEN,
         'error',
       );
       return false;
@@ -522,7 +536,13 @@ export function useDocumentSession(): DocumentSession {
       }
       if (request !== navigation.current) return;
       if (!loaded) {
-        notify('That diagram could not be read from local storage.', 'error');
+        // Said once per attempt: `notify` already folds the same message shown twice into one.
+        notify(
+          repository.takeLoadFailure?.(id) === 'newer'
+            ? 'A newer version of Draft Canvas saved this diagram, so this version can’t open it. It is kept untouched; update Draft Canvas to open it.'
+            : 'Couldn’t read that diagram from this browser’s storage.',
+          'error',
+        );
         await refreshLibrary().catch((error: unknown) => {
           logDiagnostic(error, { operation: 'open-document-refresh', documentId: id });
         });
@@ -535,7 +555,7 @@ export function useDocumentSession(): DocumentSession {
         // The editor's chunk didn't arrive (offline, or a deploy replaced it): say so rather than
         // leaving the click to do nothing.
         logDiagnostic(error, { operation: 'load-editor', documentId: id });
-        const notice = loadFailureNotice(error, 'The editor could not be loaded. Check your connection and try again.');
+        const notice = loadFailureNotice(error, 'The editor couldn’t be loaded. Check your connection and try again.');
         notify(notice.message, 'error', notice.action);
         return;
       }
@@ -592,7 +612,7 @@ export function useDocumentSession(): DocumentSession {
         editorStore = await loadEditorStore();
       } catch (error) {
         logDiagnostic(error, { operation: 'load-editor', documentId: document.metadata.id });
-        const notice = loadFailureNotice(error, 'The editor could not be loaded. Check your connection and try again.');
+        const notice = loadFailureNotice(error, 'The editor couldn’t be loaded. Check your connection and try again.');
         notify(notice.message, 'error', notice.action);
         return;
       }
@@ -619,7 +639,7 @@ export function useDocumentSession(): DocumentSession {
         editorStore = await loadEditorStore();
       } catch (error) {
         logDiagnostic(error, { operation: 'load-editor', documentId: document.metadata.id });
-        const notice = loadFailureNotice(error, 'The editor could not be loaded. Check your connection and try again.');
+        const notice = loadFailureNotice(error, 'The editor couldn’t be loaded. Check your connection and try again.');
         notify(notice.message, 'error', notice.action);
         return false;
       }
@@ -644,7 +664,7 @@ export function useDocumentSession(): DocumentSession {
       result = await decodeShareLink(hash, passphrase);
     } catch (error) {
       logDiagnostic(error, { operation: 'open-share-link' });
-      result = { ok: false, error: 'This share link could not be read in this browser.' };
+      result = { ok: false, error: 'This share link couldn’t be read in this browser.' };
     }
     if (attempt !== shareAttempt.current || window.location.hash !== hash) return null;
     if (!result) return null;
@@ -657,12 +677,12 @@ export function useDocumentSession(): DocumentSession {
       setProtectedShareHash(null);
       setShareLocked(false);
       clearShareFragment();
-      notify(`This share link could not be opened. ${result.error}`, 'error');
+      notify(`This share link couldn’t be opened. ${result.error}`, 'error');
       return result.error;
     }
     await openShared(result.document);
     const { useEditorStore } = await loadEditorStore();
-    if (useEditorStore.getState().document.metadata.id !== result.document.metadata.id) return 'The diagram could not be opened.';
+    if (useEditorStore.getState().document.metadata.id !== result.document.metadata.id) return 'The diagram couldn’t be opened.';
     setProtectedShareHash(result.protected ? hash : null);
     setShareLocked(false);
     if (result.start) {
@@ -722,7 +742,7 @@ export function useDocumentSession(): DocumentSession {
         // canvas. An unreadable existing row counts as taken, never as free — so this asks whether
         // anything is stored under the id, not whether it can be read.
         const taken = await repository.has(document.metadata.id).catch(() => true);
-        if (taken) document = cloneDocumentAsNew(document, document.metadata.title);
+        if (taken) document = cloneDocumentAsNew(document, titleWithSuffix(document.metadata.title, ' copy'));
         // A file that brought its background along: the image goes into its own store under the
         // id the canvas will have (so after the clone above), and out of the document, so the
         // Library never holds it twice. Nothing stored here ever carries `image`.
@@ -738,7 +758,7 @@ export function useDocumentSession(): DocumentSession {
         }
       } catch (error) {
         logDiagnostic(error, { operation: 'adopt-document', documentId: document.metadata.id });
-        notify('Could not save that diagram — local storage may be full or unavailable.', 'error');
+        notify(storageFailureNotice('save that diagram', error), 'error');
         return;
       }
       // Saved and open; a list that can't be re-read just stays as it was. Inside the try above, a
@@ -758,30 +778,17 @@ export function useDocumentSession(): DocumentSession {
   }, [adoptDocument]);
 
   const newDocument = useCallback(
-    async (title?: string, starterId?: StarterId, projectId?: string) => {
+    /** A blank canvas, or one already holding the bundled example or a gallery starter's diagram. */
+    async (title?: string, starter?: 'example' | DraftDocument, projectId?: string) => {
       if (creating.current) return;
       creating.current = true;
-      const request = (navigation.current += 1);
+      // A newer navigation: anything still opening gives way to this canvas.
+      navigation.current += 1;
       try {
-        let catalog: Awaited<ReturnType<typeof loadStarters>> | undefined;
-        try {
-          catalog = starterId ? await loadStarters() : undefined;
-          // Something else was opened while the starters chunk arrived.
-          if (request !== navigation.current) return;
-        } catch (error) {
-          // The starters chunk didn't arrive (offline, or a deploy replaced it) — say so, the way
-          // `openDocument` does for the editor chunk, rather than leaving the click to do nothing.
-          logDiagnostic(error, { operation: 'load-starters' });
-          const notice = loadFailureNotice(error, 'That starter could not be loaded. Check your connection and try again.');
-          notify(notice.message, 'error', notice.action);
-          return;
-        }
-        const starter = starterId ? catalog?.starterById(starterId) : undefined;
-        const created =
-          starter && catalog ? catalog.starterDocument(starter, title) : createDocument(title ?? 'Untitled canvas');
+        const created = starter === 'example' ? exampleCanvas() : starter ?? createDocument(title ?? DEFAULT_TITLE);
         const document = projectId ? { ...created, metadata: { ...created.metadata, projectId } } : created;
         await adoptDocument(document, { fresh: true });
-        if (starterId === 'order-processing') {
+        if (starter === 'example') {
           const { useEditorStore } = await loadEditorStore();
           if (useEditorStore.getState().document.metadata.id !== document.metadata.id) return;
           // No flow selected: the example opens on the plain diagram like every document, as on desktop.
@@ -791,7 +798,7 @@ export function useDocumentSession(): DocumentSession {
         creating.current = false;
       }
     },
-    [adoptDocument, notify],
+    [adoptDocument],
   );
 
   const closeDocument = useCallback(async () => {
@@ -811,8 +818,8 @@ export function useDocumentSession(): DocumentSession {
       const conflict = editorStoreModule?.useEditorStore.getState().save.conflict;
       notify(
         conflict
-          ? 'Choose which copy to keep in the status bar before leaving this canvas.'
-          : 'Your latest changes could not be saved to this browser. Export the diagram to keep a copy.',
+          ? 'Choose which copy to keep in the status bar before leaving this diagram.'
+          : UNSAVED_STAYS_OPEN,
         'error',
       );
       return false;
@@ -884,7 +891,7 @@ export function useDocumentSession(): DocumentSession {
       .then(async (found) => {
         if (found) return openDocument(id);
         replaceDocUrl(null);
-        notify("That diagram isn't in this browser. Diagrams are kept per browser — export one to open it elsewhere.");
+        notify('That diagram isn’t in this browser. Diagrams are kept per browser — export one to open it elsewhere.');
       })
       .finally(() => {
         arrivalSettled.current = true;
@@ -930,7 +937,7 @@ export function useDocumentSession(): DocumentSession {
       const { useEditorStore, fileWithLiveViewport } = await loadEditorStore();
       if (choice === 'keep') {
         const saved = await controller.resolveConflict('keep', fileWithLiveViewport(useEditorStore.getState()));
-        if (!saved) notify('Your changes still could not be saved to this browser. Export the diagram to keep a copy.', 'error');
+        if (!saved) notify('Your changes still couldn’t be saved to this browser. Export the diagram to keep a copy.', 'error');
         return;
       }
       // Sharing this canvas: the other tab's copy is a different file to everyone in the session, and
@@ -955,6 +962,40 @@ export function useDocumentSession(): DocumentSession {
     [notify, openDocument, openId, refreshLibrary, repository, setOpenId],
   );
 
+  const retrySave = useCallback(async () => {
+    const saved = (await autosave.current?.flush()) ?? true;
+    if (!saved) notify('Still couldn’t save to this browser. Export the diagram to keep a copy.', 'error');
+    return saved;
+  }, [notify]);
+
+  const exportUnsaved = useCallback(async () => {
+    try {
+      const { useEditorStore, fileWithLiveViewport } = await loadEditorStore();
+      const [{ serializeDocument, fileNameFor, FILE_MIME }, { downloadText }] = await Promise.all([
+        import('../export/project'),
+        import('../export/download'),
+      ]);
+      const file = fileWithLiveViewport(useEditorStore.getState());
+      await downloadText(serializeDocument(file), fileNameFor(file.metadata.title), FILE_MIME);
+      notify('Exported a copy of this diagram.');
+    } catch (error) {
+      // Choosing not to save (a Save dialog dismissed) is not a failure.
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      logDiagnostic(error, { operation: 'export-unsaved' });
+      notify('Couldn’t export a copy of this diagram. Try Export from the toolbar.', 'error');
+    }
+  }, [notify]);
+
+  const leaveWithoutSaving = useCallback(async () => {
+    const id = openIdRef.current;
+    if (id === null) return;
+    // What could not be stored is what the person is giving up: dropped from the queue, and from the
+    // reload stash, which would otherwise offer it back over the stored copy on the next open.
+    autosave.current?.discardPending(id);
+    discardReloadStash(id);
+    await closeDocument();
+  }, [closeDocument]);
+
   const renameDocument = useCallback(
     async (id: string, title: string) => {
       if (!repository) return;
@@ -963,7 +1004,7 @@ export function useDocumentSession(): DocumentSession {
         await refreshLibrary();
       } catch (error) {
         logDiagnostic(error, { operation: 'rename-document', documentId: id });
-        notify('Could not rename that diagram — local storage may be full or unavailable.', 'error');
+        notify(storageFailureNotice('rename that diagram', error), 'error');
       }
     },
     [notify, refreshLibrary, repository],
@@ -975,10 +1016,10 @@ export function useDocumentSession(): DocumentSession {
       try {
         const source = await repository.load(id);
         if (!source) {
-          notify("Couldn't duplicate — that canvas can't be read.", 'error');
+          notify('Couldn’t duplicate that diagram: it can’t be read.', 'error');
           return;
         }
-        const clone = cloneDocumentAsNew(source, `${source.metadata.title} copy`);
+        const clone = cloneDocumentAsNew(source, titleWithSuffix(source.metadata.title, ' copy'));
         await repository.save(clone);
         // A configured background is part of what the user set up for this
         // diagram — "Duplicate" should never silently drop it.
@@ -1003,7 +1044,7 @@ export function useDocumentSession(): DocumentSession {
         }
       } catch (error) {
         logDiagnostic(error, { operation: 'duplicate-document', documentId: id });
-        notify('Could not duplicate that diagram — local storage may be full or unavailable.', 'error');
+        notify(storageFailureNotice('duplicate that diagram', error), 'error');
         return;
       }
       // The copy is stored; a list that can't be re-read just stays as it was until the next refresh.
@@ -1021,7 +1062,7 @@ export function useDocumentSession(): DocumentSession {
         if (openId === id) setOpenId(null);
       } catch (error) {
         logDiagnostic(error, { operation: 'delete-document', documentId: id });
-        notify('Could not delete that diagram — local storage may be full or unavailable.', 'error');
+        notify(storageFailureNotice('delete that diagram', error), 'error');
         return;
       }
       // Deleted; as with duplicating, a list that can't be re-read isn't a delete that failed.
@@ -1046,7 +1087,7 @@ export function useDocumentSession(): DocumentSession {
         return project;
       } catch (error) {
         logDiagnostic(error, { operation: 'create-project' });
-        notify('Could not create that project — local storage may be full or unavailable.', 'error');
+        notify(storageFailureNotice('create that project', error), 'error');
         return undefined;
       }
     },
@@ -1063,7 +1104,7 @@ export function useDocumentSession(): DocumentSession {
         await refreshProjects();
       } catch (error) {
         logDiagnostic(error, { operation: 'rename-project' });
-        notify('Could not rename that project — local storage may be full or unavailable.', 'error');
+        notify(storageFailureNotice('rename that project', error), 'error');
       }
     },
     [notify, projects, refreshProjects, repository],
@@ -1076,7 +1117,7 @@ export function useDocumentSession(): DocumentSession {
         await repository.deleteProject(id);
       } catch (error) {
         logDiagnostic(error, { operation: 'delete-project' });
-        notify('Some canvases couldn’t be moved out, so the project was kept.', 'error');
+        notify('Some diagrams couldn’t be moved out, so the project was kept.', 'error');
       }
       await Promise.all([refreshProjects(), refreshLibrary()]).catch((error: unknown) => {
         logDiagnostic(error, { operation: 'delete-project-refresh' });
@@ -1093,7 +1134,7 @@ export function useDocumentSession(): DocumentSession {
         await refreshLibrary();
       } catch (error) {
         logDiagnostic(error, { operation: 'move-document-to-project', documentId: id });
-        notify('Could not move that diagram — local storage may be full or unavailable.', 'error');
+        notify(storageFailureNotice('move that diagram', error), 'error');
       }
     },
     [notify, refreshLibrary, repository],
@@ -1129,6 +1170,9 @@ export function useDocumentSession(): DocumentSession {
     makeEditableCopy,
     closeDocument,
     resolveConflict,
+    retrySave,
+    exportUnsaved,
+    leaveWithoutSaving,
     renameDocument,
     duplicateDocument,
     deleteDocument,

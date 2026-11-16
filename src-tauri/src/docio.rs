@@ -208,6 +208,28 @@ pub fn write_unstamped(target: &Path, bytes: &[u8]) -> Result<(), AppError> {
     write_held(target, bytes).map(drop)
 }
 
+/// `write_unstamped` for a file that is never written *through*: the temp file is renamed onto
+/// `target` itself, so if a symlink appeared there since the caller looked, it is the link that gets
+/// replaced and the file it pointed at is left alone. For a generated file (a docs image) whose
+/// place is decided by the app, not a file the person picked and may have linked on purpose.
+pub fn write_in_place(target: &Path, bytes: &[u8]) -> Result<(), AppError> {
+    let io_err = |e: io::Error| AppError::from_io(&e, Verb::Save, Subject::Path(target));
+    let file_lock = writing_lock(target);
+    let _writing = lock(&file_lock);
+    let is_link = fs::symlink_metadata(target)
+        .map(|meta| meta.file_type().is_symlink())
+        .unwrap_or(false);
+    if !is_link {
+        if let Some(block) = write_block(target) {
+            return Err(match block {
+                WriteBlock::ReadOnly => AppError::read_only(target),
+                WriteBlock::Denied(e) => io_err(e),
+            });
+        }
+    }
+    replace_contents(target, bytes, Kind::User, true).map_err(io_err)
+}
+
 /// The swap itself, under `target`'s writing lock. Returns the path actually written.
 fn write_held(target: &Path, bytes: &[u8]) -> Result<PathBuf, AppError> {
     let io_err = |e: io::Error| AppError::from_io(&e, Verb::Save, Subject::Path(target));

@@ -42,12 +42,13 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   note: 'Note',
   code: 'Code',
   service: 'Service',
-  database: 'Data store',
+  database: 'Data Store',
   queue: 'Queue',
   actor: 'Actor',
   component: 'Component',
   group: 'Boundary',
   ellipse: 'Junction',
+  sequence: 'Sequence',
 };
 
 /**

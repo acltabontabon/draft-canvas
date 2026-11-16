@@ -37,16 +37,15 @@ A step shows its connector's label; rename the connector to change it.
 
 ## Choose a flow, and leave it
 
-Click a flow in **Flows** to choose it: its connectors light up with their step numbers and the rest
-of the diagram dims. The canvas names the chosen flow at the top. To see everything again, choose
-**Whole diagram** there or at the top of **Flows**, or press `Esc` on the canvas with nothing
-selected. Opening a diagram always shows the whole diagram.
+Click a flow in **Flows** to choose it: its connectors light up with step numbers and the rest dims.
+To see everything again, choose **Whole diagram** (on the canvas or at the top of **Flows**), or
+press `Esc` with nothing selected. Opening a diagram always shows the whole diagram.
 
 ## Present
 
-Click **Present** (`⌘Enter`) and pick a flow if there are several. The opening shows the whole
-path; advance to start. During a step, the boundaries containing its highlighted shapes stay
-in focus too, including nested boundaries. Unrelated boundaries remain subdued.
+Click **Present** (`⌘Enter`) and pick a flow if there are several. The opening shows the whole path;
+advance to start. During a step, the boundaries around its highlighted shapes stay in focus, nested
+ones included, and unrelated boundaries stay subdued.
 
 ![A presentation step highlighting its connector and showing the queue's note.](../media/guides/presenting.png)
 
@@ -63,8 +62,18 @@ in focus too, including nested boundaries. Unrelated boundaries remain subdued.
 
 Pan and zoom freely; `R` hands the camera back. For a long step, choose **Read full step details**.
 
+A [sequence](sequence-diagrams.md) presents the same way, one message at a time: select it and
+choose **Present this sequence**.
+
+## Draw a flow as a sequence
+
+`⌘K` → **Draw the flow as a sequence** (**Draw a flow as a sequence…** when there are several) adds a
+[sequence](sequence-diagrams.md) beside the diagram: the flow's steps as messages, in order, between
+participants that stand for its shapes. Add replies, conditions and loops there; the flow itself is
+unchanged.
+
 ## Export a flow
 
-**Share → Export → Source → Flows** (`⌘⇧E`) turns each flow into a **Mermaid** or **PlantUML**
-sequence diagram, nested levels included. With a flow selected, an **Image** export numbers its
-connectors. See [Saving and sharing](saving-and-sharing.md).
+**Share → Export… → Other formats → Sequences** (`⌘⇧E`) turns each flow and each sequence into a
+**Mermaid** or **PlantUML** sequence diagram, nested levels included. With a flow selected, an image
+export numbers its connectors. See [Saving and sharing](saving-and-sharing.md#export-a-file).

@@ -126,10 +126,24 @@ export function QuickConnectMenu({
           setHighlighted((index) => (index + delta + count) % count);
           return;
         }
+        case 'Home':
+        case 'End': {
+          event.preventDefault();
+          event.stopPropagation();
+          setHighlighted(event.key === 'Home' ? 0 : Math.max(0, itemsRef.current.length - 1));
+          return;
+        }
         case 'Enter':
         case 'Tab': {
           event.preventDefault();
           event.stopPropagation();
+          // Tab takes the highlighted row, as Enter does; Shift+Tab is its way back, not a second way
+          // to choose — it steps the highlight up, and focus stays in the menu either way.
+          if (event.key === 'Tab' && event.shiftKey) {
+            const count = itemsRef.current.length;
+            setHighlighted((index) => (index - 1 + count) % count);
+            return;
+          }
           const item = itemsRef.current[Math.min(highlightedRef.current, itemsRef.current.length - 1)];
           if (item) onSelect(item);
           return;
@@ -180,7 +194,7 @@ export function QuickConnectMenu({
       ref={panel}
       className="dc-quick-connect"
       role="menu"
-      aria-label="Add element"
+      aria-label="Add to canvas"
       aria-activedescendant={current ? `dc-quick-connect-item-${Math.min(highlighted, items.length - 1)}` : undefined}
       aria-describedby={note ? 'dc-quick-connect-note' : undefined}
       tabIndex={-1}
@@ -188,7 +202,7 @@ export function QuickConnectMenu({
     >
       <div className="dc-quick-connect-heading" aria-hidden="true">
         <span>Add to canvas</span>
-        <kbd>esc</kbd>
+        <kbd>Esc</kbd>
       </div>
       {note && (
         <p id="dc-quick-connect-note" className="dc-quick-connect-note">

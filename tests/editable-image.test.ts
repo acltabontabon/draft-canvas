@@ -67,6 +67,27 @@ describe('SVG', () => {
     expect(readDocumentFromSvg('<svg xmlns="http://www.w3.org/2000/svg"></svg>')).toBeNull();
     expect(readDocumentFromSvg('not even svg')).toBeNull();
   });
+
+  it('reads the first block when there are several, up to its nearest closer', () => {
+    const document = fixture();
+    const once = withDocumentMetadata(renderDocumentSvg(document).svg, document);
+    const other = withDocumentMetadata(renderDocumentSvg(createDocument('Other')).svg, createDocument('Other'));
+    const block = /<metadata id="draftcanvas">[\s\S]*?<\/metadata>/.exec(other)![0];
+    const twice = once.replace('</svg>', `${block}</svg>`);
+    const result = readDocumentFromSvg(twice);
+    expect(result?.ok).toBe(true);
+    if (result?.ok) expect(result.document.metadata.title).toBe(document.metadata.title);
+  });
+
+  it('answers quickly for a file of openers with no closer', () => {
+    // The lazy pattern retried the search for `</metadata>` from every opener: 540 KB took 2 s, and
+    // this 2.7 MB would take about a minute. The bound leaves room for a busy CI runner.
+    const hostile = `<svg>${'<metadata id="draftcanvas">'.repeat(100_000)}</svg>`;
+    const started = performance.now();
+    expect(readDocumentFromSvg(hostile)).toBeNull();
+    expect(withDocumentMetadata(hostile, fixture())).toContain('</metadata>');
+    expect(performance.now() - started).toBeLessThan(3000);
+  });
 });
 
 describe('PNG', () => {

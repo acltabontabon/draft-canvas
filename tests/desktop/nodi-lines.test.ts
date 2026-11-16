@@ -1,22 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../../src/document/factory';
-import { arrivalLine, updateLine, blockedFolderOf, smallTalkOf, clockLines, diagramLines, doorOf, goodbyeLine, openers, restingLine, returnLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
+import { arrivalLine, updateLine, blockedFolderOf, smallTalkOf, clockLines, diagramLines, doorOf, goodbyeLine, openers, restingLine, seedOf, setupStepsOf, smallHours, snagOf } from '../../src/desktop/ui/nodiLines';
 
 /** What Nodi says from rest: the one thing worth knowing, most pressing first. */
 
 const quiet = { blocked: false, working: null, waiting: false, unseen: false, selected: null, seed: 0, runSeed: 0 };
 
 describe('Nodi at rest', () => {
-  it('has seeded goodbyes and returns, with news and snags still coming first', () => {
-    for (const line of [goodbyeLine, returnLine]) {
-      const variants = Array.from({ length: 14 }, (_, seed) => line(seed));
-      expect(new Set(variants).size).toBeGreaterThanOrEqual(6);
-      for (const text of variants) expect(text).toMatch(/boss/i);
-      expect(line(-123)).toBe(line(-123));
-    }
+  it('has seeded goodbyes on the way to the status bar, with news and snags still coming first', () => {
+    const variants = Array.from({ length: 14 }, (_, seed) => goodbyeLine(seed));
+    expect(new Set(variants).size).toBeGreaterThanOrEqual(6);
+    for (const text of variants) expect(text).toMatch(/boss/i);
+    expect(goodbyeLine(-123)).toBe(goodbyeLine(-123));
+    // The first time, the promise itself, whatever the seed.
+    expect(goodbyeLine(5, true)).toBe('Boss, if you need me, I’m just here.');
     const departure = { ...quiet, departure: true, arrival: 'HELLO', selected: 'Orders' };
     expect(restingLine(departure)).toMatchObject({ text: goodbyeLine(0), stays: true });
-    expect(restingLine({ ...quiet, returning: true, arrival: 'HELLO' })).toMatchObject({ text: returnLine(0), stays: false });
+    expect(restingLine({ ...departure, departure: 'first' as const })).toMatchObject({ text: 'Boss, if you need me, I’m just here.', stays: true });
     expect(restingLine({ ...departure, blocked: true }).tone).toBe('blocked');
     expect(restingLine({ ...departure, working: 'Reading' }).tone).toBe('working');
     expect(restingLine({ ...departure, waiting: true }).tone).toBe('waiting');

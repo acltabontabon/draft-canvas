@@ -18,7 +18,7 @@ import { backUpLibrary, BACKUP_COMPLETED_EVENT } from './backupActions';
  * starts open: that is the one time this footnote is the most important
  * thing on the screen.
  */
-export function LocalNote({ durable, repository, hasDocuments }: { durable: boolean; repository: DraftRepository | null; hasDocuments: boolean }) {
+export function LocalNote({ durable, repository, backupWorthwhile }: { durable: boolean; repository: DraftRepository | null; backupWorthwhile: boolean }) {
   const [open, setOpen] = useState(!durable);
   const estimate = useStorageEstimate(repository, open);
   const persisted = usePersisted(durable);
@@ -35,7 +35,7 @@ export function LocalNote({ durable, repository, hasDocuments }: { durable: bool
     };
   }, []);
   // Persistence prevents eviction, not profile deletion or device loss. Both need another copy.
-  const nudge = hasDocuments && durable && repository !== null && backupIsStale(lastBackupAt);
+  const nudge = backupWorthwhile && durable && repository !== null && backupIsStale(lastBackupAt);
 
   return (
     <div className="dc-local" data-warn={durable ? undefined : 'true'}>

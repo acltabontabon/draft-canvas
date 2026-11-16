@@ -1,11 +1,14 @@
 import { CONNECTOR_STYLE, styledConnectorPath } from '../render/connectorStyle';
 import { memo, useMemo } from 'react';
 import { categoryOf } from '../document/connectorSemantics';
+import { displayNameFor } from '../document/factory';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { edgeRoutes } from '../edges/edgeRoutes';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge } from '../edges/kindStyle';
-import { captionAnchor, labelLaneOffset, responseAwayAt } from '../edges/routing';
+import { LABEL_LINE_GAP, captionAnchor, labelChipSide, labelLaneOffset, responseAwayAt, type Side } from '../edges/routing';
+import { fittedConnectorCaption, layoutEdgeLabel } from '../edges/labelLayout';
+import { baselineOf, type TextLayout } from '../render/text/layout';
 import { describeContext, describeNode } from '../nodes/describe';
 import { markerRef } from '../render/svg/markers';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
@@ -53,6 +56,8 @@ function GhostBody({ offer, anchor }: { offer: ContinuationOffer; anchor: DraftN
 
   const accept = () => useEditorStore.getState().acceptContinuation(offer);
   const next = () => useUiStore.getState().cycleContinuation(1);
+  const dismiss = () => useUiStore.getState().dismissContinuation();
+  const notice = useUiStore((state) => state.continuationNotice);
 
   // One subscription and one routing graph for the whole ghost, shared by every `GhostEdge` below:
   // the document as it will be once the offer is accepted — its nodes *and* the fragment's, its
@@ -80,7 +85,12 @@ function GhostBody({ offer, anchor }: { offer: ContinuationOffer; anchor: DraftN
   // The pill sits under what the offer adds — the first new node, or the existing node it reaches.
   const pillHost = offer.nodes[0] ?? endpoints.get(offer.continueFromId) ?? anchor;
   const alternatives = offer.alternatives ?? [];
-  const position = alternatives.length > 1 ? `${alternatives.indexOf(offer.id) + 1}/${alternatives.length}` : undefined;
+  const index = alternatives.indexOf(offer.id) + 1;
+  const position = alternatives.length > 1 ? `${index}/${alternatives.length}` : undefined;
+  // Said the way the announcer says it: what accepting does, to whom, and the key — a connection to
+  // a shape already drawn runs *from* the anchor, it does not follow it.
+  const anchorName = displayNameFor(anchor);
+  const acceptLabel = `${offer.actionLabel} ${offer.nodes.length === 0 ? 'from' : 'after'} ${anchorName} (Tab)`;
 
   return (
     <div className="dc-ghost" data-trigger={offer.trigger} aria-hidden={showPill ? undefined : 'true'}>
@@ -108,25 +118,40 @@ function GhostBody({ offer, anchor }: { offer: ContinuationOffer; anchor: DraftN
       {showPill && (
         <div
           className="dc-ghost-pill"
-          style={{ transform: `translate(${pillHost.x}px, ${pillHost.y + pillHost.height + PILL_GAP}px)` }}
+          // Why it is on offer, and how to wave it away — the key is otherwise hinted nowhere on the canvas.
+          title={[offer.reason, 'Esc to dismiss'].filter(Boolean).join('\n')}
+          // Positioned here and animated on opacity alone: a running `transform` animation replaces the
+          // inline one, which parked the pill at the layer's origin for the length of the fade. The
+          // scale keeps its words readable zoomed out (`--dc-ghost-pill-scale` in `canvas.css`).
+          style={{ transform: `translate(${pillHost.x}px, ${pillHost.y + pillHost.height + PILL_GAP}px) scale(var(--dc-ghost-pill-scale, 1))` }}
         >
-          <button
-            type="button"
-            className="dc-ghost-pill-accept"
-            onClick={accept}
-            aria-label={`${offer.actionLabel} after ${anchor.text || anchor.type} (Tab)`}
-          >
-            <span className="dc-ghost-pill-main">
+          <button type="button" className="dc-ghost-pill-accept" onClick={accept} aria-label={acceptLabel}>
+            {/* Keyed so a cycle fades its words in with the ghost it names, rather than swapping them under it. */}
+            <span className="dc-ghost-pill-main" key={offer.id}>
               <span>{offer.label}</span>
               <kbd>Tab</kbd>
             </span>
           </button>
           {position && (
-            <button type="button" className="dc-ghost-pill-next" onClick={next} aria-label="Next suggestion (])">
-              <span>{position}</span>
+            <button
+              type="button"
+              className="dc-ghost-pill-next"
+              onClick={next}
+              aria-label={`Next suggestion, ${index} of ${alternatives.length} (])`}
+            >
+              <span aria-hidden="true">{position}</span>
               <span aria-hidden="true">›</span>
             </button>
           )}
+          {notice && (
+            <span className="dc-ghost-pill-note" aria-hidden="true">
+              {notice}
+            </span>
+          )}
+          {/* Touch has no Tab and no Esc: the dismiss is a button there (and only there — `canvas.css`). */}
+          <button type="button" className="dc-ghost-pill-dismiss" onClick={dismiss} aria-label="Dismiss suggestion (Esc)">
+            <span aria-hidden="true">✕</span>
+          </button>
         </div>
       )}
     </div>
@@ -190,6 +215,9 @@ export const GhostEdge = memo(function GhostEdge({
   lane,
   spine,
   obstacles,
+  spread,
+  tracks,
+  caption: routedCaptionText,
   removed,
 }: GhostRoute & {
   edge: DraftEdge;
@@ -199,8 +227,8 @@ export const GhostEdge = memo(function GhostEdge({
   // The same inputs, and the same cache, as the real connector (`edges/edgeRoutes.ts`) — read, never
   // written: `'transient'`, so a preview's routes never push out the ones on screen.
   const routes = useMemo(
-    () => edgeRoutes(ghostRouteInputs(edge, { source, target, lane, spine, obstacles }), 'transient'),
-    [edge, source, target, lane, spine, obstacles],
+    () => edgeRoutes(ghostRouteInputs(edge, { source, target, lane, spine, obstacles, spread, tracks, caption: routedCaptionText }), 'transient'),
+    [edge, source, target, lane, spine, obstacles, spread, tracks, routedCaptionText],
   );
   const route = routes.request;
   // Its own words when it has them (a connector an agent is proposing usually does), else the
@@ -215,10 +243,22 @@ export const GhostEdge = memo(function GhostEdge({
         target: categoryOf(target),
       })
     : undefined;
-  // Placed the way both renderers place it: nudged off its parallel siblings, and on the side away
-  // from its reply line.
+  // Placed the way both renderers place it: nudged off its parallel siblings, on the side away
+  // from its reply line, and laid out by the same functions. A label wraps to the room its line
+  // leaves and sits where its chip would; a caption shared by a fan is drawn once, on the stem,
+  // and one its line has no room for is left out. Drawn by simpler rules, a preview showed words
+  // running under shapes that the diagram it previews would never draw there.
   const nudge = labelLaneOffset(route.source.side, route.target.side, lane);
-  const at = captionAnchor(route.labelSide, route.labelX + nudge.x, route.labelY + nudge.y, responseAwayAt(route, routes.response, lane));
+  const away = responseAwayAt(route, routes.response, lane);
+  const onStem = !edge.label && Boolean(route.trunkLabel);
+  const point = onStem ? route.trunkLabel! : { x: route.labelX + nudge.x, y: route.labelY + nudge.y };
+  const words = !caption
+    ? null
+    : edge.label
+    ? layoutEdgeLabel(edge.label, undefined, route.labelRoom)
+    : fittedConnectorCaption(caption, undefined, onStem ? route.trunkLabelRoom : route.labelRoom);
+  const at = captionAnchor(onStem ? (route.trunkLabelSide ?? route.labelSide) : route.labelSide, point.x, point.y, away);
+  const chip = edge.label && words ? ghostLabelLines(words, labelChipSide(route.labelSide, away), point) : null;
   const response = routes.response;
   // Always a literal colour from `theme`, on both branches: `Markers` mints every arrowhead once,
   // as static SVG markup keyed by exact colour string (`Markers.tsx`'s `colors` Set) — a CSS custom
@@ -253,7 +293,15 @@ export const GhostEdge = memo(function GhostEdge({
           markerEnd={edge.directed ? markerRef(color, 'open') : undefined}
         />
       )}
-      {caption && (
+      {chip ? (
+        <text textAnchor={chip.textAnchor} fill={color} style={{ font: cssFont(FONTS.edgeLabel), textDecoration: removed ? 'line-through' : undefined }}>
+          {chip.lines.map((line) => (
+            <tspan key={line.y} x={chip.x} y={line.y}>
+              {line.text}
+            </tspan>
+          ))}
+        </text>
+      ) : words && (
         <text
           x={at.x}
           y={at.y}
@@ -262,15 +310,32 @@ export const GhostEdge = memo(function GhostEdge({
           fill={color}
           style={{ font: cssFont(FONTS.connectorCaption), textDecoration: removed ? 'line-through' : undefined }}
         >
-          {caption}
+          {words.lines[0]?.text ?? caption}
         </text>
       )}
     </g>
   );
 }, sameGhostEdge);
 
-/** Every prop by identity, except the obstacle list: rebuilt with each graph, but of rects that keep
- *  their identity while their node does (`obstaclesForEdge`) — so compared element by element. */
+/**
+ * A label's lines where its chip puts them (`labelChipTransform` in `DraftEdgeView`): the block of
+ * text `LABEL_LINE_GAP` off the line on `side`, centred along a level run and beside an upright one.
+ * A ghost has no chip to draw, only the words.
+ */
+function ghostLabelLines(layout: TextLayout, side: Side, point: { x: number; y: number }): { x: number; textAnchor: 'start' | 'middle' | 'end'; lines: { y: number; text: string }[] } {
+  const top = side === 'top' ? point.y - LABEL_LINE_GAP - layout.height : side === 'bottom' ? point.y + LABEL_LINE_GAP : point.y - layout.height / 2;
+  const x = side === 'right' ? point.x + LABEL_LINE_GAP : side === 'left' ? point.x - LABEL_LINE_GAP : point.x;
+  return {
+    x,
+    textAnchor: side === 'right' ? 'start' : side === 'left' ? 'end' : 'middle',
+    lines: layout.lines.map((line, index) => ({ y: top + baselineOf(layout, index), text: line.text })),
+  };
+}
+
+/** Every prop by identity, except what is rebuilt with each graph: the obstacle list, of rects that
+ *  keep their identity while their node does (`obstaclesForEdge`) — compared element by element — and
+ *  the two plans' answers, which a transient plan does not intern (`endpoints.ts`, `separation.ts`):
+ *  small values, compared by what they hold. */
 function sameGhostEdge(a: GhostRoute & { edge: DraftEdge; removed?: boolean }, b: GhostRoute & { edge: DraftEdge; removed?: boolean }): boolean {
   return (
     a.edge === b.edge &&
@@ -278,7 +343,10 @@ function sameGhostEdge(a: GhostRoute & { edge: DraftEdge; removed?: boolean }, b
     a.target === b.target &&
     a.lane === b.lane &&
     a.spine === b.spine &&
+    a.caption === b.caption &&
     a.removed === b.removed &&
+    (a.spread === b.spread || JSON.stringify(a.spread) === JSON.stringify(b.spread)) &&
+    (a.tracks === b.tracks || JSON.stringify(a.tracks) === JSON.stringify(b.tracks)) &&
     (a.obstacles === b.obstacles ||
       (a.obstacles.length === b.obstacles.length && a.obstacles.every((rect, index) => rect === b.obstacles[index])))
   );

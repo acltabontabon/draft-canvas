@@ -1,7 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { isCanvasEmpty } from '../../document/operations';
 import { MOD_SYMBOL, plainShortcut } from '../../lib/platform';
-import { PRIMARY_STARTERS, type StarterId } from '../../starters';
 import { fileOf, useEditorStore, viewLevel } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { ownerAt, viewOf } from '../../depth/tree';
@@ -10,12 +9,9 @@ import { displayNameFor } from '../../document/factory';
 import { StarterTile } from '../Library/StarterTile';
 import { InkedWords } from '../Library/InkedWords';
 import { prefersReducedMotion } from '../../lib/motion';
-import { StarterPicker } from './StarterPicker';
-
-interface EmptyStateProps {
-  /** Runs the palette's own starter command — see `EditorScreen`. */
-  onInsertStarter: (id: StarterId) => void;
-}
+import { useShallow } from 'zustand/react/shallow';
+import { useGalleryStore } from '../../store/galleryStore';
+import '../Gallery/starters.css';
 
 /** How long the layer lingers after the canvas stops being empty, matching `canvas.css`. */
 const EXIT_MS = 170;
@@ -27,7 +23,12 @@ const EXIT_MS = 170;
  * Only the controls take pointer events; the surrounding copy is decoration over a canvas that
  * must stay double-clickable everywhere else.
  */
-export function EmptyState({ onInsertStarter }: EmptyStateProps) {
+interface EmptyStateProps {
+  /** Runs the palette's own starter command — see `EditorScreen`. */
+  onAddStarter: (id: string) => void;
+}
+
+export function EmptyState({ onAddStarter }: EmptyStateProps) {
   const empty = useEditorStore((state) => isCanvasEmpty(state.document));
   const mode = useEditorStore((state) => state.mode);
   const armed = useUiStore((state) => state.armed);
@@ -68,7 +69,7 @@ export function EmptyState({ onInsertStarter }: EmptyStateProps) {
   // not a blank page, and offering a whole architecture to drop in here would be answering a
   // question nobody asked. Just the room's own name and what belongs in it.
   if (insideOf) return <EmptyRoom name={insideOf} leaving={!visible} />;
-  return <EmptyCanvas onInsertStarter={onInsertStarter} leaving={!visible} />;
+  return <EmptyCanvas onAddStarter={onAddStarter} leaving={!visible} />;
 }
 
 /** The empty inside of a shape: its name, and the one question worth answering there. */
@@ -127,45 +128,73 @@ function ContextOffer() {
   );
 }
 
-function EmptyCanvas({ onInsertStarter, leaving }: EmptyStateProps & { leaving: boolean }) {
-  const [allStartersOpen, setAllStartersOpen] = useState(false);
-  return (
-    <>
-      <div className="dc-empty" data-leaving={leaving ? 'true' : undefined}>
-        <div className="dc-empty-stage">
-          <div className="dc-empty-start" aria-hidden="true">
-            <p className="dc-empty-title">Start <em><InkedWords>drawing.</InkedWords></em></p>
-            <p className="dc-empty-hint">Double-click anywhere to add your first shape.</p>
-            <p className="dc-empty-keys">
-              <span className="dc-empty-key"><kbd>S</kbd> service</span>
-              <span className="dc-empty-key"><kbd>N</kbd> note</span>
-              <span className="dc-empty-key"><kbd>C</kbd> code</span>
-            </p>
-          </div>
+function EmptyCanvas({ onAddStarter, leaving }: EmptyStateProps & { leaving: boolean }) {
+  const enabled = useGalleryStore((state) => state.enabled);
+  const featured = useGalleryStore(
+    useShallow((state) => (state.snapshot?.starters ?? []).filter((s) => s.featured && s.availability === 'ready').slice(0, 5)),
+  );
+  // Once someone has chosen to load starters, an empty canvas shows them: the copy on this device,
+  // read again from GitHub only when there is none yet or it is a day old.
+  useEffect(() => {
+    if (enabled) void useGalleryStore.getState().load();
+  }, [enabled]);
+  const browse = () => useGalleryStore.getState().openDialog();
+  // The double-click chooser opens on the middle of this layer; the hint under it only peeked out
+  // around the menu.
+  const chooserOpen = useUiStore((state) => state.quickConnect !== null);
 
-          <div className="dc-empty-pick">
-            <p className="dc-empty-pick-label" aria-hidden="true">Or borrow a starting point</p>
-            <div className="dc-empty-rows" role="group" aria-label="Suggested starters">
-              {PRIMARY_STARTERS.map((starter, index) => (
-                <StarterTile key={starter.id} starter={starter} index={index} onStart={onInsertStarter} />
-              ))}
-            </div>
-            <div className="dc-empty-footer">
-              <button type="button" className="dc-empty-action" onClick={() => setAllStartersOpen(true)}>View all starters</button>
-              <p className="dc-empty-shortcut" aria-hidden="true">or <kbd>{plainShortcut(`${MOD_SYMBOL} K`)}</kbd> to search</p>
-            </div>
+  return (
+    <div className="dc-empty" data-leaving={leaving ? 'true' : undefined}>
+      <div className="dc-empty-stage">
+        {/* Read out like any other text: this is the only instruction a blank canvas carries, and a
+            screen-reader user has no other way to learn that the keys exist. A polite status, not a
+            dialog — nothing here takes focus or traps it. Out of the way (and out of the
+            accessibility tree) while the first-shape chooser is open, which is drawn over it. */}
+        <div className="dc-empty-start" role="status" data-chooser={chooserOpen ? 'true' : undefined}>
+          <p className="dc-empty-title">Start <em><InkedWords>drawing.</InkedWords></em></p>
+          <p className="dc-empty-keys">
+            <span className="dc-empty-key"><kbd>S</kbd> service</span>
+            <span className="dc-empty-dot" aria-hidden="true" />
+            <span className="dc-empty-key"><kbd>D</kbd> data store</span>
+            <span className="dc-empty-dot" aria-hidden="true" />
+            <span className="dc-empty-key"><kbd>Q</kbd> queue</span>
+          </p>
+        </div>
+
+        <div className="dc-empty-pick">
+          {featured.length > 0 && (
+            <>
+              <p className="dc-empty-pick-label" aria-hidden="true">or start from</p>
+              <div className="dc-empty-rows" role="group" aria-label="Suggested starters" style={{ '--count': featured.length } as CSSProperties}>
+                {featured.map((starter, index) => (
+                  <StarterTile key={starter.id} starter={starter} index={index} verb="Start from" onStart={onAddStarter} />
+                ))}
+              </div>
+            </>
+          )}
+          {/* Everything else is one line of quiet text: the canvas is the subject here, and these
+              are the margin notes beside it. */}
+          <div className="dc-empty-footer">
+            {featured.length > 0 ? (
+              <button type="button" className="dc-empty-action" onClick={browse}>View all starters</button>
+            ) : (
+              <button type="button" className="dc-empty-action dc-empty-gallery" onClick={browse}>
+                <span className="dc-empty-gallery-art" aria-hidden="true"><span /><span /></span>
+                {/* A canvas too short for the whole line gets the short name (`canvas.css`); the
+                    hidden one is `display: none`, so it is out of the accessible name too. */}
+                <span className="dc-empty-gallery-long">{enabled ? 'Browse starters' : 'Browse the starters gallery'}</span>
+                <span className="dc-empty-gallery-short">Browse starters</span>
+              </button>
+            )}
+            <span className="dc-empty-dot" aria-hidden="true" />
+            <button type="button" className="dc-empty-action" onClick={() => useUiStore.getState().requestExample()}>Try an example</button>
+            <span className="dc-empty-search" aria-hidden="true">
+              <span className="dc-empty-dot" />
+              <span className="dc-empty-shortcut"><kbd>{plainShortcut(`${MOD_SYMBOL} K`)}</kbd> to search</span>
+            </span>
           </div>
         </div>
       </div>
-      {allStartersOpen && !leaving && (
-        <StarterPicker
-          onClose={() => setAllStartersOpen(false)}
-          onStart={(id) => {
-            setAllStartersOpen(false);
-            onInsertStarter(id);
-          }}
-        />
-      )}
-    </>
+    </div>
   );
 }

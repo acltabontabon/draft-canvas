@@ -29,13 +29,14 @@ import {
   type ViewLevel,
 } from '../document/types';
 import { LIMITS } from '../document/limits';
-import { STARTER_IDS, type StarterId } from '../starters/types';
+import { DEFAULT_TITLE } from '../document/sanitize';
 import { Problems } from './errors';
-import { starterFor, starterIds } from './starter';
+import { starterFor, starterIds, type AgentStarter } from './starter';
 import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
 import type { SourceEvidence } from '../document/types';
 import { CREATE_FIELDS, ROOM_FIELDS, unknownFieldHint } from './fields';
 import { readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
+import { readSequences, SEQUENCE_LIMITS, type SequenceSpec } from './sequences';
 import { GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes, type LineStyleName, type NativeShape } from './vocabulary';
 
 /** What one request may carry. Published through `get_capabilities` and the tool schemas. */
@@ -46,6 +47,7 @@ export const AGENT_LIMITS = {
   flowsPerRequest: 20,
   stepsPerFlow: 60,
   notesPerRequest: 60,
+  ...SEQUENCE_LIMITS,
   openPointsPerRequest: 50,
   openPointContextLength: LIMITS.maxOpenPointContextLength,
   openPointTargets: LIMITS.maxOpenPointTargets,
@@ -66,6 +68,8 @@ export const AGENT_LIMITS = {
   responseLength: LIMITS.maxResponseLength,
   /** `deliveryAttempts` is a whole number in this range — the inspector's own stepper bounds. */
   deliveryAttempts: { min: 1, max: 50 },
+  /** A Service's `replicas`: one instance up to the document's own cap. */
+  replicas: { min: 1, max: LIMITS.maxReplicas },
   insideDepth: LIMITS.maxInsideDepth,
 } as const;
 
@@ -88,6 +92,8 @@ export interface NodeSpec {
   label: string;
   description?: string;
   technology?: string;
+  /** Services only; 2 or more (one instance is the default and isn't stored). */
+  replicas?: number;
   group?: string;
   color?: Accent;
   attachments?: AttachmentSpec[];
@@ -223,6 +229,8 @@ export interface RoomSpec {
   groups: GroupSpec[];
   flows: FlowSpec[];
   notes: NoteSpec[];
+  /** Sequences, each a native sequence element beside the architecture (`sequences.ts`). */
+  sequences: SequenceSpec[];
 }
 
 export interface LayoutSpec {
@@ -255,7 +263,7 @@ export interface LayoutSpec {
 }
 
 export interface StarterSpec {
-  id: StarterId;
+  id: string;
   prefix: string;
   overrides: Record<string, { label?: string; description?: string; technology?: string }>;
 }
@@ -470,6 +478,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const label = r.text(item.label, `${at}/label`, AGENT_LIMITS.labelLength, { required: true });
     const description = r.text(item.description, `${at}/description`, AGENT_LIMITS.descriptionLength);
     const technology = r.text(item.technology, `${at}/technology`, AGENT_LIMITS.technologyLength, { singleLine: true });
+    const replicas = readReplicas(r, item.replicas, `${at}/replicas`, shape?.type);
     const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
     const group = typeof item.group === 'string' ? item.group : undefined;
     if (group !== undefined && !groupIds.has(group)) r.problems.add('INVALID_REFERENCE', `${at}/group`, `no group "${group}" in this view`);
@@ -501,6 +510,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
         label,
         ...(description ? { description } : {}),
         ...(technology ? { technology } : {}),
+        ...(replicas ? { replicas } : {}),
         ...(group ? { group } : {}),
         ...(color ? { color } : {}),
         ...(attachments ? { attachments } : {}),
@@ -642,7 +652,9 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     if (id && body && relation) notes.push({ id, ...body, ...relation, ...(color ? { color } : {}), ...(style && Object.keys(style).length > 0 ? { style } : {}) });
   });
 
-  return { ...(level ? { level } : {}), nodes, relationships, groups, flows, notes };
+  const sequences = readSequences(r, raw.sequences, `${path}/sequences`, ctx.taken, elementIds, CREATE_FIELDS.sequence);
+
+  return { ...(level ? { level } : {}), nodes, relationships, groups, flows, notes, sequences };
 }
 
 /**
@@ -826,6 +838,22 @@ export function readResponse(r: Reader, value: unknown, at: string): string | tr
   return r.text(value, at, AGENT_LIMITS.responseLength, { singleLine: true, required: true });
 }
 
+/** A Service's instance count; `null` (or 1) is one instance. Refused on any other shape. */
+export function readReplicas(r: Reader, value: unknown, at: string, type: string | undefined): number | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const { min, max } = AGENT_LIMITS.replicas;
+  if (typeof value !== 'number' || !Number.isInteger(value) || value < min || value > max) {
+    r.problems.add('INVALID_INPUT', at, `must be a whole number from ${min} to ${max}`);
+    return undefined;
+  }
+  if (type !== undefined && type !== 'service') {
+    r.problems.add('UNSUPPORTED', at, 'replicas belong to a service-like element');
+    return undefined;
+  }
+  return value >= 2 ? value : null;
+}
+
 /** How many delivery attempts come before a dead-letter route is taken; `null` clears it. */
 export function readDeliveryAttempts(r: Reader, value: unknown, at: string): number | null | undefined {
   if (value === undefined) return undefined;
@@ -897,20 +925,22 @@ function readViewport(r: Reader, value: unknown, path: string): [number, number]
 
 
 /** A whole `create_diagram` request. `taken` starts empty: a new file has no ids yet. */
-export function readCreate(raw: unknown): CreateSpec {
+/** `resolved` is the gallery starter the request names, if the page found it downloaded. */
+export function readCreate(raw: unknown, resolved?: AgentStarter): CreateSpec {
   const problems = new Problems();
   const r = new Reader(problems);
   const body = r.object(raw, '', CREATE_FIELDS.request) ?? {};
-  const title = r.text(body.title, '/title', LIMITS.maxTitleLength, { required: true, singleLine: true }) ?? 'Untitled diagram';
+  const title = r.text(body.title, '/title', LIMITS.maxTitleLength, { required: true, singleLine: true }) ?? DEFAULT_TITLE;
   const taken = new Set<string>();
   let starter: StarterSpec | undefined;
   if (body.starter !== undefined) {
     const s = r.object(body.starter, '/starter', ['id', 'prefix', 'overrides']);
     if (s) {
-      const id = r.oneOf(s.id, '/starter/id', STARTER_IDS);
+      const id = typeof s.id === 'string' && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(s.id) && s.id.length <= 64 ? s.id : undefined;
+      if (!id) problems.add('INVALID_INPUT', '/starter/id', 'must be a starter id from get_capabilities (topics: ["starters"])');
       const prefix = s.prefix === undefined ? '' : typeof s.prefix === 'string' && /^[A-Za-z][A-Za-z0-9_.-]{0,15}$|^$/.test(s.prefix) ? s.prefix : undefined;
       if (prefix === undefined) problems.add('INVALID_INPUT', '/starter/prefix', 'must be a short id prefix (a letter, then up to 15 letters, digits, "_", "." or "-")');
-      const overrides: StarterSpec['overrides'] = {};
+      const overrides = Object.create(null) as StarterSpec['overrides'];
       const rawOverrides = s.overrides === undefined ? {} : r.object(s.overrides, '/starter/overrides') ?? {};
       for (const [key, value] of Object.entries(rawOverrides)) {
         const at = `/starter/overrides/${key}`;
@@ -930,18 +960,19 @@ export function readCreate(raw: unknown): CreateSpec {
   // A starter's elements exist before the request's own: relationships and flows may name them.
   let existing: RoomContext['existing'];
   if (starter) {
-    const ids = starterIds(starterFor(starter.id), starter.prefix);
+    const chosen = starterFor(starter.id, resolved);
+    const ids = starterIds(chosen, starter.prefix);
     existing = {
       elements: new Set(ids.nodes.filter((n) => !n.group).map((n) => n.id)),
       groups: new Set(ids.nodes.filter((n) => n.group).map((n) => n.id)),
       relationships: new Set(ids.edges),
-      relationshipSemantics: new Map(ids.edges.map((id, index) => [id, starterFor(starter.id).edges[index]?.semantic])),
+      relationshipSemantics: new Map(ids.edges.map((id, index) => [id, chosen.file.edges[index]?.semantic])),
     };
     for (const id of [...ids.nodes.map((n) => n.id), ...ids.edges, ...ids.flows]) taken.add(id);
   }
   const room = readRoom(r, body, '', { taken, depth: 0, fallbackType, ...(existing ? { existing } : {}) });
   const layout = readLayout(r, body.layout, '/layout', new Set(room.flows.map((f) => f.id)));
-  if (!starter && room.nodes.length === 0) problems.add('INVALID_INPUT', '/nodes', 'a diagram needs at least one element (or a starter)');
+  if (!starter && room.nodes.length === 0 && room.sequences.length === 0) problems.add('INVALID_INPUT', '/nodes', 'a diagram needs at least one element (or a starter)');
   problems.throwIfAny();
   return { ...room, title, ...(starter ? { starter } : {}), layout };
 }

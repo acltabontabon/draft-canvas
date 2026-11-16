@@ -42,9 +42,9 @@ const TIE_PX = 1;
 
 const EDGE_SELECTOR = '.react-flow__edge[data-id]';
 const OVERLAY_SELECTOR = '[data-edge-overlay]';
-/** Canvas surfaces with nothing of their own to click: looked through, never a reason to stop. */
 /** The bottom of the canvas's stack: nothing that can be clicked lies beneath it. */
 const PANE_SELECTOR = '.react-flow__pane, .react-flow__background';
+/** Canvas surfaces with nothing of their own to click: looked through, never a reason to stop. */
 const BACKDROP_SELECTOR = '.react-flow__pane, .react-flow__renderer, .react-flow__viewport, .react-flow__edges, .react-flow__edgelabel-renderer, .react-flow__nodes, .react-flow__background';
 
 function insideRect(clientX: number, clientY: number, element: Element): boolean {
@@ -95,6 +95,8 @@ function overlayPick(overlay: Element, element: Element): EdgePick | null {
   // A bend handle sits on the line itself — at the middle of a run, where a click on a connector
   // usually lands — so a click on it (not a drag) is a click on the line.
   if (element.closest('.dc-edge-bend')) return { id, part: 'line', tied: [id] };
+  // Its relationship caption is words drawn along the line, not a label to edit: a click on the line.
+  if (element.closest('.dc-edge-caption')) return { id, part: 'line', tied: [id] };
   const label = element.closest('.dc-edge-label, .dc-edge-step, .dc-edge-meta, .dc-edge-response-label');
   if (!label) return { id, part: 'control', tied: [id] };
   const members = label.getAttribute('data-label-group');
@@ -142,8 +144,8 @@ export function pickEdgeAt(clientX: number, clientY: number, aim: Point | (() =>
       const id = edge.getAttribute('data-id');
       if (!id || seen.has(id)) continue;
       seen.add(id);
-      // Drawn on the line — a caption, a glyph — rather than the hit path around it: that connector.
-      if (!element.classList.contains('dc-edge-hit') && candidates.length === 0 && element.closest('.dc-edge-caption, .dc-edge-glyph')) {
+      // Drawn on the line — a glyph — rather than the hit path around it: that connector.
+      if (!element.classList.contains('dc-edge-hit') && candidates.length === 0 && element.closest('.dc-edge-glyph')) {
         return { id, part: 'line', tied: [id] };
       }
       const distance = distanceTo(edge, aimPoint());

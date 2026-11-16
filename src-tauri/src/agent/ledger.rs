@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Write};
+use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
 /// How long a finished request is remembered, and how many are.
@@ -159,20 +159,30 @@ impl Ledger {
     /// Writes `entry` through to disk before returning: the step it records may only go ahead once
     /// this has.
     pub fn record(&mut self, entry: Entry) -> io::Result<()> {
-        let mut line = serde_json::to_vec(&entry).map_err(io::Error::other)?;
-        line.push(b'\n');
-        let mut file = private(OpenOptions::new().create(true).append(true)).open(&self.file)?;
-        file.write_all(&line)?;
-        file.sync_data()?;
+        let line = serde_json::to_vec(&entry).map_err(io::Error::other)?;
+        append_record(&self.file, &line)?;
         let now = entry.at;
         self.entries.insert(entry.key.clone(), entry);
         // A desktop session can last weeks: retention must bound the live journal too, not only open.
         self.evict(now);
         self.appended += 1;
         if self.appended >= COMPACT_AFTER {
-            self.compact()?;
+            self.compact_or_defer();
         }
         Ok(())
+    }
+
+    /// Compacts after appends, where a failure must not fail the append. The record is already
+    /// durable: an error here made `gate_passed` refuse a gate the journal already called
+    /// `Committing`, so a retry answered `OUTCOME_UNKNOWN` for a change never applied, and because
+    /// `appended` stayed past the threshold every later record failed the same way.
+    fn compact_or_defer(&mut self) {
+        if let Err(e) = self.compact() {
+            eprintln!("Draft Canvas: agent ledger couldn't be compacted ({e})");
+            // Try again after another batch of appends rather than on every one: the journal is
+            // only longer than it needs to be, and each attempt rewrites all of it.
+            self.appended = 0;
+        }
     }
 
     /// Moves an existing entry to `stage`, with whatever else the step learned.
@@ -244,6 +254,34 @@ impl Ledger {
         self.appended = 0;
         Ok(())
     }
+}
+
+/// Appends one record to a JSONL journal and flushes it to disk. Shared with the proposal journal.
+///
+/// A failed write is cut back to the previous length so the journal still ends on a whole record;
+/// where that isn't possible either (Windows denies truncating an append-only handle), the next
+/// append starts on a fresh line. Without both, the next record ran on from the fragment and load
+/// dropped the two together as one unreadable line.
+pub(super) fn append_record(path: &Path, record: &[u8]) -> io::Result<()> {
+    let mut file = private(OpenOptions::new().create(true).read(true).append(true)).open(path)?;
+    let len = file.metadata()?.len();
+    let mut line = Vec::with_capacity(record.len() + 2);
+    if len > 0 {
+        let mut last = [0u8];
+        file.seek(SeekFrom::End(-1))?;
+        file.read_exact(&mut last)?;
+        if last[0] != b'\n' {
+            line.push(b'\n');
+        }
+    }
+    line.extend_from_slice(record);
+    line.push(b'\n');
+    if let Err(e) = file.write_all(&line).and_then(|()| file.sync_data()) {
+        // Best effort: the caller is told the record wasn't written, so it mustn't be read back.
+        let _ = file.set_len(len);
+        return Err(e);
+    }
+    Ok(())
 }
 
 /// Request ids and diagram paths are the person's business: the journal is readable by this account only.
@@ -423,6 +461,42 @@ mod tests {
         drop(ledger);
         let ledger = Ledger::open(dir.path(), 2).unwrap();
         assert!(ledger.get("a").is_some() && ledger.get("b").is_some());
+    }
+
+    #[test]
+    fn a_failed_compaction_does_not_fail_the_record_or_the_ones_after_it() {
+        let dir = tempdir().unwrap();
+        let mut ledger = Ledger::open(dir.path(), 1).unwrap();
+        // A directory where the temp file goes: the rewrite can't even start.
+        fs::create_dir(dir.path().join("ledger.jsonl.tmp")).unwrap();
+        ledger.appended = COMPACT_AFTER - 1;
+        ledger.record(entry("a", Stage::Pending, 1)).unwrap();
+        ledger.advance("a", Stage::Committing, 2, |_| {}).unwrap();
+        assert!(
+            ledger.appended < COMPACT_AFTER,
+            "retried later, not on every record"
+        );
+        drop(ledger);
+        fs::remove_dir(dir.path().join("ledger.jsonl.tmp")).unwrap();
+        let ledger = Ledger::open(dir.path(), 3).unwrap();
+        assert_eq!(ledger.get("a").unwrap().stage, Stage::Committing);
+    }
+
+    #[test]
+    fn a_fragment_left_by_a_failed_append_does_not_take_the_next_record_with_it() {
+        let dir = tempdir().unwrap();
+        let file = dir.path().join("ledger.jsonl");
+        let mut ledger = Ledger::open(dir.path(), 1).unwrap();
+        ledger.record(entry("a", Stage::Committed, 1)).unwrap();
+        // An append that failed partway and couldn't be cut back.
+        let mut torn = OpenOptions::new().append(true).open(&file).unwrap();
+        torn.write_all(b"{\"key\":\"x\",\"sta").unwrap();
+        drop(torn);
+        ledger.record(entry("b", Stage::Committed, 2)).unwrap();
+        drop(ledger);
+        let ledger = Ledger::open(dir.path(), 2).unwrap();
+        assert!(ledger.get("a").is_some() && ledger.get("b").is_some());
+        assert!(ledger.get("x").is_none());
     }
 
     #[test]
