@@ -17,6 +17,7 @@
 //! dropped is gone too, and an agent never sees half of each.
 
 use crate::errors::{AppError, ErrorKind};
+use crate::util::hex;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::io::{Error, ErrorKind as IoErrorKind, Read};
@@ -151,7 +152,7 @@ fn content_hash<'a>(files: impl IntoIterator<Item = (String, &'a [u8])>) -> Stri
         hasher.update((bytes.len() as u64).to_le_bytes());
         hasher.update(bytes);
     }
-    format!("{:x}", hasher.finalize())
+    hex(hasher.finalize().as_slice())
 }
 
 pub fn bundled_hash() -> String {

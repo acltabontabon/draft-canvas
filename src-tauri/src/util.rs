@@ -1,3 +1,4 @@
+use sha2::{Digest, Sha256};
 use std::sync::{Mutex, MutexGuard, PoisonError};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -12,4 +13,25 @@ pub fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+pub(crate) fn hex(bytes: &[u8]) -> String {
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+pub(crate) fn sha256_hex(bytes: &[u8]) -> String {
+    hex(Sha256::digest(bytes).as_slice())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::sha256_hex;
+
+    #[test]
+    fn sha256_hex_preserves_leading_zeroes() {
+        assert_eq!(
+            sha256_hex(b"draft-canvas-828"),
+            "00936c9bdd3a9a25a66794c8adf312db941e57e5f1a913951150d134bd2ffb56"
+        );
+    }
 }

@@ -3,9 +3,8 @@
 
 use crate::errors::{AppError, Subject, Verb};
 use crate::paths::file_name;
-use crate::util::lock;
+use crate::util::{lock, sha256_hex};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -75,10 +74,6 @@ fn mtime_ns(meta: &fs::Metadata) -> u128 {
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_nanos())
         .unwrap_or(0)
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
 }
 
 /// Whether the file on disk is still the one `expected` describes. The content is hashed and only the
