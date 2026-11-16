@@ -37,21 +37,24 @@ Scripts, CI behavior and host wiring. Setup, the repository map and which checks
 | --- | --- |
 | `npm run desktop:dev` | Desktop app with hot reload (web side on :5198) |
 | `npm run desktop:build` | Build a desktop installer |
-| `npm run desktop:check` | Desktop web build, Rust checks and version check |
+| `npm run desktop:check` | Desktop web build, Rust checks and version check (`desktop:web`, `desktop:rust`, `desktop:version`) |
 | `npm run desktop:rust` | `cargo fmt`, `clippy` and tests; needs the desktop web build |
 | `npm run desktop:bindings` | Regenerate `src/desktop/wire.ts` from Rust payloads |
 | `npm run e2e:desktop` | Desktop browser suite against a fake shell (no Rust needed) |
 | `npm run e2e:mcp` | Real MCP sidecar to editor round trip; run after `desktop:check` |
-| `npm run agent:schemas` | Regenerate `src-tauri/mcp/tools.json` from `src/agent/schema.ts` |
+| `npm run agent:schemas` | Regenerate the tool catalogs in `src-tauri/mcp/` (`tools.json`, `entry-tools.json`, `planning-entry-tools.json`, `run-tools.json`) and the skill's `pairings.json` from `src/agent/schema.ts` |
+| `npm run agent:sidecar` | Build the MCP sidecar |
 
 ### Generated files and performance
 
 | Command | Purpose |
 | --- | --- |
 | `npm run icons:generate` / `icons:check` | Regenerate or verify the Simple Icons catalog |
+| `npm run starters:fixtures` | Refresh the vendored starter snapshot in `tests/fixtures/starters/` |
 | `npm run licenses` / `licenses:check` | Regenerate or verify `THIRD_PARTY_LICENSES.txt` |
 | `npm run perf` | Measure diagram loading and memory |
 | `npm run perf:check` | Interaction and lifecycle budgets (the release gate) |
+| `npm run perf:stress` / `perf:interaction` / `perf:lifecycle` | The individual harnesses behind `perf` and `perf:check` |
 | `npm run perf:publish` | Update the generated tables in [Performance](performance.md) |
 | `npm run adoption:compare` | ELK/Ajv comparison harness; see [Library adoption](library-adoption.md) |
 | `npx tsx e2e/docs-screenshots.ts` | Regenerate guide screenshots |
@@ -81,8 +84,8 @@ npx playwright show-trace 'test-results/<failed-test>/trace.zip'
 `ci.yml` is the entry point for pull requests and `main`.
 
 - **Shared checks** (`shared-checks.yml`): lint, tooling type-check, unit tests with coverage, once.
-- **Browsers:** the editor suite runs in four Chromium shards, four Firefox shards and six WebKit
-  shards. `--fully-parallel` distributes individual tests, with one worker per runner. CI retries once but
+- **Browsers:** the editor suite runs in four Chromium, four Firefox and six WebKit shards.
+  `--fully-parallel` distributes individual tests, one worker per runner. CI retries once, but
   `--fail-on-flaky-tests` fails a test that passes only on retry.
 - **Desktop** (`desktop-ci.yml`): runs when `src/`, `src-tauri/`, desktop tests, root package or
   build config, workflows or CI scripts change (`scripts/ci-plan.mjs`).
@@ -92,10 +95,10 @@ npx playwright show-trace 'test-results/<failed-test>/trace.zip'
 - **`verify`** is the final required job. Performance budgets run only for tagged releases.
 - Manual runs, release callers (`full-checks: true`) and missing history always run everything.
 
-Desktop Chromium and WebKit journeys run on separate runners. Native CI builds retain line tables
-for backtraces rather than full type/variable debug data, reducing compilation and cache size; local
-Cargo profiles keep their defaults. Security caches its pinned `cargo-audit` executable, while
-fetching current advisories and running every audit again.
+Desktop Chromium and WebKit journeys run on separate runners. Native CI builds keep line tables for
+backtraces, not full debug data, to cut compile time and cache size; local Cargo profiles are
+unchanged. The security job caches its pinned `cargo-audit` binary but always fetches current
+advisories and reruns every audit.
 
 ### Reusing a PR run on `main`
 

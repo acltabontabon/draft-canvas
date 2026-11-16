@@ -4,8 +4,8 @@ The **Pencil** draws over a diagram: circle a service, underline a risk, scribbl
 review. **Smart Ink** turns rough boxes, cylinders and arrows into real shapes and connectors as
 you draw them.
 
-Pick up the Pencil beside **Select** in the toolbar, or press `P`. The toolbar turns into the
-Pencil's: its tools take the place of the shapes until you put it down.
+Pick up the Pencil beside **Select** in the toolbar, or press `P`. Its tools replace the shapes in the
+toolbar until you put it down.
 
 | Tool | For | Key |
 | --- | --- | --- |
@@ -17,10 +17,9 @@ Pencil's: its tools take the place of the shapes until you put it down.
 Choose an ink and a width beside them. **Select** or `Esc` puts the Pencil down and brings the
 shapes back.
 
-Draw with a mouse, a pen or a finger. A stylus draws with pressure, and its eraser end erases. Once
-a stylus has touched the canvas, a finger pans instead of drawing, so a resting hand leaves no
-marks. The wheel, a pinch and the middle mouse button still pan and zoom while the Pencil is in
-hand.
+Draw with a mouse, a pen or a finger. A stylus draws with pressure, and its eraser end erases. Once a
+stylus has touched the canvas, a finger pans instead, so a resting hand leaves no marks. The wheel,
+a pinch and the middle mouse button still pan and zoom.
 
 ## Sketches
 
@@ -31,8 +30,8 @@ With **Select**, click a stroke to choose it (`Shift`-click for more), drag to m
 `Backspace` to erase it. A marquee picks up the strokes inside it. Right-click a stroke for
 **Convert to shape** and **Erase stroke**.
 
-Sketches belong to the view they were drawn in. Each shape's inside view keeps its own. A view
-holds sketches only while it holds a shape, so draw a shape there first.
+Sketches belong to the view they were drawn in; each [room](depth.md) keeps its own. A view holds
+sketches only while it holds a shape, so draw a shape first.
 
 ## Smart Ink
 
@@ -59,27 +58,25 @@ be:
 - **Esc** or **Keep sketch** puts your drawing back.
 - Drawing on keeps it as it is.
 
-Anything else stays ink, exactly as drawn. That includes a circle around shapes (pointing at them),
-a mark over or across a shape, a line ending in empty space, an underline, handwriting and
-scribbles. A drawing that is close to a shape but not clear enough is only offered: the strip
-appears with **Make it** and nothing changes until you choose. Only shapes are offered this way: a
-line or an arrow that is not clearly one stays ink until you select it and use **Convert to shape**,
-which also reads a weaker drawing. If a selection holds a highlighter stroke as well, the pen strokes
-are converted and the highlighter stays as it is. The strip goes away when the strokes it is for do
-(undo it and **Make it** is gone, and a stale strip never makes a shape from nothing), and Esc during a
-drag moves nothing: the sketch stays where it was.
+Anything else stays ink, exactly as drawn: a circle around shapes (pointing at them), a mark across a
+shape, a line ending in empty space, an underline, handwriting, scribbles.
+
+A drawing that is close but not clear enough is only offered: the strip shows **Make it**, and nothing
+changes until you choose. A line or arrow that isn't clearly one stays ink until you select it and use
+**Convert to shape**, which reads weaker drawings too. If the selection also holds highlighter
+strokes, only the pen strokes convert.
 
 Undo takes a converted shape or connector back to your strokes; undo again removes the strokes.
 Choosing a different kind in the strip doesn't add an undo step.
 
-Smart Ink only reads geometry. A box is a Component, not a microservice; it never guesses a
-technology, protocol or responsibility. Recognition runs on your device with no AI model or
-network. Connectors drawn as arrows get the same suggested relationship a dragged connector does.
+Smart Ink reads geometry only. A box is a Component, not a microservice; it never guesses a
+technology, protocol or responsibility. Recognition runs on your device, with no AI model or network.
+Arrows get the same suggested relationship a dragged connector does.
 
 ## Convert later
 
-Choose sketch strokes, then right-click → **Convert to shape** or `⌘K` → **Convert to shape**. The
-same recognition runs; when nothing is recognised, the strokes stay and you're told so.
+Select strokes, then right-click → **Convert to shape**, or run it from `⌘K`. The same recognition
+runs; when nothing is recognised, the strokes stay and you're told so.
 
 ## Saving, exporting and sharing
 

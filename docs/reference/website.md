@@ -28,56 +28,24 @@ npm run e2e:web         # checks against the assembled artifact
 Run `site:preview` before shipping: `scripts/serve-web.mjs` mimics the hosts' trailing-slash
 redirects and 404 pages.
 
-The home page opens with an overview of Draft Canvas. The pencil underlines the headline, then
-moves across to connect the feature icons. **Explore examples** jumps to the canvas, which opens
-with a grid of six diagram previews. Selecting a preview replaces the grid with that diagram
-on the same canvas. The pencil starts drawing on the first visit.
-Direct links open their exhibit or section.
-A short animated brief can introduce an exhibit before the pencil starts drawing. The same
-description stays with the exhibit as a caption.
-The complete handwritten draft holds briefly before the finished diagram fades in over it.
-Each exhibit plays its drawing sequence the first time it opens on a page load.
-Returning to an exhibit shows the finished diagram immediately.
-Press Escape to skip the drawing. Reduced motion shows the finished diagram immediately. Open
-**All examples** in the canvas corner to choose another diagram. Use **Overview** to return to the
-top.
-Each exhibit links to the engineering write-up it draws from. The diagrams model the parts of
-those systems described in the sources.
+## The landing page
 
-- [Shopify inventory reservations](https://shopify.engineering/scaling-inventory-reservations) shows
-  the reserve and claim operations against three MySQL tables, with an inline refill when the
-  pool empties. Hover over an operation or a MySQL table to highlight its connections and dim the
-  other paths. The reservation shape attaches illustrative SQL and the lock-order decision. Hover
-  or focus the paperclip to preview them, or click it to keep the preview open.
-- [Slack real-time messaging](https://slack.engineering/real-time-messaging/) uses a junction for
-  fan-out from a channel server to regional gateways. Hover over the junction to see both
-  branches, or follow an individual connector to its destination.
-- [Netflix Live Origin](https://netflixtechblog.com/netflix-live-origin-41f1b0ad5371) uses
-  technology-aware shapes for EC2, Open Connect’s NGINX, Cassandra, and the Memcached-based
-  EVCache. Hover over Cache-first reads to watch the pencil trace the lookup.
-- [Uber IngestionNext](https://www.uber.com/us/en/blog/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake/)
-  puts streaming data on a single line from Kafka through Flink to Hudi. Checkpoint recovery sits
-  above that path, with batch fallback and Parquet compaction below. Hover over the raw data lake
-  to trace streaming lineage back to Kafka. Recovery and batch fallback have their own highlights
-  that dim the surrounding paths.
-- [Stripe Ledger](https://stripe.dev/blog/ledger-stripe-system-for-tracking-and-validating-money-movement)
-  shows the system context, the immutable event log and correction workflow, and the three
-  Data Quality checks as nested C4 views. Select the Ledger and Data Quality shape to zoom into
-  its containers, then select Data Quality checks to see its components. Select any earlier
-  level in the breadcrumb to zoom straight back to it. Escape returns one level. Browser Back and
-  Forward move through the same C4 history before leaving the exhibit.
-- [Discord message search](https://discord.com/blog/how-discord-indexes-trillions-of-messages)
-  shows multiple Elasticsearch instances and cross-zone shard replicas in a representative
-  cluster, alongside bulk indexing and separate server and DM search cells.
+`www/index.html` is a static page with a feature overview, an **Architecture examples** index, six
+exhibits, a download dialog and a closing connector. Behavior worth knowing before you edit it:
 
-Pencil marks indicate featured diagram elements. Hover over an element or focus a phrase beneath
-the caption to see its note. The editor’s SVG renderer draws each exhibit from an editable source
-file. Narrow windows can scroll the diagram horizontally.
-
-The full-screen feature overview covers technology-aware shapes, C4 levels, attachments, live
-collaboration, presentation mode, connecting your own coding agent through MCP, and local files.
-It also highlights the Apache 2.0 license. A final animated connector closes the page after the
-exhibits.
+- **Exhibits are drawn from editable files.** Each of the six (Shopify inventory reservations, Slack
+  real-time messaging, Netflix Live Origin, Uber IngestionNext, Stripe Ledger, Discord message search)
+  is a `.draftcanvas` file in `www/examples/`, rendered by the editor's own SVG renderer. Each links
+  to the engineering write-up it models, and models only what that source describes.
+- **The pencil.** It draws the headline underline, connects the feature icons and plays each
+  exhibit's drawing sequence the first time that exhibit opens on a page load; after that the
+  finished diagram shows at once. Escape skips it, and reduced motion shows the finished diagram
+  immediately. A handwritten draft holds briefly before the finished diagram fades in.
+- **Exhibit interactions.** Pencil marks flag featured elements; hovering or focusing an element, or a
+  phrase under the caption, shows its note. Attachments (the paperclip) preview on hover or focus and
+  stay open on click. The Stripe Ledger exhibit nests C4 levels: breadcrumb, Escape and browser
+  Back/Forward move through the same level history.
+- Direct links open their exhibit or section; narrow windows scroll the diagram horizontally.
 
 ## The build
 
@@ -107,12 +75,12 @@ With `npm run site:dev`, refresh `http://localhost:5280/docs/` to see an edit.
 
 | Command | Regenerates |
 | --- | --- |
-| `node --input-type=module -e "import { runnerImport } from 'vite'; await runnerImport('./www/scripts/checkout-preview.ts')"` | SVG diagrams and attachment previews from `www/examples/` |
+| `node --input-type=module -e "import { runnerImport } from 'vite'; await runnerImport('./www/scripts/checkout-preview.ts')"` | `www/src/checkout-views.json`: the diagram scenes and attachment previews, from `www/examples/` |
 | `npm --prefix www run social` | `og-image.png` and the Apple touch icon |
 
-Outputs are committed, so deploys need neither ffmpeg nor a browser. The 1200 × 630 social card
-uses the Shopify inventory diagram. Run `social` after changing the headline or diagram, and check that the
-headline remains visible at small preview sizes.
+Outputs are committed, so deploys need no browser. The 1200 × 630 social card uses the Shopify
+inventory diagram. Run `social` after changing the headline or that diagram, and check that the
+headline stays legible at small preview sizes.
 
 ## Deploying
 
@@ -179,12 +147,11 @@ browsers connect directly.
   (`Sec-WebSocket-Protocol: draft-canvas.relay.v1, host.<secret>`); another host is closed with 4003.
   Each owner connection or departure renews the claim for 12 hours.
   No logging; observability is off in `relay.jsonc`.
-- **Limits:** one owner and 32 joining sockets per room, at most 4 of them from one address (per /64
-  for IPv6); text frames with at most 16,384 characters of data; 30 messages per 10 seconds per
-  socket, and the owner that much for every joining socket, since it answers each of them (past it,
-the owner's frames are dropped, never its socket); 60 new
-  sockets per minute per address. A room closes after 15 idle minutes, or 12 hours at most. The
-  owner's own reconnect replaces a socket the relay still thinks is open.
+- **Limits:** one owner and 32 joining sockets per room, at most 4 from one address (per /64 for
+  IPv6); text frames of at most 16,384 characters; 30 messages per 10 seconds per socket, and the
+  owner that many for every joining socket, since it answers each (past it the owner's frames are
+  dropped, never its socket); 60 new sockets per minute per address. A room closes after 15 idle
+  minutes, or 12 hours at most. The owner's reconnect replaces a socket the relay still thinks is open.
 - **Origins:** only `ALLOWED_ORIGINS`; by default the web editor and the desktop app.
 
 Code:

@@ -1,7 +1,7 @@
 # Mermaid import
 
-For the import workflow, see [saving and sharing](../guides/saving-and-sharing.md#importing-a-mermaid-flowchart).
-Draft Canvas accepts Mermaid `flowchart` and `graph`, and `sequenceDiagram`; it lays out the result itself.
+Draft Canvas imports Mermaid `flowchart`, `graph` and `sequenceDiagram`, and lays the result out
+itself. To import, see [saving and sharing](../guides/saving-and-sharing.md#importing-a-mermaid-flowchart).
 
 ## Supported syntax
 
@@ -42,9 +42,8 @@ links are skipped. Arrows to subgraphs are skipped too.
 
 ## Sequence diagrams
 
-A `sequenceDiagram` becomes one [sequence](../guides/sequence-diagrams.md) on the canvas
-(`src/import/mermaid/sequence.ts`). Nothing is inferred: work starts and ends only where the text
-says so.
+A `sequenceDiagram` becomes one [sequence](../guides/sequence-diagrams.md). Nothing is inferred:
+work starts and ends only where the text says so.
 
 | Mermaid | Sequence |
 | --- | --- |
@@ -77,5 +76,5 @@ it, and lines it cannot read. A two-way arrow (`<<->>`) is drawn as one call and
 | Shape labels | 120 characters |
 | Arrow / subgraph labels | 80 characters |
 
-Long labels are shortened; a bracketed label longer than 600 characters is not read. Inputs
-exceeding the other limits are refused before layout.
+Long labels are shortened, and a bracketed label over 600 characters is not read. Input over the
+other limits is refused before layout.

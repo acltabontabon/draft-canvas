@@ -94,9 +94,4 @@ helps and contains nothing private. **Feature requests:** describe the problem.
 
 ## Releases
 
-1. Turn `[Unreleased]` in `CHANGELOG.md` into `## [X.Y.Z] - YYYY-MM-DD` and add a fresh `[Unreleased]`.
-2. Set `X.Y.Z` in `package.json` and its lockfile (the desktop app takes its version from here).
-3. Preview notes with `npm run release:notes -- vX.Y.Z` and `npm run release:whats-new -- desktop`.
-4. Push the commit, then the `vX.Y.Z` tag. CI verifies, packages and publishes.
-
-Full steps and checks: [Releases](docs/reference/releases.md).
+Maintainers cut releases from `main` by tagging `vX.Y.Z`; the steps are in [Releases](docs/reference/releases.md).

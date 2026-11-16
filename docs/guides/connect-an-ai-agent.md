@@ -25,157 +25,115 @@ send diagram content to its AI provider, as it does with code.
 | Junie | **Add to Junie** |
 | Other MCP clients | Copy the `mcpServers` entry into the client's configuration |
 
-If Draft Canvas cannot find `claude` or `gemini`, Settings shows a terminal command instead. To
-configure by hand, open **Set it up by hand instead** (Cursor: **Copy the config instead**).
+If Draft Canvas cannot find `claude` or `gemini`, Settings shows a terminal command to run instead.
+To configure by hand, open **Set it up by hand instead** (Cursor: **Copy the config instead**).
 
 The skill installs in `~/.claude/skills` (Claude Code) or `~/.agents/skills` (other agents) and
-updates with Draft Canvas. An edited copy is kept until you click **Replace skill**. Linked files
-and unusually large copies also count as modified, so automatic updates leave them alone. Replacing
-or removing a customized copy keeps a uniquely named backup; if it cannot be backed up safely, the
-original stays in place. Repository surveys skip named pipes, sockets and other nonregular files.
+updates with Draft Canvas. If you edit your copy, updates leave it alone until you click **Replace
+skill**; the old copy is backed up first.
 
 ## Ask Nodi, on the canvas
 
-Nodi is the desktop app's companion: ask your own Claude Code or Codex about the diagram you are
-looking at, without leaving it for a terminal. It waits at the end of the status bar once Draft
-Canvas finds one of them installed, and needs agent access on and the diagram saved in an allowed
-folder. Until then it says what is missing and offers the fix: **Let Nodi in** turns agent access
-on. If the diagram is outside your listed projects, **Add project…** opens the folder picker; choose
-the folder containing the diagram, or a parent folder. Nodi then offers **Allow** *folder* to let
-agents use it. These steps are available from Nodi's box without opening Settings.
+Nodi is the desktop app's companion. It asks your own Claude Code or Codex about the diagram you are
+looking at, so you don't leave for a terminal. It appears at the end of the status bar once one of
+them is installed.
+
+Nodi needs agent access on and the diagram saved in an allowed folder. Until then it says what is
+missing and offers the fix from its own box: **Let Nodi in** turns agent access on, **Add project…**
+picks the folder, and **Allow** *folder* lets agents use it.
 
 ![Nodi offering replies about the diagram.](../media/guides/nodi-open.png)
 
-1. Click Nodi, its speech bubble, or press ⌘J (Ctrl+J). Select shapes first to ask about them; the
-   selection shows in the message box, and × asks about the whole view instead.
-2. Pick one of Nodi's suggestions (**Walk me through it**, **What breaks first?**, …) or type. What
-   needs no agent, Nodi answers itself, at no token cost: small talk, the time, what is in the view
-   ("how many queues?", "where is billing?"), where the file is saved, which folders agents can use, and
-   the app's own commands ("export", "present", "tidy connectors"), offered as buttons. Ask "what can
-   you do?" for the list.
+1. Click Nodi or press `⌘J` (`Ctrl+J`). Select shapes first to ask about them; `×` in the message
+   box asks about the whole view instead.
+2. Pick a suggestion (**Walk me through it**, **What breaks first?**) or type. Nodi answers some
+   things itself, at no token cost: what is in the view ("how many queues?"), where the file is
+   saved, which folders agents can use, and the app's own commands ("export", "present", "tidy
+   connectors"), offered as buttons. Ask "what can you do?" for the list.
+3. While the agent works, one line says what it is doing. The bubble holds the whole conversation;
+   past two turns, earlier ones fold away. The pencil starts a new conversation, and `>_` copies a
+   command that continues it in your agent's own terminal.
 
-   ![Nodi answering "What can you do?" itself, with buttons.](../media/guides/nodi-help.png)
+![Nodi answering "What can you do?" itself, with buttons.](../media/guides/nodi-help.png)
 
-3. While the agent works, one line says what it is doing, and Nodi's screen shows what it watches
-   meanwhile.
+![Nodi thinking: one live line, a feed on its screen.](../media/guides/nodi-thinking.png)
 
-   ![Nodi thinking: one live line, a feed on its screen.](../media/guides/nodi-thinking.png)
-
-4. Read the answer in the bubble, which holds the whole conversation; past two turns, the earlier
-   ones fold behind one line. On its top edge, the pencil starts a new conversation and `>_` copies a
-   command that continues it in your agent's own terminal UI.
-
-### Nodi's skills
-
-Type `/` in Nodi's box, or click the **/** button beside it, for what Nodi can do in one go.
-Highlighting a skill plays a small preview of what it will do. Use ↑ and ↓ to choose, Enter to run,
-Tab to complete and Escape to close the list.
-
-- **Arrange**: lay the view out **Left to right** (`/across`) or **Top down** (`/down`), **Along**
-  one of its first three flows (`/follow-…`) so that flow's steps run in a straight line, **Give it
-  room** (`/roomy`) or **Snug** (`/snug`). Nodi lays these out itself, with no agent and no tokens. Shapes glide to their
-  new places and the connectors redraw. Each is one undo step, and Nodi's reply has an **Undo**
-  button. `/tidy` runs **Straighten connectors**, which nudges shapes a few pixels so nearly
-  straight connectors run straight; undo it with `⌘Z`. A shared, read-only diagram offers none of
-  these.
-- **Ask**: `/explain` and `/risks` send the question to your agent, when one is installed.
-- **Show**: `/present` plays the diagram's first flow that has steps.
-
-When your agent could do more outside Nodi's box, Nodi offers it under its suggestions, one click
-each: **Connect** *agent* **everywhere** adds Draft Canvas to that agent's own MCP servers (so a
-conversation you continue in its terminal still reaches the diagram), and **Teach** *agent* **to
-draw** installs the drawing skill. They are the same as the buttons in **Settings → AI agents**.
-To hide Nodi, turn off **Show Nodi on the canvas** there.
-
-Nodi also points the way inside: it mentions a shape that holds a diagram of its own, offers
-**Take me inside…** when an answer names one, and offers to draw the inside of a selected service
-that has none yet.
-
-Answers point at the diagram: a shape or connector Nodi talks about shows as its name, which lights
-it on the canvas, and each point gets a numbered pin on the part it is about. Click a pin to read
-that point.
+Answers point at the diagram. A shape or connector Nodi names shows as its name, which lights it on
+the canvas, and each point gets a numbered pin on the part it concerns; click a pin to read it. Nodi also offers **Take
+me inside…** when an answer names a shape that holds its own diagram.
 
 ![A risk review pinned onto the diagram.](../media/guides/nodi-points.png)
 
-A question gets an answer and changes nothing; Nodi offers to make the change, or to record the risks
-it found as open points. A change comes back as a proposal on the canvas, drawn solid with what changes in teal; a change that
-moves shapes is shown on a tracing sheet over the diagram. **Now / Proposed** compares, and **Accept**
-applies it as one undo step. If you pan away from the change, **Show me** on the chip brings it back
-into view. Ask Nodi to adjust it ("keep the cache, but use Redis") and it revises
-the same proposal; the chip lists earlier versions. **Review changes first** under the message box
-switches to **Apply changes directly**, where changes land at once and Undo takes them back.
+### Skills
 
-For a request such as “Could you change the name of Orders API to Checkout API and save it?”, your
-agent works out the edit, then Draft Canvas applies it through the normal checked tool and confirms
-from its receipt. There is no extra model call just to say it is done. The reply distinguishes a
-saved edit from an unsaved change or a failed save, and keeps warnings visible. Review mode still
-creates a proposal for you to accept; selection scope and Undo still apply. More involved requests
-may need reads or previews before the final edit.
+Type `/` in Nodi's box, or click the **/** button, to list what Nodi can do in one go. Highlighting a
+skill previews it; `↑` and `↓` choose, `Enter` runs, `Esc` closes.
 
-Nodi loads diagram context only when the agent needs it. A rename that supplies both exact labels
-does not send the whole diagram first. Ambiguous labels are refused; requests referring to “this
-box” or other diagram details can still trigger a targeted read.
+- **Arrange:** `/across` (**Left to right**), `/down` (**Top down**), `/follow-…` (**Along** one of
+  the first three flows), `/roomy` (**Give it room**) and `/snug` (**Snug**). Nodi lays these out
+  itself, with no agent and no tokens. Each is one undo step. `/tidy` runs **Straighten
+  connectors**, which nudges shapes a few pixels so nearly straight connectors run straight.
+- **Ask:** `/explain` and `/risks` send the question to your agent.
+- **Show:** `/present` plays the first flow that has steps.
 
-Exact-label renames work this way in **Review changes first** too: Draft Canvas resolves the target
-locally and creates a proposal. The diagram stays unchanged until you accept it. If the target
-changes while the proposal waits, review reports a conflict instead of renaming a different shape.
+A shared, read-only diagram offers none of the arrange skills.
 
-For descriptions, new shapes and connection changes, Nodi can return an edit intent without reading
-the diagram through the model. Draft Canvas resolves exact names locally, generates new ids and
-uses the revision captured when you pressed Send. If the diagram changed while the agent was
-thinking, the edit is refused. Ambiguous names or parallel connections need clarification.
-Review mode stores concrete changes and their preconditions, and still requires your acceptance.
-Larger design questions can use compact or detailed reads; all edits keep the same validation,
-scope, approval, save and Undo checks.
+### Changes come back as proposals
 
-Each Nodi turn starts with a small model context, so a simple explicit edit does not reread the
-whole chat. Earlier requests and actual outcomes remain available through a read-only history tool.
-Follow-ups that depend on earlier choices retrieve that context; missing history needs clarification.
-These reads can cost more than a self-contained edit. Pending proposals still need acceptance.
+A question gets an answer and changes nothing. Nodi can offer to make a change, or to record the
+risks it found as [open points](open-points.md).
 
-Ask for all shapes in one horizontal row or vertical column when you want them aligned; automatic
-layout's reading direction can put several shapes in the same layer. Nodi can place and route shapes
-exactly for a specific arrangement. Short replies such as **yes** or
-**okay** continue the agent's conversation, including when it asks you to confirm a change.
-To insert a starter directly, name it or use its alias (for example, **start Change Data Capture** or
-**start CDC**); a generic follow-up such as **do it, change it** goes to the agent. Starters come from
-the [starters gallery](examples.md), so agents can use them only once you've loaded it.
+A change comes back as a proposal on the canvas, drawn solid with what changes in teal. A change
+that moves shapes is shown on a tracing sheet over the diagram. **Now / Proposed** compares, and
+**Accept** applies it as one undo step. If you pan away, **Show me** on the chip brings the change
+back into view. Ask Nodi to adjust it ("keep the cache, but use Redis") and it revises the same
+proposal.
 
-Nodi and external MCP agents use the canvas's smart connector routing. Newly drawn connectors
-attach automatically when that keeps the same picture or makes the complete view measurably simpler
-without crowding captions or worsening other routes. Automatic ends follow shapes when moved.
-Explicit attachment sides and hand-placed bends stay fixed; an agent can set `route.from` and
-`route.to` to `"auto"` to release the ends, or `route: null` to clear pins and bends together.
+**Review changes first** under the message box can switch to **Apply changes directly**: changes
+then land at once, and Undo takes them back. Either way an edit is refused if the diagram changed
+while the agent was thinking, and an ambiguous name ("Orders" when two shapes have it) is sent
+back for clarification. The reply says whether an edit was saved, unsaved or failed.
 
 ![A proposal on the canvas, beside the change.](../media/guides/nodi-proposal.png)
 
 ![A tidy-up on the tracing sheet: each moved shape trails back to where it stands.](../media/guides/nodi-tracing.png)
 
-- **What runs:** your own CLI, signed in as you, in the background. It gets the Draft Canvas tools for
-  this one diagram and nothing else: no shell, no file access, no other MCP servers, no hooks.
-  For Codex, Nodi ignores `config.toml` to keep other configured tools out. It keeps your sign-in and
-  sessions, but uses Codex's default model, provider and credential-store settings.
-- **Reading your code:** when a question needs the code ("how are retries done?"), Nodi asks in the
-  chat before anything is read: **Just for now** (until you quit), **Always for this folder**, or
-  **No**. **Another folder…** picks the project when it isn't the repository the diagram is saved in.
-  Draft Canvas reads that one folder for the agent, read-only, leaving out `.git`, dependency and
-  build folders and secrets such as `.env` and keys. Folders allowed always are listed under
-  **Settings → AI agents → Code Nodi may read**, where **Stop** takes one back.
+Some requests are best phrased exactly. For a tidy row, ask for "all shapes in one horizontal row".
+To insert a starter, name it ("start CDC"); starters are available once you have loaded the
+[starters gallery](examples.md). Short replies such as **yes** continue the agent's conversation.
+
+When your agent could do more outside Nodi's box, Nodi offers **Connect** *agent* **everywhere**
+(adds Draft Canvas to the agent's MCP servers, so a conversation continued in its terminal still
+reaches the diagram) and **Teach** *agent* **to draw** (installs the skill). These match the buttons
+in **Settings → AI agents**, where **Show Nodi on the canvas** hides it.
+
+Nodi and external agents share the canvas's connector routing. Ends attach automatically when that
+simplifies the picture, and follow shapes when moved. Explicit sides and hand-placed bends stay
+fixed; an agent can set `route.from` and `route.to` to `"auto"` to release the ends, or `route:
+null` to clear pins and bends together.
+
+### What Nodi can reach
+
+- **What runs:** your own CLI, signed in as you, in the background. It gets the Draft Canvas tools
+  for this one diagram and nothing else: no shell, no file access, no other MCP servers, no hooks.
+  For Codex, Nodi ignores `config.toml` to keep other tools out; it keeps your sign-in but uses
+  Codex's default model and provider.
+- **Reading your code:** when a question needs the code ("how are retries done?"), Nodi asks first:
+  **Just for now**, **Always for this folder** or **No**. **Another folder…** picks a different
+  project. The folder is read-only for the agent, without `.git`, dependency and build folders, or
+  secrets such as `.env` and keys. Folders allowed always are listed under **Settings → AI agents →
+  Code Nodi may read**, where **Stop** takes one back.
 - **Two agents:** with both installed, the name under the message box switches between them. Each
-  diagram keeps one conversation per agent; switching restores that agent's visible history. The
-  terminal shortcut opens its latest CLI turn. The pencil clears Nodi's retained history for the
-  chosen agent; the CLI's own transcript files remain under that agent's control.
-- **Stopping:** **Stop** closes the run's access to diagram tools immediately, even while the agent
-  is starting. Oversized agent output ends the run with an error; ask for a smaller answer and retry.
-- **What it uses:** the line under the message box shows the conversation's new tokens, and with an
-  API key its cost. Hover or keyboard-focus the dotted token count for a breakdown of new input,
-  cached input, output and totals. New tokens are new input plus output; cached input is reused
-  context, with pricing and plan limits set by the provider.
-- **Where conversations are kept:** the agent's own sessions (`~/.claude/projects`,
-  `~/.codex/sessions`). Draft Canvas keeps the conversation shown while the app runs, plus up to
-  128 turns / 64 KiB of requests and outcomes per diagram and agent in its private local settings.
-  This context survives restart, expires after 30 days without use and is never stored in a diagram.
-  History reads report when older context was omitted, including chats from before this feature.
+  diagram keeps one conversation per agent.
+- **Stopping:** **Stop** cuts the run off from the diagram tools at once. Oversized output ends the
+  run with an error; ask for a smaller answer and retry.
+- **Cost:** the line under the message box shows the conversation's new tokens, and with an API key
+  its cost. Hover the dotted count for a breakdown. Plan limits and pricing are the provider's.
+- **Where conversations are kept:** in the agent's own sessions (`~/.claude/projects`,
+  `~/.codex/sessions`). Draft Canvas keeps up to 128 turns or 64 KiB of requests and outcomes per
+  diagram and agent in its private settings, so follow-ups can refer back. That context survives
+  restart, expires after 30 days unused and is never stored in a diagram. Follow-ups that depend on
+  earlier choices read it, which can cost more than a self-contained edit.
 
 ## Draw a repository
 
@@ -187,17 +145,15 @@ Open your agent in the repository and ask:
 > Don’t turn dependencies or concurrent effects into an invented execution order. Inspect every
 > view and fix readability before finishing; tell me the scope and any unresolved questions.
 
-The skill picks the C4 levels from the size of the system: a context view with the containers
-inside once there are more than about eight and external systems around them, and a component view
-for the container that does the main path's work. Draft Canvas shows source evidence but does not
-check it, so read the inferred parts and open questions first.
+The skill picks C4 levels by the size of the system: a context view with the containers inside once
+there are more than about eight, and a component view for the container that does the main path's
+work. Draft Canvas shows source evidence but does not check it, so read the inferred parts and open
+questions first.
 
 ![A storefront diagram with services, stores, an event stream and workers.](../media/guides/agent-skill-example.png)
 
-The skill reads only the affected views for small edits and preserves existing ids and placement.
-Refreshes compare the diagram with changed source; review-only requests become proposals for you to
-accept or reject. Its local draft and validation scripts support `--json` for compact agent output,
-and drafting into an existing output folder refuses to overwrite a prepared request.
+For small edits the skill reads only the affected views and keeps existing ids and placement.
+Refreshes compare the diagram with the changed source, and review-only requests become proposals.
 
 Follow-ups change the same diagram:
 

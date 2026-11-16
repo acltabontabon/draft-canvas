@@ -1,8 +1,8 @@
 # Keyboard shortcuts and the command palette
 
-`?` lists every shortcut and `⌘K` finds any command; both are also in the **?** help menu.
-On Windows and Linux, use `Ctrl` for `⌘` and `Alt` for `⌥`.
-Single keys work when the canvas has focus (`Tab` from the toolbar), not in text fields or dialogs.
+`?` lists every shortcut and `⌘K` finds any command; both are also in the **?** help menu. On Windows
+and Linux, use `Ctrl` for `⌘` and `Alt` for `⌥`. Single keys work when the canvas has focus (`Tab`
+from the toolbar), not in text fields or dialogs.
 
 ## Add shapes
 
@@ -18,10 +18,10 @@ Single keys work when the canvas has focus (`Tab` from the toolbar), not in text
 The shape appears under the pointer, ready to name. **Connect to…** in `⌘K` connects it.
 Over a sequence, `S` `D` `Q` `A` `M` add a participant of that kind instead.
 
-`Tab` accepts the faint next-shape suggestion; `Esc` waves it away; `]` / `[` cycle through others,
-or pick the next shape when none shows. **Turn off next-shape suggestions** in `⌘K`, or the switch in
-[Settings → Canvas](getting-started.md#make-it-yours), stops them; the shape picker that opens when
-you drop a connector on empty canvas still lists them first.
+`Tab` accepts the faint next-shape suggestion, `Esc` waves it away, and `]` / `[` cycle through
+others, or pick the next shape when none shows. **Turn off next-shape suggestions** in `⌘K`, or use
+[Settings → Canvas](getting-started.md#make-it-yours), to stop them; the picker that opens when you
+drop a connector on empty canvas still lists them first.
 
 ## Draw
 
@@ -66,6 +66,7 @@ you drop a connector on empty canvas still lists them first.
 | `F` | Flows panel |
 | `I` | Add an open point to the selection |
 | `⌘⇧E` or `⌘E` | Export |
+| `⌘J` | Desktop: show or hide [Nodi](connect-an-ai-agent.md#ask-nodi-on-the-canvas) |
 
 | While editing | New line | Finish | `Esc` |
 | --- | --- | --- | --- |
@@ -97,11 +98,11 @@ Press `⌘K`, type part of a command or name, then `Enter`.
 
 ![The command palette finding Add Queue.](../media/guides/command-palette.png)
 
-It runs editor actions, inserts [starters](examples.md) once the starters gallery is loaded (**Browse starters…** opens it), jumps to named shapes, connectors and flows
-in any room, and tidies up. **Tidy up** previews a gentle cleanup before applying it; **Straighten
-connectors**, **Arrange diagram**, **Check layout**, **Tidy connectors**, **Auto attach all connectors** and **Fit
-shapes to text** each do one thing. With shapes selected it also aligns,
-distributes and matches sizes (**Same width**, **Same height**).
+It runs editor actions, inserts [starters](examples.md) once the gallery is loaded, jumps to named
+shapes, connectors and flows in any room, and tidies up. **Tidy up** previews a gentle cleanup
+before applying it; **Straighten connectors**, **Arrange diagram**, **Check layout**, **Tidy
+connectors**, **Auto attach all connectors** and **Fit shapes to text** each do one thing. With shapes
+selected it also aligns, distributes and matches sizes.
 
 ## Presenting
 
