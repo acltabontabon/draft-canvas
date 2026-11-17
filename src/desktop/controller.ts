@@ -813,14 +813,18 @@ export class DesktopController {
     await this.swap('Couldn’t open the file', async () => this.switchTo(await this.api.projectOpenFile(project, relPath)));
   }
 
-  /** Makes `opened` the open document, once whatever is open now has been settled. Returns whether it did. */
-  private async switchTo(opened: OpenedDoc, recovered?: RecoveryEntry): Promise<boolean> {
+  /**
+   * Makes `opened` the open document, once whatever is open now has been settled. Returns whether it
+   * did. `settled` says the caller already settled it in this same switch — New File asks before its
+   * Save dialog — so the question is not put a second time (#171).
+   */
+  private async switchTo(opened: OpenedDoc, recovered?: RecoveryEntry, settled = false): Promise<boolean> {
     const parsed = deserializeDocument(opened.text);
     if (!parsed.ok) {
       await this.api.showError(`Draft Canvas couldn’t open ${opened.name}.draftcanvas`, parsed.error);
       return false;
     }
-    if (!(await this.settleBeforeLeaving())) return false;
+    if (!settled && !(await this.settleBeforeLeaving())) return false;
 
     let text = opened.text;
     let baseline = true;
@@ -965,7 +969,11 @@ export class DesktopController {
         if (this.dirty) this.scheduleSnapshot();
         return;
       }
-      await this.switchTo(await this.api.openHandle(saved.handle));
+      // Settled above, before the file was written: asking again here offered a Cancel that left the
+      // new blank file on disk and the old diagram's recovery copy already discarded (#171).
+      const switched = await this.switchTo(await this.api.openHandle(saved.handle), undefined, true);
+      // The switch can still stop (a recovery copy kept for a file being replaced, and Cancel).
+      if (!switched && this.dirty) this.scheduleSnapshot();
     });
   }
 
