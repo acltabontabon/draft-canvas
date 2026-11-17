@@ -21,7 +21,7 @@ const OPERATIONS = new Set([
   'open-document', 'open-document-refresh', 'open-document-stash', 'open-share-link', 'refresh-library',
   'release-notes', 'remove-background-image', 'rename-document', 'rename-project',
   'host-agent', 'host-background-report', 'host-background-restore', 'host-change', 'host-flush-ack', 'host-forget', 'host-load', 'host-save-request',
-  'desktop-action', 'desktop-agent-clients', 'desktop-agent-configure', 'desktop-agent-connect-client',
+  'desktop-action', 'desktop-agent-activate', 'desktop-agent-clients', 'desktop-agent-configure', 'desktop-agent-connect-client',
   'desktop-agent-install-skill', 'desktop-agent-proposal-get', 'desktop-agent-proposal-list', 'desktop-agent-save',
   'desktop-companion-agents', 'desktop-companion-allow-code', 'desktop-companion-cancel', 'desktop-companion-choose-code', 'desktop-companion-code', 'desktop-companion-continue', 'desktop-companion-forget', 'desktop-companion-runs', 'desktop-companion-send',
   'desktop-agent-remove-skill', 'desktop-agent-skills', 'desktop-agent-status', 'desktop-background-read',

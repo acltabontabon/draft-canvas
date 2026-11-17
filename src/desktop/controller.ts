@@ -1,4 +1,5 @@
 import { useUiStore } from '../store/uiStore';
+import { isSharedEditing } from '../store/collabStore';
 import { createDocument } from '../document/factory';
 import { DEFAULT_TITLE } from '../document/sanitize';
 import type { DraftDocument } from '../document/types';
@@ -457,7 +458,17 @@ export class DesktopController {
     const written = confirmWrite(event.id, event.displayPath, event.stamp);
     // The shell has written it, so its picture can follow; drawn from the text the agent's write held.
     if (written && handle) void this.docs.refresh(handle, fileStem(event.displayPath), written.after, false);
-    this.ui.notify(`An AI agent updated “${written?.title || 'a diagram'}”.`, show);
+    const updated = () => this.ui.notify(`An AI agent updated “${written?.title || 'a diagram'}”.`, show);
+    if (!written?.activate || !handle) return updated();
+    // `activate`, carried out now that the change is in the file. Still without a question: when
+    // the person has started editing since (or a live session began), the notice offers it instead.
+    void this.agentHost
+      .inTurn(() => this.openQuietly(handle))
+      .then((result) => { if (!result.opened) updated(); })
+      .catch((error) => {
+        logDiagnostic(error, { operation: 'desktop-agent-activate' });
+        updated();
+      });
   }
 
   private readonly agentHost: AgentHost = {
@@ -465,8 +476,9 @@ export class DesktopController {
       this.session.kind === 'file' ? { handle: this.session.handle, stamp: this.session.stamp, readOnly: this.session.readOnly } : null,
     hasRecoveryFor: async (displayPath) =>
       (await this.api.recoveryList()).some((entry) => entry.origin.kind === 'file' && entry.origin.displayPath === displayPath),
+    // Never over a canvas in a live session: taking the screen from it ends the session for everyone.
     canReveal: (requested) =>
-      this.session.kind === 'none' || (this.session.kind === 'quick' && !this.edited) || (requested && !this.dirty),
+      !isSharedEditing() && (this.session.kind === 'none' || (this.session.kind === 'quick' && !this.edited) || (requested && !this.dirty)),
     isClean: () => this.session.kind === 'file' && !this.dirty,
     inTurn: <T>(work: () => Promise<T>) => {
       const next = this.turn.then(work, work);
@@ -481,6 +493,7 @@ export class DesktopController {
     flush: () => this.flushApp({ keepFocus: true }),
     syncWithDisk: () => this.syncWithDisk(),
     openQuietly: (handle) => this.openQuietly(handle),
+    quietOpenRefusal: () => this.quietOpenRefusal(),
     saveQuietly: (handle) => this.saveQuietly(handle),
     notify: (message) => this.ui.notify(message),
   };
@@ -502,18 +515,28 @@ export class DesktopController {
     });
   }
 
+  /** Why what is open can't be replaced without asking the person something, or null. */
+  private quietOpenRefusal(): string | null {
+    // Not waited for: a save can be a Save As dialog left open for minutes, and this holds the
+    // controller's turn — every other agent request and the person's own opens would queue behind it.
+    if (this.saving) return 'A save is in progress.';
+    if (this.dirty) return `${this.displayName} has unsaved changes.`;
+    // Replacing a shared canvas ends its session for everyone on it (`collabBridge.ts`). That is the
+    // owner's decision to make, never a side effect of an agent's request.
+    if (isSharedEditing()) return 'A live session is running on the open canvas, and opening another diagram would end it.';
+    return null;
+  }
+
   /**
    * An agent's `activate`/`open`: makes `handle` the open document without a single question — so it
    * refuses whenever a question would have been needed (unsaved changes, a recovery copy to decide
-   * about). Never brings the window forward; says so in a notice instead.
+   * about, a live session it would end). Never brings the window forward; says so in a notice instead.
    */
   private async openQuietly(handle: Handle): Promise<{ opened: true } | { opened: false; reason: string }> {
     if (this.session.kind === 'file' && this.session.handle === handle) return { opened: true };
     await this.flushApp();
-    // Not waited for: a save can be a Save As dialog left open for minutes, and this holds the
-    // controller's turn — every other agent request and the person's own opens would queue behind it.
-    if (this.saving) return { opened: false, reason: 'A save is in progress.' };
-    if (this.dirty) return { opened: false, reason: `${this.displayName} has unsaved changes.` };
+    const refusal = this.quietOpenRefusal();
+    if (refusal) return { opened: false, reason: refusal };
     const opened = await this.api.openHandle(handle);
     const parsed = deserializeDocument(opened.text);
     if (!parsed.ok) return { opened: false, reason: `${opened.name}.draftcanvas can’t be opened: ${parsed.error}` };

@@ -6,6 +6,15 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+### Desktop
+
+#### Fixed
+
+- **A failed agent change no longer ends a live session** — An agent's change that was rejected or
+  cancelled could still switch the open diagram, which ended the session for everyone on it. A
+  diagram an agent asks to show now opens only after its change is made, and never over a canvas
+  you are sharing.
+
 ## [1.20.0] - 2026-11-16
 
 Draw sequences. Sketch over any diagram.

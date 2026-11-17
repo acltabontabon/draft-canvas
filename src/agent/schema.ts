@@ -661,7 +661,7 @@ const TOOL_INPUTS = [
         diagramId: { type: 'string' },
         expectedRevision: { type: 'string', description: 'The revision from your last read or receipt; a newer one means someone else edited it.' },
         view: { type: 'object', properties: { inside: { type: 'array', items: { type: 'string' }, maxItems: 3, description: 'Element ids from the top view down to the view to change. A service or component with nothing inside yet gets its inside view (the next C4 level) from the first add here.' } }, additionalProperties: false },
-        activate: { type: 'boolean', description: 'Also open the diagram on screen first (refused if what is open has unsaved changes). Not needed to change it.' },
+        activate: { type: 'boolean', description: 'Also open the diagram on screen once the change is made (refused if what is open has unsaved changes or is in a live session). Not needed to change it.' },
         onConflict: {
           type: 'string',
           enum: ['refuse', 'rebase'],

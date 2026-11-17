@@ -379,7 +379,9 @@ advisories (10 on create).
 
 - **Closed diagrams** are changed in their file, only if it is unchanged since read
   (`REVISION_CONFLICT` otherwise). A pending recovery copy is `DOCUMENT_BUSY`. The person gets a
-  notice with **Show**. `activate: true` opens the diagram first when that loses nothing.
+  notice with **Show**. `activate: true` opens the diagram once the change is written. It is refused
+  (`DOCUMENT_BUSY`, nothing changed) when what is open has unsaved changes or is in a live session,
+  and a rejected or cancelled request never switches what is on screen.
 - **Undo.** One update is one undo step. For a closed file, the previous content is kept in memory
   (8 changes, 16 M characters) and becomes undoable if the file is opened unchanged this session.
   `create_diagram` has no undo step.
