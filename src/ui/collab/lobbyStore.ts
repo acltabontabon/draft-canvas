@@ -10,7 +10,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { useUiStore } from '../../store/uiStore';
 import { announce } from '../../lib/announce';
 import { logDiagnostic } from '../../lib/diagnostics';
-import { isLookalike, readConnectionPreferences } from './collabCopy';
+import { isLookalike, readConnectionPreferences, ROLE_LABELS } from './collabCopy';
 
 /**
  * The owner's waiting room, for as long as a session runs: one session link for everyone, a knock
@@ -79,12 +79,17 @@ function start(owner: string, url: string, identity: Awaited<ReturnType<typeof n
         seen.add(knock.id);
         if (!knock.admitting) announce(`${knock.name} is asking to join.`);
         if (useEditorStore.getState().mode === 'present' && !knock.admitting) {
-          // No one-click "Let in" for a name someone here already has: that is for the door card,
+          // No one-click answer for a name someone here already has: that is for the door card,
           // where the owner sees the warning beside the question.
           if (isLookalike(useCollabStore.getState(), knock)) {
             useUiStore.getState().notify(`${knock.name} wants to join — someone here already goes by that name. Check who it is before letting them in.`);
           } else {
-            useUiStore.getState().notify(`${knock.name} wants to join`, 'info', { label: 'Let in', run: () => void current.allow(knock.id, 'editor') });
+            // The door card's own three answers, each saying what it grants: a presenter lets a late
+            // arrival watch without leaving the walkthrough to find the access selector (#176).
+            const answer = (label: string, role: Role | null) => ({ label, run: () => void (role ? current.allow(knock.id, role) : current.deny(knock.id)) });
+            useUiStore
+              .getState()
+              .notify(`${knock.name} wants to join`, 'info', answer(ROLE_LABELS.editor, 'editor'), [answer(ROLE_LABELS.viewer, 'viewer'), answer('Deny', null)]);
           }
         }
       }

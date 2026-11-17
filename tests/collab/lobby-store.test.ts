@@ -3,9 +3,12 @@ import type { HostLobbyEvents } from '../../src/collab/lobby';
 import { newOwnerIdentity } from '../../src/collab/rendezvous';
 import { announce } from '../../src/lib/announce';
 import { COLLAB_AT_REST, useCollabStore } from '../../src/store/collabStore';
+import { useEditorStore } from '../../src/store/editorStore';
+import { useUiStore } from '../../src/store/uiStore';
 import { closeLobby, openLobby } from '../../src/ui/collab/lobbyStore';
 
 const lobbies = vi.hoisted(() => [] as HostLobbyEvents[]);
+const answers = vi.hoisted(() => ({ allow: vi.fn(), deny: vi.fn() }));
 vi.mock('../../src/collab/connect', () => ({ relayUrl: () => 'wss://relay.example' }));
 vi.mock('../../src/collab/rendezvous', () => ({
   rendezvousAvailable: () => true,
@@ -18,6 +21,8 @@ vi.mock('../../src/collab/lobby', () => ({
     constructor(...args: unknown[]) { lobbies.push(args[5] as HostLobbyEvents); }
     async open() { lobbies.at(-1)!.status('open'); }
     async close() {}
+    async allow(id: string, role: string) { answers.allow(id, role); }
+    async deny(id: string) { answers.deny(id); }
   },
 }));
 vi.mock('../../src/lib/announce', () => ({ announce: vi.fn() }));
@@ -59,5 +64,27 @@ describe('lobby UI lifetime', () => {
     events.knocks([]);
     events.knocks([knock]);
     expect(announce).toHaveBeenCalledTimes(2);
+  });
+
+  // #176: the presenter's notice had one "Let in", which always granted editing.
+  it('offers every answer, by the access it grants, while presenting', async () => {
+    const mode = useEditorStore.getState().mode;
+    useEditorStore.setState({ mode: 'present' });
+    try {
+      openLobby('Owner');
+      await Promise.resolve();
+      lobbies[0]!.knocks([{ id: 'request', name: 'Guest', at: 0 }]);
+      const toast = useUiStore.getState().toasts.at(-1)!;
+      expect(toast.message).toBe('Guest wants to join');
+      const actions = [toast.action!, ...toast.alternatives!];
+      expect(actions.map((action) => action.label)).toEqual(['Can edit', 'Can view', 'Deny']);
+      actions[1]!.run();
+      expect(answers.allow).toHaveBeenCalledWith('request', 'viewer');
+      actions[2]!.run();
+      expect(answers.deny).toHaveBeenCalledWith('request');
+      useUiStore.getState().dismiss(toast.id);
+    } finally {
+      useEditorStore.setState({ mode });
+    }
   });
 });

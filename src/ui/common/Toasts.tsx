@@ -56,18 +56,19 @@ export function Toasts() {
       {toasts.map((toast) => (
         <div key={toast.id} className="dc-toast" data-tone={toast.tone}>
           <span className="dc-toast-message">{toast.message}</span>
-          {toast.action && (
+          {[...(toast.action ? [toast.action] : []), ...(toast.alternatives ?? [])].map((action) => (
             <Button
+              key={action.label}
               variant="quiet"
               className="dc-toast-action"
               onClick={(event) => {
-                toast.action!.run();
+                action.run();
                 dismissFrom(event, toast.id);
               }}
             >
-              {toast.action.label}
+              {action.label}
             </Button>
-          )}
+          ))}
           <Button
             icon="close"
             variant="quiet"
