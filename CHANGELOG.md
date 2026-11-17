@@ -21,6 +21,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Fixed
 
+- **New File asks about unsaved changes once** — Choosing **New File…** over a diagram with unsaved
+  changes asked whether to save them, then asked again after the new file was already created. It
+  now asks once, before the Save dialog.
 - **A failed agent change no longer ends a live session** — An agent's change that was rejected or
   cancelled could still switch the open diagram, which ended the session for everyone on it. A
   diagram an agent asks to show now opens only after its change is made, and never over a canvas
