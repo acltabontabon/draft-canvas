@@ -1,6 +1,9 @@
+import type { FollowState } from '../../../collab/protocol';
 import type { DepthPath } from '../../../depth/tree';
-import type { DraftViewport } from '../../../document/types';
+import { playbackFlowOf } from '../../../document/sequenceFlow';
+import type { DraftDocument, DraftViewport } from '../../../document/types';
 import type { View } from '../../../presentation/framing';
+import { resolveFlowSteps } from '../../../presentation/useFlowPlayback';
 
 /**
  * Following the presenter — the camera half, as pure arithmetic beside `presentation/framing.ts`.
@@ -74,4 +77,39 @@ export function roomRoute(from: DepthPath, to: DepthPath): { exitTo: number | nu
   let shared = 0;
   while (shared < from.length && shared < to.length && from[shared] === to[shared]) shared += 1;
   return { exitTo: shared < from.length ? shared : null, enter: to.slice(shared) };
+}
+
+/** The moment of the presenter's walkthrough a follower's canvas shows, as `flowPlayback` holds it. */
+export interface FollowedPlayback {
+  flowId: string;
+  sequenceNodeId: string | undefined;
+  step: number;
+  stage: 'opening' | 'closing' | undefined;
+}
+
+/**
+ * Which moment the presenter is telling: the opening, a numbered step or the closing. A presenter
+ * on an older version sends no stage, and its opening is the only moment with no step number.
+ */
+export function followedStage(presenter: Pick<FollowState, 'step' | 'stage'>): 'opening' | 'closing' | undefined {
+  return presenter.stage ?? (presenter.step !== null && presenter.step < 1 ? 'opening' : undefined);
+}
+
+/**
+ * The presenter's step as this copy of their room can show it, or `null` when there is nothing to
+ * show: no flow chosen yet, or a flow (or its connectors) that has not arrived here. Never a flow
+ * with no steps — playback's own reconciliation would put that straight back to the picker.
+ */
+export function followedPlayback(presenter: FollowState, document: Pick<DraftDocument, 'flows' | 'nodes' | 'edges'>): FollowedPlayback | null {
+  if (presenter.step === null) return null;
+  const flow = playbackFlowOf(document, presenter.flowId, presenter.sequenceNodeId);
+  if (!flow) return null;
+  const steps = resolveFlowSteps(flow, document.edges, document.nodes).length;
+  if (steps === 0) return null;
+  return {
+    flowId: flow.id,
+    sequenceNodeId: presenter.sequenceNodeId,
+    step: Math.min(steps, Math.max(0, presenter.step)),
+    stage: followedStage(presenter),
+  };
 }

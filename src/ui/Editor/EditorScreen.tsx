@@ -179,6 +179,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const collabOpen = useUiStore((state) => state.collabOpen);
   const collabStatus = useCollabStore((state) => state.status);
   const collabGuest = useCollabStore((state) => state.role === 'guest');
+  // While they follow a presenter, the playback on this canvas is the presenter's (`useFollowPresenter`).
+  const collabFollowing = useCollabStore((state) => state.role === 'guest' && state.following);
   const collabEnd = useCollabStore((state) => state.endReason);
   // The session ended on this collaborator (not left on purpose): the copy on screen is nobody's
   // file now, so the canvas closes behind a card rather than staying there to fiddle with.
@@ -746,7 +748,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               <CompanionChunk.Component buildCommandContext={buildCommandContext} />
             </Suspense>
           )}
-          <FlowBar playback={playback} />
+          <FlowBar playback={playback} follower={collabFollowing && mode !== 'present'} />
           <FocusIndicator />
           <LayoutBusyBar />
           <TidyBar />

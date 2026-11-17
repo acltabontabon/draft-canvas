@@ -7,6 +7,8 @@ import { createDocument, createEdge, createNode } from '../../src/document/facto
 import { COLLAB_AT_REST, useCollabStore } from '../../src/store/collabStore';
 import { useEditorStore } from '../../src/store/editorStore';
 import { FollowPrompt } from '../../src/ui/collab/FollowPrompt';
+import { followedPlayback } from '../../src/ui/collab/presence/follow';
+import { readHostMessage } from '../../src/collab/protocol';
 
 const peers: PeerView[] = [
   { id: 'host', name: 'Ada Lovelace', color: 0, role: 'owner', link: 'live' },
@@ -159,6 +161,41 @@ describe('FollowPrompt', () => {
     expect(screen.queryByText('Ada Lovelace is presenting')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Follow Ada Lovelace' }));
     expect(useCollabStore.getState().following).toBe(true);
+  });
+
+  it('names the presenter’s own moment: the opening, the step number, the end', () => {
+    const document = useEditorStore.getState().document;
+    useEditorStore.getState().setDocument({ ...document, flows: [{ id: 'f', title: 'Checkout', steps: [{ id: 's', edgeId: 'e' }] }] });
+    const telling = { ...presenter, flowId: 'f' };
+    useCollabStore.setState({ role: 'guest', status: 'live', peers, presenter: { ...telling, step: 0, stage: 'opening' } });
+    render(<FollowPrompt />);
+    expect(screen.getByText('Checkout · opening')).toBeTruthy();
+    act(() => useCollabStore.setState({ presenter: { ...telling, step: 1 } }));
+    expect(screen.getByText('Checkout · step 1')).toBeTruthy();
+    act(() => useCollabStore.setState({ presenter: { ...telling, step: 1, stage: 'closing' } }));
+    expect(screen.getByText('Checkout · end')).toBeTruthy();
+    // An owner on an older version sends no stage: its opening is the moment before step 1.
+    act(() => useCollabStore.setState({ presenter: { ...telling, step: 0 } }));
+    expect(screen.getByText('Checkout · opening')).toBeTruthy();
+  });
+
+  it('shows a follower the presenter’s step only once the flow is here to show', () => {
+    const document = useEditorStore.getState().document;
+    const told = { ...document, flows: [{ id: 'f', title: 'Checkout', steps: [{ id: 's', edgeId: 'e' }] }] };
+    const telling = { ...presenter, flowId: 'f' };
+    expect(followedPlayback({ ...telling, step: 1 }, told)).toEqual({ flowId: 'f', sequenceNodeId: undefined, step: 1, stage: undefined });
+    expect(followedPlayback({ ...telling, step: 0, stage: 'opening' }, told)).toMatchObject({ step: 0, stage: 'opening' });
+    expect(followedPlayback({ ...telling, step: 1, stage: 'closing' }, told)).toMatchObject({ step: 1, stage: 'closing' });
+    // No flow chosen, a flow not here yet, or one whose connectors are not: nothing to light.
+    expect(followedPlayback(presenter, told)).toBeNull();
+    expect(followedPlayback({ ...telling, step: 1 }, document)).toBeNull();
+    expect(followedPlayback({ ...telling, step: 1 }, { ...told, edges: [] })).toBeNull();
+  });
+
+  it('carries the stage over the wire, and refuses one it does not know', () => {
+    const state = { ...presenter, flowId: 'f', step: 0, stage: 'opening' };
+    expect(readHostMessage({ t: 'follow', state })).toEqual({ t: 'follow', state });
+    expect(readHostMessage({ t: 'follow', state: { ...state, stage: 'middle' } })).toBeNull();
   });
 
   it('is never shown to the owner', () => {

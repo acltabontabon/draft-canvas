@@ -66,8 +66,9 @@ there later.
 - **People column** (top right): everyone in the session, each in a colour. Hover a face to see where
   they are; **Find** takes you there.
 - **Pointers and selections** show for people inside the same shape (level) as you.
-- **Follow:** collaborators can follow the owner's presentation. Moving the canvas, or stepping into
-  or out of a shape, stops following.
+- **Follow:** collaborators can follow the owner's presentation. Their view goes where the owner's
+  does, with the step being told lit on their canvas and its caption shown. Moving the canvas,
+  stepping into or out of a shape, or `Esc` stops following.
 - **Same shape, same moment:** the last change to reach the owner wins.
 
 ## Owner controls

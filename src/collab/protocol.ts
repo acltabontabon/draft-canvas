@@ -100,7 +100,10 @@ export interface FollowState {
   presenting: boolean;
   flowId: string | null;
   sequenceNodeId?: string;
+  /** As `flowPlayback.step`: 1-based, and `0` in the opening. */
   step: number | null;
+  /** The opening or closing overview rather than a numbered step, as `flowPlayback.stage`. */
+  stage?: 'opening' | 'closing';
 }
 
 export type RejectReason = 'view-only' | 'malformed' | 'limits' | 'too-much';
@@ -289,6 +292,8 @@ function readFollow(value: unknown): FollowState | null {
   const flowId = sequenceNodeId ? null : value.flowId === null ? null : readId(value.flowId);
   const step = value.step === null ? null : isInt(value.step) ? value.step : undefined;
   if ((!sequenceNodeId && value.flowId !== null && flowId === null) || step === undefined) return null;
+  if (value.stage !== undefined && value.stage !== 'opening' && value.stage !== 'closing') return null;
+  const stage = value.stage;
   let view: FollowState['view'];
   if (value.view !== undefined) {
     if (!isRecord(value.view) || !isFiniteNumber(value.view.width) || !isFiniteNumber(value.view.height)) return null;
@@ -307,6 +312,7 @@ function readFollow(value: unknown): FollowState | null {
     flowId,
     ...(sequenceNodeId ? { sequenceNodeId } : {}),
     step,
+    ...(stage ? { stage } : {}),
   };
 }
 
