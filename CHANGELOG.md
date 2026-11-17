@@ -6,6 +6,14 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+### Shared
+
+#### Fixed
+
+- **Following a presentation shows the presenter's step** — A collaborator following a walkthrough
+  saw a step number one ahead of the presenter's, and a plain canvas. They now see the same opening,
+  step or end, with the connector being discussed lit and its caption shown.
+
 ### Desktop
 
 #### Fixed

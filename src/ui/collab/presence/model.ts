@@ -67,6 +67,7 @@ export function sameFollow(a: FollowState | null, b: FollowState | null): boolea
     a.flowId === b.flowId &&
     a.sequenceNodeId === b.sequenceNodeId &&
     a.step === b.step &&
+    a.stage === b.stage &&
     a.viewport.x === b.viewport.x &&
     a.viewport.y === b.viewport.y &&
     a.viewport.zoom === b.viewport.zoom &&

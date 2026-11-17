@@ -43,7 +43,7 @@ const TIMELINE_TICK_LIMIT = 14;
  * first by mistake. The camera has its own two: Overview (`O`) pulls back with the step kept, and
  * Re-centre (`R`) hands the camera back after a manual pan. The pointer (`P`) is for pointing.
  */
-export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
+export function FlowBar({ playback, follower = false }: { playback: FlowPlaybackController; follower?: boolean }) {
   // Only while presenting — the bar isn't shown otherwise, so it needn't follow every edit.
   const document = useEditorStore((state) => (playback.active ? state.document : null));
   const mode = useEditorStore((state) => state.mode);
@@ -78,7 +78,8 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
   }, [playback]);
 
   useEffect(() => {
-    if (!playback.active) return;
+    // A follower's steps are the presenter's to take: no key here moves them.
+    if (!playback.active || follower) return;
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
       // No editable surface is actually reachable while presenting today, but every other
       // shortcut listener in the app guards against one the same way (`EditorScreen.tsx`) — kept
@@ -166,7 +167,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [playback, toggleOverview, togglePointer]);
+  }, [playback, follower, toggleOverview, togglePointer]);
 
   // A presenter's reveal (a chip or badge clicked while presenting — see `presentationReveal`) is
   // scoped to the step it was made on (`revealIn` ignores it elsewhere, from the very first render),
@@ -180,7 +181,7 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
   // on the first movement, keypress or focus. Written to the store only on the flip, never per
   // pointer frame (`setPresentation` refuses an unchanged write).
   useEffect(() => {
-    if (!playback.active) return;
+    if (!playback.active || follower) return;
     let timer = 0;
     const rest = () => {
       window.clearTimeout(timer);
@@ -201,9 +202,25 @@ export function FlowBar({ playback }: { playback: FlowPlaybackController }) {
       window.removeEventListener('keydown', wake);
       useUiStore.getState().setPresentation({ idle: false });
     };
-  }, [playback.active]);
+  }, [playback.active, follower]);
 
   if (!playback.active) return null;
+  // Following a presenter (`useFollowPresenter`) lights their step on this canvas, and the step's
+  // caption is all of the bar that belongs here: the controls are the presenter's, and the follow
+  // pill already says which moment this is and how to let go.
+  if (follower) {
+    if (!playback.flow || !document || playback.stage !== 'step' || !playback.current) return null;
+    const followed = nodeIndex(document.nodes);
+    return (
+      <StepCaption
+        step={playback.current}
+        story={describeStep(playback.current, followed)}
+        total={playback.steps.length}
+        flow={playback.flow}
+        nodes={followed}
+      />
+    );
+  }
 
   // Before any flow has been chosen, the picker *is* the bar — the same list and the same keys, so
   // the choice made on the way in and the one made mid-presentation are one gesture to learn.

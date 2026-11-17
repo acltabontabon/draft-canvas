@@ -41,6 +41,8 @@ export function usePresenterBroadcast(): void {
         flowId: playback.active && !playback.sequenceNodeId ? playback.flowId : null,
         ...(playback.active && playback.sequenceNodeId ? { sequenceNodeId: playback.sequenceNodeId } : {}),
         step: playback.active && playback.flowId ? playback.step : null,
+        // Without it the opening and the closing read as a numbered step on a follower's side.
+        ...(playback.active && playback.flowId && playback.stage ? { stage: playback.stage } : {}),
       };
     };
 
