@@ -14,7 +14,6 @@ import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
 import { markLastSeenRelease, readLastSeenRelease } from '../releases/seen';
 
-/** A toast's one optional button — e.g. "Undo" for something that was just removed. */
 export type NewCanvasRequest = { kind: 'example' } | { kind: 'canvas'; document: DraftDocument };
 
 export interface FlowTrace {
@@ -29,7 +28,11 @@ export interface FlowTrace {
 }
 
 export type ToastAction = { label: string; run: () => void };
-export type Toast = { id: number; message: string; tone: 'info' | 'error'; action?: ToastAction };
+/**
+ * A toast's optional button — e.g. "Undo" for something that was just removed — and, for the rare
+ * question with more than one answer (a join request while presenting), the other answers beside it.
+ */
+export type Toast = { id: number; message: string; tone: 'info' | 'error'; action?: ToastAction; alternatives?: ToastAction[] };
 
 /**
  * Drives the small type-picker menu (`QuickConnectMenu`) for the two
@@ -800,7 +803,7 @@ export interface UiStore {
   setRecoveryConnect: (gesture: UiStore['recoveryConnect']) => void;
   setEditingText: (id: string | null) => void;
   setQuietEdge: (id: string | null) => void;
-  notify: (message: string, tone?: Toast['tone'], action?: ToastAction) => void;
+  notify: (message: string, tone?: Toast['tone'], action?: ToastAction, alternatives?: ToastAction[]) => void;
   dismiss: (id: number) => void;
   /** Holds every toast's auto-dismiss while the pointer or focus is on them, so there's time to
    *  read one — or reach its action — and restarts the countdowns once it leaves. */
@@ -1144,7 +1147,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setEditingText: (editingTextId) => set({ editingTextId }),
   setQuietEdge: (quietEdgeId) => set((state) => (state.quietEdgeId === quietEdgeId ? state : { quietEdgeId })),
 
-  notify(message, tone = 'info', action) {
+  notify(message, tone = 'info', action, alternatives) {
     // The same message again (a paste refused twice in a row) restarts the one already showing
     // rather than stacking a copy; and only the newest few stay, so a burst can't bury the canvas.
     const repeat = get().toasts.find((t) => t.message === message && t.tone === tone && t.action?.label === action?.label);
@@ -1152,10 +1155,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
     const overflow = get().toasts.slice(0, Math.max(0, get().toasts.length - (MAX_TOASTS - 1)));
     for (const old of overflow) get().dismiss(old.id);
     toastId += 1;
-    const toast: Toast = { id: toastId, message, tone, ...(action ? { action } : {}) };
+    const toast: Toast = { id: toastId, message, tone, ...(action ? { action } : {}), ...(action && alternatives?.length ? { alternatives } : {}) };
     set((state) => ({ toasts: [...state.toasts, toast] }));
-    // An action needs time to be reached, not just read.
-    const remaining = tone === 'error' ? 8000 : action ? 6000 : 3500;
+    // An action needs time to be reached, not just read; a choice between several, time to be made.
+    const remaining = toast.alternatives ? 12000 : tone === 'error' ? 8000 : action ? 6000 : 3500;
     const timer = { remaining, startedAt: Date.now(), handle: null as ReturnType<typeof setTimeout> | null };
     toastTimers.set(toast.id, timer);
     if (!toastsPaused) timer.handle = setTimeout(() => get().dismiss(toast.id), remaining);

@@ -28,6 +28,8 @@ Send the **session link** (**Copy link**). Each person opens it, writes their na
 
 Their request appears at the top of the people column on your canvas, and in the Collaborate
 dialog. Choose **Can edit** or **Can view**, then **Let in**, or **Deny**.
+While you are presenting, the request appears as a notice with the same choices: **Can edit**,
+**Can view** or **Deny**.
 
 ![A join request on the owner's canvas: "Wants to join: Grace", with Can edit, Let in and Deny.](../media/guides/collab-door.png)
 
