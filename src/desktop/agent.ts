@@ -21,7 +21,9 @@
  * - **Not open** — worked out from the file's text and handed back for the shell to write, under the
  *   stamp it read, so an edit made on disk meanwhile turns into a conflict. What the person is looking
  *   at is never switched; a notice offers to show the change, and opening the file then has the change
- *   as one undo step (`agentWrites.ts`). `activate: true` still opens it first, as it always did.
+ *   as one undo step (`agentWrites.ts`). `activate: true` opens it once the change is written, never
+ *   before: a request that is refused or cancelled leaves what is on screen (and any live session
+ *   on it) alone.
  *
  * A saved change is identified by its file revision (`f:…`), which stays valid when the document is
  * closed, reopened or the app restarts; only a change left unsaved carries the editor's revision.
@@ -85,6 +87,11 @@ export interface AgentHost {
   syncWithDisk(): Promise<'unchanged' | 'reloaded' | 'changed' | 'missing'>;
   /** Makes `handle` the open document without asking anything — or says why it won't. */
   openQuietly(handle: Handle): Promise<{ opened: true } | { opened: false; reason: string }>;
+  /**
+   * Why `openQuietly` would refuse to replace what is open right now (a save in progress, unsaved
+   * changes, a live session it would end), or null. Asked before any work, opening nothing.
+   */
+  quietOpenRefusal(): string | null;
   /** Saves the open file without any dialog — refused unless `handle` is still the file that is open. */
   saveQuietly(handle: Handle): Promise<{ saved: true } | { saved: false; reason: string }>;
   /** Draft Canvas holds unsaved changes to this file from an earlier session (a recovery copy). */
@@ -721,9 +728,14 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
   let open = host.openFile();
   if (open?.handle !== context.handle) {
     if (args.activate !== true) return updateFile(api, host, event, expected);
-    const opened = await host.openQuietly(context.handle);
-    if (!opened.opened) throw new AgentError('DOCUMENT_BUSY', opened.reason, { hint: 'Leave out activate to change the file without opening it, or ask the person to save or close what they have open.', retryable: true });
-    open = host.openFile();
+    // Opened only once the change is written (the controller's `onAgentFileWritten`). Opening first
+    // switched the canvas, and ended a live session on it, for a request that was then refused as
+    // stale or cancelled at the gate and answered "Nothing changed." Whether it could open at all
+    // is still settled up front, so a change the agent asked to show isn't made out of sight.
+    await host.flush();
+    const refusal = host.quietOpenRefusal();
+    if (refusal) throw new AgentError('DOCUMENT_BUSY', `${refusal} Nothing changed.`, { hint: 'Leave out activate to change the file without opening it, or ask the person to save or close what they have open.', retryable: true });
+    return updateFile(api, host, event, expected, true);
   }
   if (!open) throw new AgentError('NOT_FOUND', 'That diagram is not open.');
   await requireInStepWithDisk(host);
@@ -855,7 +867,7 @@ async function update(api: DesktopApi, host: AgentHost, event: Request) {
  * A change to a diagram that isn't open: worked out from the file as the shell read it, and handed
  * back for the shell to write under that same stamp. Nothing on screen changes.
  */
-async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expected: string) {
+async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expected: string, activate = false) {
   const { args, context } = event;
   // Open when the broker sent it, closed by its turn: the broker sent no text for an open diagram,
   // and answering NOT_FOUND told the agent to give up on a diagram that is right there. The same
@@ -888,7 +900,7 @@ async function updateFile(api: DesktopApi, host: AgentHost, event: Request, expe
   const text = gate(result.file);
 
   await passGate(api, event.id);
-  rememberPendingWrite(event.id, { title, before: context.text, after: text });
+  rememberPendingWrite(event.id, { title, before: context.text, after: text, ...(activate ? { activate: true as const } : {}) });
   // `write` is the shell's to carry out; it fills in the new revision and removes `write` itself.
   return { ...base, applied: true, where: 'file', undo: 'on-open', ...receiptCounts(result), write: { text } };
 }

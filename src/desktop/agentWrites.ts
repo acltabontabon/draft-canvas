@@ -15,6 +15,8 @@ export interface AgentWrite {
   title: string;
   before: string;
   after: string;
+  /** The agent asked for the diagram to be opened (`activate`): done when the write is confirmed. */
+  activate?: true;
 }
 
 const MAX_ENTRIES = 8;
