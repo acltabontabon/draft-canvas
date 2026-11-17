@@ -22,6 +22,9 @@ the Library. **Leave without saving** asks before it gives up the unsaved change
 3. To bring it back, choose **Restore…**. Existing diagrams are never overwritten; matches come back
    as copies.
 
+In a browser with no diagrams yet, Home has no **View all**. Choose **Import a file** and pick the
+backup ZIP, or drop it onto Home, to restore it.
+
 Once you have a few diagrams, the Library reminds you when the last backup is missing or over a week
 old. Press `/` in the Library to search. Deleting a project moves its diagrams to **Unorganized**.
 

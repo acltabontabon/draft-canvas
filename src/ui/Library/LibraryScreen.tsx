@@ -17,7 +17,7 @@ import { DocumentPreview } from './DocumentPreview';
 import { GalleryHeading } from './GalleryHeading';
 import { LibraryBrand } from './LibraryBrand';
 import { LocalNote } from './LocalNote';
-import { backUpLibrary, restoreLibrary } from './backupActions';
+import { backUpLibrary, looksLikeBackup, restoreLibrary } from './backupActions';
 import { MoveToProjectMenu } from './MoveToProjectMenu';
 import { MovedHouseNotice } from './MovedHouseNotice';
 import { hostKind } from '../../host/hostInfo';
@@ -143,8 +143,25 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     await session.adoptDocument(document);
   };
 
+  // Restore adds, never replaces: every diagram in the archive arrives beside what is here, a
+  // taken id becoming a copy — so the list and the project nav are simply refreshed afterwards.
+  const onRestore = async (file: File | undefined) => {
+    if (!file || !session.repository) return;
+    const result = await restoreLibrary(session.repository, file, notify);
+    if (!result) return;
+    await session.refreshProjects();
+    await session.refreshLibrary();
+  };
+
   const onImport = async (file: File | undefined) => {
     if (!file) return;
+    // A library backup is not a diagram: read as one, a valid ZIP was called invalid JSON. It goes to
+    // Restore instead — the only way in from a first-run Home, which has no Restore button (#172).
+    if (await looksLikeBackup(file)) {
+      if (session.repository) await onRestore(file);
+      else notify('That is a library backup, which can’t be restored here.', 'error');
+      return;
+    }
     try {
       // What the file is — a document, an encrypted one, a Mermaid flowchart, an editable image — is
       // decided in one place for every entry point (`import/route.ts`).
@@ -185,7 +202,8 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     <input
       ref={fileInput}
       type="file"
-      accept={IMPORT_ACCEPT}
+      // A backup too: Import is where someone with only a ZIP and an empty Home will look.
+      accept={`${IMPORT_ACCEPT},.zip,application/zip`}
       hidden
       onChange={(event) => {
         void onImport(event.target.files?.[0]);
@@ -194,15 +212,6 @@ export function LibraryScreen({ session }: { session: DocumentSession }) {
     />
   );
 
-  // Restore adds, never replaces: every diagram in the archive arrives beside what is here, a
-  // taken id becoming a copy — so the list and the project nav are simply refreshed afterwards.
-  const onRestore = async (file: File | undefined) => {
-    if (!file || !session.repository) return;
-    const result = await restoreLibrary(session.repository, file, notify);
-    if (!result) return;
-    await session.refreshProjects();
-    await session.refreshLibrary();
-  };
   const restoreInputElement = (
     <input
       ref={restoreInput}

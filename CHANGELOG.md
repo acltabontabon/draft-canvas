@@ -29,6 +29,14 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   diagram an agent asks to show now opens only after its change is made, and never over a canvas
   you are sharing.
 
+### Web
+
+#### Fixed
+
+- **Restore a backup into an empty browser** — A browser with no diagrams had no **Restore…**, and
+  a backup ZIP dropped on Home was reported as invalid JSON. **Import a file** and a drop now
+  restore a backup ZIP, on Home and in the Library.
+
 ## [1.20.0] - 2026-11-16
 
 Draw sequences. Sketch over any diagram.
