@@ -1,6 +1,7 @@
-import { continuationsFor, materialize, type Continuation, type FragmentNodeSpec } from '../continuation';
-import { defaultSizeFor } from '../document/factory';
-import { placeNear } from '../document/operations';
+import { continuationsFor, materialize, type Continuation, type FragmentNodeSpec, type MaterializedContinuation } from '../continuation';
+import { createEdge, defaultSizeFor } from '../document/factory';
+import { addNodes, placeNear } from '../document/operations';
+import { inferRelationshipThroughJunctions } from '../document/reinfer';
 import type { DraftDocument, ViewLevel } from '../document/types';
 import type { ContinuationOffer, QuickConnectState } from '../store/uiStore';
 import { quickConnectPresets, type Preset } from '../lib/presets';
@@ -106,5 +107,36 @@ export function offerFor(doc: DraftDocument, state: QuickConnectState, item: Qui
   const offer = source
     ? (materialize(doc, continuation) ?? materialize(doc, continuation, { at: placeNear(doc, source, size) }))
     : materialize(doc, continuation, { at });
-  return offer ? { ...offer, trigger: 'drop' } : undefined;
+  return offer ? { ...withFanIn(doc, state, offer), trigger: 'drop' } : undefined;
+}
+
+/**
+ * The offer with a connector from every other shape the drag carried, to the same new shape the
+ * dragged one reaches — what dropping on an existing shape does (`connectMany`), so the picker's
+ * ghost shows every line the drag did and choosing a row adds them all in its one undo step (#177).
+ * Each connector means what a single drag between that pair would have meant.
+ */
+function withFanIn(doc: DraftDocument, state: QuickConnectState, offer: MaterializedContinuation): MaterializedContinuation {
+  if (!state.fanIn?.length) return offer;
+  const targetId = offer.edges.find((edge) => edge.source === offer.anchorId)?.target;
+  const target = offer.nodes.find((node) => node.id === targetId);
+  if (!target) return offer;
+  // Inference looks the new shape up by id, so it reads the document as it will be.
+  const after = addNodes(doc, offer.nodes);
+  const extra = [...new Set(state.fanIn)].flatMap((id) => {
+    const source = id === offer.anchorId ? undefined : doc.nodes.find((node) => node.id === id);
+    if (!source) return [];
+    const relationship = inferRelationshipThroughJunctions(after, source, target);
+    return [
+      createEdge({
+        source: source.id,
+        target: target.id,
+        kind: relationship?.kind,
+        semantic: relationship?.semantic,
+        async: relationship?.async,
+        semanticsOrigin: relationship ? 'inferred' : undefined,
+      }),
+    ];
+  });
+  return extra.length > 0 ? { ...offer, edges: [...offer.edges, ...extra] } : offer;
 }

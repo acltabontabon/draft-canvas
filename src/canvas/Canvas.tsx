@@ -381,6 +381,8 @@ export interface CanvasProps {
     flowPosition: { x: number; y: number },
     screenPosition: { x: number; y: number },
     center: { x: number; y: number },
+    /** The other selected shapes the drag carried, to be connected to whatever is chosen. */
+    fanIn?: readonly string[],
   ) => void;
   /**
    * Called instead of `onCreateAt` when the canvas is double-clicked with no
@@ -1672,6 +1674,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         { x: Math.round(position.x - 88), y: Math.round(position.y - 34) },
         { x: point.clientX, y: point.clientY },
         position,
+        // Carried into the picker: dropped here, the other sources the drag drew were lost (#177).
+        fanIn ?? undefined,
       );
     },
     [onQuickConnectMenu, screenToFlowPosition],

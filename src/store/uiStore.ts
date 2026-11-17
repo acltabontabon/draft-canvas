@@ -48,6 +48,9 @@ export type Toast = { id: number; message: string; tone: 'info' | 'error'; actio
 export interface QuickConnectState {
   /** Absent for a plain double-click-to-create; present for a connector dropped on empty canvas. */
   source?: string;
+  /** The other selected shapes the drag carried (`fanInSources`): the chosen row is connected from
+   *  each of them too, as a drop on an existing shape would be. */
+  fanIn?: readonly string[];
   flowPosition: { x: number; y: number };
   screenPosition: { x: number; y: number };
   /** The raw drop point in flow coordinates (`flowPosition` is that point already offset for a
