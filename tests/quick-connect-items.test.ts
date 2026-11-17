@@ -136,4 +136,20 @@ describe('offerFor', () => {
     const doc = topicDoc();
     expect(offerFor(doc, drop(), quickConnectItems(doc, drop())[0]!)).toBeUndefined();
   });
+
+  // #177: a drag from one of several selected shapes drew a line from each, then connected only one.
+  it('connects every shape the drag carried to the row that is chosen', () => {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
+    const b = createNode({ id: 'b', type: 'service', x: 0, y: 200 });
+    const doc = addNodes(createDocument('Fan'), [a, b]);
+    const state: QuickConnectState = { ...drop('a'), fanIn: ['b', 'a', 'gone'] };
+    const store = quickConnectItems(doc, state).find((row) => row.label === 'Data Store')!;
+    const offer = offerFor(doc, state, store)!;
+    expect(offer.nodes).toHaveLength(1);
+    const made = offer.nodes[0]!;
+    expect(offer.edges.map((edge) => [edge.source, edge.target])).toEqual([['a', made.id], ['b', made.id]]);
+    const [first, second] = offer.edges;
+    expect([second!.kind, second!.semantic]).toEqual([first!.kind, first!.semantic]);
+    expect(offerFor(doc, drop('a'), store)!.edges).toHaveLength(1);
+  });
 });
