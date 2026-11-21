@@ -253,18 +253,21 @@ export interface FocusState {
 }
 
 /**
- * Whether the canvas is showing traffic (`src/traffic/`), and over which connectors: every one in
- * the room, or only a flow's (`flowId`). The analysis itself is never stored — `store/traffic.ts`
- * derives it from the room on demand — so it can't describe a graph that has since changed. Like
- * Focus: transient, never saved, never in history, never shared with collaborators, and dropped by
- * `resetViewSession` along with everything else about the room being left.
+ * An outage walk (`src/traffic/outage.ts`): `active` while the canvas is asking "what if this goes
+ * down?", `down` the shape or Boundary taken down (none yet while one is still to be picked), and
+ * `whole` whether every instance of a Service drawn with several is down rather than one. What the
+ * outage does is never stored — `store/outage.ts` derives it from the room on demand — so it can't
+ * describe a graph that has since changed. Like Focus: transient, never saved, never in history,
+ * never shared with collaborators, and dropped by `resetViewSession` along with everything else
+ * about the room being left.
  */
-export interface TrafficView {
+export interface OutageView {
   active: boolean;
-  flowId: string | null;
+  down: string | null;
+  whole: boolean;
 }
 
-export const TRAFFIC_OFF: TrafficView = { active: false, flowId: null };
+export const OUTAGE_OFF: OutageView = { active: false, down: null, whole: false };
 
 /**
  * An edge counts as focused if it was explicitly added, or if both of its
@@ -362,7 +365,7 @@ export interface EditorStore {
    */
   editReturn: { selection: Selection; viewport: DraftViewport | null } | null;
   focus: FocusState;
-  traffic: TrafficView;
+  outage: OutageView;
   /** The active flow: which flow's step badges show on the canvas, which the Flows panel
    *  highlights, and which a connector's "Add to …" chip appends to. Independent of playback;
    *  never mutates anything by itself. See `lensFlow` for when it also dims the canvas. */
@@ -513,6 +516,9 @@ export interface EditorStore {
   /** "Add DLQ" — creates a compact, connected Dead Letter Queue companion for a plain Queue. A
    *  no-op if the node isn't a plain queue, is itself a generated DLQ, or already has one. */
   addDeadLetterQueue: (queueId: string) => void;
+  /** Draws the way back out of a dead-letter queue: a "replays" connector to the queue it serves.
+   *  One undo step; the existing connector's id when the two are already joined that way. */
+  addReplayRoute: (deadLetterId: string, queueId: string) => string | null;
   /** Adds a folded business action linked to this interaction; a canvas gesture may choose its target. */
   addCompensation: (edgeId: string, targetId?: string) => string | null;
   setCompensationVisible: (id: string, visible: boolean) => void;
@@ -794,11 +800,14 @@ export interface EditorStore {
   enterFocus: (nodeIds: string[], edgeIds: string[]) => void;
   exitFocus: () => void;
 
-  /* Traffic */
-  /** Shows traffic over the whole room, or over one flow's connectors. Ends Focus: one dimming
-   *  system at a time. Refused while presenting. */
-  showTraffic: (flowId?: string | null) => void;
-  hideTraffic: () => void;
+  /* Outage walk */
+  /** Starts an outage walk with nothing down yet: the next shape chosen is taken down. Ends Focus:
+   *  one dimming system at a time. */
+  startOutage: () => void;
+  /** Takes a shape (or a Boundary and what is in it) down and shows what follows across the room.
+   *  `whole` takes every instance of a Service drawn with several, rather than one of them. */
+  takeDown: (nodeId: string, whole?: boolean) => void;
+  endOutage: () => void;
 
   /* Depth */
   /** Step into a shape's inside. Pure navigation: nothing is written, and an inside that does not
@@ -1148,7 +1157,7 @@ export function viewLevel(state: FileState): ViewLevel | undefined {
  * and node ids survive both a reload of the same file and a step into another room. Deliberately
  * leaves `mode` alone — presenting is a way of looking at any room, not a property of one.
  */
-function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'editReturn' | 'focus' | 'traffic' | 'selectedFlowId'> {
+function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'editReturn' | 'focus' | 'outage' | 'selectedFlowId'> {
   const ui = useUiStore.getState();
   if (ui.flowTrace) { ui.setFlowTrace(null); ui.notify('Tracing cancelled because the diagram or level changed.'); }
   ui.resetContinuation();
@@ -1188,7 +1197,7 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     editReturn: null,
     focus: { active: false, nodeIds: [], edgeIds: [] },
     // An analysis of the room being left says nothing about the one arriving.
-    traffic: TRAFFIC_OFF,
+    outage: OUTAGE_OFF,
     selectedFlowId: null,
   };
 }
@@ -1204,11 +1213,10 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
  * are moot for an empty flow anyway.
  */
 export function lensFlow(
-  state: Pick<EditorStore, 'document' | 'selectedFlowId' | 'flowPlayback' | 'focus' | 'traffic'>,
+  state: Pick<EditorStore, 'document' | 'selectedFlowId' | 'flowPlayback' | 'focus' | 'outage'>,
 ): DraftFlow | undefined {
-  // Traffic owns the dimming while it shows, the way Focus and playback do — a flow it is scoped
-  // to is named in the traffic panel rather than lit a second way.
-  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active || state.traffic.active) return undefined;
+  // An outage walk owns the dimming while it shows, the way Focus and playback do.
+  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active || state.outage.active) return undefined;
   const flow = findFlow(state.document, state.selectedFlowId);
   return flow && flowHasMembers(state.document, flow) ? flow : undefined;
 }
@@ -1522,7 +1530,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   flowPlayback: { active: false, flowId: null, step: 0 },
   editReturn: null,
   focus: { active: false, nodeIds: [], edgeIds: [] },
-  traffic: TRAFFIC_OFF,
+  outage: OUTAGE_OFF,
   selectedFlowId: null,
   revision: 0,
   liveViewport: null,
@@ -2317,6 +2325,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Add DLQ', (doc) => addEdges(addNodes(doc, [dlq]), [edge]), {
       selection: { nodes: [dlq.id], edges: [] },
     });
+  },
+
+  addReplayRoute(deadLetterId, queueId) {
+    const state = get();
+    const dlq = state.document.nodes.find((n) => n.id === deadLetterId);
+    const queue = state.document.nodes.find((n) => n.id === queueId);
+    if (!dlq || !queue || dlq.id === queue.id || dlq.type !== 'queue' || queue.type !== 'queue' || dlq.deliveryRole !== 'dead-letter') return null;
+    const existing = state.document.edges.find((e) => e.source === dlq.id && e.target === queue.id);
+    if (existing) return existing.id;
+    if (!roomFor(0, 1)) return null;
+    // Said outright rather than inferred: the matrix has no reading of its own for a connector
+    // that leaves a dead-letter queue, and "replays" is the whole point of drawing this one.
+    const edge = createEdge({
+      source: dlq.id,
+      target: queue.id,
+      semantic: 'deliversTo',
+      semanticsOrigin: 'explicit',
+      label: 'replays',
+      async: true,
+    });
+    state.apply('Draw replay route', (doc) => addEdges(doc, [edge]));
+    return edge.id;
   },
 
   addCompensation(edgeId, targetId) {
@@ -3734,7 +3764,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return {
         mode,
         // Presenting tells the story; it doesn't carry an analysis along with it.
-        traffic: entering ? TRAFFIC_OFF : s.traffic,
+        outage: entering ? OUTAGE_OFF : s.outage,
         flowPlayback: mode === 'edit' ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
         // A selection ring left over from editing has no meaning in a
         // read-only presentation — nothing there can show why it is
@@ -3758,14 +3788,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // Mutually exclusive with Focus — starting playback exits it, rather
       // than the two dimming systems ever needing to combine.
       const exitsFocus = playback.active === true && s.focus.active;
-      const exitsTraffic = playback.active === true && s.traffic.active;
+      const exitsOutage = playback.active === true && s.outage.active;
       // Playback re-asserts its phase on every step (and on mount, while editing): a write that changes
       // nothing would still hand every subscriber new objects and re-render them all.
-      if (unchanged && !exitsFocus && !exitsTraffic) return s;
+      if (unchanged && !exitsFocus && !exitsOutage) return s;
       return {
         flowPlayback: unchanged ? s.flowPlayback : { ...s.flowPlayback, ...playback },
         focus: exitsFocus ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
-        traffic: exitsTraffic ? TRAFFIC_OFF : s.traffic,
+        outage: exitsOutage ? OUTAGE_OFF : s.outage,
       };
     });
   },
@@ -3774,7 +3804,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((s) => ({
       focus: { active: true, nodeIds, edgeIds },
       flowPlayback: s.flowPlayback.active ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
-      traffic: s.traffic.active ? TRAFFIC_OFF : s.traffic,
+      outage: s.outage.active ? OUTAGE_OFF : s.outage,
     }));
   },
 
@@ -3782,20 +3812,30 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ focus: { active: false, nodeIds: [], edgeIds: [] } });
   },
 
-  showTraffic(flowId = null) {
+  startOutage() {
     set((s) => {
-      if (s.mode === 'present') return s;
-      const scoped = flowId && findFlow(s.document, flowId) ? flowId : null;
-      if (s.traffic.active && s.traffic.flowId === scoped) return s;
+      if (s.mode === 'present' || s.outage.active) return s;
       return {
-        traffic: { active: true, flowId: scoped },
+        outage: { active: true, down: null, whole: false },
         focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
       };
     });
   },
 
-  hideTraffic() {
-    set((s) => (s.traffic.active ? { traffic: TRAFFIC_OFF } : s));
+  takeDown(nodeId, whole = false) {
+    set((s) => {
+      if (s.mode === 'present') return s;
+      if (s.outage.down === nodeId && s.outage.whole === whole) return s;
+      if (!s.document.nodes.some((node) => node.id === nodeId)) return s;
+      return {
+        outage: { active: true, down: nodeId, whole },
+        focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+      };
+    });
+  },
+
+  endOutage() {
+    set((s) => (s.outage.active ? { outage: OUTAGE_OFF } : s));
   },
 
   enterInside(nodeId) {

@@ -154,7 +154,7 @@ export function EditorRoute({ session }: { session: DocumentSession }) {
 }
 
 function EditorScreen({ session }: { session: DocumentSession }) {
-  const readingTraffic = useEditorStore((state) => state.traffic.active);
+  const walkingOutage = useEditorStore((state) => state.outage.active);
   const tracing = useUiStore((state) => state.flowTrace !== null);
   const title = useEditorStore((state) => state.document.metadata.title);
   const mode = useEditorStore((state) => state.mode);
@@ -732,8 +732,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               right under the menu; an open point's popover sits beside the same element — one
               floating surface at a time. */}
           {/* A view-only collaborator gets no editing surface: the store refuses every change they make. */}
-          {!presenting && !tracing && !readingTraffic && !contextMenu && !openPointPopoverOpen && !readOnly && <EdgeInspectorPopover />}
-          {!presenting && !tracing && !readingTraffic && !contextMenu && !openPointPopoverOpen && !readOnly && (
+          {!presenting && !tracing && !walkingOutage && !contextMenu && !openPointPopoverOpen && !readOnly && <EdgeInspectorPopover />}
+          {!presenting && !tracing && !walkingOutage && !contextMenu && !openPointPopoverOpen && !readOnly && (
             <ElementInspectorPopover buildCommandContext={buildCommandContext} />
           )}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
@@ -744,7 +744,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           <PresentationCalloutLayer />
           <EmptyState onAddStarter={addStarter} />
           {!presenting && <ContinuationAnnouncer />}
-          {!presenting && !tracing && !readingTraffic && !readOnly && <Inspector />}
+          {!presenting && !tracing && !walkingOutage && !readOnly && <Inspector />}
           {!presenting && !tracing && <FlowPanel onPresent={onPresent} />}
           {!presenting && ProposalPanelChunk && (
             <Suspense fallback={null}>
@@ -1380,16 +1380,15 @@ export function useKeyboard({
             playback.stop();
             if (state.mode === 'present') state.setMode('edit');
           } else if (state.mode === 'present') state.setMode('edit');
-          // Traffic is a view you asked for, like a flow's lens: with nothing selected, Escape puts
-          // it away — and while something is, it deselects first, so the panel can go back to the
-          // summary before the view itself goes.
+          // An outage walk is a view you asked for, like a flow's lens: Escape deselects first, and
+          // with nothing selected puts the walk away.
           else if (
-            state.traffic.active &&
+            state.outage.active &&
             state.selection.nodes.length === 0 &&
             state.selection.edges.length === 0 &&
             !(event.target instanceof Element && event.target.closest('.react-flow__node, .react-flow__edge'))
           ) {
-            state.hideTraffic();
+            state.endOutage();
           }
           // A chosen flow dimming the canvas is a view you stepped into, so with nothing selected
           // Escape steps back out to the whole diagram — before leaving the shape it lives in. Only

@@ -17,4 +17,4 @@ buttons, menu rows and status bar controls are at least 40 px on touch screens.
 4.5:1. Automated tests check both.
 
 **Motion.** With the system's reduce-motion setting on, camera moves jump instead of animating, and
-Traffic and connector traces drop their movement.
+Outage notes and connector traces drop their movement.

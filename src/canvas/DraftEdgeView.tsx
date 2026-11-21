@@ -1,6 +1,6 @@
 import { playbackFlowOf } from '../document/sequenceFlow';
 import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
 import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
@@ -54,7 +54,7 @@ import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { accentOf } from '../render/theme/tokens';
 import { isEdgeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
-import { trafficEdgeMotionOf, trafficEdgeOf } from '../store/traffic';
+import { outageEdgeOf } from '../store/outage';
 import { selectEdge, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../theme/usePersonality';
@@ -279,9 +279,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // The flow object comes straight out of `document.flows`, so its identity only changes when the
   // flow itself does — this subscription doesn't re-render every edge on unrelated store writes.
   const lensFlowValue = useEditorStore(lensFlow);
-  // While traffic shows: a string out of the room's one memoized analysis — see `store/traffic.ts`.
-  const trafficReading = useEditorStore((state) => trafficEdgeOf(state, id));
-  const trafficMotion = useEditorStore((state) => trafficEdgeMotionOf(state, id));
+  // During an outage walk: a string out of the room's one memoized reading — see `store/outage.ts`.
+  const outageReading = useEditorStore((state) => outageEdgeOf(state, id));
   const mode = useEditorStore((state) => state.mode);
   // Identity-stable out of a per-document index — see `DraftNodeView`'s matching subscription.
   const openPoints = useEditorStore((state) => unresolvedOpenPointsFor(state.document.openPoints, { kind: 'edge', id }));
@@ -495,9 +494,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const lensActive = lensFlowValue !== undefined;
   const lensTier = lensActive && edge ? lensEdgeTier(lensFlowValue, edge.id) : 'dimmed';
   const lensMember = lensActive && lensTier === 'member';
-  // Traffic dims what carries none the way a lens dims what isn't in the flow, through the same
-  // attribute, so labels, chips and open-point markers fade with their connector without a second path.
-  const lensDimmed = (lensActive && lensTier === 'dimmed') || trafficReading === 'none';
+  // An outage walk dims what carries no work the way a lens dims what isn't in the flow, through the
+  // same attribute, so labels, chips and open-point markers fade with their connector without a second path.
+  const lensDimmed = (lensActive && lensTier === 'dimmed') || outageReading === 'none';
   // The flow's own identity colour, temporarily worn by its member
   // connectors while it's the active lens — never a permanent per-edge
   // colour, since a connector can belong to several flows. See
@@ -839,7 +838,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-arriving={arriving ? 'true' : undefined}
       data-changed={changed ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
-      data-traffic={trafficReading ?? undefined}
+      data-outage={outageReading ?? undefined}
       data-lens-pulse={lensPulsing ? 'true' : undefined}
       data-hovered={hoverShown ? 'true' : undefined}
       data-recovery-associated={recoveryAssociated ? 'true' : undefined}
@@ -899,32 +898,21 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
               ? 2.6
               : selected || attachTarget || spliceTarget
                 ? 2.4
-                : trafficReading === 'shared'
-                  ? 2.3
-                  : lensMember || (overview && isShownStep) || hoverShown || trafficReading === 'flow'
-                    ? 2.0
-                    : CONNECTOR_STYLE.lineWidth),
+                : lensMember || (overview && isShownStep) || hoverShown || outageReading === 'recovery'
+                  ? 2.0
+                  : CONNECTOR_STYLE.lineWidth),
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
       />
-      {/* Traffic, flowing: a stream of light along the very path drawn, in the direction the work
-          travels (not always the arrow's — "read by" flows back up it), denser where more paths
-          share the line, sparse where only some may take it. Started a beat later per hop from an
-          entry, so turning traffic on shows it spreading out from where it enters. Pure CSS — see
-          `.dc-traffic-flow` — and still under reduced motion. Chrome: never exported. */}
-      {trafficMotion && trafficReading !== 'none' && trafficReading !== null && (
-        <g
-          className="dc-traffic-flow"
-          fill="none"
-          pointerEvents="none"
-          data-dir={trafficMotion[0] === 'r' ? 'reverse' : undefined}
-          data-still={trafficMotion === 's' ? 'true' : undefined}
-          style={{ '--dc-traffic-hop': trafficMotion === 's' ? 0 : Number(trafficMotion.slice(1)) } as CSSProperties}
-        >
-          <path className="dc-traffic-channel" d={drawnPath} />
-          <path className="dc-traffic-tail" d={drawnPath} />
-          <path className="dc-traffic-spark" d={drawnPath} />
+      {/* The route an outage brings into use (a fallback, a dead-letter route): light travelling
+          along the very path drawn, so what now carries the work reads at a glance. Pure CSS — see
+          `.dc-outage-flow` — and still under reduced motion. Chrome: never exported. */}
+      {outageReading === 'recovery' && (
+        <g className="dc-outage-flow" fill="none" pointerEvents="none">
+          <path className="dc-outage-channel" d={drawnPath} />
+          <path className="dc-outage-tail" d={drawnPath} />
+          <path className="dc-outage-spark" d={drawnPath} />
         </g>
       )}
       {secondStrokePath && (
@@ -1003,7 +991,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )}
       {/* One short directional cue per hover. CSS opts in only when motion is welcome; the paths
           unmount as soon as the pointer leaves, a gesture starts or presentation takes over. */}
-      {hoverShown && !routeUnsettled && trafficReading === null && (
+      {hoverShown && !routeUnsettled && outageReading === null && (
         <>
           <path className="dc-edge-trace" d={drawnPath} pathLength={1} fill="none" stroke={theme.selection} strokeWidth={2} pointerEvents="none" />
           {responseDrawnPath && <path className="dc-edge-trace dc-edge-trace-reply" d={responseDrawnPath} pathLength={1} fill="none" stroke={theme.selection} strokeWidth={1.6} pointerEvents="none" />}

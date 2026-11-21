@@ -41,7 +41,7 @@ corner handle to resize; Actor, Queue and Data Store artwork grows with the box.
   PostgreSQL makes it SQL, Kafka makes a Queue a Topic, Kinesis a Stream, Stripe a Service External.
   A kind you choose yourself always stays.
 - Instances: type `×3` (or `x3`) after a Service's name, or use **− ×1 +** in its toolbar. It draws
-  as a stack, and [Traffic](traffic.md) reads it.
+  as a stack, and an [outage](outage.md#instances) loses one instance before all of them.
 
 ![Technology suggestions for PostgreSQL.](../media/guides/technology-suggestions.png)
 
@@ -240,7 +240,7 @@ An agent using the Draft Canvas MCP tools, including Nodi, can add the same asso
 A connector that would cross the whole diagram can be drawn as a **portal**: select it and run
 **Draw as portal** in `⌘K`. Its line is replaced by a short stub at each end, each ending in a small
 ring and naming the shape at the other end ("→ Billing", "Checkout →"). Click the words to move the
-view there. The connector is otherwise unchanged: flows, Traffic and agents read it as before, and
+view there. The connector is otherwise unchanged: flows, outages and agents read it as before, and
 **Draw as line** draws it in full again.
 
 ![A portal between a Data Store and the gateway, a held shape with its pin, and the legend.](../media/guides/portal-legend-held.png)
@@ -278,8 +278,8 @@ the boundary. Pick a kind and colour in its toolbar:
 | Network | A network scope |
 | Deployment | A runtime or hosting scope |
 
-Kinds change the look, and [Traffic](traffic.md#boundary-crossings) reads the Network, Deployment,
-Domain and System ones. Boundaries nest up to 32 levels deep; grouping past that is refused.
+Kinds change the look. Any Boundary can be [taken down](outage.md) with everything inside it.
+Boundaries nest up to 32 levels deep; grouping past that is refused.
 
 ## Write rich text
 

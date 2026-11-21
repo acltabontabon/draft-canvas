@@ -10,6 +10,16 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Outage** — Take a shape down and see what the drawing says happens next: what fails with it,
+  what absorbs the failure and what carries on. Right-click a shape and choose **Take down**, or
+  click **Outage** in the status bar. It reads the drawing alone and invents no numbers.
+- **Outage answers** — Each open question offers the edit that settles it (**Add a dead-letter
+  queue**, **Draw the replay route**, **Run two instances**) or **Keep as open point**.
+- **Outage reads what a shape is** — A Service with several instances loses one before all, a Cache
+  is fallen through, a Boundary takes everything inside it, and Kafka, SQS, RabbitMQ, SNS and Redis
+  add their own behaviour.
+- **Agents can ask "what if"** — `read_diagram` with `outage` returns what an outage affects and the
+  questions it leaves open.
 - **Arrange around a flow** — **Arrange around a flow…** in `⌘K`, or **Follow** in the Arrange
   preview, lays one flow out in a straight line with the rest of the diagram around it.
 - **Crossings in the Arrange preview** — The preview counts where connectors cross now and after,
@@ -30,6 +40,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Changed
 
+- **Outage replaces Traffic** — Traffic, its example rates and its field notes are gone. What it
+  found worth knowing (a missing fallback, a queue with no replay route) now shows when you take a
+  shape down.
 - **Finer connectors** — Lines are a little lighter, arrowheads slimmer, and a directed connector
   starts from a small dot where it leaves its shape. Shapes rest on a softer shadow.
 - **Connectors ease into place** — A connector whose route changes after a drop, an undo or a Tidy

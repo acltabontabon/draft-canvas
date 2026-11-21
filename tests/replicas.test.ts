@@ -7,7 +7,7 @@ import { serializeDocument } from '../src/export/project';
 import { describeContext, describeNode } from '../src/nodes/describe';
 import { LIGHT } from '../src/render/theme/tokens';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
-import { analyzeTraffic } from '../src/traffic/analyze';
+import { analyzeTraffic, outageOf } from '../src/traffic';
 
 describe('splitReplicaCount', () => {
   it.each([
@@ -80,7 +80,7 @@ describe('replicas on a Service', () => {
   });
 });
 
-describe('Traffic reads replicas', () => {
+describe('An outage reads replicas', () => {
   it('several instances of one consumer compete for a queue', () => {
     const producer = createNode({ type: 'service', text: 'Orders', x: 0, y: 0 });
     const queue = createNode({ type: 'queue', text: 'orders', x: 0, y: 0 });
@@ -92,8 +92,17 @@ describe('Traffic reads replicas', () => {
         createEdge({ source: queue.id, target: worker.id, semantic: 'consumes' }),
       ],
     });
-    const competing = result.insights.find((insight) => insight.kind === 'competing-consumers');
-    expect(competing?.text).toContain('3 instances of Fulfilment');
-    expect(competing?.text).toContain('a third');
+    const edges = [
+      createEdge({ source: producer.id, target: queue.id, semantic: 'publishes' }),
+      createEdge({ source: queue.id, target: worker.id, semantic: 'consumes' }),
+    ];
+    const nodes = [producer, queue, worker];
+    const one = outageOf(analyzeTraffic({ nodes, edges }), nodes, edges, { id: worker.id });
+    expect(one?.instances).toEqual({ down: 1, of: 3 });
+    expect(one?.headline).toBe('One of 3 Fulfilment instances is down. Everything drawn carries on.');
+    expect(one?.notes[0]?.note).toBe('2 of 3 still running');
+    const all = outageOf(analyzeTraffic({ nodes, edges }), nodes, edges, { id: worker.id, whole: true });
+    expect(all?.nodes.get(queue.id)).toBe('holding');
+    expect(result.status).toBe('ok');
   });
 });

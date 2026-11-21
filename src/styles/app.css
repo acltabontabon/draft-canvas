@@ -6419,13 +6419,13 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   margin-left: auto;
   }
 
-  /* The cluster already fills a phone's bar; the Traffic chip pushed it over "Saved locally", and the
+  /* The cluster already fills a phone's bar; the Outage chip pushed it over "Saved locally", and the
      open-points and level chips would do the same. All three stay reachable from the canvas menu and
-     ⌘K (Traffic, Open points, View level…). */
+     ⌘K (Outage, Open points, View level…). */
   .dc-status-hint,
   .dc-status-right > .dc-muted,
   .dc-status-right > .dc-inspector-divider,
-  .dc-status-right > button.dc-status-traffic,
+  .dc-status-right > button.dc-status-outage,
   .dc-status-right > button.dc-status-open-points,
   .dc-status-right > button.dc-status-level {
   display: none;
@@ -6833,11 +6833,11 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   font-size: 10.5px;
 }
 
-/* --------------------------------------------------------------- traffic -- */
+/* ---------------------------------------------------------------- outage -- */
 
-/* The status bar's way into traffic — the open-points chip's treatment, with a glyph of three lines
-   meeting at a point: where paths converge. Pressed while traffic shows. */
-button.dc-status-traffic {
+/* The status bar's way into an outage walk — the open-points chip's treatment, with a glyph of a
+   line broken in the middle. Pressed while the walk is open. */
+button.dc-status-outage {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -6851,24 +6851,25 @@ button.dc-status-traffic {
   cursor: pointer;
 }
 
-button.dc-status-traffic:hover,
-button.dc-status-traffic:focus-visible,
-button.dc-status-traffic[aria-pressed='true'] {
+button.dc-status-outage:hover,
+button.dc-status-outage:focus-visible,
+button.dc-status-outage[aria-pressed='true'] {
   color: var(--dc-text);
 }
 
-.dc-status-traffic-glyph {
+.dc-status-outage-glyph {
   position: relative;
   display: inline-block;
-  width: 10px;
+  width: 11px;
   height: 9px;
   background:
-    linear-gradient(to bottom right, transparent calc(50% - 0.7px), currentColor calc(50% - 0.7px), currentColor calc(50% + 0.7px), transparent calc(50% + 0.7px)) left top / 50% 50% no-repeat,
-    linear-gradient(to top right, transparent calc(50% - 0.7px), currentColor calc(50% - 0.7px), currentColor calc(50% + 0.7px), transparent calc(50% + 0.7px)) left bottom / 50% 50% no-repeat,
-    linear-gradient(currentColor, currentColor) left center / 100% 1.4px no-repeat;
+    linear-gradient(currentColor, currentColor) left center / 3.5px 1.4px no-repeat,
+    linear-gradient(currentColor, currentColor) right center / 3.5px 1.4px no-repeat,
+    linear-gradient(to bottom right, transparent calc(50% - 0.7px), currentColor calc(50% - 0.7px), currentColor calc(50% + 0.7px), transparent calc(50% + 0.7px)) center / 5px 5px no-repeat,
+    linear-gradient(to top right, transparent calc(50% - 0.7px), currentColor calc(50% - 0.7px), currentColor calc(50% + 0.7px), transparent calc(50% + 0.7px)) center / 5px 5px no-repeat;
 }
 
-button.dc-status-traffic[aria-pressed='true'] .dc-status-traffic-glyph {
+button.dc-status-outage[aria-pressed='true'] .dc-status-outage-glyph {
   color: var(--dc-selection);
 }
 
@@ -7455,7 +7456,7 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
 
   .dc-status .dc-button,
   .dc-status button.dc-zoom-value,
-  .dc-status button.dc-status-traffic,
+  .dc-status button.dc-status-outage,
   .dc-status button.dc-status-open-points,
   .dc-status button.dc-status-level {
     min-height: 40px;

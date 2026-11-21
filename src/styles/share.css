@@ -92,7 +92,7 @@
 .dc-reader-footer { display: flex; justify-content: space-between; gap: 12px; padding: 8px 28px; font-size: 11px; color: var(--dc-text-muted); }
 .dc-reader-footer > span { display: flex; align-items: center; gap: 5px; }
 
-/* Reader annotations borrow Traffic’s marker strokes; the full text stays in a readable card. */
+/* Reader annotations borrow the outage walk’s marker strokes; the full text stays in a readable card. */
 .dc-shared-reader .dc-attachment-badge,
 .dc-shared-reader .dc-attachment-chip-row,
 .dc-shared-reader .dc-open-point-marker { display: none; }

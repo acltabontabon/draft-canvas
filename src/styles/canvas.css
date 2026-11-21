@@ -5471,181 +5471,149 @@
   transition: opacity 180ms ease;
 }
 
-/* ------------------------------------------------------------- traffic --- */
+/* -------------------------------------------------------------- outage walk --- */
 
 /*
- * Showing traffic reads like a lens: what carries modeled paths stays at full strength, what takes
- * no part is nudged aside to the lens's own floor, and nothing is greyed out or hidden. Where paths
- * concentrate is lit along its own contour (`.dc-emphasis[data-role^='traffic-']`, set by
- * `DraftNodeView`) and says how many in a small badge — the halo is never the only signal, and no
- * colour here means "overloaded": the analysis knows nothing about load.
+ * One shape taken down (`traffic/outage.ts`, drawn by `OutageLayer`). Each shape says what the
+ * outage does to it along its own silhouette, never a box: red is "this now fails", amber is "this
+ * absorbs it", and what goes quiet or takes no part recedes. Colour is never the only signal — the
+ * shape taken down is struck through and every consequence is written beside what it is about.
+ * Chrome, not content: nothing here is saved, undone, shared or exported.
  */
-.dc-canvas[data-traffic='on'] .react-flow__node:has(.dc-node[data-traffic='dim']) {
+.dc-canvas[data-outage='on'] .react-flow__node:has(.dc-node[data-outage='dim']) {
   opacity: 0.4;
   transition: opacity 180ms ease;
 }
 
-.dc-canvas[data-traffic='on'] .react-flow__node:has(.dc-node[data-editing='true']) {
+.dc-canvas[data-outage='on'] .react-flow__node:has(.dc-node[data-outage='quiet']) {
+  opacity: 0.45;
+  filter: grayscale(0.8);
+  transition: opacity 180ms ease;
+}
+
+.dc-canvas[data-outage='on'] .react-flow__node:has(.dc-node[data-outage='down']) {
+  filter: grayscale(1) brightness(0.72);
+}
+
+.dc-canvas[data-outage='on'] .react-flow__node:has(.dc-node[data-editing='true']) {
+  opacity: 1;
+  filter: none;
+}
+
+.dc-canvas[data-outage='on'] .dc-node[data-outage='failing'] {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--dc-danger) 85%, transparent)) drop-shadow(0 0 1px var(--dc-danger));
+}
+
+.dc-canvas[data-outage='on'] .dc-node[data-outage='degraded'],
+.dc-canvas[data-outage='on'] .dc-node[data-outage='holding'],
+.dc-canvas[data-outage='on'] .dc-node[data-outage='retrying'],
+.dc-canvas[data-outage='on'] .dc-node[data-outage='catching'],
+.dc-canvas[data-outage='on'] .dc-node[data-outage='stale'] {
+  filter: drop-shadow(0 0 5px color-mix(in srgb, var(--dc-caution) 80%, transparent)) drop-shadow(0 0 1px var(--dc-caution));
+}
+
+/* A dead-letter queue is drawn faint until something lands in it. */
+.dc-canvas[data-outage='on'] .react-flow__node:has(.dc-node[data-outage='catching']) {
   opacity: 1;
 }
 
-.dc-canvas[data-traffic='on'] .dc-edge[data-lens-dimmed='true'],
-.dc-canvas[data-traffic='on'] .dc-attachment-chip-row[data-lens-dimmed='true'] {
+.dc-canvas[data-outage='on'] .dc-edge[data-lens-dimmed='true'],
+.dc-canvas[data-outage='on'] .dc-attachment-chip-row[data-lens-dimmed='true'] {
   opacity: 0.35;
   transition: opacity 180ms ease;
 }
 
-/* Only some of the traffic may take this branch — a split nobody drew the share of, a condition,
-   one of several competing consumers. Present, but quieter than what certainly carries paths. */
-.dc-canvas[data-traffic='on'] .dc-edge[data-traffic='uncertain'] .dc-edge-line {
-  opacity: 0.62;
+.dc-canvas[data-outage='on'] .dc-edge[data-outage='failing'] .dc-edge-line {
+  stroke: var(--dc-danger) !important;
+  stroke-dasharray: 2 6 !important;
+}
+
+.dc-canvas[data-outage='on'] .dc-edge[data-outage='stopped'] {
+  opacity: 0.3;
+  transition: opacity 180ms ease;
+}
+
+.dc-canvas[data-outage='on'] .dc-edge[data-outage='recovery'] .dc-edge-line {
+  stroke: var(--dc-caution) !important;
+  opacity: 1;
+}
+
+/* While a shape is still to be picked, what can be taken down says so under the pointer. */
+.dc-canvas[data-outage='on'] .react-flow__node {
+  cursor: pointer;
 }
 
 /*
- * The flow itself: light travelling along each connector that carries traffic (`DraftEdgeView`).
- * Three layers on the very path drawn — a faint channel showing where traffic runs, and sparks
- * with a short comet tail riding it in the direction the work travels. The sparks are round dots on
- * a dash pattern and the tail a dash one tail-length behind them, both moved one gap per beat, so
- * the rhythm is in screen-true pixels whatever the line's length and the stream never seams. Its
- * density is the reading: paths sharing a line pack the sparks close and widen the channel; a branch
- * only some traffic may take thins them and dims them. Each stream fades in one beat later per hop
- * from its entry point (`--dc-traffic-hop`), so turning traffic on shows it spreading through the
- * system from where it enters, then flowing on. Every speed is the same: calm, never urgent.
+ * The route an outage brings into use: sparks with a short tail riding the very path drawn, in the
+ * direction the work now travels. Round dots on a dash pattern moved one gap per beat, so the rhythm
+ * is in screen-true pixels whatever the line's length. Calm, never urgent; still under reduced motion.
  */
-.dc-traffic-flow {
-  --dc-traffic-gap: 34px;
-  --dc-traffic-tail: 12px;
-  --dc-traffic-beat: 620ms;
-  --dc-traffic-spark: 4px;
-  --dc-traffic-glow: 0.13;
-  --dc-traffic-light: 1;
-  color: var(--dc-selection);
-  opacity: var(--dc-traffic-light);
+.dc-outage-flow {
+  --dc-outage-gap: 46px;
+  --dc-outage-tail: 12px;
+  color: var(--dc-caution);
 }
 
-.dc-edge[data-traffic='shared'] .dc-traffic-flow {
-  --dc-traffic-gap: 22px;
-  --dc-traffic-beat: 400ms;
-  --dc-traffic-spark: 4.6px;
-  --dc-traffic-glow: 0.2;
-}
-
-.dc-edge[data-traffic='uncertain'] .dc-traffic-flow {
-  --dc-traffic-gap: 54px;
-  --dc-traffic-tail: 8px;
-  --dc-traffic-beat: 985ms;
-  --dc-traffic-spark: 3.4px;
-  --dc-traffic-glow: 0.08;
-  --dc-traffic-light: 0.65;
-}
-
-.dc-traffic-channel {
+.dc-outage-channel {
   stroke: currentColor;
-  stroke-width: 7;
+  stroke-width: 5;
   stroke-linecap: round;
-  stroke-linejoin: round;
-  opacity: var(--dc-traffic-glow);
+  opacity: 0.14;
 }
 
-.dc-traffic-spark {
+.dc-outage-spark {
   stroke: currentColor;
-  stroke-width: var(--dc-traffic-spark);
+  stroke-width: 4px;
   stroke-linecap: round;
-  stroke-dasharray: 0 var(--dc-traffic-gap);
+  stroke-dasharray: 0.01 var(--dc-outage-gap);
+  opacity: 0.95;
 }
 
-/* One tail-length behind the spark: before it along the line when it flows with the arrow, after
-   it when the work runs against the arrow. */
-.dc-traffic-tail {
-  --dc-traffic-from: var(--dc-traffic-tail);
+.dc-outage-tail {
   stroke: currentColor;
   stroke-width: 2;
   stroke-linecap: round;
-  stroke-dasharray: var(--dc-traffic-tail) calc(var(--dc-traffic-gap) - var(--dc-traffic-tail));
-  stroke-dashoffset: var(--dc-traffic-from);
+  stroke-dasharray: var(--dc-outage-tail) calc(var(--dc-outage-gap) - var(--dc-outage-tail));
+  stroke-dashoffset: var(--dc-outage-tail);
   opacity: 0.4;
 }
 
-.dc-traffic-flow[data-dir='reverse'] .dc-traffic-tail {
-  --dc-traffic-from: 0px;
-}
-
-/* Light themes have no dark sky for the light to glow against: a deeper line reads better. */
-:root:not([data-theme='dark']) .dc-traffic-flow {
-  color: color-mix(in srgb, var(--dc-selection) 88%, var(--dc-text));
-}
-
 @media (prefers-reduced-motion: no-preference) {
-  .dc-traffic-flow {
-    animation: dc-traffic-arrive 700ms var(--dc-ease-out) calc(var(--dc-traffic-hop, 0) * 180ms) both;
+  .dc-outage-spark {
+    animation: dc-outage-flow 1.5s linear infinite;
   }
 
-  .dc-traffic-spark,
-  .dc-traffic-tail {
-    animation: dc-traffic-flow var(--dc-traffic-beat) linear calc(var(--dc-traffic-hop, 0) * 180ms) infinite;
+  .dc-outage-tail {
+    animation: dc-outage-flow-tail 1.5s linear infinite;
   }
 
-  .dc-traffic-flow[data-dir='reverse'] .dc-traffic-spark,
-  .dc-traffic-flow[data-dir='reverse'] .dc-traffic-tail {
-    animation-name: dc-traffic-flow-reverse;
-  }
-
-  /* Past the motion budget on a very large diagram: drawn, not moving. */
-  .dc-traffic-flow[data-still='true'] .dc-traffic-spark,
-  .dc-traffic-flow[data-still='true'] .dc-traffic-tail {
-    animation: none;
-  }
-
-  @keyframes dc-traffic-flow {
+  @keyframes dc-outage-flow {
     from {
-      stroke-dashoffset: var(--dc-traffic-from, 0px);
+      stroke-dashoffset: 0;
     }
     to {
-      stroke-dashoffset: calc(var(--dc-traffic-from, 0px) - var(--dc-traffic-gap));
+      stroke-dashoffset: calc(0px - var(--dc-outage-gap));
     }
   }
 
-  @keyframes dc-traffic-flow-reverse {
+  @keyframes dc-outage-flow-tail {
     from {
-      stroke-dashoffset: var(--dc-traffic-from, 0px);
+      stroke-dashoffset: var(--dc-outage-tail);
     }
     to {
-      stroke-dashoffset: calc(var(--dc-traffic-from, 0px) + var(--dc-traffic-gap));
-    }
-  }
-
-  @keyframes dc-traffic-arrive {
-    from {
-      opacity: 0;
-    }
-  }
-
-  /* Where the most paths meet breathes, slowly — arrivals pooling, never an alarm. */
-  .dc-emphasis[data-role='traffic-top'] {
-    animation:
-      dc-emphasis-in 220ms var(--dc-ease-out) both,
-      dc-traffic-breathe 3.4s ease-in-out 1.2s infinite;
-  }
-
-  @keyframes dc-traffic-breathe {
-    0%,
-    100% {
-      filter: drop-shadow(0 0 3px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 60%, transparent));
-    }
-    50% {
-      filter: drop-shadow(0 0 8px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 80%, transparent));
+      stroke-dashoffset: calc(var(--dc-outage-tail) - var(--dc-outage-gap));
     }
   }
 }
 
 /*
- * Traffic's whiteboard markup (`TrafficSketches`): marker loops, flicked arrows and handwritten
- * notes over the diagram. One ink — the theme's own "check this" amber — and a highlighter swipe of
- * the same hue behind the words, so it reads as somebody's review on top of the drawing rather than
- * part of it. Findings the diagram leaves open (`unknown`) are written in a lighter, dashed hand.
+ * The walk's whiteboard markup: marker loops, flicked arrows and handwritten notes over the diagram.
+ * One ink — the theme's own "check this" amber — with a highlighter swipe of the same hue behind
+ * the words, so it reads as somebody's review on top of the drawing rather than part of it. What the
+ * drawing leaves open (`question`) is circled in a dashed hand; what is down is struck out in red.
  * Each stroke draws itself on in turn (`--dc-sketch-delay`), as if being written.
  */
-.dc-traffic-sketches {
+.dc-outage-sketches {
   position: absolute;
   top: 0;
   left: 0;
@@ -5670,36 +5638,24 @@
   stroke-width: 1.8;
 }
 
-.dc-traffic-sketch[data-tone='unknown'] .dc-sketch-loop {
+.dc-outage-sketch[data-tone='question'] .dc-sketch-loop {
   stroke-dasharray: 0.035 0.025;
   opacity: 0.75;
 }
 
-.dc-sketch-text {
-  fill: var(--dc-sketch-ink);
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  paint-order: stroke;
-  stroke: var(--dc-canvas);
-  stroke-width: 3px;
-  stroke-linejoin: round;
-}
-
-.dc-sketch-hop {
-  font-size: 13px;
+.dc-outage-cross {
+  --dc-sketch-ink: var(--dc-danger);
 }
 
 /* While a shape is carried the notes hold still where they were; fade them rather than leave them
    pointing at where it used to be. They are placed again on release. */
-.dc-traffic-sketches[data-moving],
-.dc-traffic-notes[data-moving] {
+.dc-outage-sketches[data-moving],
+.dc-outage-notes[data-moving] {
   opacity: 0.15;
   transition: opacity 120ms ease;
 }
 
-/* The handwriting: real text, in the hand Text elements use, written in the review's amber ink with
-   a highlighter pass behind the words — no box, no card, nothing that reads as UI. */
-.dc-traffic-notes {
+.dc-outage-notes {
   position: absolute;
   top: 0;
   left: 0;
@@ -5708,6 +5664,7 @@
   --dc-sketch-highlight: color-mix(in srgb, var(--dc-caution) 22%, transparent);
 }
 
+/* The handwriting: real text, in the hand Text elements use — no box, no card, nothing that reads as UI. */
 .dc-hand {
   color: var(--dc-sketch-ink);
   font-weight: 700;
@@ -5719,9 +5676,9 @@
     0 0 1px var(--dc-canvas);
 }
 
-.dc-traffic-note,
-.dc-traffic-headline-note,
-.dc-traffic-callout {
+.dc-outage-note,
+.dc-outage-headline,
+.dc-outage-actions {
   position: absolute;
   top: 0;
   left: 0;
@@ -5731,13 +5688,21 @@
   pointer-events: all;
 }
 
-.dc-traffic-headline-note {
-  max-width: 560px;
+.dc-outage-headline {
+  max-width: 600px;
+  margin: 0;
   background: var(--dc-canvas);
-  border-radius: 3px;
+  font-size: 22px;
+  line-height: 1.2;
 }
 
-.dc-traffic-note {
+.dc-outage-headline-line,
+.dc-outage-note-line {
+  display: block;
+  white-space: pre;
+}
+
+.dc-outage-note {
   display: block;
   max-width: 260px;
   margin: 0;
@@ -5753,69 +5718,61 @@
   cursor: pointer;
 }
 
-.dc-traffic-note[data-up] {
+/* In the lower half of what is written, the rest of the thought goes up, not off the board. */
+.dc-outage-note[data-up] {
   display: flex;
   flex-direction: column-reverse;
   /* Grows upward from where the words sit: the button is anchored by its bottom edge. */
   translate: 0 calc(-100% + var(--dc-note-height));
 }
 
-.dc-traffic-note[data-up] .dc-traffic-note-more {
+.dc-outage-note[data-up] .dc-outage-note-more {
   margin-top: 0;
   margin-bottom: 6px;
 }
 
-.dc-traffic-note[data-up] .dc-traffic-note-mark {
+.dc-outage-note[data-up] .dc-outage-note-mark {
   align-self: flex-start;
 }
 
-.dc-traffic-note-mark {
+.dc-outage-note-mark {
   display: block;
 }
 
-.dc-traffic-note-line,
-.dc-hand-title-line {
-  display: block;
-  white-space: pre;
-}
-
-.dc-traffic-note-line {
+.dc-outage-note-line {
   width: max-content;
   background: linear-gradient(transparent 42%, var(--dc-sketch-highlight) 42%, var(--dc-sketch-highlight) 92%, transparent 92%);
 }
 
-.dc-traffic-note:hover .dc-traffic-note-mark,
-.dc-traffic-note[aria-expanded='true'] .dc-traffic-note-mark {
+.dc-outage-note:hover .dc-outage-note-mark,
+.dc-outage-note[aria-expanded='true'] .dc-outage-note-mark {
   --dc-sketch-highlight: color-mix(in srgb, var(--dc-caution) 36%, transparent);
 }
 
-.dc-traffic-note:focus-visible,
-.dc-hand-link:focus-visible {
+.dc-outage-note:focus-visible {
   outline: 2px dashed var(--dc-sketch-ink);
   outline-offset: 3px;
 }
 
-/* More notes than handwriting can carry (`HANDWRITTEN_NOTES`): the same notes in the plain face. */
-.dc-traffic-note[data-plain] {
+/* More notes than handwriting can carry: the same notes in the plain face. */
+.dc-outage-note[data-plain] {
   font-size: 13px;
   font-weight: 600;
   line-height: 18px;
 }
 
-.dc-traffic-note[data-plain][data-tone='unknown'] {
-  font-weight: 500;
-}
-
-.dc-traffic-note[data-tone='unknown'] {
+.dc-outage-note[data-tone='question'] {
   font-weight: 600;
-  color: color-mix(in srgb, var(--dc-sketch-ink) 85%, var(--dc-canvas));
 }
 
-/* The canvas mask erases underlying connector text as well as strokes. */
-.dc-traffic-note-more,
-.dc-hand-list {
+/* What keeps the damage from spreading is good news, and reads as the quieter note. */
+.dc-outage-note[data-tone='shield'] {
+  color: color-mix(in srgb, var(--dc-sketch-ink) 78%, var(--dc-text));
+}
+
+.dc-outage-note-more {
   display: block;
-  width: 280px;
+  width: 290px;
   margin-top: 6px;
   padding: 6px 8px 7px;
   border-radius: 8px;
@@ -5825,232 +5782,78 @@
   font-size: 13px;
   font-weight: 400;
   line-height: 1.5;
+  white-space: normal;
   text-shadow: none;
 }
 
-.dc-traffic-note[aria-expanded='true'],
-.dc-traffic-headline-note:has([aria-expanded='true']) {
+.dc-outage-note[aria-expanded='true'] {
   z-index: 2;
 }
 
-.dc-hand-title {
-  margin: 0;
-  font-size: 22px;
-  line-height: 1.2;
+/* A question is the person's to answer: draw the answer, or keep the question on the shape. */
+.dc-outage-actions {
+  display: flex;
+  gap: 6px;
 }
 
-.dc-hand-link {
-  margin-top: 4px;
-  padding: 0;
-  border: 0;
-  background: none;
+.dc-outage-actions button {
+  padding: 1px 8px;
+  border: 1px dashed color-mix(in srgb, var(--dc-caution) 70%, transparent);
+  border-radius: 999px;
+  background: var(--dc-canvas);
+  color: var(--dc-text-muted);
   font: inherit;
-  font-size: 15px;
-  line-height: 21px;
-  text-decoration: underline wavy color-mix(in srgb, var(--dc-caution) 55%, transparent);
-  text-underline-offset: 4px;
+  font-size: 11px;
+  line-height: 17px;
+  white-space: nowrap;
   cursor: pointer;
 }
 
-.dc-hand-list {
-  margin-bottom: 0;
-  padding-left: 22px;
-  list-style: '– ';
-}
-
-.dc-hand-list li + li {
-  margin-top: 4px;
-}
-
-/* A small field note: amber ink marks the reading; quiet type carries the evidence. */
-.dc-traffic-callout {
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  padding: 14px;
-  border: 1px solid color-mix(in srgb, var(--dc-caution) 24%, var(--dc-border));
-  border-radius: 3px 14px 14px 14px;
-  background: color-mix(in srgb, var(--dc-caution) 3%, var(--dc-canvas));
-  box-shadow: 0 3px 12px -6px var(--dc-shadow);
+.dc-outage-actions button[data-primary] {
+  border-style: solid;
   color: var(--dc-text);
-  font-family: var(--dc-font);
-  font-size: 13px;
-  font-weight: 400;
-  line-height: 18px;
-  text-shadow: none;
 }
 
-.dc-traffic-callout::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.dc-traffic-callout::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 17px;
-  width: 3px;
-  height: 32px;
-  border-radius: 50% 30% 40% 20%;
-  background: var(--dc-caution);
-  rotate: -2deg;
-}
-
-.dc-traffic-callout-heading {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 52px;
-  gap: 10px;
-  align-items: start;
-}
-
-.dc-traffic-callout-title {
-  font-weight: 600;
-}
-
-.dc-traffic-callout-kicker {
-  color: var(--dc-text-muted);
-  font-size: 9px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-align: right;
-  text-transform: uppercase;
-}
-
-.dc-traffic-callout-line {
-  display: block;
-  white-space: pre;
-}
-
-.dc-traffic-callout-metric {
-  position: relative;
-  height: 40px;
-  margin-top: 2px;
-  color: var(--dc-caution);
-  font-weight: 700;
-  line-height: 40px;
-}
-
-.dc-traffic-callout-metric svg {
-  position: absolute;
-  left: 0;
-  bottom: -1px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1;
-  stroke-linecap: round;
-  opacity: 0.65;
-}
-
-.dc-traffic-callout-summary {
-  margin: 6px 0 0;
-  color: var(--dc-text-muted);
-}
-
-.dc-traffic-callout ul {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.dc-traffic-callout .dc-traffic-callout-sources {
-  margin-top: 6px;
-}
-
-.dc-traffic-callout-sources li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 80px;
-  gap: 8px;
-}
-
-.dc-traffic-callout-count {
-  color: var(--dc-text-muted);
-  font-size: 10px;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-  white-space: nowrap;
-}
-
-.dc-traffic-callout-section {
-  margin-top: 8px;
-  padding-top: 7px;
-  border-top: 1px solid color-mix(in srgb, var(--dc-caution) 15%, var(--dc-border));
-}
-
-.dc-traffic-callout-section h3 {
-  margin: 0 0 4px;
-  color: var(--dc-text-muted);
-  font-size: 9px;
-  font-weight: 600;
-  line-height: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.dc-traffic-callout-section[data-tone='caution'] h3 {
+.dc-outage-actions button:hover:not(:disabled),
+.dc-outage-actions button:focus-visible {
+  border-style: solid;
   color: var(--dc-caution);
 }
 
-.dc-traffic-callout-section[data-tone='safe'] h3 {
-  color: var(--dc-selection);
+.dc-outage-actions button:disabled {
+  border-color: transparent;
+  cursor: default;
 }
 
-.dc-traffic-callout-detail {
-  margin: 0 0 4px;
-  color: var(--dc-text-muted);
-  font-size: 11px;
-  line-height: 16px;
-}
-
-.dc-traffic-callout-more {
-  color: var(--dc-text-muted);
-  font-size: 11px;
-}
-
-.dc-traffic-callout:focus-visible {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: 3px;
+.dc-outage-notes[data-moving] .dc-outage-actions {
+  visibility: hidden;
 }
 
 @media (prefers-reduced-motion: no-preference) {
   /* Opacity only: these carry their position in an inline transform an animated one would replace. */
-  .dc-traffic-note,
-  .dc-traffic-headline-note {
-    animation: dc-sketch-appear 420ms var(--dc-ease-out) var(--dc-sketch-delay, 700ms) both;
+  .dc-outage-note,
+  .dc-outage-headline,
+  .dc-outage-actions {
+    animation: dc-sketch-appear 420ms var(--dc-ease-out) var(--dc-sketch-delay, 0ms) both;
   }
 
-  .dc-traffic-callout {
-    animation: dc-sketch-appear 240ms var(--dc-ease-out) both;
-  }
-
-  .dc-traffic-note-more,
-  .dc-hand-list {
-    animation: dc-sketch-write 260ms var(--dc-ease-out) both;
-  }
-}
-
-@media (prefers-reduced-motion: no-preference) {
-  .dc-traffic-sketch .dc-sketch-stroke {
+  .dc-outage-sketch .dc-sketch-stroke {
     stroke-dasharray: 1;
     animation: dc-sketch-draw 520ms var(--dc-ease-out) var(--dc-sketch-delay, 0ms) both;
   }
 
-  .dc-traffic-sketch .dc-sketch-arrow {
+  .dc-outage-sketch .dc-sketch-arrow {
     animation-delay: calc(var(--dc-sketch-delay, 0ms) + 260ms);
-    animation-duration: 300ms;
   }
 
-  .dc-traffic-sketch .dc-sketch-head {
+  .dc-outage-sketch .dc-sketch-head {
     animation-delay: calc(var(--dc-sketch-delay, 0ms) + 520ms);
-    animation-duration: 160ms;
   }
 
-  .dc-traffic-sketch[data-tone='unknown'] .dc-sketch-loop {
+  /* A dashed loop can't be drawn on by its dash offset; it fades in instead. */
+  .dc-outage-sketch[data-tone='question'] .dc-sketch-loop {
+    stroke-dasharray: 0.035 0.025;
     animation-name: dc-sketch-appear;
-  }
-
-  .dc-traffic-hop .dc-sketch-text {
-    animation: dc-sketch-write 420ms var(--dc-ease-out) calc(var(--dc-sketch-delay, 0ms) + 380ms) both;
   }
 
   @keyframes dc-sketch-draw {
@@ -6067,69 +5870,108 @@
       opacity: 0;
     }
   }
-
-  @keyframes dc-sketch-write {
-    from {
-      opacity: 0;
-      transform: translateY(3px);
-    }
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .dc-canvas[data-traffic='on'] .react-flow__node,
-  .dc-canvas[data-traffic='on'] .dc-edge,
-  .dc-canvas[data-traffic='on'] .dc-attachment-chip-row {
+  .dc-canvas[data-outage='on'] .react-flow__node,
+  .dc-canvas[data-outage='on'] .dc-edge,
+  .dc-canvas[data-outage='on'] .dc-attachment-chip-row {
     transition: none;
   }
 }
 
-.dc-emphasis[data-role='traffic-raised'] {
-  opacity: 0.55;
-  filter: drop-shadow(0 0 2px color-mix(in srgb, var(--dc-emphasis-color, var(--dc-selection)) 45%, transparent));
+/* The walk's own strip stays at the canvas edge, outside the zooming drawing, so it reads at any zoom. */
+.dc-outage-strip {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  max-width: calc(100% - 32px);
+  margin: 16px;
+  padding: 4px 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: 8px;
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  line-height: 24px;
 }
 
-/* Above the shape's top-left edge: the top-right is the attachment badge's and the resize handle's,
-   and the open-point marker sits past the right edge. */
-.dc-traffic-badge {
-  position: absolute;
-  top: -34px;
-  left: 6px;
+.dc-outage-strip-title {
+  color: var(--dc-text);
+  font-weight: 600;
+}
+
+.dc-outage-legend {
+  display: inline-flex;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-outage-legend li {
   display: inline-flex;
   align-items: center;
-  padding: 2px 7px;
-  border: 1px solid var(--dc-border-strong);
-  border-radius: var(--dc-radius-pill);
-  background: var(--dc-surface);
-  color: var(--dc-text);
-  font-size: 10.5px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.4;
+  gap: 5px;
   white-space: nowrap;
-  pointer-events: none;
-  box-shadow: var(--dc-shadow-panel);
 }
 
-.dc-traffic-badge[data-tier='raised'],
-.dc-traffic-badge[data-tier='none'] {
-  border-color: var(--dc-border);
+.dc-outage-legend li::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dc-outage-key, currentColor);
+}
+
+.dc-outage-legend [data-key='fails'] {
+  --dc-outage-key: var(--dc-danger);
+}
+
+.dc-outage-legend [data-key='absorbs'] {
+  --dc-outage-key: var(--dc-caution);
+}
+
+.dc-outage-legend [data-key='quiet']::before {
+  background: none;
+  border: 1px solid currentColor;
+}
+
+.dc-outage-extent {
+  display: inline-flex;
+  border: 1px solid var(--dc-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.dc-outage-extent button,
+.dc-outage-strip > button {
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  background: transparent;
   color: var(--dc-text-muted);
-  font-weight: 500;
-  box-shadow: none;
+  font: inherit;
+  cursor: pointer;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .dc-traffic-badge {
-    animation: dc-traffic-badge-in 200ms var(--dc-ease-out) both;
-  }
+.dc-outage-extent button[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--dc-caution) 18%, transparent);
+  color: var(--dc-text);
+}
 
-  @keyframes dc-traffic-badge-in {
-    from {
-      opacity: 0;
-      transform: translateY(3px);
-    }
-  }
+.dc-outage-strip > button {
+  padding: 0;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.dc-outage-extent button:hover,
+.dc-outage-strip > button:hover,
+.dc-outage-extent button:focus-visible,
+.dc-outage-strip > button:focus-visible {
+  color: var(--dc-caution);
 }
 
 .dc-editor[data-armed='true'] .react-flow__pane {
@@ -7389,238 +7231,6 @@
 .dc-source-evidence p { opacity: 0.7; margin: 8px 0 0; }
 
 .dc-proposal-diff-before, .dc-proposal-diff-after { white-space: pre-wrap; }
-
-/* Traffic's reference stays at the canvas edge; help floats above it without growing the bar. */
-.dc-traffic-scenario {
-  max-width: calc(100% - 32px);
-  margin: 16px;
-  padding: 2px 8px;
-  border: 1px solid var(--dc-border);
-  border-radius: 6px;
-  background: var(--dc-surface);
-  color: var(--dc-text-muted);
-  font-size: 11px;
-}
-
-.dc-traffic-scenario-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.dc-traffic-scenario-rate {
-  white-space: nowrap;
-}
-
-.dc-traffic-scenario button {
-  min-height: 32px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--dc-text-muted);
-  font: inherit;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-
-.dc-traffic-scenario button:hover,
-.dc-traffic-scenario button[aria-expanded='true'] {
-  color: var(--dc-caution);
-}
-
-.dc-traffic-scenario button:focus-visible,
-.dc-traffic-scenario-help:focus-visible {
-  outline: 2px solid var(--dc-accent);
-  outline-offset: 3px;
-}
-
-.dc-traffic-scenario-help {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  width: min(320px, calc(100vw - 32px));
-  max-height: min(180px, 26vh);
-  padding: 10px 12px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  border: 1px solid var(--dc-border);
-  border-left: 2px solid var(--dc-caution);
-  border-radius: 3px 8px 8px 3px;
-  background: var(--dc-surface);
-  box-shadow: var(--dc-shadow-panel);
-  color: var(--dc-text);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.dc-traffic-scenario-help p {
-  margin: 0 0 8px;
-}
-
-.dc-traffic-scenario-help p:last-child {
-  margin-bottom: 0;
-  color: var(--dc-text-muted);
-}
-
-/* A small tally and a folded field note: the explanation keeps Traffic's whiteboard voice. */
-.dc-traffic-callout-sources[data-rates] li {
-  display: block;
-  padding: 5px 0;
-  border-bottom: 1px dashed color-mix(in srgb, var(--dc-caution) 22%, transparent);
-}
-.dc-traffic-callout-sources[data-rates] .dc-traffic-callout-count {
-  display: block;
-  font-size: 11px;
-  color: var(--dc-caution);
-}
-.dc-traffic-callout-sources[data-rates] .dc-traffic-callout-count::before {
-  content: '↳ ';
-}
-.dc-traffic-work {
-  margin-top: 8px;
-  color: var(--dc-caution);
-}
-/* In the card, the hand is kept for the one number it leads with; what opens further detail is set
-   like the rest of the card's type. */
-.dc-traffic-work summary {
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 28px;
-  text-decoration: underline;
-  text-decoration-style: wavy;
-  text-decoration-color: color-mix(in srgb, var(--dc-caution) 30%, transparent);
-  text-underline-offset: 4px;
-}
-.dc-traffic-work summary:focus-visible {
-  outline: 2px solid var(--dc-accent);
-  outline-offset: 2px;
-}
-.dc-traffic-work-paper {
-  border-left: 2px solid color-mix(in srgb, var(--dc-caution) 35%, transparent);
-  padding-left: 10px;
-  margin: 8px 0;
-  color: var(--dc-text);
-}
-.dc-traffic-work-paper li {
-  padding: 3px 0;
-}
-.dc-traffic-work-paper p {
-  margin: 6px 0 0;
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--dc-text-muted);
-}
-
-.dc-traffic-replay-count {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: 12px;
-  margin-bottom: 8px;
-}
-.dc-traffic-replay-count input {
-  width: 76px;
-  min-height: 30px;
-  padding: 3px 6px;
-  color: var(--dc-text);
-  background: var(--dc-surface);
-  border: 1px solid var(--dc-border);
-  border-radius: 4px;
-  font: inherit;
-  font-variant-numeric: tabular-nums;
-}
-.dc-traffic-replay-count input:focus-visible,
-.dc-traffic-recovery-shared button:focus-visible {
-  outline: 2px solid var(--dc-accent);
-  outline-offset: 2px;
-}
-.dc-traffic-recovery-shared {
-  margin-top: 10px;
-  border-top: 1px dashed var(--dc-border);
-}
-.dc-traffic-recovery-shared button {
-  display: block;
-  padding: 4px 0;
-  background: transparent;
-  border: 0;
-  color: var(--dc-caution);
-  font: inherit;
-  font-size: 12px;
-  text-align: left;
-  text-decoration: underline;
-  cursor: pointer;
-}
-
-.dc-traffic-replay-badge,
-.dc-traffic-baseline-chip {
-  position: absolute;
-  padding: 4px 6px;
-  border: 1px solid var(--dc-caution);
-  border-radius: 6px;
-  background: var(--dc-surface);
-  color: var(--dc-caution);
-  font-weight: 600;
-  font-size: 12px;
-  line-height: 16px;
-  pointer-events: none;
-}
-
-.dc-traffic-replay-badge,
-.dc-traffic-baseline-chip {
-  translate: 0 -100%;
-  box-shadow: var(--dc-shadow-panel);
-}
-.dc-traffic-chip-normal {
-  display: block;
-  color: var(--dc-text);
-  padding-bottom: 3px;
-}
-.dc-traffic-baseline-chip {
-  color: var(--dc-text-muted);
-  border-color: var(--dc-border);
-}
-.dc-canvas:has(.dc-traffic-replay-badge) .dc-traffic-badge {
-  visibility: hidden;
-}
-
-.dc-traffic-dlq-note {
-  position: absolute;
-  color: var(--dc-caution);
-  font-size: 14px;
-  line-height: 19px;
-  pointer-events: none;
-  opacity: 0.85;
-}
-
-.dc-traffic-shared-work {
-  margin: 10px 0;
-  padding-left: 10px;
-  border-left: 2px solid var(--dc-caution);
-}
-.dc-traffic-shared-work h3 {
-  margin: 0 0 4px;
-  color: var(--dc-caution);
-  font-size: 13px;
-  line-height: 21px;
-  font-weight: 600;
-}
-.dc-traffic-shared-work p {
-  margin: 0;
-  color: var(--dc-text-muted);
-  font-size: 12px;
-  line-height: 18px;
-}
-
-.dc-traffic-crossings { margin: 12px 0; }
-.dc-traffic-crossings h3 { margin: 0 0 8px; color: var(--dc-caution); font-size: 13px; line-height: 19px; font-weight: 600; }
-.dc-traffic-crossing { margin-top: 10px; padding-left: 10px; border-left: 1px dashed var(--dc-border); }
-.dc-traffic-crossing strong { font-size: 12px; line-height: 18px; }
-.dc-traffic-crossings p { margin: 3px 0; font-size: 11px; line-height: 16px; color: var(--dc-text-muted); }
 
 /* ── What a change did ──────────────────────────────────────────────────────────────────────────
    `canvas/useChangeFeedback.ts`: a new shape settles in where it was put, a new connector is drawn

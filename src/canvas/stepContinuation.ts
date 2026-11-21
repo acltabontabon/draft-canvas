@@ -32,13 +32,13 @@ export const NO_OTHER_SUGGESTIONS = 'No other suggestions';
  * everything about continuation itself.
  */
 export function stepContinuation(
-  editor: Pick<EditorStore, 'document' | 'selection' | 'selectedFlowId' | 'flowPlayback' | 'focus' | 'traffic' | 'path' | 'outer'>,
+  editor: Pick<EditorStore, 'document' | 'selection' | 'selectedFlowId' | 'flowPlayback' | 'focus' | 'outage' | 'path' | 'outer'>,
   delta: 1 | -1,
 ): boolean | AskInstead {
   const ui = useUiStore.getState();
   // The Pencil hides the ghost: a key that acts on a suggestion nobody can see would add an invisible shape.
   if (!ui.continuationsEnabled || ui.quickConnect || ui.contextMenu || ui.openAttachmentDetail || ui.interactionActive || ui.pencil) return false;
-  if (lensFlow(editor) || editor.traffic.active) return false;
+  if (lensFlow(editor) || editor.outage.active) return false;
   const { nodes, edges } = editor.selection;
   if (nodes.length !== 1 || edges.length > 0) return false;
   const anchorId = nodes[0]!;
