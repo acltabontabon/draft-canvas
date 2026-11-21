@@ -28,7 +28,9 @@ describe('shapes held in place', () => {
 
   it('survive a save and a load, and mean nothing when absent', () => {
     const doc = tangle(['a']);
-    const back = parseDocument(JSON.parse(JSON.stringify(doc))).document;
+    const parsed = parseDocument(JSON.parse(JSON.stringify(doc)));
+    if (!parsed.ok) throw new Error(parsed.error);
+    const back = parsed.document;
     expect(back.nodes.find((n) => n.id === 'a')!.held).toBe(true);
     expect('held' in back.nodes.find((n) => n.id === 'b')!).toBe(false);
   });

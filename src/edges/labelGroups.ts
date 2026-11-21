@@ -183,7 +183,8 @@ function lookOf(edge: DraftEdge): string {
  * response pair all hang off the label's point too, and moving the label would strand them.
  */
 function eligible(edge: DraftEdge): boolean {
-  return Boolean(edge.label?.trim()) && !edge.condition && !edge.cadence && !edge.hasResponse && !edge.response && !edge.attachments?.length;
+  // (A portal's label rides with its own stub: there is no shared run for it to sit on.)
+  return Boolean(edge.label?.trim()) && !edge.portal && !edge.condition && !edge.cadence && !edge.hasResponse && !edge.response && !edge.attachments?.length;
 }
 
 interface Routed {

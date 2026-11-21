@@ -770,6 +770,34 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       });
     }
   }
+  // A connector that crosses the whole diagram can be drawn as a portal instead: a short labelled
+  // stub at each end. Offered by what the selection is, as holding is.
+  if (!ctx.ui.readOnly && ctx.editor.selection.edges.length > 0) {
+    const chosen = new Set(ctx.editor.selection.edges);
+    const picked = ctx.editor.document.edges.filter((edge) => chosen.has(edge.id));
+    // A reply line and a sequence message have no stub to become.
+    const able = picked.filter((edge) => !edge.hasResponse && !edge.sourceAnchor?.participantId && !edge.targetAnchor?.participantId);
+    if (able.some((edge) => !edge.portal)) {
+      commands.push({
+        id: 'draw-as-portal',
+        title: able.length === 1 ? 'Draw as portal' : 'Draw as portals',
+        group: 'selection',
+        keywords: ['portal', 'off-page', 'jump', 'stub', 'teleport', 'long connector', 'hide line', 'declutter', 'crossing'],
+        hint: 'A labelled stub at each end instead of a line across the diagram',
+        run: (inner) => void inner.editor.setEdgesPortal(able.map((edge) => edge.id), true),
+      });
+    }
+    if (picked.some((edge) => edge.portal)) {
+      commands.push({
+        id: 'draw-as-line',
+        title: 'Draw as line',
+        group: 'selection',
+        keywords: ['portal', 'line', 'connector', 'show line', 'restore'],
+        hint: 'Draw the whole connector again',
+        run: (inner) => void inner.editor.setEdgesPortal(picked.filter((edge) => edge.portal).map((edge) => edge.id), false),
+      });
+    }
+  }
   // Room for one more shape in the middle of a finished diagram, without dragging half of it over
   // by hand: only worth offering once there is something to push.
   if (!ctx.ui.readOnly && ctx.editor.document.nodes.length > 1) {

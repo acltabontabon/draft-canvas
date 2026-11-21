@@ -556,6 +556,9 @@ export interface EditorStore {
   /** Free-text condition chip, e.g. "approved" — display only, never evaluated. */
   /** How often a connector moves its data ("hourly"); empty clears it. */
   setEdgeCadence: (id: string, cadence: string | undefined) => void;
+  /** Draws connectors as portals (a labelled stub at each end, `DraftEdge.portal`) or as lines
+   *  again. One undo step; `false` when nothing changed. */
+  setEdgesPortal: (ids: readonly string[], portal: boolean) => boolean;
   /** Spotlights everything `nodeId`'s data comes from and everything it feeds (`lineageOf`). */
   showLineage: (nodeId: string) => void;
   setEdgeCondition: (id: string, condition: string) => void;
@@ -2481,6 +2484,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setEdgeCadence(id, cadence) {
     const value = cadence?.slice(0, LIMITS.maxCadenceLength).trim() || undefined;
     get().apply('Set cadence', (doc) => updateEdge(doc, id, { cadence: value }), { coalesceKey: `edge-cadence:${id}` });
+  },
+
+  setEdgesPortal(ids, portal) {
+    const wanted = new Set(ids);
+    let changed = false;
+    get().apply(portal ? 'Draw as portal' : 'Draw as line', (doc) => {
+      const edges = doc.edges.map((edge) => {
+        if (!wanted.has(edge.id) || Boolean(edge.portal) === portal) return edge;
+        changed = true;
+        if (portal) return { ...edge, portal: true };
+        const { portal: _portal, ...line } = edge;
+        return line;
+      });
+      return changed ? { ...doc, edges } : doc;
+    });
+    return changed;
   },
 
   showLineage(nodeId) {

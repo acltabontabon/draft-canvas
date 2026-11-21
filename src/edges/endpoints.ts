@@ -125,7 +125,10 @@ function intern(edgeId: string, spread: EdgeSpread, scope: PlanScope): EdgeSprea
   return spread;
 }
 
-function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope: PlanScope): EndpointPlan {
+function compute(nodes: readonly DraftNode[], all: readonly DraftEdge[], scope: PlanScope): EndpointPlan {
+  // A portal's stubs sit where `portalPlan.ts` seats them: they take no place among the ends of the
+  // lines really drawn on a side, and must not push those off centre.
+  const edges = all.some((edge) => edge.portal) ? all.filter((edge) => !edge.portal) : all;
   if (edges.length < 2) return EMPTY;
   // Twice at most: first on the sides the shapes alone give every end, which is the picture the side
   // plan judges; then, only if it moved any end to another side, again with those.

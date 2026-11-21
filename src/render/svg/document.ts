@@ -15,6 +15,7 @@ import { MARKER_SIZE, describeMarker, describeMarkerKey, nodeMarkerOrigin } from
 import { describeAttachmentBadge } from '../../edges/attachmentChips';
 import { laneIndex } from '../../edges/routing';
 import { routingPlan } from '../../edges/bundles';
+import { portalPlan } from '../../edges/portalPlan';
 import { crossingPlan } from '../../edges/crossings';
 import { labelGroupPlan } from '../../edges/labelGroups';
 import { replyLabelPlan } from '../../edges/replyLabels';
@@ -364,6 +365,7 @@ export function buildScene(
       replyShift: replies.shiftFor(edge.id),
       obstacles: inputs?.obstacles ?? obstaclesForEdge(nodes, edge.source, edge.target, 'transient'),
       crossings: crossings.crossingsFor(edge.id),
+      ...(edge.portal ? { portalSlots: portalPlan(nodes, edges).slotsFor } : {}),
       ...(inputs ? { routes: edgeRoutes(inputs, 'transient') } : {}),
     });
     if (!described) continue;
