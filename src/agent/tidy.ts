@@ -1,6 +1,8 @@
 /**
- * Tidy up: the gentle cleanup. What the editor reaches for after a few shapes were added or moved,
- * when the picture is nearly right and should stay recognisably the one that was drawn.
+ * Tidying: the gentle cleanup, for when the picture is nearly right and should stay recognisably the
+ * one that was drawn. The editor has no command for it: a drop straightens what it moved itself
+ * (`editorStore.commitMove`) and then asks this, off the page's thread, only to re-attach
+ * (`reattachOnly`, `editorStore.reattachAfterMove`).
  *
  * Arrange (`arrange.ts`) lays a view out again from nothing, so one new service can move every shape
  * on the canvas. This keeps every shape where it was put and fixes only what reads as untidy:
@@ -37,8 +39,14 @@ export interface Tidied {
 const sameAnchor = (a: DraftEdge['sourceAnchor'], b: DraftEdge['sourceAnchor']) =>
   a === b || (Boolean(a) && Boolean(b) && a!.side === b!.side && a!.offset === b!.offset);
 
-export function tidyView(view: DraftDocument, scope: ReadonlySet<string> | undefined, ctx: DescribeContext): Tidied {
-  const straightened = straightenConnectors(view, scope);
+export function tidyView(
+  view: DraftDocument,
+  scope: ReadonlySet<string> | undefined,
+  ctx: DescribeContext,
+  options: { reattachOnly?: boolean } = {},
+): Tidied {
+  // `reattachOnly`: no shape moves at all, and only connectors' ends are looked at.
+  const straightened = options.reattachOnly ? view : straightenConnectors(view, scope);
   const was = new Map(view.nodes.map((node) => [node.id, node]));
   const moved = straightened === view
     ? []

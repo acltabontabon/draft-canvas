@@ -164,3 +164,81 @@ describe('a drop settles what it moved', () => {
     expect(commands.some((command) => command.id === 'straighten')).toBe(true);
   });
 });
+
+describe('a drop re-attaches the connectors it left drawn through a shape', () => {
+  /** `a` and `wall` in a row, `b` below: its pinned connector to `a` clears the wall until `b` is dropped in line. */
+  function behindTheWall() {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'A' });
+    const wall = createNode({ id: 'wall', type: 'service', x: 300, y: 0, text: 'Wall' });
+    const b = createNode({ id: 'b', type: 'service', x: 600, y: 300, text: 'B' });
+    const through = { ...createEdge({ id: 'ab', source: 'a', target: 'b', routing: 'straight' }), sourceAnchor: { side: 'right' as const, offset: 0.5 }, targetAnchor: { side: 'left' as const, offset: 0.5 } };
+    return addEdges(addNodes(createDocument('Through'), [a, wall, b]), [through]);
+  }
+
+  beforeEach(() => {
+    __resetInteraction();
+    useEditorStore.setState({
+      document: behindTheWall(),
+      history: { past: [], future: [] },
+      selection: { nodes: [], edges: [] },
+      clipboard: null,
+      revision: 0,
+      mode: 'edit',
+      selectedFlowId: null,
+      path: [],
+      outer: null,
+    });
+    useUiStore.setState({ readOnly: null, flowTrace: null });
+  });
+
+  const edge = () => useEditorStore.getState().document.edges.find((candidate) => candidate.id === 'ab')!;
+  /** `b` dragged level with `a`, behind the wall, as the canvas commits a drop. */
+  function dropInLine(key: string) {
+    const store = useEditorStore.getState();
+    store.beginInteraction('Move');
+    store.commitMove(new Map([['b', { x: 600, y: 0 }]]), ['b'], { settle: [] });
+    store.endInteraction(undefined, { amendKey: key });
+  }
+
+  it('a moment after the drop, without moving a shape, and as part of the same undo step', async () => {
+    const before = useEditorStore.getState().document;
+    dropInLine('drop:1');
+    const dropped = useEditorStore.getState().document;
+    expect(await useEditorStore.getState().reattachAfterMove(['b'], 'drop:1')).toBe(true);
+    const after = useEditorStore.getState();
+    expect(edge().sourceAnchor).not.toEqual({ side: 'right', offset: 0.5 });
+    expect(after.document.nodes).toBe(dropped.nodes);
+    // One step for the move and what followed it: undo puts the shape and the connector back together.
+    expect(after.history.past).toHaveLength(1);
+    expect(after.history.past[0]!.label).toBe('Move');
+    after.undo();
+    expect(useEditorStore.getState().document.nodes).toEqual(before.nodes);
+    expect(edge()).toMatchObject({ sourceAnchor: { side: 'right', offset: 0.5 }, targetAnchor: { side: 'left', offset: 0.5 } });
+  });
+
+  it('has nothing to do for a drop that left every connector clear', async () => {
+    const store = useEditorStore.getState();
+    store.beginInteraction('Move');
+    store.commitMove(new Map([['b', { x: 640, y: 300 }]]), ['b'], { settle: [] });
+    store.endInteraction(undefined, { amendKey: 'drop:2' });
+    const dropped = useEditorStore.getState().document;
+    expect(await useEditorStore.getState().reattachAfterMove(['b'], 'drop:2')).toBe(false);
+    expect(useEditorStore.getState().document).toBe(dropped);
+  });
+
+  it('applies nothing once the room has moved on', async () => {
+    dropInLine('drop:3');
+    const pending = useEditorStore.getState().reattachAfterMove(['b'], 'drop:3');
+    useEditorStore.getState().addNode({ type: 'service', x: 900, y: 600, text: 'Late' });
+    const steps = useEditorStore.getState().history.past.length;
+    expect(await pending).toBe(false);
+    expect(useEditorStore.getState().history.past).toHaveLength(steps);
+    expect(edge()).toMatchObject({ sourceAnchor: { side: 'right', offset: 0.5 } });
+  });
+
+  it('is not asked of a shared diagram', async () => {
+    dropInLine('drop:4');
+    useUiStore.setState({ readOnly: { sharedTitle: 'Shared' } });
+    expect(await useEditorStore.getState().reattachAfterMove(['b'], 'drop:4')).toBe(false);
+  });
+});

@@ -603,6 +603,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const dragSnap = useRef<DragSnapContext>(NO_DRAG_SNAP);
   /** The axes the drag in hand last showed a `settle` guide on: the drop straightens those only. */
   const settleArmed = useRef({ x: false, y: false });
+  /** Counts plain drops, so each one's undo step has a key its re-attach can fold into. */
+  const dropCount = useRef(0);
   const draggingIds = useRef<Set<string>>(new Set());
   /** Same idea for a resize gesture — resize starts inside `DraftNodeView`,
    *  not `onNodeDragStart`, so this is (re)built lazily, the first frame a
@@ -1518,6 +1520,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     const armedSequence = useUiStore.getState().sequenceDropTarget;
     const armedMessage = useUiStore.getState().sequenceAttachmentTarget;
     let label: string | undefined;
+    let reattachKey: string | null = null;
 
     if (singleId && armedMessage) {
       const attachment = sequenceActions.attachExistingNode(armedMessage.nodeId, armedMessage.messageId, singleId);
@@ -1561,9 +1564,14 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       // And settled in that same write, unless Alt is held as it is for snapping (`settleAfterMove`).
       const armed = settleArmed.current;
       state.commitMove(positions, draggedIds, { settle: snapBypassed() ? [] : (['x', 'y'] as const).filter((axis) => armed[axis]) });
+      // A plain move, snapping on: its connectors are looked at once it has landed (below).
+      if (!snapBypassed()) reattachKey = `drop:${(dropCount.current += 1)}`;
     }
 
-    state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : label);
+    state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : label, reattachKey ? { amendKey: reattachKey } : undefined);
+    // Connectors the drop left drawn through a shape are re-attached a moment later, as part of
+    // the same undo step (`editorStore.reattachAfterMove`). Alt skips it, as it skips the settle.
+    if (reattachKey) void state.reattachAfterMove(draggedIds, reattachKey);
     useUiStore.getState().setInteractionActive(false);
     draggingIds.current = new Set();
     dragSnap.current = NO_DRAG_SNAP;

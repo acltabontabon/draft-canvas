@@ -85,6 +85,10 @@ the move.
 - Dragging a boundary leaves what it holds as it was laid out.
 - Hold `⌥` while you drop to leave the shape exactly where it is.
 
+A drop also looks at the connectors of the shapes it moved. One whose line now runs through a shape,
+or across a boundary neither end is in, is re-attached to sides that clear it a moment after you let
+go. No shape moves for this, and it is part of the same undo step. `⌥` skips it too.
+
 For a whole view, **Straighten connectors** in `⌘K` does the same nudging everywhere at once, and
 **Tidy connectors** clears hand-drawn routes.
 

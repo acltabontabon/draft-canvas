@@ -239,14 +239,14 @@ export function planArrange(doc: DraftDocument, ask: { selection?: readonly stri
  * Works out what Tidy up would do to `doc`, or to the neighbourhood of `scope` (shape ids), and
  * applies none of it.
  */
-export function planTidy(doc: DraftDocument, scope?: readonly string[]): TidyPlanResult {
+export function planTidy(doc: DraftDocument, scope?: readonly string[], options: { reattachOnly?: boolean } = {}): TidyPlanResult {
   const edges = visibleEdges(doc.edges).length;
   // Held shapes are never nudged: the cleanup is scoped to everything else.
   const fixed = fixedIds(doc.nodes);
   const movable = fixed.size > 0 ? new Set((scope ?? doc.nodes.map((node) => node.id)).filter((id) => !fixed.has(id))) : scope ? new Set(scope) : undefined;
   const held = fixed.size > 0 ? { held: heldCount(doc.nodes) } : {};
   const bounded = withBudget({ work: TIDY_WORK_UNITS + TIDY_WORK_PER_CONNECTOR * edges, backstopMs: LAYOUT_BACKSTOP_MS }, () =>
-    tidyView(doc, movable, measureContext()),
+    tidyView(doc, movable, measureContext(), options),
   );
   const tidied = bounded.value;
   if (tidied.view === doc) {

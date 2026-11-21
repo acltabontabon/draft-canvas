@@ -26,8 +26,8 @@ export type Job =
   | { kind: 'proposal'; file: DraftDocument; path: DepthPath; ops: unknown; layout: unknown; scope?: unknown }
   /** The editor's Arrange: `doc` is the room on screen (see `layoutPlan.ts`), bounded by work, not by `deadline`. */
   | { kind: 'arrange'; doc: DraftDocument; selection?: string[]; preset?: ArrangePreset }
-  /** The editor's Tidy up. */
-  | { kind: 'tidy'; doc: DraftDocument; scope?: string[] };
+  /** The tidy engine (`tidy.ts`). The editor asks for `reattachOnly`, after a drop. */
+  | { kind: 'tidy'; doc: DraftDocument; scope?: string[]; reattachOnly?: boolean };
 
 export type JobResult =
   | { kind: 'compose'; composed: Composed }
@@ -61,7 +61,7 @@ export function runJob(job: Job, deadline: number, report: Report = silent): Job
   // The editor's layout previews are bounded by a work budget of their own (`layoutPlan.ts`), the same
   // on any machine; `deadline` is the agent's time limit, which would make their result depend on speed.
   if (job.kind === 'arrange') return { kind: 'arrange', result: planArrange(job.doc, { ...(job.selection ? { selection: job.selection } : {}), ...(job.preset ? { preset: job.preset } : {}) }) };
-  if (job.kind === 'tidy') return { kind: 'tidy', result: planTidy(job.doc, job.scope) };
+  if (job.kind === 'tidy') return { kind: 'tidy', result: planTidy(job.doc, job.scope, job.reattachOnly ? { reattachOnly: true } : {}) };
   if (job.kind === 'compose') return { kind: 'compose', composed: compose(job.raw, job.diagramId, { deadline, report, ...(job.starter ? { starter: job.starter } : {}) }) };
   if (job.kind === 'proposal') {
     return withDeadline(deadline, () => {

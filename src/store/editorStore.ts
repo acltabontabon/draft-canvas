@@ -412,7 +412,7 @@ export interface EditorStore {
   beginInteraction: (label: string) => void;
   /** `label` overrides the one `beginInteraction` opened with, when the gesture turned out to be
    *  something else (a drag that ended as an attach). */
-  endInteraction: (label?: string) => void;
+  endInteraction: (label?: string, options?: { amendKey?: string }) => void;
   /**
    * Gives up the step `beginInteraction` opened: the document goes back to exactly what it was when
    * it began, and nothing is recorded. For a thing made and then let go before it was finished — a
@@ -703,6 +703,15 @@ export interface EditorStore {
   /** One frame of the Make room drag: `base` (the room as the drag found it) with everything past
    *  the line moved by `push.delta`. Inside the drag's interaction, so the whole drag is one step. */
   pushRoom: (base: DraftDocument, push: RoomPush) => void;
+  /**
+   * After a drop: re-attaches the connectors of the shapes it moved whose line is now drawn through
+   * a shape, or across a boundary neither end is in (`agent/tidy.ts`, `reattachOnly`). Worked out
+   * off the page's thread, so it lands a moment after the drop; no shape moves. Folded into the
+   * drop's own undo step through `amendKey`, the key that step was recorded with
+   * (`endInteraction`). Nothing is applied, and nothing is said, when the room changed meanwhile or
+   * a gesture is held. Resolves whether anything was re-attached.
+   */
+  reattachAfterMove: (movedIds: Iterable<string>, amendKey: string) => Promise<boolean>;
   /** A resize handle let go: the new box, with membership following (see `reconcileAfterResize`). */
   resizeNode: (id: string, box: { x?: number; y?: number; width: number; height: number }) => void;
   /** Explicitly expand saved or manually resized architecture labels, as one undoable change. */
@@ -1698,7 +1707,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     };
   },
 
-  endInteraction(label) {
+  endInteraction(label, options) {
     const active = interaction;
     interaction = null;
     if (!active) return;
@@ -1720,6 +1729,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         selectionBefore: active.selection,
         selectionAfter: s.selection,
         at: Date.now(),
+        ...(options?.amendKey ? { amendKey: options.amendKey } : {}),
         ...keys,
       }),
     }));
@@ -2816,6 +2826,38 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const moved = reconcileMembershipOp(moveNodes(doc, positions), ids);
       return options?.settle?.length ? settleAfterMove(moved, ids, options.settle) : moved;
     });
+  },
+
+  async reattachAfterMove(movedIds, amendKey) {
+    const ids = [...movedIds];
+    const before = get();
+    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return false;
+    // Nothing to ask about: most drops are of a shape no connector touches, or of none that can.
+    const moved = new Set(ids);
+    if (!before.document.edges.some((edge) => moved.has(edge.source) || moved.has(edge.target))) return false;
+    // The latest drop is the only one worth an answer.
+    reattaching?.abort();
+    const control = new AbortController();
+    reattaching = control;
+    try {
+      const [{ runOffThread, cancelled }, { reuseOf }] = await Promise.all([import('../agent/offThread'), import('../agent/layoutPlan')]);
+      const unchanged = () => !interaction && !control.signal.aborted && get().document === before.document && samePath(get().path, before.path);
+      if (!unchanged()) return false;
+      const done = await runLayoutJob({ kind: 'tidy', doc: before.document, scope: ids, reattachOnly: true }, control.signal, runOffThread, cancelled);
+      if (done === null || done.kind !== 'tidy' || done.result.kind !== 'plan' || done.result.plan.reattached === 0) return false;
+      // Said to nobody when the room moved on: the person did not ask, and has already done more.
+      if (!unchanged()) return false;
+      const view = reuseOf(before.document, done.result.plan.view);
+      if (view === before.document) return false;
+      // Only the ends of connectors: the job was asked to move nothing, and nothing else is taken.
+      get().apply('Move', (doc) => (doc === before.document ? { ...doc, edges: view.edges } : doc), { amendKey });
+      return get().document !== before.document;
+    } catch {
+      // A cleanup nobody asked for has nothing to report when the engine cannot run.
+      return false;
+    } finally {
+      if (reattaching === control) reattaching = null;
+    }
   },
 
   resizeNode(id, box) {
@@ -3965,6 +4007,9 @@ async function runLayoutJob(
     throw error;
   }
 }
+
+/** The re-attach a drop asked for and has not had an answer to (`reattachAfterMove`). */
+let reattaching: AbortController | null = null;
 
 /**
  * What a drop tidies, in the same write as the move and so the same undo step: a connector the

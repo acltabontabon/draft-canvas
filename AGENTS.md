@@ -116,8 +116,11 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   is one undo step. It never moves a resting shape, never settles an axis the drag snapped to a
   neighbour, skips a boundary's drag, and Alt skips it. The drag shows it first as a dashed `settle`
   guide (`canvas/snapping.ts`); what the last frame showed is exactly what the drop does.
-- `agent/tidy.ts` (straighten, then re-attach connectors drawn through a shape) stays as the engine
-  behind the worker's `tidy` job. Nothing in the editor starts it; it never lays a view out again.
+- After the drop, `editorStore.reattachAfterMove` asks the worker's `tidy` job (`agent/tidy.ts`,
+  `reattachOnly`) to re-attach the moved shapes' connectors that are drawn through a shape. It moves
+  no shape, is applied only if the room is unchanged and no gesture is held, and folds into the
+  drop's undo step through the `amendKey` that step was recorded with. Nothing else in the editor
+  starts the tidy engine, and it never lays a view out again.
 - A hand resize of a Service, Data Store, Queue, Actor or Component lands on `SIZE_STEP`
   (`canvas/resizeSnap.ts`) unless a neighbour's edge is within reach. Boundaries and content-sized
   shapes never step.

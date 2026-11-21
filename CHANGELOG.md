@@ -40,7 +40,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   open a file saved by this one rather than drop them.
 - **Tidying happens as you draw** — Dropping a shape whose connector is a small step off straight
   moves it the last few pixels onto the line, in the same undo step. A dashed line shows where it
-  will land while you drag, and `⌥` leaves it where you dropped it. The **Tidy up** command is gone;
+  will land while you drag. A connector the drop left running through a shape is re-attached to
+  clear it a moment later, also in that undo step. `⌥` skips both. The **Tidy up** command is gone;
   **Straighten connectors** and **Tidy connectors** remain for a whole view.
 - **Shapes resize in steps** — A Service, Data Store, Queue, Actor or Component resizes in steps of
   12 pixels, so shapes sized by eye come out the same. A neighbour's edge still wins, and `⌥`
