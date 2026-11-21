@@ -34,6 +34,10 @@ const EditorChunk = retryableLazy(() => loadEditor().then((module) => ({ default
 // About (and every release's notes with it) is opened now and then, from Home or the editor — fetched
 // the first time, so neither screen's first chunk carries it.
 const AboutChunk = retryableLazy(() => import('./ui/common/AboutDialog').then((module) => ({ default: module.AboutDialog })));
+// The shortcuts sheet lists the editor's commands, so it comes with their code. It is mounted here,
+// not in the editor: the desktop Help menu can ask for it on Home, and a sheet that only the editor
+// drew stayed queued there and opened over the next canvas instead.
+const ShortcutsChunk = retryableLazy(() => import('./ui/Editor/ShortcutSheet').then((module) => ({ default: module.ShortcutSheet })));
 // The desktop app's Home takes the Library's place. `__DESKTOP__` is false in the web build, which
 // drops this — and everything under src/desktop/ — from it.
 const DesktopHomeChunk = __DESKTOP__
@@ -63,6 +67,27 @@ function LazyAboutDialog() {
     >
       <Suspense fallback={null}>
         <AboutChunk.Component />
+      </Suspense>
+    </PanelBoundary>
+  );
+}
+
+function LazyShortcutSheet() {
+  const open = useUiStore((state) => state.shortcutsOpen);
+  if (!open) return null;
+  return (
+    <PanelBoundary
+      onError={(error, componentStack) => {
+        logDiagnostic(error, { operation: 'shortcuts-panel' }, componentStack);
+        ShortcutsChunk.reset();
+        const ui = useUiStore.getState();
+        ui.setShortcutsOpen(false);
+        const notice = loadFailureNotice(error, 'Keyboard shortcuts couldn’t open. Check your connection and try again.');
+        ui.notify(notice.message, 'error', notice.action);
+      }}
+    >
+      <Suspense fallback={null}>
+        <ShortcutsChunk.Component />
       </Suspense>
     </PanelBoundary>
   );
@@ -171,6 +196,7 @@ function Shell() {
       <Toasts />
       <LiveAnnouncer />
       <LazyAboutDialog />
+      <LazyShortcutSheet />
       {!__DESKTOP__ && <DiagnosticsDialog />}
       {DesktopSettingsChunk && hostKind() === 'desktop' && (
         <Suspense fallback={null}>

@@ -177,3 +177,37 @@ test('a mouse keeps the compact chrome at any width', async ({ page }) => {
   const undo = page.getByRole('button', { name: 'Undo' });
   expect((await undo.boundingBox())!.height).toBeLessThan(36);
 });
+
+test('the Add to canvas picker scrolls in a short window, and the keyboard’s row is always in view', async ({ page }) => {
+  // Four rows need about 195px; this window leaves the picker 160.
+  await page.setViewportSize({ width: 820, height: 260 });
+  await newCanvas(page, 'Short picker');
+  await page.locator('.react-flow__pane').dblclick({ position: { x: 300, y: 130 } });
+  const menu = page.locator('.dc-quick-connect');
+  await expect(menu).toBeVisible();
+  const rows = menu.locator('.dc-quick-connect-item');
+  // Wholly in view, give or take the fraction of a pixel the menu's own position is rounded by.
+  const SEEN = 0.97;
+  // Taller than the window allows: it stays inside the window and scrolls instead.
+  const box = (await menu.boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(260);
+  expect(await menu.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+
+  // End highlights the last row; it was below the fold, and is now wholly visible with its label.
+  await expect(rows.last()).not.toBeInViewport({ ratio: SEEN });
+  await page.keyboard.press('End');
+  await expect(rows.last()).toHaveAttribute('data-highlighted', 'true');
+  await expect(rows.last()).toBeInViewport({ ratio: SEEN });
+  const last = (await rows.last().boundingBox())!;
+  expect(last.y + last.height).toBeLessThanOrEqual(box.y + box.height + 0.5);
+
+  await page.keyboard.press('Home');
+  await expect(rows.first()).toBeInViewport({ ratio: SEEN });
+  // One row at a time keeps up too, wrapping from the first row to the last.
+  await page.keyboard.press('ArrowUp');
+  await expect(rows.last()).toBeInViewport({ ratio: SEEN });
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeHidden();
+  await expect(page.locator('.dc-node')).toHaveCount(1);
+});

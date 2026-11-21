@@ -10,10 +10,16 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Fixed
 
+- **Joining to view says so** — A person let in with **Can view** was told “Edits you make are
+  shared live.” They are now told they can view the diagram; the editing message is kept for people
+  who can edit.
 - **A connector dragged from several shapes connects them all to a new shape** — Dragging from one
   of several selected shapes to empty canvas and choosing what to add connected only the dragged
   shape. Every selected shape is now connected, as when dropping on an existing shape, in one undo
   step.
+- **The Add to canvas picker scrolls in a short window** — In a short or magnified window the
+  picker ran past the bottom edge, and the keyboard could highlight and add a choice you could not
+  see. It now scrolls, and the highlighted choice is always brought into view.
 - **Choose a late arrival's access while presenting** — A join request during a presentation
   offered only **Let in**, which always let the person edit. It now offers **Can edit**, **Can view**
   and **Deny**, so you can let someone watch without leaving the walkthrough.
@@ -31,10 +37,15 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **New File asks about unsaved changes once** — Choosing **New File…** over a diagram with unsaved
   changes asked whether to save them, then asked again after the new file was already created. It
   now asks once, before the Save dialog.
+- **Agents can render a selection of any size** — `render_diagram` with the current selection
+  failed above 200 selected shapes with an error about unknown shapes. The 200 limit now applies
+  only to shapes an agent lists itself, and going past it says so.
 - **A failed agent change no longer ends a live session** — An agent's change that was rejected or
   cancelled could still switch the open diagram, which ended the session for everyone on it. A
   diagram an agent asks to show now opens only after its change is made, and never over a canvas
   you are sharing.
+- **Keyboard Shortcuts opens on Home** — **Help → Keyboard Shortcuts** did nothing on Home, then
+  opened over the next diagram you started. It now opens where you ask for it.
 
 ### Web
 

@@ -363,6 +363,24 @@ test('the gallery shares white light surfaces and teal actions with Home, and re
   await expect(primary).toHaveCSS('color', 'rgb(255, 255, 255)');
 });
 
+test('Help → Keyboard Shortcuts opens on Home, and leaves nothing queued for the next canvas', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
+
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'shortcuts' }));
+  const sheet = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
+  await expect(sheet).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(sheet).toHaveCount(0);
+
+  await page.getByRole('button', { name: 'New Quick Draft' }).click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await expect(sheet).toHaveCount(0);
+  // Asked for on the canvas, it still opens there.
+  await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'shortcuts' }));
+  await expect(sheet).toBeVisible();
+});
+
 test('a Quick Draft starts drawing at once and becomes a file on Save', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'New Quick Draft' }).click();

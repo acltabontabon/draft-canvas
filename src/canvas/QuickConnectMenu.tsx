@@ -80,6 +80,9 @@ export function QuickConnectMenu({
   highlightedRef.current = highlighted;
   const itemsRef = useRef(items);
   itemsRef.current = items;
+  // Set by the keys that move the highlight: only they bring its row into view. A row the pointer
+  // highlights is already under the pointer, and scrolling it would slide the next one beneath it.
+  const revealHighlight = useRef(false);
 
   // Same focus handling as `ContextMenu`: the menu takes focus so a screen reader follows the
   // highlight (`aria-activedescendant`), and gives it back on close unless a choice moved it on.
@@ -123,6 +126,7 @@ export function QuickConnectMenu({
           event.stopPropagation();
           const delta = event.key === 'ArrowDown' ? 1 : -1;
           const count = itemsRef.current.length;
+          revealHighlight.current = true;
           setHighlighted((index) => (index + delta + count) % count);
           return;
         }
@@ -130,6 +134,7 @@ export function QuickConnectMenu({
         case 'End': {
           event.preventDefault();
           event.stopPropagation();
+          revealHighlight.current = true;
           setHighlighted(event.key === 'Home' ? 0 : Math.max(0, itemsRef.current.length - 1));
           return;
         }
@@ -141,6 +146,7 @@ export function QuickConnectMenu({
           // to choose — it steps the highlight up, and focus stays in the menu either way.
           if (event.key === 'Tab' && event.shiftKey) {
             const count = itemsRef.current.length;
+            revealHighlight.current = true;
             setHighlighted((index) => (index - 1 + count) % count);
             return;
           }
@@ -186,6 +192,19 @@ export function QuickConnectMenu({
   const placement = resolvePlacement('below', anchors, identity, measuredSize, clearances);
   const transform = placementTransform(placement, anchors, measuredSize, clearances, identity, identity);
 
+  // The list can be taller than a short or magnified window. Capped to the room between the toolbar
+  // and the bottom clearance it scrolls instead, as `ContextMenu` does; a resize closes the menu, so
+  // nothing can invalidate this.
+  const maxHeight = Math.max(0, window.innerHeight - toolbarClearance - BOTTOM_CLEARANCE);
+
+  // The keyboard can move the highlight onto a row scrolled out of view — a row that would then be
+  // previewed on the canvas and taken by Enter without its name ever being seen.
+  useEffect(() => {
+    if (!revealHighlight.current) return;
+    revealHighlight.current = false;
+    panel.current?.querySelector(`#dc-quick-connect-item-${highlighted}`)?.scrollIntoView?.({ block: 'nearest' });
+  }, [highlighted]);
+
   const firstPreset = items.findIndex((item) => item.kind === 'preset');
   const hasSuggestions = firstPreset > 0;
 
@@ -198,7 +217,7 @@ export function QuickConnectMenu({
       aria-activedescendant={current ? `dc-quick-connect-item-${Math.min(highlighted, items.length - 1)}` : undefined}
       aria-describedby={note ? 'dc-quick-connect-note' : undefined}
       tabIndex={-1}
-      style={{ transform }}
+      style={{ transform, maxHeight }}
     >
       <div className="dc-quick-connect-heading" aria-hidden="true">
         <span>Add to canvas</span>
