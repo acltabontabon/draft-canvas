@@ -329,5 +329,18 @@ describe('product facts', () => {
     expect(outageFact({ type: 'queue', technology: 'Kafka client' })).toBeNull();
     expect(outageFact({ type: 'service', technology: 'Kafka' })).toBeNull();
     expect(outageFact({ type: 'database', technology: undefined })).toBeNull();
+    // The same rule a technology's kind follows: a parenthetical is about the product, a stack is not one.
+    expect(outageFact({ type: 'queue', technology: 'Kafka (orders)' })?.name).toBe('Kafka');
+    expect(outageFact({ type: 'queue', technology: 'Kafka + Redis' })).toBeNull();
+  });
+
+  it('knows which brokers keep what a subscriber missed, and which drop it', () => {
+    for (const technology of ['Amazon MSK', 'Redpanda', 'Google Pub/Sub', 'Azure Service Bus', 'Apache Pulsar', 'Amazon Kinesis']) {
+      expect(outageFact({ type: 'queue', technology })?.retains, technology).toBe(true);
+    }
+    for (const technology of ['Amazon EventBridge', 'Azure Event Grid', 'NATS', 'Mosquitto', 'Redis Pub/Sub']) {
+      expect(outageFact({ type: 'queue', technology })?.retains, technology).toBe(false);
+    }
+    expect(outageFact({ type: 'database', technology: 'Valkey' })?.down).toMatch(/comes back empty/);
   });
 });

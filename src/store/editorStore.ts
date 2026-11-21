@@ -2149,6 +2149,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           const box = boxForServiceKind(before, before.serviceKind, (kind as Partial<DraftNode>).serviceKind ?? before.serviceKind);
           if (box) next = updateNode(next, id, box);
           next = reinferIncidentEdges(next, id, doc);
+        } else if ('technology' in fields) {
+          // A technology can change what a connector means without moving the kind: a Worker
+          // named as Debezium tails the database drawn into it (`refinementBetween`).
+          next = reinferIncidentEdges(next, id, doc);
         }
         return growArchitectureToFit(next, id);
       },

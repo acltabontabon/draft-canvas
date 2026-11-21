@@ -212,6 +212,9 @@ export function relationLabel(semantic: EdgeSemantic, source?: NodeCategory, tar
   // Drawn from the artifact, the arrow starts at the verb's object: the same relationship, passive.
   const fromArtifact = source !== undefined ? ARTIFACT_CAPTIONS[source]?.[semantic] : undefined;
   if (fromArtifact && !(target !== undefined && ARTIFACT_CAPTIONS[target])) return fromArtifact.passive;
+  // A CDN or web server in front of a bucket or a disk: it reads them, but what the drawing means
+  // is where the content it hands out comes from.
+  if (semantic === 'reads' && source === 'proxy' && (target === 'objectStorage' || target === 'fileSystem')) return 'serves from';
   if (passiveApplies(semantic, source, target)) {
     // A stream is read, not drained: every consumer group sees every record, so "consumed by" —
     // a queue's word, one message to one worker — would say the wrong thing about it.

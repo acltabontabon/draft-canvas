@@ -146,7 +146,7 @@ describe('naming a new participant', () => {
   });
 
   it('knows a technology by name, with the kind it implies', () => {
-    expect(preferred('Kafka').participant).toMatchObject({ type: 'queue', queueKind: 'topic', technology: 'Apache Kafka' });
+    expect(preferred('Kafka').participant).toMatchObject({ type: 'queue', queueKind: 'stream', technology: 'Apache Kafka' });
     expect(preferred('PostgreSQL').participant).toMatchObject({ type: 'database', technology: 'PostgreSQL' });
   });
 

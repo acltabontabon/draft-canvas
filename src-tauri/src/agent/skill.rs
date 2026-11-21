@@ -683,6 +683,10 @@ mod tests {
             "29",
             "bb13fb6be66c40246c817656a3f35247f1e3f26900b3a7f103de8c069ef9d777",
         ),
+        (
+            "30",
+            "9a54a666275be815b5faa05f8b6f7d8c00723e8275fe5474a9eff068bdb67dea",
+        ),
     ];
 
     #[test]

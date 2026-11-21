@@ -87,8 +87,11 @@ instance that something depends on raises the question itself.
 
 When a shape names one product, its notes add that product's documented default: Kafka keeps the
 log for its retention period, Amazon SQS keeps a message for its retention period and shows it
-again after each visibility timeout, RabbitMQ keeps a message until it is acknowledged, Amazon SNS
-retries and then drops, and Redis or Memcached come back empty. These are product behaviour, not
+again after each visibility timeout, RabbitMQ keeps a message until it is acknowledged, Google
+Pub/Sub keeps an unacknowledged one for seven days, Amazon Kinesis keeps a record for 24 hours,
+Amazon SNS, EventBridge and Event Grid retry and then drop, core NATS and MQTT drop what an offline
+subscriber missed, and Redis, Valkey or Memcached come back empty. The same holds for managed and
+compatible Kafka (Amazon MSK, Confluent, Redpanda). These are product behaviour, not
 your settings. A setting that changes one is yours to know, so the question stays.
 
 ![A cache taken down: the service that reads it is degraded and the note asks whether every read falls to the catalog.](../media/guides/outage-cache.png)

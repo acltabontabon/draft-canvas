@@ -1422,10 +1422,8 @@
    "dependsOn"
   ],
   "proxy>fileSystem": [
-   "dependsOn",
    "reads",
-   "writes",
-   "watches"
+   "dependsOn"
   ],
   "proxy>gateway": [
    "routes",
@@ -1438,9 +1436,8 @@
    "dependsOn"
   ],
   "proxy>objectStorage": [
-   "dependsOn",
    "reads",
-   "writes"
+   "dependsOn"
   ],
   "proxy>port": [
    "calls",

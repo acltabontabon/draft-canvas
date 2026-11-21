@@ -13,8 +13,20 @@ describe('kindForTechnology', () => {
     ['database', 'PostgreSQL 16', { databaseKind: 'sql' }],
     ['database', 'Amazon S3', { databaseKind: 'object-storage' }],
     ['database', 'Redis (sessions)', { databaseKind: 'cache' }],
-    ['queue', 'Kafka', { queueKind: 'topic' }],
-    ['queue', 'Apache Kafka 3.7', { queueKind: 'topic' }],
+    // A retained log is a stream, whatever the product calls it.
+    ['queue', 'Kafka', { queueKind: 'stream' }],
+    ['queue', 'Apache Kafka 3.7', { queueKind: 'stream' }],
+    ['queue', 'Redpanda', { queueKind: 'stream' }],
+    ['queue', 'Amazon SNS', { queueKind: 'topic' }],
+    ['queue', 'NATS', { queueKind: 'topic' }],
+    ['queue', 'NATS JetStream', { queueKind: 'stream' }],
+    ['database', 'Amazon EFS', { databaseKind: 'file-system' }],
+    ['database', 'Pinecone', { databaseKind: 'search-index' }],
+    ['database', 'Amazon Aurora', { databaseKind: 'sql' }],
+    ['database', 'Neo4j', { databaseKind: 'nosql' }],
+    ['service', 'Debezium 2.5', { serviceKind: 'worker' }],
+    ['service', 'Celery', { serviceKind: 'worker' }],
+    ['service', 'OpenAI', { serviceKind: 'external' }],
     ['queue', 'Kinesis', { queueKind: 'stream' }],
     ['queue', 'SQS', { queueKind: 'queue' }],
     ['service', 'Stripe', { serviceKind: 'external' }],
@@ -60,10 +72,10 @@ describe('technologyKindPatch', () => {
     expect(technologyKindPatch(dlq, 'Kafka')).toBeNull();
   });
 
-  it('applies on conversion: a Service on Kafka turned into a Queue is a Topic', () => {
+  it('applies on conversion: a Service on Kafka turned into a Queue is a Stream', () => {
     const service = createNode({ type: 'service', technology: 'Kafka', text: 'Events', x: 0, y: 0 });
     const queue = convertedNode(service, 'queue');
-    expect(queue.queueKind).toBe('topic');
+    expect(queue.queueKind).toBe('stream');
     expect(queue.kindOrigin).toBe('technology');
   });
 
@@ -105,10 +117,10 @@ describe('store: setting a technology', () => {
   it('a kind picked afterwards stops following the technology', () => {
     const queue = store.getState().addNode({ type: 'queue', x: 0, y: 0 });
     store.getState().setNodeC4Text(queue.id, { technology: 'Kafka' });
-    expect(store.getState().document.nodes[0]!.queueKind).toBe('topic');
-    store.getState().updateNodeById(queue.id, { queueKind: 'stream' });
+    expect(store.getState().document.nodes[0]!.queueKind).toBe('stream');
+    store.getState().updateNodeById(queue.id, { queueKind: 'topic' });
     expect(store.getState().document.nodes[0]!.kindOrigin).toBeUndefined();
     store.getState().setNodeC4Text(queue.id, { technology: 'SQS' });
-    expect(store.getState().document.nodes[0]!.queueKind).toBe('stream');
+    expect(store.getState().document.nodes[0]!.queueKind).toBe('topic');
   });
 });

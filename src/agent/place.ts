@@ -6,6 +6,7 @@
  * from a diagram someone drew and arranged by hand.
  */
 
+import { technologyKindPatch } from '../document/technologyKind';
 import { capabilityFor, categoryOf, inferRelationship, isSyncPairing } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { createAttachment, createDocument, createEdge, createNode, defaultSizeFor } from '../document/factory';
@@ -101,21 +102,26 @@ function attachmentsOf(specs: AttachmentSpec[] | undefined) {
 
 /** A native element for a spec, at its natural size (grown, never shrunk, from the type's default). */
 function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: string): DraftNode {
+  // The technology fixes the kind for an agent's shape as it does for a person's: a "database" that
+  // is Redis arrives as a cache. Only from the type's plain kind — "sql" with Redis stays SQL.
+  const implied = spec.technology ? technologyKindPatch(spec.shape as DraftNode, spec.technology) : null;
+  const shape: NodeSpec['shape'] & Pick<DraftNode, 'kindOrigin'> = implied ? { ...spec.shape, ...implied } : spec.shape;
   const node = createNode({
     id: spec.id,
-    type: spec.shape.type,
+    type: shape.type,
     x: 0,
     y: 0,
     text: spec.label,
-    ...(spec.shape.serviceKind ? { serviceKind: spec.shape.serviceKind } : {}),
-    ...(spec.shape.databaseKind ? { databaseKind: spec.shape.databaseKind } : {}),
-    ...(spec.shape.queueKind ? { queueKind: spec.shape.queueKind } : {}),
-    ...(spec.shape.actorKind ? { actorKind: spec.shape.actorKind } : {}),
-    ...(spec.shape.componentKind ? { componentKind: spec.shape.componentKind } : {}),
-    ...(spec.shape.artifactKind ? { artifactKind: spec.shape.artifactKind } : {}),
-    ...(spec.shape.deliveryRole ? { deliveryRole: spec.shape.deliveryRole } : {}),
+    ...(shape.serviceKind ? { serviceKind: shape.serviceKind } : {}),
+    ...(shape.databaseKind ? { databaseKind: shape.databaseKind } : {}),
+    ...(shape.queueKind ? { queueKind: shape.queueKind } : {}),
+    ...(shape.actorKind ? { actorKind: shape.actorKind } : {}),
+    ...(shape.componentKind ? { componentKind: shape.componentKind } : {}),
+    ...(shape.artifactKind ? { artifactKind: shape.artifactKind } : {}),
+    ...(shape.deliveryRole ? { deliveryRole: shape.deliveryRole } : {}),
     ...(spec.description ? { description: spec.description } : {}),
     ...(spec.technology ? { technology: spec.technology } : {}),
+    ...(shape.kindOrigin ? { kindOrigin: shape.kindOrigin } : {}),
     ...(spec.color ? { accent: spec.color } : {}),
     ...(parentId ? { parentId } : {}),
   });
