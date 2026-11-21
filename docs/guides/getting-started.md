@@ -34,7 +34,8 @@ Connectors label themselves; click one to change it.
 ## Add a note
 
 Right-click the queue and choose **Attach note**. Type, then click the canvas to keep it (`Esc`
-throws it away). Click the chip to reopen it.
+throws it away). Rest the pointer on the queue to read the note beside it; click the paperclip tab,
+then the chip, to edit it.
 
 ## Draw a boundary
 

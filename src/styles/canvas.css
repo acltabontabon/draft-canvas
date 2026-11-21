@@ -5194,6 +5194,19 @@
   display: none;
 }
 
+/*
+ * Told while editing, for the shape or connector the pointer rests on (`AttachmentPeekLayer.tsx`):
+ * one on its way out never catches the pointer it is leaving.
+ */
+/* Read at leisure rather than glanced at mid-step, so code gets the width for whole lines. */
+.dc-callout[data-variant='peek'][data-wide='true'] {
+  max-width: 460px;
+}
+
+.dc-callout[data-variant='peek'][data-leaving='true'] {
+  pointer-events: none;
+}
+
 /* A single ring off the marker as the callout arrives — once, never looping. */
 .dc-callout-pulse {
   position: absolute;

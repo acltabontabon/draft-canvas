@@ -12,6 +12,7 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { PresentationCalloutLayer } from '../../canvas/presentation/PresentationCalloutLayer';
+import { AttachmentPeekLayer } from '../../canvas/presentation/AttachmentPeekLayer';
 import { Canvas, type CanvasProps } from '../../canvas/Canvas';
 import { ContextMenu } from '../../canvas/ContextMenu';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
@@ -764,6 +765,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           <StartersDialog onAdd={addStarter} />
           <FlowTraceBar />
           <PresentationCalloutLayer />
+          {/* Resting on a shape tells its notes and code; the editing popover stays a click away. */}
+          {!presenting && !tracing && !walkingOutage && <AttachmentPeekLayer />}
           <EmptyState onAddStarter={addStarter} />
           {!presenting && <ContinuationAnnouncer />}
           {!presenting && !tracing && !walkingOutage && !readOnly && <Inspector />}
