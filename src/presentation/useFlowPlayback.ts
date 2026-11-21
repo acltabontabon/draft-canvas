@@ -109,6 +109,8 @@ export interface FlowPlaybackController {
   /** The step being shown — `null` in the opening and closing overviews, where no single step is. */
   current: FlowPlaybackStep | null;
   active: boolean;
+  /** The flow being told is a walk — worked out from the diagram, not one the file holds. */
+  derived: boolean;
   /** Playback is active but no flow has been chosen yet — show the picker. */
   picking: boolean;
   /** The opening (title and overview, before step 1), a step, or the closing overview after the last. */
@@ -118,6 +120,8 @@ export interface FlowPlaybackController {
   canStart: boolean;
   start: () => void;
   pickFlow: (flowId: string, sequenceNodeId?: string) => void;
+  /** Present a walk (`presentation/walk.ts`): a flow the file does not hold, from its opening. */
+  startWalk: (walk: DraftFlow) => void;
   stop: () => void;
   /** Forward through the story: opening → step 1 … last step → closing → the next flow's opening. */
   next: () => void;
@@ -195,6 +199,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       active: state.flowPlayback.active,
       flowId: state.flowPlayback.flowId,
       sequenceNodeId: state.flowPlayback.sequenceNodeId,
+      walk: state.flowPlayback.walk,
       step: state.flowPlayback.step,
       stage: state.flowPlayback.stage,
     })),
@@ -204,7 +209,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
   // whole-document subscription re-rendered the entire editor on every commit. Edges and nodes are
   // only watched while a flow is actually being presented; everything else reads `getState()`.
   const flow = useEditorStore((state) =>
-    flowPlayback.flowId ? (playbackFlowOf(state.document, flowPlayback.flowId, flowPlayback.sequenceNodeId) ?? null) : null,
+    flowPlayback.flowId ? (playbackFlowOf(state.document, flowPlayback.flowId, flowPlayback.sequenceNodeId, flowPlayback.walk) ?? null) : null,
   );
   const edges = useEditorStore((state) => (flow ? state.document.edges : NO_EDGES));
   const nodes = useEditorStore((state) => (flow ? state.document.nodes : NO_NODES));
@@ -366,7 +371,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       // a sequence telling itself is not one of them, and the lens has nothing to show for it.
       if (sequenceNodeId === undefined) useEditorStore.getState().setSelectedFlowId(flowId);
       if (matchedIndex < 0) {
-        setFlowPlayback({ active: true, flowId, sequenceNodeId, step: 0, stage: 'opening' });
+        setFlowPlayback({ active: true, flowId, sequenceNodeId, walk: undefined, step: 0, stage: 'opening' });
         frameFlow(chosen, 'guided');
         return;
       }
@@ -386,11 +391,11 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
         }
       }
       if (!landed) {
-        setFlowPlayback({ active: true, flowId, sequenceNodeId, step: 0, stage: 'opening' });
+        setFlowPlayback({ active: true, flowId, sequenceNodeId, walk: undefined, step: 0, stage: 'opening' });
         frameFlow(chosen, 'guided');
         return;
       }
-      setFlowPlayback({ active: true, flowId, sequenceNodeId, step: landed.step, stage: undefined });
+      setFlowPlayback({ active: true, flowId, sequenceNodeId, walk: undefined, step: landed.step, stage: undefined });
       frameStepFor(landed);
     },
     [current, flow, flowPlayback.sequenceNodeId, frameFlow, frameStepFor, setFlowPlayback],
@@ -406,13 +411,22 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       pickFlow(preferred.id);
       return;
     }
-    setFlowPlayback({ active: true, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined });
+    setFlowPlayback({ active: true, flowId: null, sequenceNodeId: undefined, walk: undefined, step: 0, stage: undefined });
   }, [playableFlows, pickFlow, setFlowPlayback]);
+
+  const startWalk = useCallback(
+    (walk: DraftFlow) => {
+      // Not the lens: step badges belong to flows the file holds, and a walk is not one yet.
+      setFlowPlayback({ active: true, flowId: walk.id, sequenceNodeId: undefined, walk, step: 0, stage: 'opening' });
+      frameFlow(walk, 'guided');
+    },
+    [frameFlow, setFlowPlayback],
+  );
 
   const stop = useCallback(() => {
     intended.current = null;
     useUiStore.getState().resetPresentation();
-    setFlowPlayback({ active: false, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined });
+    setFlowPlayback({ active: false, flowId: null, sequenceNodeId: undefined, walk: undefined, step: 0, stage: undefined });
   }, [setFlowPlayback]);
 
   const flowIndex = flow && flowPlayback.sequenceNodeId === undefined ? playableFlows.findIndex((candidate) => candidate.id === flow.id) : -1;
@@ -491,8 +505,8 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       // own first line steps over, so there is no second pass.)
       setFlowPlayback(
         playableFlows.length > 0
-          ? { active: true, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined }
-          : { active: false, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined },
+          ? { active: true, flowId: null, sequenceNodeId: undefined, walk: undefined, step: 0, stage: undefined }
+          : { active: false, flowId: null, sequenceNodeId: undefined, walk: undefined, step: 0, stage: undefined },
       );
       return;
     }
@@ -541,12 +555,14 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       step: flowPlayback.step,
       current,
       active: flowPlayback.active,
+      derived: flow !== null && flow === flowPlayback.walk,
       picking: flowPlayback.active && flowPlayback.flowId === null,
       stage,
       atEnd: stage === 'closing' && !upcoming,
       canStart: playableFlows.length > 0,
       start,
       pickFlow,
+      startWalk,
       stop,
       next,
       previous,
@@ -567,11 +583,13 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       flowPlayback.step,
       flowPlayback.active,
       flowPlayback.flowId,
+      flowPlayback.walk,
       current,
       stage,
       upcoming,
       start,
       pickFlow,
+      startWalk,
       stop,
       next,
       previous,

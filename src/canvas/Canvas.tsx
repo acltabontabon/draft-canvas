@@ -440,7 +440,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // colour — handed to every arrival ring, boundary outline and caption through a single variable.
   const explainAccent = useEditorStore((state) => {
     if (!state.flowPlayback.active || !state.flowPlayback.flowId) return undefined;
-    return playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)?.accent;
+    return playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId, state.flowPlayback.walk)?.accent;
   });
   const focusActive = useEditorStore((state) => state.focus.active);
   const traceActive = useUiStore((state) => state.traceIds !== null);

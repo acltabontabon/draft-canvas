@@ -994,7 +994,7 @@ function explainTierFor(state: EditorStore, id: string): ExplainTier {
   // not by walking the parent chain in every node selector.
   if (stepContextOf(state)?.containing.has(id)) return 'active';
   if (!state.flowPlayback.active || !state.flowPlayback.flowId) return 'hidden';
-  const flow = playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId);
+  const flow = playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId, state.flowPlayback.walk);
   return nodeTierInPlayback(flow, state.document.edges, id, state.flowPlayback);
 }
 

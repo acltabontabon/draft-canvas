@@ -10,6 +10,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Present without a flow** — **Present** now walks a diagram that has no flows, following its
+  arrows one connector at a time. Select one shape to present from it onward, two shapes to present
+  the way between them, or several to present that part; the button reads **Present selection**.
+  **Keep as a flow** (`K`) saves the walk.
 - **Arrange around a flow** — **Arrange around a flow…** in `⌘K`, or **Follow** in the Arrange
   preview, lays one flow out in a straight line with the rest of the diagram around it.
 - **Crossings in the Arrange preview** — The preview counts where connectors cross now and after,

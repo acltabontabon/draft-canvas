@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument } from '../src/document/factory';
 import { useFlowPlayback } from '../src/presentation/useFlowPlayback';
+import { walkOfDiagram } from '../src/presentation/walk';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { PRESENTATION_AT_REST, useUiStore } from '../src/store/uiStore';
 
@@ -458,5 +459,68 @@ describe('useFlowPlayback — opening, steps, closing', () => {
     act(() => result.current.stop());
     expect(useUiStore.getState().presentation).toEqual(PRESENTATION_AT_REST);
     expect(useEditorStore.getState().flowPlayback).toMatchObject({ active: false, flowId: null, step: 0 });
+  });
+});
+
+/**
+ * A walk is a flow the file does not hold: Present tells it like any other, and keeping it is the
+ * one moment it reaches the document.
+ */
+describe('useFlowPlayback — a walk', () => {
+  beforeEach(reset);
+
+  function walkOfPair() {
+    connectedPair();
+    return walkOfDiagram(useEditorStore.getState().document)!.flow;
+  }
+
+  it('plays without the file holding a flow, and without becoming the lens', () => {
+    const walk = walkOfPair();
+    const { result } = mount();
+    expect(result.current.canStart).toBe(false);
+    act(() => result.current.startWalk(walk));
+    expect(result.current).toMatchObject({ active: true, derived: true, flow: walk, flowIndex: -1, stage: 'opening' });
+    expect(result.current.steps).toHaveLength(1);
+    expect(useEditorStore.getState().document.flows).toEqual([]);
+    expect(useEditorStore.getState().selectedFlowId).toBeNull();
+    act(() => result.current.next());
+    expect(result.current.current?.step).toBe(1);
+  });
+
+  it('is kept as a flow in one undo step, and the telling carries on where it was', () => {
+    const walk = walkOfPair();
+    const { result } = mount();
+    act(() => result.current.startWalk(walk));
+    act(() => result.current.next());
+    const undoable = useEditorStore.getState().history.past.length;
+
+    let kept: string | null = null;
+    act(() => {
+      kept = useEditorStore.getState().keepWalk();
+    });
+    const state = useEditorStore.getState();
+    expect(state.document.flows).toHaveLength(1);
+    expect(state.document.flows[0]).toMatchObject({ id: kept, title: 'Whole diagram' });
+    expect(state.document.flows[0]!.steps.map((step) => step.edgeId)).toEqual(walk.steps.map((step) => step.edgeId));
+    expect(state.document.flows[0]!.steps.some((step) => step.id.startsWith('walk:'))).toBe(false);
+    expect(state.history.past.length).toBe(undoable + 1);
+    expect(state.flowPlayback).toMatchObject({ active: true, flowId: kept, walk: undefined, step: 1 });
+    expect(result.current).toMatchObject({ derived: false, flowIndex: 0 });
+    // Nothing left to keep.
+    expect(useEditorStore.getState().keepWalk()).toBeNull();
+  });
+
+  it('lets go of the walk when a saved flow is picked, or the presentation stops', () => {
+    const walk = walkOfPair();
+    const state = useEditorStore.getState();
+    const saved = state.createFlow('Saved')!;
+    state.addEdgeToFlow(saved, state.document.edges[0]!.id);
+    const { result } = mount();
+    act(() => result.current.startWalk(walk));
+    act(() => result.current.pickFlow(saved));
+    expect(useEditorStore.getState().flowPlayback).toMatchObject({ flowId: saved, walk: undefined });
+    act(() => result.current.startWalk(walk));
+    act(() => result.current.stop());
+    expect(useEditorStore.getState().flowPlayback).toMatchObject({ active: false, flowId: null, walk: undefined });
   });
 });

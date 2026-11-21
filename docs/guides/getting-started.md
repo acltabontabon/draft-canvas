@@ -42,6 +42,9 @@ Select all three shapes, press `⌘G`, then `Enter` to name the [boundary](shape
 
 ## Present a flow
 
+**Present** (`⌘Enter`) already walks the diagram in the order its arrows point. A flow is a
+walkthrough in an order you choose:
+
 1. Click the API-to-queue connector and choose **Add to flow**. Name it `Place an order`.
 2. Click the queue-to-worker connector and choose **Add to Place an order**.
 3. Press `F` to open **Flows** and check the order.

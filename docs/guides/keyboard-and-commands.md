@@ -114,6 +114,7 @@ selected it also aligns, distributes and matches sizes.
 | `Home` / `End` / `1`–`9` | First / last / that step |
 | `Shift+→` / `Shift+←` / `Shift+F` | Next / previous / any flow |
 | `O` / `R` / `P` | Overview / re-centre / pointer |
+| `K` | Keep a walk as a flow |
 | `Esc` | Close a reveal, then stop presenting |
 
 Tracing keys are in [flows and presenting](flows-and-presentation.md); desktop file keys in the

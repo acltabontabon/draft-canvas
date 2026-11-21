@@ -1,6 +1,7 @@
 # Flows and presenting
 
-A flow is an ordered list of connectors, presented one step at a time.
+A flow is an ordered list of connectors, presented one step at a time. You don't need one to
+[present](#present): without a flow, **Present** follows the diagram's arrows.
 
 Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
 
@@ -43,8 +44,30 @@ press `Esc` with nothing selected. Opening a diagram always shows the whole diag
 
 ## Present
 
-Click **Present** (`⌘Enter`) and pick a flow if there are several. The opening shows the whole path;
-advance to start. During a step, the boundaries around its highlighted shapes stay in focus, nested
+Click **Present** (`⌘Enter`). What it walks through depends on what you have:
+
+| You have | Present walks |
+| --- | --- |
+| One shape selected | From that shape onward, along its arrows |
+| Two shapes selected | The way from one to the other |
+| Several shapes, connectors or a boundary selected | That part, in arrow order |
+| Nothing selected, and flows | The chosen flow, or the one you pick |
+| Nothing selected, and no flows | The whole diagram, in arrow order |
+
+![Two shapes selected; the toolbar button reads Present selection.](../media/guides/present-selection.png)
+
+The button reads **Present selection** when the selection will be walked. A selection that makes
+fewer than two steps, or that takes in every connector, is ignored. To present a flow while something is selected, use its **Present**
+button in **Flows**.
+
+A walk in arrow order starts at the shapes nothing points into and follows one path to its end
+before the next. Connectors that fan out to end points, or fan in from starting points, share a
+step. Nothing is saved until you choose **Keep as a flow** (`K`), which adds the walk to **Flows**
+in one undo step; rename or reorder it there.
+
+![The opening of a walk from Orders API to Fulfilment worker, with Keep as a flow on the bar.](../media/guides/present-walk.png)
+
+The opening shows the whole path; advance to start. During a step, the boundaries around its highlighted shapes stay in focus, nested
 ones included, and unrelated boundaries stay subdued.
 
 ![A presentation step highlighting its connector and showing the queue's note.](../media/guides/presenting.png)
@@ -57,6 +80,7 @@ ones included, and unrelated boundaries stay subdued.
 | `O` | Whole-flow overview |
 | `R` | Re-centre and resume guided camera |
 | `P` | Pointer ring |
+| `K` | Keep the walk as a flow |
 | `⌘↓` / `⌘↑` | Look inside a shape / go back out |
 | `Esc` | Close a reveal, then leave |
 

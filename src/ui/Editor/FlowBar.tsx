@@ -68,6 +68,14 @@ export function FlowBar({ playback, follower = false }: { playback: FlowPlayback
     if (useEditorStore.getState().mode === 'present') useEditorStore.getState().setMode('edit');
   }, [playback]);
 
+  // A walk (`presentation/walk.ts`) is nobody's until it is kept: one press makes it a flow of the
+  // file, and the presentation carries on from the same moment. Not offered to a shared reader,
+  // whose file can't take it.
+  const canKeep = useUiStore((state) => playback.derived && !state.readOnly);
+  const keep = useCallback(() => {
+    useEditorStore.getState().keepWalk();
+  }, []);
+
   const togglePointer = useCallback(() => {
     const ui = useUiStore.getState();
     ui.setPresentation({ pointer: !ui.presentation.pointer });
@@ -155,6 +163,12 @@ export function FlowBar({ playback, follower = false }: { playback: FlowPlayback
           event.preventDefault();
           togglePointer();
           return;
+        case 'k':
+        case 'K':
+          if (!canKeep) return;
+          event.preventDefault();
+          keep();
+          return;
         default: {
           // A digit jumps straight to that step — the way a chapter number does — when there is one.
           const digit = /^[1-9]$/.test(event.key) ? Number(event.key) : 0;
@@ -167,7 +181,7 @@ export function FlowBar({ playback, follower = false }: { playback: FlowPlayback
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [playback, follower, toggleOverview, togglePointer]);
+  }, [playback, follower, toggleOverview, togglePointer, canKeep, keep]);
 
   // A presenter's reveal (a chip or badge clicked while presenting — see `presentationReveal`) is
   // scoped to the step it was made on (`revealIn` ignores it elsewhere, from the very first render),
@@ -238,7 +252,8 @@ export function FlowBar({ playback, follower = false }: { playback: FlowPlayback
   const { flows, flowIndex, stage } = playback;
   // One flow is just a walkthrough: no position to report and nowhere to skip to, so none of the
   // flow chrome appears at all and the bar stays as small as it was.
-  const manyFlows = flows.length > 1;
+  // A walk or a sequence's own telling is not one of the file's flows: there is no "2 of 5" for it.
+  const manyFlows = flows.length > 1 && flowIndex >= 0;
   const upcoming = flowIndex >= 0 ? flows[flowIndex + 1] : undefined;
   const total = playback.steps.length;
   const primary = playback.current?.edge;
@@ -266,10 +281,10 @@ export function FlowBar({ playback, follower = false }: { playback: FlowPlayback
   return (
     <>
       {stage === 'opening' && (
-        <PresentationCard kind="opening" flow={playback.flow} playback={playback} title={document.metadata.title} nodes={nodes} />
+        <PresentationCard kind="opening" flow={playback.flow} playback={playback} title={document.metadata.title} nodes={nodes} onKeep={canKeep ? keep : undefined} />
       )}
       {stage === 'closing' && (
-        <PresentationCard kind="closing" flow={playback.flow} playback={playback} title={document.metadata.title} nodes={nodes} />
+        <PresentationCard kind="closing" flow={playback.flow} playback={playback} title={document.metadata.title} nodes={nodes} onKeep={canKeep ? keep : undefined} />
       )}
       {stage === 'step' && playback.current && story && (
         <StepCaption step={playback.current} story={story} total={total} flow={playback.flow} nodes={nodes} />
@@ -312,23 +327,39 @@ export function FlowBar({ playback, follower = false }: { playback: FlowPlayback
               )}
             </Tooltip>
           )}
-          <button
-            ref={pickToggleRef}
-            type="button"
-            className="dc-explain-flow-pick"
-            aria-haspopup="menu"
-            aria-expanded={pickerOpen}
-            title={playback.flow.title}
-            onClick={() => setPickerFor(pickerOpen ? null : playback.flow?.id ?? null)}
-          >
-            <span className="dc-explain-flow-title">{playback.flow.title}</span>
-            {manyFlows && (
-              <span className="dc-explain-flow-pos">
-                Flow {flowIndex + 1} of {flows.length}
-              </span>
-            )}
-            <Icon name="down" size={13} />
-          </button>
+          {playback.derived && flows.length === 0 ? (
+            // Nothing else to switch to: the walk's name is a label, not a menu with nothing in it.
+            <span className="dc-explain-flow-pick dc-explain-flow-name" title={playback.flow.title}>
+              <span className="dc-explain-flow-title">{playback.flow.title}</span>
+            </span>
+          ) : (
+            <button
+              ref={pickToggleRef}
+              type="button"
+              className="dc-explain-flow-pick"
+              aria-haspopup="menu"
+              aria-expanded={pickerOpen}
+              title={playback.flow.title}
+              onClick={() => setPickerFor(pickerOpen ? null : playback.flow?.id ?? null)}
+            >
+              <span className="dc-explain-flow-title">{playback.flow.title}</span>
+              {manyFlows && (
+                <span className="dc-explain-flow-pos">
+                  Flow {flowIndex + 1} of {flows.length}
+                </span>
+              )}
+              <Icon name="down" size={13} />
+            </button>
+          )}
+          {canKeep && (
+            <Tooltip content={{ title: 'Keep as a flow', shortcut: 'K', description: 'Saves these steps so you can rename, reorder and present them again.' }}>
+              {(tip) => (
+                <Button {...tip} icon="plus" variant="quiet" className="dc-explain-keep" onClick={keep}>
+                  Keep as a flow
+                </Button>
+              )}
+            </Tooltip>
+          )}
           {manyFlows && (
             <Tooltip content={{ title: upcoming ? `Next flow: ${upcoming.title}` : 'Next flow', shortcut: 'Shift →' }}>
               {(tip) => (
@@ -598,21 +629,24 @@ function PresentationCard({
   playback,
   title,
   nodes,
+  onKeep,
 }: {
   kind: 'opening' | 'closing';
   flow: DraftFlow;
   playback: FlowPlaybackController;
   title: string;
   nodes: ReadonlyMap<string, DraftNode>;
+  /** Present while the flow is a walk the file can take — see `FlowBar`'s `keep`. */
+  onKeep?: () => void;
 }) {
   const route = useMemo(() => routeOf(playback.steps, nodes), [playback.steps, nodes]);
   const upcoming = playback.flowIndex >= 0 ? playback.flows[playback.flowIndex + 1] : undefined;
-  const manyFlows = playback.flows.length > 1;
+  const manyFlows = playback.flows.length > 1 && playback.flowIndex >= 0;
   const base = useEditorStore((state) => (flow.variantOf ? state.document.flows.find((f) => f.id === flow.variantOf) : undefined));
   return (
     <div className="dc-present-card" data-kind={kind} role={kind === 'closing' ? 'group' : undefined} aria-label={kind === 'closing' ? 'End of flow' : undefined}>
       <span className="dc-present-eyebrow">
-        {kind === 'opening' ? title : 'End of flow'}
+        {kind === 'opening' ? title : playback.derived ? 'End of the walk' : 'End of flow'}
         {manyFlows && (
           <>
             {' · '}Flow {playback.flowIndex + 1} of {playback.flows.length}
@@ -621,6 +655,10 @@ function PresentationCard({
       </span>
       <span className="dc-present-title">{flow.title}</span>
       {base && <span className="dc-present-text">A variant of {base.title}</span>}
+      {/* Says what this is, once, where the presenter is still reading: an order nobody chose. */}
+      {playback.derived && kind === 'opening' && (
+        <span className="dc-present-text">Following the arrows, one connector at a time.</span>
+      )}
       {route.length > 0 && (
         <span className="dc-present-route" aria-hidden={kind === 'closing' ? true : undefined}>
           {route.map((name, index) => (
@@ -643,6 +681,11 @@ function PresentationCard({
           <Button variant="ghost" icon="undo" onClick={playback.replay}>
             Replay
           </Button>
+          {onKeep && (
+            <Button variant="solid" icon="plus" onClick={onKeep}>
+              Keep as a flow
+            </Button>
+          )}
           {upcoming && (
             <Button variant="solid" icon="flowNext" onClick={playback.nextFlow}>
               Next: {upcoming.title}

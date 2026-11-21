@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { walkOfSelection } from '../../../presentation/walk';
 import { useEditorStore } from '../../../store/editorStore';
 import { useUiStore } from '../../../store/uiStore';
 import { Button } from '../../common/Button';
@@ -28,6 +30,21 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
   const activeFlowTitle = useEditorStore((state) =>
     state.selectedFlowId ? state.document.flows.find((flow) => flow.id === state.selectedFlowId)?.title : undefined,
   );
+  // What Present will do, said before it is pressed: a selection that makes a story is walked
+  // instead of the active flow (`presentation/walk.ts`), and the button says so while that holds.
+  // Whether it makes one is a question of which connectors join what, never of where anything
+  // sits — so it is asked again when the selection or the connectors change, and not on every
+  // frame of a drag, which replaces the shapes but neither of those.
+  const selection = useEditorStore((state) => state.selection);
+  const edges = useEditorStore((state) => state.document.edges);
+  const shapeCount = useEditorStore((state) => state.document.nodes.length);
+  const presentsSelection = useMemo(
+    () =>
+      (selection.nodes.length > 0 || selection.edges.length > 0) &&
+      walkOfSelection({ nodes: useEditorStore.getState().document.nodes, edges }, selection) !== null,
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- shapeCount stands in for the shapes, see above.
+    [selection, edges, shapeCount],
+  );
 
   return (
     <div className="dc-toolbar-trail">
@@ -36,21 +53,22 @@ export function ToolbarActions({ onPresent, onExport }: ToolbarActionsProps) {
           Flows panel, tinted while it is open. Two words and a loose flow name used to sit here as
           three separate things. Present is momentary, so it has no active state to fake. */}
       <div className="dc-toolbar-modes dc-story" role="group" aria-label="Flows and presenting">
-        <Tooltip content={toolbarTooltip('present')}>
+        <Tooltip content={presentsSelection ? { ...toolbarTooltip('present'), title: 'Present selection' } : toolbarTooltip('present')}>
           {(tip) => (
             <Button
               icon="present"
               variant="ghost"
               className="dc-toolbar-mode dc-story-play"
+              data-presents={presentsSelection ? 'selection' : undefined}
               // Wrapped, never passed straight through: `onPresent` takes an optional flow id,
               // and a bare `onClick={onPresent}` hands it the click event instead — truthy, so
               // the presentation would start on a flow that doesn't exist and quietly do nothing.
               onClick={() => onPresent()}
-              aria-label={toolbarLabel('present')}
+              aria-label={presentsSelection ? 'Present selection' : toolbarLabel('present')}
               {...tip}
             >
-              <span className="dc-mode-label">Present</span>
-              {activeFlowTitle && (
+              <span className="dc-mode-label">{presentsSelection ? 'Present selection' : 'Present'}</span>
+              {activeFlowTitle && !presentsSelection && (
                 <>
                   <span className="dc-flow-toggle-sep" aria-hidden="true">
                     ·

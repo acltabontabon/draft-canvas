@@ -46,8 +46,8 @@ const SPECS = {
   present: {
     title: 'Present',
     commandId: 'present',
-    description: 'Shows the canvas full screen, without the editor around it.',
-    usageHint: 'With a flow active, reveals it one step at a time.',
+    description: 'Walks through the diagram one connector at a time, full screen.',
+    usageHint: 'Presents the selection, else the active flow, else the whole diagram in arrow order.',
   },
   zoomOut: { title: 'Zoom out', commandId: 'zoom-out' },
   zoomIn: { title: 'Zoom in', commandId: 'zoom-in' },
