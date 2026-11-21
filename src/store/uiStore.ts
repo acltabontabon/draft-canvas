@@ -150,6 +150,8 @@ export interface TidyPreview {
   partial?: boolean;
   /** How many sketches the room holds: they stay where they are, which the bar says. */
   sketches?: number;
+  /** Shapes held in place that the cleanup left alone. */
+  held?: number;
 }
 
 /** Tidy up found nothing to change. */
@@ -196,6 +198,12 @@ export interface ArrangePreview {
   alternativeSkipped?: boolean;
   /** How many sketches the room holds: they stay where they are, which the bar says. */
   sketches?: number;
+  /** Shapes held in place that the arrangement was worked out around: the bar says they stay. */
+  held?: number;
+  /** Places two connectors cross, now and in each arrangement offered: the bar's "Crossings 12 → 3". */
+  crossings?: { before: number; after: Partial<Record<ArrangeDirection, number>> };
+  /** The flow this arrangement lays out in one line, when one was chosen. */
+  followed?: string;
   /** Asked for by a layout skill of Nodi's: Apply plays the rearrangement (`canvas/arrangeMotion.ts`)
    *  instead of cutting to it. */
   motion?: boolean;
@@ -278,7 +286,17 @@ let changeTimer: ReturnType<typeof setTimeout> | undefined;
 const NO_IDS: ReadonlySet<string> = new Set();
 
 const CONTINUATION_PREFERENCE = 'continuation';
+const LEGEND_PREFERENCE = 'legend';
 const NO_MOVING_NODES: ReadonlySet<string> = new Set();
+
+/** Off unless this device asked for it. Read once at startup, as `initialContinuationsEnabled` is. */
+function initialLegendShown(): boolean {
+  try {
+    return readPreference(LEGEND_PREFERENCE) === 'on';
+  } catch {
+    return false;
+  }
+}
 
 /** On unless the device says otherwise. Read once at startup; a preference store that is not
  *  usable at that moment (blocked storage, a test harness still wiring up) means "on". */
@@ -631,6 +649,23 @@ export interface UiStore {
    */
   pointedIds: ReadonlySet<string> | null;
   /**
+   * The shapes and connectors lit while Shift rests the pointer on a shape: everything its data comes
+   * from and everything it feeds (`canvas/useHoverTrace.ts`). Transient: never saved, undone or
+   * exported. A set, so each node's and edge's selector is one lookup, and only members re-render.
+   */
+  traceIds: ReadonlySet<string> | null;
+  /**
+   * The Make room tool in hand (`canvas/useMakeRoom.ts`), and while its one drag is under way the
+   * line it pushes from and how far: what the canvas draws as its guide. `null` when put down.
+   * Transient: never saved, undone or exported.
+   */
+  makeRoom: { line: { axis: 'x' | 'y'; at: number; delta: number } | null } | null;
+  /**
+   * Whether the canvas shows the legend of line styles in use (`edges/legend.ts`), and an image
+   * export carries it. A device preference, like the drawing style: never part of the file.
+   */
+  legendShown: boolean;
+  /**
    * The id of a document that has just arrived and still needs its opening viewport computed —
    * set once as it arrives (see `arriveWith` in `useDocumentSession.ts`) for a genuine new open,
    * never for reopening the canvas already on screen or for a freshly created one (which already
@@ -829,6 +864,9 @@ export interface UiStore {
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
   setPointedIds: (ids: ReadonlySet<string> | null) => void;
+  setTraceIds: (ids: ReadonlySet<string> | null) => void;
+  setMakeRoom: (makeRoom: UiStore['makeRoom']) => void;
+  setLegendShown: (shown: boolean) => void;
   /** Marks `documentId` as just arrived and awaiting its opening viewport fit. */
   requestOpenFit: (documentId: string) => void;
   /** Consumes the pending fit for `documentId` — a no-op if a newer request has already replaced
@@ -938,7 +976,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setFlowTrace: (flowTrace) => set({ flowTrace }),
   armed: null,
   pencil: null,
-  setPencil: (pencil) => set((state) => ({ pencil, armed: pencil ? null : state.armed, spliceArmedEdgeTarget: pencil ? null : state.spliceArmedEdgeTarget })),
+  setPencil: (pencil) => set((state) => ({ pencil, armed: pencil ? null : state.armed, makeRoom: pencil ? null : state.makeRoom, spliceArmedEdgeTarget: pencil ? null : state.spliceArmedEdgeTarget })),
   inkPrefs: readInkPrefs(),
   setInkPrefs: (patch) =>
     set((state) => {
@@ -1009,6 +1047,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   exportSelectionRequested: false,
   jumpFlashId: null,
   pointedIds: null,
+  traceIds: null,
+  makeRoom: null,
+  legendShown: initialLegendShown(),
   openFitDocumentId: null,
   continuation: null,
   agentPreview: null,
@@ -1038,7 +1079,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
   // A connector a placed shape would have gone into is not one any more once the tool changes.
   // Picking up a shape tool puts the Pencil down; putting a shape tool down (`null`) leaves it be.
-  arm: (armed) => set((state) => ({ armed, spliceArmedEdgeTarget: null, pencil: armed ? null : state.pencil })),
+  arm: (armed) => set((state) => ({ armed, spliceArmedEdgeTarget: null, pencil: armed ? null : state.pencil, makeRoom: armed ? null : state.makeRoom })),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setFindReplaceOpen: (findReplaceOpen) => set({ findReplaceOpen }),
   requestFit: () => set((state) => ({ fitRequestId: state.fitRequestId + 1 })),
@@ -1215,6 +1256,13 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setJumpFlashId: (jumpFlashId) =>
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
   setPointedIds: (pointedIds) => set((state) => (state.pointedIds === pointedIds ? state : { pointedIds })),
+  setTraceIds: (traceIds) => set((state) => (state.traceIds === traceIds ? state : { traceIds })),
+  setLegendShown: (legendShown) => {
+    writePreference(LEGEND_PREFERENCE, legendShown ? 'on' : 'off');
+    set({ legendShown });
+  },
+  // Taking the tool up puts down whatever else was in hand: one tool owns the pointer at a time.
+  setMakeRoom: (makeRoom) => set((state) => (makeRoom && !state.makeRoom ? { makeRoom, armed: null, pencil: null, spliceArmedEdgeTarget: null } : { makeRoom })),
   requestOpenFit: (documentId) => set({ openFitDocumentId: documentId }),
   clearOpenFit: (documentId) =>
     set((state) => (state.openFitDocumentId === documentId ? { openFitDocumentId: null } : state)),

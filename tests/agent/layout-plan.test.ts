@@ -65,6 +65,19 @@ describe('planArrange', () => {
     expect(Object.keys(result.plan.options)).toEqual(['down']);
   });
 
+  it('counts crossings before and after, for every direction it offers, without spending the budget on it', () => {
+    const result = planArrange(room());
+    if (result.kind !== 'plan') throw new Error('expected a plan');
+    const { crossings, options } = result.plan;
+    expect(crossings.before).toBeGreaterThanOrEqual(0);
+    expect(Object.keys(crossings.after).sort()).toEqual(Object.keys(options).sort());
+    // The same room, the same count and the same work: counting happens after the budget is settled.
+    const again = planArrange(room());
+    if (again.kind !== 'plan') throw new Error('expected a plan');
+    expect(again.plan.crossings).toEqual(crossings);
+    expect(again.plan.used).toBe(result.plan.used);
+  });
+
   it('refuses nothing about a room with nothing to lay out', () => {
     const note = createNode({ id: 'n', type: 'note', x: 0, y: 0, text: 'Just a note' });
     expect(planArrange(addNodes(createDocument('Notes'), [note])).kind).toBe('unchanged');

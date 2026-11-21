@@ -27,8 +27,18 @@ export function movesNote(base: DraftDocument, view: DraftDocument): string {
   return moved > 0 ? `Moves ${count(moved, 'shape')}` : '';
 }
 
+/** Where connectors cross, before and after the arrangement shown: "Crossings 12 → 3". Empty when
+ *  nothing crosses either way, which is not worth a word. */
+export function crossingsNote(preview: Pick<ArrangePreview, 'crossings' | 'direction'>): string {
+  const after = preview.crossings?.after[preview.direction];
+  if (!preview.crossings || after === undefined) return '';
+  const { before } = preview.crossings;
+  if (before === 0 && after === 0) return '';
+  return before === after ? `Crossings ${before}` : `Crossings ${before} → ${after}`;
+}
+
 /** What a preview did not do, or leaves as it is, one line each — in the words the bar says under its name. */
-export function layoutNotes(preview: Pick<ArrangePreview, 'partial' | 'alternativeSkipped' | 'sketches' | 'scoped'>, kind: 'arrange' | 'tidy'): string[] {
+export function layoutNotes(preview: Pick<ArrangePreview, 'partial' | 'alternativeSkipped' | 'sketches' | 'scoped' | 'held'>, kind: 'arrange' | 'tidy'): string[] {
   const notes: string[] = [];
   if (preview.partial) {
     notes.push(kind === 'tidy'
@@ -36,6 +46,7 @@ export function layoutNotes(preview: Pick<ArrangePreview, 'partial' | 'alternati
       : 'Stopped early on a large diagram. Apply it, then run Tidy up to finish the connectors.');
   }
   if (kind === 'arrange' && preview.alternativeSkipped) notes.push('Only one direction was worked out for a diagram this size.');
+  if (preview.held) notes.push(preview.held === 1 ? '1 held shape stays where it is.' : `${preview.held} held shapes stay where they are.`);
   if (preview.sketches) notes.push(preview.sketches === 1 ? '1 sketch stays where it is.' : `${preview.sketches} sketches stay where they are.`);
   return notes;
 }

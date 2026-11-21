@@ -271,10 +271,13 @@ export function emitDisplayList(list: DisplayList): SvgEl[] {
 export function shadowFilter(color: string): SvgEl {
   return el(
     'filter',
-    { id: scopedId(SHADOW_FILTER_ID), x: '-20%', y: '-20%', width: '140%', height: '140%' },
+    // A soft lift, not an edge: wide enough to read as the shape resting just above the sheet, and
+    // low enough that it never outlines it. The region leaves the blur room below a shallow shape
+    // (a Queue is 48 tall) without growing the filtered area more than it must.
+    { id: scopedId(SHADOW_FILTER_ID), x: '-25%', y: '-30%', width: '150%', height: '170%' },
     [
-      el('feGaussianBlur', { in: 'SourceAlpha', stdDeviation: 2, result: 'blur' }),
-      el('feOffset', { in: 'blur', dx: 0, dy: 1, result: 'offset' }),
+      el('feGaussianBlur', { in: 'SourceAlpha', stdDeviation: 3, result: 'blur' }),
+      el('feOffset', { in: 'blur', dx: 0, dy: 2, result: 'offset' }),
       el('feFlood', { 'flood-color': color, 'flood-opacity': 1, result: 'color' }),
       el('feComposite', { in: 'color', in2: 'offset', operator: 'in', result: 'shadow' }),
       el('feMerge', {}, [el('feMergeNode', { in: 'shadow' }), el('feMergeNode', { in: 'SourceGraphic' })]),

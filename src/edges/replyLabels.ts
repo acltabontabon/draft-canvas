@@ -116,6 +116,7 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
   const doc = { nodes, edges };
   const placed: Placed[] = [];
   for (const edge of edges) {
+    if (edge.portal) continue;
     const label = place(edge, doc, byId, scope);
     if (label) placed.push(label);
     if (placed.length > MAX_LABELS) return shifts;

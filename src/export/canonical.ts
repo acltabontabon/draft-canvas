@@ -85,6 +85,7 @@ const NODE_KEYS = [
   'textBackground',
   'inside',
   'sequence',
+  'held',
 ] as const satisfies KeysOf<DraftNode>;
 const SEQUENCE_KEYS = ['participants', 'groups', 'items', 'numberMessages'] as const satisfies KeysOf<DraftSequence>;
 const SEQ_PARTICIPANT_KEYS = [
@@ -141,6 +142,7 @@ const EDGE_KEYS = [
   'compensationDescription',
   'condition',
   'cadence',
+  'portal',
   'response',
   'hasResponse',
   'kind',

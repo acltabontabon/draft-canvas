@@ -521,6 +521,14 @@ function flowCommands(ctx: CommandContext): Command[] {
 export function viewCommands(ctx: CommandContext): Command[] {
   const commands: Command[] = [
     {
+      id: 'toggle-legend',
+      title: ctx.ui.legendShown ? 'Hide legend' : 'Show legend',
+      group: 'view',
+      keywords: ['legend', 'key', 'line styles', 'dashed', 'dotted', 'arrows', 'notation', 'what do the lines mean'],
+      hint: ctx.ui.legendShown ? 'On the canvas and in exported images' : 'Name the kinds of line this diagram uses, here and in exported images',
+      run: (inner) => inner.ui.setLegendShown(!inner.ui.legendShown),
+    },
+    {
       id: 'fit',
       title: 'Fit to view',
       group: 'view',
@@ -744,6 +752,72 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       },
     });
   }
+  // Held shapes are the ones Arrange and Tidy up leave alone. Offered by what the selection is:
+  // hold what is free, let go what is held, both when it is mixed.
+  if (!ctx.ui.readOnly && ctx.editor.selection.nodes.length > 0) {
+    const chosen = new Set(ctx.editor.selection.nodes);
+    const picked = ctx.editor.document.nodes.filter((node) => chosen.has(node.id));
+    if (picked.some((node) => !node.held)) {
+      commands.push({
+        id: 'hold-in-place',
+        title: 'Hold in place',
+        group: 'selection',
+        keywords: ['pin', 'lock', 'fix', 'keep', 'anchor', 'stay', 'freeze', 'arrange', 'layout'],
+        hint: 'Arrange and Tidy up leave it where you put it',
+        run: (inner) => void inner.editor.holdSelection(true),
+      });
+    }
+    if (picked.some((node) => node.held)) {
+      commands.push({
+        id: 'let-go',
+        title: 'Let go',
+        group: 'selection',
+        keywords: ['unpin', 'unlock', 'release', 'free', 'unhold', 'arrange', 'layout'],
+        hint: 'Arrange and Tidy up may move it again',
+        run: (inner) => void inner.editor.holdSelection(false),
+      });
+    }
+  }
+  // A connector that crosses the whole diagram can be drawn as a portal instead: a short labelled
+  // stub at each end. Offered by what the selection is, as holding is.
+  if (!ctx.ui.readOnly && ctx.editor.selection.edges.length > 0) {
+    const chosen = new Set(ctx.editor.selection.edges);
+    const picked = ctx.editor.document.edges.filter((edge) => chosen.has(edge.id));
+    // A reply line and a sequence message have no stub to become.
+    const able = picked.filter((edge) => !edge.hasResponse && !edge.sourceAnchor?.participantId && !edge.targetAnchor?.participantId);
+    if (able.some((edge) => !edge.portal)) {
+      commands.push({
+        id: 'draw-as-portal',
+        title: able.length === 1 ? 'Draw as portal' : 'Draw as portals',
+        group: 'selection',
+        keywords: ['portal', 'off-page', 'jump', 'stub', 'teleport', 'long connector', 'hide line', 'declutter', 'crossing'],
+        hint: 'A labelled stub at each end instead of a line across the diagram',
+        run: (inner) => void inner.editor.setEdgesPortal(able.map((edge) => edge.id), true),
+      });
+    }
+    if (picked.some((edge) => edge.portal)) {
+      commands.push({
+        id: 'draw-as-line',
+        title: 'Draw as line',
+        group: 'selection',
+        keywords: ['portal', 'line', 'connector', 'show line', 'restore'],
+        hint: 'Draw the whole connector again',
+        run: (inner) => void inner.editor.setEdgesPortal(picked.filter((edge) => edge.portal).map((edge) => edge.id), false),
+      });
+    }
+  }
+  // Room for one more shape in the middle of a finished diagram, without dragging half of it over
+  // by hand: only worth offering once there is something to push.
+  if (!ctx.ui.readOnly && ctx.editor.document.nodes.length > 1) {
+    commands.push({
+      id: 'make-room',
+      title: 'Make room',
+      group: 'canvas',
+      keywords: ['space', 'insert space', 'push', 'spread', 'gap', 'open up', 'close gap', 'shove', 'room'],
+      hint: 'Then drag across or down: everything past the pointer moves away, or back',
+      run: (inner) => inner.ui.setMakeRoom({ line: null }),
+    });
+  }
   if (!ctx.ui.readOnly && arrangeable) {
     commands.push({
       id: 'arrange',
@@ -753,6 +827,31 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       hint: 'Preview this view laid out again from scratch, and choose which way it reads',
       run: (inner) => void startArrange({}, inner),
     });
+    // A flow somebody authored is the path a reader follows: laid out in one straight line, the rest
+    // hangs off it. Only flows with a connector to follow — a flow of shapes alone has no line to draw.
+    const followable = ctx.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId));
+    if (followable.length > 0) {
+      commands.push({
+        id: 'arrange-around-flow',
+        title: followable.length === 1 ? `Arrange around “${followable[0]!.title}”` : 'Arrange around a flow…',
+        group: 'canvas',
+        keywords: ['layout', 'auto layout', 'spine', 'happy path', 'straight', 'follow', 'flow', 'rearrange', 'main path'],
+        hint: 'Preview the view with one flow in a straight line and the rest around it',
+        run: (inner) => {
+          const flows = inner.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId));
+          if (flows.length === 1) return void startArrange({ preset: { primaryFlow: flows[0]!.id } }, inner);
+          return {
+            prompt: 'Arrange around',
+            options: flows.map((flow) => ({
+              id: `arrange-around-flow:${flow.id}`,
+              title: flow.title,
+              hint: count(flow.steps.length, 'step'),
+              run: () => void startArrange({ preset: { primaryFlow: flow.id } }, inner),
+            })),
+          };
+        },
+      });
+    }
     commands.push({
       id: 'check-layout',
       title: 'Check layout',

@@ -67,6 +67,28 @@ describe('what a drawing means here', () => {
     expect(read(c.arrowSeparateHead({ x: 405, y: 36 }, { x: 170, y: 34 }, c.hand(13)), nodes)).toMatchObject({ kind: 'connector', source: 'b', target: 'a', directed: true });
   });
 
+  it('keeps the path of a stroke drawn round from one shape to another as the connector’s bends', () => {
+    const nodes = [service('a', 0, 0), service('b', 400, 0)];
+    // Out of the bottom of one, along underneath, up into the other.
+    const under = [c.humanize([{ x: 88, y: 60 }, { x: 90, y: 200 }, { x: 488, y: 200 }, { x: 490, y: 60 }], c.hand(31))];
+    const result = read(under, nodes);
+    expect(result).toMatchObject({ kind: 'connector', source: 'a', target: 'b', directed: false, confident: true });
+    if (result.kind !== 'connector') return;
+    expect(result.via).toHaveLength(2);
+    expect(result.via![0]!.y).toBeGreaterThan(170);
+    expect(result.via![0]!.x).toBeLessThan(140);
+    expect(result.via![1]!.x).toBeGreaterThan(440);
+  });
+
+  it('a path drawn by hand is a route only between two shapes, and never a scribble across them', () => {
+    const nodes = [service('a', 0, 0), service('b', 400, 0)];
+    // Round and back to the shape it left; off into empty space; a zigzag from one to the other.
+    expect(read([c.humanize([{ x: 88, y: 60 }, { x: 90, y: 200 }, { x: 150, y: 200 }, { x: 150, y: 60 }], c.hand(32))], nodes).kind).toBe('none');
+    expect(read([c.humanize([{ x: 88, y: 60 }, { x: 90, y: 200 }, { x: 300, y: 200 }, { x: 300, y: 320 }], c.hand(33))], nodes).kind).toBe('none');
+    const zig = Array.from({ length: 12 }, (_, i) => ({ x: 88 + i * 36, y: i % 2 === 0 ? 40 : 160 }));
+    expect(read([c.humanize(zig, c.hand(34))], nodes).kind).toBe('none');
+  });
+
   it('never invents a connection: a line into empty space, or under one shape, stays ink', () => {
     const nodes = [service('a', 0, 0), service('b', 400, 0)];
     expect(read(c.arrowOneStroke({ x: 170, y: 34 }, { x: 300, y: 200 }, c.hand(14)), nodes)).toMatchObject({ kind: 'none', reason: 'unanchored' });

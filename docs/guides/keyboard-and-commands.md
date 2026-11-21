@@ -40,6 +40,7 @@ drop a connector on empty canvas still lists them first.
 | `⌥⇧→` / `⌥⇧←` | Follow an outgoing / incoming connector |
 | Arrow / `Shift` + arrow | Nudge the selection 1 / 10 units |
 | Hold `⌥` while dragging or resizing | Turn off [snapping](shapes-and-connectors.md#line-things-up) |
+| Hold `Shift` and rest on a shape | Light up everything its data comes from and feeds |
 | `Shift+1` | Fit the diagram in view |
 | `⌘+` / `⌘−` / `⌘0` | Zoom in / out / to 100% |
 | `Space` + drag | Pan (scrolling also pans) |

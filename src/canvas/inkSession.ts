@@ -140,7 +140,7 @@ function act(interpretation: InkInterpretation, strokes: DraftInk[], forced: boo
   const room = pathKey(editor.path);
   if (interpretation.kind === 'connector') {
     if (!interpretation.confident && !forced) return 'none';
-    const edgeId = editor.inkToConnector(ids, interpretation.source, interpretation.target, interpretation.directed);
+    const edgeId = editor.inkToConnector(ids, interpretation.source, interpretation.target, interpretation.directed, interpretation.via);
     if (!edgeId) return 'none';
     resolve(strokes);
     ui.setInkSuggestion(null);

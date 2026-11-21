@@ -4,7 +4,7 @@ import { MARKER_SIZE, describeMarker, type OccupiedRect } from '../openPoints/ma
 import type { Shape, TextAlign } from '../render/displayList';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
-import { markerRef } from '../render/svg/markers';
+import { markerRef, originRef } from '../render/svg/markers';
 import type { Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { baselineOf, layoutText, type TextLayout } from '../render/text/layout';
@@ -45,6 +45,8 @@ import { categoryOf } from '../document/connectorSemantics';
 import { connectorCaptionText } from './captionText';
 import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
 import { compensationLabelParts } from './compensationMarker';
+import { PORTAL_RING, portalName, portalOf, portalWordsRect, slotPoint } from './portal';
+import type { PortalSlots } from './portalPlan';
 import { compensationDisplayLabel } from '../document/compensation';
 
 export interface EdgeDescribeContext {
@@ -63,6 +65,8 @@ export interface EdgeDescribeContext {
    * independently, exactly as every connector did before this field existed.
    */
   spine?: EdgeSpine;
+  /** Where each end of a portal sits on its shape (`portalPlan.ts`). Omitted: where the line would attach. */
+  portalSlots?: (edgeId: string) => PortalSlots | undefined;
   /** The nodes this connector may detour around. Omitted: every node but its endpoints and groups. */
   obstacles?: readonly Rect[];
   /**
@@ -233,6 +237,54 @@ function routesOf(edge: DraftEdge, nodes: Map<string, DraftNode>, ctx: EdgeDescr
   });
 }
 
+/** Padding round a portal's words: `.dc-edge-portal-label`'s own (`canvas.css`). */
+const PORTAL_PADDING_X = 6;
+const PORTAL_PADDING_Y = 2;
+
+/**
+ * A connector drawn as a portal (`portal.ts`): a stub and a ring at each end, each saying where the
+ * other end is. Mirrors the portal branch of `DraftEdgeView.tsx`. Its own label, caption, chips and
+ * marks are not drawn — the label rides in the leaving stub's words, and there is no line to hang
+ * the rest on.
+ */
+function describePortal(edge: DraftEdge, nodes: Map<string, DraftNode>, route: RoutedEdge, color: string, ctx: EdgeDescribeContext): DescribedEdge {
+  const source = nodes.get(edge.source);
+  const target = nodes.get(edge.target);
+  // The same seats the canvas gives them (`portalPlan.ts`), from the same shapes and connectors.
+  const slots = source && target ? ctx.portalSlots?.(edge.id) : undefined;
+  const ends = slots && source && target ? { source: slotPoint(rectOf(source), slots.source), target: slotPoint(rectOf(target), slots.target) } : route;
+  const portal = portalOf(ends, edge, { source: portalName(source), target: portalName(target) });
+  const stroke = { color, width: CONNECTOR_STYLE.lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
+  const ring = (at: { x: number; y: number }): Shape => ({
+    t: 'ellipse',
+    cx: at.x,
+    cy: at.y,
+    rx: PORTAL_RING,
+    ry: PORTAL_RING,
+    stroke: { color, width: CONNECTOR_STYLE.openArrowWidth },
+  });
+  const line: Shape[] = [
+    { t: 'path', d: portal.out.line, fill: 'none', stroke, markerStart: edge.directed ? originRef(color) : undefined },
+    { t: 'path', d: portal.into.line, fill: 'none', stroke, markerEnd: edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined },
+    ring(portal.out.ring),
+    ring(portal.into.ring),
+  ];
+  const overlay: Shape[] = [];
+  const words: Rect[] = [];
+  for (const end of [portal.out, portal.into]) {
+    const layout = layoutText(end.text, { font: FONTS.edgeLabel, maxWidth: 600, lineHeight: FONTS.edgeLabel.size * LINE_HEIGHTS.label, maxLines: 1, measurer: ctx.measurer });
+    const width = layout.width + PORTAL_PADDING_X * 2;
+    const height = layout.height + PORTAL_PADDING_Y * 2;
+    const { left, top } = portalWordsRect(end, width, height);
+    overlay.push(
+      { t: 'rect', x: left, y: top, w: width, h: height, r: 4, fill: ctx.theme.canvas, opacity: 0.82 },
+      { t: 'text', x: left + PORTAL_PADDING_X, y: top + PORTAL_PADDING_Y, layout, font: FONTS.edgeLabel, fill: ctx.theme.edgeText, align: 'start' },
+    );
+    words.push(boxOf(left, top, width, height));
+  }
+  return { route, line, overlay, color, boxes: { words, marks: [] } };
+}
+
 export function describeEdge(
   edge: DraftEdge,
   nodes: Map<string, DraftNode>,
@@ -267,6 +319,7 @@ export function describeEdge(
   const recoveryChipSide = recoveryParts && (labelSide === 'top' || labelSide === 'bottom') ? 'bottom' : labelSide;
 
   const color = resolveEdgeColor(edge, nodes.get(edge.source), ctx.theme);
+  if (edge.portal) return describePortal(edge, nodes, route, color, ctx);
 
   // Geometry (`route`, `labelX`/`labelY`/every overlay below) always reads
   // from the unperturbed `route` object — only the drawn stroke wobbles, so
@@ -297,6 +350,8 @@ export function describeEdge(
       fill: 'none',
       stroke: strokeBase,
       markerEnd,
+      // Where a directed line leaves its shape: the origin dot. Mirrors `DraftEdgeView.tsx`.
+      markerStart: markerEnd ? originRef(color) : undefined,
     },
     ...(profile.strokes === 2
       ? ([

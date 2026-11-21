@@ -643,6 +643,9 @@ const MIGRATIONS: Record<number, Migration> = {
   // version still moves so an older build refuses a file with sketches by name rather than opening
   // it and silently dropping them on the next save.
   27: (document) => document,
+  // Optional `held` on shapes and `portal` on connectors; a diagram without them means the same.
+  // The version moves so an older build refuses the file rather than dropping both on its next save.
+  28: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

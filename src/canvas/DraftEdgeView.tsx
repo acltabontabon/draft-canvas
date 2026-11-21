@@ -1,6 +1,6 @@
 import { playbackFlowOf } from '../document/sequenceFlow';
 import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
 import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
@@ -10,7 +10,7 @@ import type { DraftEdge, DraftNode, DraftPoint } from '../document/types';
 import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
 import { edgeTierInPlayback, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
-import { markerRef } from '../render/svg/markers';
+import { markerRef, originRef } from '../render/svg/markers';
 import {
   rectOf,
   snappedAnchorForDrop,
@@ -61,6 +61,7 @@ import { usePersonality } from '../theme/usePersonality';
 import { useThemeValue } from '../theme/useTheme';
 import { FONTS, cssFont } from '../render/text/fonts';
 import { Lru } from '../lib/lru';
+import { motionMs } from '../lib/motion';
 import { pointInBox } from '../lib/math';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { EdgeBendHandles, type BendPreview } from './EdgeBendHandles';
@@ -70,6 +71,9 @@ import { endpointPlan } from '../edges/endpoints';
 import { sequenceAnchorRect } from '../edges/sequenceAnchors';
 import { separationPlan } from '../edges/separation';
 import { DRAG_THRESHOLD_PX } from './gestureThresholds';
+import { PORTAL_RING, portalName, portalOf, portalWordsRect, slotPoint, type PortalEnd } from '../edges/portal';
+import { portalPlan } from '../edges/portalPlan';
+import { morphRoute, settleRoute } from './routeMorph';
 
 const NO_OBSTACLES: readonly Rect[] = [];
 
@@ -100,6 +104,10 @@ function RecoveryHoverTooltip({ parentId, x, y, side }: { parentId: string; x: n
  *  renders (selection, lens, playback, hover) move none of them, and building the shared cache's
  *  string key meant serialising every obstacle rect on each of those renders, for every connector. */
 const LAST_ROUTES = new Lru<string, { inputs: readonly unknown[]; routes: EdgeRoutes }>(LIMITS.maxEdges);
+
+/** The route each connector was last drawn along, before wobble or bridges: what a changed route
+ *  eases from (`routeMorph.ts`). */
+const LAST_DRAWN = new Lru<string, string>(LIMITS.maxEdges);
 
 interface DragOverride {
   endpoint: 'source' | 'target';
@@ -132,6 +140,60 @@ function labelChipTransform(side: Side, x: number, y: number): string {
     case 'bottom':
       return `translate(-50%, 0) translate(${x}px, ${y + LABEL_LINE_GAP - LABEL_PADDING_Y}px)`;
   }
+}
+
+/**
+ * A settled route that differs from the one this line last had eases into place (`routeMorph.ts`).
+ * Not while `still`: a gesture's frames are already continuous, Sketch's arrowhead is its own path
+ * and would be left behind, and a line drawing itself in for the first time has nothing to leave.
+ *
+ * The route it last had is kept by id, outside React: React Flow mounts a connector afresh when its
+ * shapes move, and a ref would forget the very line it is leaving. Its own component, drawing
+ * nothing, so the effect is declared unconditionally whatever the connector's render returns early on.
+ */
+function RouteMorph({ id, line, styledPath, still }: { id: string; line: React.RefObject<SVGPathElement | null>; styledPath: string; still: boolean }) {
+  useLayoutEffect(() => {
+    const element = line.current;
+    const was = LAST_DRAWN.get(id);
+    LAST_DRAWN.set(id, styledPath);
+    if (!element) return;
+    if (still) settleRoute(element);
+    else if (was !== undefined && was !== styledPath) morphRoute(element, was, styledPath);
+  }, [id, line, styledPath, still]);
+  useEffect(() => {
+    const element = line.current;
+    return () => {
+      if (element) settleRoute(element);
+    };
+  }, [line]);
+  return null;
+}
+
+/**
+ * One end of a portal's words ("→ Billing"): where the connector goes, said at the stub. A click
+ * takes the view to the shape at the other end — the line that is not drawn, travelled.
+ */
+function PortalWords({ end, jumpTo, about, dimmed }: { end: PortalEnd; jumpTo: { x: number; y: number; width: number; height: number }; about: string; dimmed: boolean }) {
+  const { setCenter, getZoom } = useReactFlow();
+  // Placed by the same rule the export uses (`portalWordsRect`), with the box's own size left to CSS.
+  const anchor = portalWordsRect(end, 0, 0);
+  const shift = end.side === 'right' ? 'translate(0, -50%)' : end.side === 'left' ? 'translate(-100%, -50%)' : end.side === 'top' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)';
+  return (
+    <button
+      type="button"
+      className="dc-edge-portal-label nodrag nopan"
+      data-dimmed={dimmed ? 'true' : undefined}
+      title={about}
+      aria-label={about}
+      style={{ transform: `${shift} translate(${anchor.left}px, ${anchor.top}px)` }}
+      onClick={(event) => {
+        event.stopPropagation();
+        void setCenter(jumpTo.x + jumpTo.width / 2, jumpTo.y + jumpTo.height / 2, { zoom: getZoom(), duration: motionMs(420) });
+      }}
+    >
+      {end.text}
+    </button>
+  );
 }
 
 /** Same idea for the condition chip — stacked below the caption for a horizontal line
@@ -334,8 +396,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // positions, it says whether a gesture is carrying both ends (and so this connector's bends) along.
   // The node objects themselves, so nothing is allocated per store update — and only a bent
   // connector asks at all.
-  const committedSource = useEditorStore((state) => (edge && (edge.waypoints || edge.sourceAnchor?.participantId) ? selectNode(state.document, edge.source) : undefined));
-  const committedTarget = useEditorStore((state) => (edge && (edge.waypoints || edge.targetAnchor?.participantId) ? selectNode(state.document, edge.target) : undefined));
+  const committedSource = useEditorStore((state) => (edge && (edge.waypoints || edge.portal || edge.sourceAnchor?.participantId) ? selectNode(state.document, edge.source) : undefined));
+  const committedTarget = useEditorStore((state) => (edge && (edge.waypoints || edge.portal || edge.targetAnchor?.participantId) ? selectNode(state.document, edge.target) : undefined));
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
@@ -357,6 +419,12 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const compensating = Boolean(edge?.compensationFor);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
+  const traced = useUiStore((state) => state.traceIds?.has(id) ?? false);
+  // The drawn line, for `RouteMorph` below. Declared here, before this component's early returns.
+  const lineRef = useRef<SVGPathElement>(null);
+  // Stable per plan: the plan interns nothing, but its slot objects live as long as it does, and it
+  // is rebuilt only when the document's shapes or connectors change.
+  const portalSlots = useEditorStore((state) => (edge?.portal ? portalPlan(state.document.nodes, state.document.edges).slotsFor(id) : undefined));
   // Just connected (or undone back, or added by someone else): drawn on once, source to target.
   // An undo or redo that changed this connector in place pulses it instead. See `useChangeFeedback.ts`.
   const arriving = useUiStore((state) => state.arrivingIds.has(id));
@@ -561,6 +629,11 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const routes = unmoved ? known.routes : transient ? computeEdgeRoutes(routeRequest) : edgeRoutes(routeRequest);
   if (!unmoved) LAST_ROUTES.set(id, { inputs: routeInputs, routes });
   const route = routes.request;
+  // Drawn as a portal (`edges/portal.ts`): two stubs and their words, and nothing between them. The
+  // route above is still worked out in full, so its ends attach exactly where the line's would.
+  const portal = portalSlots && !dragOverride
+    ? portalOf({ source: slotPoint(sourceRect, portalSlots.source), target: slotPoint(targetRect, portalSlots.target) }, edge, { source: portalName(committedSource), target: portalName(committedTarget) })
+    : null;
   // A label chip is far taller than the line's own lane nudge — extra
   // separation on top of it is what keeps parallel labels from stacking.
   const labelNudge = labelLaneOffset(route.source.side, route.target.side, laneOffset);
@@ -681,7 +754,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // exactly as precise as Clean regardless of how bold Sketch's wobble gets —
   // see the hit-path/decorative-path split further down.
   const profile = PERSONALITY_PROFILES[preset];
-  const styledPath = styledConnectorPath(route.d, edge, !transient);
+  const styledPath = portal ? portal.d : styledConnectorPath(route.d, edge, !transient);
   // Bundle members each draw the whole shared trunk, so they must wobble it
   // identically or it frays into a rope — see `strokeSeed`.
   const seed = strokeSeed(edge.id, route.trunkLabel ? spine : undefined);
@@ -693,9 +766,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // A gesture's frames each have a route no later frame repeats: wobbled, but never filed, so a long
   // drag can't push out the settled wobble of every other connector on screen.
   const keepWobble = !transient;
-  const drawnPath = bridgePath(connectorStrokePath(styledPath, `${seed}:0`, profile, keepWobble, crossings.length > 0), crossings);
+  // A portal's stubs are drawn as they are: two short straight lines have nothing to wobble or bridge.
+  const drawnPath = portal ? portal.d : bridgePath(connectorStrokePath(styledPath, `${seed}:0`, profile, keepWobble, crossings.length > 0), crossings);
   const secondStrokePath =
-    profile.strokes === 2
+    profile.strokes === 2 && !portal
       ? bridgePath(connectorStrokePath(styledPath, `${seed}:1`, profile, keepWobble, crossings.length > 0), crossings)
       : null;
   // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
@@ -717,7 +791,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // line rather than a whole new routing system. `responseRoute.target` therefore lands on the
   // *original source* node — that's what makes its `markerEnd` correctly point back at A; don't
   // "fix" the apparent reversal. See `responseLaneFor`'s own doc comment in `edges/routing.ts`.
-  const responseRoute = routes.response;
+  const responseRoute = portal ? null : routes.response;
   const responseDrawnPath = responseRoute
     ? connectorStrokePath(styledConnectorPath(responseRoute.d, edge, keepWobble), `${seed}${RESPONSE_SEED_SUFFIX}`, profile, keepWobble)
     : null;
@@ -760,6 +834,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-lens-member={lensMember ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
+      data-traced={traced ? 'true' : undefined}
+      data-portal={portal ? 'true' : undefined}
       data-arriving={arriving ? 'true' : undefined}
       data-changed={changed ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
@@ -806,12 +882,16 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       {hoverShown && (
         <path className="dc-edge-hover" d={drawnPath} fill="none" pointerEvents="none" stroke={theme.selection} strokeLinecap="round" />
       )}
+      <RouteMorph id={id} line={lineRef} styledPath={styledPath} still={transient || usesHandDrawnArrow || arriving} />
       <path
+        ref={lineRef}
         className="react-flow__edge-path dc-edge-line"
         d={drawnPath}
         fill="none"
         pointerEvents="none"
         markerEnd={edge.directed && !usesHandDrawnArrow ? markerRef(strokeColor, markerVariantForEdge(edge)) : undefined}
+        // Where a directed line leaves its shape: the origin dot. Mirrors `edges/describe.ts`.
+        markerStart={edge.directed && !usesHandDrawnArrow ? originRef(strokeColor) : undefined}
         style={{
           stroke: strokeColor,
           strokeWidth: Math.max(CONNECTOR_STYLE.lineWidth,
@@ -982,10 +1062,16 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
       {/* A small glyph at the path's midpoint — see the matching comment in
           `edges/describe.ts`. Only when nothing else already occupies that spot. */}
-      {!hasLabel && !badgeOverMidpoint && edge.kind === 'event' && (
+      {portal && (
+        <>
+          <circle className="dc-edge-portal-ring" cx={portal.out.ring.x} cy={portal.out.ring.y} r={PORTAL_RING} fill="none" stroke={strokeColor} strokeWidth={CONNECTOR_STYLE.openArrowWidth} />
+          <circle className="dc-edge-portal-ring" cx={portal.into.ring.x} cy={portal.into.ring.y} r={PORTAL_RING} fill="none" stroke={strokeColor} strokeWidth={CONNECTOR_STYLE.openArrowWidth} />
+        </>
+      )}
+      {!portal && !hasLabel && !badgeOverMidpoint && edge.kind === 'event' && (
         <circle cx={labelX} cy={labelY} r={3} fill={strokeColor} />
       )}
-      {!hasLabel && !badgeOverMidpoint && edge.kind === 'conditional' && (
+      {!portal && !hasLabel && !badgeOverMidpoint && edge.kind === 'conditional' && (
         <polygon
           points={`${labelX},${labelY - 5} ${labelX + 5},${labelY} ${labelX},${labelY + 5} ${labelX - 5},${labelY}`}
           fill={theme.edgeLabelBg}
@@ -1033,7 +1119,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       <EdgeLabels>
         {/* `display: contents` — no box of its own, so every chip below still positions against the
             label layer. It only tells `edgePick.ts` whose chip the pointer is on. */}
-        <div className="dc-edge-overlay" data-edge-overlay={edge.id}>
+        <div className="dc-edge-overlay" data-edge-overlay={edge.id} data-traced={traced ? 'true' : undefined}>
           {hovering && edge.compensationFor && (
             <RecoveryHoverTooltip parentId={edge.compensationFor} x={labelX} y={labelY} side={route.labelSide} />
           )}
@@ -1075,7 +1161,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
             `relationshipCaptionLabel`): the two-line shape says "this is a call", not what kind.
             Drawn up here with the labels, above every line, on the same quiet canvas-toned backing:
             in the connector's own SVG it sat under any line drawn after it, struck through. */}
-        {captionBox && captionLayout && (
+        {portal && (
+          <>
+            <PortalWords end={portal.out} jumpTo={targetRect} about={`Go to ${portalName(committedTarget)}`} dimmed={dimmed} />
+            <PortalWords end={portal.into} jumpTo={sourceRect} about={`Go to ${portalName(committedSource)}`} dimmed={dimmed} />
+          </>
+        )}
+        {!portal && captionBox && captionLayout && (
           <div
             className="dc-edge-caption"
             data-unusual={captionIsUnusual ? 'true' : undefined}
@@ -1096,7 +1188,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           </div>
         )}
 
-        {(hasLabel || editing) && !hidesOwnLabel && (
+        {!portal && (hasLabel || editing) && !hidesOwnLabel && (
           <div
             className="dc-edge-label"
             data-recovery-detail={recoveryLayout ? 'true' : undefined}
@@ -1179,7 +1271,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           its number and without this its step is invisible on screen — while `edges/describe.ts`
           drew it anyway, which is exactly the silent drift the two-renderer split risks.
         */}
-        {hasStep && (!hasLabel || hidesOwnLabel) && !editing && (
+        {!portal && hasStep && (!hasLabel || hidesOwnLabel) && !editing && (
           <div
             className="dc-edge-step"
             data-active={isActiveStep ? 'true' : undefined}
@@ -1197,7 +1289,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           </div>
         )}
 
-        {conditionText && (
+        {!portal && conditionText && (
           <div
             className="dc-edge-meta"
             data-dimmed={dimmed ? 'true' : undefined}
@@ -1248,7 +1340,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
         {/* The reply's own path and local direction anchor its label, paired with the request
             via responseLabelAnchor. Retained text stays hidden while the reply is off. */}
-        {responseLabel && edge.response && (
+        {!portal && responseLabel && edge.response && (
           <div
             className="dc-edge-response-label"
             data-revealed={responseRevealed ? 'true' : undefined}
@@ -1270,7 +1362,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         {/* Mounted only when there is something to reveal — no cost, no listeners, when an
             edge has no attachment. Stays mounted in presentation mode (click-to-reveal still
             works there); only pinning into edit mode is gated to edit mode, below. */}
-        {edge.attachments?.length && markRow?.attachments ? (
+        {!portal && edge.attachments?.length && markRow?.attachments ? (
           <AttachmentChipRow
             hostKind="edge"
             hostId={edge.id}
@@ -1286,7 +1378,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           />
         ) : null}
 
-        {openPointCenter && (
+        {!portal && openPointCenter && (
           <OpenPointMarker
             targetKind="edge"
             targetId={edge.id}
@@ -1356,7 +1448,7 @@ function EdgeEditHandles({
         oppositeNodeId={edge.source}
         onDrag={onDrag}
       />
-      {soleSelection && !reshaping && (
+      {soleSelection && !reshaping && !edge.portal && (
         <EdgeBendHandles edgeId={edge.id} routing={edge.routing} route={route} waypoints={waypoints} onPreview={onBendPreview} />
       )}
     </>

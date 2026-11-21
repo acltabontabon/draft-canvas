@@ -521,6 +521,26 @@
   display: contents;
 }
 
+/* Semantic zoom (`canvas/zoomBand.ts`): far out, the small print beside a line is too small to read
+   and only fogs the structure, so it steps back and the shapes and lines carry the picture; further
+   out still, so do the labels. Never while presenting, where the camera is the presenter's and the
+   words are the point, and never a chip someone is typing in. Canvas only: an export draws it all. */
+.dc-canvas:not([data-explain='on']) .react-flow[data-zoom-band] .dc-edge-overlay :is(.dc-edge-caption, .dc-edge-meta, .dc-edge-response-label, .dc-attachment-chip-row, .dc-edge-endpoint-hint):not(:focus-within),
+.dc-canvas:not([data-explain='on']) .react-flow[data-zoom-band='overview'] .dc-edge-overlay :is(.dc-edge-label, .dc-edge-step):not(:focus-within) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dc-edge-overlay :is(.dc-edge-caption, .dc-edge-meta, .dc-edge-response-label, .dc-attachment-chip-row, .dc-edge-label, .dc-edge-step) {
+  transition: opacity 160ms ease;
+}
+
+/* A route easing into place (`canvas/routeMorph.ts`): the stand-in for the line while it moves. */
+.dc-edge-morph {
+  fill: none;
+  pointer-events: none;
+}
+
 /* Hover: a soft wash of the selection colour beneath a slightly firmer line — "a click takes this
    one" — and deliberately short of selection's own colour, halo and handles. Fixed on screen. */
 .dc-edge-hover {
@@ -4091,6 +4111,37 @@
   height: 1px;
 }
 
+/* Make room (`canvas/useMakeRoom.ts`): the tool in hand shows as its cursor; its drag as the band of
+   room being opened, edged by the line everything past it is pushed from. */
+.dc-canvas[data-make-room] .react-flow__pane,
+.dc-canvas[data-make-room] .react-flow__node,
+.dc-canvas[data-make-room] .react-flow__edge {
+  cursor: crosshair;
+}
+
+.dc-canvas[data-make-room='x'] :is(.react-flow__pane, .react-flow__node, .react-flow__edge) {
+  cursor: col-resize;
+}
+
+.dc-canvas[data-make-room='y'] :is(.react-flow__pane, .react-flow__node, .react-flow__edge) {
+  cursor: row-resize;
+}
+
+.dc-make-room-band {
+  position: absolute;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--dc-selection) 9%, transparent);
+  pointer-events: none;
+}
+
+.dc-make-room-band[data-axis='x'] {
+  border-inline: calc(1px / var(--dc-zoom, 1)) dashed var(--dc-selection);
+}
+
+.dc-make-room-band[data-axis='y'] {
+  border-block: calc(1px / var(--dc-zoom, 1)) dashed var(--dc-selection);
+}
+
 /* A connector that now runs straight: the line it runs along, a little bolder than an edge guide. */
 .dc-guide[data-kind='connector'][data-axis='x'] {
   width: 2px;
@@ -5258,6 +5309,116 @@
 .dc-edge-meta[data-focus-dimmed='true'] {
   opacity: 0.22;
   transition: opacity 180ms ease;
+}
+
+/* -------------------------------------------------------------- legend --- */
+
+/* The legend (`canvas/CanvasLegend.tsx`): fixed in the pane's lower-left corner, above the status
+   bar, quiet enough to be ignored and near enough to be found. Never in the way of a drag. */
+.dc-canvas-legend {
+  position: absolute;
+  left: 14px;
+  bottom: 52px;
+  z-index: 5;
+  max-width: calc(100% - 28px);
+  padding: 6px 10px;
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: color-mix(in srgb, var(--dc-surface-raised) 88%, transparent);
+  pointer-events: none;
+}
+
+.dc-canvas-legend svg {
+  display: block;
+}
+
+/* -------------------------------------------------------------- portal --- */
+
+/*
+ * A connector drawn as a portal (`edges/portal.ts`): the words at each stub say where it goes, in the
+ * tone of a connector's own label, and a click travels there. Keep `font-size` equal to
+ * `TEXT_SIZES.edgeLabel`: the export lays the same words out with it.
+ */
+.dc-edge-portal-label {
+  position: absolute;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--dc-radius-xs);
+  background: color-mix(in srgb, var(--dc-canvas) 82%, transparent);
+  color: var(--dc-edge-text);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  pointer-events: all;
+  cursor: pointer;
+  transition: color 120ms ease, opacity 160ms ease;
+}
+
+.dc-edge-portal-label:hover,
+.dc-edge-portal-label:focus-visible {
+  color: var(--dc-selection);
+  outline: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dc-edge-portal-label[data-dimmed='true'] {
+  opacity: 0.3;
+}
+
+/* ---------------------------------------------------------------- held --- */
+
+/*
+ * A shape held in place (`DraftNode.held`): a small pin at its top-left corner, so what Arrange and
+ * Tidy up will leave alone can be seen before running either. Editor chrome, never exported — being
+ * held is a note to the layout, not part of the diagram. Quiet until the shape is hovered or selected.
+ */
+.dc-node[data-held='true']::before {
+  content: '';
+  position: absolute;
+  top: -7px;
+  left: -7px;
+  z-index: 2;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 50% 50%, var(--dc-canvas, var(--dc-bg)) 0 2px, transparent 2.5px),
+    var(--dc-text-muted);
+  box-shadow: 0 0 0 2px var(--dc-canvas, var(--dc-bg));
+  opacity: 0.7;
+  pointer-events: none;
+  transition: opacity 120ms ease, background-color 120ms ease;
+}
+
+.react-flow__node:hover .dc-node[data-held='true']::before,
+.react-flow__node.selected .dc-node[data-held='true']::before {
+  background:
+    radial-gradient(circle at 50% 50%, var(--dc-canvas, var(--dc-bg)) 0 2px, transparent 2.5px),
+    var(--dc-selection);
+  opacity: 1;
+}
+
+/* --------------------------------------------------------------- trace --- */
+
+/*
+ * Shift resting on a shape (`canvas/useHoverTrace.ts`): what its data comes from and what it feeds
+ * stays as drawn, and everything else steps back. Only members carry an attribute, so starting or
+ * ending a trace re-renders the handful of shapes on the path and never the whole diagram.
+ */
+.dc-canvas[data-trace='on'] .react-flow__node:not(:has(.dc-node[data-traced='true'])) {
+  opacity: 0.28;
+  filter: grayscale(0.5);
+  transition: opacity 160ms ease, filter 160ms ease;
+}
+
+.dc-canvas[data-trace='on'] .dc-edge:not([data-traced='true']),
+.dc-canvas[data-trace='on'] .dc-edge-overlay:not([data-traced='true']) > * {
+  opacity: 0.18;
+  transition: opacity 160ms ease;
 }
 
 /* ---------------------------------------------------------------- lens --- */

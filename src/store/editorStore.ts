@@ -143,6 +143,8 @@ import { inferRelationshipThroughJunctions, reinferIfEligible } from '../documen
 import { plainShortcut } from '../lib/platform';
 import { technologyKindPatch } from '../document/technologyKind';
 import { lineageOf } from '../document/dataFlow';
+import { makeRoom as makeRoomOp, type RoomPush } from '../document/makeRoom';
+import { fixedIds } from '../document/held';
 import { replicasField, splitReplicaCount } from '../document/replicas';
 import { CONVERTIBLE_TYPE_NAMES, convertNodeType, isConvertibleType, type ConvertibleType } from '../document/convert';
 import { bridgeProblems, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
@@ -437,7 +439,7 @@ export interface EditorStore {
   /** The shape a drawing became, back to the drawing. */
   revertInkShape: (nodeId: string, strokes: readonly DraftInk[]) => void;
   /** Turns strokes into a connector between two shapes, as one undo step. Returns its id, or null. */
-  inkToConnector: (strokeIds: readonly string[], source: string, target: string, directed: boolean) => string | null;
+  inkToConnector: (strokeIds: readonly string[], source: string, target: string, directed: boolean, via?: readonly DraftPoint[]) => string | null;
   /** One undoable bulk add. `flows` (a starter's predefined walkthroughs) join the same entry, so
    *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. False
    *  (and nothing added) when the result would pass the document limits. */
@@ -554,6 +556,9 @@ export interface EditorStore {
   /** Free-text condition chip, e.g. "approved" — display only, never evaluated. */
   /** How often a connector moves its data ("hourly"); empty clears it. */
   setEdgeCadence: (id: string, cadence: string | undefined) => void;
+  /** Draws connectors as portals (a labelled stub at each end, `DraftEdge.portal`) or as lines
+   *  again. One undo step; `false` when nothing changed. */
+  setEdgesPortal: (ids: readonly string[], portal: boolean) => boolean;
   /** Spotlights everything `nodeId`'s data comes from and everything it feeds (`lineageOf`). */
   showLineage: (nodeId: string) => void;
   setEdgeCondition: (id: string, condition: string) => void;
@@ -708,6 +713,12 @@ export interface EditorStore {
    *  what is visibly inside. One write, because every write re-derives the whole diagram's routing
    *  and crossings, and doing that twice per drop was the largest part of its cost. */
   commitMove: (positions: Map<string, { x: number; y: number }>, movedIds: Iterable<string>) => void;
+  /** Holds the selected shapes in place (`DraftNode.held`), or lets them go: Arrange and Tidy up
+   *  leave a held shape where it is. One undo step; `false` when nothing changed. */
+  holdSelection: (held: boolean) => boolean;
+  /** One frame of the Make room drag: `base` (the room as the drag found it) with everything past
+   *  the line moved by `push.delta`. Inside the drag's interaction, so the whole drag is one step. */
+  pushRoom: (base: DraftDocument, push: RoomPush) => void;
   /** A resize handle let go: the new box, with membership following (see `reconcileAfterResize`). */
   resizeNode: (id: string, box: { x?: number; y?: number; width: number; height: number }) => void;
   /** Explicitly expand saved or manually resized architecture labels, as one undoable change. */
@@ -1835,7 +1846,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Back to sketch', (doc) => addInk(removeElements(doc, [nodeId], []), strokes), { selection: EMPTY_SELECTION });
   },
 
-  inkToConnector(strokeIds, source, target, directed) {
+  inkToConnector(strokeIds, source, target, directed, via) {
     const state = get();
     const sourceNode = state.document.nodes.find((n) => n.id === source);
     const targetNode = state.document.nodes.find((n) => n.id === target);
@@ -1858,7 +1869,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       async: relationship?.async,
       semanticsOrigin: relationship ? 'inferred' : undefined,
     });
-    state.apply(directed ? 'Draw connector' : 'Draw line', (doc) => addEdges(removeInk(doc, strokeIds), [edge]), { selection: EMPTY_SELECTION });
+    // A path drawn by hand between the two is the route the person asked for: its corners are kept
+    // as the connector's bends, exactly as if they had been dragged there.
+    state.apply(
+      directed ? 'Draw connector' : 'Draw line',
+      (doc) => {
+        const drawn = addEdges(removeInk(doc, strokeIds), [edge]);
+        return via?.length ? setEdgeWaypointsOp(drawn, edge.id, via) : drawn;
+      },
+      { selection: EMPTY_SELECTION },
+    );
     return get().document.edges.some((e) => e.id === edge.id) ? edge.id : null;
   },
 
@@ -2466,6 +2486,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Set cadence', (doc) => updateEdge(doc, id, { cadence: value }), { coalesceKey: `edge-cadence:${id}` });
   },
 
+  setEdgesPortal(ids, portal) {
+    const wanted = new Set(ids);
+    let changed = false;
+    get().apply(portal ? 'Draw as portal' : 'Draw as line', (doc) => {
+      const edges = doc.edges.map((edge) => {
+        if (!wanted.has(edge.id) || Boolean(edge.portal) === portal) return edge;
+        changed = true;
+        if (portal) return { ...edge, portal: true };
+        const { portal: _portal, ...line } = edge;
+        return line;
+      });
+      return changed ? { ...doc, edges } : doc;
+    });
+    return changed;
+  },
+
   showLineage(nodeId) {
     const { nodeIds, edgeIds } = lineageOf(get().document, nodeId);
     get().enterFocus(nodeIds, edgeIds);
@@ -2579,6 +2615,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       scoped: Boolean(scope),
       partial: result.plan.partial,
       sketches: inkOf(current.document).length,
+      ...(result.plan.held ? { held: result.plan.held } : {}),
     };
   },
 
@@ -2620,6 +2657,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       partial: plan.partial,
       alternativeSkipped: plan.alternativeSkipped,
       sketches: inkOf(current.document).length,
+      crossings: plan.crossings,
+      ...(plan.held ? { held: plan.held } : {}),
+      ...(plan.followed ? { followed: plan.followed } : {}),
     };
   },
 
@@ -2797,6 +2837,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   commitPositions(positions) {
     get().apply('Move', (doc) => moveNodes(doc, positions));
+  },
+
+  holdSelection(held) {
+    const { selection, apply } = get();
+    const ids = new Set(selection.nodes);
+    if (ids.size === 0) return false;
+    let changed = false;
+    apply(held ? 'Hold in place' : 'Let go', (doc) => {
+      const nodes = doc.nodes.map((node) => {
+        if (!ids.has(node.id) || Boolean(node.held) === held) return node;
+        changed = true;
+        if (held) return { ...node, held: true };
+        const { held: _held, ...free } = node;
+        return free;
+      });
+      return changed ? { ...doc, nodes } : doc;
+    });
+    return changed;
+  },
+
+  pushRoom(base, push) {
+    get().apply('Make room', () => makeRoomOp(base, push));
   },
 
   commitMove(positions, movedIds) {
@@ -3081,9 +3143,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   straighten() {
     if (interaction) return false;
     const { selection, apply } = get();
-    const movable = selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
+    const chosen = selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
     let moved = false;
     apply('Straighten', (doc) => {
+      // A held shape is never nudged, selected or not.
+      const fixed = fixedIds(doc.nodes);
+      const movable = fixed.size > 0 ? new Set([...(chosen ?? doc.nodes.map((node) => node.id))].filter((id) => !fixed.has(id))) : chosen;
       const next = straightenConnectors(doc, movable);
       moved = next !== doc;
       return next;

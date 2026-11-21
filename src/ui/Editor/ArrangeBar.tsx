@@ -9,7 +9,8 @@ import { useUiStore, type ArrangeDirection, type ArrangePreview, type ArrangeSho
 import { Button } from '../common/Button';
 import { LayoutNotes } from './LayoutBusyBar';
 import { SegmentedControl } from '../common/SegmentedControl';
-import { directionNote, fixesNote, layoutNotes, movesNote, readsAs } from './arrangeSummary';
+import { startArrange } from '../../commands/arrange';
+import { crossingsNote, directionNote, fixesNote, layoutNotes, movesNote, readsAs } from './arrangeSummary';
 
 const DIRECTIONS: { value: ArrangeDirection; label: string; name: string }[] = [
   { value: 'right', label: 'Across →', name: 'Across, left to right' },
@@ -139,6 +140,9 @@ export function ArrangeBar() {
   const choices = DIRECTIONS.filter((d) => preview.options[d.value]);
   const fixed = fixesNote(preview.fixes?.[preview.direction]);
   const notes = layoutNotes(preview, 'arrange');
+  const crossings = crossingsNote(preview);
+  // The whole room only: a selection reads the way the view around it does, with no line of its own.
+  const flows = preview.scoped ? [] : document.flows.filter((flow) => flow.steps.some((step) => step.edgeId));
 
   return (
     <Fragment>
@@ -147,6 +151,7 @@ export function ArrangeBar() {
           <strong>{preview.scoped ? 'Arrange selection' : 'Arrange'}</strong>
           {choices.length < 2 && <span className="dc-tidy-bar-summary">{readsAs(preview.direction)}</span>}
           {moves && <span className="dc-tidy-bar-summary">{moves}</span>}
+          {crossings && <span className="dc-tidy-bar-summary" title="Places where two connectors cross, now and after">{crossings}</span>}
           {/* Only what this arrangement resolves, marked in teal on the sheet. */}
           {fixed && <span className="dc-tidy-bar-summary dc-arrange-bar-fixes" title={fixed}>{fixed}</span>}
         </span>
@@ -164,6 +169,25 @@ export function ArrangeBar() {
             />
             <span className="dc-tidy-bar-summary">{directionNote(preview)}</span>
           </span>
+        )}
+        {flows.length > 0 && (
+          <label className="dc-arrange-bar-follow" title="Lay one flow out in a straight line, with the rest around it">
+            <span>Follow</span>
+            <select
+              aria-label="Flow to lay out in a straight line"
+              value={preview.followed ?? ''}
+              onChange={(event) => {
+                const flow = event.target.value;
+                // Worked out again from the same room: the preview stays up until the new one replaces it.
+                void startArrange(flow ? { preset: { primaryFlow: flow } } : {});
+              }}
+            >
+              <option value="">No flow</option>
+              {flows.map((flow) => (
+                <option key={flow.id} value={flow.id}>{flow.title}</option>
+              ))}
+            </select>
+          </label>
         )}
         <SegmentedControl
           name="arrange-show"

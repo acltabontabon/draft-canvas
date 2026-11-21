@@ -20,7 +20,7 @@ export function markerRef(color: string, variant: MarkerVariant = 'closed'): str
 export function headPath(variant: MarkerVariant, seed: string, amplitude = 0): string {
   return connectorHead(variant === 'open').replace(/(-?\d*\.?\d+) (-?\d*\.?\d+)/g, (_, sx, sy) => {
     const x = Number(sx), y = Number(sy);
-    if (x === 14 && y === 5) return '14 5';
+    if (x === CONNECTOR_STYLE.arrowLength && y === CONNECTOR_STYLE.arrowWidth / 2) return `${x} ${y}`;
     return `${x + jitter(seed, x * 20 + y * 2, amplitude)} ${y + jitter(seed, x * 20 + y * 2 + 1, amplitude)}`;
   });
 }
@@ -48,8 +48,38 @@ function arrowMarker(color: string, variant: MarkerVariant, amplitude: number): 
   })]);
 }
 
+function originId(color: string): string {
+  return scopedId(`dc-origin-${color.replace(/[^a-zA-Z0-9]/g, '')}`);
+}
+
+/** The dot a directed connector starts from (`CONNECTOR_STYLE.originRadius`), as a `marker-start`. */
+export function originRef(color: string): string {
+  return `url(#${originId(color)})`;
+}
+
+/**
+ * A start marker is turned to face back down the line (`auto-start-reverse`), so its own +x points
+ * into the shape: the dot is drawn at −x, which puts it on the line just clear of the shape's edge
+ * rather than half under it.
+ */
+function originMarker(color: string): SvgEl {
+  const { originRadius: r, originGap: gap } = CONNECTOR_STYLE;
+  const reach = gap + r + 0.5;
+  return el('marker', {
+    id: originId(color),
+    viewBox: `${-reach} ${-r - 0.5} ${reach + 0.5} ${r * 2 + 1}`,
+    refX: 0,
+    refY: 0,
+    markerWidth: reach + 0.5,
+    markerHeight: r * 2 + 1,
+    markerUnits: 'userSpaceOnUse',
+    orient: 'auto-start-reverse',
+  }, [el('circle', { cx: -gap, cy: 0, r, fill: color })]);
+}
+
 export function markerDefs(colors: Iterable<string>, arrowJitter = 0): SvgEl[] {
-  return [...new Set(colors)].flatMap(color =>
-    (['closed', 'open'] as const).map(variant => arrowMarker(color, variant, arrowJitter)),
-  );
+  return [...new Set(colors)].flatMap(color => [
+    ...(['closed', 'open'] as const).map(variant => arrowMarker(color, variant, arrowJitter)),
+    originMarker(color),
+  ]);
 }
