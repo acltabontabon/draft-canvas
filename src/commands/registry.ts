@@ -744,6 +744,18 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       },
     });
   }
+  // Room for one more shape in the middle of a finished diagram, without dragging half of it over
+  // by hand: only worth offering once there is something to push.
+  if (!ctx.ui.readOnly && ctx.editor.document.nodes.length > 1) {
+    commands.push({
+      id: 'make-room',
+      title: 'Make room',
+      group: 'canvas',
+      keywords: ['space', 'insert space', 'push', 'spread', 'gap', 'open up', 'close gap', 'shove', 'room'],
+      hint: 'Then drag across or down: everything past the pointer moves away, or back',
+      run: (inner) => inner.ui.setMakeRoom({ line: null }),
+    });
+  }
   if (!ctx.ui.readOnly && arrangeable) {
     commands.push({
       id: 'arrange',

@@ -81,6 +81,7 @@ import {
 } from './projection';
 import { sameGuides, type Guide } from './snapping';
 import { NO_DRAG_SNAP, NO_GUIDES, snapChanges, snapResizeChanges, type DragLink, type DragSnapContext, type NodeLookup } from './dragSnap';
+import { useMakeRoom } from './useMakeRoom';
 import { useHoverTrace } from './useHoverTrace';
 import { zoomBand } from './zoomBand';
 import { snapBypassed, trackSnapBypass } from './snapBypass';
@@ -300,6 +301,18 @@ const ZOOM_VARIABLE_SETTLE_MS = 140;
  * layer is dropped for a zoom and comes back once it holds still. An attribute only restyles the one
  * element its selector names, unlike the inherited `--dc-zoom`.
  */
+/** How far past the diagram the Make room line runs: beyond any view, without a size no browser draws. */
+const ROOM_LINE_REACH = 200_000;
+
+const MakeRoomLine = memo(function MakeRoomLine({ line }: { line: { axis: 'x' | 'y'; at: number; delta: number } }) {
+  const from = Math.min(line.at, line.at + line.delta);
+  const span = Math.abs(line.delta);
+  const style: CSSProperties = line.axis === 'x'
+    ? { left: from, top: -ROOM_LINE_REACH, width: span, height: ROOM_LINE_REACH * 2 }
+    : { top: from, left: -ROOM_LINE_REACH, height: span, width: ROOM_LINE_REACH * 2 };
+  return <div className="dc-make-room-band" data-axis={line.axis} data-closing={line.delta < 0 ? 'true' : undefined} style={style} />;
+});
+
 function useZoomVariable() {
   const storeApi = useStoreApi();
   useEffect(() => {
@@ -573,6 +586,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
   useZoomVariable();
   useHoverTrace(mode === 'edit');
+  useMakeRoom(paneRef);
+  const makeRoomLine = useUiStore((state) => state.makeRoom?.line ?? null);
+  const makingRoom = useUiStore((state) => state.makeRoom !== null);
   useChangeFeedback();
 
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -2252,6 +2268,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       data-explain-stage={explainOverview ? 'overview' : undefined}
       data-focus={focusActive ? 'on' : undefined}
       data-trace={traceActive ? 'on' : undefined}
+      data-make-room={makingRoom ? (makeRoomLine?.axis ?? 'armed') : undefined}
       data-lens={lensActive ? 'on' : undefined}
       data-traffic={trafficActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}
@@ -2405,6 +2422,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             including across a mode switch mid-gesture.
           */}
           {interactive && <GuideLines guides={guides} />}
+          {/* Make room: the line everything past is pushed from, and the band of room made (or closed). */}
+          {makeRoomLine && <MakeRoomLine line={makeRoomLine} />}
 
           {/* Where deleted shapes and connectors fade (`changeMotion.ts` fills it, imperatively and
               briefly). React renders it empty and never touches what is put inside. */}

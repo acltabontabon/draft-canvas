@@ -641,6 +641,12 @@ export interface UiStore {
    */
   traceIds: ReadonlySet<string> | null;
   /**
+   * The Make room tool in hand (`canvas/useMakeRoom.ts`), and while its one drag is under way the
+   * line it pushes from and how far: what the canvas draws as its guide. `null` when put down.
+   * Transient: never saved, undone or exported.
+   */
+  makeRoom: { line: { axis: 'x' | 'y'; at: number; delta: number } | null } | null;
+  /**
    * The id of a document that has just arrived and still needs its opening viewport computed —
    * set once as it arrives (see `arriveWith` in `useDocumentSession.ts`) for a genuine new open,
    * never for reopening the canvas already on screen or for a freshly created one (which already
@@ -840,6 +846,7 @@ export interface UiStore {
   setJumpFlashId: (id: string | null) => void;
   setPointedIds: (ids: ReadonlySet<string> | null) => void;
   setTraceIds: (ids: ReadonlySet<string> | null) => void;
+  setMakeRoom: (makeRoom: UiStore['makeRoom']) => void;
   /** Marks `documentId` as just arrived and awaiting its opening viewport fit. */
   requestOpenFit: (documentId: string) => void;
   /** Consumes the pending fit for `documentId` — a no-op if a newer request has already replaced
@@ -949,7 +956,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setFlowTrace: (flowTrace) => set({ flowTrace }),
   armed: null,
   pencil: null,
-  setPencil: (pencil) => set((state) => ({ pencil, armed: pencil ? null : state.armed, spliceArmedEdgeTarget: pencil ? null : state.spliceArmedEdgeTarget })),
+  setPencil: (pencil) => set((state) => ({ pencil, armed: pencil ? null : state.armed, makeRoom: pencil ? null : state.makeRoom, spliceArmedEdgeTarget: pencil ? null : state.spliceArmedEdgeTarget })),
   inkPrefs: readInkPrefs(),
   setInkPrefs: (patch) =>
     set((state) => {
@@ -1021,6 +1028,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   jumpFlashId: null,
   pointedIds: null,
   traceIds: null,
+  makeRoom: null,
   openFitDocumentId: null,
   continuation: null,
   agentPreview: null,
@@ -1050,7 +1058,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
   // A connector a placed shape would have gone into is not one any more once the tool changes.
   // Picking up a shape tool puts the Pencil down; putting a shape tool down (`null`) leaves it be.
-  arm: (armed) => set((state) => ({ armed, spliceArmedEdgeTarget: null, pencil: armed ? null : state.pencil })),
+  arm: (armed) => set((state) => ({ armed, spliceArmedEdgeTarget: null, pencil: armed ? null : state.pencil, makeRoom: armed ? null : state.makeRoom })),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setFindReplaceOpen: (findReplaceOpen) => set({ findReplaceOpen }),
   requestFit: () => set((state) => ({ fitRequestId: state.fitRequestId + 1 })),
@@ -1228,6 +1236,8 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
   setPointedIds: (pointedIds) => set((state) => (state.pointedIds === pointedIds ? state : { pointedIds })),
   setTraceIds: (traceIds) => set((state) => (state.traceIds === traceIds ? state : { traceIds })),
+  // Taking the tool up puts down whatever else was in hand: one tool owns the pointer at a time.
+  setMakeRoom: (makeRoom) => set((state) => (makeRoom && !state.makeRoom ? { makeRoom, armed: null, pencil: null, spliceArmedEdgeTarget: null } : { makeRoom })),
   requestOpenFit: (documentId) => set({ openFitDocumentId: documentId }),
   clearOpenFit: (documentId) =>
     set((state) => (state.openFitDocumentId === documentId ? { openFitDocumentId: null } : state)),

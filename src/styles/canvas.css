@@ -4111,6 +4111,37 @@
   height: 1px;
 }
 
+/* Make room (`canvas/useMakeRoom.ts`): the tool in hand shows as its cursor; its drag as the band of
+   room being opened, edged by the line everything past it is pushed from. */
+.dc-canvas[data-make-room] .react-flow__pane,
+.dc-canvas[data-make-room] .react-flow__node,
+.dc-canvas[data-make-room] .react-flow__edge {
+  cursor: crosshair;
+}
+
+.dc-canvas[data-make-room='x'] :is(.react-flow__pane, .react-flow__node, .react-flow__edge) {
+  cursor: col-resize;
+}
+
+.dc-canvas[data-make-room='y'] :is(.react-flow__pane, .react-flow__node, .react-flow__edge) {
+  cursor: row-resize;
+}
+
+.dc-make-room-band {
+  position: absolute;
+  box-sizing: border-box;
+  background: color-mix(in srgb, var(--dc-selection) 9%, transparent);
+  pointer-events: none;
+}
+
+.dc-make-room-band[data-axis='x'] {
+  border-inline: calc(1px / var(--dc-zoom, 1)) dashed var(--dc-selection);
+}
+
+.dc-make-room-band[data-axis='y'] {
+  border-block: calc(1px / var(--dc-zoom, 1)) dashed var(--dc-selection);
+}
+
 /* A connector that now runs straight: the line it runs along, a little bolder than an edge guide. */
 .dc-guide[data-kind='connector'][data-axis='x'] {
   width: 2px;

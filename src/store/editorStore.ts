@@ -143,6 +143,7 @@ import { inferRelationshipThroughJunctions, reinferIfEligible } from '../documen
 import { plainShortcut } from '../lib/platform';
 import { technologyKindPatch } from '../document/technologyKind';
 import { lineageOf } from '../document/dataFlow';
+import { makeRoom as makeRoomOp, type RoomPush } from '../document/makeRoom';
 import { replicasField, splitReplicaCount } from '../document/replicas';
 import { CONVERTIBLE_TYPE_NAMES, convertNodeType, isConvertibleType, type ConvertibleType } from '../document/convert';
 import { bridgeProblems, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
@@ -708,6 +709,9 @@ export interface EditorStore {
    *  what is visibly inside. One write, because every write re-derives the whole diagram's routing
    *  and crossings, and doing that twice per drop was the largest part of its cost. */
   commitMove: (positions: Map<string, { x: number; y: number }>, movedIds: Iterable<string>) => void;
+  /** One frame of the Make room drag: `base` (the room as the drag found it) with everything past
+   *  the line moved by `push.delta`. Inside the drag's interaction, so the whole drag is one step. */
+  pushRoom: (base: DraftDocument, push: RoomPush) => void;
   /** A resize handle let go: the new box, with membership following (see `reconcileAfterResize`). */
   resizeNode: (id: string, box: { x?: number; y?: number; width: number; height: number }) => void;
   /** Explicitly expand saved or manually resized architecture labels, as one undoable change. */
@@ -2808,6 +2812,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   commitPositions(positions) {
     get().apply('Move', (doc) => moveNodes(doc, positions));
+  },
+
+  pushRoom(base, push) {
+    get().apply('Make room', () => makeRoomOp(base, push));
   },
 
   commitMove(positions, movedIds) {
