@@ -49,7 +49,7 @@ type Sized = { width: number; height: number; type?: string };
 /** The scale a box asks for before any growth: the older rule, which saved diagrams depend on. */
 function unitScale(node: Sized): number {
   const scale = Math.max(1, Math.min(node.width / DS_UNIT_WIDTH, node.height / DS_UNIT_HEIGHT));
-  return node.type === 'service' ? Math.min(scale, SERVICE_GLYPH_SCALE) : scale;
+  return node.type === 'service' || node.type === 'component' ? Math.min(scale, SERVICE_GLYPH_SCALE) : scale;
 }
 
 /**
@@ -120,4 +120,28 @@ export function artifactGlyphBounds(node: { x: number; y: number; width: number;
  */
 export function isGlyphServiceKind(kind: string | undefined): boolean {
   return kind !== undefined && kind !== 'generic' && kind !== 'api';
+}
+
+/**
+ * The Component kinds drawn the same way: every kind but Generic. A Module, an Adapter and a Port
+ * were one box with a different small mark on its edge, told apart mostly by the word in the
+ * corner; each is now the thing it is, in the Service glyphs' arrangement and at their size.
+ */
+export function isGlyphComponentKind(kind: string | undefined): boolean {
+  return kind === 'module' || kind === 'adapter' || kind === 'port';
+}
+
+/** A shape's kind within its own family, whichever family that is: what the two tests above read. */
+export function familyKindOf(node: { serviceKind?: string; componentKind?: string; type?: string }): string | undefined {
+  return node.type === 'component' ? node.componentKind : node.serviceKind;
+}
+
+/** Whether a Service or a Component of this kind is drawn as a glyph with its name underneath. */
+export function isGlyphKind(type: string | undefined, kind: string | undefined): boolean {
+  return (type === 'service' && isGlyphServiceKind(kind)) || (type === 'component' && isGlyphComponentKind(kind));
+}
+
+/** The same test for a whole shape. */
+export function isGlyphShape(node: { type?: string; serviceKind?: string; componentKind?: string }): boolean {
+  return isGlyphKind(node.type, familyKindOf(node));
 }

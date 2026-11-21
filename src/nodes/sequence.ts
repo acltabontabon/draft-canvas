@@ -12,6 +12,7 @@
  * dashed line with an open one; a created participant's head sits on the message that creates it,
  * and a destroyed one's lifeline ends in a cross.
  */
+import { familyKindOf } from '../document/dataStoreGeometry';
 import { ATTACHMENT_CHIP_GAP, ATTACHMENT_CHIP_HEIGHT, attachmentChipRowWidth, describeAttachmentChips, namedAttachmentChipWidths } from '../edges/attachmentChips';
 import { minSizeFor } from '../document/factory';
 import { messagesOf, sequenceOf } from '../document/sequenceModel';
@@ -61,7 +62,7 @@ const HEAD_MAX_HEIGHT = 132;
 
 /** The shape a participant's head is: an architecture shape with the participant's identity. */
 export function headNode(host: Pick<DraftNode, 'id'>, participant: SeqParticipant, size?: { width: number; height: number }): DraftNode {
-  const floor = minSizeFor(participant.type, participant.serviceKind);
+  const floor = minSizeFor(participant.type, familyKindOf(participant));
   // A queue with a name needs the taller box that holds the name under its tube (`DEFAULTS.queueNamedHeight`).
   const height = participant.type === 'queue' && participant.name.trim() ? 72 : floor.height;
   const node: DraftNode = {

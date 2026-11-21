@@ -1,3 +1,4 @@
+import { familyKindOf } from '../document/dataStoreGeometry';
 import { continuationsFor, materialize, type Continuation, type FragmentNodeSpec, type MaterializedContinuation } from '../continuation';
 import { createEdge, defaultSizeFor } from '../document/factory';
 import { addNodes, clearSpotNear, placeNear } from '../document/operations';
@@ -82,7 +83,7 @@ function representsPreset(item: QuickConnectItem, preset: Preset): boolean {
  */
 export function offerFor(doc: DraftDocument, state: QuickConnectState, item: QuickConnectItem): ContinuationOffer | undefined {
   if (!state.source) return undefined;
-  const size = defaultSizeFor(item.node.type, item.node.serviceKind);
+  const size = defaultSizeFor(item.node.type, familyKindOf(item.node));
   const dropped = state.center
     ? { x: state.center.x - size.width / 2, y: state.center.y - size.height / 2 }
     : state.flowPosition;

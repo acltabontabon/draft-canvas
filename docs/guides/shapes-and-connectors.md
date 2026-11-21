@@ -44,10 +44,14 @@ Balancer** one address fanning out to identical instances; a **Proxy** two plate
 ending at one and another leaving the other, forward or reverse; a **Worker** a trace, the short
 span of the request and the long one of the job it started; a **Scheduler** a page of time slots;
 an **External** system a block inside a dashed boundary. Gateway, Load Balancer and Proxy all
-route. An **Artifact** is something read,
+route. A plain **Component** is a card too; a **Module** is a block with two lugs
+through its edge, a **Port** a ball on a stem, and an **Adapter** the cup that ball sits in, with a
+different end on its far side. An **Artifact** is something read,
 mounted or presented rather than run: draw one when the config, secret or certificate is part of
 what you are explaining. For a sidecar, put the service and a Proxy inside a Boundary (`pod` in the
 shape picker gives one).
+
+![A plain Component as a card, then a Module, a Port and an Adapter as glyphs; below, a use case using a port that a Postgres adapter implements.](../media/guides/component-kinds.png)
 
 Use **External** for a service you don't own. **Actor frame → Framed** outlines an actor. Drag a
 corner handle to resize; Actor, Queue and Data Store artwork grows with the box.

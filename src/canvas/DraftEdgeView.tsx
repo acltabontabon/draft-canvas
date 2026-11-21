@@ -402,6 +402,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // With the type, what a Service is drawn as: a Worker's connectors meet its glyph, not its box.
   const sourceServiceKind = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.serviceKind);
   const targetServiceKind = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.serviceKind);
+  const sourceComponentKind = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.componentKind);
+  const targetComponentKind = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.componentKind);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
   /** A dragged, unconnected shape would go into the middle of this connector on drop. Tinted like
    *  an attach target, with no landing dot: the shape lands where it is, not at the label point. */
@@ -553,8 +555,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
   if (!edge || !sourceNode || !targetNode) return null;
 
-  const sourceRect = rectOfInternal(sourceNode, sourceType && { type: sourceType, serviceKind: sourceServiceKind });
-  const targetRect = rectOfInternal(targetNode, targetType && { type: targetType, serviceKind: targetServiceKind });
+  const sourceRect = rectOfInternal(sourceNode, sourceType && { type: sourceType, serviceKind: sourceServiceKind, componentKind: sourceComponentKind });
+  const targetRect = rectOfInternal(targetNode, targetType && { type: targetType, serviceKind: targetServiceKind, componentKind: targetComponentKind });
   if (!sourceRect || !targetRect) return null;
 
   // While an endpoint is being dragged, the path tracks the live pointer
@@ -586,6 +588,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     targetType,
     sourceServiceKind,
     targetServiceKind,
+    sourceComponentKind,
+    targetComponentKind,
     dragOverride,
     bendPreview,
     committedSource,

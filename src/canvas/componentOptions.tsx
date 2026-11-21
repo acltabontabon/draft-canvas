@@ -1,15 +1,14 @@
+import { isGlyphComponentKind } from '../document/dataStoreGeometry';
 import { COMPONENT_KINDS } from '../document/types';
 import { COMPONENT_KIND_OPTION_LABELS } from '../lib/nodeKindLabels';
 import { shapeVariantOptions } from './shapeVariantOptions';
 
-/** The Component kind picker's shared option list — see `dataStoreOptions.tsx`. Every kind draws
- *  identically (`nodes/describe.ts`'s `component()` — only the corner caption differs, and
- *  `generic` gets none), unlike Service/Database's genuinely distinct per-kind silhouettes, so this
- *  list previews as three copies of the same box with a different tiny tag. That's intentional, not
- *  a gap to fill in later — see `component()`'s own doc comment. */
+/** The Component kind picker's shared option list — see `dataStoreOptions.tsx`. */
 export const COMPONENT_ICON_OPTIONS = shapeVariantOptions(
   'component',
   COMPONENT_KINDS,
   COMPONENT_KIND_OPTION_LABELS,
   (kind) => ({ componentKind: kind }),
+  // As for the Service glyph kinds: a box that hugs the glyph (`serviceOptions.tsx`).
+  { sizeFor: (kind) => (isGlyphComponentKind(kind) ? { width: 78, height: 60 } : undefined) },
 );

@@ -3,6 +3,7 @@ import { parseDocument } from '../src/document/validate';
 import { CURRENT_VERSION, DRAFT_FORMAT } from '../src/document/types';
 import { chooseSides } from '../src/edges/routing';
 import { migrateToCurrent } from '../src/document/migrate';
+import { anchorBandOf } from '../src/document/queueGeometry';
 
 /**
  * The v2→v3 migration: existing documents have no concept of a connector
@@ -963,5 +964,61 @@ describe('v16 to v17 migration does not mutate its input', () => {
     expect(JSON.stringify(raw)).toBe(before);
     const nodes = doc.nodes as { attachments?: { text: string }[] }[];
     expect(nodes[0]!.attachments?.[0]?.text).toBe('Action: Do it');
+  });
+});
+
+describe('v30 to v31 migration: Module, Adapter and Port become glyphs', () => {
+  const v30 = (nodes: unknown[]) => ({
+    format: DRAFT_FORMAT,
+    version: 30,
+    metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0 },
+    nodes,
+    edges: [],
+    settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
+    flows: [],
+  });
+  const open = (nodes: unknown[]) => {
+    const result = parseDocument(JSON.stringify(v30(nodes)));
+    if (!result.ok) throw new Error('did not open');
+    return result.document;
+  };
+
+  it('grows each to the height its glyph and name need, with the glyph where the box was', () => {
+    const doc = open([
+      { id: 'p', type: 'component', componentKind: 'port', x: 100, y: 100, width: 152, height: 56, z: 0, text: 'Inbound' },
+      { id: 'a', type: 'component', componentKind: 'adapter', x: 400, y: 100, width: 152, height: 56, z: 0, text: 'HTTP Adapter' },
+      { id: 'm', type: 'component', componentKind: 'module', x: 700, y: 100, width: 200, height: 56, z: 0, text: 'Billing', description: 'Invoices' },
+    ]);
+    expect(doc.version).toBe(CURRENT_VERSION);
+    const [port, adapter, module] = doc.nodes;
+    expect(port).toMatchObject({ width: 120, height: 114 });
+    expect(adapter!.height).toBe(114);
+    // A description keeps the width its words were fitted to.
+    expect(module).toMatchObject({ x: 700, width: 200, height: 143 });
+    // The same centre line across, and the glyph's middle where the card's middle was (y 128).
+    expect(port!.x + port!.width / 2).toBe(176);
+    for (const node of [port!, adapter!]) {
+      const band = anchorBandOf(node)!;
+      expect(Math.abs((band.top + band.bottom) / 2 - 128)).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('leaves a Generic Component, and every other shape, exactly as it was', () => {
+    const before = [
+      { id: 'c', type: 'component', componentKind: 'generic', x: 0, y: 0, width: 152, height: 56, z: 0, text: 'Use Cases' },
+      { id: 's', type: 'service', serviceKind: 'api', x: 300, y: 0, width: 176, height: 68, z: 0, text: 'API' },
+    ];
+    const doc = open(before);
+    expect(doc.nodes.map(({ x, y, width, height }) => ({ x, y, width, height }))).toEqual(before.map(({ x, y, width, height }) => ({ x, y, width, height })));
+  });
+
+  it('reaches a Port inside a room', () => {
+    const doc = open([
+      {
+        id: 'host', type: 'service', x: 0, y: 0, width: 176, height: 68, z: 0, text: 'Orders',
+        inside: { nodes: [{ id: 'p', type: 'component', componentKind: 'port', x: 0, y: 0, width: 152, height: 56, z: 0, text: 'Port' }], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } },
+      },
+    ]);
+    expect(doc.nodes[0]!.inside?.nodes[0]?.height).toBe(114);
   });
 });

@@ -1,3 +1,4 @@
+import { familyKindOf } from '../document/dataStoreGeometry';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useToolbarHeight } from './useToolbarHeight';
 import { useUiStore } from '../store/uiStore';
@@ -252,6 +253,6 @@ export function QuickConnectMenu({
 
 /** Fixed-pixel details need a real node's logical size; CSS alone scales the result to an icon. */
 function QuickConnectShape({ node }: { node: QuickConnectItem['node'] }) {
-  const size = minSizeFor(node.type, node.serviceKind);
+  const size = minSizeFor(node.type, familyKindOf(node));
   return <ShapePreview node={node} width={size.width} height={size.height} />;
 }

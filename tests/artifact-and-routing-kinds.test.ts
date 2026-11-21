@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { baseCategory, capabilityFor, categoryOf } from '../src/document/connectorSemantics';
 import { relationLabel } from '../src/document/edgeSemantics';
 import { convertedNode } from '../src/document/convert';
-import { boxForServiceKind, createDocument, createNode, defaultSizeFor, displayNameFor } from '../src/document/factory';
+import { boxForKind, createDocument, createNode, defaultSizeFor, displayNameFor } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
 import { anchorBandOf } from '../src/document/queueGeometry';
 import { isLinkable } from '../src/document/sequenceLinks';
@@ -55,12 +55,12 @@ describe('Load Balancer and Proxy', () => {
 
   it('change box when the kind moves between a card and a glyph, around the same centre', () => {
     const card = createNode({ type: 'service', x: 0, y: 0 });
-    const box = boxForServiceKind(card, 'generic', 'proxy')!;
+    const box = boxForKind(card, 'generic', 'proxy')!;
     expect({ width: box.width, height: box.height }).toEqual(defaultSizeFor('service', 'proxy'));
     expect(box.x + box.width / 2).toBeCloseTo(card.x + card.width / 2, 0);
-    expect(boxForServiceKind(card, 'generic', 'api')).toBeNull();
-    expect(boxForServiceKind({ ...card, ...box }, 'proxy', 'load-balancer')).toBeNull();
-    expect(boxForServiceKind({ ...card, ...box }, 'proxy', 'worker')).toBeNull();
+    expect(boxForKind(card, 'generic', 'api')).toBeNull();
+    expect(boxForKind({ ...card, ...box }, 'proxy', 'load-balancer')).toBeNull();
+    expect(boxForKind({ ...card, ...box }, 'proxy', 'worker')).toBeNull();
   });
 
   it.each([
