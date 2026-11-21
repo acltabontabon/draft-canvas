@@ -1,0 +1,1887 @@
+{
+  "format": "draft-canvas",
+  "version": 29,
+  "metadata": {
+    "id": "starter-video-streaming",
+    "title": "Video streaming platform",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "devices",
+      "type": "group",
+      "x": 210,
+      "y": 387,
+      "width": 240,
+      "height": 487,
+      "z": -2,
+      "text": "Viewer devices",
+      "textOrigin": "explicit",
+      "boundaryPreset": "group"
+    },
+    {
+      "id": "cloud",
+      "type": "group",
+      "x": 628,
+      "y": -5,
+      "width": 1686,
+      "height": 1021,
+      "z": -2,
+      "text": "Reelwave cloud",
+      "textOrigin": "explicit",
+      "boundaryPreset": "system"
+    },
+    {
+      "id": "edge-api",
+      "type": "group",
+      "x": 660,
+      "y": 504,
+      "width": 240,
+      "height": 230,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Edge",
+      "textOrigin": "explicit",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "discovery",
+      "type": "group",
+      "x": 1278,
+      "y": 47,
+      "width": 1004,
+      "height": 427,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Discovery",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "playback-d",
+      "type": "group",
+      "x": 980,
+      "y": 504,
+      "width": 240,
+      "height": 230,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Playback",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "data",
+      "type": "group",
+      "x": 1278,
+      "y": 504,
+      "width": 1004,
+      "height": 480,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Data platform",
+      "textOrigin": "explicit",
+      "accent": "violet",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "isp",
+      "type": "group",
+      "x": -65,
+      "y": 914,
+      "width": 515,
+      "height": 173,
+      "z": -2,
+      "text": "Partner ISP networks",
+      "textOrigin": "explicit",
+      "accent": "amber",
+      "boundaryPreset": "network"
+    },
+    {
+      "id": "viewer",
+      "type": "actor",
+      "x": 0,
+      "y": 741,
+      "width": 140,
+      "height": 118,
+      "z": 0,
+      "text": "Viewer",
+      "description": "Browses and watches on any screen.",
+      "textOrigin": "explicit",
+      "actorKind": "human",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "tv",
+      "type": "service",
+      "x": 242,
+      "y": 759,
+      "width": 176,
+      "height": 83,
+      "z": 0,
+      "parentId": "devices",
+      "text": "TV App",
+      "description": "Plays on smart TVs and streaming sticks.",
+      "technology": "Kotlin",
+      "textOrigin": "explicit",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "mobile",
+      "type": "service",
+      "x": 242,
+      "y": 599,
+      "width": 176,
+      "height": 83,
+      "z": 0,
+      "parentId": "devices",
+      "text": "Mobile App",
+      "description": "Streams and downloads on phones.",
+      "technology": "Swift",
+      "textOrigin": "explicit",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "web",
+      "type": "service",
+      "x": 242,
+      "y": 439,
+      "width": 176,
+      "height": 83,
+      "z": 0,
+      "parentId": "devices",
+      "text": "Web Player",
+      "description": "Plays in the browser.",
+      "technology": "React",
+      "textOrigin": "explicit",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "j-api",
+      "type": "ellipse",
+      "x": 542,
+      "y": 622,
+      "width": 36,
+      "height": 36,
+      "z": 0
+    },
+    {
+      "id": "gateway",
+      "type": "service",
+      "x": 692,
+      "y": 580,
+      "width": 176,
+      "height": 121,
+      "z": 0,
+      "parentId": "edge-api",
+      "text": "Edge Gateway",
+      "description": "Authenticates, rate-limits and routes every API call.",
+      "technology": "Envoy",
+      "textOrigin": "explicit",
+      "serviceKind": "gateway",
+      "replicas": 6,
+      "attachments": [
+        {
+          "id": "n.route",
+          "type": "code",
+          "language": "yaml",
+          "code": "routes:\n  - match: { prefix: /play }\n    route:\n      cluster: playback\n      timeout: 0.5s\n      retry_policy:\n        retry_on: 5xx,reset\n        num_retries: 2",
+          "width": 260,
+          "height": 197
+        }
+      ]
+    },
+    {
+      "id": "graph",
+      "type": "service",
+      "x": 1352,
+      "y": 216,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "discovery",
+      "text": "Discovery Graph",
+      "description": "Composes the home screen in one query.",
+      "technology": "Apollo GraphQL",
+      "textOrigin": "explicit",
+      "serviceKind": "api",
+      "replicas": 4,
+      "attachments": [
+        {
+          "id": "n.graph",
+          "type": "note",
+          "text": "One GraphQL query per screen: devices ship slowly, so the shape of a screen changes on the server.",
+          "noteKind": "decision",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "recs",
+      "type": "service",
+      "x": 1712,
+      "y": 116,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "discovery",
+      "text": "Recommendations",
+      "description": "Ranks rows and titles for each profile.",
+      "technology": "Python",
+      "textOrigin": "explicit",
+      "serviceKind": "api",
+      "replicas": 8,
+      "attachments": [
+        {
+          "id": "n.cold",
+          "type": "note",
+          "text": "What does a brand-new profile see before it has watched anything?",
+          "noteKind": "question",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "features",
+      "type": "database",
+      "x": 2030,
+      "y": 99,
+      "width": 220,
+      "height": 143,
+      "z": 0,
+      "parentId": "discovery",
+      "text": "Feature Store",
+      "description": "Serves profile features in under 5 ms.",
+      "technology": "Redis",
+      "textOrigin": "explicit",
+      "databaseKind": "cache"
+    },
+    {
+      "id": "catalog",
+      "type": "service",
+      "x": 1712,
+      "y": 316,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "discovery",
+      "text": "Catalog",
+      "description": "Owns titles, artwork and availability by country.",
+      "technology": "Spring Boot",
+      "textOrigin": "explicit",
+      "serviceKind": "api"
+    },
+    {
+      "id": "search",
+      "type": "database",
+      "x": 2030,
+      "y": 299,
+      "width": 220,
+      "height": 143,
+      "z": 0,
+      "parentId": "discovery",
+      "text": "Title Search",
+      "description": "Finds titles by name, cast and genre.",
+      "technology": "Elasticsearch",
+      "textOrigin": "explicit",
+      "databaseKind": "search-index"
+    },
+    {
+      "id": "playback",
+      "type": "service",
+      "x": 1012,
+      "y": 579,
+      "width": 176,
+      "height": 123,
+      "z": 0,
+      "parentId": "playback-d",
+      "text": "Playback API",
+      "description": "Checks rights, picks streams and edges, issues licences.",
+      "technology": "Go",
+      "textOrigin": "explicit",
+      "serviceKind": "api",
+      "replicas": 6,
+      "inside": {
+        "nodes": [
+          {
+            "id": "p.tv",
+            "type": "service",
+            "x": 0,
+            "y": 175,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "TV App",
+            "technology": "Kotlin",
+            "textOrigin": "explicit",
+            "serviceKind": "generic"
+          },
+          {
+            "id": "p.handler",
+            "type": "component",
+            "x": 281,
+            "y": 169,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Play Handler",
+            "description": "Answers POST /play with a manifest.",
+            "technology": "Go",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "p.rights",
+            "type": "component",
+            "x": 771,
+            "y": 0,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Entitlements",
+            "description": "Checks plan, country and stream limit.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "p.ladder",
+            "type": "component",
+            "x": 771,
+            "y": 169,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Stream Selector",
+            "description": "Picks codec and bitrate ladder for the device.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "p.steering",
+            "type": "component",
+            "x": 1071,
+            "y": 169,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Edge Steering",
+            "description": "Ranks edge appliances by health and distance.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "p.licence",
+            "type": "component",
+            "x": 771,
+            "y": 303,
+            "width": 152,
+            "height": 115,
+            "z": 0,
+            "text": "Licence Client",
+            "description": "Requests a DRM licence for the session.",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "p.members",
+            "type": "database",
+            "x": 1087,
+            "y": 1.1363636363636402,
+            "width": 120,
+            "height": 114,
+            "z": 0,
+            "text": "Members",
+            "technology": "PostgreSQL",
+            "textOrigin": "explicit",
+            "databaseKind": "sql"
+          },
+          {
+            "id": "p.drm",
+            "type": "service",
+            "x": 1059,
+            "y": 303,
+            "width": 176,
+            "height": 115,
+            "z": 0,
+            "text": "DRM Licence Server",
+            "description": "Issues Widevine and FairPlay licences.",
+            "textOrigin": "explicit",
+            "serviceKind": "external"
+          },
+          {
+            "id": "p.health",
+            "type": "database",
+            "x": 1355,
+            "y": 170.13636363636363,
+            "width": 120,
+            "height": 114,
+            "z": 0,
+            "text": "Edge Health",
+            "technology": "Redis",
+            "textOrigin": "explicit",
+            "databaseKind": "cache"
+          }
+        ],
+        "edges": [
+          {
+            "id": "p.post",
+            "source": "p.tv",
+            "target": "p.handler",
+            "label": "POST /play",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "response": "200 Manifest",
+            "hasResponse": true,
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "p.check",
+            "source": "p.handler",
+            "target": "p.rights",
+            "label": "canPlay(profile)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "p.plan",
+            "source": "p.rights",
+            "target": "p.members",
+            "label": "Plan and streams",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "reads",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "p.pick",
+            "source": "p.handler",
+            "target": "p.ladder",
+            "label": "ladderFor(device)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "p.steer",
+            "source": "p.ladder",
+            "target": "p.steering",
+            "label": "rankEdges(ip)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "p.healthy",
+            "source": "p.steering",
+            "target": "p.health",
+            "label": "Healthy edges",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "reads",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "p.lic",
+            "source": "p.handler",
+            "target": "p.licence",
+            "label": "licence(session)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "p.drmcall",
+            "source": "p.licence",
+            "target": "p.drm",
+            "label": "License request",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "p.flow",
+            "title": "Press play, inside the Playback API",
+            "steps": [
+              {
+                "id": "p.flow.s1",
+                "edgeId": "p.post",
+                "caption": "The TV asks to play a title for one profile."
+              },
+              {
+                "id": "p.flow.s2",
+                "edgeId": "p.check",
+                "caption": "Is this plan allowed one more stream, in this country?"
+              },
+              {
+                "id": "p.flow.s3",
+                "edgeId": "p.plan",
+                "caption": "Plan and active streams come from Members."
+              },
+              {
+                "id": "p.flow.s4",
+                "edgeId": "p.pick",
+                "caption": "4K HDR for this TV, or 1080p if the plan doesn't include it."
+              },
+              {
+                "id": "p.flow.s5",
+                "edgeId": "p.steer",
+                "caption": "Edges are ranked for the viewer's ISP."
+              },
+              {
+                "id": "p.flow.s6",
+                "edgeId": "p.healthy",
+                "caption": "Only appliances that reported healthy in the last 10 s."
+              },
+              {
+                "id": "p.flow.s7",
+                "edgeId": "p.lic",
+                "caption": "A licence is requested for this session."
+              },
+              {
+                "id": "p.flow.s8",
+                "edgeId": "p.drmcall",
+                "caption": "The DRM server signs it; the manifest goes back to the TV."
+              }
+            ],
+            "accent": "teal"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "level": "component"
+      }
+    },
+    {
+      "id": "drm",
+      "type": "service",
+      "x": 1012,
+      "y": 1133,
+      "width": 176,
+      "height": 115,
+      "z": 0,
+      "text": "DRM Licence Server",
+      "description": "Issues Widevine, FairPlay and PlayReady licences.",
+      "textOrigin": "explicit",
+      "serviceKind": "external"
+    },
+    {
+      "id": "events",
+      "type": "queue",
+      "x": 1370,
+      "y": 588,
+      "width": 140,
+      "height": 104,
+      "z": 0,
+      "parentId": "data",
+      "text": "playback-events",
+      "description": "Every start, heartbeat, rebuffer and stop.",
+      "technology": "Kafka",
+      "textOrigin": "explicit",
+      "queueKind": "stream"
+    },
+    {
+      "id": "aggregator",
+      "type": "service",
+      "x": 1712,
+      "y": 579,
+      "width": 176,
+      "height": 123,
+      "z": 0,
+      "parentId": "data",
+      "text": "Viewing Aggregator",
+      "description": "Turns heartbeats into progress and quality metrics.",
+      "technology": "Apache Flink",
+      "textOrigin": "explicit",
+      "serviceKind": "worker",
+      "replicas": 12
+    },
+    {
+      "id": "history",
+      "type": "database",
+      "x": 2070,
+      "y": 556,
+      "width": 140,
+      "height": 169,
+      "z": 0,
+      "parentId": "data",
+      "text": "Viewing History",
+      "description": "Where each profile stopped, for Continue Watching.",
+      "technology": "Apache Cassandra",
+      "textOrigin": "explicit",
+      "databaseKind": "nosql"
+    },
+    {
+      "id": "lake",
+      "type": "database",
+      "x": 1310,
+      "y": 809,
+      "width": 260,
+      "height": 143,
+      "z": 0,
+      "parentId": "data",
+      "text": "Data Lake",
+      "description": "Every event, kept for training and analysis.",
+      "technology": "Amazon S3",
+      "textOrigin": "explicit",
+      "databaseKind": "object-storage"
+    },
+    {
+      "id": "training",
+      "type": "service",
+      "x": 1712,
+      "y": 829,
+      "width": 176,
+      "height": 103,
+      "z": 0,
+      "parentId": "data",
+      "text": "Model Training",
+      "description": "Retrains the ranking models every night.",
+      "technology": "Apache Spark",
+      "textOrigin": "explicit",
+      "serviceKind": "scheduler"
+    },
+    {
+      "id": "studio",
+      "type": "actor",
+      "x": 0,
+      "y": 1131,
+      "width": 140,
+      "height": 118,
+      "z": 0,
+      "text": "Studio Partner",
+      "description": "Delivers finished masters and subtitles.",
+      "textOrigin": "explicit",
+      "actorKind": "thirdParty",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "pipeline",
+      "type": "service",
+      "x": 242,
+      "y": 1149,
+      "width": 176,
+      "height": 83,
+      "z": 0,
+      "text": "Content Pipeline",
+      "description": "Encodes each master into hundreds of streams.",
+      "technology": "FFmpeg",
+      "textOrigin": "explicit",
+      "serviceKind": "generic",
+      "inside": {
+        "nodes": [
+          {
+            "id": "c.studio",
+            "type": "actor",
+            "x": 0,
+            "y": 85,
+            "width": 120,
+            "height": 92,
+            "z": 0,
+            "text": "Studio Partner",
+            "textOrigin": "explicit",
+            "actorKind": "thirdParty",
+            "actorFrame": "borderless"
+          },
+          {
+            "id": "c.ingest",
+            "type": "service",
+            "x": 248,
+            "y": 79.5,
+            "width": 176,
+            "height": 103,
+            "z": 0,
+            "text": "Ingest",
+            "description": "Takes masters by Aspera and checks them.",
+            "technology": "Go",
+            "textOrigin": "explicit",
+            "serviceKind": "api"
+          },
+          {
+            "id": "c.masters",
+            "type": "database",
+            "x": 588,
+            "y": 51.25,
+            "width": 120,
+            "height": 143,
+            "z": 0,
+            "text": "Masters",
+            "description": "Original files, kept forever.",
+            "technology": "Amazon S3",
+            "textOrigin": "explicit",
+            "databaseKind": "object-storage"
+          },
+          {
+            "id": "c.jobs",
+            "type": "queue",
+            "x": 578,
+            "y": 219,
+            "width": 140,
+            "height": 104,
+            "z": 0,
+            "text": "encode-jobs",
+            "description": "One job per chunk and rendition.",
+            "technology": "Amazon SQS",
+            "textOrigin": "explicit",
+            "queueKind": "queue"
+          },
+          {
+            "id": "c.encoders",
+            "type": "service",
+            "x": 841,
+            "y": 146,
+            "width": 176,
+            "height": 109,
+            "z": 0,
+            "text": "Chunk Encoders",
+            "description": "Encode 4-second chunks in parallel.",
+            "technology": "FFmpeg",
+            "textOrigin": "explicit",
+            "serviceKind": "worker",
+            "replicas": 40
+          },
+          {
+            "id": "c.dlq",
+            "type": "queue",
+            "x": 859,
+            "y": 325,
+            "width": 140,
+            "height": 104,
+            "z": 0,
+            "text": "encode-jobs-dlq",
+            "description": "Chunks that failed every attempt.",
+            "technology": "Amazon SQS",
+            "textOrigin": "explicit",
+            "queueKind": "queue",
+            "deliveryRole": "dead-letter"
+          },
+          {
+            "id": "c.packager",
+            "type": "service",
+            "x": 1142,
+            "y": 139,
+            "width": 176,
+            "height": 123,
+            "z": 0,
+            "text": "Packager",
+            "description": "Assembles chunks, encrypts and writes DASH and HLS.",
+            "technology": "Go",
+            "textOrigin": "explicit",
+            "serviceKind": "worker"
+          },
+          {
+            "id": "c.origin",
+            "type": "database",
+            "x": 1445,
+            "y": 151.75,
+            "width": 240,
+            "height": 143,
+            "z": 0,
+            "text": "Origin",
+            "description": "Encrypted streams, ready for the edges.",
+            "technology": "Amazon S3",
+            "textOrigin": "explicit",
+            "databaseKind": "object-storage"
+          }
+        ],
+        "edges": [
+          {
+            "id": "c.deliver",
+            "source": "c.studio",
+            "target": "c.ingest",
+            "label": "Uploads master",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "calls",
+            "semanticsOrigin": "inferred"
+          },
+          {
+            "id": "c.store",
+            "source": "c.ingest",
+            "target": "c.masters",
+            "label": "Stores master",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "writes",
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.25
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.75
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "c.split",
+            "source": "c.ingest",
+            "target": "c.jobs",
+            "label": "EncodeChunk × 2,400",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "command",
+            "kind": "async",
+            "async": true,
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.75
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.25
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "c.take",
+            "source": "c.jobs",
+            "target": "c.encoders",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "consumes",
+            "kind": "async",
+            "async": true,
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.25
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.75
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "c.park",
+            "source": "c.jobs",
+            "target": "c.dlq",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "deadLetters",
+            "kind": "failure",
+            "async": true,
+            "sourceAnchor": {
+              "side": "bottom",
+              "offset": 0.75
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.5
+            },
+            "semanticsOrigin": "explicit",
+            "deliveryAttempts": 3
+          },
+          {
+            "id": "c.done",
+            "source": "c.encoders",
+            "target": "c.packager",
+            "label": "Chunk encoded",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "event",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "c.write",
+            "source": "c.packager",
+            "target": "c.origin",
+            "label": "Writes streams",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "writes",
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "c.flow",
+            "title": "Encode a new title",
+            "steps": [
+              {
+                "id": "c.flow.s1",
+                "edgeId": "c.deliver",
+                "caption": "The studio uploads a 400 GB master."
+              },
+              {
+                "id": "c.flow.s2",
+                "edgeId": "c.store",
+                "caption": "The master is checked and kept as is."
+              },
+              {
+                "id": "c.flow.s3",
+                "edgeId": "c.split",
+                "caption": "It is cut into 4-second chunks: one job per chunk and rendition."
+              },
+              {
+                "id": "c.flow.s4",
+                "edgeId": "c.take",
+                "caption": "Forty encoders work through the jobs in parallel."
+              },
+              {
+                "id": "c.flow.s5",
+                "edgeId": "c.done",
+                "caption": "Each finished chunk is reported to the packager."
+              },
+              {
+                "id": "c.flow.s6",
+                "edgeId": "c.write",
+                "caption": "DASH and HLS streams are encrypted and written to the origin."
+              }
+            ],
+            "accent": "violet"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "level": "container"
+      }
+    },
+    {
+      "id": "origin",
+      "type": "database",
+      "x": 680,
+      "y": 1119,
+      "width": 120,
+      "height": 143,
+      "z": 0,
+      "text": "Origin",
+      "description": "Every encrypted stream.",
+      "technology": "Amazon S3",
+      "textOrigin": "explicit",
+      "databaseKind": "object-storage"
+    },
+    {
+      "id": "edge",
+      "type": "service",
+      "x": 242,
+      "y": 966,
+      "width": 176,
+      "height": 89,
+      "z": 0,
+      "parentId": "isp",
+      "text": "Edge Appliances",
+      "description": "Serve video from inside the viewer's ISP.",
+      "technology": "NGINX",
+      "textOrigin": "explicit",
+      "serviceKind": "generic",
+      "replicas": 9,
+      "attachments": [
+        {
+          "id": "n.edge",
+          "type": "note",
+          "text": "Video is served from appliances inside ISPs. The cloud only decides which appliance; it never streams a byte.",
+          "noteKind": "decision",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "slo",
+      "type": "text",
+      "x": 660,
+      "y": 47,
+      "width": 330,
+      "height": 172,
+      "z": 0,
+      "text": "### Playback SLOs\n| Path | Target |\n| --- | ---: |\n| Play → first frame | 2 s |\n| `POST /play` p99 | 150 ms |\n| Rebuffer ratio | < 0.1% |",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "textBackground": "card"
+    },
+    {
+      "id": "edge-callout",
+      "type": "text",
+      "x": -33,
+      "y": 993,
+      "width": 247,
+      "height": 36,
+      "z": 0,
+      "parentId": "isp",
+      "text": "95% of bytes never touch the cloud",
+      "textOrigin": "explicit",
+      "accent": "rose",
+      "textFont": "hand"
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "x": -65,
+      "y": -163,
+      "width": 1000,
+      "height": 110,
+      "z": 0,
+      "text": "# Reelwave\nA video streaming platform: **200M** members, **15k** titles, every screen.",
+      "textOrigin": "explicit",
+      "textRole": "title"
+    },
+    {
+      "id": "seq-play",
+      "type": "sequence",
+      "x": 1341,
+      "y": 1096,
+      "width": 973,
+      "height": 814,
+      "z": 0,
+      "text": "Press play, message by message",
+      "textOrigin": "explicit",
+      "sequence": {
+        "participants": [
+          {
+            "id": "sp_vfa8odj9vhst",
+            "name": "TV App",
+            "type": "service",
+            "serviceKind": "generic",
+            "technology": "Kotlin",
+            "ref": "tv"
+          },
+          {
+            "id": "sp_2obemnnyrcz3",
+            "name": "Edge Gateway",
+            "type": "service",
+            "serviceKind": "gateway",
+            "technology": "Envoy",
+            "ref": "gateway"
+          },
+          {
+            "id": "sp_s3mjaargvfk5",
+            "name": "Playback API",
+            "type": "service",
+            "serviceKind": "api",
+            "technology": "Go",
+            "ref": "playback"
+          },
+          {
+            "id": "sp_lxlb997k2tgw",
+            "name": "DRM Licence Server",
+            "type": "service",
+            "serviceKind": "external",
+            "ref": "drm"
+          },
+          {
+            "id": "sp_igtu3oohogb3",
+            "name": "Edge Appliances",
+            "type": "service",
+            "serviceKind": "generic",
+            "technology": "NGINX",
+            "ref": "edge"
+          }
+        ],
+        "items": [
+          {
+            "id": "sm_ur6j73vif413",
+            "t": "message",
+            "from": "sp_vfa8odj9vhst",
+            "to": "sp_2obemnnyrcz3",
+            "kind": "sync",
+            "label": "POST /play",
+            "activate": true
+          },
+          {
+            "id": "sm_cr7baf1sl1dn",
+            "t": "message",
+            "from": "sp_2obemnnyrcz3",
+            "to": "sp_s3mjaargvfk5",
+            "kind": "sync",
+            "label": "/play",
+            "activate": true
+          },
+          {
+            "id": "sm_9rycuodtb5r6",
+            "t": "message",
+            "from": "sp_s3mjaargvfk5",
+            "to": "sp_lxlb997k2tgw",
+            "kind": "sync",
+            "label": "Licence request",
+            "activate": true
+          },
+          {
+            "id": "sm_86ve3p7yo74z",
+            "t": "message",
+            "from": "sp_lxlb997k2tgw",
+            "to": "sp_s3mjaargvfk5",
+            "kind": "reply",
+            "label": "Signed licence",
+            "replyTo": "sm_9rycuodtb5r6",
+            "deactivate": true
+          },
+          {
+            "id": "sm_gpk604qibpgr",
+            "t": "message",
+            "from": "sp_s3mjaargvfk5",
+            "to": "sp_2obemnnyrcz3",
+            "kind": "reply",
+            "label": "Manifest and edge URLs",
+            "replyTo": "sm_cr7baf1sl1dn",
+            "deactivate": true
+          },
+          {
+            "id": "sm_rdbf9wym7d26",
+            "t": "message",
+            "from": "sp_2obemnnyrcz3",
+            "to": "sp_vfa8odj9vhst",
+            "kind": "reply",
+            "label": "200 Manifest",
+            "replyTo": "sm_ur6j73vif413",
+            "deactivate": true
+          },
+          {
+            "id": "sf_4xh5eidkr16f",
+            "t": "fragment",
+            "operator": "loop",
+            "operands": [
+              {
+                "id": "so_vv2k8k474ur8",
+                "guard": "every 4 s",
+                "items": [
+                  {
+                    "id": "sm_409uhap8wt30",
+                    "t": "message",
+                    "from": "sp_vfa8odj9vhst",
+                    "to": "sp_igtu3oohogb3",
+                    "kind": "sync",
+                    "label": "GET segment",
+                    "activate": true
+                  },
+                  {
+                    "id": "sf_0skiadxo2mdg",
+                    "t": "fragment",
+                    "operator": "alt",
+                    "operands": [
+                      {
+                        "id": "so_nspljzrswl20",
+                        "guard": "cached",
+                        "items": [
+                          {
+                            "id": "sm_sphkcvsqx543",
+                            "t": "message",
+                            "from": "sp_igtu3oohogb3",
+                            "to": "sp_vfa8odj9vhst",
+                            "kind": "reply",
+                            "label": "200 chunk",
+                            "replyTo": "sm_409uhap8wt30"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "so_zvdkeihy61zt",
+                        "guard": "not cached yet",
+                        "items": [
+                          {
+                            "id": "sm_ptgehfms7bq3",
+                            "t": "message",
+                            "from": "sp_igtu3oohogb3",
+                            "to": "sp_igtu3oohogb3",
+                            "kind": "sync",
+                            "label": "Fetch from origin"
+                          },
+                          {
+                            "id": "sm_da5jv9r9i737",
+                            "t": "message",
+                            "from": "sp_igtu3oohogb3",
+                            "to": "sp_vfa8odj9vhst",
+                            "kind": "reply",
+                            "label": "200 chunk",
+                            "replyTo": "sm_409uhap8wt30",
+                            "deactivate": true
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "watch",
+      "source": "viewer",
+      "target": "tv",
+      "label": "Presses play",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "tv-api",
+      "source": "tv",
+      "target": "j-api",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "mobile-api",
+      "source": "mobile",
+      "target": "j-api",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "web-api",
+      "source": "web",
+      "target": "j-api",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "api",
+      "source": "j-api",
+      "target": "gateway",
+      "label": "HTTPS",
+      "directed": true,
+      "routing": "smoothstep"
+    },
+    {
+      "id": "home",
+      "source": "gateway",
+      "target": "graph",
+      "label": "/graphql",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "routes",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "play",
+      "source": "gateway",
+      "target": "playback",
+      "label": "/play",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "routes",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "rank",
+      "source": "graph",
+      "target": "recs",
+      "label": "Ranks rows",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "grpc",
+      "response": "rows",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "feat",
+      "source": "recs",
+      "target": "features",
+      "label": "Profile features",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "titles",
+      "source": "graph",
+      "target": "catalog",
+      "label": "Titles by id",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "grpc",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "find",
+      "source": "catalog",
+      "target": "search",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "searches",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "resume",
+      "source": "graph",
+      "target": "history",
+      "label": "Continue Watching",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "portal": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "licence",
+      "source": "playback",
+      "target": "drm",
+      "label": "Licence",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "response": "signed",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.drm",
+          "type": "note",
+          "text": "No licence, no playback. Licences are cached for a session and for downloads, so a DRM outage stops new plays only.",
+          "noteKind": "warning",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "heartbeat",
+      "source": "playback",
+      "target": "events",
+      "label": "PlaybackHeartbeat",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.hb",
+          "type": "code",
+          "language": "json",
+          "code": "{\n  \"type\": \"PlaybackHeartbeat\",\n  \"session\": \"s_81f2\",\n  \"profile\": \"p_4410\",\n  \"title\": \"tt_0092\",\n  \"positionMs\": 1843000,\n  \"bitrateKbps\": 15800,\n  \"rebufferMs\": 0\n}",
+          "width": 260,
+          "height": 216.375
+        }
+      ]
+    },
+    {
+      "id": "aggregate",
+      "source": "events",
+      "target": "aggregator",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "event",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "progress",
+      "source": "aggregator",
+      "target": "history",
+      "label": "Progress per profile",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "archive",
+      "source": "events",
+      "target": "lake",
+      "label": "Archives events",
+      "directed": true,
+      "routing": "smoothstep",
+      "cadence": "Hourly"
+    },
+    {
+      "id": "learn",
+      "source": "lake",
+      "target": "training",
+      "label": "Viewing year",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "cadence": "Daily",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "publish-model",
+      "source": "training",
+      "target": "features",
+      "label": "New features",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "portal": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "segments",
+      "source": "tv",
+      "target": "edge",
+      "label": "Video segments",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "response": "4 s chunks",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "fill",
+      "source": "origin",
+      "target": "edge",
+      "label": "Nightly fill",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "cadence": "Nightly 02:00",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "miss",
+      "source": "edge",
+      "target": "origin",
+      "label": "Cache miss",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "kind": "fallback",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "deliver",
+      "source": "studio",
+      "target": "pipeline",
+      "label": "Delivers master",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "encode",
+      "source": "pipeline",
+      "target": "origin",
+      "label": "Writes streams",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "launch",
+      "source": "pipeline",
+      "target": "catalog",
+      "label": "Title ready",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "portal": true,
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "f.play",
+      "title": "Press play",
+      "steps": [
+        {
+          "id": "f.play.s1",
+          "edgeId": "watch",
+          "caption": "A viewer picks a film on the TV and presses play."
+        },
+        {
+          "id": "f.play.s2",
+          "edgeId": "tv-api",
+          "caption": "The TV calls the API, like every other device."
+        },
+        {
+          "id": "f.play.s3",
+          "edgeId": "api",
+          "caption": "One edge gateway in the nearest region takes the call."
+        },
+        {
+          "id": "f.play.s4",
+          "edgeId": "play",
+          "caption": "It is authenticated and routed to the Playback API."
+        },
+        {
+          "id": "f.play.s5",
+          "edgeId": "licence",
+          "caption": "Rights, streams and edges are chosen; a DRM licence is signed."
+        },
+        {
+          "id": "f.play.s6",
+          "edgeId": "segments",
+          "caption": "The TV fetches 4-second chunks from an appliance inside its ISP."
+        },
+        {
+          "id": "f.play.s7",
+          "edgeId": "heartbeat",
+          "caption": "Every 30 s the session reports position and quality."
+        },
+        {
+          "id": "f.play.s8",
+          "edgeId": "aggregate",
+          "caption": "Flink folds heartbeats per session."
+        },
+        {
+          "id": "f.play.s9",
+          "edgeId": "progress",
+          "caption": "Where the viewer stopped is saved for Continue Watching."
+        }
+      ],
+      "accent": "teal"
+    },
+    {
+      "id": "f.miss",
+      "title": "The edge doesn't have it",
+      "steps": [
+        {
+          "id": "f.miss.s1",
+          "edgeId": "segments",
+          "caption": "A brand-new title, not yet filled to this appliance."
+        },
+        {
+          "id": "f.miss.s2",
+          "edgeId": "miss",
+          "extraNodeIds": [
+            "origin"
+          ],
+          "caption": "The appliance fetches the chunk from the origin and keeps it."
+        }
+      ],
+      "accent": "amber",
+      "variantOf": "f.play"
+    },
+    {
+      "id": "f.browse",
+      "title": "Open the home screen",
+      "steps": [
+        {
+          "id": "f.browse.s1",
+          "edgeId": "mobile-api",
+          "caption": "The app asks for the home screen in one GraphQL query."
+        },
+        {
+          "id": "f.browse.s2",
+          "edgeId": "api",
+          "caption": "The gateway checks the session token."
+        },
+        {
+          "id": "f.browse.s3",
+          "edgeId": "home",
+          "caption": "The query goes to the Discovery Graph."
+        },
+        {
+          "id": "f.browse.s4",
+          "edgeId": "rank",
+          "caption": "Recommendations ranks forty rows for this profile."
+        },
+        {
+          "id": "f.browse.s5",
+          "edgeId": "feat",
+          "caption": "Ranking reads the profile's features from Redis."
+        },
+        {
+          "id": "f.browse.s6",
+          "edgeId": "titles",
+          "caption": "Titles, artwork and availability fill each row."
+        },
+        {
+          "id": "f.browse.s7",
+          "edgeId": "resume",
+          "caption": "Continue Watching comes from the viewing history."
+        }
+      ],
+      "accent": "blue"
+    },
+    {
+      "id": "f.launch",
+      "title": "Launch a new title",
+      "steps": [
+        {
+          "id": "f.launch.s1",
+          "edgeId": "deliver",
+          "caption": "The studio delivers the master and subtitles."
+        },
+        {
+          "id": "f.launch.s2",
+          "edgeId": "encode",
+          "caption": "Hundreds of streams are encoded and stored at the origin."
+        },
+        {
+          "id": "f.launch.s3",
+          "edgeId": "fill",
+          "caption": "Off-peak, appliances pull what their viewers will want tomorrow."
+        },
+        {
+          "id": "f.launch.s4",
+          "edgeId": "launch",
+          "caption": "At launch time the title becomes available in the catalog."
+        },
+        {
+          "id": "f.launch.s5",
+          "edgeId": "find",
+          "caption": "It is indexed, so viewers can find it by name."
+        }
+      ],
+      "accent": "violet"
+    },
+    {
+      "id": "f.learn",
+      "title": "Retrain recommendations",
+      "steps": [
+        {
+          "id": "f.learn.s1",
+          "edgeId": "archive",
+          "caption": "Every event lands in the lake, hourly."
+        },
+        {
+          "id": "f.learn.s2",
+          "edgeId": "learn",
+          "caption": "At night, Spark trains on a year of viewing."
+        },
+        {
+          "id": "f.learn.s3",
+          "edgeId": "publish-model",
+          "caption": "Fresh features go live without a deploy."
+        }
+      ],
+      "accent": "green"
+    }
+  ],
+  "ink": [
+    {
+      "id": "ink_1",
+      "tool": "pen",
+      "color": "red",
+      "size": 3,
+      "x": 272.3,
+      "y": 966.4,
+      "points": [
+        0,
+        0,
+        7.5,
+        -2.9,
+        15.5,
+        -5.5,
+        23.9,
+        -7.6,
+        32.7,
+        -9.2,
+        41.7,
+        -10.4,
+        50.9,
+        -11.1,
+        60.2,
+        -11.2,
+        69.5,
+        -10.9,
+        78.7,
+        -10.1,
+        87.7,
+        -8.7,
+        96.4,
+        -6.9,
+        104.7,
+        -4.6,
+        112.6,
+        -1.9,
+        120,
+        1.2,
+        126.8,
+        4.7,
+        132.9,
+        8.5,
+        138.4,
+        12.7,
+        143.2,
+        17,
+        147.2,
+        21.6,
+        150.5,
+        26.4,
+        152.9,
+        31.3,
+        154.6,
+        36.3,
+        155.5,
+        41.4,
+        155.5,
+        46.5,
+        154.8,
+        51.6,
+        153.3,
+        56.6,
+        150.9,
+        61.5,
+        147.8,
+        66.3,
+        143.8,
+        71,
+        139.2,
+        75.4,
+        133.7,
+        79.6,
+        127.6,
+        83.5,
+        120.9,
+        87.1,
+        113.5,
+        90.3,
+        105.6,
+        93.1,
+        97.3,
+        95.5,
+        88.5,
+        97.4,
+        79.4,
+        98.9,
+        70.1,
+        99.8,
+        60.7,
+        100.2,
+        51.3,
+        100.2,
+        41.9,
+        99.5,
+        32.7,
+        98.4,
+        23.7,
+        96.8,
+        15,
+        94.8,
+        6.8,
+        92.2,
+        -1,
+        89.3,
+        -8.2,
+        86,
+        -14.8,
+        82.3,
+        -20.8,
+        78.3,
+        -26.1,
+        74.1,
+        -30.6,
+        69.6,
+        -34.5,
+        64.8,
+        -37.5,
+        60,
+        -39.8,
+        55,
+        -41.3,
+        49.8,
+        -42,
+        44.7,
+        -41.8,
+        39.5,
+        -40.8,
+        34.3,
+        -38.9,
+        29.2,
+        -36.3,
+        24.2,
+        -32.8,
+        19.4,
+        -28.5,
+        14.7,
+        -23.4,
+        10.3,
+        -17.6,
+        6.1,
+        -11,
+        2.3,
+        -3.8,
+        -1.2,
+        3.9,
+        -4.3,
+        12.2,
+        -7,
+        21,
+        -9.2,
+        30,
+        -10.9,
+        39.4,
+        -12.1
+      ]
+    }
+  ],
+  "openPoints": [
+    {
+      "id": "op.downloads",
+      "kind": "awaiting",
+      "context": "Downloads on mobile need longer licences. Legal to confirm the offline window per studio.",
+      "targets": [
+        {
+          "kind": "edge",
+          "id": "licence"
+        }
+      ]
+    }
+  ],
+  "level": "container"
+}

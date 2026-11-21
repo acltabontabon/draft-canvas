@@ -2,6 +2,7 @@ import Ajv from 'ajv';
 import { starterOf } from '../fixtures/gallery';
 import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
+import { starterKeptIds } from '../../src/agent/starter';
 import { buildImplementationContext } from '../../src/agent/context';
 import { validateToolInput } from '../../src/agent/contract';
 import { AgentError } from '../../src/agent/errors';
@@ -435,5 +436,26 @@ describe('look inside (C4 levels)', () => {
     // hr would leave with r while hv stays inside: the story would be split.
     expect(refusal(() => update(file, [{ op: 'moveOutside', ids: ['r'] }], ['api'])).message).toContain('Split that story');
     expect(refusal(() => update(file, [{ op: 'moveOutside', ids: ['api'] }])).message).toContain('top view');
+  });
+});
+
+describe('creating from a gallery starter', () => {
+  // A starter is drawn by hand and checked by the gallery. The agent's own readability check, written
+  // for what it arranges itself, used to refuse most of them as they stood.
+  it.each(['monolith', 'modular-monolith', 'microservices', 'event-driven', 'hexagonal', 'bff', 'cqrs', 'medallion', 'kappa', 'cdc', 'saga-orchestration', 'saga-choreography', 'transactional-outbox'])(
+    'opens %s as its author drew it',
+    (id) => {
+      const raw = { starter: { id } };
+      expect(() => compose({ title: 'T', ...raw }, 'd_authoring00', starterOf(raw))).not.toThrow();
+    },
+  );
+
+  it('still holds a shape the request renamed, and anything it added, to the check', () => {
+    const { starter } = starterOf({ starter: { id: 'microservices' } });
+    const drawn = starter!.file.nodes.map((node) => (node.id === 'gateway' ? { ...node, id: 'x.gateway', text: 'Edge Gateway' } : { ...node, id: `x.${node.id}` }));
+    const kept = starterKeptIds(starter!, 'x.', [...drawn, { ...drawn[0]!, id: 'audit' }]);
+    expect(kept.has('x.orders')).toBe(true);
+    expect(kept.has('x.gateway')).toBe(false);
+    expect(kept.has('audit')).toBe(false);
   });
 });

@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 25,
+  "version": 28,
   "metadata": {
     "id": "starter-event-driven",
     "title": "Event-Driven",
@@ -9,288 +9,552 @@
   },
   "nodes": [
     {
-      "id": "producer",
-      "type": "service",
-      "x": -240,
-      "y": -367,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Producer Service",
+      "id": "ordering",
+      "type": "group",
+      "x": 280,
+      "y": 558,
+      "width": 542,
+      "height": 476,
+      "z": -1,
+      "text": "Ordering",
+      "textOrigin": "explicit",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "restaurant",
+      "type": "group",
+      "x": 1018,
+      "y": 94,
+      "width": 894,
+      "height": 430,
+      "z": -1,
+      "text": "Restaurant",
+      "textOrigin": "explicit",
+      "accent": "amber",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "dispatching",
+      "type": "group",
+      "x": 1018,
+      "y": 541,
+      "width": 894,
+      "height": 227,
+      "z": -1,
+      "text": "Dispatch",
       "textOrigin": "explicit",
       "accent": "teal",
-      "serviceKind": "generic"
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "notifying",
+      "type": "group",
+      "x": 1018,
+      "y": 824,
+      "width": 894,
+      "height": 193,
+      "z": -1,
+      "text": "Notifications",
+      "textOrigin": "explicit",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "diner",
+      "type": "actor",
+      "x": 10,
+      "y": 605,
+      "width": 120,
+      "height": 118,
+      "z": 0,
+      "text": "Diner",
+      "description": "Orders food from nearby restaurants.",
+      "textOrigin": "explicit",
+      "actorKind": "human",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "orders",
+      "type": "service",
+      "x": 312,
+      "y": 610,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "ordering",
+      "text": "Orders Service",
+      "description": "Takes orders and publishes what happens to them.",
+      "technology": "Spring Boot 3",
+      "textOrigin": "explicit",
+      "serviceKind": "api",
+      "replicas": 3
+    },
+    {
+      "id": "orders-db",
+      "type": "database",
+      "x": 340,
+      "y": 859,
+      "width": 120,
+      "height": 143,
+      "z": 0,
+      "parentId": "ordering",
+      "text": "Orders DB",
+      "description": "Orders and their status.",
+      "technology": "PostgreSQL 16",
+      "textOrigin": "explicit",
+      "databaseKind": "sql"
     },
     {
       "id": "topic",
       "type": "queue",
-      "x": -222,
-      "y": -195,
+      "x": 650,
+      "y": 612,
       "width": 140,
-      "height": 72,
+      "height": 120,
       "z": 0,
-      "text": "Domain Events",
+      "parentId": "ordering",
+      "text": "order-events",
+      "description": "Copies every order event to each subscriber.",
+      "technology": "Amazon SNS",
       "textOrigin": "explicit",
       "queueKind": "topic",
       "attachments": [
         {
-          "id": "a_5u8do6a07ppk",
+          "id": "n.fanout",
           "type": "note",
-          "text": "Fan-out, not competition: every subscription gets its own copy of every event. Workers sharing one queue would instead compete for each message.",
-          "noteKind": "note",
+          "text": "Fan-out, not competition: each subscriber binds its own queue, so a slow restaurant never delays couriers.",
+          "noteKind": "decision",
           "width": 200,
           "height": 56
         }
       ]
     },
     {
-      "id": "projection-queue",
+      "id": "restaurant-q",
       "type": "queue",
-      "x": -352,
-      "y": -19,
-      "width": 152,
-      "height": 72,
+      "x": 1050,
+      "y": 148,
+      "width": 140,
+      "height": 104,
       "z": 0,
-      "text": "Projection Queue",
+      "parentId": "restaurant",
+      "text": "tickets",
+      "description": "The relay's own copy of each event.",
+      "technology": "Amazon SQS",
+      "textOrigin": "explicit",
+      "queueKind": "queue",
+      "attachments": [
+        {
+          "id": "n.redrive",
+          "type": "code",
+          "language": "json",
+          "code": "{\n  \"RedrivePolicy\": {\n    \"deadLetterTargetArn\": \"arn:aws:sqs:eu-central-1:…:tickets-dlq\",\n    \"maxReceiveCount\": 4\n  }\n}",
+          "width": 542,
+          "height": 158.25
+        }
+      ]
+    },
+    {
+      "id": "dispatch-q",
+      "type": "queue",
+      "x": 1050,
+      "y": 612,
+      "width": 140,
+      "height": 104,
+      "z": 0,
+      "parentId": "dispatching",
+      "text": "dispatch",
+      "description": "Dispatch's own copy of each event.",
+      "technology": "Amazon SQS",
       "textOrigin": "explicit",
       "queueKind": "queue"
     },
     {
-      "id": "integration-queue",
+      "id": "notify-q",
       "type": "queue",
-      "x": -104,
-      "y": -19,
-      "width": 152,
-      "height": 72,
+      "x": 1050,
+      "y": 878,
+      "width": 140,
+      "height": 104,
       "z": 0,
-      "text": "Integration Queue",
+      "parentId": "notifying",
+      "text": "updates",
+      "description": "Notifications' own copy.",
+      "technology": "Amazon SQS",
       "textOrigin": "explicit",
       "queueKind": "queue"
     },
     {
-      "id": "projection-worker",
+      "id": "relay",
       "type": "service",
-      "x": -364,
-      "y": 125,
+      "x": 1352,
+      "y": 146,
       "width": 176,
-      "height": 68,
+      "height": 109,
       "z": 0,
-      "text": "Projection Worker",
+      "parentId": "restaurant",
+      "text": "Restaurant Relay",
+      "description": "Turns orders into kitchen tickets.",
+      "technology": "Node.js",
       "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "worker"
+      "serviceKind": "worker",
+      "replicas": 2
     },
     {
-      "id": "integration-worker",
+      "id": "dispatch",
       "type": "service",
-      "x": -116,
-      "y": 125,
+      "x": 1352,
+      "y": 610,
       "width": 176,
-      "height": 68,
+      "height": 109,
       "z": 0,
-      "text": "Integration Worker",
+      "parentId": "dispatching",
+      "text": "Dispatch Service",
+      "description": "Assigns the nearest free courier.",
+      "technology": "Go",
       "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "worker"
+      "serviceKind": "worker",
+      "replicas": 4,
+      "inside": {
+        "nodes": [
+          {
+            "id": "d.queue",
+            "type": "queue",
+            "x": 0,
+            "y": 32.75,
+            "width": 140,
+            "height": 72,
+            "z": 0,
+            "text": "dispatch",
+            "technology": "Amazon SQS",
+            "textOrigin": "explicit",
+            "queueKind": "queue"
+          },
+          {
+            "id": "d.listener",
+            "type": "component",
+            "x": 257,
+            "y": 0,
+            "width": 152,
+            "height": 99,
+            "z": 0,
+            "text": "Queue Listener",
+            "description": "Long-polls the queue; deletes on success.",
+            "technology": "Go",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "d.guard",
+            "type": "component",
+            "x": 528,
+            "y": 0,
+            "width": 152,
+            "height": 99,
+            "z": 0,
+            "text": "Idempotency Guard",
+            "description": "Drops events already handled, by event id.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "d.assign",
+            "type": "component",
+            "x": 797,
+            "y": 9.5,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Assign Courier",
+            "description": "Picks the nearest free courier and books them.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "d.locator",
+            "type": "component",
+            "x": 1077,
+            "y": 0,
+            "width": 152,
+            "height": 99,
+            "z": 0,
+            "text": "Courier Locator",
+            "description": "Finds couriers near the restaurant.",
+            "technology": "Redis 7",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "d.redis",
+            "type": "database",
+            "x": 1333,
+            "y": 10.63636363636364,
+            "width": 120,
+            "height": 114,
+            "z": 0,
+            "text": "Couriers",
+            "technology": "Redis 7",
+            "textOrigin": "explicit",
+            "databaseKind": "nosql"
+          }
+        ],
+        "edges": [
+          {
+            "id": "d.poll",
+            "source": "d.queue",
+            "target": "d.listener",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "consumes",
+            "kind": "async",
+            "async": true,
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.check",
+            "source": "d.listener",
+            "target": "d.guard",
+            "label": "handle(event)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.handle",
+            "source": "d.guard",
+            "target": "d.assign",
+            "label": "assign(order)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "condition": "first delivery",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.find",
+            "source": "d.assign",
+            "target": "d.locator",
+            "label": "nearest(pickup)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.geo",
+            "source": "d.locator",
+            "target": "d.redis",
+            "label": "GEOSEARCH",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "readsWrites",
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "d.flow",
+            "title": "Dispatch a courier, inside the service",
+            "steps": [
+              {
+                "id": "d.flow.s1",
+                "edgeId": "d.poll",
+                "caption": "A worker receives the OrderPlaced copy from its own queue."
+              },
+              {
+                "id": "d.flow.s2",
+                "edgeId": "d.check",
+                "caption": "Every event passes the guard before anything changes."
+              },
+              {
+                "id": "d.flow.s3",
+                "edgeId": "d.handle",
+                "caption": "A redelivered event stops here; a new one goes on to assignment."
+              },
+              {
+                "id": "d.flow.s4",
+                "edgeId": "d.find",
+                "caption": "Assignment asks for free couriers near the restaurant."
+              },
+              {
+                "id": "d.flow.s5",
+                "edgeId": "d.geo",
+                "caption": "Redis answers with GEOSEARCH; the courier is booked and the message deleted."
+              }
+            ],
+            "accent": "teal"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "level": "component"
+      }
     },
     {
-      "id": "read-store",
-      "type": "database",
-      "x": -362,
-      "y": 265,
-      "width": 172,
-      "height": 102,
+      "id": "notifier",
+      "type": "service",
+      "x": 1352,
+      "y": 876,
+      "width": 176,
+      "height": 109,
       "z": 0,
-      "text": "Read Store",
+      "parentId": "notifying",
+      "text": "Notifications",
+      "description": "Texts the diner as the order moves along.",
+      "technology": "Python",
       "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic"
+      "serviceKind": "worker",
+      "attachments": [
+        {
+          "id": "n.order",
+          "type": "note",
+          "text": "Events can arrive out of order across queues. Should a 'courier assigned' text wait for 'order confirmed'?",
+          "noteKind": "question",
+          "width": 200,
+          "height": 56
+        }
+      ]
     },
     {
-      "id": "external",
+      "id": "pos",
       "type": "service",
-      "x": -116,
-      "y": 265,
+      "x": 1992,
+      "y": 143,
       "width": 176,
-      "height": 68,
+      "height": 115,
       "z": 0,
-      "text": "External System",
+      "text": "Restaurant POS",
+      "description": "Prints tickets in the restaurant's kitchen.",
       "textOrigin": "explicit",
-      "accent": "teal",
       "serviceKind": "external"
     },
     {
-      "id": "integration-dlq",
-      "type": "queue",
-      "x": 224,
-      "y": -15,
-      "width": 140,
-      "height": 48,
+      "id": "couriers",
+      "type": "database",
+      "x": 1640,
+      "y": 593,
+      "width": 240,
+      "height": 143,
       "z": 0,
-      "text": "",
-      "textOrigin": "auto",
+      "parentId": "dispatching",
+      "text": "Couriers",
+      "description": "Live courier positions and who is free.",
+      "technology": "Redis 7",
+      "textOrigin": "explicit",
+      "databaseKind": "nosql"
+    },
+    {
+      "id": "twilio",
+      "type": "service",
+      "x": 1992,
+      "y": 873,
+      "width": 176,
+      "height": 115,
+      "z": 0,
+      "text": "Twilio",
+      "description": "Sends text messages.",
+      "technology": "Twilio",
+      "textOrigin": "explicit",
+      "serviceKind": "external"
+    },
+    {
+      "id": "dlq",
+      "type": "queue",
+      "x": 1050,
+      "y": 348,
+      "width": 140,
+      "height": 104,
+      "z": 0,
+      "parentId": "restaurant",
+      "text": "tickets-dlq",
+      "description": "Tickets no kitchen accepted.",
+      "technology": "Amazon SQS",
+      "textOrigin": "explicit",
       "queueKind": "queue",
       "deliveryRole": "dead-letter"
+    },
+    {
+      "id": "recover",
+      "type": "text",
+      "x": 1330,
+      "y": 308,
+      "width": 420,
+      "height": 184,
+      "z": 0,
+      "parentId": "restaurant",
+      "text": "### When a ticket lands here\n1. The kitchen never saw the order: page the restaurant team.\n2. Fix the POS, then move the messages back to `tickets`.\n3. The relay is idempotent, so a replayed ticket prints once.",
+      "textOrigin": "explicit",
+      "accent": "amber",
+      "textBackground": "card"
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "x": 10,
+      "y": -72,
+      "width": 1100,
+      "height": 110,
+      "z": 0,
+      "text": "# Event-Driven\nOne event, a queue per subscriber: each team works at its own pace.",
+      "textOrigin": "explicit",
+      "textRole": "title"
     }
   ],
   "edges": [
     {
+      "id": "place",
+      "source": "diner",
+      "target": "orders",
+      "label": "Places order",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "response": "201 Order",
+      "hasResponse": true,
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "store",
+      "source": "orders",
+      "target": "orders-db",
+      "label": "Stores order",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "semanticsOrigin": "explicit"
+    },
+    {
       "id": "publish",
-      "source": "producer",
+      "source": "orders",
       "target": "topic",
-      "label": "publishes state-change event",
+      "label": "OrderPlaced",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "publishes",
       "kind": "event",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred",
+      "semanticsOrigin": "explicit",
       "attachments": [
         {
-          "id": "a_yqwwgafvspf4",
+          "id": "n.event",
           "type": "code",
-          "text": "Event envelope",
           "language": "json",
-          "code": "{\n  \"id\": \"evt_8f3a1c2d\",\n  \"type\": \"StateChanged\",\n  \"time\": \"2026-09-10T08:15Z\",\n  \"data\": {\n    \"entityId\": \"ent_4821\"\n  }\n}",
-          "width": 380,
-          "height": 180
-        },
-        {
-          "id": "a_2t16uj9fc139",
-          "type": "note",
-          "text": "Typically at-least-once and unordered across partitions: consumers dedupe on the event id and tolerate reordering. Publishing is not atomic with the state change that caused it — see Transactional Outbox.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
+          "code": "{\n  \"type\": \"OrderPlaced\",\n  \"eventId\": \"evt_01J9Z6Q3\",\n  \"orderId\": \"ord_7731\",\n  \"restaurantId\": \"r_204\",\n  \"pickup\": { \"lat\": 52.52, \"lng\": 13.40 },\n  \"placedAt\": \"2026-11-21T18:04:11Z\"\n}",
+          "width": 354.5,
+          "height": 197
         }
       ]
     },
     {
-      "id": "fan-out-projection",
+      "id": "fan-restaurant",
       "source": "topic",
-      "target": "projection-queue",
+      "target": "restaurant-q",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "fansOut",
       "kind": "event",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "fan-out-integration",
-      "source": "topic",
-      "target": "integration-queue",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "fansOut",
-      "kind": "event",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "consume-projection",
-      "source": "projection-queue",
-      "target": "projection-worker",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "consumes",
-      "kind": "async",
-      "async": true,
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "consume-integration",
-      "source": "integration-queue",
-      "target": "integration-worker",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "consumes",
-      "kind": "async",
-      "async": true,
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "project",
-      "source": "projection-worker",
-      "target": "read-store",
-      "label": "updates projection",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "writes",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "call-external",
-      "source": "integration-worker",
-      "target": "external",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "calls",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "dead-letter",
-      "source": "integration-queue",
-      "target": "integration-dlq",
-      "label": "after configured retry limit",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "deadLetters",
-      "kind": "failure",
-      "async": true,
       "sourceAnchor": {
         "side": "right",
         "offset": 0.5
@@ -299,23 +563,136 @@
         "side": "left",
         "offset": 0.5
       },
-      "semanticsOrigin": "inferred",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "fan-dispatch",
+      "source": "topic",
+      "target": "dispatch-q",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "fansOut",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "fan-notify",
+      "source": "topic",
+      "target": "notify-q",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "fansOut",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "consume-restaurant",
+      "source": "restaurant-q",
+      "target": "relay",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "async",
+      "async": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "consume-dispatch",
+      "source": "dispatch-q",
+      "target": "dispatch",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "async",
+      "async": true,
+      "semanticsOrigin": "explicit",
       "attachments": [
         {
-          "id": "a_d7vdoaomdr74",
+          "id": "n.dupes",
           "type": "note",
-          "text": "An illustrative failure path — any subscription can have one. Poison messages park here for inspection and redrive; alert on depth.",
-          "noteKind": "note",
+          "text": "Delivery is at least once: SNS and SQS may hand over the same event twice. Dispatch drops repeats by eventId.",
+          "noteKind": "warning",
           "width": 200,
           "height": 56
         }
       ]
+    },
+    {
+      "id": "consume-notify",
+      "source": "notify-q",
+      "target": "notifier",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "async",
+      "async": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "ticket",
+      "source": "relay",
+      "target": "pos",
+      "label": "Sends ticket",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "response": "201",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "assign",
+      "source": "dispatch",
+      "target": "couriers",
+      "label": "Books courier",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "sms",
+      "source": "notifier",
+      "target": "twilio",
+      "label": "Sends SMS",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "park",
+      "source": "restaurant-q",
+      "target": "dlq",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "deadLetters",
+      "kind": "failure",
+      "async": true,
+      "semanticsOrigin": "explicit",
+      "deliveryAttempts": 4
     }
   ],
   "viewport": {
-    "x": 720,
-    "y": 450,
-    "zoom": 0.9809264305177112
+    "x": 0,
+    "y": 0,
+    "zoom": 1
   },
   "settings": {
     "showSequence": true,
@@ -329,68 +706,118 @@
   },
   "flows": [
     {
-      "id": "flow1",
-      "title": "Update a projection",
+      "id": "placed",
+      "title": "An order is placed",
       "steps": [
         {
-          "id": "fs_bof19sg93aia",
-          "edgeId": "publish"
+          "id": "placed.s1",
+          "edgeId": "place",
+          "caption": "A diner places an order."
         },
         {
-          "id": "fs_5yt4rfdnzigi",
-          "edgeId": "fan-out-projection",
-          "caption": "This subscription’s own copy"
+          "id": "placed.s2",
+          "edgeId": "store",
+          "caption": "The Orders Service stores it and answers 201."
         },
         {
-          "id": "fs_opqibx1ejpgm",
-          "edgeId": "consume-projection"
+          "id": "placed.s3",
+          "edgeId": "publish",
+          "extraNodeIds": [
+            "topic"
+          ],
+          "caption": "It publishes OrderPlaced once, not knowing who listens."
         },
         {
-          "id": "fs_4tvqqvl0syhx",
-          "edgeId": "project"
+          "id": "placed.s4",
+          "edgeId": "fan-restaurant",
+          "caption": "SNS copies the event into the restaurant relay's queue…"
+        },
+        {
+          "id": "placed.s5",
+          "edgeId": "consume-restaurant",
+          "caption": "The relay picks it up at its own pace."
+        },
+        {
+          "id": "placed.s6",
+          "edgeId": "ticket",
+          "caption": "A ticket prints in the restaurant's kitchen."
+        },
+        {
+          "id": "placed.s7",
+          "edgeId": "fan-dispatch",
+          "caption": "…and, independently, into Dispatch's queue."
+        },
+        {
+          "id": "placed.s8",
+          "edgeId": "consume-dispatch",
+          "caption": "One of four dispatch workers takes it."
+        },
+        {
+          "id": "placed.s9",
+          "edgeId": "assign",
+          "caption": "The nearest free courier is booked."
+        },
+        {
+          "id": "placed.s10",
+          "edgeId": "fan-notify",
+          "caption": "A third copy goes to Notifications."
+        },
+        {
+          "id": "placed.s11",
+          "edgeId": "consume-notify",
+          "caption": "Notifications reads it from its own queue."
+        },
+        {
+          "id": "placed.s12",
+          "edgeId": "sms",
+          "caption": "The diner gets a text: the order is confirmed."
         }
       ],
-      "accent": "green"
+      "accent": "teal"
     },
     {
-      "id": "flow2",
-      "title": "Reach an external system",
+      "id": "pos-down",
+      "title": "Restaurant POS is offline",
       "steps": [
         {
-          "id": "fs_y6dyrfyvyh0w",
-          "edgeId": "publish"
+          "id": "pos-down.s1",
+          "edgeId": "fan-restaurant",
+          "caption": "The event reaches the relay's queue as usual."
         },
         {
-          "id": "fs_kxzqixgakk5o",
-          "edgeId": "fan-out-integration",
-          "caption": "The same event, delivered again — independently"
+          "id": "pos-down.s2",
+          "edgeId": "consume-restaurant",
+          "extraNodeIds": [
+            "pos"
+          ],
+          "caption": "The POS doesn't answer; the message reappears and is retried."
         },
         {
-          "id": "fs_3gwirdt7pttz",
-          "edgeId": "consume-integration"
-        },
-        {
-          "id": "fs_j3lfaznep7s4",
-          "edgeId": "call-external"
+          "id": "pos-down.s3",
+          "edgeId": "park",
+          "extraNodeIds": [
+            "dispatch-q",
+            "notify-q"
+          ],
+          "caption": "After four attempts it moves to the DLQ. Couriers and texts are unaffected."
         }
       ],
-      "accent": "amber"
-    },
-    {
-      "id": "flow3",
-      "title": "Handle a failed delivery",
-      "steps": [
-        {
-          "id": "fs_dy4rtouf4a4x",
-          "edgeId": "fan-out-integration"
-        },
-        {
-          "id": "fs_05duaa1l1gkr",
-          "edgeId": "dead-letter",
-          "caption": "Parked after the configured retries, without blocking the lane"
-        }
-      ],
-      "accent": "rose"
+      "accent": "rose",
+      "variantOf": "placed"
     }
-  ]
+  ],
+  "openPoints": [
+    {
+      "id": "op.schema",
+      "kind": "tentative",
+      "context": "OrderPlaced v1 carries the pickup location so Dispatch never calls back. Revisit if restaurants move.",
+      "targets": [
+        {
+          "kind": "edge",
+          "id": "publish"
+        }
+      ]
+    }
+  ],
+  "level": "container"
 }

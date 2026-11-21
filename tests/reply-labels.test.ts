@@ -50,7 +50,7 @@ function overlapping(boxes: Map<string, Box>): string[] {
 }
 
 function saga(): DraftDocument {
-  const text = readFileSync(resolve(process.cwd(), 'tests/fixtures/starters/starters/patterns/saga-orchestration/saga-orchestration.draftcanvas'), 'utf8');
+  const text = readFileSync(resolve(process.cwd(), 'tests/fixtures/connectors/saga-orchestration.draftcanvas'), 'utf8');
   const parsed = deserializeDocument(text);
   if (!parsed.ok) throw new Error(parsed.error);
   return parsed.document;

@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 25,
+  "version": 28,
   "metadata": {
     "id": "starter-microservices",
     "title": "Microservices",
@@ -9,363 +9,702 @@
   },
   "nodes": [
     {
-      "id": "client",
+      "id": "ordering",
+      "type": "group",
+      "x": 940,
+      "y": -106,
+      "width": 240,
+      "height": 500,
+      "z": -1,
+      "text": "Ordering",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "kitchen",
+      "type": "group",
+      "x": 940,
+      "y": -483,
+      "width": 592,
+      "height": 227,
+      "z": -1,
+      "text": "Restaurants",
+      "textOrigin": "explicit",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "dispatch",
+      "type": "group",
+      "x": 1700,
+      "y": -106,
+      "width": 240,
+      "height": 500,
+      "z": -1,
+      "text": "Delivery",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "customer",
       "type": "actor",
       "x": -60,
-      "y": -433,
+      "y": -59,
       "width": 120,
-      "height": 92,
+      "height": 118,
       "z": 0,
-      "text": "Client",
+      "text": "Customer",
+      "description": "Orders dinner from nearby restaurants.",
       "textOrigin": "explicit",
-      "actorKind": "system",
+      "actorKind": "human",
       "actorFrame": "borderless"
+    },
+    {
+      "id": "app",
+      "type": "service",
+      "x": 252,
+      "y": -41,
+      "width": 176,
+      "height": 83,
+      "z": 0,
+      "text": "Customer App",
+      "description": "Shows menus, takes the order and tracks the courier.",
+      "technology": "Flutter",
+      "textOrigin": "explicit",
+      "serviceKind": "generic"
     },
     {
       "id": "gateway",
       "type": "service",
-      "x": -88,
-      "y": -237,
+      "x": 612,
+      "y": -60,
       "width": 176,
-      "height": 68,
+      "height": 121,
       "z": 0,
       "text": "API Gateway",
+      "description": "Checks the token, rate-limits and routes each path.",
+      "technology": "Kong",
       "textOrigin": "explicit",
-      "accent": "teal",
       "serviceKind": "gateway",
+      "replicas": 2,
       "attachments": [
         {
-          "id": "a_jbndqrqwug0d",
+          "id": "n.bff",
           "type": "note",
-          "text": "Optional: one entry point for routing, auth and rate limits. Clients may also call services directly — the pattern is the independent services, not the gateway.",
-          "noteKind": "note",
+          "text": "The tracking screen needs Orders and Delivery together. Compose it here, or give the app its own backend (see the BFF starter)?",
+          "noteKind": "question",
           "width": 200,
           "height": 56
+        },
+        {
+          "id": "n.kong",
+          "type": "code",
+          "language": "yaml",
+          "code": "routes:\n  - name: orders\n    paths: [/orders]\n    service: orders-service\n    plugins:\n      - name: jwt\n      - name: rate-limiting\n        config: { minute: 60 }",
+          "width": 260,
+          "height": 197
         }
       ]
     },
     {
-      "id": "owner-a",
-      "type": "group",
-      "x": -552,
-      "y": 27,
-      "width": 320,
-      "height": 406,
-      "z": -2,
-      "text": "Capability A",
-      "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
-    },
-    {
-      "id": "deploy-a",
-      "type": "group",
-      "x": -516,
-      "y": 71,
-      "width": 248,
-      "height": 152,
-      "z": -1,
-      "parentId": "owner-a",
-      "text": "",
-      "textOrigin": "explicit",
-      "boundaryPreset": "deployment"
-    },
-    {
-      "id": "service-a",
+      "id": "orders",
       "type": "service",
-      "x": -480,
-      "y": 119,
+      "x": 972,
+      "y": -54,
       "width": 176,
-      "height": 68,
+      "height": 109,
       "z": 0,
-      "parentId": "deploy-a",
-      "text": "Capability A Service",
+      "parentId": "ordering",
+      "text": "Orders Service",
+      "description": "Prices, pays for and records orders.",
+      "technology": "Spring Boot 3",
       "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api"
-    },
-    {
-      "id": "store-a",
-      "type": "database",
-      "x": -478,
-      "y": 295,
-      "width": 172,
-      "height": 102,
-      "z": 0,
-      "parentId": "owner-a",
-      "text": "Capability A Store",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic",
+      "serviceKind": "api",
+      "replicas": 3,
       "attachments": [
         {
-          "id": "a_ddg6uvlwbuim",
-          "type": "note",
-          "text": "Private to Capability A: no other service reads or writes it. Ownership is logical — a separate schema on a shared instance qualifies; a separate server is not required.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
+          "id": "n.breaker",
+          "type": "code",
+          "language": "yaml",
+          "code": "resilience4j.circuitbreaker.instances:\n  restaurants:\n    slidingWindowSize: 20\n    failureRateThreshold: 50\n    waitDurationInOpenState: 10s",
+          "width": 317,
+          "height": 138.875
+        }
+      ],
+      "inside": {
+        "nodes": [
+          {
+            "id": "o.gateway",
+            "type": "service",
+            "x": 0,
+            "y": 315,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "API Gateway",
+            "technology": "Kong",
+            "textOrigin": "explicit",
+            "serviceKind": "gateway"
+          },
+          {
+            "id": "o.controller",
+            "type": "component",
+            "x": 291,
+            "y": 309,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Order Controller",
+            "description": "Validates the basket and answers 201.",
+            "technology": "Spring",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "o.place",
+            "type": "component",
+            "x": 562,
+            "y": 309,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Place Order",
+            "description": "Prices, charges and records the order.",
+            "technology": "Java",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "o.menus",
+            "type": "component",
+            "x": 1026,
+            "y": 0,
+            "width": 152,
+            "height": 134,
+            "z": 0,
+            "text": "Restaurants Client",
+            "description": "Calls Restaurants over gRPC behind a circuit breaker.",
+            "technology": "Spring",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "o.pay",
+            "type": "component",
+            "x": 1026,
+            "y": 188,
+            "width": 152,
+            "height": 134,
+            "z": 0,
+            "text": "Payments Client",
+            "description": "Authorizes the card with an idempotency key.",
+            "technology": "Adyen",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "o.repo",
+            "type": "component",
+            "x": 1026,
+            "y": 376,
+            "width": 152,
+            "height": 134,
+            "z": 0,
+            "text": "Order Repository",
+            "description": "Saves orders and their lines.",
+            "technology": "Hibernate",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "o.publisher",
+            "type": "component",
+            "x": 1026,
+            "y": 564,
+            "width": 152,
+            "height": 134,
+            "z": 0,
+            "text": "Event Publisher",
+            "description": "Publishes OrderPlaced after commit.",
+            "technology": "Kafka",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "o.restaurants",
+            "type": "service",
+            "x": 1327,
+            "y": 33,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Restaurants Service",
+            "technology": "Go",
+            "textOrigin": "explicit",
+            "serviceKind": "api"
+          },
+          {
+            "id": "o.adyen",
+            "type": "service",
+            "x": 1327,
+            "y": 221,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Adyen",
+            "technology": "Adyen",
+            "textOrigin": "explicit",
+            "serviceKind": "external"
+          },
+          {
+            "id": "o.db",
+            "type": "database",
+            "x": 1355,
+            "y": 404.1363636363636,
+            "width": 120,
+            "height": 114,
+            "z": 0,
+            "text": "Orders DB",
+            "technology": "PostgreSQL 16",
+            "textOrigin": "explicit",
+            "databaseKind": "sql"
+          },
+          {
+            "id": "o.events",
+            "type": "queue",
+            "x": 1345,
+            "y": 614.25,
+            "width": 140,
+            "height": 72,
+            "z": 0,
+            "text": "order-events",
+            "technology": "Kafka",
+            "textOrigin": "explicit",
+            "queueKind": "topic"
+          }
+        ],
+        "edges": [
+          {
+            "id": "o.post",
+            "source": "o.gateway",
+            "target": "o.controller",
+            "label": "POST /orders",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "routes",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.handle",
+            "source": "o.controller",
+            "target": "o.place",
+            "label": "place(basket)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.price",
+            "source": "o.place",
+            "target": "o.menus",
+            "label": "price(items)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.grpc",
+            "source": "o.menus",
+            "target": "o.restaurants",
+            "label": "GetPrices",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "grpc",
+            "hasResponse": true,
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.charge",
+            "source": "o.place",
+            "target": "o.pay",
+            "label": "authorize(total)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.adyen-call",
+            "source": "o.pay",
+            "target": "o.adyen",
+            "label": "Authorizes payment",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.save",
+            "source": "o.place",
+            "target": "o.repo",
+            "label": "save(order)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.sql",
+            "source": "o.repo",
+            "target": "o.db",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "writes",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.emit",
+            "source": "o.place",
+            "target": "o.publisher",
+            "label": "publish(event)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.kafka",
+            "source": "o.publisher",
+            "target": "o.events",
+            "label": "OrderPlaced",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "publishes",
+            "kind": "event",
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "o.flow",
+            "title": "Place an order, inside Orders",
+            "steps": [
+              {
+                "id": "o.flow.s1",
+                "edgeId": "o.post",
+                "caption": "The gateway forwards the checked request to the controller."
+              },
+              {
+                "id": "o.flow.s2",
+                "edgeId": "o.handle",
+                "caption": "The use case owns the order rules."
+              },
+              {
+                "id": "o.flow.s3",
+                "edgeId": "o.price",
+                "caption": "Prices come from Restaurants, never from a copy of its tables."
+              },
+              {
+                "id": "o.flow.s4",
+                "edgeId": "o.grpc",
+                "caption": "One gRPC call, guarded by a circuit breaker and a 300 ms deadline."
+              },
+              {
+                "id": "o.flow.s5",
+                "edgeId": "o.charge",
+                "caption": "The total is authorized before anything is stored."
+              },
+              {
+                "id": "o.flow.s6",
+                "edgeId": "o.adyen-call",
+                "caption": "Adyen authorizes the card, keyed by the order id."
+              },
+              {
+                "id": "o.flow.s7",
+                "edgeId": "o.save",
+                "caption": "The order is saved as PAID."
+              },
+              {
+                "id": "o.flow.s8",
+                "edgeId": "o.sql",
+                "caption": "Only Orders writes Orders DB."
+              },
+              {
+                "id": "o.flow.s9",
+                "edgeId": "o.emit",
+                "caption": "The use case announces the order."
+              },
+              {
+                "id": "o.flow.s10",
+                "edgeId": "o.kafka",
+                "caption": "OrderPlaced is published, keyed by restaurant."
+              }
+            ],
+            "accent": "blue"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "level": "component"
+      }
+    },
+    {
+      "id": "orders-db",
+      "type": "database",
+      "x": 1000,
+      "y": 219,
+      "width": 120,
+      "height": 143,
+      "z": 0,
+      "parentId": "ordering",
+      "text": "Orders DB",
+      "description": "Orders and payment status.",
+      "technology": "PostgreSQL 16",
+      "textOrigin": "explicit",
+      "databaseKind": "sql"
+    },
+    {
+      "id": "restaurants",
+      "type": "service",
+      "x": 972,
+      "y": -414,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "kitchen",
+      "text": "Restaurants Service",
+      "description": "Serves menus and today's prices.",
+      "technology": "Go",
+      "textOrigin": "explicit",
+      "serviceKind": "api",
+      "replicas": 2
+    },
+    {
+      "id": "menus-db",
+      "type": "database",
+      "x": 1380,
+      "y": -431,
+      "width": 120,
+      "height": 143,
+      "z": 0,
+      "parentId": "kitchen",
+      "text": "Menus DB",
+      "description": "Menus, prices and hours.",
+      "technology": "MongoDB",
+      "textOrigin": "explicit",
+      "databaseKind": "nosql"
+    },
+    {
+      "id": "events",
+      "type": "queue",
+      "x": 1370,
+      "y": -38,
+      "width": 140,
+      "height": 120,
+      "z": 0,
+      "text": "order-events",
+      "description": "Order lifecycle events, partitioned by restaurant.",
+      "technology": "Kafka",
+      "textOrigin": "explicit",
+      "queueKind": "topic",
+      "attachments": [
+        {
+          "id": "n.payload",
+          "type": "code",
+          "language": "json",
+          "code": "{\n  \"type\": \"OrderPlaced\",\n  \"orderId\": \"ord_7Hq2\",\n  \"restaurantId\": \"rst_221\",\n  \"items\": [{ \"sku\": \"margherita\", \"qty\": 2 }],\n  \"dropOff\": { \"lat\": 52.52, \"lng\": 13.40 }\n}",
+          "width": 384.5,
+          "height": 177.625
         }
       ]
     },
     {
-      "id": "owner-b",
-      "type": "group",
-      "x": -160,
-      "y": 27,
-      "width": 320,
-      "height": 406,
-      "z": -2,
-      "text": "Capability B",
-      "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
-    },
-    {
-      "id": "deploy-b",
-      "type": "group",
-      "x": -124,
-      "y": 71,
-      "width": 248,
-      "height": 152,
-      "z": -1,
-      "parentId": "owner-b",
-      "text": "",
-      "textOrigin": "explicit",
-      "boundaryPreset": "deployment"
-    },
-    {
-      "id": "service-b",
+      "id": "delivery",
       "type": "service",
-      "x": -88,
-      "y": 119,
+      "x": 1732,
+      "y": -51,
       "width": 176,
-      "height": 68,
+      "height": 103,
       "z": 0,
-      "parentId": "deploy-b",
-      "text": "Capability B Service",
+      "parentId": "dispatch",
+      "text": "Delivery Service",
+      "description": "Assigns a courier and tracks the drop-off.",
+      "technology": "NestJS",
       "textOrigin": "explicit",
-      "accent": "teal",
       "serviceKind": "api"
     },
     {
-      "id": "store-b",
+      "id": "locations",
       "type": "database",
-      "x": -86,
-      "y": 295,
-      "width": 172,
-      "height": 102,
+      "x": 1740,
+      "y": 219,
+      "width": 160,
+      "height": 143,
       "z": 0,
-      "parentId": "owner-b",
-      "text": "Capability B Store",
+      "parentId": "dispatch",
+      "text": "Courier Locations",
+      "description": "Live courier positions.",
+      "technology": "Redis 7",
       "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic"
+      "databaseKind": "cache"
     },
     {
-      "id": "owner-c",
-      "type": "group",
-      "x": 232,
-      "y": 27,
-      "width": 320,
-      "height": 406,
-      "z": -2,
-      "text": "Capability C",
-      "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
-    },
-    {
-      "id": "deploy-c",
-      "type": "group",
-      "x": 268,
-      "y": 71,
-      "width": 248,
-      "height": 152,
-      "z": -1,
-      "parentId": "owner-c",
-      "text": "",
-      "textOrigin": "explicit",
-      "boundaryPreset": "deployment"
-    },
-    {
-      "id": "service-c",
-      "type": "service",
-      "x": 304,
-      "y": 119,
-      "width": 176,
-      "height": 68,
+      "id": "title",
+      "type": "text",
+      "x": -60,
+      "y": -641,
+      "width": 1000,
+      "height": 110,
       "z": 0,
-      "parentId": "deploy-c",
-      "text": "Capability C Service",
+      "text": "# Food delivery services\nMicroservices: each service owns its data; calls and events connect them.",
       "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api"
-    },
-    {
-      "id": "store-c",
-      "type": "database",
-      "x": 306,
-      "y": 295,
-      "width": 172,
-      "height": 102,
-      "z": 0,
-      "parentId": "owner-c",
-      "text": "Capability C Store",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic"
+      "textRole": "title"
     }
   ],
   "edges": [
     {
+      "id": "use",
+      "source": "customer",
+      "target": "app",
+      "label": "Orders dinner",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
       "id": "call",
-      "source": "client",
+      "source": "app",
       "target": "gateway",
+      "label": "POST /orders",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "calls",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semantic": "http",
+      "response": "201 Created",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "route-a",
+      "id": "route-orders",
       "source": "gateway",
-      "target": "service-a",
+      "target": "orders",
+      "label": "/orders/**",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "routes",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "route-menus",
+      "source": "gateway",
+      "target": "restaurants",
+      "label": "/menus/**",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "routes",
       "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
         "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "route-b",
-      "source": "gateway",
-      "target": "service-b",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "routes",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "route-c",
-      "source": "gateway",
-      "target": "service-c",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "routes",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "persist-a",
-      "source": "service-a",
-      "target": "store-a",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "readsWrites",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "persist-b",
-      "source": "service-b",
-      "target": "store-b",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "readsWrites",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "persist-c",
-      "source": "service-c",
-      "target": "store-c",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "readsWrites",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "collaborate",
-      "source": "service-b",
-      "target": "service-c",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "calls",
-      "sourceAnchor": {
-        "side": "right",
         "offset": 0.5
       },
       "targetAnchor": {
         "side": "left",
         "offset": 0.5
       },
-      "semanticsOrigin": "inferred",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "price",
+      "source": "orders",
+      "target": "restaurants",
+      "label": "GetPrices",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "grpc",
+      "response": "prices",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit",
       "attachments": [
         {
-          "id": "a_2fs9pl4onifc",
+          "id": "n.chain",
           "type": "note",
-          "text": "Through Capability C’s API — its contract — never its store. Events are the other way to integrate; see Event-Driven.",
-          "noteKind": "note",
+          "text": "A synchronous call chains availability: when Restaurants is down, nobody can order. The breaker fails fast instead of piling up threads.",
+          "noteKind": "warning",
           "width": 200,
           "height": 56
         }
       ]
+    },
+    {
+      "id": "persist-orders",
+      "source": "orders",
+      "target": "orders-db",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "persist-menus",
+      "source": "restaurants",
+      "target": "menus-db",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "publish",
+      "source": "orders",
+      "target": "events",
+      "label": "OrderPlaced",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.events",
+          "type": "note",
+          "text": "Services share events and APIs, never tables. Delivery learns about orders from OrderPlaced, not from Orders DB.",
+          "noteKind": "decision",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "to-delivery",
+      "source": "events",
+      "target": "delivery",
+      "label": "Courier request",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "deliversTo",
+      "kind": "event",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "nearest",
+      "source": "delivery",
+      "target": "locations",
+      "label": "Nearest couriers",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "semanticsOrigin": "explicit"
     }
   ],
   "viewport": {
-    "x": 720,
-    "y": 450,
-    "zoom": 0.8314087759815243
+    "x": 0,
+    "y": 0,
+    "zoom": 1
   },
   "settings": {
     "showSequence": true,
@@ -379,48 +718,108 @@
   },
   "flows": [
     {
-      "id": "flow1",
-      "title": "Handle a request",
+      "id": "order",
+      "title": "Order dinner",
       "steps": [
         {
-          "id": "fs_gttmcyf8z9t7",
-          "edgeId": "call"
+          "id": "order.s1",
+          "edgeId": "use",
+          "caption": "A customer orders two pizzas in the app."
         },
         {
-          "id": "fs_8ju8yj6q6ova",
-          "edgeId": "route-a"
+          "id": "order.s2",
+          "edgeId": "call",
+          "caption": "The app posts the order to the one public entry point."
         },
         {
-          "id": "fs_bp491mx7tp2j",
-          "edgeId": "persist-a",
-          "caption": "Its own store — nobody else’s"
+          "id": "order.s3",
+          "edgeId": "route-orders",
+          "caption": "Kong checks the customer's JWT and routes /orders to one of three instances."
+        },
+        {
+          "id": "order.s4",
+          "edgeId": "price",
+          "caption": "Orders asks Restaurants for today's prices over gRPC."
+        },
+        {
+          "id": "order.s5",
+          "edgeId": "persist-orders",
+          "caption": "Orders stores the order in its own database."
+        },
+        {
+          "id": "order.s6",
+          "edgeId": "publish",
+          "caption": "OrderPlaced is published once; Orders doesn't know who listens."
+        },
+        {
+          "id": "order.s7",
+          "edgeId": "to-delivery",
+          "caption": "Delivery starts looking for a courier, at its own pace."
+        },
+        {
+          "id": "order.s8",
+          "edgeId": "nearest",
+          "caption": "The nearest free courier is found in the geo index."
         }
       ],
-      "accent": "green"
+      "accent": "teal"
     },
     {
-      "id": "flow2",
-      "title": "Call another service",
+      "id": "breaker",
+      "title": "Restaurants is down",
       "steps": [
         {
-          "id": "fs_ddq2y4s3lqjf",
-          "edgeId": "call"
+          "id": "breaker.s1",
+          "edgeId": "price",
+          "extraNodeIds": [
+            "restaurants"
+          ],
+          "caption": "GetPrices times out at 300 ms; after 10 failures in 20 the breaker opens."
         },
         {
-          "id": "fs_gk6yenum2b2z",
-          "edgeId": "route-b"
-        },
-        {
-          "id": "fs_140xg5s9dsvb",
-          "edgeId": "collaborate",
-          "caption": "A network call to C’s contract, not a query on C’s data"
-        },
-        {
-          "id": "fs_mg3lw998l8jm",
-          "edgeId": "persist-c"
+          "id": "breaker.s2",
+          "edgeId": "call",
+          "caption": "Orders fails fast with 503 and the app asks the customer to retry."
         }
       ],
-      "accent": "amber"
+      "accent": "rose",
+      "variantOf": "order"
+    },
+    {
+      "id": "browse",
+      "title": "Browse a menu",
+      "steps": [
+        {
+          "id": "browse.s1",
+          "edgeId": "call",
+          "caption": "The app asks for a restaurant's menu."
+        },
+        {
+          "id": "browse.s2",
+          "edgeId": "route-menus",
+          "caption": "The gateway routes /menus straight to Restaurants."
+        },
+        {
+          "id": "browse.s3",
+          "edgeId": "persist-menus",
+          "caption": "Restaurants answers from its own Menus DB."
+        }
+      ],
+      "accent": "blue"
     }
-  ]
+  ],
+  "openPoints": [
+    {
+      "id": "op.locations",
+      "kind": "tentative",
+      "context": "Courier positions live only in Redis. Assumed fine to lose on a restart: couriers report again within 5 s.",
+      "targets": [
+        {
+          "kind": "node",
+          "id": "locations"
+        }
+      ]
+    }
+  ],
+  "level": "container"
 }

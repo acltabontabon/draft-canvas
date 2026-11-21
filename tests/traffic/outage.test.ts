@@ -15,7 +15,7 @@ function walk(nodes: readonly DraftNode[], edges: readonly DraftEdge[], target: 
 }
 
 const parsed = parseDocument(
-  readFileSync(join(process.cwd(), 'tests/fixtures/starters/starters/architectures/event-driven/event-driven.draftcanvas'), 'utf8'),
+  readFileSync(join(process.cwd(), 'tests/fixtures/outage/event-driven.draftcanvas'), 'utf8'),
 );
 if (!parsed.ok) throw new Error(parsed.error);
 const starter = parsed.document;

@@ -1,0 +1,350 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-kappa",
+    "title": "Kappa",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "producers",
+      "type": "group",
+      "x": -522,
+      "y": -250,
+      "width": 464,
+      "height": 148,
+      "z": -1,
+      "text": "Producers",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "application",
+      "type": "service",
+      "x": -486,
+      "y": -206,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "producers",
+      "text": "Application",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "external",
+      "type": "service",
+      "x": -270,
+      "y": -206,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "producers",
+      "text": "External System",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "external"
+    },
+    {
+      "id": "core",
+      "type": "group",
+      "x": -416,
+      "y": 38,
+      "width": 848,
+      "height": 213,
+      "z": -1,
+      "text": "Streaming core",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "log",
+      "type": "queue",
+      "x": -360,
+      "y": 99,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "parentId": "core",
+      "text": "Event Log",
+      "textOrigin": "explicit",
+      "queueKind": "stream",
+      "attachments": [
+        {
+          "id": "a_94nkygqqt8fp",
+          "type": "note",
+          "text": "Replay from the start through the same processor to rebuild any view.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "history",
+      "type": "text",
+      "x": -350,
+      "y": 191,
+      "width": 120,
+      "height": 24,
+      "z": 0,
+      "parentId": "core",
+      "text": "Append-only, replayable",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "processor",
+      "type": "service",
+      "x": -76,
+      "y": 82,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "core",
+      "text": "Stream Processor",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "view",
+      "type": "database",
+      "x": 204,
+      "y": 81,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "parentId": "core",
+      "text": "Materialized View",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "table"
+    },
+    {
+      "id": "derived",
+      "type": "text",
+      "x": 238,
+      "y": 191,
+      "width": 104,
+      "height": 24,
+      "z": 0,
+      "parentId": "core",
+      "text": "Derived, rebuildable",
+      "textOrigin": "explicit",
+      "annotation": true
+    },
+    {
+      "id": "serving",
+      "type": "group",
+      "x": 58,
+      "y": -250,
+      "width": 464,
+      "height": 148,
+      "z": -1,
+      "text": "Serving",
+      "textOrigin": "explicit",
+      "boundaryPreset": "boundary"
+    },
+    {
+      "id": "query-api",
+      "type": "service",
+      "x": 94,
+      "y": -206,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "serving",
+      "text": "Query API",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "api"
+    },
+    {
+      "id": "analytics",
+      "type": "service",
+      "x": 310,
+      "y": -206,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "parentId": "serving",
+      "text": "Analytics",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    }
+  ],
+  "edges": [
+    {
+      "id": "app-publish",
+      "source": "application",
+      "target": "log",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "ext-publish",
+      "source": "external",
+      "target": "log",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "consume",
+      "source": "log",
+      "target": "processor",
+      "label": "live + replay",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "materialize",
+      "source": "processor",
+      "target": "view",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "query",
+      "source": "query-api",
+      "target": "view",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "analyze",
+      "source": "analytics",
+      "target": "view",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 1
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Live processing",
+      "steps": [
+        {
+          "id": "fs_4qgvxyaoxy52",
+          "edgeId": "app-publish",
+          "caption": "Application publishes an event"
+        },
+        {
+          "id": "fs_3ond8evb2kud",
+          "edgeId": "consume",
+          "caption": "Consumed live, in log order"
+        },
+        {
+          "id": "fs_4zrzyzksmypi",
+          "edgeId": "materialize",
+          "caption": "Projected into current state"
+        },
+        {
+          "id": "fs_fpd2voy4exh3",
+          "edgeId": "query",
+          "caption": "Query API reads the view"
+        }
+      ],
+      "accent": "teal"
+    },
+    {
+      "id": "flow2",
+      "title": "Rebuild view",
+      "steps": [
+        {
+          "id": "fs_c9unxihftfzy",
+          "edgeId": "consume",
+          "caption": "Replayed from the start, same processor"
+        },
+        {
+          "id": "fs_vxa8agrbf7ih",
+          "edgeId": "materialize",
+          "caption": "The view rebuilds from history"
+        }
+      ],
+      "accent": "violet"
+    }
+  ]
+}

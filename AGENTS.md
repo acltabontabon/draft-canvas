@@ -60,6 +60,8 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   `parseDocument` before it is kept. `tests/starter-files.test.ts` is the quality gate for starter
   files; `tests/fixtures/starters/` is a vendored snapshot (`npm run starters:fixtures`) and
   `tests/fixtures/starters-v1/` the frozen old catalog for routing and performance corpora.
+  Browser journeys read their own pinned gallery, `e2e/fixtures/starters/` (`e2e/gallery.ts`): a
+  refreshed snapshot must not rewrite them. Guide screenshots ask for the current one.
 - Commands live in `src/commands/registry.ts`, with jump targets in `search.ts`. Call existing store
   actions or camera methods, never document operations directly. Add an operation and store wrapper
   before naming a new command.

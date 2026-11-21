@@ -2,27 +2,35 @@
   "id": "transactional-outbox",
   "name": "Transactional Outbox",
   "category": "pattern",
-  "summary": "Persist state and event intent atomically, publish after",
+  "summary": "A bank transfer and its event commit in one transaction; Debezium publishes it after, and consumers drop duplicates",
   "aliases": [
     "outbox",
     "transactional outbox",
     "outbox pattern",
     "dual write",
-    "reliable publish"
+    "reliable publish",
+    "debezium outbox",
+    "inbox pattern",
+    "idempotent consumer"
   ],
   "tags": [
     "outbox",
     "reliable messaging",
     "events",
-    "consistency"
+    "consistency",
+    "cdc",
+    "idempotency"
   ],
   "useWhen": [
     "A state change and its event must never disagree.",
-    "Publishing events from a service that owns a database."
+    "Publishing events from a service that owns a relational database.",
+    "The broker must not be on the request path: a Kafka outage should not block writes."
   ],
   "watchOutFor": [
-    "Events arrive at least once and slightly late.",
-    "The outbox table needs cleaning up."
+    "Events arrive at least once and slightly late; every consumer must deduplicate.",
+    "The outbox table grows unless rows are deleted once published.",
+    "Ordering holds only per message key; choose the key for the order consumers need.",
+    "The relay is one more thing to run and monitor: lag means late events."
   ],
   "featured": false,
   "order": 130

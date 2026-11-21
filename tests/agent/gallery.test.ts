@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { starterOf } from '../fixtures/gallery';
 import { compose } from '../../src/agent/compile';
+import { starterKeptIds } from '../../src/agent/starter';
 import { applyUpdate } from '../../src/agent/patch';
 import { lineOf, measureContext } from '../../src/agent/place';
 import { checkQuality } from '../../src/agent/quality';
@@ -51,13 +52,17 @@ describe('layout gallery', { timeout: 45_000 }, () => {
       const { doc, before, touched } = galleryDocument(entry);
       const ctx = measureContext();
       const jogs: string[] = [];
-      // Readable in every view, the drill-downs included.
+      // Readable in every view, the drill-downs included. A starter's own hand-made drawing is the
+      // gallery's to check (`tests/starter-files.test.ts`): here it is what the request added to it.
+      const request = (entry as { request?: { starter?: { id: string; prefix?: string } } }).request;
+      const starter = request?.starter ? starterOf(request).starter : undefined;
+      const kept = starter ? starterKeptIds(starter, request!.starter!.prefix ?? '', doc.nodes) : undefined;
       walkGraphs(doc, (graph, path) => {
         const view = path.length ? viewOf(doc, path)! : doc;
         const focus = touched && path.length === 0 ? touched : undefined;
         const quality = checkQuality(view.nodes, view.edges, ctx, focus);
-        expect(quality.errors, `view ${path.join('/') || 'top'}`).toEqual([]);
-        jogs.push(...quality.warnings.filter(w => w.kind === 'jog').map(w => `${path.join('/') || 'top'}: ${w.message}`));
+        expect(quality.errors.filter((issue) => !kept || !issue.ids.every((id) => kept.has(id))), `view ${path.join('/') || 'top'}`).toEqual([]);
+        jogs.push(...quality.warnings.filter(w => w.kind === 'jog' && !(kept && w.ids.every((id) => kept.has(id)))).map(w => `${path.join('/') || 'top'}: ${w.message}`));
         // Every anchor the layout chose is one the router draws as given — never one it overrides
         // because the line would cut back through a shape (see `anchorsHold`).
         // Pins this edit didn't choose — ones a person moved shapes away from — are kept as given and
@@ -190,7 +195,7 @@ describe('layout gallery', { timeout: 45_000 }, () => {
     const entry = GALLERY.find((g) => g.id === '14-starter-flow')!;
     const { doc } = galleryDocument(entry);
     expect(doc.flows.length).toBeGreaterThan(0);
-    expect(doc.nodes.find((n) => n.id === 'producer')).toMatchObject({ text: 'Order Service', technology: 'Spring Boot' });
+    expect(doc.nodes.find((n) => n.id === 'orders')).toMatchObject({ text: 'Order Service', technology: 'Spring Boot' });
     const mermaid = sequenceSourceFor(doc, 'mermaid');
     expect(mermaid).toContain('sequenceDiagram');
     expect(mermaid).toContain('Order Service');

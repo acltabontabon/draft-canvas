@@ -2,27 +2,34 @@
   "id": "bff",
   "name": "Backend for Frontend",
   "category": "architecture",
-  "summary": "A backend per frontend, over shared capabilities",
+  "summary": "Web, mobile and TV each get a backend shaped for their screens, over shared platform APIs",
   "aliases": [
     "bff",
     "backend for frontend",
     "backends for frontends",
     "client adapter",
-    "per-client api"
+    "per-client api",
+    "api composition",
+    "graphql bff",
+    "streaming app"
   ],
   "tags": [
     "backend for frontend",
     "web",
     "mobile",
-    "api composition"
+    "tv",
+    "api composition",
+    "graphql"
   ],
   "useWhen": [
-    "Web and mobile need different shapes of the same data.",
-    "Frontend teams want to change their API without coordinating every release."
+    "Web, mobile and TV need different shapes and sizes of the same data.",
+    "Frontend teams want to change their API without coordinating every release.",
+    "A screen should load in one round trip instead of many calls from a slow network."
   ],
   "watchOutFor": [
-    "Logic duplicated across BFFs instead of living in the shared services.",
-    "One more service per client to run."
+    "Business rules creeping into BFFs and drifting apart; keep them in the platform APIs.",
+    "One more service per client to build, run and keep secure.",
+    "A BFF that waits on every call is as slow as its slowest one; set budgets and degrade."
   ],
   "featured": false,
   "order": 60

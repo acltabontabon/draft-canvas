@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 25,
+  "version": 29,
   "metadata": {
     "id": "starter-bff",
     "title": "Backend for Frontend",
@@ -9,335 +9,725 @@
   },
   "nodes": [
     {
-      "id": "web-box",
+      "id": "web-team",
       "type": "group",
-      "x": -476,
-      "y": -244,
-      "width": 248,
-      "height": 342,
+      "x": 420,
+      "y": 74,
+      "width": 600,
+      "height": 213,
       "z": -1,
       "text": "Web experience",
       "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
+      "boundaryPreset": "domain"
     },
     {
-      "id": "web-subtitle",
-      "type": "text",
-      "x": -464,
-      "y": -214,
-      "width": 224,
-      "height": 24,
-      "z": 0,
-      "parentId": "web-box",
-      "text": "Owned by the web team",
+      "id": "mobile-team",
+      "type": "group",
+      "x": 420,
+      "y": 354,
+      "width": 600,
+      "height": 213,
+      "z": -1,
+      "text": "Mobile experience",
       "textOrigin": "explicit",
-      "annotation": true
+      "accent": "blue",
+      "boundaryPreset": "domain",
+      "attachments": [
+        {
+          "id": "n.owner",
+          "type": "note",
+          "text": "Each BFF belongs to its frontend's team and ships with it. Business rules stay in the platform's APIs.",
+          "noteKind": "decision",
+          "width": 200,
+          "height": 56
+        }
+      ]
     },
     {
-      "id": "web-client",
+      "id": "tv-team",
+      "type": "group",
+      "x": 420,
+      "y": 637,
+      "width": 600,
+      "height": 207,
+      "z": -1,
+      "text": "TV experience",
+      "textOrigin": "explicit",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "platform",
+      "type": "group",
+      "x": 1340,
+      "y": 74,
+      "width": 240,
+      "height": 772,
+      "z": -1,
+      "text": "Streaming platform",
+      "textOrigin": "explicit",
+      "accent": "violet",
+      "boundaryPreset": "domain",
+      "attachments": [
+        {
+          "id": "n.dup",
+          "type": "note",
+          "text": "Watch for the same rule appearing in three BFFs (who may play what, say). It belongs in a platform API.",
+          "noteKind": "warning",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "viewer",
       "type": "actor",
-      "x": -412,
-      "y": -182,
-      "width": 120,
-      "height": 92,
+      "x": 0,
+      "y": 421,
+      "width": 140,
+      "height": 118,
       "z": 0,
-      "parentId": "web-box",
-      "text": "Web Client",
+      "text": "Viewer",
+      "description": "Watches films and series on any screen.",
       "textOrigin": "explicit",
-      "actorKind": "system",
+      "actorKind": "human",
       "actorFrame": "borderless"
+    },
+    {
+      "id": "web",
+      "type": "service",
+      "x": 452,
+      "y": 159,
+      "width": 176,
+      "height": 83,
+      "z": 0,
+      "parentId": "web-team",
+      "text": "Web App",
+      "description": "Browses and plays titles in the browser.",
+      "technology": "React",
+      "textOrigin": "explicit",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "mobile",
+      "type": "service",
+      "x": 452,
+      "y": 439,
+      "width": 176,
+      "height": 83,
+      "z": 0,
+      "parentId": "mobile-team",
+      "text": "Mobile App",
+      "description": "Browses, downloads and plays on phones.",
+      "technology": "Flutter",
+      "textOrigin": "explicit",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "tv",
+      "type": "service",
+      "x": 452,
+      "y": 719,
+      "width": 176,
+      "height": 83,
+      "z": 0,
+      "parentId": "tv-team",
+      "text": "TV App",
+      "description": "Plays on smart TVs, driven by a remote.",
+      "technology": "Kotlin",
+      "textOrigin": "explicit",
+      "serviceKind": "generic"
     },
     {
       "id": "web-bff",
       "type": "service",
-      "x": -440,
-      "y": -26,
+      "x": 812,
+      "y": 146,
       "width": 176,
-      "height": 88,
+      "height": 109,
       "z": 0,
-      "parentId": "web-box",
+      "parentId": "web-team",
       "text": "Web BFF",
-      "description": "Composes page data",
+      "description": "Serves page-shaped JSON for each web route.",
+      "technology": "Node.js",
       "textOrigin": "explicit",
-      "accent": "teal",
       "serviceKind": "api",
-      "attachments": [
-        {
-          "id": "a_2rcn0b5im1la",
-          "type": "note",
-          "text": "Aggregates several capability calls into one page-shaped response for the browser. Not a shared gateway, and not where business rules live.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
-        }
-      ]
-    },
-    {
-      "id": "shared",
-      "type": "group",
-      "x": -124,
-      "y": -234,
-      "width": 248,
-      "height": 478,
-      "z": -1,
-      "text": "Shared backend capabilities",
-      "textOrigin": "explicit",
-      "boundaryPreset": "boundary",
-      "attachments": [
-        {
-          "id": "a_jr6fp6dibfq2",
-          "type": "note",
-          "text": "Shared capabilities with their own owners and the business rules. A BFF composes a subset of them for its client; it never owns them, and no client is required to use them all.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
-        }
-      ]
-    },
-    {
-      "id": "shared-subtitle",
-      "type": "text",
-      "x": -112,
-      "y": -204,
-      "width": 224,
-      "height": 24,
-      "z": 0,
-      "parentId": "shared",
-      "text": "Business rules live here",
-      "textOrigin": "explicit",
-      "annotation": true
-    },
-    {
-      "id": "capability-a",
-      "type": "service",
-      "x": -88,
-      "y": -172,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "parentId": "shared",
-      "text": "Capability A Service",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api"
-    },
-    {
-      "id": "capability-b",
-      "type": "service",
-      "x": -88,
-      "y": -16,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "parentId": "shared",
-      "text": "Capability B Service",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api"
-    },
-    {
-      "id": "capability-c",
-      "type": "service",
-      "x": -88,
-      "y": 140,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "parentId": "shared",
-      "text": "Capability C Service",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api"
-    },
-    {
-      "id": "mobile-box",
-      "type": "group",
-      "x": 228,
-      "y": -244,
-      "width": 248,
-      "height": 342,
-      "z": -1,
-      "text": "Mobile experience",
-      "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
-    },
-    {
-      "id": "mobile-subtitle",
-      "type": "text",
-      "x": 240,
-      "y": -214,
-      "width": 224,
-      "height": 24,
-      "z": 0,
-      "parentId": "mobile-box",
-      "text": "Owned by the mobile team",
-      "textOrigin": "explicit",
-      "annotation": true
-    },
-    {
-      "id": "mobile-client",
-      "type": "actor",
-      "x": 292,
-      "y": -182,
-      "width": 120,
-      "height": 92,
-      "z": 0,
-      "parentId": "mobile-box",
-      "text": "Mobile Client",
-      "textOrigin": "explicit",
-      "actorKind": "device",
-      "actorFrame": "borderless"
+      "replicas": 3
     },
     {
       "id": "mobile-bff",
       "type": "service",
-      "x": 264,
-      "y": -26,
+      "x": 812,
+      "y": 426,
       "width": 176,
-      "height": 88,
+      "height": 109,
       "z": 0,
-      "parentId": "mobile-box",
+      "parentId": "mobile-team",
       "text": "Mobile BFF",
-      "description": "Tailors compact responses",
+      "description": "One GraphQL query per screen, small payloads.",
+      "technology": "GraphQL",
       "textOrigin": "explicit",
-      "accent": "teal",
+      "serviceKind": "api",
+      "replicas": 3,
+      "inside": {
+        "nodes": [
+          {
+            "id": "m.app",
+            "type": "service",
+            "x": 0,
+            "y": 108,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Mobile App",
+            "technology": "Flutter",
+            "textOrigin": "explicit",
+            "serviceKind": "generic"
+          },
+          {
+            "id": "m.schema",
+            "type": "component",
+            "x": 318,
+            "y": 102,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Screen Schema",
+            "description": "Exposes one query per screen.",
+            "technology": "GraphQL",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "m.home",
+            "type": "component",
+            "x": 593,
+            "y": 102,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Home Resolver",
+            "description": "Builds the home screen in one round trip.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "m.loader",
+            "type": "component",
+            "x": 841,
+            "y": 102,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Batch Loader",
+            "description": "Batches and dedupes calls within one request.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "m.catalog-client",
+            "type": "component",
+            "x": 1118,
+            "y": 35.75,
+            "width": 152,
+            "height": 115,
+            "z": 0,
+            "text": "Catalog Client",
+            "description": "Fetches titles; trims artwork to phone sizes.",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "m.profiles-client",
+            "type": "component",
+            "x": 1118,
+            "y": 169,
+            "width": 152,
+            "height": 115,
+            "z": 0,
+            "text": "Profiles Client",
+            "description": "Reads the profile and its watch history.",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "m.catalog",
+            "type": "service",
+            "x": 1382,
+            "y": 59.25,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Catalog API",
+            "technology": "Spring Boot 3",
+            "textOrigin": "explicit",
+            "serviceKind": "api"
+          },
+          {
+            "id": "m.profiles",
+            "type": "service",
+            "x": 1382,
+            "y": 192.5,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Profiles API",
+            "technology": "Go",
+            "textOrigin": "explicit",
+            "serviceKind": "api"
+          }
+        ],
+        "edges": [
+          {
+            "id": "m.query",
+            "source": "m.app",
+            "target": "m.schema",
+            "label": "query HomeScreen",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "response": "200 JSON",
+            "hasResponse": true,
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "m.resolve",
+            "source": "m.schema",
+            "target": "m.home",
+            "label": "resolve(home)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "m.batch",
+            "source": "m.home",
+            "target": "m.loader",
+            "label": "load(ids)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "m.titles",
+            "source": "m.loader",
+            "target": "m.catalog-client",
+            "label": "titles(ids)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.3
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.5
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "m.history",
+            "source": "m.loader",
+            "target": "m.profiles-client",
+            "label": "history(profile)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.7
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.5
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "m.catalog-call",
+            "source": "m.catalog-client",
+            "target": "m.catalog",
+            "label": "GET /titles",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "m.profiles-call",
+            "source": "m.profiles-client",
+            "target": "m.profiles",
+            "label": "GET /history",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "m.flow",
+            "title": "Home screen, inside the Mobile BFF",
+            "steps": [
+              {
+                "id": "m.flow.s1",
+                "edgeId": "m.query",
+                "caption": "The app sends one HomeScreen query."
+              },
+              {
+                "id": "m.flow.s2",
+                "edgeId": "m.resolve",
+                "caption": "The schema hands it to the resolver for that screen."
+              },
+              {
+                "id": "m.flow.s3",
+                "edgeId": "m.batch",
+                "caption": "Every row asks the batch loader; repeats collapse into one call."
+              },
+              {
+                "id": "m.flow.s4",
+                "edgeId": "m.history",
+                "caption": "Watch history comes first: it decides 'Continue watching'."
+              },
+              {
+                "id": "m.flow.s5",
+                "edgeId": "m.profiles-call",
+                "caption": "One call to Profiles for the whole screen."
+              },
+              {
+                "id": "m.flow.s6",
+                "edgeId": "m.titles",
+                "caption": "Then the titles for every row, in one batch."
+              },
+              {
+                "id": "m.flow.s7",
+                "edgeId": "m.catalog-call",
+                "caption": "Catalog answers; artwork is cut to phone sizes before replying."
+              }
+            ],
+            "accent": "blue"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "level": "component"
+      }
+    },
+    {
+      "id": "tv-bff",
+      "type": "service",
+      "x": 812,
+      "y": 709,
+      "width": 176,
+      "height": 103,
+      "z": 0,
+      "parentId": "tv-team",
+      "text": "TV BFF",
+      "description": "Serves big-screen rails, preloaded for the remote.",
+      "technology": "Go",
+      "textOrigin": "explicit",
       "serviceKind": "api",
       "attachments": [
         {
-          "id": "a_wh4xc8vqqdhz",
+          "id": "n.tv",
           "type": "note",
-          "text": "Fewer round trips and smaller payloads — what a phone on a slow network needs. Uses only the capabilities the mobile experience needs.",
-          "noteKind": "note",
+          "text": "TV traffic is a tenth of mobile's. Could the TV app share the Mobile BFF, or does the remote really need its own shape?",
+          "noteKind": "question",
           "width": 200,
           "height": 56
         }
       ]
+    },
+    {
+      "id": "profiles",
+      "type": "service",
+      "x": 1372,
+      "y": 146,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "platform",
+      "text": "Profiles API",
+      "description": "Owns profiles, preferences and watch history.",
+      "technology": "Go",
+      "textOrigin": "explicit",
+      "serviceKind": "api"
+    },
+    {
+      "id": "catalog",
+      "type": "service",
+      "x": 1372,
+      "y": 426,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "platform",
+      "text": "Catalog API",
+      "description": "Owns titles, seasons, artwork and availability.",
+      "technology": "Spring Boot 3",
+      "textOrigin": "explicit",
+      "serviceKind": "api",
+      "replicas": 4
+    },
+    {
+      "id": "playback",
+      "type": "service",
+      "x": 1372,
+      "y": 705,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "platform",
+      "text": "Playback API",
+      "description": "Checks rights and signs stream URLs.",
+      "technology": "Rust",
+      "textOrigin": "explicit",
+      "serviceKind": "api"
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "x": 0,
+      "y": -92,
+      "width": 1100,
+      "height": 110,
+      "z": 0,
+      "text": "# Backend for Frontend\nOne backend per screen, each owned by its app's team, over shared platform APIs.",
+      "textOrigin": "explicit",
+      "textRole": "title"
     }
   ],
   "edges": [
     {
-      "id": "web-call",
-      "source": "web-client",
-      "target": "web-bff",
+      "id": "use-web",
+      "source": "viewer",
+      "target": "web",
+      "label": "Browses",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "calls",
       "sourceAnchor": {
-        "side": "bottom",
+        "side": "right",
         "offset": 0.5
       },
       "targetAnchor": {
-        "side": "top",
+        "side": "left",
         "offset": 0.5
       },
       "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "use-mobile",
+      "source": "viewer",
+      "target": "mobile",
+      "label": "Watches on the go",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "use-tv",
+      "source": "viewer",
+      "target": "tv",
+      "label": "Watches at home",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "web-call",
+      "source": "web",
+      "target": "web-bff",
+      "label": "GET /pages/title",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "response": "200 Page",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
     },
     {
       "id": "mobile-call",
-      "source": "mobile-client",
+      "source": "mobile",
       "target": "mobile-bff",
+      "label": "HomeScreen query",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "calls",
+      "semantic": "http",
+      "response": "200 JSON",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.query",
+          "type": "code",
+          "language": "plaintext",
+          "code": "query HomeScreen($profile: ID!) {\n  continueWatching(profile: $profile, first: 10) {\n    title { id name artwork(size: PHONE) }\n    progress\n  }\n  rows(first: 6) { name titles(first: 12) { id artwork(size: PHONE) } }\n}",
+          "width": 564.5,
+          "height": 177.625
+        }
+      ]
+    },
+    {
+      "id": "tv-call",
+      "source": "tv",
+      "target": "tv-bff",
+      "label": "GET /rails",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "response": "200 Rails",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "web-profiles",
+      "source": "web-bff",
+      "target": "profiles",
+      "label": "My list",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
       "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
+        "side": "right",
+        "offset": 0.3
       },
       "targetAnchor": {
+        "side": "left",
+        "offset": 0.3
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "web-catalog",
+      "source": "web-bff",
+      "target": "catalog",
+      "label": "Title details",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.75
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.3
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "mobile-profiles",
+      "source": "mobile-bff",
+      "target": "profiles",
+      "label": "Watch history",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "portal": true,
+      "sourceAnchor": {
         "side": "top",
         "offset": 0.5
       },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "web-a",
-      "source": "web-bff",
-      "target": "capability-a",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "calls",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
       "targetAnchor": {
-        "side": "left",
+        "side": "bottom",
         "offset": 0.5
       },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.timeout",
+          "type": "code",
+          "language": "yaml",
+          "code": "profiles:\n  timeout: 250ms\n  onTimeout: omit-field   # screen renders without it\ncatalog:\n  timeout: 400ms\n  onTimeout: fail",
+          "width": 429.5,
+          "height": 158.25
+        }
+      ]
     },
     {
-      "id": "web-b",
-      "source": "web-bff",
-      "target": "capability-b",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "calls",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "web-c",
-      "source": "web-bff",
-      "target": "capability-c",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "calls",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "mobile-a",
+      "id": "mobile-catalog",
       "source": "mobile-bff",
-      "target": "capability-a",
+      "target": "catalog",
+      "label": "Titles by id",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "calls",
+      "semantic": "http",
       "sourceAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "targetAnchor": {
         "side": "right",
         "offset": 0.5
       },
-      "semanticsOrigin": "inferred"
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "mobile-b",
-      "source": "mobile-bff",
-      "target": "capability-b",
+      "id": "tv-catalog",
+      "source": "tv-bff",
+      "target": "catalog",
+      "label": "Rails",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "calls",
+      "semantic": "http",
       "sourceAnchor": {
-        "side": "left",
-        "offset": 0.5
+        "side": "right",
+        "offset": 0.25
       },
       "targetAnchor": {
-        "side": "right",
-        "offset": 0.5
+        "side": "left",
+        "offset": 0.7
       },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "tv-playback",
+      "source": "tv-bff",
+      "target": "playback",
+      "label": "Prefetches stream",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "response": "signed URL",
+      "hasResponse": true,
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.7
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.7
+      },
+      "semanticsOrigin": "explicit"
     }
   ],
   "viewport": {
-    "x": 720,
-    "y": 450,
+    "x": 0,
+    "y": 0,
     "zoom": 1
   },
   "settings": {
@@ -352,50 +742,112 @@
   },
   "flows": [
     {
-      "id": "flow1",
-      "title": "Web request",
+      "id": "mobile-home",
+      "title": "Open the app's home screen",
       "steps": [
         {
-          "id": "fs_dmg4uh4ufhhr",
+          "id": "mobile-home.s1",
+          "edgeId": "use-mobile",
+          "caption": "A viewer opens the app on a train."
+        },
+        {
+          "id": "mobile-home.s2",
+          "edgeId": "mobile-call",
+          "caption": "The app sends one GraphQL query for the whole screen."
+        },
+        {
+          "id": "mobile-home.s3",
+          "edgeId": "mobile-profiles",
+          "caption": "The Mobile BFF reads watch history for 'Continue watching'."
+        },
+        {
+          "id": "mobile-home.s4",
+          "edgeId": "mobile-catalog",
+          "caption": "Titles come in one batch; only the fields the screen shows go back."
+        }
+      ],
+      "accent": "blue"
+    },
+    {
+      "id": "web-page",
+      "title": "Open a title page on the web",
+      "steps": [
+        {
+          "id": "web-page.s1",
+          "edgeId": "use-web",
+          "caption": "A viewer opens a series page in the browser."
+        },
+        {
+          "id": "web-page.s2",
           "edgeId": "web-call",
-          "caption": "One request for a whole page"
+          "caption": "The web app asks its BFF for the page in one request."
         },
         {
-          "id": "fs_g24cy40xg2ph",
-          "edgeId": "web-a"
+          "id": "web-page.s3",
+          "edgeId": "web-catalog",
+          "caption": "The Web BFF fetches seasons, episodes and artwork…"
         },
         {
-          "id": "fs_oqsuq62b9f6z",
-          "edgeId": "web-b"
-        },
-        {
-          "id": "fs_utkc1h6rjwip",
-          "edgeId": "web-c",
-          "caption": "Composed into one page-shaped response"
+          "id": "web-page.s4",
+          "edgeId": "web-profiles",
+          "caption": "…and whether the title is on the viewer's list."
         }
       ],
       "accent": "teal"
     },
     {
-      "id": "flow2",
-      "title": "Mobile request",
+      "id": "tv-play",
+      "title": "Start watching on TV",
       "steps": [
         {
-          "id": "fs_a4w2krq7p50z",
-          "edgeId": "mobile-call",
-          "caption": "One compact request from the phone"
+          "id": "tv-play.s1",
+          "edgeId": "use-tv",
+          "caption": "A viewer scrolls the rails with a remote."
         },
         {
-          "id": "fs_h4k0mprviom0",
-          "edgeId": "mobile-a"
+          "id": "tv-play.s2",
+          "edgeId": "tv-call",
+          "caption": "The TV app loads a few rails at a time."
         },
         {
-          "id": "fs_xu74ia2hd59y",
-          "edgeId": "mobile-b",
-          "caption": "Only what the mobile experience needs, trimmed for it"
+          "id": "tv-play.s3",
+          "edgeId": "tv-catalog",
+          "caption": "The TV BFF builds big-screen rails from the catalog."
+        },
+        {
+          "id": "tv-play.s4",
+          "edgeId": "tv-playback",
+          "caption": "It prefetches a signed stream for the focused title, so play is instant."
         }
       ],
-      "accent": "amber"
+      "accent": "violet"
+    },
+    {
+      "id": "profiles-down",
+      "title": "Profiles is slow",
+      "steps": [
+        {
+          "id": "profiles-down.s1",
+          "edgeId": "mobile-call",
+          "caption": "The same HomeScreen query arrives."
+        },
+        {
+          "id": "profiles-down.s2",
+          "edgeId": "mobile-profiles",
+          "extraNodeIds": [
+            "profiles"
+          ],
+          "caption": "Profiles misses its 250 ms budget, so the BFF stops waiting."
+        },
+        {
+          "id": "profiles-down.s3",
+          "edgeId": "mobile-catalog",
+          "caption": "The screen ships without 'Continue watching' instead of failing whole."
+        }
+      ],
+      "accent": "amber",
+      "variantOf": "mobile-home"
     }
-  ]
+  ],
+  "level": "container"
 }

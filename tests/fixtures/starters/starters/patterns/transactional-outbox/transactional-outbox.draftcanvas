@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 25,
+  "version": 28,
   "metadata": {
     "id": "starter-transactional-outbox",
     "title": "Transactional Outbox",
@@ -9,85 +9,306 @@
   },
   "nodes": [
     {
-      "id": "producer",
-      "type": "service",
-      "x": -672,
-      "y": -37,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Producer Service",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api",
-      "attachments": [
-        {
-          "id": "a_otwhg8lbr64j",
-          "type": "note",
-          "text": "Never talks to the broker. If the transaction rolls back, the event was never written either.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
-        }
-      ]
-    },
-    {
-      "id": "transaction",
+      "id": "ledger",
       "type": "group",
-      "x": -392,
-      "y": -171,
-      "width": 244,
-      "height": 342,
+      "x": 548,
+      "y": 37,
+      "width": 184,
+      "height": 567,
       "z": -1,
-      "text": "One local transaction",
+      "text": "Ledger DB · one transaction",
       "textOrigin": "explicit",
       "boundaryPreset": "boundary"
     },
     {
-      "id": "transaction-subtitle",
-      "type": "text",
-      "x": -380,
-      "y": -141,
-      "width": 200,
-      "height": 24,
+      "id": "holder",
+      "type": "actor",
+      "x": -60,
+      "y": 241,
+      "width": 120,
+      "height": 118,
       "z": 0,
-      "parentId": "transaction",
-      "text": "Committed together, or not at all",
+      "text": "Account Holder",
+      "description": "Sends money from the banking app.",
       "textOrigin": "explicit",
-      "annotation": true
+      "actorKind": "human",
+      "actorFrame": "borderless"
     },
     {
-      "id": "business",
-      "type": "database",
-      "x": -356,
-      "y": -109,
-      "width": 172,
-      "height": 102,
+      "id": "api",
+      "type": "service",
+      "x": 212,
+      "y": 239,
+      "width": 176,
+      "height": 123,
       "z": 0,
-      "parentId": "transaction",
-      "text": "Business Data",
+      "text": "Transfers API",
+      "description": "Debits the account and records the transfer and its event together.",
+      "technology": "Spring Boot 3",
       "textOrigin": "explicit",
-      "accent": "blue",
+      "serviceKind": "api",
+      "replicas": 2,
+      "attachments": [
+        {
+          "id": "n.tx",
+          "type": "code",
+          "language": "sql",
+          "code": "BEGIN;\nUPDATE accounts SET balance = balance - 250.00\n WHERE id = 'acc_17' AND version = 42;\nINSERT INTO transfers (id, from_acc, to_iban, amount)\n VALUES ('tr_9c1', 'acc_17', 'DE89 3704…', 250.00);\nINSERT INTO outbox (id, aggregate_id, type, payload)\n VALUES ('ev_51f', 'tr_9c1', 'TransferInitiated',\n         '{\"amount\": \"250.00\", \"currency\": \"EUR\"}');\nCOMMIT;",
+          "width": 429.5,
+          "height": 216.375
+        }
+      ],
+      "inside": {
+        "nodes": [
+          {
+            "id": "t.holder",
+            "type": "actor",
+            "x": 222,
+            "y": 0,
+            "width": 120,
+            "height": 92,
+            "z": 0,
+            "text": "Account Holder",
+            "textOrigin": "explicit",
+            "actorKind": "human",
+            "actorFrame": "borderless"
+          },
+          {
+            "id": "t.controller",
+            "type": "component",
+            "x": 206,
+            "y": 164,
+            "width": 152,
+            "height": 99,
+            "z": 0,
+            "text": "Transfers Controller",
+            "description": "Validates the request and answers 201.",
+            "technology": "Spring",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "t.send",
+            "type": "component",
+            "x": 206,
+            "y": 335,
+            "width": 152,
+            "height": 95,
+            "z": 0,
+            "text": "Send Money",
+            "description": "One @Transactional method: debit, record, enqueue the event.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "t.accounts",
+            "type": "component",
+            "x": 0,
+            "y": 502,
+            "width": 152,
+            "height": 119,
+            "z": 0,
+            "text": "Account Repository",
+            "description": "Debits the balance with a version check.",
+            "technology": "Hibernate",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "t.outbox",
+            "type": "component",
+            "x": 206,
+            "y": 502,
+            "width": 152,
+            "height": 119,
+            "z": 0,
+            "text": "Outbox Writer",
+            "description": "Adds the event row in the caller's transaction.",
+            "technology": "Hibernate",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "t.db",
+            "type": "database",
+            "x": 84,
+            "y": 693,
+            "width": 120,
+            "height": 114,
+            "z": 0,
+            "text": "Ledger DB",
+            "technology": "PostgreSQL 16",
+            "textOrigin": "explicit",
+            "databaseKind": "sql"
+          }
+        ],
+        "edges": [
+          {
+            "id": "t.post",
+            "source": "t.holder",
+            "target": "t.controller",
+            "label": "POST /transfers",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "calls",
+            "semanticsOrigin": "inferred"
+          },
+          {
+            "id": "t.call",
+            "source": "t.controller",
+            "target": "t.send",
+            "label": "send(cmd)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "t.debit",
+            "source": "t.send",
+            "target": "t.accounts",
+            "label": "debit(acc, amount)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "sourceAnchor": {
+              "side": "bottom",
+              "offset": 0.25
+            },
+            "targetAnchor": {
+              "side": "top",
+              "offset": 0.75
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "t.enqueue",
+            "source": "t.send",
+            "target": "t.outbox",
+            "label": "add(TransferInitiated)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "t.sql1",
+            "source": "t.accounts",
+            "target": "t.db",
+            "label": "UPDATE accounts",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "writes",
+            "sourceAnchor": {
+              "side": "bottom",
+              "offset": 0.75
+            },
+            "targetAnchor": {
+              "side": "top",
+              "offset": 0.25
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "t.sql2",
+            "source": "t.outbox",
+            "target": "t.db",
+            "label": "INSERT outbox",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "writes",
+            "sourceAnchor": {
+              "side": "bottom",
+              "offset": 0.25
+            },
+            "targetAnchor": {
+              "side": "right",
+              "offset": 0.25
+            },
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "t.flow",
+            "title": "Send money, inside the API",
+            "steps": [
+              {
+                "id": "t.flow.s1",
+                "edgeId": "t.post",
+                "caption": "The controller checks the IBAN and amount."
+              },
+              {
+                "id": "t.flow.s2",
+                "edgeId": "t.call",
+                "caption": "Send Money opens the transaction."
+              },
+              {
+                "id": "t.flow.s3",
+                "edgeId": "t.debit",
+                "caption": "The balance is debited, guarded by a version check."
+              },
+              {
+                "id": "t.flow.s4",
+                "edgeId": "t.sql1",
+                "caption": "Written, not yet committed."
+              },
+              {
+                "id": "t.flow.s5",
+                "edgeId": "t.enqueue",
+                "caption": "The event is added through the same connection."
+              },
+              {
+                "id": "t.flow.s6",
+                "edgeId": "t.sql2",
+                "caption": "On return, both rows commit together — or neither does."
+              }
+            ],
+            "accent": "blue"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "level": "component"
+      }
+    },
+    {
+      "id": "accounts",
+      "type": "database",
+      "x": 580,
+      "y": 89,
+      "width": 120,
+      "height": 143,
+      "z": 0,
+      "parentId": "ledger",
+      "text": "accounts",
+      "description": "Balances, one row per account.",
+      "technology": "PostgreSQL 16",
+      "textOrigin": "explicit",
       "databaseKind": "table"
     },
     {
       "id": "outbox",
       "type": "database",
-      "x": -356,
-      "y": 33,
-      "width": 172,
-      "height": 102,
+      "x": 580,
+      "y": 259,
+      "width": 120,
+      "height": 143,
       "z": 0,
-      "parentId": "transaction",
-      "text": "Outbox",
+      "parentId": "ledger",
+      "text": "outbox",
+      "description": "Events waiting to be published.",
+      "technology": "PostgreSQL 16",
       "textOrigin": "explicit",
-      "accent": "blue",
       "databaseKind": "table",
       "attachments": [
         {
-          "id": "a_9ahc3rmy5m6s",
+          "id": "n.grow",
           "type": "note",
-          "text": "A table in the same database. Rows are marked published (or deleted) after the broker acks. Poll it, or tail the log (CDC) — same shape.",
+          "text": "Delete rows once published, or in the same transaction: Debezium reads the INSERT from the WAL either way.",
           "noteKind": "note",
           "width": 200,
           "height": 56
@@ -95,148 +316,232 @@
       ]
     },
     {
-      "id": "publisher",
-      "type": "service",
-      "x": -44,
-      "y": 34,
-      "width": 176,
-      "height": 68,
+      "id": "transfers",
+      "type": "database",
+      "x": 580,
+      "y": 429,
+      "width": 120,
+      "height": 143,
       "z": 0,
-      "text": "Outbox Publisher",
+      "parentId": "ledger",
+      "text": "transfers",
+      "description": "Every transfer and its status.",
+      "technology": "PostgreSQL 16",
       "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "worker"
+      "databaseKind": "table"
     },
     {
-      "id": "events",
-      "type": "queue",
-      "x": 244,
-      "y": 51,
-      "width": 140,
-      "height": 72,
-      "z": 0,
-      "text": "Domain Events",
-      "textOrigin": "explicit",
-      "queueKind": "topic"
-    },
-    {
-      "id": "consumer",
+      "id": "relay",
       "type": "service",
-      "x": 496,
-      "y": 34,
+      "x": 892,
+      "y": 239,
       "width": 176,
-      "height": 68,
+      "height": 123,
       "z": 0,
-      "text": "Consumer Service",
+      "text": "Outbox Relay",
+      "description": "Tails new outbox rows from the WAL and publishes them.",
+      "technology": "Debezium",
       "textOrigin": "explicit",
-      "accent": "teal",
       "serviceKind": "worker",
       "attachments": [
         {
-          "id": "a_40ejtbajatin",
-          "type": "note",
-          "text": "At-least-once: the same event can arrive twice. Dedupe on the event id.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
+          "id": "n.router",
+          "type": "code",
+          "language": "yaml",
+          "code": "transforms: outbox\ntransforms.outbox.type: io.debezium.transforms.outbox.EventRouter\ntransforms.outbox.table.field.event.key: aggregate_id\ntransforms.outbox.route.topic.replacement: transfers.events",
+          "width": 519.5,
+          "height": 119.5
         }
       ]
+    },
+    {
+      "id": "topic",
+      "type": "queue",
+      "x": 1230,
+      "y": 282,
+      "width": 140,
+      "height": 104,
+      "z": 0,
+      "text": "transfers.events",
+      "description": "Transfer events, keyed by transfer id.",
+      "technology": "Kafka",
+      "textOrigin": "explicit",
+      "queueKind": "stream"
+    },
+    {
+      "id": "notify",
+      "type": "service",
+      "x": 1532,
+      "y": 246,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "text": "Notification Service",
+      "description": "Tells the account holder their money left.",
+      "technology": "Go",
+      "textOrigin": "explicit",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "inbox",
+      "type": "database",
+      "x": 1530,
+      "y": 429,
+      "width": 180,
+      "height": 143,
+      "z": 0,
+      "text": "processed_messages",
+      "description": "Event ids already handled.",
+      "technology": "PostgreSQL 16",
+      "textOrigin": "explicit",
+      "databaseKind": "table"
+    },
+    {
+      "id": "fcm",
+      "type": "service",
+      "x": 1872,
+      "y": 233,
+      "width": 176,
+      "height": 134,
+      "z": 0,
+      "text": "Firebase Cloud Messaging",
+      "description": "Delivers push notifications to phones.",
+      "technology": "Firebase",
+      "textOrigin": "explicit",
+      "serviceKind": "external"
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "x": -60,
+      "y": -121,
+      "width": 1100,
+      "height": 110,
+      "z": 0,
+      "text": "# Transactional Outbox\nA bank transfer and its event commit together; a relay publishes the event afterwards.",
+      "textOrigin": "explicit",
+      "textRole": "title"
     }
   ],
   "edges": [
     {
-      "id": "write-business",
-      "source": "producer",
-      "target": "business",
+      "id": "request",
+      "source": "holder",
+      "target": "api",
+      "label": "Sends €250",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "response": "201 Transfer",
+      "hasResponse": true,
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "debit",
+      "source": "api",
+      "target": "accounts",
+      "label": "UPDATE balance",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "writes",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "write-outbox",
-      "source": "producer",
-      "target": "outbox",
+      "id": "record",
+      "source": "api",
+      "target": "transfers",
+      "label": "INSERT transfer",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "writes",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "relay",
-      "source": "publisher",
+      "id": "intent",
+      "source": "api",
       "target": "outbox",
-      "label": "reads unpublished",
+      "label": "INSERT event",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.never",
+          "type": "note",
+          "text": "Never publish to Kafka inside the transaction: a broker outage would block transfers, and a rollback cannot unsend.",
+          "noteKind": "decision",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "tail",
+      "source": "outbox",
+      "target": "relay",
+      "label": "New rows (WAL)",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "reads",
-      "sourceAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
       "semanticsOrigin": "explicit"
     },
     {
       "id": "publish",
-      "source": "publisher",
-      "target": "events",
+      "source": "relay",
+      "target": "topic",
+      "label": "TransferInitiated",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "publishes",
       "kind": "event",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
       "id": "deliver",
-      "source": "events",
-      "target": "consumer",
+      "source": "topic",
+      "target": "notify",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "deliversTo",
+      "semantic": "consumes",
       "kind": "event",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.once",
+          "type": "note",
+          "text": "At least once, never exactly once: every consumer must deduplicate by event id.",
+          "noteKind": "warning",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "dedupe",
+      "source": "notify",
+      "target": "inbox",
+      "label": "Records event id",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "push",
+      "source": "notify",
+      "target": "fcm",
+      "label": "Push",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "semanticsOrigin": "explicit"
     }
   ],
   "viewport": {
-    "x": 720,
-    "y": 450,
-    "zoom": 0.8571428571428571
+    "x": 0,
+    "y": 0,
+    "zoom": 1
   },
   "settings": {
     "showSequence": true,
@@ -250,50 +555,96 @@
   },
   "flows": [
     {
-      "id": "flow1",
-      "title": "Service transaction",
+      "id": "send",
+      "title": "Send money",
       "steps": [
         {
-          "id": "fs_4283soafhsz6",
-          "edgeId": "write-business",
-          "caption": "The business change"
+          "id": "send.s1",
+          "edgeId": "request",
+          "caption": "The holder sends €250 to a friend's IBAN."
         },
         {
-          "id": "fs_zc4zjyi9siu4",
-          "edgeId": "write-outbox",
-          "caption": "And the event to publish — same transaction"
-        }
-      ],
-      "accent": "amber"
-    },
-    {
-      "id": "flow2",
-      "title": "Outbox publication",
-      "steps": [
-        {
-          "id": "fs_bfahw6hs70rr",
-          "edgeId": "relay",
-          "caption": "Later, and independently — after the commit"
+          "id": "send.s2",
+          "edgeId": "debit",
+          "extraNodeIds": [
+            "ledger"
+          ],
+          "caption": "BEGIN: the balance is debited…"
         },
         {
-          "id": "fs_b1qi7tox4n62",
+          "id": "send.s3",
+          "edgeId": "record",
+          "caption": "…the transfer is recorded…"
+        },
+        {
+          "id": "send.s4",
+          "edgeId": "intent",
+          "caption": "…and TransferInitiated is added to the outbox. COMMIT: all three, or none."
+        },
+        {
+          "id": "send.s5",
+          "edgeId": "tail",
+          "caption": "After the commit, Debezium reads the new outbox row from the WAL."
+        },
+        {
+          "id": "send.s6",
           "edgeId": "publish",
-          "caption": "Then mark the row published"
+          "caption": "It publishes the event to Kafka, keyed by transfer id."
+        },
+        {
+          "id": "send.s7",
+          "edgeId": "deliver",
+          "caption": "Notification Service receives it."
+        },
+        {
+          "id": "send.s8",
+          "edgeId": "dedupe",
+          "caption": "It records the event id; it has not seen this one before."
+        },
+        {
+          "id": "send.s9",
+          "edgeId": "push",
+          "caption": "The holder's phone shows \"€250 sent\"."
         }
       ],
-      "accent": "violet"
+      "accent": "teal"
     },
     {
-      "id": "flow3",
-      "title": "Event consumption",
+      "id": "duplicate",
+      "title": "Relay crashes mid-publish",
       "steps": [
         {
-          "id": "fs_e5n5e36ca5vw",
+          "id": "duplicate.s1",
+          "edgeId": "publish",
+          "caption": "Debezium publishes, then dies before saving its offset."
+        },
+        {
+          "id": "duplicate.s2",
           "edgeId": "deliver",
-          "caption": "Possibly more than once — the consumer dedupes"
+          "caption": "On restart it re-reads the row: the event arrives a second time."
+        },
+        {
+          "id": "duplicate.s3",
+          "edgeId": "dedupe",
+          "caption": "The id is already in processed_messages: skipped, no second push."
         }
       ],
-      "accent": "green"
+      "accent": "rose",
+      "variantOf": "send"
     }
-  ]
+  ],
+  "openPoints": [
+    {
+      "id": "op.order",
+      "kind": "awaiting",
+      "context": "Do consumers need events per account in order? Then key by account id, not transfer id.",
+      "targets": [
+        {
+          "kind": "edge",
+          "id": "publish"
+        }
+      ]
+    }
+  ],
+  "level": "container"
 }

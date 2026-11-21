@@ -2,27 +2,32 @@
   "id": "modular-monolith",
   "name": "Modular Monolith",
   "category": "architecture",
-  "summary": "One deployable, explicitly encapsulated modules inside",
+  "summary": "A course platform as one Spring Boot deployable with Catalog, Enrollment, Billing and Notifications modules",
   "aliases": [
     "modular monolith",
     "modular architecture",
     "modules",
     "module boundaries",
     "majestic monolith",
-    "monolith modules"
+    "monolith modules",
+    "spring modulith",
+    "bounded contexts in one app"
   ],
   "tags": [
     "modules",
     "single deployable",
-    "bounded contexts"
+    "bounded contexts",
+    "schema per module"
   ],
   "useWhen": [
     "You want clear ownership without the cost of distributed services.",
-    "Preparing a monolith to split later, one module at a time."
+    "Preparing a monolith to split later, one module at a time.",
+    "Several teams share one codebase and need lines they cannot cross by accident."
   ],
   "watchOutFor": [
-    "Module boundaries only hold if calls go through the public interface.",
-    "A shared database makes it easy to reach into another module's tables."
+    "Module boundaries only hold if calls go through the public interface; enforce it in a build test.",
+    "A shared database server makes it easy to join another module's tables; grant each module its own schema.",
+    "In-process events vanish on a crash unless they are stored before they are handled."
   ],
   "featured": false,
   "order": 20

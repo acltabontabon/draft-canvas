@@ -9,7 +9,7 @@ import { parseDocument } from '../../src/document/validate';
  * what absorbs it, and — as `open` — what the drawing leaves for the person to decide.
  */
 const parsed = parseDocument(
-  readFileSync(join(process.cwd(), 'tests/fixtures/starters/starters/architectures/event-driven/event-driven.draftcanvas'), 'utf8'),
+  readFileSync(join(process.cwd(), 'tests/fixtures/outage/event-driven.draftcanvas'), 'utf8'),
 );
 if (!parsed.ok) throw new Error(parsed.error);
 const starter = parsed.document;

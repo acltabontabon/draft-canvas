@@ -1,6 +1,9 @@
 import { openGallery, openStarter } from './library';
 import { createReaderExample } from './reader-example';
 import { storeDocument } from './fixtures/outage';
+
+// The guides picture the starters people get today, not the set pinned for the test journeys (`gallery.ts`).
+process.env.STARTERS_SNAPSHOT ??= 'current';
 /**
  * Regenerates the screenshots the user guides in `docs/guides/` embed (`docs/media/guides/*.png`).
  *
@@ -260,7 +263,7 @@ async function collabScreenshots(browser: Browser, page: Page) {
     await guest.locator(CANVAS).click({ position: { x: 8, y: 8 } });
     await palette(guest, 'Fit to view');
     await guest.waitForTimeout(600);
-    const held = await box(guest.locator('.dc-node', { hasText: 'Capability B Service' }));
+    const held = await box(guest.locator('.dc-node', { hasText: 'Restaurants Service' }));
     await guest.mouse.click(held.x + held.width / 2, held.y + 10);
     await guest.mouse.move(held.x + held.width + 30, held.y + held.height + 24, { steps: 4 });
     await expect(page.locator('.dc-presence-cursor').filter({ hasText: 'Grace' })).toBeVisible({ timeout: 10_000 });
@@ -620,7 +623,7 @@ async function layoutScreenshots(page: Page) {
   // A starter arrives selected; the commands below are offered by what is selected.
   await page.keyboard.press('Escape');
 
-  await paletteChoice(page, 'Arrange around', 'Handle a request');
+  await paletteChoice(page, 'Arrange around', 'Order dinner');
   await expect(page.getByRole('region', { name: 'Arrange preview' })).toBeVisible();
   await expect(page.getByRole('region', { name: 'Arrange preview' }).getByRole('button', { name: 'Apply' })).toBeEnabled();
   await shot(page, 'arrange-follow-flow');
@@ -632,12 +635,12 @@ async function layoutScreenshots(page: Page) {
   await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
 
   // A connector right across the diagram, drawn as a portal instead.
-  await shape('Capability C Store').click();
+  await shape('Courier Locations').click();
   await expect(page.locator('.react-flow__node.selected')).toHaveCount(1);
   await paletteChoice(page, 'Connect to', 'API Gateway');
   await palette(page, 'Draw as portal');
   await page.keyboard.press('Escape');
-  await shape('Capability A Service').click();
+  await shape('Orders Service').click();
   await palette(page, 'Hold in place');
   await page.keyboard.press('Escape');
   await palette(page, 'Show legend');

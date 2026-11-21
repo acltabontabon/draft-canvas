@@ -2,7 +2,7 @@
   "id": "event-driven",
   "name": "Event-Driven",
   "category": "architecture",
-  "summary": "Pub/sub: a topic fanning out to per-subscriber queues",
+  "summary": "One event, many reactions: a topic fans out to a queue per subscriber, with a dead-letter queue for failures",
   "aliases": [
     "event driven",
     "event-driven",
@@ -13,21 +13,27 @@
     "messaging",
     "fan out",
     "asynchronous",
-    "eda"
+    "eda",
+    "sns sqs",
+    "food delivery"
   ],
   "tags": [
     "pub/sub",
     "topic",
     "queues",
-    "dead letter"
+    "dead letter",
+    "idempotency"
   ],
   "useWhen": [
     "Several consumers react to the same change without the producer knowing them.",
-    "Showing retries and where failed messages go."
+    "One slow or failing consumer must not hold up the others.",
+    "Showing retries, idempotent consumers and where failed messages go."
   ],
   "watchOutFor": [
-    "Delivery is at least once: consumers must handle duplicates.",
-    "The flow of one request is harder to follow end to end."
+    "Delivery is at least once: every consumer must handle duplicates.",
+    "Events can arrive out of order across queues; don't let consumers assume an order.",
+    "One request is harder to follow end to end; keep event ids in your logs and traces.",
+    "An event's shape is a contract with consumers you may not know about. Version it."
   ],
   "featured": true,
   "order": 40

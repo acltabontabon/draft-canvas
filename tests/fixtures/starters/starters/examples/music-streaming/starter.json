@@ -1,0 +1,36 @@
+{
+  "id": "music-streaming",
+  "name": "Music streaming service",
+  "category": "example",
+  "summary": "A whole music service: playback from a CDN, an AI DJ, weekly mixes, royalties and artist releases",
+  "aliases": [
+    "music streaming",
+    "audio streaming",
+    "spotify-style architecture",
+    "playlists",
+    "royalties",
+    "ai dj",
+    "recommendations",
+    "podcast platform"
+  ],
+  "tags": [
+    "example",
+    "system design",
+    "streaming",
+    "ai agent",
+    "recommendations",
+    "analytics"
+  ],
+  "useWhen": [
+    "Seeing how an AI agent, batch jobs and a live API share one realistic system.",
+    "Explaining how one play becomes a song, a recommendation and a royalty payment.",
+    "Starting a system-design discussion about a consumer platform with a data business."
+  ],
+  "watchOutFor": [
+    "It is a big picture on purpose: present it flow by flow rather than all at once.",
+    "Scale numbers are illustrative; replace them with your own before you reason from them.",
+    "Two connectors are portals and the file is format 29, so it needs a current Draft Canvas."
+  ],
+  "featured": true,
+  "order": 110
+}

@@ -2,7 +2,7 @@
   "id": "hexagonal",
   "name": "Hexagonal",
   "category": "architecture",
-  "summary": "Adapters around a core that owns its ports",
+  "summary": "A bank's transfers core owns its ports; REST, a job, JPA, Kafka and a fraud vendor plug in as adapters",
   "aliases": [
     "hexagonal",
     "hexagonal architecture",
@@ -18,16 +18,19 @@
   "tags": [
     "ports and adapters",
     "clean architecture",
-    "domain"
+    "domain",
+    "testability"
   ],
   "useWhen": [
-    "Keeping business rules independent of frameworks, databases and transports.",
-    "Testing the core without infrastructure."
+    "Keeping business rules independent of frameworks, databases and vendors.",
+    "Testing the core with in-memory adapters, without infrastructure.",
+    "The same use case is driven from several places: HTTP, a job, a message."
   ],
   "watchOutFor": [
     "More indirection than a small service may need.",
-    "Ports drift into thin wrappers if they mirror one adapter."
+    "Ports drift into thin wrappers if they mirror one adapter or one vendor's API.",
+    "Arrows here read at runtime (port, then the adapter behind it); source dependencies point the other way, inward."
   ],
-  "featured": true,
+  "featured": false,
   "order": 50
 }
