@@ -75,7 +75,6 @@ import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { CommandPalette } from './CommandPalette';
 import { ContinuationAnnouncer } from './ContinuationAnnouncer';
 import { Inspector } from './Inspector';
-import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
 import { Toolbar } from './Toolbar';
 import { Button } from '../common/Button';
@@ -797,7 +796,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         />
       )}
 
-      <ShortcutSheet />
       {exportMounted && (
         <PanelBoundary onError={onExportFailed}>
           <Suspense fallback={null}>

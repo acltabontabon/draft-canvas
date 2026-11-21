@@ -19,7 +19,7 @@ const OPERATIONS = new Set([
   'file-explorer', 'library-backfill', 'library-dialog', 'library-startup', 'library-visibility-refresh',
   'import-mermaid', 'load-editor', 'load-starters', 'load-technology-icon', 'load-technology-icons', 'move-document-to-project',
   'open-document', 'open-document-refresh', 'open-document-stash', 'open-share-link', 'refresh-library',
-  'release-notes', 'remove-background-image', 'rename-document', 'rename-project',
+  'release-notes', 'remove-background-image', 'rename-document', 'rename-project', 'shortcuts-panel',
   'host-agent', 'host-background-report', 'host-background-restore', 'host-change', 'host-flush-ack', 'host-forget', 'host-load', 'host-save-request',
   'desktop-action', 'desktop-agent-activate', 'desktop-agent-clients', 'desktop-agent-configure', 'desktop-agent-connect-client',
   'desktop-agent-install-skill', 'desktop-agent-proposal-get', 'desktop-agent-proposal-list', 'desktop-agent-save',
