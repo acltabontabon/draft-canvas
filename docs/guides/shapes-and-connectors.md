@@ -138,6 +138,7 @@ while you drag, lines settle only when you let go. A connector with nothing wron
 | Action | The end is |
 | --- | --- |
 | Drawn from any dot, or dropped on a shape or dot | Automatic |
+| Dropped on empty canvas, to a shape chosen from **Add to canvas** | Automatic |
 | Dragged to a side or attachment dot | Pinned at that side and attachment point |
 | Dragged to the centre of a shape | Automatic |
 | **Pin ends here** | Pinned where it is drawn |

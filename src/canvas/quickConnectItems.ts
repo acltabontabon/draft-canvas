@@ -106,7 +106,9 @@ export function offerFor(doc: DraftDocument, state: QuickConnectState, item: Qui
   const source = state.asked ? doc.nodes.find((node) => node.id === state.source) : undefined;
   const offer = source
     ? (materialize(doc, continuation) ?? materialize(doc, continuation, { at: placeNear(doc, source, size) }))
-    : materialize(doc, continuation, { at });
+    : // Dragged out by hand: its ends are automatic, like those of a connector dropped on a shape, so
+      // the line the ghost shows is the line that is added and it keeps facing the shapes as they move.
+      materialize(doc, continuation, { at, ends: 'automatic' });
   return offer ? { ...withFanIn(doc, state, offer), trigger: 'drop' } : undefined;
 }
 

@@ -20,6 +20,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Following a presentation shows the presenter's step** — A collaborator following a walkthrough
   saw a step number one ahead of the presenter's, and a plain canvas. They now see the same opening,
   step or end, with the connector being discussed lit and its caption shown.
+- **A connector dragged out to a new shape keeps facing it** — Dropping a connector on empty canvas
+  and choosing a shape pinned both of its ends without saying so, so the line wrapped around the
+  shapes once they moved. Its ends are now automatic, as when dropping on an existing shape.
 
 ### Desktop
 

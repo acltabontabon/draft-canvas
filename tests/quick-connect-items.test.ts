@@ -132,6 +132,20 @@ describe('offerFor', () => {
     expect(offer.edges[0]!.source).toBe('t');
   });
 
+  it('leaves a dragged-out connector’s ends automatic, so it follows the shapes like one drawn by hand', () => {
+    const doc = topicDoc();
+    for (const row of quickConnectItems(doc, drop('t'))) {
+      for (const edge of offerFor(doc, drop('t'), row)!.edges) {
+        expect(edge.sourceAnchor, row.label).toBeUndefined();
+        expect(edge.targetAnchor, row.label).toBeUndefined();
+      }
+    }
+    // Asked for with `]`, the shape is placed beside its source like a suggestion, and pinned like one.
+    const asked: QuickConnectState = { ...drop('t'), asked: true };
+    const beside = offerFor(doc, asked, quickConnectItems(doc, asked)[0]!)!;
+    expect(beside.edges[0]!.sourceAnchor).toBeDefined();
+  });
+
   it('is nothing for a picker with no source', () => {
     const doc = topicDoc();
     expect(offerFor(doc, drop(), quickConnectItems(doc, drop())[0]!)).toBeUndefined();
