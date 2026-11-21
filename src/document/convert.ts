@@ -5,7 +5,7 @@
  * kind, its default size, an automatic name) is swapped for the new type's own.
  */
 
-import { boxForServiceKind, createNode } from './factory';
+import { boxForKind, createNode } from './factory';
 import { technologyKindPatch } from './technologyKind';
 import type { DraftDocument, DraftNode, DraftNodeType } from './types';
 
@@ -58,7 +58,7 @@ export function convertedNode(node: DraftNode, type: ConvertibleType): DraftNode
   const kind = technologyKindPatch(next, next.technology);
   if (!kind) return next;
   // A technology that makes it a glyph kind (HAProxy: a Load Balancer) changes the box it needs.
-  const box = boxForServiceKind(next, next.serviceKind, (kind as Partial<DraftNode>).serviceKind ?? next.serviceKind);
+  const box = boxForKind(next, next.serviceKind, (kind as Partial<DraftNode>).serviceKind ?? next.serviceKind);
   return stripUndefined({ ...next, ...kind, ...box });
 }
 

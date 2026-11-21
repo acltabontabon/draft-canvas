@@ -22,6 +22,11 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   with a job still running, a scheduler a page of time slots, an external system a block inside a
   dashed boundary. Their name sits underneath. In a diagram you already have, each grows taller to
   fit; check the spacing around them.
+- **Module, Adapter and Port drawn as what they are** — The three were one box with a small mark
+  on its edge and a word in the corner. A Module is now a block with two lugs, a Port a ball on a
+  stem, and an Adapter the cup that ball sits in with a different end on its far side. Their name
+  sits underneath; a plain Component is still a card. In a diagram you already have, each grows
+  taller to fit; check the spacing around them.
 - **Artifact** — A new shape for what a system reads, mounts or presents: a File, a Config, a
   Secret or a Certificate. Find it in **Shapes**; it is not on the toolbar.
 - **Shapes by name** — Type what a thing is called in **Shapes** or `⌘K` and it arrives already set

@@ -6,6 +6,7 @@
  * from a diagram someone drew and arranged by hand.
  */
 
+import { familyKindOf } from '../document/dataStoreGeometry';
 import { technologyKindPatch } from '../document/technologyKind';
 import { capabilityFor, categoryOf, inferRelationship, isSyncPairing } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
@@ -299,7 +300,7 @@ export function arrangedSize(node: DraftNode, ctx: DescribeContext): { width: nu
   const lines = node.text?.trim() ? nameLineCount(node, ctx) : 0;
   if (lines > 2) {
     // From the type's own height, so the search can find a shorter box than the column it was.
-    const floor = Math.min(node.height, defaultSizeFor(node.type, node.serviceKind).height);
+    const floor = Math.min(node.height, defaultSizeFor(node.type, familyKindOf(node)).height);
     const balanced = balancedSize({ ...node, height: floor }, ctx);
     if (balanced && nameLineCount({ ...node, ...balanced }, ctx) < lines) {
       return { width: Math.max(node.width, balanced.width), height: balanced.height };

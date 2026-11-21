@@ -1,4 +1,4 @@
-import { isGlyphServiceKind } from './dataStoreGeometry';
+import { familyKindOf, isGlyphKind } from './dataStoreGeometry';
 import { createId } from './ids';
 import { plainTextOfMarkdown } from './markdownText';
 import { DEFAULTS } from './limits';
@@ -35,9 +35,9 @@ import {
   type TextRole,
 } from './types';
 
-export function defaultSizeFor(type: DraftNodeType, serviceKind?: ServiceKind): { width: number; height: number } {
-  // A Service drawn as a glyph (a Load Balancer, a Proxy) is laid out like a Data Store.
-  if (type === 'service' && isGlyphServiceKind(serviceKind)) return { width: DEFAULTS.dataStoreWidth, height: DEFAULTS.dataStoreHeight };
+export function defaultSizeFor(type: DraftNodeType, kind?: string): { width: number; height: number } {
+  // A Service or Component drawn as a glyph (a Load Balancer, a Port) is laid out like a Data Store.
+  if (isGlyphKind(type, kind)) return { width: DEFAULTS.dataStoreWidth, height: DEFAULTS.dataStoreHeight };
   switch (type) {
     case 'code':
       return { width: DEFAULTS.codeWidth, height: DEFAULTS.codeHeight };
@@ -73,8 +73,8 @@ export function defaultSizeFor(type: DraftNodeType, serviceKind?: ServiceKind): 
  * database cylinder or an actor's head-and-shoulders never resizes into a shape
  * that stops reading as its type.
  */
-export function minSizeFor(type: DraftNodeType, serviceKind?: ServiceKind): { width: number; height: number } {
-  if (type === 'service' && isGlyphServiceKind(serviceKind)) return { width: 120, height: 76 };
+export function minSizeFor(type: DraftNodeType, kind?: string): { width: number; height: number } {
+  if (isGlyphKind(type, kind)) return { width: 120, height: 76 };
   switch (type) {
     case 'text':
       return { width: 80, height: 28 };
@@ -294,7 +294,7 @@ export interface CreateNodeInput {
 }
 
 export function createNode(input: CreateNodeInput): DraftNode {
-  const size = defaultSizeFor(input.type, input.serviceKind);
+  const size = defaultSizeFor(input.type, familyKindOf(input));
   const node: DraftNode = {
     id: input.id ?? createId('n'),
     type: input.type,
@@ -485,17 +485,17 @@ export function cloneDocumentAsNew(doc: DraftDocument, title: string): DraftDocu
 }
 
 /**
- * The box a Service takes when its kind moves between a card and a glyph (Generic → Load Balancer,
- * Proxy → API): the new drawing's default size around the same centre, as turning one shape into
+ * The box a Service or Component takes when its kind moves between a card and a glyph (Generic →
+ * Load Balancer, Port → Generic): the new drawing's default size around the same centre, as turning one shape into
  * another does (`convert.ts`). `null` when the kind stayed in its family and the box is fine.
  */
-export function boxForServiceKind(
+export function boxForKind(
   node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'>,
-  from: ServiceKind | undefined,
-  to: ServiceKind | undefined,
+  from: ServiceKind | ComponentKind | undefined,
+  to: ServiceKind | ComponentKind | undefined,
 ): Pick<DraftNode, 'x' | 'y' | 'width' | 'height'> | null {
-  if (node.type !== 'service' || isGlyphServiceKind(from) === isGlyphServiceKind(to)) return null;
-  const size = defaultSizeFor('service', to);
+  if (isGlyphKind(node.type, from) === isGlyphKind(node.type, to)) return null;
+  const size = defaultSizeFor(node.type, to);
   return {
     x: Math.round(node.x + node.width / 2 - size.width / 2),
     y: Math.round(node.y + node.height / 2 - size.height / 2),

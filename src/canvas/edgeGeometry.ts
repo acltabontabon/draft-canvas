@@ -19,12 +19,12 @@ import { clamp } from '../lib/math';
 export type InternalNode = NonNullable<ReturnType<typeof useInternalNode>>;
 
 /** What decides a shape's anchor band: its type, and for a Service the kind it is drawn as. */
-export type BandKind = Pick<DraftNode, 'type'> & Pick<Partial<DraftNode>, 'serviceKind'>;
+export type BandKind = Pick<DraftNode, 'type'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind'>;
 
 /**
  * `kind` opts the rect into its node kind's anchor band (a queue-family node's tube, a glyph's
  * sides) — routing callers pass it; popover-placement callers, which only want the box, leave it
- * out. It takes the Service kind with the type: on the type alone a Worker or a Gateway had no band
+ * out. It takes the Service or Component kind with the type: on the type alone a Worker or a Gateway had no band
  * here, so the canvas drew its connectors to the middle of its box, below the glyph and with a jog
  * the exported picture did not have.
  */
@@ -38,7 +38,7 @@ export function rectOfInternal(node: InternalNode, kind?: BandKind): Rect | null
     width,
     height,
   };
-  const band = kind ? anchorBandOf({ type: kind.type, serviceKind: kind.serviceKind, x: rect.x, y: rect.y, width, height }) : undefined;
+  const band = kind ? anchorBandOf({ type: kind.type, serviceKind: kind.serviceKind, componentKind: kind.componentKind, x: rect.x, y: rect.y, width, height }) : undefined;
   return band ? { ...rect, anchorBand: band } : rect;
 }
 

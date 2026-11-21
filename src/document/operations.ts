@@ -1360,8 +1360,8 @@ export interface PlaceAlignment {
  * tube, a Data Store's glyph (`anchorBandOf`) — or of its height when the whole side is the anchor.
  * What `edges/routing.ts` resolves a centred (offset `0.5`) left or right anchor to, minus the top.
  */
-export function anchorOffsetY(shape: Pick<DraftNode, 'type' | 'width' | 'height'> & Pick<Partial<DraftNode>, 'serviceKind'>): number {
-  const band = anchorBandOf({ type: shape.type, serviceKind: shape.serviceKind, x: 0, y: 0, width: shape.width, height: shape.height });
+export function anchorOffsetY(shape: Pick<DraftNode, 'type' | 'width' | 'height'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind'>): number {
+  const band = anchorBandOf({ type: shape.type, serviceKind: shape.serviceKind, componentKind: shape.componentKind, x: 0, y: 0, width: shape.width, height: shape.height });
   return band ? (band.top + band.bottom) / 2 : shape.height / 2;
 }
 

@@ -635,6 +635,20 @@ function glyphMiddle(width: number, height: number): number {
  * alone: the words were fitted to it.
  */
 function migrateCardKindsToGlyphs(doc: Record<string, unknown>): Record<string, unknown> {
+  return cardsToGlyphs(doc, (node) => node.type === 'service' && FORMER_CARD_KINDS.has(node.serviceKind));
+}
+
+/**
+ * v31 does the same for a Module, an Adapter and a Port, which were a Component's box with a mark
+ * on its edge. The same move for the same reason, so the same code: the glyph's middle goes where
+ * the box's middle was.
+ */
+const FORMER_CARD_COMPONENTS: ReadonlySet<unknown> = new Set(['module', 'adapter', 'port']);
+function migrateComponentKindsToGlyphs(doc: Record<string, unknown>): Record<string, unknown> {
+  return cardsToGlyphs(doc, (node) => node.type === 'component' && FORMER_CARD_COMPONENTS.has(node.componentKind));
+}
+
+function cardsToGlyphs(doc: Record<string, unknown>, formerCard: (node: Record<string, unknown>) => boolean): Record<string, unknown> {
   if (!Array.isArray(doc.nodes)) return doc;
   const written = (value: unknown) => typeof value === 'string' && value.trim() !== '';
   return {
@@ -642,7 +656,7 @@ function migrateCardKindsToGlyphs(doc: Record<string, unknown>): Record<string, 
     nodes: doc.nodes.map((raw) => {
       if (!raw || typeof raw !== 'object') return raw;
       const node = raw as Record<string, unknown>;
-      if (node.type !== 'service' || !FORMER_CARD_KINDS.has(node.serviceKind)) return raw;
+      if (!formerCard(node)) return raw;
       const { y, width, height } = node;
       if (typeof y !== 'number' || typeof width !== 'number' || typeof height !== 'number') return raw;
       if (!Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) return raw;
@@ -718,6 +732,8 @@ const MIGRATIONS: Record<number, Migration> = {
   // The `artifact` shape and two Service kinds (`load-balancer`, `proxy`), which nothing older
   // holds, and four kinds that stop being cards (`migrateCardKindsToGlyphs`).
   29: everyRoom(migrateCardKindsToGlyphs),
+  // Three Component kinds stop being cards too (`migrateComponentKindsToGlyphs`).
+  30: everyRoom(migrateComponentKindsToGlyphs),
 };
 
 export class UnsupportedVersionError extends Error {

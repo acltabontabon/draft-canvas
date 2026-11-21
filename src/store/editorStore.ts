@@ -13,10 +13,11 @@ import {
   createEdge,
   createNode,
   defaultSizeFor,
-  boxForServiceKind,
+  boxForKind,
   defaultTextFor,
   type CreateNodeInput,
 } from '../document/factory';
+import { familyKindOf } from '../document/dataStoreGeometry';
 import { gapForCaption, horizontalAnchorsFor, RULES, type MaterializedContinuation } from '../continuation';
 import { effectiveLevel } from '../depth/level';
 import {
@@ -2113,10 +2114,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (before && 'serviceKind' in patch) {
         next = applyServiceAutoLabel(next, id, before, patch);
         // A card becoming a glyph (or back) takes the box that drawing needs.
-        const box = boxForServiceKind(before, before.serviceKind, patch.serviceKind);
+        const box = boxForKind(before, before.serviceKind, patch.serviceKind);
         if (box && !('width' in patch) && !('height' in patch)) next = updateNode(next, id, box);
       }
-      if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
+      if (before && 'componentKind' in patch) {
+        next = applyComponentAutoLabel(next, id, before, patch);
+        const box = boxForKind(before, before.componentKind, patch.componentKind);
+        if (box && !('width' in patch) && !('height' in patch)) next = updateNode(next, id, box);
+      }
       if (before && 'actorKind' in patch) next = applyActorAutoLabel(next, id, before, patch);
       if (before && 'artifactKind' in patch) next = applyArtifactAutoLabel(next, id, before, patch);
       if (before?.type === 'note' && 'noteKind' in patch) next = growNoteToFit(next, id);
@@ -2146,7 +2151,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           // The same follow-ups as a kind picked in the inspector: an automatic name follows the
           // kind, and connectors whose meaning was inferred are inferred again.
           next = applyServiceAutoLabel(next, id, before, kind);
-          const box = boxForServiceKind(before, before.serviceKind, (kind as Partial<DraftNode>).serviceKind ?? before.serviceKind);
+          const box = boxForKind(before, before.serviceKind, (kind as Partial<DraftNode>).serviceKind ?? before.serviceKind);
           if (box) next = updateNode(next, id, box);
           next = reinferIncidentEdges(next, id, doc);
         } else if ('technology' in fields) {
@@ -2468,7 +2473,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!source) return;
     if (!roomFor(1, 1)) return;
 
-    const size = defaultSizeFor(companion.type, 'serviceKind' in companion ? companion.serviceKind : undefined);
+    const size = defaultSizeFor(companion.type, familyKindOf(companion));
     // Same capability matrix every other connection reads — it correctly differentiates a queue's
     // competing-consumer `consumes` from a topic's fan-out `deliversTo`, a service's `writes` from
     // a gateway's `routes`, with no special-casing here. Resolved ahead of placement (category only

@@ -1,3 +1,4 @@
+import { familyKindOf } from '../document/dataStoreGeometry';
 import { capabilityFor, categoryOf, inferRelationship } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { BOUNDARY_HEADER_BAND } from '../document/boundaryHeader';
@@ -68,7 +69,7 @@ export function materialize(
   let host: DraftNode = anchor;
 
   for (const [index, spec] of continuation.fragment.nodes.entries()) {
-    const size = defaultSizeFor(spec.type, spec.serviceKind);
+    const size = defaultSizeFor(spec.type, familyKindOf(spec));
     // The gap must clear the caption the connector *into* this node will carry — the same rule
     // `addConsumer`/`addDeadLetterQueue` follow, so "after 3 attempts" never overlaps either box.
     const inbound = continuation.fragment.edges.find((e) => e.to === spec.key);
@@ -87,7 +88,7 @@ export function materialize(
     // The two ends of the connector into this node, level: its anchor is a Queue's tube or a Data
     // Store's glyph, not its box's middle, so top-aligning the boxes drew most suggestions' connectors
     // with a jog — and a jog is where a caption loses its room.
-    const align = { host: anchorOffsetY(host), self: anchorOffsetY({ type: spec.type, serviceKind: spec.serviceKind, ...size }) };
+    const align = { host: anchorOffsetY(host), self: anchorOffsetY({ type: spec.type, serviceKind: spec.serviceKind, componentKind: spec.componentKind, ...size }) };
     // Where the connectors already drawn through here are, so a candidate that would sit on one
     // ranks behind a candidate that wouldn't. A preference only: see `PlaceNearOptions.avoid`.
     // `doc` has neither the nodes placed so far nor the fragment's own new connectors, so a chain is
