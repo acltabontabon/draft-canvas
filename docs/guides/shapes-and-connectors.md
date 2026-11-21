@@ -239,7 +239,8 @@ An agent using the Draft Canvas MCP tools, including Nodi, can add the same asso
 
 ## More connector tools
 
-- **Attach note** / **Attach code** (right-click), or drag a note onto the line and hold.
+- **Attach note** / **Attach code** (right-click), or drag a note onto the line and hold. Rest the
+  pointer on the connector to read what it carries; click a chip to edit it.
 - **Add DLQ** on a Queue adds a dead-letter queue; click its connector to set delivery attempts. A
   muted amber outline and message icon mark its role, not a live error. An explicit colour overrides
   it.

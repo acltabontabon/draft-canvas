@@ -10,6 +10,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Notes at a glance** — Rest the pointer on a shape or connector that carries notes or code and
+  they appear beside it, the way they do while presenting. Nothing is selected or opened; the
+  paperclip tab and a connector's chips still open them for editing.
 - **Load Balancer and Proxy** — Two new Service kinds, each drawn as what it does: a load balancer
   as one address fanning out to identical instances, a proxy as two plates with a connection ending
   at one and another leaving the other. HAProxy and an ALB arrive as a Load Balancer; NGINX, Envoy

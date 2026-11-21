@@ -85,6 +85,18 @@ export function revealedSubject(
   return host ? subjectFor(scope, reveal.hostKind, reveal.hostId, host.attachments) : null;
 }
 
+/**
+ * What a shape or connector tells when the pointer rests on it while editing (`canvas/presentation/
+ * AttachmentPeekLayer.tsx`) — the same subject a presenter's click would give, outside any
+ * presentation. Null when it carries nothing with content.
+ */
+export function peekSubject(
+  hostKind: PresentationHostKind,
+  host: { id: string; attachments?: readonly Attachment[] },
+): PresentationSubject | null {
+  return subjectFor('peek', hostKind, host.id, host.attachments);
+}
+
 export interface ResolveSubjectInput {
   flowId: string;
   steps: readonly FlowPlaybackStep[];

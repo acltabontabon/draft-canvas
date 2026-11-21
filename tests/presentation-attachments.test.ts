@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { DraftEdge, DraftFlow, DraftNode } from '../src/document/types';
 import {
   describePresentationSubject,
+  peekSubject,
   presentableAttachments,
   presentationScope,
   resolvePresentationSubject,
@@ -142,5 +143,18 @@ describe('resolvePresentationSubject', () => {
     const subject = revealedSubject('present', reveal, new Map(nodes.map((n) => [n.id, n])), new Map());
     expect(subject?.key).toBe('present:node:a');
     expect(describePresentationSubject(subject!)).toBe('Decision: Keep it. Code attached.');
+  });
+
+  it('tells a shape rested on while editing only what has content', () => {
+    const said = { id: 'n', type: 'note' as const, text: 'Holds accepted work.' };
+    expect(peekSubject('node', node('a', { attachments: [{ id: 'e', type: 'note', text: '  ' }, said] }))).toEqual({
+      key: 'peek:node:a',
+      hostKind: 'node',
+      hostId: 'a',
+      attachments: [said],
+    });
+    expect(peekSubject('edge', { id: 'e1', attachments: [said] })?.key).toBe('peek:edge:e1');
+    expect(peekSubject('node', node('b', { attachments: [{ id: 'e', type: 'code', code: '' }] }))).toBeNull();
+    expect(peekSubject('node', node('c'))).toBeNull();
   });
 });
