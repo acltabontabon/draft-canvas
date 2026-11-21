@@ -521,6 +521,20 @@
   display: contents;
 }
 
+/* Semantic zoom (`canvas/zoomBand.ts`): far out, the small print beside a line is too small to read
+   and only fogs the structure, so it steps back and the shapes and lines carry the picture; further
+   out still, so do the labels. Never while presenting, where the camera is the presenter's and the
+   words are the point, and never a chip someone is typing in. Canvas only: an export draws it all. */
+.dc-canvas:not([data-explain='on']) .react-flow[data-zoom-band] .dc-edge-overlay :is(.dc-edge-caption, .dc-edge-meta, .dc-edge-response-label, .dc-attachment-chip-row, .dc-edge-endpoint-hint):not(:focus-within),
+.dc-canvas:not([data-explain='on']) .react-flow[data-zoom-band='overview'] .dc-edge-overlay :is(.dc-edge-label, .dc-edge-step):not(:focus-within) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dc-edge-overlay :is(.dc-edge-caption, .dc-edge-meta, .dc-edge-response-label, .dc-attachment-chip-row, .dc-edge-label, .dc-edge-step) {
+  transition: opacity 160ms ease;
+}
+
 /* A route easing into place (`canvas/routeMorph.ts`): the stand-in for the line while it moves. */
 .dc-edge-morph {
   fill: none;

@@ -81,6 +81,7 @@ import {
 } from './projection';
 import { sameGuides, type Guide } from './snapping';
 import { NO_DRAG_SNAP, NO_GUIDES, snapChanges, snapResizeChanges, type DragLink, type DragSnapContext, type NodeLookup } from './dragSnap';
+import { zoomBand } from './zoomBand';
 import { snapBypassed, trackSnapBypass } from './snapBypass';
 import { useIdSet } from './useIdSet';
 import { DRAG_THRESHOLD_PX, LONG_PRESS_DRIFT_PX, LONG_PRESS_MS } from './gestureThresholds';
@@ -335,6 +336,11 @@ function useZoomVariable() {
       const zoom = quantized(transform);
       if (!domNode || (written?.node === domNode && written.zoom === zoom)) return;
       domNode.style.setProperty('--dc-zoom', String(zoom));
+      // Semantic zoom (`zoomBand.ts`): one attribute on the root, restyled by `canvas.css`, so no
+      // shape or connector subscribes to the camera to know how far out it is.
+      const band = zoomBand(zoom);
+      if (band) domNode.setAttribute('data-zoom-band', band);
+      else domNode.removeAttribute('data-zoom-band');
       written = { node: domNode, zoom };
     };
     write();
