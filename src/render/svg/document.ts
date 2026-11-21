@@ -16,6 +16,7 @@ import { describeAttachmentBadge } from '../../edges/attachmentChips';
 import { laneIndex } from '../../edges/routing';
 import { routingPlan } from '../../edges/bundles';
 import { portalPlan } from '../../edges/portalPlan';
+import { describeLegend } from '../../edges/legend';
 import { crossingPlan } from '../../edges/crossings';
 import { labelGroupPlan } from '../../edges/labelGroups';
 import { replyLabelPlan } from '../../edges/replyLabels';
@@ -74,6 +75,12 @@ export interface ExportOptions {
   openPoints?: boolean;
   /** The exported legend is unnecessary when drawing a transient camera-sized room picture. */
   openPointKey?: boolean;
+  /**
+   * Whether the picture carries a legend of the line styles it uses (`edges/legend.ts`), below the
+   * architecture beside the open-point key. Defaults to `false`: the canvas shows one only when
+   * asked, and an export shows what the canvas does.
+   */
+  legend?: boolean;
   /** Preserve element ids in SVG data attributes for an interactive embedding. */
   identifyElements?: boolean;
   /**
@@ -504,9 +511,12 @@ export function renderDocumentSvg(
       { theme, measurer },
     );
   }
+  // The line styles among the connectors drawn, under the key when there is one.
+  const legend = options.legend ? describeLegend(scene.edgeEntries.map((entry) => entry.edge), { theme, measurer }) : null;
   const keyBlock = key ? key.height + KEY_GAP : 0;
-  const width = Math.max(1, Math.round(Math.max(bounds.width, key?.width ?? 0) + padding * 2));
-  const height = Math.max(1, Math.round(bounds.height + keyBlock + padding * 2));
+  const legendBlock = legend ? legend.height + KEY_GAP : 0;
+  const width = Math.max(1, Math.round(Math.max(bounds.width, key?.width ?? 0, legend?.width ?? 0) + padding * 2));
+  const height = Math.max(1, Math.round(bounds.height + keyBlock + legendBlock + padding * 2));
   const originX = bounds.x - padding;
   const originY = bounds.y - padding;
 
@@ -543,6 +553,12 @@ export function renderDocumentSvg(
   if (key) {
     children.push(
       el('g', { transform: `translate(${n(padding)} ${n(bounds.height + padding + KEY_GAP)})` }, emitDisplayList({ width: key.width, height: key.height, shapes: key.shapes })),
+    );
+  }
+
+  if (legend) {
+    children.push(
+      el('g', { transform: `translate(${n(padding)} ${n(bounds.height + padding + KEY_GAP + keyBlock)})` }, emitDisplayList({ width: legend.width, height: legend.height, shapes: legend.shapes })),
     );
   }
 

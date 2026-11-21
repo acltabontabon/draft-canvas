@@ -5311,6 +5311,28 @@
   transition: opacity 180ms ease;
 }
 
+/* -------------------------------------------------------------- legend --- */
+
+/* The legend (`canvas/CanvasLegend.tsx`): fixed in the pane's lower-left corner, above the status
+   bar, quiet enough to be ignored and near enough to be found. Never in the way of a drag. */
+.dc-canvas-legend {
+  position: absolute;
+  left: 14px;
+  bottom: 52px;
+  z-index: 5;
+  max-width: calc(100% - 28px);
+  padding: 6px 10px;
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: color-mix(in srgb, var(--dc-surface-raised) 88%, transparent);
+  pointer-events: none;
+}
+
+.dc-canvas-legend svg {
+  display: block;
+}
+
 /* -------------------------------------------------------------- portal --- */
 
 /*

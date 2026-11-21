@@ -81,6 +81,7 @@ import {
 } from './projection';
 import { sameGuides, type Guide } from './snapping';
 import { NO_DRAG_SNAP, NO_GUIDES, snapChanges, snapResizeChanges, type DragLink, type DragSnapContext, type NodeLookup } from './dragSnap';
+import { CanvasLegend } from './CanvasLegend';
 import { useMakeRoom } from './useMakeRoom';
 import { useHoverTrace } from './useHoverTrace';
 import { zoomBand } from './zoomBand';
@@ -2486,6 +2487,7 @@ export const Canvas = memo(function Canvas(props: CanvasProps) {
       {/* Beside the canvas, not in it: the canvas's own press handlers (a touch long-press opens its
           context menu, a tap deselects) must never see a press on this offer's buttons. */}
       <FollowPrompt />
+      <CanvasLegend />
     </>
   );
 });

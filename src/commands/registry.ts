@@ -521,6 +521,14 @@ function flowCommands(ctx: CommandContext): Command[] {
 export function viewCommands(ctx: CommandContext): Command[] {
   const commands: Command[] = [
     {
+      id: 'toggle-legend',
+      title: ctx.ui.legendShown ? 'Hide legend' : 'Show legend',
+      group: 'view',
+      keywords: ['legend', 'key', 'line styles', 'dashed', 'dotted', 'arrows', 'notation', 'what do the lines mean'],
+      hint: ctx.ui.legendShown ? 'On the canvas and in exported images' : 'Name the kinds of line this diagram uses, here and in exported images',
+      run: (inner) => inner.ui.setLegendShown(!inner.ui.legendShown),
+    },
+    {
       id: 'fit',
       title: 'Fit to view',
       group: 'view',

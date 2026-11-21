@@ -286,7 +286,17 @@ let changeTimer: ReturnType<typeof setTimeout> | undefined;
 const NO_IDS: ReadonlySet<string> = new Set();
 
 const CONTINUATION_PREFERENCE = 'continuation';
+const LEGEND_PREFERENCE = 'legend';
 const NO_MOVING_NODES: ReadonlySet<string> = new Set();
+
+/** Off unless this device asked for it. Read once at startup, as `initialContinuationsEnabled` is. */
+function initialLegendShown(): boolean {
+  try {
+    return readPreference(LEGEND_PREFERENCE) === 'on';
+  } catch {
+    return false;
+  }
+}
 
 /** On unless the device says otherwise. Read once at startup; a preference store that is not
  *  usable at that moment (blocked storage, a test harness still wiring up) means "on". */
@@ -651,6 +661,11 @@ export interface UiStore {
    */
   makeRoom: { line: { axis: 'x' | 'y'; at: number; delta: number } | null } | null;
   /**
+   * Whether the canvas shows the legend of line styles in use (`edges/legend.ts`), and an image
+   * export carries it. A device preference, like the drawing style: never part of the file.
+   */
+  legendShown: boolean;
+  /**
    * The id of a document that has just arrived and still needs its opening viewport computed —
    * set once as it arrives (see `arriveWith` in `useDocumentSession.ts`) for a genuine new open,
    * never for reopening the canvas already on screen or for a freshly created one (which already
@@ -851,6 +866,7 @@ export interface UiStore {
   setPointedIds: (ids: ReadonlySet<string> | null) => void;
   setTraceIds: (ids: ReadonlySet<string> | null) => void;
   setMakeRoom: (makeRoom: UiStore['makeRoom']) => void;
+  setLegendShown: (shown: boolean) => void;
   /** Marks `documentId` as just arrived and awaiting its opening viewport fit. */
   requestOpenFit: (documentId: string) => void;
   /** Consumes the pending fit for `documentId` — a no-op if a newer request has already replaced
@@ -1033,6 +1049,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   pointedIds: null,
   traceIds: null,
   makeRoom: null,
+  legendShown: initialLegendShown(),
   openFitDocumentId: null,
   continuation: null,
   agentPreview: null,
@@ -1240,6 +1257,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
   setPointedIds: (pointedIds) => set((state) => (state.pointedIds === pointedIds ? state : { pointedIds })),
   setTraceIds: (traceIds) => set((state) => (state.traceIds === traceIds ? state : { traceIds })),
+  setLegendShown: (legendShown) => {
+    writePreference(LEGEND_PREFERENCE, legendShown ? 'on' : 'off');
+    set({ legendShown });
+  },
   // Taking the tool up puts down whatever else was in hand: one tool owns the pointer at a time.
   setMakeRoom: (makeRoom) => set((state) => (makeRoom && !state.makeRoom ? { makeRoom, armed: null, pencil: null, spliceArmedEdgeTarget: null } : { makeRoom })),
   requestOpenFit: (documentId) => set({ openFitDocumentId: documentId }),

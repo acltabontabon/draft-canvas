@@ -144,6 +144,7 @@ export function ExportDialog() {
   const [selectionOnly, setSelectionOnly] = useState(false);
   const [includeBackground, setIncludeBackground] = useState(true);
   const [includeOpenPoints, setIncludeOpenPoints] = useState(true);
+  const legendShown = useUiStore((state) => state.legendShown);
   // One image per room, zipped. Per open, like "Selection only": it is a choice about this picture.
   const [everyLevel, setEveryLevel] = useState(false);
   // Whether the background image rides along in the `.draftcanvas` file (up to 2 MB) — looked up
@@ -321,6 +322,8 @@ export function ExportDialog() {
     includeBackground: hasBackground ? includeBackground : false,
     preset,
     openPoints: hasOpenPoints ? includeOpenPoints : false,
+    // What the canvas shows is what the image carries: the legend follows the canvas's own switch.
+    legend: legendShown,
   };
 
   const title = document.metadata.title;
