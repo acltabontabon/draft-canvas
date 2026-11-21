@@ -26,6 +26,21 @@ is yours to review.
 - **Context for decisions.** Notes, code, sources, and open questions.
 - **Import and export.** Import Mermaid and editable files; export images, editable files, Mermaid, PlantUML, Structurizr, and draw.io.
 
+## Start from a real system
+
+<a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/food-delivery">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-food-delivery-dark.png">
+  <img width="100%" alt="Forkful, a food delivery marketplace, open in Draft Canvas: customer, kitchen and courier apps meet at a junction before the API gateway; the order saga, payments, kitchen, logistics, data and notification domains sit inside the system boundary." src="docs/media/starter-food-delivery-light.png">
+</picture>
+</a>
+
+<p align="center"><sub>
+<b>Forkful</b>, a food delivery marketplace from the <a href="https://github.com/acltabontabon/draft-canvas-starters">starters gallery</a>: an order saga
+with its refunds, an outbox, a dead-letter queue, a sequence diagram and eight flows to present.
+Open it from <b>Starters</b> in the app.
+</sub></p>
+
 ## Get started
 
 Start in the [Draft Canvas web app](https://app.draftcanvas.dev/)—nothing to install—or [download
