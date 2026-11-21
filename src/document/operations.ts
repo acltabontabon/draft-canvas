@@ -1487,6 +1487,67 @@ function companionCandidates(
     : [right, below, belowRight, aboveRight, furtherBelow];
 }
 
+/** Room left between a shape moved off a neighbour it was dropped on and that neighbour: enough to
+ *  read as two shapes, small enough that it still lands where it was aimed. */
+export const DROP_CLEARANCE = 16;
+
+/** How many of the closest shapes a drop is steered around. Past the ones it actually landed on,
+ *  only their near neighbours can be in the way of the spot beside them. */
+const DROP_NEIGHBOURS = 24;
+
+/**
+ * Where a shape dropped at `rect` should actually go: `rect` itself when it covers no other shape,
+ * and otherwise the closest spot that is `DROP_CLEARANCE` clear of every shape around it. The point
+ * a connector was let go at can be empty while the box centred on it reaches a neighbour (#178), and
+ * a shape landing on another hides it and its attachments.
+ *
+ * Not a general free-space solver. The closest clear position to a point among boxes always has each
+ * coordinate either unchanged or flush against some box's edge, so only those are tried: exact, and
+ * the same inputs always give the same answer. A boundary is never an obstacle, as in `tryPlaceNear`:
+ * landing inside one is normal. With no clear spot among the candidates (a packed corner) the drop
+ * point is kept, as a committed companion's is by `placeNear`.
+ */
+export function clearSpotNear(doc: DraftDocument, rect: Bounds): { x: number; y: number } {
+  const wanted = { x: clampCoord(rect.x), y: clampCoord(rect.y) };
+  const shapes = doc.nodes.filter((n) => n.type !== 'group');
+  if (!shapes.some((n) => rectsOverlap(rect, n))) return wanted;
+
+  const reach = (rect.width + rect.height) * 2 + DROP_CLEARANCE;
+  const centre = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  // Edge-to-centre distance, so a long shape whose middle is far away still counts as near.
+  const distanceTo = (n: Bounds) =>
+    Math.hypot(Math.max(n.x - centre.x, 0, centre.x - (n.x + n.width)), Math.max(n.y - centre.y, 0, centre.y - (n.y + n.height)));
+  const near = shapes
+    .map((shape) => ({ shape, distance: distanceTo(shape) }))
+    .filter((entry) => entry.distance <= reach)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, DROP_NEIGHBOURS)
+    .map((entry) => entry.shape);
+
+  const xs = [wanted.x, ...near.flatMap((n) => [n.x - rect.width - DROP_CLEARANCE, n.x + n.width + DROP_CLEARANCE])];
+  const ys = [wanted.y, ...near.flatMap((n) => [n.y - rect.height - DROP_CLEARANCE, n.y + n.height + DROP_CLEARANCE])];
+  const blocked = (x: number, y: number) =>
+    shapes.some(
+      (n) =>
+        x < n.x + n.width + DROP_CLEARANCE &&
+        x + rect.width + DROP_CLEARANCE > n.x &&
+        y < n.y + n.height + DROP_CLEARANCE &&
+        y + rect.height + DROP_CLEARANCE > n.y,
+    );
+  let best: { x: number; y: number; distance: number } | undefined;
+  for (const x of xs) {
+    for (const y of ys) {
+      const distance = (x - wanted.x) ** 2 + (y - wanted.y) ** 2;
+      // Strictly closer only: on a tie the first found stays, so the answer never depends on more
+      // than the order shapes were tried in.
+      if (best && distance >= best.distance) continue;
+      if (Math.abs(x) > LIMITS.maxCoordinate || Math.abs(y) > LIMITS.maxCoordinate || blocked(x, y)) continue;
+      best = { x, y, distance };
+    }
+  }
+  return best ? { x: clampCoord(best.x), y: clampCoord(best.y) } : wanted;
+}
+
 function clampCompanion(
   chosen: Bounds,
   host: Pick<DraftNode, 'x' | 'y' | 'width' | 'height'>,
