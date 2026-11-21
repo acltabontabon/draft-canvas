@@ -17,7 +17,7 @@ import { CODE_THEMES, colorForScope } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { BOUNDARY_HEADER_HEIGHT } from '../document/boundaryHeader';
-import { ARTIFACT_GLYPH_WIDTH, DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreGlyphTop, dataStoreScale, isGlyphServiceKind } from '../document/dataStoreGeometry';
+import { ARTIFACT_GLYPH_WIDTH, DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreGlyphTop, dataStoreScale, isGlyphComponentKind, isGlyphServiceKind, isGlyphShape } from '../document/dataStoreGeometry';
 import { queueTubeSpan } from '../document/queueGeometry';
 import { roughenPath } from '../render/roughness/roughPath';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
@@ -1053,10 +1053,6 @@ const COMPONENT_KIND_LABELS: Partial<Record<ComponentKind, string>> = {
   adapter: 'ADAPTER',
   port: 'PORT',
 };
-/** Same dash array a Boundary's outline and a generated DLQ already use — "dashed = not a concrete
- *  thing" is an established meaning in this app, and a Port is exactly that: a contract. */
-const PORT_DASH = [6, 5];
-
 /**
  * Component's own stroke — a shade thinner than every other primitive's shared 1.5px
  * (`surfaceStroke`). One of the two deliberate "weighs less than Service" cues that aren't just an
@@ -1068,58 +1064,20 @@ function componentStroke(ctx: DescribeContext, node: DraftNode): Stroke {
 }
 
 /**
- * Component earns a distinct silhouette per kind now, the same discipline Service's own kinds
- * follow — but restrained on purpose: where a Service kind sometimes changes the *whole* body
- * (Worker's stacked cards, External's double outline), every Component kind keeps exactly the same
- * plain rounded body and departs from it with only a small mark or two (Module: one, on the top
- * edge; Adapter: two, mirrored left/right — see its own comment for why), because a Component is
- * still meant to read as *contained within* something else, never a peer of the Services around
- * it. `generic` gets no mark at all (and no corner caption — the same "unspecified means unmarked"
- * convention Service's own default kind follows).
+ * Generic is the family's card: a part of something, and nothing more is known about it. The other
+ * three kinds are each a particular thing, and are drawn as it (`componentGlyph`).
+ *
+ * They used to share Generic's box and depart from it by one small mark on its edge (a tab on a
+ * Module, a notch in each side of an Adapter, a dashed outline for a Port). At the size a component
+ * is drawn the marks were a few pixels each, and the three were told apart by the word in the
+ * corner.
  */
 function component(node: DraftNode, ctx: DescribeContext): Shape[] {
-  switch (node.componentKind) {
-    case 'module':
-      return componentModule(node, ctx);
-    case 'adapter':
-      return componentAdapter(node, ctx);
-    case 'port':
-      return componentPort(node, ctx);
-    default:
-      return componentGeneric(node, ctx);
-  }
-}
-
-/**
- * Port: Generic's body drawn as a dashed outline — the one Component kind that isn't a thing
- * doing work but the shape of an agreement, so it borrows the "not concrete" dash a Boundary and a
- * DLQ already speak rather than inventing a glyph. Its `PORT` tag sits centred *under* the name (a
- * queue's name-over-kind stacking) instead of in the corner every other kind uses: a port is meant
- * to be small, and at the width a one-word port name needs, a corner tag would sit on top of the
- * name itself. The name is held above the tag by exactly the tag's own line plus its inset, so the
- * two never touch at any height a port is likely to be drawn at.
- */
-function componentPort(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const portRect = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
-  return [
-    outlineShape(node.id, ctx, portRect, {
-      fill: palette.fill,
-      stroke: { ...componentStroke(ctx, node), dash: PORT_DASH },
-      shadow: true,
-    }),
-    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '' }),
-    // The shared bottom-right tag, like every other captioned kind. This used to centre its tag
-    // under the name instead, on the reasoning that a Port is an agreement rather than a component
-    // and could afford its own arrangement; sitting beside an Adapter or a Module it just looked
-    // like the one shape whose caption had slipped out of place.
-    ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.port!, ctx.theme.textMuted),
-  ];
+  return isGlyphComponentKind(node.componentKind) ? componentGlyph(node, ctx) : componentGeneric(node, ctx);
 }
 
 /** Generic: the family's neutral baseline — a plain rounded box, no cap, no notch, `neutral`
- *  accent, Component's own thinner stroke. Every other kind is a deliberate, restrained departure
- *  from this one. */
+ *  accent, Component's own thinner stroke. */
 function componentGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const rect = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
@@ -1131,122 +1089,94 @@ function componentGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   ];
 }
 
+/* ----------------------------------------------------- component glyphs -- */
+
 /**
- * Module: Generic's body with one small tab stepping up from the top edge, near the left corner —
- * a "labelled unit in a set" cue, the same idea as a file/sheet tab. Built as one continuous
- * outline (the technique `serviceApi`/`serviceGateway` already use for their own notches) rather
- * than a second stacked shape (`serviceWorker`'s technique, which reads as *layers*, not a *tab*).
- * Deliberately short and one-sided — a tab spanning the full width would just be Service's own cap
- * band, the one silhouette Component exists specifically not to have.
+ * Module, Port and Adapter in the Service glyphs' arrangement: a compact glyph, the name and kind
+ * underneath. The three are drawn in one notation so they read against each other. A Port offers a
+ * ball on a stem; an Adapter has the cup that a ball sits in on one side and something of another
+ * shape on the other; a Module is the block all of that plugs into.
  */
-function componentModule(node: DraftNode, ctx: DescribeContext): Shape[] {
+function componentGlyph(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const r = 8;
-  const tabX = x + 12;
-  const tabW = Math.min(30, w * 0.32);
-  const tabH = 7;
-  const tr = 2;
-
-  const d = [
-    `M${x + r},${y}`,
-    `L${tabX},${y}`,
-    `L${tabX},${y - tabH + tr}`,
-    `Q${tabX},${y - tabH} ${tabX + tr},${y - tabH}`,
-    `L${tabX + tabW - tr},${y - tabH}`,
-    `Q${tabX + tabW},${y - tabH} ${tabX + tabW},${y - tabH + tr}`,
-    `L${tabX + tabW},${y}`,
-    `L${x + w - r},${y}`,
-    `Q${x + w},${y} ${x + w},${y + r}`,
-    `L${x + w},${y + h - r}`,
-    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
-    `L${x + r},${y + h}`,
-    `Q${x},${y + h} ${x},${y + h - r}`,
-    `L${x},${y + r}`,
-    `Q${x},${y} ${x + r},${y}`,
-    'Z',
-  ].join(' ');
-
+  const scale = dataStoreScale(node);
+  const top = dataStoreGlyphTop(node);
+  const kind = node.componentKind as ComponentKind;
+  const box = { x: node.width / 2 - GLYPH_SERVICE_WIDTH / 2, y: DS_GLYPH_TOP, w: GLYPH_SERVICE_WIDTH, h: DS_GLYPH_HEIGHT };
+  const hand: Hand = {
+    rect: (key, rect) => outlineShape(`${node.id}:${key}`, ctx, rect, { fill: palette.fill, stroke: { color: palette.line, width: 1.5 } }),
+    path: (key, d) => ({ t: 'path', d: roughOutline(d, `${node.id}:${key}`, ctx), fill: palette.fill, stroke: { color: palette.line, width: 1.5 } }),
+  };
+  const glyph = kind === 'port' ? portGlyph(box, palette, hand) : kind === 'adapter' ? adapterGlyph(box, palette, hand) : moduleGlyph(box, palette, hand);
   return [
-    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
-    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '' }),
-    ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.module!, ctx.theme.textMuted),
+    ...scaledGlyph(glyph, scale, node.width / 2, top - DS_GLYPH_TOP * scale),
+    ...glyphCaption(node, ctx, palette, COMPONENT_KIND_LABELS[kind]!, scale, top),
   ];
 }
 
 /**
- * Adapter: Generic's body with a small rectangular notch cut into *both* vertical edges — the same
- * cut-rectangle language `serviceApi`'s own notch already speaks, just mirrored onto each side
- * rather than one.
- *
- * An earlier revision cut the notch into the right edge only, on the reasoning that "Draft Canvas
- * reads left to right, so the side facing onward is the one that bridges toward infrastructure."
- * That baked in a global assumption this starter's own composition disproves: `Persistence
- * Adapter`/`Integration Adapter` face infrastructure on their right, but an inbound adapter (a
- * `REST Adapter` fronting the same core from the left, say) faces infrastructure on its *left* —
- * there is no side of an Adapter that is always the outward one. Fixing that properly means
- * orienting the notch from the node's actual connections, but `describeNode` takes only a node and
- * a theme — deliberately pure, so the same function produces byte-identical output for the canvas
- * and the static exporter — and has no view of the document's edges to orient from. Threading edge
- * direction through it would mean recomputing a node's silhouette every time an edge nearby is
- * dragged, reconnected, undone, or redone, and risks the exact "shape flip-flops while the user is
- * still drawing" failure a directional rule invites. So instead the silhouette itself stays valid
- * regardless of which way the Adapter faces: a notch on *each* vertical edge, bilaterally
- * symmetric, reads as "interfaces on both sides" — true of every Adapter, in either orientation,
- * with no context required and nothing to get wrong while dragging.
+ * Module: a block with two lugs through its left edge, the mark UML has used for a replaceable unit
+ * of a system since before most of what is drawn with it. Not a folder with a tab, which this was
+ * closer to and which is a File System here.
  */
-function componentAdapter(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const r = 8;
-  const notchH = h * 0.34;
-  const notchDepth = Math.min(8, w * 0.1);
-  const notchTop = y + (h - notchH) / 2;
-  const notchBottom = notchTop + notchH;
-  const nr = 3;
-
-  const d = [
-    `M${x + r},${y}`,
-    `L${x + w - r},${y}`,
-    `Q${x + w},${y} ${x + w},${y + r}`,
-    `L${x + w},${notchTop}`,
-    `L${x + w - notchDepth + nr},${notchTop}`,
-    `Q${x + w - notchDepth},${notchTop} ${x + w - notchDepth},${notchTop + nr}`,
-    `L${x + w - notchDepth},${notchBottom - nr}`,
-    `Q${x + w - notchDepth},${notchBottom} ${x + w - notchDepth + nr},${notchBottom}`,
-    `L${x + w},${notchBottom}`,
-    `L${x + w},${y + h - r}`,
-    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
-    `L${x + r},${y + h}`,
-    `Q${x},${y + h} ${x},${y + h - r}`,
-    `L${x},${notchBottom}`,
-    `L${x + notchDepth - nr},${notchBottom}`,
-    `Q${x + notchDepth},${notchBottom} ${x + notchDepth},${notchBottom - nr}`,
-    `L${x + notchDepth},${notchTop + nr}`,
-    `Q${x + notchDepth},${notchTop} ${x + notchDepth - nr},${notchTop}`,
-    `L${x},${notchTop}`,
-    `L${x},${y + r}`,
-    `Q${x},${y} ${x + r},${y}`,
-    'Z',
-  ].join(' ');
-
-  // The default corner inset (7px from the right edge) sits inside the right notch's own x-range
-  // whenever a notch is this deep — the caption and the silhouette would visually crowd the same
-  // corner. Pushed out exactly as far as the notch itself cuts in, plus a small fixed gap, so the
-  // two never compete regardless of node width.
-  const captionInset = { right: notchDepth + 5 };
-
+function moduleGlyph(box: GlyphBox, _palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const lug = { w: 14, h: 8 };
+  const left = x + 4;
+  const body = { x: left + lug.w / 2, w: w - 8 - lug.w / 2 };
   return [
-    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
-    // The label clears the sockets cut into both vertical edges.
-    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '', left: notchDepth, right: notchDepth }),
-    ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.adapter!, ctx.theme.textMuted, captionInset),
+    hand.rect('body', { x: body.x, y: y + 0.75, w: body.w, h: h - 1.5, r: 6 }),
+    hand.rect('lug-a', { x: left, y: y + 9, w: lug.w, h: lug.h, r: 2.5 }),
+    hand.rect('lug-b', { x: left, y: y + h - 9 - lug.h, w: lug.w, h: lug.h, r: 2.5 }),
+  ];
+}
+
+/** The radius of a Port's ball, and of the cup in an Adapter that holds one. */
+const PORT_BALL = 7.5;
+
+/**
+ * Port: an interface offered at the edge of something, as a ball on a stem. The plate is the edge;
+ * the ball is what a caller sees, and it is empty because a port is an agreement with nothing in it
+ * until something implements it.
+ */
+function portGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const mid = y + h / 2;
+  const plate = { x: x + 7, w: 9 };
+  const cx = x + w - 7 - PORT_BALL;
+  return [
+    { t: 'path', d: `M${plate.x + plate.w},${mid} H${cx - PORT_BALL}`, fill: 'none', stroke: { color: palette.chip, width: 1.4, linecap: 'round' } },
+    hand.rect('edge', { x: plate.x, y: y + 0.75, w: plate.w, h: h - 1.5, r: 3.5 }),
+    { t: 'ellipse', cx, cy: mid, rx: PORT_BALL, ry: PORT_BALL, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
+  ];
+}
+
+/**
+ * Adapter: a cup on one side, a square on the other and a body between. The cup takes a Port's ball;
+ * the square is whatever the adapter speaks to on the far side (a database driver, an HTTP client),
+ * and it is a different shape because turning one into the other is the whole job.
+ *
+ * Which side faces outward is not claimed. An adapter in front of the core faces one way and an
+ * adapter behind it the other, and this function sees one shape and none of its connectors.
+ */
+function adapterGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const mid = y + h / 2;
+  const body = { x: x + w / 2 - 7, w: 14 };
+  const cup = x + 1.5 + PORT_BALL;
+  const plug = 12;
+  const plugX = x + w - plug - 0.75;
+  const line: Stroke = { color: palette.chip, width: 1.4, linecap: 'round' };
+  return [
+    { t: 'path', d: `M${cup},${mid} H${body.x} M${body.x + body.w},${mid} H${plugX}`, fill: 'none', stroke: line },
+    {
+      t: 'path',
+      d: `M${cup - PORT_BALL + 2.5},${mid - PORT_BALL - 1} A${PORT_BALL + 1},${PORT_BALL + 1} 0 0 1 ${cup - PORT_BALL + 2.5},${mid + PORT_BALL + 1}`,
+      fill: 'none',
+      stroke: { color: palette.line, width: 1.5, linecap: 'round' },
+    },
+    hand.rect('body', { x: body.x, y: y + 5, w: body.w, h: h - 10, r: 4 }),
+    hand.rect('plug', { x: plugX, y: mid - plug / 2, w: plug, h: plug, r: 3 }),
   ];
 }
 
@@ -3602,7 +3532,7 @@ export function naturalArchitectureSize(
   const start = verdict(node.width, node.height);
   if (start.fits) return { width: node.width, height: node.height, fits: true };
   // The shapes drawn as a glyph with the name beneath it, not as a card around the name.
-  const glyph = node.type === 'database' || node.type === 'artifact' || (node.type === 'service' && isGlyphServiceKind(node.serviceKind));
+  const glyph = node.type === 'database' || node.type === 'artifact' || isGlyphShape(node);
 
   // For each width (growing in steps), the least height at which everything shows — by bisection,
   // since more height never shows less. The first width whose shape comes out no taller than it is
@@ -3644,7 +3574,14 @@ export function naturalArchitectureSize(
   }
   // A Data Store's glyph grows with the smaller of its box's two growths (`dataStoreScale`), so a box
   // grown both ways draws a giant glyph: for one, the shortest box that fits wins outright.
-  const shortest = glyph;
+  //
+  // A glyph Component is left out. Its glyph stays one size, and the shortest box for a description
+  // is the widest one: 280 across around a glyph 54 across. A connector into the glyph's side then
+  // crosses a hundred pixels of the shape's own empty box, with nowhere for its caption but on it,
+  // and an arranged diagram with a described Adapter failed its readability check. It takes the
+  // balanced box every card does. (A glyph Service has the same wide box and keeps it for now: the
+  // layouts drawn around it are held to it.)
+  const shortest = glyph && node.type !== 'component';
   let best: { width: number; height: number } | undefined;
   for (let width = node.width; ; width = Math.min(bounds.maxWidth, width + WIDTH_STEP)) {
     const height = minHeightAt(width);

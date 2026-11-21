@@ -252,6 +252,10 @@ test.describe('Intent Continuation', () => {
     await page.mouse.move(made.x + made.width / 2, made.y + made.height - 10);
     await page.mouse.down();
     await page.mouse.move(first.x - 180, made.y + made.height - 10, { steps: 16 });
+    // Before letting go, as every other drag here does (`nextFrames`). Released in the same frame
+    // as the last moves, WebKit and Firefox dropped it two steps short: 15 pixels from the first
+    // shape, where there is no room for a straight line and the connector goes round.
+    await nextFrames(page);
     await page.mouse.up();
     await page.keyboard.press('Escape');
     await nextFrames(page);

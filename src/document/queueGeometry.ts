@@ -1,4 +1,4 @@
-import { artifactGlyphBounds, dataStoreGlyphBounds, isGlyphServiceKind } from './dataStoreGeometry';
+import { artifactGlyphBounds, dataStoreGlyphBounds, isGlyphShape } from './dataStoreGeometry';
 import type { DraftNode } from './types';
 
 /**
@@ -47,7 +47,7 @@ export interface AnchorBand {
  * unaffected: it leaves below the captions rather than through them.
  */
 export function anchorBandOf(
-  node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'> & Pick<Partial<DraftNode>, 'serviceKind'>,
+  node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind'>,
 ): AnchorBand | undefined {
   if (node.type === 'queue') {
     const span = queueTubeSpan(node.height, node.width);
@@ -57,7 +57,7 @@ export function anchorBandOf(
       ...(span.top > 0.75 ? { glyphTop: node.y + span.top } : {}),
     };
   }
-  if (node.type === 'database' || (node.type === 'service' && isGlyphServiceKind(node.serviceKind))) {
+  if (node.type === 'database' || isGlyphShape(node)) {
     const glyph = dataStoreGlyphBounds(node);
     return { top: glyph.top, bottom: glyph.bottom, left: glyph.left, right: glyph.right, glyphTop: glyph.top };
   }

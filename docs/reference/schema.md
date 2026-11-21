@@ -10,7 +10,7 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | Field | Contents |
 | --- | --- |
 | `format` | Always `"draft-canvas"` |
-| `version` | Format version, currently **30** (`CURRENT_VERSION`) |
+| `version` | Format version, currently **31** (`CURRENT_VERSION`) |
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
 | `ink` | Optional handwritten strokes over the top-level graph (`DraftInk`). Absent when there are none |
@@ -85,8 +85,9 @@ Rules for a new version:
 | v27 → v28 | identity | No-op (optional `ink` on the document and every room) |
 | v28 → v29 | identity | No-op (optional `held` on shapes and `portal` on connectors) |
 | v29 → v30 | `migrateCardKindsToGlyphs` | A Service of kind `worker`, `external`, `scheduler` or `gateway` grows to the height its glyph, name and details need (114, 128 with a technology, 143 with a description), placed so the glyph's middle is where the card's middle was: those kinds are drawn as a glyph with the name underneath. Also the first version with the `artifact` shape and `serviceKind` of `load-balancer` and `proxy` |
+| v30 → v31 | `migrateComponentKindsToGlyphs` | A Component of kind `module`, `adapter` or `port` grows the same way, for the same reason: those kinds are drawn as a glyph with the name underneath |
 
-Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
+Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17, v20, v29 and v30. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
 
 **Compensating actions** are ordinary connectors. One can name its originating interaction

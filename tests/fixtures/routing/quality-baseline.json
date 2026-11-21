@@ -1225,7 +1225,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1103,
+    "cost": 1070,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1276,8 +1276,8 @@
   "gallery/25-readme-architecture/app": {
     "obstruction": 0,
     "overlap": 0,
-    "crossings": 0,
-    "cost": 4392,
+    "crossings": 2,
+    "cost": 4529,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1303,7 +1303,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 2671,
+    "cost": 2787,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1745,7 +1745,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1705,
+    "cost": 2187,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1849,7 +1849,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1992,
+    "cost": 1878,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1872,10 +1872,10 @@
     }
   },
   "starter/monolith": {
-    "obstruction": 0,
+    "obstruction": 2,
     "overlap": 0,
     "crossings": 0,
-    "cost": 544,
+    "cost": 521,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1883,7 +1883,7 @@
       "pins": 0
     },
     "unresolved": {
-      "blocked": 0,
+      "blocked": 1,
       "budget": 0,
       "crowded": 0,
       "skipped": 0
@@ -1979,7 +1979,7 @@
     "obstruction": 8,
     "overlap": 0,
     "crossings": 71,
-    "cost": 209654,
+    "cost": 212877,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -2005,7 +2005,7 @@
     "obstruction": 1,
     "overlap": 0,
     "crossings": 9,
-    "cost": 36235,
+    "cost": 36717,
     "violations": {
       "endpoint": 0,
       "continuity": 0,

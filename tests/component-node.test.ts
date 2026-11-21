@@ -3,8 +3,9 @@ import { capabilityFor, categoryOf } from '../src/document/connectorSemantics';
 import { relationshipCaptionLabel } from '../src/document/edgeSemantics';
 import { createDocument, createNode, defaultSizeFor, defaultTextFor, displayNameFor, minSizeFor } from '../src/document/factory';
 import { DEFAULTS } from '../src/document/limits';
+import { anchorBandOf } from '../src/document/queueGeometry';
 import { deserializeDocument, serializeDocument } from '../src/export/project';
-import { describeContext, describeNode } from '../src/nodes/describe';
+import { describeContext, describeNode, naturalArchitectureSize } from '../src/nodes/describe';
 import { THEMES } from '../src/render/theme/tokens';
 import { PERSONALITY_PRESETS } from '../src/theme/usePersonality';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
@@ -61,13 +62,12 @@ describe('Component — creation', () => {
     expect(heightRatio).toBeLessThan(0.95);
   });
 
-  it('every kind shares the exact same default footprint — the hierarchy is family-wide', () => {
-    for (const kind of COMPONENT_KINDS) {
-      expect(defaultSizeFor('component')).toEqual({
-        width: DEFAULTS.componentWidth,
-        height: DEFAULTS.componentHeight,
-      });
-      void kind;
+  it('Generic keeps the card; Module, Adapter and Port take the glyph box a Service glyph does', () => {
+    expect(defaultSizeFor('component')).toEqual({ width: DEFAULTS.componentWidth, height: DEFAULTS.componentHeight });
+    expect(defaultSizeFor('component', 'generic')).toEqual(defaultSizeFor('component'));
+    for (const kind of ['module', 'adapter', 'port'] as const) {
+      expect(defaultSizeFor('component', kind)).toEqual(defaultSizeFor('service', 'worker'));
+      expect(minSizeFor('component', kind)).toEqual(minSizeFor('service', 'worker'));
     }
   });
 
@@ -130,22 +130,23 @@ describe('Component — changing kind', () => {
     expect(store.getState().document.edges[0]!.semantic).toBe('readsWrites');
   });
 
-  it('never resizes a node just because its kind changed — the silhouette departs, the box does not', () => {
-    const node = store.getState().addNode({ type: 'component', x: 0, y: 0, width: 300, height: 120 });
-    for (const kind of ['module', 'adapter', 'generic'] as const) {
-      store.getState().updateNodeById(node.id, { componentKind: kind });
-      const after = store.getState().document.nodes[0]!;
-      expect(after.width).toBe(300);
-      expect(after.height).toBe(120);
-    }
+  it('takes the box the new drawing needs when the kind moves between the card and a glyph, around the same centre', () => {
+    const node = store.getState().addNode({ type: 'component', x: 40, y: 60 });
+    const centre = { x: node.x + node.width / 2, y: node.y + node.height / 2 };
+    store.getState().updateNodeById(node.id, { componentKind: 'adapter' });
+    const glyph = store.getState().document.nodes[0]!;
+    expect({ width: glyph.width, height: glyph.height }).toEqual(defaultSizeFor('component', 'adapter'));
+    expect(glyph.x + glyph.width / 2).toBeCloseTo(centre.x, 0);
+    expect(glyph.y + glyph.height / 2).toBeCloseTo(centre.y, 0);
+    store.getState().updateNodeById(node.id, { componentKind: 'generic' });
+    const card = store.getState().document.nodes[0]!;
+    expect({ width: card.width, height: card.height }).toEqual(defaultSizeFor('component'));
   });
 
-  it('leaves position untouched — kind, label and position are three independent fields', () => {
-    const node = store.getState().addNode({ type: 'component', x: 40, y: 60 });
+  it('keeps its box between two glyph kinds: a Port resized by hand is the same size as an Adapter', () => {
+    const node = store.getState().addNode({ type: 'component', componentKind: 'port', x: 40, y: 60, width: 200, height: 150 });
     store.getState().updateNodeById(node.id, { componentKind: 'adapter' });
-    const after = store.getState().document.nodes[0]!;
-    expect(after.x).toBe(40);
-    expect(after.y).toBe(60);
+    expect(store.getState().document.nodes[0]).toMatchObject({ x: 40, y: 60, width: 200, height: 150 });
   });
 });
 
@@ -183,19 +184,21 @@ describe('Component — an existing, already-sized node is never retroactively r
   });
 });
 
-describe('Component — visual family: distinct but related silhouettes', () => {
-  const dims = { width: 160, height: 56 };
+describe('Component — visual family: a card, and three glyphs in one notation', () => {
   const nodeFor = (kind: ComponentKind) => ({
     id: 'n',
     type: 'component' as const,
     x: 0,
     y: 0,
     z: 0,
-    ...dims,
+    ...defaultSizeFor('component', kind),
     text: '',
     componentKind: kind,
   });
   const ctx = describeContext(THEMES.light, 'clean');
+  type Drawn = ReturnType<typeof describeNode>['shapes'][number];
+  const flat = (shapes: Drawn[]): Drawn[] => shapes.flatMap((s) => (s.t === 'group' ? flat(s.children as Drawn[]) : [s]));
+  const drawn = (kind: ComponentKind) => flat(describeNode(nodeFor(kind), ctx).shapes);
 
   it('every kind renders something (never an empty shape list)', () => {
     for (const kind of COMPONENT_KINDS) {
@@ -203,55 +206,71 @@ describe('Component — visual family: distinct but related silhouettes', () => 
     }
   });
 
-  it('Module and Adapter each depart from Generic with their own outline geometry', () => {
-    const outlineOf = (kind: ComponentKind) =>
-      describeNode(nodeFor(kind), ctx).shapes.find((s) => s.t === 'rect' || s.t === 'path')!;
-    const generic = outlineOf('generic');
-    const module = outlineOf('module');
-    const adapter = outlineOf('adapter');
-
-    // Generic, undecorated, stays a plain analytic rect at Clean (see `outlineShape`'s own doc
-    // comment) — Module and Adapter each build a custom notched/tabbed path instead, the same
-    // "a real departure from the plain body" `serviceApi`/`serviceGateway` already establish.
-    expect(generic.t).toBe('rect');
-    expect(module.t).toBe('path');
-    expect(adapter.t).toBe('path');
-    expect((module as { d: string }).d).not.toBe((adapter as { d: string }).d);
+  it('Generic is one card the size of its box; no glyph kind draws a body that size', () => {
+    const fullWidth = (kind: ComponentKind) => drawn(kind).filter((s) => s.t === 'rect' && s.w > nodeFor(kind).width - 4);
+    expect(fullWidth('generic')).toHaveLength(1);
+    for (const kind of ['module', 'adapter', 'port'] as const) expect(fullWidth(kind)).toHaveLength(0);
   });
 
-  it('Port keeps the plain body but draws it dashed — a contract, not a concrete thing', () => {
-    const outlineOf = (kind: ComponentKind) =>
-      describeNode(nodeFor(kind), ctx).shapes.find((s) => s.t === 'rect' || s.t === 'path')!;
-    const generic = outlineOf('generic');
-    const port = outlineOf('port');
-    expect(port.t).toBe('rect');
-    expect('stroke' in port && port.stroke?.dash).toEqual([6, 5]);
-    expect('stroke' in generic && generic.stroke?.dash).toBeUndefined();
+  it('draws the three glyph kinds differently from one another', () => {
+    const signature = (kind: ComponentKind) => JSON.stringify(drawn(kind).filter((s) => s.t !== 'text'));
+    const signatures = (['module', 'adapter', 'port'] as const).map(signature);
+    expect(new Set(signatures).size).toBe(3);
   });
 
-  it('a small Port fits a one-word name and its PORT tag inside its own box', () => {
-    const port = createNode({ type: 'component', componentKind: 'port', text: 'Persistence', x: 0, y: 0, width: 120, height: 44 });
-    const texts = describeNode(port, ctx).shapes.filter((s) => s.t === 'text');
+  it("a Port's ball is the size of the cup an Adapter holds it in", () => {
+    const ball = drawn('port').find((s) => s.t === 'ellipse')!;
+    const cup = drawn('adapter').find((s) => s.t === 'path' && /A/.test(s.d))!;
+    expect(ball.t === 'ellipse' && ball.rx).toBe(7.5);
+    // The cup's arc is one pixel wider all round, so a ball drawn into it would sit clear of it.
+    expect(cup.t === 'path' && cup.d).toContain('A8.5,8.5');
+  });
+
+  it('a Port holds a name and its PORT tag under the glyph, inside its own box', () => {
+    const port = createNode({ type: 'component', componentKind: 'port', text: 'Persistence', x: 0, y: 0 });
+    const texts = flat(describeNode(port, ctx).shapes).filter((s) => s.t === 'text');
     expect(texts.map((s) => s.layout.lines.map((l) => l.text).join(''))).toEqual(['Persistence', 'PORT']);
     for (const shape of texts) {
       expect(shape.layout.truncated).toBe(false);
       expect(shape.y).toBeGreaterThanOrEqual(0);
       expect(shape.y + shape.layout.height).toBeLessThanOrEqual(port.height);
     }
-    const name = texts[0]!;
-    const tag = texts[1]!;
-    // The name centres; the tag sits bottom-right, in the same corner every other captioned
-    // Component kind uses — a Port used to centre its tag and read as the one shape whose caption
-    // had slipped out of place.
-    expect(name.align).toBe('middle');
-    expect(tag.align).toBe('end');
-    expect(name.y + name.layout.height).toBeLessThanOrEqual(tag.y);
+    expect(texts[0]!.y + texts[0]!.layout.height).toBeLessThanOrEqual(texts[1]!.y);
   });
 
-  it('Module and Adapter each carry their own corner caption; Generic carries none', () => {
+  it('a described glyph kind takes a balanced box, not the widest one around a small glyph', () => {
+    // At 280 across, a connector into the glyph's side crossed a hundred pixels of the shape's own
+    // empty box and its caption had nowhere to sit but on it: an agent's diagram with a described
+    // Adapter failed its readability check (`e2e/desktop/skill-architecture.spec.ts`).
+    const adapter = createNode({
+      type: 'component',
+      componentKind: 'adapter',
+      text: 'Peer transport',
+      description: 'Carries patches and numbered commits over WebRTC or LAN.',
+      technology: 'TypeScript',
+      x: 0,
+      y: 0,
+    });
+    const size = naturalArchitectureSize(adapter, ctx);
+    expect(size.fits).toBe(true);
+    expect(size.width).toBeLessThanOrEqual(200);
+    expect(size.height).toBeLessThanOrEqual(Math.max(adapter.height, size.width));
+  });
+
+  it('connectors meet a glyph kind at its glyph, and a Generic card at its box', () => {
+    expect(anchorBandOf({ ...nodeFor('generic') })).toBeUndefined();
+    for (const kind of ['module', 'adapter', 'port'] as const) {
+      const band = anchorBandOf({ ...nodeFor(kind) })!;
+      expect(band.left).toBeGreaterThan(0);
+      expect(band.right).toBeLessThan(nodeFor(kind).width);
+      expect(band.bottom).toBeLessThan(nodeFor(kind).height / 2 + 10);
+    }
+  });
+
+  it('Module, Adapter and Port each carry their kind under the name; Generic carries none', () => {
     const captionOf = (kind: ComponentKind) =>
-      describeNode(nodeFor(kind), ctx)
-        .shapes.filter((s) => s.t === 'text')
+      drawn(kind)
+        .filter((s) => s.t === 'text')
         .map((s) => s.layout.lines.map((line) => line.text).join(''));
     expect(captionOf('generic')).toEqual([]);
     expect(captionOf('module')).toContain('MODULE');
@@ -259,21 +278,14 @@ describe('Component — visual family: distinct but related silhouettes', () => 
     expect(captionOf('port')).toContain('PORT');
   });
 
-  it('all three kinds share the same body radius and stroke weight — one family, not three shapes', () => {
-    // Component's own stroke is deliberately thinner than every other primitive's shared 1.5px —
-    // but uniform *across* Generic/Module/Adapter, so the family reads as siblings, not as three
-    // independently-weighted shapes.
-    for (const kind of COMPONENT_KINDS) {
-      const outline = describeNode(nodeFor(kind), ctx).shapes.find((s) => s.t === 'rect' || s.t === 'path')!;
-      if ('stroke' in outline && outline.stroke) expect(outline.stroke.width).toBe(1.25);
-    }
-  });
-
   it("does not depend on colour alone — the same distinction holds with every accent, including a colour-neutral one", () => {
     for (const accent of ['neutral', 'teal', 'blue'] as const) {
-      const generic = describeNode({ ...nodeFor('generic'), accent }, ctx).shapes.find((s) => s.t === 'rect' || s.t === 'path')!;
-      const adapter = describeNode({ ...nodeFor('adapter'), accent }, ctx).shapes.find((s) => s.t === 'rect' || s.t === 'path')!;
-      expect(generic.t).not.toBe(adapter.t);
+      const marks = (kind: ComponentKind) =>
+        flat(describeNode({ ...nodeFor(kind), accent }, ctx).shapes)
+          .filter((s) => s.t !== 'text')
+          .map((s) => s.t)
+          .join(' ');
+      expect(marks('generic')).not.toBe(marks('adapter'));
     }
   });
 });

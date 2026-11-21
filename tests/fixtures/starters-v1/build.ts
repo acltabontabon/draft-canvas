@@ -60,6 +60,7 @@ export function starterSize(starter: ArchitectureStarter): { width: number; heig
   const drawn = starter.nodes.map((spec) => ({
     type: spec.type,
     serviceKind: spec.serviceKind,
+    componentKind: spec.componentKind,
     text: spec.text,
     description: spec.description,
     technology: spec.technology,
