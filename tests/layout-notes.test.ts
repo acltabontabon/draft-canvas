@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
 import { addNodes, moveNodes } from '../src/document/operations';
 import { fixesNote } from '../src/lib/arrangeFixes';
-import { layoutNotes, movesNote } from '../src/ui/Editor/arrangeSummary';
+import { crossingsNote, layoutNotes, movesNote } from '../src/ui/Editor/arrangeSummary';
 
 /** What the Arrange and Tidy up bars say beyond their name: what moved, what stopped early, what stays. */
 describe('the bars of Arrange and Tidy up', () => {
@@ -16,6 +16,14 @@ describe('the bars of Arrange and Tidy up', () => {
     expect(layoutNotes({ alternativeSkipped: true, scoped: false }, 'arrange')).toEqual(['Only one direction was worked out for a diagram this size.']);
     // Tidy up has no direction to speak of.
     expect(layoutNotes({ alternativeSkipped: true, scoped: false }, 'tidy')).toEqual([]);
+  });
+
+  it('count where connectors cross before and after, and say nothing when none do', () => {
+    expect(crossingsNote({ direction: 'right', crossings: { before: 12, after: { right: 3, down: 5 } } })).toBe('Crossings 12 → 3');
+    expect(crossingsNote({ direction: 'down', crossings: { before: 12, after: { right: 3, down: 5 } } })).toBe('Crossings 12 → 5');
+    expect(crossingsNote({ direction: 'right', crossings: { before: 2, after: { right: 2 } } })).toBe('Crossings 2');
+    expect(crossingsNote({ direction: 'right', crossings: { before: 0, after: { right: 0 } } })).toBe('');
+    expect(crossingsNote({ direction: 'right' })).toBe('');
   });
 
   it('say that sketches stay where they are, and only when the room has some', () => {

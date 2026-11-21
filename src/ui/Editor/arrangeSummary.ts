@@ -27,6 +27,16 @@ export function movesNote(base: DraftDocument, view: DraftDocument): string {
   return moved > 0 ? `Moves ${count(moved, 'shape')}` : '';
 }
 
+/** Where connectors cross, before and after the arrangement shown: "Crossings 12 → 3". Empty when
+ *  nothing crosses either way, which is not worth a word. */
+export function crossingsNote(preview: Pick<ArrangePreview, 'crossings' | 'direction'>): string {
+  const after = preview.crossings?.after[preview.direction];
+  if (!preview.crossings || after === undefined) return '';
+  const { before } = preview.crossings;
+  if (before === 0 && after === 0) return '';
+  return before === after ? `Crossings ${before}` : `Crossings ${before} → ${after}`;
+}
+
 /** What a preview did not do, or leaves as it is, one line each — in the words the bar says under its name. */
 export function layoutNotes(preview: Pick<ArrangePreview, 'partial' | 'alternativeSkipped' | 'sketches' | 'scoped'>, kind: 'arrange' | 'tidy'): string[] {
   const notes: string[] = [];

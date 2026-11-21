@@ -2620,6 +2620,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       partial: plan.partial,
       alternativeSkipped: plan.alternativeSkipped,
       sketches: inkOf(current.document).length,
+      crossings: plan.crossings,
+      ...(plan.followed ? { followed: plan.followed } : {}),
     };
   },
 

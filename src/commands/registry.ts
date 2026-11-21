@@ -753,6 +753,31 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       hint: 'Preview this view laid out again from scratch, and choose which way it reads',
       run: (inner) => void startArrange({}, inner),
     });
+    // A flow somebody authored is the path a reader follows: laid out in one straight line, the rest
+    // hangs off it. Only flows with a connector to follow — a flow of shapes alone has no line to draw.
+    const followable = ctx.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId));
+    if (followable.length > 0) {
+      commands.push({
+        id: 'arrange-around-flow',
+        title: followable.length === 1 ? `Arrange around “${followable[0]!.title}”` : 'Arrange around a flow…',
+        group: 'canvas',
+        keywords: ['layout', 'auto layout', 'spine', 'happy path', 'straight', 'follow', 'flow', 'rearrange', 'main path'],
+        hint: 'Preview the view with one flow in a straight line and the rest around it',
+        run: (inner) => {
+          const flows = inner.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId));
+          if (flows.length === 1) return void startArrange({ preset: { primaryFlow: flows[0]!.id } }, inner);
+          return {
+            prompt: 'Arrange around',
+            options: flows.map((flow) => ({
+              id: `arrange-around-flow:${flow.id}`,
+              title: flow.title,
+              hint: count(flow.steps.length, 'step'),
+              run: () => void startArrange({ preset: { primaryFlow: flow.id } }, inner),
+            })),
+          };
+        },
+      });
+    }
     commands.push({
       id: 'check-layout',
       title: 'Check layout',

@@ -196,6 +196,10 @@ export interface ArrangePreview {
   alternativeSkipped?: boolean;
   /** How many sketches the room holds: they stay where they are, which the bar says. */
   sketches?: number;
+  /** Places two connectors cross, now and in each arrangement offered: the bar's "Crossings 12 → 3". */
+  crossings?: { before: number; after: Partial<Record<ArrangeDirection, number>> };
+  /** The flow this arrangement lays out in one line, when one was chosen. */
+  followed?: string;
   /** Asked for by a layout skill of Nodi's: Apply plays the rearrangement (`canvas/arrangeMotion.ts`)
    *  instead of cutting to it. */
   motion?: boolean;

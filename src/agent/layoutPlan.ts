@@ -15,6 +15,7 @@ import { visibleEdges } from '../document/compensation';
 import type { ArrangeFix } from '../lib/arrangeFixes';
 import { arrangeView, readingDirectionOf } from './arrange';
 import { Problems } from './errors';
+import { legibilityOf } from './legibility';
 import { measureContext } from './place';
 import { proportionFindings, resolvedBy } from './proportion';
 import { pastDeadline, withBudget } from './route';
@@ -67,6 +68,11 @@ export interface ArrangePlan {
   alternativeSkipped: boolean;
   /** Units of work spent (`route.ts`'s `charge`): what a test or a benchmark holds to a bound. */
   used: number;
+  /** Places two connectors cross: as the room stands, and in each arrangement offered. Counted after
+   *  the budget is settled, so the count never costs a repair and `used` stays what the layout spent. */
+  crossings: { before: number; after: Partial<Record<PlanDirection, number>> };
+  /** The flow laid out in one line (`ArrangePreset.primaryFlow`), when one was asked for and still exists. */
+  followed?: string;
 }
 
 export type ArrangePlanResult =
@@ -197,11 +203,22 @@ export function planArrange(doc: DraftDocument, ask: { selection?: readonly stri
     if (!options[suggested]) return { kind: 'unchanged' };
     return {
       kind: 'plan',
-      plan: { options, direction: suggested, suggested, current: reads, scoped, fixes, partial: false, alternativeSkipped: Boolean(arranged.alternativeSkipped), used: 0 },
+      plan: {
+        options, direction: suggested, suggested, current: reads, scoped, fixes, partial: false,
+        alternativeSkipped: Boolean(arranged.alternativeSkipped), used: 0, crossings: { before: 0, after: {} },
+        ...(layout.primaryFlow ? { followed: layout.primaryFlow } : {}),
+      },
     };
   });
   const result = bounded.value;
-  return result.kind === 'plan' ? { kind: 'plan', plan: { ...result.plan, partial: bounded.partial, used: bounded.used } } : result;
+  if (result.kind !== 'plan') return result;
+  const after: ArrangePlan['crossings']['after'] = {};
+  for (const direction of ['right', 'down'] as const) {
+    const view = result.plan.options[direction];
+    if (view) after[direction] = legibilityOf(view.nodes, view.edges).crossings;
+  }
+  const crossings = { before: legibilityOf(doc.nodes, doc.edges).crossings, after };
+  return { kind: 'plan', plan: { ...result.plan, partial: bounded.partial, used: bounded.used, crossings } };
 }
 
 /**

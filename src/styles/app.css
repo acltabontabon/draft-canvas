@@ -2140,6 +2140,34 @@ kbd {
   gap: 10px;
 }
 
+/* Which flow the arrangement follows: a quiet native menu, so a long flow name never widens the bar
+   past what its own text needs. */
+.dc-arrange-bar-follow {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-arrange-bar-follow select {
+  max-width: 14em;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font: inherit;
+  text-overflow: ellipsis;
+}
+
+.dc-arrange-bar-follow select:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
 /* What a preview did not do or leaves alone (stopped early, one direction, sketches that stay): one
    line above its bar, quieter than the bar and out of the way of the shapes being judged. */
 .dc-tidy-bar-notes {
