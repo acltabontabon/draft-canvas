@@ -1,6 +1,6 @@
 import { continuationsFor, materialize, type Continuation, type FragmentNodeSpec, type MaterializedContinuation } from '../continuation';
 import { createEdge, defaultSizeFor } from '../document/factory';
-import { addNodes, placeNear } from '../document/operations';
+import { addNodes, clearSpotNear, placeNear } from '../document/operations';
 import { inferRelationshipThroughJunctions } from '../document/reinfer';
 import type { DraftDocument, ViewLevel } from '../document/types';
 import type { ContinuationOffer, QuickConnectState } from '../store/uiStore';
@@ -76,14 +76,14 @@ function representsPreset(item: QuickConnectItem, preset: Preset): boolean {
 
 /**
  * The elements choosing this row would add, positioned at the drop point (centred on where the
- * user let go). A preset row is wrapped as a one-node continuation so it flows through the same
+ * user let go, or the closest spot to it clear of other shapes). A preset row is wrapped as a one-node continuation so it flows through the same
  * `materialize` — and therefore the same matrix inference — as a suggested one. `undefined` only
  * when the source node has vanished under the open menu.
  */
 export function offerFor(doc: DraftDocument, state: QuickConnectState, item: QuickConnectItem): ContinuationOffer | undefined {
   if (!state.source) return undefined;
   const size = defaultSizeFor(item.node.type);
-  const at = state.center
+  const dropped = state.center
     ? { x: state.center.x - size.width / 2, y: state.center.y - size.height / 2 }
     : state.flowPosition;
   const continuation: Continuation =
@@ -106,7 +106,9 @@ export function offerFor(doc: DraftDocument, state: QuickConnectState, item: Qui
   const source = state.asked ? doc.nodes.find((node) => node.id === state.source) : undefined;
   const offer = source
     ? (materialize(doc, continuation) ?? materialize(doc, continuation, { at: placeNear(doc, source, size) }))
-    : materialize(doc, continuation, { at });
+    : // The point let go at was empty; the box centred on it may still reach a neighbour. It goes to
+      // the closest clear spot, in the preview and the commit alike (#178).
+      materialize(doc, continuation, { at: clearSpotNear(doc, { ...dropped, ...size }) });
   return offer ? { ...withFanIn(doc, state, offer), trigger: 'drop' } : undefined;
 }
 

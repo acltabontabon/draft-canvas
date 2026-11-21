@@ -23,6 +23,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Choose a late arrival's access while presenting** — A join request during a presentation
   offered only **Let in**, which always let the person edit. It now offers **Can edit**, **Can view**
   and **Deny**, so you can let someone watch without leaving the walkthrough.
+- **A shape added from a dragged connector lands clear of its neighbours** — Letting go of a
+  connector on empty canvas close to another shape set the new shape down partly over it. The
+  preview and the new shape now take the closest clear spot.
 - **Following a presentation shows the presenter's step** — A collaborator following a walkthrough
   saw a step number one ahead of the presenter's, and a plain canvas. They now see the same opening,
   step or end, with the connector being discussed lit and its caption shown.
