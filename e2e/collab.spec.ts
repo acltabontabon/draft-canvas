@@ -264,6 +264,9 @@ test('a collaborator who follows a walkthrough sees the presenter’s own step, 
   const guest = await knock(browser, link, 'Gus');
   await letIn(owner, 'Gus', 'Can view');
   await expect(guest.locator('.dc-edge-line')).toHaveCount(1, { timeout: 30_000 });
+  // Let in to watch: the confirmation says so, and promises no shared edits.
+  await expect(guest.getByText('Joined. You can view this diagram.')).toBeVisible();
+  await expect(guest.getByText('Edits you make are shared live')).toHaveCount(0);
 
   await owner.getByRole('button', { name: 'Present', exact: true }).click();
   const prompt = guest.locator('.dc-follow');

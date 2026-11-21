@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { answerInvite, CollabCodeError, peerConnectionsAvailable, relayUrl, type CollabTransport } from '../../collab/connect';
 import type { GuestSession } from '../../collab/guestSession';
 import { knock, type KnockStatus } from '../../collab/lobby';
-import { readName } from '../../collab/protocol';
+import { readName, type Role } from '../../collab/protocol';
 import { readSessionPayload, rendezvousAvailable } from '../../collab/rendezvous';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { rejoinByRelay } from './relayGuest';
@@ -32,6 +32,12 @@ type Stage =
  * the owner's canvas opens here as soon as they paste it. Opening a fresh invite while a session
  * is reconnecting picks that session back up, unconfirmed edits and all, instead of starting over.
  */
+/** What a person is told on getting in: only someone who may edit is promised shared edits. */
+export function joinedMessage(rejoining: boolean, access: Role | 'owner'): string {
+  if (rejoining) return 'Back in the session.';
+  return access === 'viewer' ? 'Joined. You can view this diagram.' : 'Joined. Edits you make are shared live.';
+}
+
 export function JoinDialog({ session, invite }: { session: DocumentSession; invite: string }) {
   const [stage, setStage] = useState<Stage>({ kind: 'form' });
   const [name, setName] = useState(readDisplayName);
@@ -64,7 +70,8 @@ export function JoinDialog({ session, invite }: { session: DocumentSession; invi
   useEffect(() => {
     if ((stage.kind !== 'joining' && stage.kind !== 'knocking') || status !== 'live') return;
     useUiStore.getState().setJoinInvite(null);
-    notify(rejoining.current ? 'Back in the session.' : 'Joined. Edits you make are shared live.');
+    // `access` is set before the session reads live, so it is already what the owner granted.
+    notify(joinedMessage(rejoining.current, useCollabStore.getState().access));
   }, [stage.kind, status, notify]);
   // Turned away while joining (full, version, removed…): shown as this dialog's failure.
   const shown: Stage =
