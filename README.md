@@ -33,16 +33,18 @@ Whole systems from the [starters gallery](https://github.com/acltabontabon/draft
 
 <table>
 <tr>
-<td width="33%" valign="top">
+<td colspan="2">
 <a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/food-delivery">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-food-delivery-dark.png">
-  <img width="100%" alt="Forkful, a food delivery marketplace, open in Draft Canvas." src="docs/media/starter-food-delivery-light.png">
+  <img width="100%" alt="Forkful, a food delivery marketplace, open in Draft Canvas: customer, kitchen and courier apps meet at a junction before the API gateway; ordering, payments, kitchen, logistics, data and notification domains sit inside the system boundary." src="docs/media/starter-food-delivery-light.png">
 </picture>
 </a>
-<p align="center"><b>Food delivery</b><br><sub>An order saga with refunds, an outbox and a dead-letter queue.</sub></p>
+<p align="center"><b>Food delivery</b><br><sub>Customers, restaurants and couriers: an order saga with refunds, an outbox, a dead-letter queue and eight flows to present.</sub></p>
 </td>
-<td width="33%" valign="top">
+</tr>
+<tr>
+<td width="50%" valign="top">
 <a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/video-streaming">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-video-streaming-dark.png">
@@ -51,7 +53,7 @@ Whole systems from the [starters gallery](https://github.com/acltabontabon/draft
 </a>
 <p align="center"><b>Video streaming</b><br><sub>An edge inside ISPs, DRM, and a Press play sequence diagram.</sub></p>
 </td>
-<td width="33%" valign="top">
+<td width="50%" valign="top">
 <a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/ride-hailing">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-ride-hailing-dark.png">
