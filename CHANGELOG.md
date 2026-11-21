@@ -32,6 +32,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   cancelled could still switch the open diagram, which ended the session for everyone on it. A
   diagram an agent asks to show now opens only after its change is made, and never over a canvas
   you are sharing.
+- **Keyboard Shortcuts opens on Home** — **Help → Keyboard Shortcuts** did nothing on Home, then
+  opened over the next diagram you started. It now opens where you ask for it.
 
 ### Web
 
