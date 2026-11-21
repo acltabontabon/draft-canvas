@@ -38,14 +38,12 @@ export function crossingsNote(preview: Pick<ArrangePreview, 'crossings' | 'direc
 }
 
 /** What a preview did not do, or leaves as it is, one line each — in the words the bar says under its name. */
-export function layoutNotes(preview: Pick<ArrangePreview, 'partial' | 'alternativeSkipped' | 'sketches' | 'scoped' | 'held'>, kind: 'arrange' | 'tidy'): string[] {
+export function layoutNotes(preview: Pick<ArrangePreview, 'partial' | 'alternativeSkipped' | 'sketches' | 'scoped' | 'held'>): string[] {
   const notes: string[] = [];
   if (preview.partial) {
-    notes.push(kind === 'tidy'
-      ? 'Stopped early on a large diagram. Apply it, then run Tidy up again to continue.'
-      : 'Stopped early on a large diagram. Apply it, then run Tidy up to finish the connectors.');
+    notes.push('Stopped early on a large diagram. Apply it, then run Tidy connectors to finish the connectors.');
   }
-  if (kind === 'arrange' && preview.alternativeSkipped) notes.push('Only one direction was worked out for a diagram this size.');
+  if (preview.alternativeSkipped) notes.push('Only one direction was worked out for a diagram this size.');
   if (preview.held) notes.push(preview.held === 1 ? '1 held shape stays where it is.' : `${preview.held} held shapes stay where they are.`);
   if (preview.sketches) notes.push(preview.sketches === 1 ? '1 sketch stays where it is.' : `${preview.sketches} sketches stay where they are.`);
   return notes;

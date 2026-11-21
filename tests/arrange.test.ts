@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { createAttachment, createDocument } from '../src/document/factory';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { LAYOUT_BACKSTOP_MS } from '../src/agent/layoutPlan';
-import { startArrange, startTidy } from '../src/commands/arrange';
+import { startArrange } from '../src/commands/arrange';
 import { useUiStore, type ArrangePreview } from '../src/store/uiStore';
 
 /**
@@ -148,7 +148,7 @@ it('arranges boundary members without shrinking their container or losing explan
 describe('starting Arrange', () => {
   beforeEach(() => {
     reset();
-    useUiStore.setState({ arrangePreview: null, tidyPreview: null, layoutBusy: null, readOnly: null, flowTrace: null });
+    useUiStore.setState({ arrangePreview: null, layoutBusy: null, readOnly: null, flowTrace: null });
   });
 
   function stacked() {
@@ -199,16 +199,6 @@ describe('starting Arrange', () => {
     useEditorStore.getState().addNode({ type: 'service', x: 900, y: 0, text: 'Late' });
     expect(await started).toBe('nothing');
     expect(useUiStore.getState().arrangePreview).toBeNull();
-  });
-
-  it('Tidy up is told the same way, and Cancel leaves nothing behind', async () => {
-    stacked();
-    const started = startTidy(false);
-    expect(useUiStore.getState().layoutBusy).toMatchObject({ kind: 'tidy' });
-    useUiStore.getState().layoutBusy!.cancel();
-    await started;
-    expect(useUiStore.getState().layoutBusy).toBeNull();
-    expect(useUiStore.getState().tidyPreview).toBeNull();
   });
 });
 

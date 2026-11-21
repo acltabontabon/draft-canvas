@@ -55,9 +55,11 @@ export interface Guide {
   to: number;
   /**
    * What it shows: an edge or centre lined up (absent), a connector that now runs straight
-   * (`connector`), or one of a run of equal gaps (`gap`, drawn as a measured span with `label`).
+   * (`connector`), one of a run of equal gaps (`gap`, drawn as a measured span with `label`), or
+   * the line a connector will be straightened onto when the shape is dropped (`settle`, dashed:
+   * nothing is pulled while the drag is held).
    */
-  kind?: 'connector' | 'gap';
+  kind?: 'connector' | 'gap' | 'settle';
   /** A gap's size, as shown beside it. */
   label?: string;
 }
@@ -66,6 +68,8 @@ export interface SnapResult {
   dx: number;
   dy: number;
   guides: Guide[];
+  /** The axes a drop would settle on (`SnapOptions.settleReach`): each has a `settle` guide. */
+  settle?: { x: boolean; y: boolean };
 }
 
 /**
@@ -90,6 +94,12 @@ export interface SnapOptions {
   /** Shapes to measure even spacing against — the resting ones, less boundaries, whose own box
    *  contains the shapes it spaces. Absent: no spacing snap (a resize never takes one). */
   spacing?: readonly Rect[];
+  /**
+   * How large a kink a drop straightens (`STRAIGHTEN_LIMIT`), in canvas units. With it, an axis
+   * nothing has snapped on shows where its nearest connector will settle. Absent: no settle guides
+   * (a boundary's drag, a resize).
+   */
+  settleReach?: number;
 }
 
 const NO_SNAP: SnapResult = { dx: 0, dy: 0, guides: [] };
@@ -143,7 +153,23 @@ export function computeSnap(
     ...(bestX?.guides ?? []).map((guide) => shiftAcross(guide, dy)),
     ...(bestY?.guides ?? []).map((guide) => shiftAcross(guide, dx)),
   ];
-  return { dx, dy, guides };
+  if (options.settleReach === undefined) return { dx, dy, guides };
+  // An axis something already holds stays as the person lined it up: no settle there.
+  const settleX = bestX ? null : settleGuide(links, 'x', options.settleReach);
+  const settleY = bestY ? null : settleGuide(links, 'y', options.settleReach);
+  if (settleX) guides.push(settleX);
+  if (settleY) guides.push(settleY);
+  return { dx, dy, guides, settle: { x: settleX !== null, y: settleY !== null } };
+}
+
+/** The line the nearest connector on `axis` within `reach` will be straightened onto at the drop. */
+function settleGuide(links: readonly SnapLink[], axis: 'x' | 'y', reach: number): Guide | null {
+  let best: SnapLink | undefined;
+  for (const link of links) {
+    if (link.axis !== axis || Math.abs(link.delta) > reach || Math.abs(link.delta) <= 0.5) continue;
+    if (!best || Math.abs(link.delta) < Math.abs(best.delta)) best = link;
+  }
+  return best ? { axis, at: best.at, from: best.from, to: best.to, kind: 'settle' } : null;
 }
 
 /** A spacing mark follows its shape when the other axis snaps too. Lines that merely span the

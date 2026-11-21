@@ -4,7 +4,7 @@ import { prefersReducedMotion } from '../lib/motion';
 
 /**
  * A connector whose route changed eases from the line it had to the line it has, instead of cutting:
- * the settled route after a drop, an undo, a Tidy up, a reconnect. Presentation only, and canvas
+ * the settled route after a drop, an undo, a reconnect. Presentation only, and canvas
  * chrome: never exported.
  *
  * The line React rendered is never touched beyond being hidden for the moment: a stand-in drawn with

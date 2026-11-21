@@ -66,7 +66,6 @@ import { FlowBar } from './FlowBar';
 import { FlowPanel } from './FlowPanel';
 import { SharedReader } from './SharedReader';
 import { FocusIndicator } from './FocusIndicator';
-import { TidyBar } from './TidyBar';
 import { ArrangeBar } from './ArrangeBar';
 import { LayoutBusyBar } from './LayoutBusyBar';
 import { FlowLensIndicator } from './FlowLensIndicator';
@@ -760,7 +759,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           <FlowBar playback={playback} follower={collabFollowing && mode !== 'present'} />
           <FocusIndicator />
           <LayoutBusyBar />
-          <TidyBar />
           <ArrangeBar />
           {!presenting && !tracing && <FlowLensIndicator />}
           <DepthStack />
@@ -905,7 +903,7 @@ export function useKeyboard({
    * The keyboard-only path into the context menu (Shift+F10 / the Menu key, standard desktop
    * convention) — anchors the menu to the current selection instead of a click point, since there's
    * no pointer position to use. A single node/edge/multi-selection each resolve their own screen
-   * anchor; with nothing selected the pane menu (Add here, Paste, Tidy up, Arrange) opens at the
+   * anchor; with nothing selected the pane menu (Add here, Paste, Arrange) opens at the
    * middle of the canvas, the one point a keyboard has — it was mouse-only, which left Paste and the
    * layout commands with no keyboard route to them from the canvas itself. Presentation Mode, a flow
    * trace and a read-only view have no pane menu (`Canvas`'s `interactive` and `readOnly` guards),

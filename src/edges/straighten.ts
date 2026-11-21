@@ -70,7 +70,7 @@ function inside(inner: Box, outer: Box): boolean {
  */
 export function straightenPositions(
   graph: Graph,
-  options: { movable?: ReadonlySet<string>; limit?: number } = {},
+  options: { movable?: ReadonlySet<string>; limit?: number; axes?: readonly ('x' | 'y')[] } = {},
 ): Map<string, { x: number; y: number }> {
   const limit = options.limit ?? STRAIGHTEN_LIMIT;
   const byId = new Map(graph.nodes.map((node) => [node.id, node] as const));
@@ -81,7 +81,11 @@ export function straightenPositions(
   const edges = visibleEdges(graph.edges).filter((edge) => {
     const source = byId.get(edge.source);
     const target = byId.get(edge.target);
-    return source && target && edge.source !== edge.target && source.type !== 'group' && target.type !== 'group' && !edge.waypoints?.length;
+    if (!source || !target || edge.source === edge.target || source.type === 'group' || target.type === 'group' || edge.waypoints?.length) return false;
+    // With `movable`, only a connector with a movable end can be straightened, and a shape it joins
+    // to a resting one already holds it still: the rest of the graph cannot change the answer, and
+    // asking the router about it was most of what a drop's settle cost on a large diagram.
+    return !options.movable || options.movable.has(edge.source) || options.movable.has(edge.target);
   });
   const degree = new Map<string, number>();
   for (const edge of edges) {
@@ -102,6 +106,8 @@ export function straightenPositions(
   }
 
   for (const axis of ['y', 'x'] as const) {
+    // A drop settles only the axes its drag showed it would (`dragSnap.ts`).
+    if (options.axes && !options.axes.includes(axis)) continue;
     // Rigid groups: shapes a straight line on this axis already joins.
     const parent = new Map<string, string>();
     const find = (id: string): string => {
@@ -188,7 +194,7 @@ export function straightenPositions(
  * The document operation: `doc` with its near-straight connectors straightened (see
  * `straightenPositions`), or `doc` itself when there is nothing to do.
  */
-export function straightenConnectors(doc: DraftDocument, movable?: ReadonlySet<string>): DraftDocument {
-  const positions = straightenPositions(doc, movable ? { movable } : {});
+export function straightenConnectors(doc: DraftDocument, movable?: ReadonlySet<string>, axes?: readonly ('x' | 'y')[]): DraftDocument {
+  const positions = straightenPositions(doc, { ...(movable ? { movable } : {}), ...(axes ? { axes } : {}) });
   return positions.size === 0 ? doc : moveNodes(doc, positions);
 }

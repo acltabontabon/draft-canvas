@@ -5,7 +5,7 @@ import { decodeClipboard, encodeClipboard } from '../document/clipboardCodec';
 // UI feedback for document limits and rejected reconnects stays outside document operations.
 import type { ArrangePreset } from '../agent/layoutPlan';
 import type { Job, JobResult } from '../agent/jobs';
-import { PRESENTATION_AT_REST, useUiStore, type ArrangePreview, type TidyNothing, type TidyPreview } from './uiStore';
+import { PRESENTATION_AT_REST, useUiStore, type ArrangePreview } from './uiStore';
 import { edgeIndex, nodeIndex, selectSequenceMessage } from './selectors';
 import {
   createAttachment,
@@ -599,22 +599,6 @@ export interface EditorStore {
    */
   commitArrange: (preview: ArrangePreview) => boolean;
   /**
-   * Works out what Tidy up would do and applies none of it: the gentle cleanup of `agent/tidy.ts`
-   * (straighten connectors that draw a visible kink, re-attach ones drawn through a shape) on the room
-   * on screen, or on the selection's neighbourhood when shapes are selected. Run like `planArrange`.
-   * Resolves the preview to show, `{ nothing }` when there is nothing to tidy (`stopped`: it ran out of
-   * its work budget on a large diagram before it could tell; `reads`: what reads badly all the same,
-   * which laying the room out again may fix), or `null` when the room changed, the work was cancelled,
-   * or it cannot be edited right now.
-   */
-  planTidy: (options?: { signal?: AbortSignal }) => Promise<TidyPreview | TidyNothing | null>;
-  /**
-   * Applies a preview from `planTidy` as one undo step labelled "Tidy up". False, and nothing
-   * applied, when the room has changed since it was worked out: the preview describes a room that
-   * no longer exists.
-   */
-  commitTidy: (preview: TidyPreview) => boolean;
-  /**
    * Replaces `find` with `replace` in every label of every room of the file (shape names, connector
    * labels, attachment text, flow titles) as one undo step, staying in the room on screen. Returns
    * how many occurrences changed — `0` when nothing matched, in which case nothing was recorded.
@@ -712,9 +696,9 @@ export interface EditorStore {
    *  boundary membership agreeing with where it landed, so a later delete or boundary drag acts on
    *  what is visibly inside. One write, because every write re-derives the whole diagram's routing
    *  and crossings, and doing that twice per drop was the largest part of its cost. */
-  commitMove: (positions: Map<string, { x: number; y: number }>, movedIds: Iterable<string>) => void;
-  /** Holds the selected shapes in place (`DraftNode.held`), or lets them go: Arrange and Tidy up
-   *  leave a held shape where it is. One undo step; `false` when nothing changed. */
+  commitMove: (positions: Map<string, { x: number; y: number }>, movedIds: Iterable<string>, options?: { settle?: readonly ('x' | 'y')[] }) => void;
+  /** Holds the selected shapes in place (`DraftNode.held`), or lets them go: Arrange leaves
+   *  a held shape where it is. One undo step; `false` when nothing changed. */
   holdSelection: (held: boolean) => boolean;
   /** One frame of the Make room drag: `base` (the room as the drag found it) with everything past
    *  the line moved by `push.delta`. Inside the drag's interaction, so the whole drag is one step. */
@@ -2590,42 +2574,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     });
   },
 
-  async planTidy(options = {}) {
-    const before = get();
-    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
-    const [{ runOffThread, cancelled }, { reuseOf }] = await Promise.all([import('../agent/offThread'), import('../agent/layoutPlan')]);
-    const current = get();
-    // The room, or what is selected in it, changed while the engine loaded: what was asked for is
-    // no longer what is on screen, so nothing is offered rather than a cleanup of something else.
-    if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) return null;
-    const scope = current.selection.nodes.length > 0 ? [...current.selection.nodes] : undefined;
-    const done = await runLayoutJob({ kind: 'tidy', doc: current.document, ...(scope ? { scope } : {}) }, options.signal, runOffThread, cancelled);
-    if (done === null || done.kind !== 'tidy') return null;
-    if (roomChanged(current)) return null;
-    const result = done.result;
-    if (result.kind === 'unchanged') return { nothing: true, stopped: result.partial, reads: result.reads };
-    const view = reuseOf(current.document, result.plan.view);
-    if (view === current.document) return { nothing: true, stopped: result.plan.partial, reads: [] };
-    return {
-      path: current.path,
-      base: current.document,
-      view,
-      moved: result.plan.moved,
-      reattached: result.plan.reattached,
-      scoped: Boolean(scope),
-      partial: result.plan.partial,
-      sketches: inkOf(current.document).length,
-      ...(result.plan.held ? { held: result.plan.held } : {}),
-    };
-  },
-
   async planArrange(selection = false, options = {}) {
     const before = get();
     if (selection && before.selection.nodes.length === 0) return null;
     if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
     const [{ runOffThread, cancelled }, { reuseOf }] = await Promise.all([import('../agent/offThread'), import('../agent/layoutPlan')]);
     const current = get();
-    // As `planTidy`: what was asked about is no longer what is on screen.
+    // The room, or what is selected in it, changed while the engine loaded: what
+    // was asked about is no longer what is on screen.
     if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) return null;
     if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
     const done = await runLayoutJob(
@@ -2668,13 +2624,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const view = preview.options[preview.direction];
     if (interaction || !view || state.document !== preview.base || state.path !== preview.path) return false;
     state.apply(preview.scoped ? 'Arrange selection' : 'Arrange', () => view);
-    return get().document !== preview.base;
-  },
-
-  commitTidy(preview) {
-    const state = get();
-    if (interaction || state.document !== preview.base || state.path !== preview.path) return false;
-    state.apply('Tidy up', () => preview.view);
     return get().document !== preview.base;
   },
 
@@ -2861,8 +2810,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Make room', () => makeRoomOp(base, push));
   },
 
-  commitMove(positions, movedIds) {
-    get().apply('Move', (doc) => reconcileMembershipOp(moveNodes(doc, positions), movedIds));
+  commitMove(positions, movedIds, options) {
+    const ids = [...movedIds];
+    get().apply('Move', (doc) => {
+      const moved = reconcileMembershipOp(moveNodes(doc, positions), ids);
+      return options?.settle?.length ? settleAfterMove(moved, ids, options.settle) : moved;
+    });
   },
 
   resizeNode(id, box) {
@@ -4011,6 +3964,25 @@ async function runLayoutJob(
     if (error instanceof DOMException && error.name === cancelled().name) return null;
     throw error;
   }
+}
+
+/**
+ * What a drop tidies, in the same write as the move and so the same undo step: a connector the
+ * dropped shapes left with a small kink is straightened by nudging them — never a resting shape —
+ * the last few pixels onto its line (`edges/straighten.ts`). This is what the Tidy up command did
+ * on request. Only on the `axes` the drag showed a dashed `settle` guide for (`dragSnap.ts`): an
+ * axis the person lined up with a neighbour stays where they put it, and Alt skips it altogether.
+ *
+ * Not when a boundary was dragged: what it carries keeps the layout it had inside it. And never a
+ * held shape (`DraftNode.held`): it stays exactly where the person put it, to the pixel.
+ */
+function settleAfterMove(doc: DraftDocument, movedIds: readonly string[], axes: readonly ('x' | 'y')[]): DraftDocument {
+  const byId = new Map(doc.nodes.map((node) => [node.id, node] as const));
+  if (movedIds.some((id) => byId.get(id)?.type === 'group')) return doc;
+  const movable = new Set(movedIds.filter((id) => !byId.get(id)?.held));
+  if (movable.size === 0) return doc;
+  const straightened = straightenConnectors(doc, movable, axes);
+  return straightened === doc ? doc : reconcileMembershipOp(straightened, movedIds);
 }
 
 /** Whether the room on screen is no longer the one a job was started for: said, since the person asked. */

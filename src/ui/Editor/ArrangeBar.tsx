@@ -28,7 +28,7 @@ const CAMERA_MS = 320;
 
 /**
  * Apply or Cancel for an Arrange preview, and the reading direction to arrange in: the room laid out
- * again from scratch is a bigger change than Tidy up's, so it is shown first and chosen, never just
+ * again from scratch is a big change, so it is shown first and chosen, never just
  * done. The canvas shows the result on a tracing sheet (`ArrangePreviewLayer`); the camera frames it,
  * and frames it again when the direction changes, since the two can be very different shapes.
  *
@@ -42,7 +42,7 @@ const CAMERA_MS = 320;
  * reads clearly better or fits a screen clearly better (`agent/arrange.ts`). Nothing happens to the
  * diagram until Apply, which is one undo step. Enter applies and Escape cancels from anywhere but a
  * text field or the direction choice itself, and the preview is dropped the moment the room it was
- * worked out from changes — as `TidyBar` does, and always mounted for the same reason.
+ * worked out from changes. Always mounted, so a preview set before it rendered is never missed.
  */
 export function ArrangeBar() {
   const preview = useUiStore((state) => state.arrangePreview);
@@ -139,7 +139,7 @@ export function ArrangeBar() {
   if (!preview || stale) return null;
   const choices = DIRECTIONS.filter((d) => preview.options[d.value]);
   const fixed = fixesNote(preview.fixes?.[preview.direction]);
-  const notes = layoutNotes(preview, 'arrange');
+  const notes = layoutNotes(preview);
   const crossings = crossingsNote(preview);
   // The whole room only: a selection reads the way the view around it does, with no line of its own.
   const flows = preview.scoped ? [] : document.flows.filter((flow) => flow.steps.some((step) => step.edgeId));

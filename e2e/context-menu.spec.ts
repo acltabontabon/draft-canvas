@@ -534,7 +534,7 @@ test.describe('context menu — keyboard-only operation', () => {
     await page.keyboard.press('Escape'); // clear the selection creation left behind
     await expect(page.locator('.dc-node[data-selected="true"]')).toHaveCount(0);
     await page.keyboard.press('Shift+F10');
-    // The pane menu was mouse-only: Paste, Tidy up and Arrange had no keyboard route from the canvas.
+    // The pane menu was mouse-only: Paste and Arrange had no keyboard route from the canvas.
     await expect(menu(page)).toBeVisible();
     await expect(menuItem(page, 'Service')).toBeVisible();
     await expect(menu(page).locator('[data-highlighted="true"]')).toHaveCount(1);

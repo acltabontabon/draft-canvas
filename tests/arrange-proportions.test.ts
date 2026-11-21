@@ -244,7 +244,7 @@ describe('Arrange in the editor', () => {
       path: [],
       outer: null,
     });
-    useUiStore.setState({ tidyPreview: null, arrangePreview: null, readOnly: null, flowTrace: null });
+    useUiStore.setState({ arrangePreview: null, readOnly: null, flowTrace: null });
   });
 
   it('plans both directions without changing anything, then applies the chosen one as one undo step', async () => {
@@ -295,13 +295,6 @@ describe('Arrange in the editor', () => {
       expect(plan.scoped).toBe(true);
       expect(Object.keys(plan.options)).toEqual(['down']);
     } else expect(['unchanged', 'no-room']).toContain(plan);
-  });
-
-  it('keeps one cleanup preview at a time', () => {
-    const doc = useEditorStore.getState().document;
-    useUiStore.getState().setArrangePreview({ path: [], base: doc, options: { down: doc }, direction: 'down', suggested: 'down', current: 'down', scoped: false, show: 'result' });
-    useUiStore.getState().setTidyPreview({ path: [], base: doc, view: doc, moved: 0, reattached: 0, scoped: false });
-    expect(useUiStore.getState().arrangePreview).toBeNull();
   });
 
   it('names the direction shown', () => {

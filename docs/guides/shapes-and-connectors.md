@@ -57,7 +57,9 @@ Dragging does most of the lining up:
   neighbour matches a gap already in the row or column, both gaps show their size.
 - Snapping pulls 6 pixels on screen at any zoom (12 for a connector's straight line). Resizing snaps
   the same way.
-- Hold `⌥` while you drag or resize to turn snapping off.
+- A Service, Data Store, Queue, Actor or Component resizes in steps of 12 pixels, so shapes sized by
+  eye come out the same size. A neighbour's edge within reach still wins.
+- Hold `⌥` while you drag or resize to turn snapping and size steps off.
 
 With shapes selected, the bar at the bottom offers **Align**, **Distribute** (three or more) and
 **Same width** / **Same height**, which use the largest size among them. A boundary selected with
@@ -71,22 +73,20 @@ move everything below. A boundary the line passes through stretches with what it
 closes only until the nearest shape reaches the line. The drag is one undo step, `Esc` gives it up,
 and the tool puts itself down after one use.
 
-### Tidy up
+### Tidying happens as you draw
 
-**Tidy up** is the one to reach for first. Run it from `⌘K` or the canvas's right-click menu. It
-keeps every shape where you put it and fixes only what looks untidy: a connector with a small step in
-it is straightened by nudging a shape a few pixels (up to 32), and a connector drawn through a shape
-is re-attached so it goes round. A connector that already runs straight is left alone.
+There is no Tidy up command. A drop tidies what it moved: while you drag a shape whose connector is
+a small step off straight (up to 32 pixels), a dashed line shows where that connector will run, and
+letting go moves the shape the last few pixels onto it. The nudge is part of the same undo step as
+the move.
 
-You see the result before anything changes, with a faint outline where each nudged shape stands now
-and a line saying what it did ("2 shapes nudged to straighten connectors, 1 connector re-attached to
-clear shapes"). **Apply** (`Enter`) is one undo step; **Cancel** (`Esc`) leaves the diagram as it was.
-**Tidy up selection** touches only the selected shapes and their connectors. Sketches never move.
+- Only the shapes you dragged move. A shape at rest is never nudged.
+- An axis you lined up with a neighbour's edge, centre or gap stays where you put it.
+- Dragging a boundary leaves what it holds as it was laid out.
+- Hold `⌥` while you drop to leave the shape exactly where it is.
 
-On a large diagram, Tidy up and Arrange run in the background with a **Cancel**, and the canvas stays
-usable. They stop at a fixed amount of work, not a timer, so the same diagram gives the same result
-on any computer. If the bar says "Stopped early on a large diagram", apply what it found and run it
-again.
+For a whole view, **Straighten connectors** in `⌘K` does the same nudging everywhere at once, and
+**Tidy connectors** clears hand-drawn routes.
 
 ### Arrange
 
@@ -103,7 +103,8 @@ flow out in a straight line and arranges the rest around it.
 ![The Arrange preview following a flow: its steps in one line, the rest around it.](../media/guides/arrange-follow-flow.png)
 
 **Hold in place** in `⌘K` pins the selected shapes: a small pin appears at their corner, and Arrange
-and Tidy up leave them exactly where they are and lay everything else out around them. A held
+leaves them exactly where they are and lays everything else out around them. A drop never nudges
+a held shape either. A held
 boundary holds what is inside it, and holding a shape inside a boundary holds that whole boundary. **Let go** frees them. Dragging a held shape still moves it.
 
 Boundaries keep what they hold and notes stay beside their shapes. A long name gets a wider box, and
@@ -268,6 +269,10 @@ kept on this device, not in the file.
 
 Select shapes and press `⌘G`, or press `B` and drag shapes in. Contents move, copy and delete with
 the boundary. Pick a kind and colour in its toolbar:
+
+A boundary's colour carries to what it holds: a Service, Data Store, Queue, Actor or Component with
+no colour of its own draws in its boundary's colour, and goes back to neutral when it leaves. A
+colour you pick for a shape, neutral included, always wins.
 
 | Kind | For |
 | --- | --- |

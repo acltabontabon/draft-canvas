@@ -50,29 +50,9 @@ export const ProposalPreviewLayer = memo(function ProposalPreviewLayer() {
 });
 
 /**
- * What Tidy up would do, before it is applied (`uiStore.tidyPreview`, set by the Tidy up command and
- * cleared by `TidyBar`). Always the tracing sheet, even when no shape moves: a cleanup that only
- * re-attaches connectors drawn as ghosts over the live ones would show every changed line twice,
- * and the question being asked is "is this the picture I want", which the whole result answers.
- */
-export const TidyPreviewLayer = memo(function TidyPreviewLayer() {
-  const preview = useUiStore((state) => state.tidyPreview);
-  const path = useEditorStore((state) => state.path);
-  // Only over the very room it was worked out from: `TidyBar` drops a stale preview a render later,
-  // and for that render the sheet must not show a cleanup of a diagram that has since changed.
-  const current = useEditorStore((state) => preview !== null && state.document === preview.base);
-  const source = useMemo(
-    () => preview && { path: preview.path, nodes: preview.view.nodes, edges: preview.view.edges, base: { nodes: preview.base.nodes, edges: preview.base.edges } },
-    [preview],
-  );
-  if (!source || !current || pathKey(source.path as string[]) !== pathKey(path)) return null;
-  return <PreviewBody preview={source} source="tidy" label="Tidy up preview" sheet />;
-});
-
-/**
  * What Arrange would do, before it is applied (`uiStore.arrangePreview`, set by the Arrange commands
- * and cleared by `ArrangeBar`): the arrangement for the reading direction shown, on the same tracing
- * sheet Tidy up's preview uses — the whole result is the question, more so for a room laid out again.
+ * and cleared by `ArrangeBar`): the arrangement for the reading direction shown, on a tracing
+ * sheet — the whole result is the question, more so for a room laid out again.
  *
  * The result alone, unless asked (`ArrangeShow`): a re-layout moves everything, and an outline and a
  * trail for every shape competed with the drawing being judged. One shape's move shows when it is

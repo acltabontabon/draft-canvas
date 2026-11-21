@@ -109,16 +109,25 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   `useFlowPlayback` judges against the requested camera. A presenter's pan sets `framing: 'manual'`;
   guided framing stays off until requested again.
 
-### Tidy up
+### Tidying and Arrange
 
-- Tidy up is the gentle cleanup (`agent/tidy.ts`): it never lays a view out again and never moves a
-  shape outside its scope. Layout from scratch stays in Arrange.
-- Its preview lives in `uiStore.tidyPreview`, never the document, history or autosave. Only
-  `editorStore.commitTidy` applies it, as one undo step, and only to the room it was worked out from.
+- There is no Tidy up command. A drop tidies what it moved: `editorStore.commitMove` straightens the
+  dragged shapes' small connector kinks (`edges/straighten.ts`) in the same write as the move, so it
+  is one undo step. It never moves a resting shape, never settles an axis the drag snapped to a
+  neighbour, skips a boundary's drag, and Alt skips it. The drag shows it first as a dashed `settle`
+  guide (`canvas/snapping.ts`); what the last frame showed is exactly what the drop does.
+- `agent/tidy.ts` (straighten, then re-attach connectors drawn through a shape) stays as the engine
+  behind the worker's `tidy` job. Nothing in the editor starts it; it never lays a view out again.
+- A hand resize of a Service, Data Store, Queue, Actor or Component lands on `SIZE_STEP`
+  (`canvas/resizeSnap.ts`) unless a neighbour's edge is within reach. Boundaries and content-sized
+  shapes never step.
+- A shape with no accent of its own draws in its nearest coloured boundary's accent
+  (`document/inheritedAccent.ts`). Derived at the callers of `describeNode` in canvas and export,
+  never stored, and nothing but appearance reads it.
 - Arrange's proportion rules (wider boxes for long names, gaps sized to their captions, a reading
-  direction weighed by how it fits a screen) belong to Arrange and new layouts, never Tidy up. Its
-  preview lives in `uiStore.arrangePreview`; only `editorStore.commitArrange` applies it.
-- Every way into Arrange or Tidy up (palette, menus, the desktop menu, Nodi's skills) goes through
+  direction weighed by how it fits a screen) belong to Arrange and new layouts, never a drop's
+  settle. Its preview lives in `uiStore.arrangePreview`; only `editorStore.commitArrange` applies it.
+- Every way into Arrange (palette, menus, the desktop menu, Nodi's skills) goes through
   `commands/arrange.ts`, which shows a preview first. The work runs on the agent worker
   (`agent/layoutPlan.ts` through `offThread.ts`, Cancel included) and is bounded by a deterministic
   work budget (`route.ts`'s `withBudget`), never a wall-clock deadline: the same diagram gives the
@@ -127,7 +136,7 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 ### Sketches and Smart Ink
 
 - Sketches (`DraftInk`) are per-room annotation in `ink`, absent when empty. They never take part in
-  routing, layout, Arrange, Tidy up, semantics, Traffic or agent reads, and nothing turns one into a
+  routing, layout, Arrange, tidying, semantics, Traffic or agent reads, and nothing turns one into a
   shape except an explicit Smart Ink conversion through `editorStore.inkToShape`/`inkToConnector`.
 - `src/ink/` imports `document/` only and stays free of React, the store and the DOM. Geometry
   (`recognize.ts`) and meaning (`interpret.ts`) stay apart; Smart Ink offers only existing shape kinds.

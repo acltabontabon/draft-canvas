@@ -2,7 +2,7 @@ import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
 
 /**
- * Arrange or Tidy up while it is being worked out: said, with a Cancel, in the place its preview bar
+ * Arrange while it is being worked out: said, with a Cancel, in the place its preview bar
  * will take. The work runs off the page's thread (`agent/offThread.ts`), so the editor stays usable
  * and this is not a modal; a diagram that is already tidy answers before it is ever seen. Always
  * mounted, like the bars it leads to.
@@ -10,7 +10,7 @@ import { Button } from '../common/Button';
 export function LayoutBusyBar() {
   const busy = useUiStore((state) => state.layoutBusy);
   if (!busy) return null;
-  const what = busy.kind === 'tidy' ? 'Tidying' : 'Arranging';
+  const what = 'Arranging';
   return (
     <div className="dc-tidy-bar dc-layout-busy" role="region" aria-label={`${what} progress`}>
       <span className="dc-tidy-bar-text" role="status">

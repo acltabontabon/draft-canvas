@@ -24,7 +24,7 @@ a pinch and the middle mouse button still pan and zoom.
 ## Sketches
 
 A sketch is annotation, not architecture. It never moves, connects or changes the shapes under it,
-and routing, Arrange, Tidy up and agents ignore it.
+and routing, Arrange, tidying and agents ignore it.
 
 With **Select**, click a stroke to choose it (`Shift`-click for more), drag to move it, and press
 `Backspace` to erase it. A marquee picks up the strokes inside it. Right-click a stroke for

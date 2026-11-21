@@ -9,6 +9,7 @@ import { findFlow, stepIndexOf } from '../../document/flow';
 import { visibleEdges } from '../../document/compensation';
 import { recoverCappedSequence } from '../../nodes/sequenceFit';
 import { boundsOf } from '../../document/operations';
+import { withInheritedAccent } from '../../document/inheritedAccent';
 import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../../document/types';
 import { unresolvedOpenPoints, unresolvedOpenPointsFor } from '../../document/openPoints';
 import { MARKER_SIZE, describeMarker, describeMarkerKey, nodeMarkerOrigin } from '../../openPoints/marker';
@@ -413,8 +414,11 @@ export function buildScene(
   const nodeEls: SvgEl[] = [];
   const backdropEls: SvgEl[] = [];
 
+  // Drawn as the canvas draws it: a shape with no accent of its own takes its boundary's. Looked up
+  // in the whole room, so a selection exported without its boundary keeps the colour it had.
+  const accentSource = new Map(document.nodes.map((candidate) => [candidate.id, candidate] as const));
   for (const node of ordered) {
-    const list = describeNode(node, nodeCtx);
+    const list = describeNode(withInheritedAccent(node, accentSource), nodeCtx);
     const decoration = options.decorateNode?.(node);
     const els = emitDisplayList(list);
     const group = el(

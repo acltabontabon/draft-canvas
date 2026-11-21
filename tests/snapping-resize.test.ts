@@ -3,7 +3,7 @@ import { createNode } from '../src/document/factory';
 import { describeContext, describeNode, noteLayout } from '../src/nodes/describe';
 import { LIGHT } from '../src/render/theme/tokens';
 import { computeSnap, SNAP_THRESHOLD } from '../src/canvas/snapping';
-import { minResizeSizeFor, snapResize } from '../src/canvas/resizeSnap';
+import { minResizeSizeFor, SIZE_STEP, sizeStepFor, snapResize } from '../src/canvas/resizeSnap';
 
 /**
  * Resize snapping reuses `computeSnap` unmodified — see `snapResizeChanges`
@@ -96,5 +96,42 @@ describe('note resize floors', () => {
     }
     const geo = noteLayout(node);
     expect(geo.top + geo.lineHeight + geo.bottom).toBeLessThanOrEqual(min.height);
+  });
+});
+
+describe('snapResize — a size step', () => {
+  const limits = { min: { width: 120, height: 40 }, max: { width: Infinity, height: Infinity } };
+  const start = { x: 100, y: 100, width: 176, height: 68 };
+
+  it('lands the dragged width on the step grid and leaves the far edge where it was', () => {
+    const fromRight = snapResize(start, { ...start, width: 203 }, [], limits, undefined, SIZE_STEP).rect;
+    expect(fromRight).toMatchObject({ x: 100, width: 204 });
+    // A left handle moves `x`: the right edge (276) is the one that stays.
+    const fromLeft = snapResize(start, { ...start, x: 70, width: 206 }, [], limits, undefined, SIZE_STEP).rect;
+    expect(fromLeft.width).toBe(204);
+    expect(fromLeft.x + fromLeft.width).toBe(276);
+  });
+
+  it('steps only the axis the handle moves', () => {
+    const { rect } = snapResize(start, { ...start, width: 203 }, [], limits, undefined, SIZE_STEP);
+    expect(rect.height).toBe(68);
+    expect(rect.y).toBe(100);
+  });
+
+  it('gives way to a neighbour within reach, and to the size limits', () => {
+    const neighbour = { x: 310, y: 300, width: 100, height: 60 };
+    // The right edge at 307 is 3 from the neighbour's left edge: that wins over the step at 204.
+    const snapped = snapResize(start, { ...start, width: 207 }, [neighbour], limits, undefined, SIZE_STEP);
+    expect(snapped.rect.x + snapped.rect.width).toBe(310);
+    expect(snapped.guides.length).toBeGreaterThan(0);
+    // 122 would step down to 120, which is allowed; 125 with a floor of 124 would step below it.
+    const floor = { min: { width: 124, height: 40 }, max: { width: Infinity, height: Infinity } };
+    expect(snapResize(start, { ...start, width: 125 }, [], floor, undefined, SIZE_STEP).rect.width).toBe(125);
+  });
+
+  it('is for the shapes a person sizes, not the ones that fit their content', () => {
+    expect(sizeStepFor({ type: 'service' })).toBe(SIZE_STEP);
+    expect(sizeStepFor({ type: 'database' })).toBe(SIZE_STEP);
+    for (const type of ['group', 'note', 'text', 'code', 'sequence', 'ellipse'] as const) expect(sizeStepFor({ type })).toBeUndefined();
   });
 });

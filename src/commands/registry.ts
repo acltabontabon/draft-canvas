@@ -42,7 +42,7 @@ import type { CopyResult } from '../export/clipboard';
 import type { ContextMenuEntry } from './contextMenu';
 import { inkOf } from '../document/ink';
 import { cancelSmartInk, convertStrokes } from '../canvas/inkSession';
-import { startArrange, startCheckLayout, startTidy } from './arrange';
+import { startArrange, startCheckLayout } from './arrange';
 import type { PencilTool } from '../store/uiStore';
 
 // The exporters (rasterizer, Structurizr, draw.io, sequence engine) load when a copy command runs, not with the editor.
@@ -697,25 +697,11 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.editor.redo(),
     });
   }
-  // Tidy, Arrange and Find and replace edit the document, which a shared (read-only) diagram
+  // Arrange and Find and replace edit the document, which a shared (read-only) diagram
   // refuses — offering them only produced a misleading error.
   const arrangeable = ctx.editor.document.nodes.some((node) => node.type !== 'group' && node.type !== 'note' && node.type !== 'text' && node.type !== 'code');
-  // The one cleanup to reach for first. It keeps every shape where it was put, shows what it would
-  // change before changing anything, and with shapes selected tidies only their neighbourhood. The
-  // specialised commands below stay for someone who wants exactly one of them.
-  if (!ctx.ui.readOnly && arrangeable) {
-    const scoped = ctx.editor.selection.nodes.length > 0;
-    commands.push({
-      id: 'tidy',
-      title: scoped ? 'Tidy up selection' : 'Tidy up',
-      group: 'canvas',
-      keywords: ['tidy', 'clean up', 'cleanup', 'neaten', 'fix layout', 'straighten', 'untangle', 'preview', 'polish'],
-      hint: scoped
-        ? 'Preview a gentle cleanup of the selected shapes — nothing else moves'
-        : 'Preview a gentle cleanup — shapes stay where you put them',
-      run: (inner) => void startTidy(scoped, inner),
-    });
-  }
+  // There is no general "Tidy up": a drop settles what it moved (`editorStore.commitMove`), so the
+  // cleanup happens as the diagram is drawn. The specialised commands below stay for a whole view.
   if (!ctx.ui.readOnly && ctx.editor.document.edges.some((edge) => edge.routeMode || edge.waypoints)) {
     commands.push({
       id: 'tidy-connections',
@@ -752,7 +738,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       },
     });
   }
-  // Held shapes are the ones Arrange and Tidy up leave alone. Offered by what the selection is:
+  // Held shapes are the ones Arrange and a drop's settle leave alone. Offered by what the selection is:
   // hold what is free, let go what is held, both when it is mixed.
   if (!ctx.ui.readOnly && ctx.editor.selection.nodes.length > 0) {
     const chosen = new Set(ctx.editor.selection.nodes);
@@ -763,7 +749,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
         title: 'Hold in place',
         group: 'selection',
         keywords: ['pin', 'lock', 'fix', 'keep', 'anchor', 'stay', 'freeze', 'arrange', 'layout'],
-        hint: 'Arrange and Tidy up leave it where you put it',
+        hint: 'Arrange leaves it where you put it',
         run: (inner) => void inner.editor.holdSelection(true),
       });
     }
@@ -773,7 +759,7 @@ export function canvasCommands(ctx: CommandContext): Command[] {
         title: 'Let go',
         group: 'selection',
         keywords: ['unpin', 'unlock', 'release', 'free', 'unhold', 'arrange', 'layout'],
-        hint: 'Arrange and Tidy up may move it again',
+        hint: 'Arrange may move it again',
         run: (inner) => void inner.editor.holdSelection(false),
       });
     }

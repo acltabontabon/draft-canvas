@@ -26,7 +26,7 @@ the contract: tools, receipts, limits, errors and security.
 - **Broker.** Owns access, folder scope, the request ledger, file reads, deadlines and the commit gate.
 - **Page.** Validation, layout and quality checks (`src/agent/`, `src/layout/`) share the canvas's
   shape, text and routing code, so results match the canvas. Heavy work runs in `src/agent/worker.ts`.
-  The editor's Arrange and Tidy up use the same worker (`layoutPlan.ts`) and a deterministic work
+  The editor's Arrange uses the same worker (`layoutPlan.ts`) and a deterministic work
   budget, never the clock; an agent request keeps its time limit.
 - **One writer.** Edits to the open document go through the editor store and undo history. A new
   diagram is written by the shell with `create_new`, which never overwrites.

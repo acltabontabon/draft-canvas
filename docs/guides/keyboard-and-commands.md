@@ -63,7 +63,7 @@ drop a connector on empty canvas still lists them first.
 | `⌘G` / `⌘⇧G` | Group into a boundary / ungroup |
 | `⌘B` / `⌘I` | Bold / italic on the selected Text |
 | `⌘⌥F` (`Ctrl+H`) | Find and replace across every room |
-| `Shift+F10` or Menu key | Context menu for the selection; with nothing selected, the canvas menu (Add here, Paste, Tidy up, Arrange) |
+| `Shift+F10` or Menu key | Context menu for the selection; with nothing selected, the canvas menu (Add here, Paste, Arrange) |
 | `F` | Flows panel |
 | `I` | Add an open point to the selection |
 | `⌘⇧E` or `⌘E` | Export |
@@ -100,8 +100,7 @@ Press `⌘K`, type part of a command or name, then `Enter`.
 ![The command palette finding Add Queue.](../media/guides/command-palette.png)
 
 It runs editor actions, inserts [starters](examples.md) once the gallery is loaded, jumps to named
-shapes, connectors and flows in any room, and tidies up. **Tidy up** previews a gentle cleanup
-before applying it; **Straighten connectors**, **Arrange diagram**, **Check layout**, **Tidy
+shapes, connectors and flows in any room, and tidies up. **Straighten connectors**, **Arrange diagram**, **Check layout**, **Tidy
 connectors**, **Auto attach all connectors** and **Fit shapes to text** each do one thing. With shapes
 selected it also aligns, distributes and matches sizes.
 

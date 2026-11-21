@@ -88,7 +88,7 @@ import { zoomBand } from './zoomBand';
 import { snapBypassed, trackSnapBypass } from './snapBypass';
 import { useIdSet } from './useIdSet';
 import { DRAG_THRESHOLD_PX, LONG_PRESS_DRIFT_PX, LONG_PRESS_MS } from './gestureThresholds';
-import { AgentPreviewLayer, ArrangePreviewLayer, ProposalPreviewLayer, TidyPreviewLayer } from './AgentPreviewLayer';
+import { AgentPreviewLayer, ArrangePreviewLayer, ProposalPreviewLayer } from './AgentPreviewLayer';
 import { ContinuationGhost } from './ContinuationGhost';
 import { RecoveryConnectGhost } from './RecoveryConnectGhost';
 import { RoomFrame } from './RoomFrame';
@@ -601,6 +601,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
   /** Rectangles of everything not being dragged, and the connectors to them, rebuilt once per gesture. */
   const dragSnap = useRef<DragSnapContext>(NO_DRAG_SNAP);
+  /** The axes the drag in hand last showed a `settle` guide on: the drop straightens those only. */
+  const settleArmed = useRef({ x: false, y: false });
   const draggingIds = useRef<Set<string>>(new Set());
   /** Same idea for a resize gesture — resize starts inside `DraftNodeView`,
    *  not `onNodeDragStart`, so this is (re)built lazily, the first frame a
@@ -862,6 +864,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       // The same pull on screen at every zoom, and none at all while Alt is held.
       const frame = { zoom: getZoom(), bypass: snapBypassed() };
       const snappedMove = snapChanges(changes, nodeById, dragSnap.current, frame);
+      // What the last frame of the drag showed is what the drop does (`settleAxes`).
+      if (snappedMove.settle) settleArmed.current = snappedMove.settle;
 
       // A dimensions change appears on every frame of a resize gesture,
       // including the terminal one (`resizing: false`) that commits to the
@@ -1366,6 +1370,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
       const moving = new Set(dragged.map((node) => node.id));
       draggingIds.current = moving;
+      settleArmed.current = { x: false, y: false };
 
       const swept = new Map<string, string[]>();
       const byId = nodeIndex(state.document.nodes);
@@ -1412,6 +1417,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         statics: resting.map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height })),
         spacing: resting.filter((node) => node.type !== 'group').map((node) => ({ x: node.x, y: node.y, width: node.width, height: node.height })),
         links,
+        settles: swept.size === 0 && !dragged.some((node) => byId.get(node.id)?.type === 'group'),
         origin: new Map([...moving].flatMap((id) => {
           const node = byId.get(id);
           return node ? [[id, { x: node.x, y: node.y }] as const] : [];
@@ -1552,7 +1558,9 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       // carries as much as for one shape dropped on its own. `parentId` is what a delete cascades
       // along, so a shape carried out of its boundary but still parented to it would go with it.
       // Written together with the move: each write re-derives every connector's route and crossings.
-      state.commitMove(positions, draggedIds);
+      // And settled in that same write, unless Alt is held as it is for snapping (`settleAfterMove`).
+      const armed = settleArmed.current;
+      state.commitMove(positions, draggedIds, { settle: snapBypassed() ? [] : (['x', 'y'] as const).filter((axis) => armed[axis]) });
     }
 
     state.endInteraction(singleId && (armedHost || armedEdge) ? 'Attach' : label);
@@ -2443,8 +2451,6 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           {/* A pending proposal's reviewed result (desktop only), while `ProposalPanel` shows it. */}
           <ProposalPreviewLayer />
 
-          {/* What Tidy up would change, while the person decides (`TidyBar`). Never in the document. */}
-          <TidyPreviewLayer />
           {/* What Arrange would change, in the direction chosen (`ArrangeBar`). Never in the document. */}
           <ArrangePreviewLayer />
 

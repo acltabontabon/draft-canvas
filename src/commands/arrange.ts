@@ -1,23 +1,22 @@
 /**
- * Starting Arrange and Tidy up. Every way in — the palette, the context menu, the toolbar, the
+ * Starting Arrange. Every way in — the palette, the context menu, the toolbar, the
  * desktop menu, Nodi's layout skills — goes through here, so every one of them gets the same answer:
- * a preview to decide on (`ArrangeBar`, `TidyBar`), never a diagram that changed under the person's
- * hands. Only `editorStore.commitArrange` and `commitTidy` apply one.
+ * a preview to decide on (`ArrangeBar`), never a diagram that changed under the person's
+ * hands. Only `editorStore.commitArrange` applies one.
  *
- * The work is run off the page's thread (`editorStore.planArrange`, `planTidy`), so while it runs the
+ * The work is run off the page's thread (`editorStore.planArrange`), so while it runs the
  * editor says so — `uiStore.layoutBusy`, drawn by `LayoutBusyBar` — and Cancel stops it.
  */
 
 import type { ArrangePreset } from '../agent/layoutPlan';
-import { fixesList, type ArrangeFix } from '../lib/arrangeFixes';
 import { useEditorStore } from '../store/editorStore';
-import { useUiStore, type ArrangeDirection, type ArrangePreview, type LayoutBusy, type TidyNothing } from '../store/uiStore';
+import { useUiStore, type ArrangeDirection, type ArrangePreview, type LayoutBusy } from '../store/uiStore';
 import { ARRANGE_FAILED, notifyLoadFailure } from '../ui/common/notifyLoadFailure';
 
 /** The parts of the editor a start needs: a command's own context, or the live stores. */
 export interface LayoutHost {
-  editor: Pick<ReturnType<typeof useEditorStore.getState>, 'planArrange' | 'planTidy'>;
-  ui: Pick<ReturnType<typeof useUiStore.getState>, 'notify' | 'setArrangePreview' | 'setTidyPreview'>;
+  editor: Pick<ReturnType<typeof useEditorStore.getState>, 'planArrange'>;
+  ui: Pick<ReturnType<typeof useUiStore.getState>, 'notify' | 'setArrangePreview'>;
 }
 
 const live = (): LayoutHost => ({ editor: useEditorStore.getState(), ui: useUiStore.getState() });
@@ -99,38 +98,4 @@ function fixingPlan(plan: ArrangePreview | 'unchanged' | 'no-room' | null): Arra
   if (fixes(plan.direction)) return plan;
   const other: ArrangeDirection = plan.direction === 'right' ? 'down' : 'right';
   return fixes(other) ? { ...plan, direction: other } : null;
-}
-
-/**
- * Tidy up (selection when `scoped`): the gentle cleanup, shown as a preview first. When there is
- * nothing to tidy, the toast says so — and, since tidy as drawn is not the same as easy to read, what
- * reads badly all the same (`TidyNothing.reads`), with Rearrange one click away.
- */
-export async function startTidy(scoped: boolean, host: LayoutHost = live()): Promise<void> {
-  try {
-    const outcome = await busy('tidy', scoped, (signal) => host.editor.planTidy({ signal }));
-    if (outcome === null) return;
-    if ('nothing' in outcome) nothingToTidy(host, scoped, outcome);
-    else host.ui.setTidyPreview(outcome);
-  } catch (error) {
-    failed(error);
-  }
-}
-
-function nothingToTidy(host: LayoutHost, scoped: boolean, nothing: TidyNothing): void {
-  if (useUiStore.getState().readOnly) return;
-  const rearrange = () => void startArrange({}, host);
-  if (nothing.stopped) {
-    host.ui.notify('Tidy up stopped early on a large diagram before it found anything to change. Select part of it and tidy that.', 'info', scoped ? undefined : { label: 'Rearrange', run: rearrange });
-    return;
-  }
-  const reads: readonly ArrangeFix[] = scoped ? [] : nothing.reads;
-  const list = fixesList(reads);
-  if (!list) {
-    host.ui.notify('Already tidy.', 'info', { label: 'Rearrange', run: rearrange });
-    return;
-  }
-  // Said as "may": this is what reads badly now, not an arrangement that was tried; the preview the
-  // button opens is the answer, and names what it really fixes.
-  host.ui.notify(`Already tidy. Rearranging may fix ${list}.`, 'info', { label: 'Show fix', run: () => void startCheckLayout(host) });
 }

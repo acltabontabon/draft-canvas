@@ -9,7 +9,7 @@ first diagram.
 
 | Guide | Covers |
 | --- | --- |
-| [Shapes and connectors](guides/shapes-and-connectors.md) | Shapes, connectors, boundaries, tidy up and arrange |
+| [Shapes and connectors](guides/shapes-and-connectors.md) | Shapes, connectors, boundaries, tidying and arrange |
 | [Sketch and Smart Ink](guides/sketching.md) | Draw over a diagram and turn rough drawings into shapes |
 | [Architecture examples](guides/examples.md) | Ready-to-edit diagrams in the starters gallery |
 | [System levels](guides/depth.md) | Move from system context to containers and components |

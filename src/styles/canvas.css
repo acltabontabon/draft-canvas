@@ -4153,6 +4153,21 @@
   margin-top: -0.5px;
 }
 
+/* Where a connector will be straightened onto when the shape is dropped: dashed, since nothing has
+   moved yet. */
+.dc-guide[data-kind='settle'] {
+  background: none;
+  opacity: 0.7;
+}
+
+.dc-guide[data-kind='settle'][data-axis='x'] {
+  border-left: 1px dashed var(--dc-selection);
+}
+
+.dc-guide[data-kind='settle'][data-axis='y'] {
+  border-top: 1px dashed var(--dc-selection);
+}
+
 /* One of a run of equal gaps: a measured span with end ticks and its size. */
 .dc-guide[data-kind='gap']::before,
 .dc-guide[data-kind='gap']::after {

@@ -4,8 +4,9 @@ import { boundsOf } from '../document/operations';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { rectOf, type Rect } from '../edges/routing';
 import { straightOffset } from '../edges/straight';
+import { STRAIGHTEN_LIMIT } from '../edges/straighten';
 import type { DraftRfNode } from './projection';
-import { minResizeSizeFor, snapResize } from './resizeSnap';
+import { minResizeSizeFor, sizeStepFor, snapResize } from './resizeSnap';
 import { computeSnap, snapReach, type Guide, type SnapLink } from './snapping';
 
 /**
@@ -18,6 +19,7 @@ import { computeSnap, snapReach, type Guide, type SnapLink } from './snapping';
 export const NO_GUIDES: Guide[] = [];
 
 const NO_SNAP = { changes: [] as NodeChange<DraftRfNode>[], guides: NO_GUIDES };
+const NO_SETTLE = { x: false, y: false };
 
 /** A connector between a dragged shape and a resting one: what drag snapping straightens. */
 export interface DragLink {
@@ -37,6 +39,8 @@ export interface DragSnapContext {
   links: DragLink[];
   /** Where each dragged shape began, so a frame's move is known from any of them. */
   origin: Map<string, { x: number; y: number }>;
+  /** The drop will settle small connector kinks (`editorStore.commitMove`): not a boundary's drag. */
+  settles?: boolean;
 }
 
 export const NO_DRAG_SNAP: DragSnapContext = { statics: [], spacing: [], links: [], origin: new Map() };
@@ -83,8 +87,8 @@ export function snapChanges(
   nodeById: NodeLookup,
   context: DragSnapContext,
   frame: SnapFrame,
-): { changes: NodeChange<DraftRfNode>[]; guides: Guide[] } {
-  if (frame.bypass) return { ...NO_SNAP, changes };
+): { changes: NodeChange<DraftRfNode>[]; guides: Guide[]; settle?: { x: boolean; y: boolean } } {
+  if (frame.bypass) return { ...NO_SNAP, changes, settle: NO_SETTLE };
   const moves = changes.filter(
     (change) => change.type === 'position' && change.dragging === true && change.position,
   );
@@ -116,11 +120,18 @@ export function snapChanges(
   }
   const links = shift && context.links.length > 0 ? linksAt(context.links, shift) : [];
   const reach = snapReach(frame.zoom);
-  const snap = computeSnap(bounds, context.statics, reach.threshold, { links, spacing: context.spacing, connectorThreshold: reach.connectorThreshold });
-  if (snap.dx === 0 && snap.dy === 0) return { changes, guides: snap.guides };
+  const snap = computeSnap(bounds, context.statics, reach.threshold, {
+    links,
+    spacing: context.spacing,
+    connectorThreshold: reach.connectorThreshold,
+    ...(context.settles ? { settleReach: STRAIGHTEN_LIMIT } : {}),
+  });
+  const settle = snap.settle ?? NO_SETTLE;
+  if (snap.dx === 0 && snap.dy === 0) return { changes, guides: snap.guides, settle };
 
   return {
     guides: snap.guides,
+    settle,
     changes: changes.map((change) =>
       change.type === 'position' && change.dragging === true && change.position
         ? { ...change, position: { x: change.position.x + snap.dx, y: change.position.y + snap.dy } }
@@ -178,7 +189,8 @@ export function snapResizeChanges(
     }
 
     // A proportional resize (a Junction stays round) would need both axes snapped together.
-    if (frame.bypass || statics.length === 0 || node.type === 'ellipse') continue;
+    const step = sizeStepFor(node);
+    if (frame.bypass || (statics.length === 0 && !step) || node.type === 'ellipse') continue;
     const posChange = changes.find((c) => c.type === 'position' && c.id === change.id && c.position);
     const position = (posChange?.type === 'position' ? posChange.position : undefined) ?? live.position;
     const min = minResizeSizeFor(node);
@@ -188,11 +200,13 @@ export function snapResizeChanges(
       statics,
       { min, max: maxSizeFor(node.type) ?? { width: Infinity, height: Infinity } },
       reach.threshold,
+      step,
     );
     guides.push(...snap.guides);
-    if (snap.guides.length === 0) continue;
-
     const { x, y, width, height } = snap.rect;
+    // Nothing snapped and nothing stepped: the frame goes through as React Flow sent it.
+    if (snap.guides.length === 0 && x === position.x && y === position.y && width === change.dimensions.width && height === change.dimensions.height) continue;
+
     result = result.map((c) => {
       if (c === change) return { ...change, dimensions: { width, height } };
       if (c === posChange) return { ...posChange, position: { x, y } };

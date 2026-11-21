@@ -128,49 +128,13 @@ export interface AgentPreview {
 }
 
 /**
- * What Tidy up would do to the room on screen, worked out and not yet applied: shown on the canvas
- * as a tracing sheet (`canvas/AgentPreviewLayer.tsx`) with Apply and Cancel beside it
- * (`ui/Editor/TidyBar.tsx`). Transient like every preview here: never saved, undone or exported, and
- * dropped the moment the room it was worked out from changes.
- */
-export interface TidyPreview {
-  /** The room it was worked out for, and that room exactly as it was then: applying is refused,
-   *  and the preview dropped, once either differs from what is on screen. */
-  path: readonly string[];
-  base: DraftDocument;
-  /** That room after tidying. */
-  view: DraftDocument;
-  /** How many shapes it nudges and how many connectors it re-attaches, for the bar's summary. */
-  moved: number;
-  reattached: number;
-  /** Whether only the selection was tidied. */
-  scoped: boolean;
-  /** The work budget was spent before every repair was tried (a large diagram): running Tidy up
-   *  again on the result continues. */
-  partial?: boolean;
-  /** How many sketches the room holds: they stay where they are, which the bar says. */
-  sketches?: number;
-  /** Shapes held in place that the cleanup left alone. */
-  held?: number;
-}
-
-/** Tidy up found nothing to change. */
-export interface TidyNothing {
-  nothing: true;
-  /** It ran out of its work budget on a large diagram before it could tell. */
-  stopped: boolean;
-  /** What reads badly all the same (`agent/proportion.ts`): laying the room out again may fix it. */
-  reads: ArrangeFix[];
-}
-
-/**
  * What Arrange would do to the room on screen: the room laid out again from scratch, reading each
- * way the person can choose between, shown like Tidy up's preview (a tracing sheet with a bar beside
+ * way the person can choose between, shown as a preview (a tracing sheet with a bar beside
  * it, `ui/Editor/ArrangeBar.tsx`) and applied only on Apply, as one undo step. Transient like every
  * preview here: never saved, undone or exported, and dropped the moment the room changes.
  */
 export interface ArrangePreview {
-  /** The room it was worked out for, and that room exactly as it was then (see `TidyPreview`). */
+  /** The room it was worked out for, and that room exactly as it was then (applying is refused, and the preview dropped, once either differs from what is on screen). */
   path: readonly string[];
   base: DraftDocument;
   /** That room arranged, by the reading direction it was laid out in. A selection, which has to
@@ -213,7 +177,7 @@ export type { ArrangeFix };
 
 /** A layout job in flight (see `UiStore.layoutBusy`). */
 export interface LayoutBusy {
-  kind: 'arrange' | 'tidy';
+  kind: 'arrange';
   /** Whether only the selection is being worked on. */
   scoped: boolean;
   cancel: () => void;
@@ -695,11 +659,9 @@ export interface UiStore {
    * and on closing the panel.
    */
   proposalPreview: ProposalPreview | null;
-  /** What Tidy up would change, while the person decides: see `TidyPreview`. */
-  tidyPreview: TidyPreview | null;
   /** What Arrange would change, while the person decides: see `ArrangePreview`. */
   arrangePreview: ArrangePreview | null;
-  /** Arrange or Tidy up is being worked out, off the page's thread: what `LayoutBusyBar` says, and the
+  /** Arrange is being worked out, off the page's thread: what `LayoutBusyBar` says, and the
    *  Cancel that stops it. Transient like the previews it leads to. */
   layoutBusy: LayoutBusy | null;
   setLayoutBusy: (busy: LayoutBusy | null) => void;
@@ -879,7 +841,6 @@ export interface UiStore {
   setAgentPreview: (preview: AgentPreview | null) => void;
   /** Replaces the whole proposal ghost — a proposalId change never merges onto the previous one. */
   setProposalPreview: (preview: ProposalPreview | null) => void;
-  setTidyPreview: (preview: TidyPreview | null) => void;
   setArrangePreview: (preview: ArrangePreview | null) => void;
   /** Flips the review panel's "Show on canvas" toggle without recomputing or dropping the ghost data. */
   setProposalPreviewVisible: (visible: boolean) => void;
@@ -1054,7 +1015,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   continuation: null,
   agentPreview: null,
   proposalPreview: null,
-  tidyPreview: null,
   arrangePreview: null,
   layoutBusy: null,
   setLayoutBusy: (layoutBusy) => set({ layoutBusy }),
@@ -1269,8 +1229,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setAgentPreview: (agentPreview) => set({ agentPreview }),
   setProposalPreview: (proposalPreview) => set({ proposalPreview }),
   // One cleanup decided at a time: opening either preview closes the other.
-  setTidyPreview: (tidyPreview) => set(tidyPreview ? { tidyPreview, arrangePreview: null } : { tidyPreview }),
-  setArrangePreview: (arrangePreview) => set(arrangePreview ? { arrangePreview, tidyPreview: null } : { arrangePreview }),
+  setArrangePreview: (arrangePreview) => set({ arrangePreview }),
   setProposalPreviewVisible: (visible) =>
     set((state) => (state.proposalPreview ? { proposalPreview: { ...state.proposalPreview, visible } } : state)),
   setContinuation: (next) =>

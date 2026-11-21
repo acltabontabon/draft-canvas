@@ -15,7 +15,7 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Crossings in the Arrange preview** — The preview counts where connectors cross now and after,
   for example “Crossings 12 → 3”.
 - **Hold in place** — **Hold in place** in `⌘K` marks the selected shapes with a small pin. Arrange
-  and Tidy up leave them where they are and lay the rest out around them. **Let go** frees them.
+  leaves them where they are and lay the rest out around them. **Let go** frees them.
 - **Make room** — **Make room** in `⌘K`, then drag across or down: everything past the pointer moves
   away, or back. A boundary the line passes through stretches. One undo step.
 - **Portals** — **Draw as portal** replaces a selected connector's line with a short labelled stub
@@ -32,12 +32,21 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 - **Finer connectors** — Lines are a little lighter, arrowheads slimmer, and a directed connector
   starts from a small dot where it leaves its shape. Shapes rest on a softer shadow.
-- **Connectors ease into place** — A connector whose route changes after a drop, an undo or a Tidy
-  up moves from its old line to its new one instead of jumping. Reduced motion turns this off.
+- **Connectors ease into place** — A connector whose route changes after a drop or an undo
+  moves from its old line to its new one instead of jumping. Reduced motion turns this off.
 - **Less small print when zoomed out** — Below about 55% zoom, captions, conditions and chips beside
   connectors step back; below about 28%, so do labels. Exports are unaffected.
 - **File format 29** — Held shapes and portals are new in the file. Older versions say they cannot
   open a file saved by this one rather than drop them.
+- **Tidying happens as you draw** — Dropping a shape whose connector is a small step off straight
+  moves it the last few pixels onto the line, in the same undo step. A dashed line shows where it
+  will land while you drag, and `⌥` leaves it where you dropped it. The **Tidy up** command is gone;
+  **Straighten connectors** and **Tidy connectors** remain for a whole view.
+- **Shapes resize in steps** — A Service, Data Store, Queue, Actor or Component resizes in steps of
+  12 pixels, so shapes sized by eye come out the same. A neighbour's edge still wins, and `⌥`
+  resizes freely.
+- **A boundary's colour carries to what it holds** — A shape with no colour of its own draws in its
+  boundary's colour. A colour you pick for a shape, neutral included, always wins.
 
 #### Fixed
 

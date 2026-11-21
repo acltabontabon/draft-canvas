@@ -116,7 +116,8 @@ describe('the frame-by-frame snapping the canvas runs', () => {
   });
 
   describe('a resize', () => {
-    const node = createNode({ id: 'resizing', type: 'service', x: 0, y: 500, width: 700, height: 60, text: 'A' });
+    // A boundary: its size never steps (`sizeStepFor`), so what is measured here is the neighbour's reach alone.
+    const node = createNode({ id: 'resizing', type: 'group', x: 0, y: 500, width: 700, height: 60, text: 'A' });
     const byId = new Map([[node.id, node]]);
     const rfLookup: NodeLookup = () => live({ x: 0, y: 500 }, { width: 700, height: 60 });
     const growTo = (width: number): NodeChange<DraftRfNode>[] => [

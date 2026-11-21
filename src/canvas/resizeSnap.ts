@@ -23,6 +23,28 @@ export interface SizeLimits {
   max: { width: number; height: number };
 }
 
+/**
+ * The increment a hand resize lands on: a shape's width and height come out as multiples of this, so
+ * two shapes sized by eye to "about the same" are the same, and a diagram holds a few sizes rather
+ * than one per shape. A neighbour's edge within reach still wins, and Alt resizes freely.
+ */
+export const SIZE_STEP = 12;
+
+/** The shapes whose size is the person's to choose, and so steps. A boundary fits what it holds, a
+ *  note, text, code or sequence fits its content, and a Junction stays round. */
+const STEPPED: ReadonlySet<DraftNode['type']> = new Set(['service', 'database', 'queue', 'actor', 'component']);
+
+/** The size step for a shape, or none. */
+export function sizeStepFor(node: Pick<DraftNode, 'type'>): number | undefined {
+  return STEPPED.has(node.type) ? SIZE_STEP : undefined;
+}
+
+/** `size` on the step grid, when the nearest step is inside the limits; otherwise as it is. */
+function stepped(size: number, step: number, min: number, max: number): number {
+  const next = Math.round(size / step) * step;
+  return next >= min && next <= max ? next : size;
+}
+
 /** Below this, an edge counts as where it started (sub-pixel noise from zoomed pointer maths). */
 const MOVED = 0.5;
 
@@ -38,6 +60,9 @@ const MOVED = 0.5;
  *
  * `threshold` is in canvas units: `snapReach(zoom).threshold`, which is the same 6 screen pixels at
  * every zoom. The default is that at zoom 1.
+ *
+ * With `step`, an axis no neighbour caught lands its size on the step grid instead (`SIZE_STEP`),
+ * the far edge staying put. It shows no guide: there is nothing on the canvas it lined up with.
  */
 export function snapResize(
   start: Rect,
@@ -45,8 +70,9 @@ export function snapResize(
   statics: readonly Rect[],
   limits: SizeLimits,
   threshold = SNAP_THRESHOLD,
+  step?: number,
 ): { rect: Rect; guides: Guide[] } {
-  if (statics.length === 0) return { rect, guides: [] };
+  if (statics.length === 0 && !step) return { rect, guides: [] };
   const guides: Guide[] = [];
   let { x, y, width, height } = rect;
 
@@ -60,6 +86,10 @@ export function snapResize(
       width = nextWidth;
       if (leftMoved) x = rect.x + snap.dx;
       guides.push(...snap.guides.filter((guide) => guide.axis === 'x'));
+    } else if (step && !snap.guides.some((guide) => guide.axis === 'x')) {
+      // (An edge already exactly on a neighbour's shows its guide with no pull: it stays there.)
+      width = stepped(rect.width, step, limits.min.width, limits.max.width);
+      if (leftMoved) x = rect.x + rect.width - width;
     }
   }
 
@@ -73,6 +103,9 @@ export function snapResize(
       height = nextHeight;
       if (topMoved) y = rect.y + snap.dy;
       guides.push(...snap.guides.filter((guide) => guide.axis === 'y'));
+    } else if (step && !snap.guides.some((guide) => guide.axis === 'y')) {
+      height = stepped(rect.height, step, limits.min.height, limits.max.height);
+      if (topMoved) y = rect.y + rect.height - height;
     }
   }
 

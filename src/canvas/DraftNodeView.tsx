@@ -36,7 +36,8 @@ import { FONTS, LINE_HEIGHTS, cssFont } from '../render/text/fonts';
 import type { Shape } from '../render/displayList';
 import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
 import { accentOf, type Theme } from '../render/theme/tokens';
-import { selectNode } from '../store/selectors';
+import { nodeIndex, selectNode } from '../store/selectors';
+import { inheritedAccent } from '../document/inheritedAccent';
 import { useUiStore } from '../store/uiStore';
 import { usePersonality } from '../theme/usePersonality';
 import { useThemeValue } from '../theme/useTheme';
@@ -72,6 +73,12 @@ const EMPHASIS_BLEED = 12;
 
 export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, height }: NodeProps) {
   const node = useEditorStore((state) => selectNode(state.document, id));
+  // The accent of the boundary around it, when it has none of its own (`inheritedAccent.ts`). A
+  // string or nothing, read off the shared index: no scan and nothing allocated per update.
+  const boundaryAccent = useEditorStore((state) => {
+    const self = selectNode(state.document, id);
+    return self && self.accent === undefined && self.parentId ? inheritedAccent(self, nodeIndex(state.document.nodes)) : undefined;
+  });
   const mode = useEditorStore((state) => state.mode);
   // A string, not an object: the selector runs for every node on every store
   // change, and only the nodes whose tier actually flips re-render.
@@ -330,10 +337,11 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     beginClipScope(liveNode.id);
     // A Text element keeps its background (a zero-width space is "something", so no empty-state
     // outline) while its source is edited over it.
-    const described = editingNote ? { ...liveNode, text: isText ? '\u200b' : '' } : liveNode;
+    const edited = editingNote ? { ...liveNode, text: isText ? '\u200b' : '' } : liveNode;
+    const described = boundaryAccent ? { ...edited, accent: boundaryAccent } : edited;
     return emitDisplayList(describeNode(described, describeContext(theme, preset)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
-  }, [liveNode, theme, preset, editingNote, technologyIcon, participantIcons]);
+  }, [liveNode, theme, preset, editingNote, technologyIcon, participantIcons, boundaryAccent]);
 
   /**
    * The font a plain shape label (Service/Component/Database/Queue/Actor/Group — everything but

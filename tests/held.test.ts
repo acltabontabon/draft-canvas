@@ -49,7 +49,7 @@ describe('shapes held in place', () => {
     }
   });
 
-  it('are never nudged by Tidy up', () => {
+  it('are never nudged by the tidy engine', () => {
     const a = { ...createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'A' }), held: true };
     const b = createNode({ id: 'b', type: 'service', x: 420, y: 9, text: 'B' });
     const doc = addEdges(addNodes(createDocument('Nearly'), [a, b]), [createEdge({ id: 'ab', source: 'a', target: 'b' })]);
@@ -59,7 +59,7 @@ describe('shapes held in place', () => {
   });
 
   it('are named in the bar, so nobody wonders why one shape did not move', () => {
-    expect(layoutNotes({ held: 1, scoped: false }, 'arrange')).toEqual(['1 held shape stays where it is.']);
-    expect(layoutNotes({ held: 3, scoped: false }, 'tidy')).toEqual(['3 held shapes stay where they are.']);
+    expect(layoutNotes({ held: 1, scoped: false })).toEqual(['1 held shape stays where it is.']);
+    expect(layoutNotes({ held: 3, scoped: false })).toEqual(['3 held shapes stay where they are.']);
   });
 });

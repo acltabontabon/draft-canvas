@@ -1,17 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 import { tidyView } from '../src/agent/tidy';
 import { measureContext } from '../src/agent/place';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
-import { useUiStore, type TidyPreview } from '../src/store/uiStore';
-import { tidySummary } from '../src/ui/Editor/tidySummary';
+import { useUiStore } from '../src/store/uiStore';
 import { stubContext } from './commandStubs';
 import { canvasCommands } from '../src/commands/registry';
 
 /**
- * Tidy up: the gentle cleanup. It keeps every shape where it was put, fixes only what reads as
- * untidy, and changes nothing until its preview is applied.
+ * Tidying: the gentle cleanup. It keeps every shape where it was put and fixes only what reads as
+ * untidy. Agents ask for it as a whole (`tidyView`); in the editor a drop does it for what it moved.
  */
 
 /** Two services side by side, the second a step low: a connector drawn with a kink. (A few pixels
@@ -94,11 +93,11 @@ describe('tidyView', () => {
   });
 });
 
-describe('Tidy up in the editor', () => {
+describe('a drop settles what it moved', () => {
   beforeEach(() => {
     __resetInteraction();
     useEditorStore.setState({
-      document: offLevel(),
+      document: offLevel(0),
       history: { past: [], future: [] },
       selection: { nodes: [], edges: [] },
       clipboard: null,
@@ -108,94 +107,60 @@ describe('Tidy up in the editor', () => {
       path: [],
       outer: null,
     });
-    useUiStore.setState({ tidyPreview: null, readOnly: null, flowTrace: null });
+    useUiStore.setState({ readOnly: null, flowTrace: null });
   });
 
-  it('plans without changing anything, then applies as one undo step', async () => {
-    const before = useEditorStore.getState().document;
-    const preview = (await useEditorStore.getState().planTidy()) as TidyPreview;
-    expect(preview).toMatchObject({ moved: 1, reattached: 0, scoped: false });
-    expect(preview.base).toBe(before);
-    // A plan is only a plan: the document and its history are exactly as they were.
-    expect(useEditorStore.getState().document).toBe(before);
-    expect(useEditorStore.getState().history.past).toHaveLength(0);
+  const at = (id: string) => useEditorStore.getState().document.nodes.find((node) => node.id === id)!;
+  /** `b` dropped a step low, as a drag would leave it. */
+  const drop = (settle?: readonly ('x' | 'y')[]) =>
+    useEditorStore.getState().commitMove(new Map([['b', { x: 320, y: 28 }]]), ['b'], settle ? { settle } : undefined);
 
-    expect(useEditorStore.getState().commitTidy(preview)).toBe(true);
-    const after = useEditorStore.getState();
-    expect(after.document.nodes).toEqual(preview.view.nodes);
-    expect(after.history.past).toHaveLength(1);
-    expect(after.history.past.at(-1)!.label).toBe('Tidy up');
-    after.undo();
-    expect(useEditorStore.getState().document.nodes).toEqual(before.nodes);
+  it('straightens the connector the drop left with a kink, in the same undo step as the move', () => {
+    drop(['y']);
+    // Level with `a` again: the dropped shape went the last few pixels, and `a` never moved.
+    expect(at('b').y).toBe(0);
+    expect(at('a')).toMatchObject({ x: 0, y: 0 });
+    expect(useEditorStore.getState().history.past).toHaveLength(1);
+    expect(useEditorStore.getState().history.past[0]!.label).toBe('Move');
   });
 
-  it('has nothing to offer a room that is already tidy', async () => {
-    const preview = (await useEditorStore.getState().planTidy()) as TidyPreview;
-    useEditorStore.getState().commitTidy(preview);
-    expect(await useEditorStore.getState().planTidy()).toMatchObject({ nothing: true, stopped: false });
+  it('leaves the shape where it was dropped on an axis the drag did not arm, and with none armed', () => {
+    drop(['x']);
+    expect(at('b').y).toBe(28);
+    useEditorStore.getState().undo();
+    drop([]);
+    expect(at('b').y).toBe(28);
+    useEditorStore.getState().undo();
+    drop();
+    expect(at('b').y).toBe(28);
   });
 
-  it('refuses a preview of a room that has changed since', async () => {
-    const preview = (await useEditorStore.getState().planTidy()) as TidyPreview;
-    useEditorStore.getState().addNode({ type: 'service', x: 900, y: 0, text: 'Late' });
-    const steps = useEditorStore.getState().history.past.length;
-    expect(useEditorStore.getState().commitTidy(preview)).toBe(false);
-    expect(useEditorStore.getState().history.past).toHaveLength(steps);
-    expect(useEditorStore.getState().document.nodes.some((node) => node.text === 'Late')).toBe(true);
+  it('never moves a shape that was not dragged', () => {
+    // `a` is the lighter end and would be the one a whole-view Straighten nudges; a drop of `b` may not.
+    useEditorStore.getState().commitMove(new Map([['b', { x: 320, y: 28 }]]), ['b'], { settle: ['x', 'y'] });
+    expect(at('a')).toMatchObject({ x: 0, y: 0 });
+    expect(at('c')).toMatchObject({ x: 640, y: 400 });
   });
 
-  it('tidies only the selection when there is one, and offers nothing to a shared diagram', async () => {
-    useEditorStore.getState().setSelection({ nodes: ['b'], edges: [] });
-    const preview = (await useEditorStore.getState().planTidy()) as TidyPreview;
-    expect(preview.scoped).toBe(true);
-    expect(preview.view.nodes.find((node) => node.id === 'a')).toBe(preview.base.nodes.find((node) => node.id === 'a'));
-    useUiStore.setState({ readOnly: { sharedTitle: 'Shared' } });
-    expect(await useEditorStore.getState().planTidy()).toBeNull();
+  it('leaves a held shape exactly where it was dropped', () => {
+    const doc = useEditorStore.getState().document;
+    useEditorStore.setState({ document: { ...doc, nodes: doc.nodes.map((node) => (node.id === 'b' ? { ...node, held: true } : node)) } });
+    drop(['y']);
+    expect(at('b').y).toBe(28);
   });
 
-  it('is one command, named for what it will tidy, and absent where nothing can be edited', () => {
-    const idsOf = (ctx = stubContext()) => canvasCommands(ctx);
-    const whole = idsOf().find((command) => command.id === 'tidy')!;
-    expect(whole.title).toBe('Tidy up');
-    useEditorStore.getState().setSelection({ nodes: ['b'], edges: [] });
-    expect(idsOf().find((command) => command.id === 'tidy')!.title).toBe('Tidy up selection');
-    const shared = idsOf(stubContext({ ui: { ...useUiStore.getState(), readOnly: { sharedTitle: 'Shared' } } }));
-    expect(shared.some((command) => command.id === 'tidy')).toBe(false);
+  it('keeps what a dragged boundary carries as it was laid out', () => {
+    const frame = createNode({ id: 'frame', type: 'group', x: 300, y: -40, width: 240, height: 200 });
+    const doc = addNodes(offLevel(28), [frame]);
+    useEditorStore.setState({ document: { ...doc, nodes: doc.nodes.map((node) => (node.id === 'b' ? { ...node, parentId: 'frame' } : node)) } });
+    useEditorStore.getState().commitMove(new Map([['frame', { x: 300, y: -30 }], ['b', { x: 320, y: 38 }]]), ['frame', 'b'], { settle: ['x', 'y'] });
+    expect(at('b').y).toBe(38);
   });
 
-  it('says a tidy diagram is tidy, and names what laying it out again would fix', async () => {
-    const run = async () => {
-      const notify = vi.fn();
-      const ctx = stubContext({ ui: { ...useUiStore.getState(), notify } });
-      canvasCommands(ctx).find((command) => command.id === 'tidy')!.run(ctx);
-      await vi.waitFor(() => expect(notify).toHaveBeenCalled());
-      return notify.mock.calls[0] as [string, string, { label: string; run: () => void }];
-    };
-    // Level and apart: nothing to tidy, and nothing that reads badly.
-    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'A' });
-    const b = createNode({ id: 'b', type: 'service', x: 420, y: 0, text: 'B' });
-    const edge = createEdge({ id: 'ab', source: 'a', target: 'b' });
-    useEditorStore.getState().setDocument(addEdges(addNodes(createDocument('Tidy'), [a, b]), [edge]));
-    const [plain, , rearrange] = await run();
-    expect(plain).toBe('Already tidy.');
-    expect(rearrange.label).toBe('Rearrange');
-
-    // The same, with a long name stacked into a narrow column: still tidy, but worth laying out.
-    const stacked = { ...a, text: 'Customer-Facing Public API Gateway and Edge Routing Layer for Web and Mobile', width: 150, height: 190, y: -61 };
-    useEditorStore.getState().setDocument(addEdges(addNodes(createDocument('Tidy'), [stacked, b]), [edge]));
-    const [message, , fix] = await run();
-    expect(message).toBe('Already tidy. Rearranging may fix 1 stacked name.');
-    expect(fix.label).toBe('Show fix');
-    fix.run();
-    // The button works the arrangement out (off the page's thread) and opens it on the direction that fixes.
-    await vi.waitFor(() => expect(useUiStore.getState().arrangePreview).not.toBeNull());
-    expect(useUiStore.getState().arrangePreview?.fixes?.[useUiStore.getState().arrangePreview!.direction]).toContainEqual({ kind: 'stacked-name', id: 'a' });
-    useUiStore.getState().setArrangePreview(null);
-  });
-
-  it('says what a preview changes in plain words', () => {
-    expect(tidySummary({ moved: 3, reattached: 0 })).toBe('3 shapes nudged to straighten connectors');
-    expect(tidySummary({ moved: 1, reattached: 2 })).toBe('1 shape nudged to straighten a connector, 2 connectors re-attached to clear shapes');
-    expect(tidySummary({ moved: 0, reattached: 1 })).toBe('1 connector re-attached to clear shapes');
+  it('is not a command: the cleanup happens as the diagram is drawn', () => {
+    const commands = canvasCommands(stubContext());
+    expect(commands.some((command) => command.id === 'tidy')).toBe(false);
+    // The whole-view tools it was built from stay for someone who wants exactly one of them.
+    expect(commands.some((command) => command.id === 'straighten')).toBe(true);
   });
 });
