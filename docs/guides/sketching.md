@@ -50,6 +50,14 @@ strokes or add an arrowhead.
 | An arrow from one shape to another | A connector, pointing where you drew it |
 | A line from one shape to another | A plain connector, without an arrowhead |
 
+A box does not have to be neat. One that leans, sits a few degrees off level, or starts and ends
+with a flick of the pen past its corner is still a box; it becomes an upright shape the size of the
+box you drew, without the flicks. A diamond is not a box and stays ink.
+
+| Drawn | Becomes |
+| --- | --- |
+| ![Four rough boxes drawn in one stroke each: one with a tail at its start, one leaning with a tail on top, one whose stroke ends short of a long tail, one skewed with a hook](../media/guides/smart-ink-hurried-boxes-drawn.png) | ![The same four drawings in Smart Ink: four upright Components, each the size of its box, with the strip offering Service, Boundary, Note and Keep sketch](../media/guides/smart-ink-hurried-boxes-read.png) |
+
 The shape takes the size you drew. A strip beside it shows what it became and what else it could
 be:
 

@@ -152,6 +152,70 @@ describe('cylinders, tubes and people', () => {
   });
 });
 
+describe('boxes as a hurried hand draws them', () => {
+  it('reads a box whose stroke flicks in before its first corner and out past its last', () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const r = c.rng(seed * 13);
+      const w = 120 + r() * 220;
+      const h = 80 + r() * 140;
+      const result = expectConverts(c.turnedBox(300, 300, w, h, 0, c.hand(seed, 2.5, 0.7), { tailIn: 15 + r() * 50, tailOut: r() * 40 }), 'rectangle');
+      // The shape is the box, not the box and its tails.
+      expect(Math.abs(result.box.width - w)).toBeLessThan(16);
+      expect(Math.abs(result.box.height - h)).toBeLessThan(16);
+    }
+  });
+
+  it('reads a box that leans, as the upright box of the same size', () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const r = c.rng(seed * 17);
+      const shear = (r() < 0.5 ? -1 : 1) * (20 + r() * 35);
+      const result = expectConverts(c.parallelogram(100, 100, 260, 130, shear, c.hand(seed, 2.5, 0.7), { tailIn: r() * 40 }), 'rectangle');
+      // As wide as its sides are long, not as wide as the extent its lean sweeps out.
+      expect(Math.abs(result.box.width - 260)).toBeLessThan(16);
+      expect(Math.abs(result.box.x + result.box.width / 2 - (230 + shear / 2))).toBeLessThan(12);
+    }
+  });
+
+  it('reads a box drawn a few degrees off level', () => {
+    for (let seed = 1; seed <= 20; seed += 1) {
+      const r = c.rng(seed * 19);
+      const degrees = (r() - 0.5) * 30;
+      const result = expectConverts(c.turnedBox(300, 300, 240, 130, degrees, c.hand(seed, 2.5, 0.7), { tailOut: r() * 30 }), 'rectangle');
+      expect(Math.abs(result.box.width - 240)).toBeLessThan(16);
+      expect(Math.abs(result.box.height - 130)).toBeLessThan(16);
+    }
+  });
+
+  // Traced from boxes drawn by hand on the canvas, none of which was read: a tail at the start, a
+  // lean with a tail on top, a long tail and an end that stops short, a skew with a hook.
+  it('reads the boxes that used to stay ink', () => {
+    const drawn: Array<Array<[number, number]>> = [
+      [[285, 213], [310, 203], [328, 188], [420, 186], [515, 183], [518, 295], [420, 283], [312, 285], [310, 262], [328, 190]],
+      [[877, 310], [895, 380], [928, 493], [662, 537], [640, 480], [606, 388], [690, 366], [895, 380]],
+      [[1570, 367], [1565, 588], [1365, 600], [1345, 500], [1320, 448], [1345, 437], [1560, 425]],
+      [[215, 447], [200, 440], [180, 427], [160, 450], [108, 567], [385, 632], [392, 540], [410, 475], [210, 455]],
+    ];
+    for (const points of drawn) for (let seed = 1; seed <= 5; seed += 1) expectConverts(c.path(points, c.hand(seed, 2.5, 0.7)), 'rectangle');
+  });
+
+  it('still reads a circle through its tails as a circle', () => {
+    for (let seed = 1; seed <= 10; seed += 1) {
+      const result = expectConverts(c.ellipse(200, 200, 70, 50, c.hand(seed, 2, 0.6), { sweep: Math.PI * 2.25 }), 'ellipse');
+      expect(result.scores.rectangle ?? 0).toBeLessThan(CONVERT_CONFIDENCE);
+    }
+  });
+
+  it('does not read a diamond, a triangle with a tail, or a box with a line out of it as a box', () => {
+    for (let seed = 1; seed <= 12; seed += 1) {
+      expectStaysInk(c.turnedBox(300, 300, 160, 160, 45, c.hand(seed, 2, 0.6)));
+      expectStaysInk(c.turnedBox(300, 300, 220, 120, 40, c.hand(seed, 2, 0.6), { tailIn: 20 }));
+      expectStaysInk(c.path([[80, -30], [80, 0], [160, 140], [0, 140], [80, 0]], c.hand(seed)));
+      // The line is as long as a side: a box and its connector in one stroke, not a flick of the pen.
+      expectStaysInk(c.turnedBox(300, 300, 200, 120, 0, c.hand(seed, 2, 0.6), { tailOut: 220 }));
+    }
+  });
+});
+
 describe('what stays ink', () => {
   it('never converts scribbles, zigzags, spirals, handwriting, ticks or triangles', () => {
     for (let seed = 1; seed <= 12; seed += 1) {

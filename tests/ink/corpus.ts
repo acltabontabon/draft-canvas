@@ -104,6 +104,41 @@ export function rectangle(x: number, y: number, w: number, h: number, hd: Hand, 
   return [humanize(closed, hd)];
 }
 
+/**
+ * A closed four-sided outline through `corners`, drawn in one stroke from the first, the way a hurried
+ * hand does it: a flick in along the first side before the pen reaches the corner (`tailIn`), and a
+ * flick out past it along the last side once it has closed (`tailOut`).
+ */
+export function quad(corners: readonly [Pt, Pt, Pt, Pt], hd: Hand, options: { tailIn?: number; tailOut?: number } = {}): Pt[][] {
+  const [first, second, , last] = corners;
+  const beyond = (from: Pt, through: Pt, by: number): Pt => {
+    const length = Math.hypot(through.x - from.x, through.y - from.y) || 1;
+    return { x: through.x + ((through.x - from.x) / length) * by, y: through.y + ((through.y - from.y) / length) * by };
+  };
+  const path: Pt[] = [];
+  if (options.tailIn) path.push(beyond(second, first, options.tailIn));
+  path.push(...corners, first);
+  if (options.tailOut) path.push(beyond(last, first, options.tailOut));
+  return [humanize(path, hd)];
+}
+
+/** A `w` × `h` box turned `degrees` about its centre. */
+export function turnedBox(cx: number, cy: number, w: number, h: number, degrees: number, hd: Hand, options: { tailIn?: number; tailOut?: number } = {}): Pt[][] {
+  const a = (degrees * Math.PI) / 180;
+  const corner = (dx: number, dy: number): Pt => ({ x: cx + dx * Math.cos(a) - dy * Math.sin(a), y: cy + dx * Math.sin(a) + dy * Math.cos(a) });
+  return quad([corner(-w / 2, -h / 2), corner(w / 2, -h / 2), corner(w / 2, h / 2), corner(-w / 2, h / 2)], hd, options);
+}
+
+/** A box leaning over: its top edge shifted `shear` px to the right of its bottom edge. */
+export function parallelogram(x: number, y: number, w: number, h: number, shear: number, hd: Hand, options: { tailIn?: number; tailOut?: number } = {}): Pt[][] {
+  return quad([{ x: x + shear, y }, { x: x + w + shear, y }, { x: x + w, y: y + h }, { x, y: y + h }], hd, options);
+}
+
+/** A free path through `points`, as drawn. */
+export function path(points: readonly (readonly [number, number])[], hd: Hand): Pt[][] {
+  return [humanize(points.map(([x, y]) => ({ x, y })), hd)];
+}
+
 /** A rectangle drawn as four separate sides, each slightly overshooting its corners. */
 export function rectangleFourStrokes(x: number, y: number, w: number, h: number, hd: Hand): Pt[][] {
   const o = 4;
