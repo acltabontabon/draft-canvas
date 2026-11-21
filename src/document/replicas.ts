@@ -1,7 +1,7 @@
 /**
  * A Service's replica count — how many instances of it run. Typed as part of its name
  * ("Fulfilment ×3", "Fulfilment x3") and stored apart from it (`DraftNode.replicas`), so the name
- * stays the name and the count is drawn as a small mark and read by Traffic.
+ * stays the name and the count is drawn as a small mark and read by an outage walk.
  */
 
 import { LIMITS } from './limits';

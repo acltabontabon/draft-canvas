@@ -124,10 +124,24 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   work budget (`route.ts`'s `withBudget`), never a wall-clock deadline: the same diagram gives the
   same preview on any machine, and a result that ran out says `partial`.
 
+### Outage walk
+
+- An outage is read from the drawing alone (`traffic/outage.ts`, over `analyzeTraffic`'s reading of
+  how work travels). It never states a rate, latency, likelihood or capacity, and where the drawing
+  is silent it asks a question rather than guessing. `tests/traffic/outage.test.ts` holds that line.
+- The walk is a view: `editorStore.outage` and everything `store/outage.ts` derives from it are never
+  saved, undone, shared or exported. Readings are memoized per graph; a drag must not recompute them.
+- It changes nothing by itself. A question's answers are the person's edits: a fix is one existing
+  store action through `commands/outage.ts` (one undo step), and "Keep as open point" is `addOpenPoint`.
+- Every way in (status bar, palette, shape menu) goes through `commands/outage.ts`. `OutageLayer` is
+  canvas chrome drawn with `canvas/sketchPaths.ts`; product behaviour lives only in
+  `traffic/technology.ts`, as documented defaults matched on an assigned product name.
+- Agents get the same reading through `read_diagram`'s `outage`, as facts and open questions.
+
 ### Sketches and Smart Ink
 
 - Sketches (`DraftInk`) are per-room annotation in `ink`, absent when empty. They never take part in
-  routing, layout, Arrange, Tidy up, semantics, Traffic or agent reads, and nothing turns one into a
+  routing, layout, Arrange, Tidy up, semantics, outage walks or agent reads, and nothing turns one into a
   shape except an explicit Smart Ink conversion through `editorStore.inkToShape`/`inkToConnector`.
 - `src/ink/` imports `document/` only and stays free of React, the store and the DOM. Geometry
   (`recognize.ts`) and meaning (`interpret.ts`) stay apart; Smart Ink offers only existing shape kinds.

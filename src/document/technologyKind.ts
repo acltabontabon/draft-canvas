@@ -1,7 +1,7 @@
 /**
  * The technology fixes the kind: Redis on a Data Store is a cache, Kafka on a Queue is a topic,
  * Stripe on a Service is something outside the system. A short table of product names, matched the
- * way the Traffic notes match them (`traffic/technology.ts`): the product on its own, with an
+ * way an outage's product facts match them (`traffic/technology.ts`): the product on its own, with an
  * optional version or parenthetical ("PostgreSQL 16", "Redis (sessions)"), never a stack of several
  * products or a phrase that merely mentions one ("Kafka client").
  */

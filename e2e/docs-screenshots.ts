@@ -1,6 +1,6 @@
 import { openGallery, openStarter } from './library';
 import { createReaderExample } from './reader-example';
-import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fixtures/traffic';
+import { storeDocument } from './fixtures/outage';
 /**
  * Regenerates the screenshots the user guides in `docs/guides/` embed (`docs/media/guides/*.png`).
  *
@@ -30,7 +30,7 @@ import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fix
  *   npx tsx e2e/docs-screenshots.ts --empty-canvas-only
  *   npx tsx e2e/docs-screenshots.ts --reader-only
  *   npx tsx e2e/docs-screenshots.ts --reader-only --theme dark   (the guide's `share-*-dark.png` pair)
- *   npx tsx e2e/docs-screenshots.ts --traffic-only
+ *   npx tsx e2e/docs-screenshots.ts --outage-only
  *   npx tsx e2e/docs-screenshots.ts --sequence-only
  *   npx tsx e2e/docs-screenshots.ts --walk-only
  *
@@ -363,74 +363,34 @@ async function richTextScreenshots(page: Page) {
   await page.keyboard.press('Escape');
 }
 
-async function trafficScreenshots(page: Page) {
+async function outageScreenshots(page: Page) {
   await page.setViewportSize({ width: 1440, height: 860 });
-  const document = trafficDocument('Online store');
-  document.nodes = [
-    node('gateway', 'service', 'Web Storefront', 0, 0, { serviceKind: 'api' }),
-    node('mobile', 'service', 'Mobile BFF', 0, 240, { serviceKind: 'api' }),
-    node('checkout', 'service', 'Checkout', 360, 160),
-    node('billing', 'service', 'Catalog', 360, -100),
-    node('postgres', 'database', 'PostgreSQL', 760, 40, { databaseKind: 'sql' }),
-    node('stripe', 'service', 'Stripe', 760, 300, { serviceKind: 'external' }),
-    node('paypal', 'service', 'PayPal', 760, 440, { serviceKind: 'external' }),
-  ];
-  document.edges.push(
-    { id: 'checkout-stripe', source: 'checkout', target: 'stripe', directed: true, routing: 'smoothstep', semantic: 'calls' },
-    { id: 'checkout-paypal', source: 'checkout', target: 'paypal', directed: true, routing: 'smoothstep', semantic: 'calls' },
-  );
   await page.locator('input[type="file"]').setInputFiles({
-    name: 'traffic-guide.draftcanvas',
+    name: 'outage-guide.draftcanvas',
     mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(document)),
+    buffer: Buffer.from(JSON.stringify(storeDocument())),
   });
   await expect(page.locator('.dc-editor')).toBeVisible();
-  await page.locator('.dc-status-traffic').click();
-  await expect(page.locator('button.dc-traffic-note').last()).toHaveCSS('opacity', '1', { timeout: 10000 });
-  await shot(page, 'traffic-overview');
-  const fallback = page.getByRole('button', { name: /^no fallback drawn/ }).first();
-  await fallback.click();
-  await shot(page, 'traffic-note');
-  await fallback.press('Escape');
-  await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
-  await expect(page.locator('.dc-traffic-callout')).toBeVisible();
-  await shot(page, 'traffic-detail');
-  await page.locator('.dc-traffic-work summary').click();
-  await page.getByRole('list', { name: 'Work per arrival' }).scrollIntoViewIfNeeded();
-  await shot(page, 'traffic-work');
-  await page.getByRole('button', { name: 'How to read this' }).click();
-  await shot(page, 'traffic-reading-guide');
-  await page.goto(URL);
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'recovery-guide.draftcanvas', mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(recoveryDocument())),
-  });
-  await page.locator('.dc-status-traffic').click();
-  await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
-  await page.locator('.dc-traffic-recovery summary').click();
-  await page.getByRole('textbox', { name: 'Messages to replay' }).fill('500');
-  await shot(page, 'traffic-recovery');
-  await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
-  await page.locator('.dc-traffic-database summary').click();
-  await shot(page, 'traffic-database');
-  await page.locator('.dc-status-traffic').click();
-  await page.getByRole('button', { name: 'Details', exact: true }).click();
-  const assigned = page.getByRole('combobox', { name: 'Technology', exact: true });
-  await assigned.fill('PostgreSQL');
-  await assigned.press('Enter');
-  await page.keyboard.press('Escape');
-  await page.locator('.dc-status-traffic').click();
-  await expect(page.getByRole('region', { name: 'Technology note' })).toContainText('PostgreSQL');
-  await shot(page, 'traffic-technology');
-
-  await page.goto(URL);
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'boundary-guide.draftcanvas', mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(boundaryDocument())),
-  });
-  await page.locator('.dc-status-traffic').click();
-  await page.locator('.react-flow__node[data-id="deployment"] .dc-node').click({ position: { x: 20, y: 15 } });
-  await shot(page, 'traffic-boundaries');
+  const settled = () => expect(page.locator('.dc-outage-note, .dc-outage-actions').last()).toHaveCSS('opacity', '1', { timeout: 10000 });
+  const takeDown = async (id: string) => {
+    await page.locator(`.react-flow__node[data-id="${id}"] .dc-node`).click();
+    await settled();
+  };
+  await page.locator('.dc-status-outage').click();
+  await takeDown('payments');
+  await shot(page, 'outage-overview');
+  const calls = page.locator('button.dc-outage-note', { hasText: 'calls fail' });
+  await calls.click();
+  await shot(page, 'outage-note');
+  await calls.press('Escape');
+  await page.getByRole('button', { name: 'Draw the replay route' }).click();
+  await expect(page.locator('button.dc-outage-note', { hasText: 'replay from here once' })).toBeVisible();
+  await settled();
+  await shot(page, 'outage-fix');
+  await takeDown('checkout');
+  await shot(page, 'outage-instances');
+  await takeDown('cache');
+  await shot(page, 'outage-cache');
 }
 
 /** Import a real example and follow the same share-link route as a recipient. */
@@ -679,8 +639,8 @@ async function main() {
       return;
     }
 
-    if (process.argv.includes('--traffic-only')) {
-      await trafficScreenshots(page);
+    if (process.argv.includes('--outage-only')) {
+      await outageScreenshots(page);
       return;
     }
 

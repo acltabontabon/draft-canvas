@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeTraffic, mayHaveTraffic } from '../../src/traffic';
-import { edge, insight, node } from './helpers';
+import { edge, node } from './helpers';
 
 describe('traffic graph propagation', () => {
   it('keeps multiple independent entries and their paths separate', () => {
@@ -18,9 +18,7 @@ describe('traffic graph propagation', () => {
     const services = ['one', 'two', 'three'].map((id) => node(id, 'service', { text: id }));
     const database = node('postgres', 'database', { databaseKind: 'sql', text: 'Postgres' });
     const result = analyzeTraffic({ nodes: [...services, database], edges: services.map((value) => edge(`${value.id}-postgres`, value.id, database.id, { semantic: 'writes' })) });
-    expect(result.nodes.get(database.id)).toMatchObject({ paths: { definite: 3, possible: 3 }, sources: services.map((value) => value.id).sort(), tier: 'top' });
-    expect(result.hotspots).toContain(database.id);
-    expect(insight(result, 'shared-dependency').text).toMatch(/3 services use one store/);
+    expect(result.nodes.get(database.id)).toMatchObject({ paths: { definite: 3, possible: 3 }, sources: services.map((value) => value.id).sort() });
   });
 
   it('models a service to queue to worker as an async buffer', () => {
@@ -29,7 +27,6 @@ describe('traffic graph propagation', () => {
     const worker = node('worker', 'service', { serviceKind: 'worker' });
     const result = analyzeTraffic({ nodes: [producer, queue, worker], edges: [edge('publish', producer.id, queue.id, { semantic: 'publishes', async: true }), edge('consume', queue.id, worker.id, { semantic: 'consumes', async: true })] });
     expect(result.nodes.get(worker.id)?.paths).toEqual({ definite: 1, possible: 1 });
-    expect(insight(result, 'async-buffer').text).toMatch(/backpressure can still affect producers/);
   });
 
   it('delivers a topic message definitely to all three subscribers', () => {
@@ -41,7 +38,6 @@ describe('traffic graph propagation', () => {
       ...subscribers.map((value) => edge(`consume-${value.id}`, topic.id, value.id, { semantic: 'consumes' })),
     ] });
     expect(subscribers.map((value) => result.nodes.get(value.id)?.paths)).toEqual(subscribers.map(() => ({ definite: 1, possible: 1 })));
-    expect(insight(result, 'message-distribution').text).toMatch(/one delivery per drawn subscriber/);
   });
 
   it('marks two queue consumers possible and reports competing consumers', () => {
@@ -50,7 +46,6 @@ describe('traffic graph propagation', () => {
     const workers = ['a', 'b'].map((id) => node(id, 'service', { serviceKind: 'worker' }));
     const result = analyzeTraffic({ nodes: [producer, queue, ...workers], edges: [edge('publish', producer.id, queue.id, { semantic: 'publishes' }), ...workers.map((value) => edge(`consume-${value.id}`, queue.id, value.id, { semantic: 'consumes' }))] });
     expect(workers.map((value) => result.nodes.get(value.id)?.paths)).toEqual(workers.map(() => ({ definite: 0, possible: 1 })));
-    expect(insight(result, 'competing-consumers').text).toMatch(/competing consumers/);
   });
 
   it('handles file, object and search storage operations as data workload', () => {
@@ -80,7 +75,6 @@ describe('traffic graph propagation', () => {
     const result = analyzeTraffic({ nodes: [service, component, database], edges: [edge('service-component', service.id, component.id, { semantic: 'calls' }), edge('component-database', component.id, database.id, { semantic: 'reads' })] });
     expect(result.interactions.some((value) => value.from === service.id && value.to === database.id)).toBe(false);
     expect(result.nodes.has(component.id)).toBe(true);
-    expect(insight(result, 'unsupported-hop').text).toMatch(/Order Logic/);
   });
 
   it('uses a scheduler as an entry and explains the schedule', () => {
@@ -88,7 +82,6 @@ describe('traffic graph propagation', () => {
     const worker = node('worker', 'service', { serviceKind: 'worker' });
     const result = analyzeTraffic({ nodes: [scheduler, worker], edges: [edge('run', scheduler.id, worker.id, { semantic: 'triggers' })] });
     expect(result.entries).toEqual([scheduler.id]);
-    expect(insight(result, 'scheduler').text).toMatch(/starts scheduled work/);
   });
 
   it('keeps nodes present with zero paths when they are not reached', () => {

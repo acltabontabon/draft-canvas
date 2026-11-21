@@ -198,6 +198,7 @@ describe('contextMenuCommandsFor — a regular node', () => {
       'sep',
       'spotlight',
       'show-lineage',
+      'take-down',
       'sep',
       'delete',
     ]);

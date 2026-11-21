@@ -49,7 +49,6 @@ describe('traffic analysis', () => {
     ];
     const result = analyzeTraffic({ nodes: [producer, queue, w1, w2], edges });
     expect(result.nodes.get(w1.id)?.paths).toEqual({ definite: 0, possible: 1 });
-    expect(result.insights.some((insight) => insight.kind === 'competing-consumers')).toBe(true);
 
     const topic = node('queue', { queueKind: 'topic', text: 'Events' });
     const topicResult = analyzeTraffic({ nodes: [producer, topic, w1, w2], edges: [edge(producer.id, topic.id, { semantic: 'publishes' }), edge(topic.id, w1.id, { semantic: 'consumes' }), edge(topic.id, w2.id, { semantic: 'consumes' })] });
@@ -66,8 +65,6 @@ describe('traffic analysis', () => {
     const routes = result.interactions.filter((interaction) => interaction.from === a.id);
     expect(routes).toHaveLength(2);
     expect(routes.every((interaction) => interaction.certainty === 'possible' && interaction.paths.definite === 0 && interaction.paths.possible === 1)).toBe(true);
-    expect(result.insights.some((insight) => insight.kind === 'ambiguous-split')).toBe(true);
-    expect(result.nodes.get(j.id)?.tier).toBe('none');
   });
 
   it('collapses a loop and reports no-entry for a pure cycle', () => {
@@ -77,7 +74,6 @@ describe('traffic analysis', () => {
     expect(result.status).toBe('no-entry');
     expect(result.nodes.get(a.id)?.inLoop).toBe(true);
     expect(result.interactions.filter((interaction) => interaction.loop)).toHaveLength(2);
-    expect(result.insights.some((insight) => insight.kind === 'loop')).toBe(true);
   });
 
   it('is bounded and handles duplicate ids and missing endpoints', () => {

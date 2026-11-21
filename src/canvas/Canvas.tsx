@@ -1,8 +1,7 @@
+import { mayTakeDown } from '../traffic';
 import { playbackFlowOf } from '../document/sequenceFlow';
-import { TrafficReplayProvider } from './TrafficReplayContext';
-import { TrafficScenario } from './TrafficScenario';
 import { FlowTraceBadges } from './FlowTraceBadges';
-import { TrafficSketches } from './TrafficSketches';
+import { OutageLayer, OutageStrip } from './OutageLayer';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Background,
@@ -448,7 +447,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // `docs/reference/architecture.md`'s "Flows and presentation". `lensFlow` owns the rule for when that
   // lens is on (never during Presentation/Focus, never for an empty flow).
   const lensActive = useEditorStore((state) => lensFlow(state) !== undefined);
-  const trafficActive = useEditorStore((state) => state.traffic.active);
+  const outageActive = useEditorStore((state) => state.outage.active);
   const theme = useThemeValue();
   // A fresh object here would defeat React Flow's own memoized renderer on every drag frame.
   const connectionLineStyle = useMemo(() => ({ stroke: theme.selection, strokeWidth: 1.8 }), [theme.selection]);
@@ -565,6 +564,12 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       event.stopPropagation();
       finishRecoveryConnect(node.id);
     } else if (sharedReadOnly) selectSharedNode(event, node);
+    // During an outage walk a plain click on something that runs takes it down: the walk is for
+    // trying one shape after another. A modified click still only selects.
+    else if (editable && useEditorStore.getState().outage.active && !useUiStore.getState().armed && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+      const editor = useEditorStore.getState();
+      if (editor.outage.down !== node.id && mayTakeDown(editor.document.nodes, node.id)) editor.takeDown(node.id);
+    }
     else if (
       editable &&
       useUiStore.getState().armed &&
@@ -582,7 +587,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // The Pencil: drawing claims the pointer only while it is in hand on an editable canvas.
   const pencil = useUiStore((state) => state.pencil);
   const armedShape = useUiStore((state) => state.armed !== null);
-  const drawing = editable && pencil !== null && !trafficActive;
+  const drawing = editable && pencil !== null && !outageActive;
   useInkInput(paneRef, drawing);
 
   useZoomVariable();
@@ -2271,7 +2276,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       data-trace={traceActive ? 'on' : undefined}
       data-make-room={makingRoom ? (makeRoomLine?.axis ?? 'armed') : undefined}
       data-lens={lensActive ? 'on' : undefined}
-      data-traffic={trafficActive ? 'on' : undefined}
+      data-outage={outageActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}
       data-pencil={drawing ? pencil : undefined}
       data-recovery-connecting={recoveryConnect ? 'true' : undefined}
@@ -2410,7 +2415,6 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           />
         )}
 
-        <TrafficReplayProvider active={trafficActive}>
         <ViewportLayer>
           {tracing && <FlowTraceBadges />}
           {interactive && <FanInPreview />}
@@ -2452,10 +2456,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           <PresenceLayer />
 
           {/* Handwritten sketches sit over everything else drawn in the room, as on a whiteboard. */}
-          <InkLayer theme={theme.name} selectable={editable && !drawing && !armedShape && !trafficActive} />
+          <InkLayer theme={theme.name} selectable={editable && !drawing && !armedShape && !outageActive} />
 
-          {/* Traffic's findings, written over the diagram like a whiteboard review. Never exported. */}
-          {trafficActive && <TrafficSketches />}
+          {/* What an outage does, written over the diagram like a whiteboard review. Never exported. */}
+          {outageActive && <OutageLayer />}
 
           {editable && attachTarget && (
             <div
@@ -2466,8 +2470,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             </div>
           )}
         </ViewportLayer>
-        {trafficActive && <TrafficScenario />}
-        </TrafficReplayProvider>
+        {outageActive && <OutageStrip />}
       </ReactFlow>
     </div>
   );

@@ -1,21 +1,18 @@
 /**
- * Traffic analysis: where the traffic a diagram already describes concentrates, and why.
+ * How work travels through a diagram, as drawn — the reading an outage walk (`outage.ts`) is made from.
  *
- * Read-only and derived. Nothing here is saved, undone, shared or exported: the analysis is a way of
- * looking at the current room, recomputed from its nodes and connectors, the way a flow's lens is.
+ * Read-only and derived. Nothing here is saved, undone, shared or exported: it is recomputed from the
+ * room's nodes and connectors.
  *
  * The one unit is a **modeled path**: each entry point (an Actor, a Scheduler, or a service or queue
- * nothing drawn feeds) starts one path, and every runtime interaction it reaches carries it on. A
- * node reached by three paths is not receiving three requests per second — it is where three drawn
- * routes meet. Paths alone establish no rates, latencies, utilisation or capacity; the diagram
- * holds none of those. `scenario.ts` separately scales paths by an explicitly illustrative input;
- * it never estimates capacity or latency.
+ * nothing drawn feeds) starts one, and every runtime interaction it reaches carries it on. Paths say
+ * what is reached and from where; they establish no rates, latencies, utilisation or capacity — the
+ * diagram holds none of those, and nothing here invents them.
  *
  * Paths come in two strengths. `definite` paths follow interactions the diagram states plainly. A
  * `possible` path also crosses something whose share is unknown — a Junction that splits, a
  * conditional branch, a queue shared by competing consumers — so it may or may not arrive. Every
- * definite path is also possible (`possible >= definite`); the gap between them is the uncertainty,
- * kept rather than resolved with an invented split.
+ * definite path is also possible (`possible >= definite`).
  *
  * Imports `document/` only: no React, store, canvas or DOM.
  */
@@ -141,64 +138,6 @@ export interface TrafficNode {
   isEntry: boolean;
   /** Part of a loop — see `TrafficInteraction.loop`. */
   inLoop: boolean;
-  /**
-   * `top`: a place paths meet — two or more distinct sources — with the most paths of its group.
-   * `raised`: also a meeting place, below the top. A node with one source is never tiered, however
-   * many paths it carries: those paths met further upstream, and that is where the tier goes. `none`: no concentration. Never
-   * set for an origin, a Junction or an excluded node, and never a statement about load or capacity.
-   */
-  tier: 'top' | 'raised' | 'none';
-  /** 1 for the most-concentrated node of its group; absent when `tier` is `none`. */
-  rank?: number;
-}
-
-/**
- * Deterministic observations, each about named elements and each worded to say only what the
- * diagram establishes. `basis: 'modeled'` counts paths; `structural` reads topology alone.
- */
-export type TrafficInsightKind =
-  | 'convergence'
-  | 'shared-dependency'
-  | 'external-on-sync'
-  | 'dead-end'
-  | 'gateway-bypass'
-  | 'hub'
-  | 'amplification'
-  | 'fan-out'
-  | 'sync-chain'
-  | 'async-buffer'
-  | 'message-distribution'
-  | 'competing-consumers'
-  | 'routed-split'
-  | 'retry-amplification'
-  | 'ambiguous-split'
-  | 'conditional'
-  | 'loop'
-  | 'scheduler'
-  | 'external'
-  | 'unsupported-hop'
-  | 'undirected'
-  | 'conflicting-semantics'
-  | 'dangling-junction'
-  | 'not-counted'
-  | 'no-concentration';
-
-export interface TrafficInsight {
-  /** Stable across identical inputs: `${kind}:${sorted subject ids}`. */
-  id: string;
-  kind: TrafficInsightKind;
-  /** Highest first: concentration, then structure, then what the diagram leaves unsaid. */
-  severity: 'notable' | 'info' | 'unknown';
-  basis: 'modeled' | 'structural';
-  /** The element(s) the insight is about, first one primary. */
-  nodeIds: string[];
-  edgeIds: string[];
-  /** One sentence, plain text, names in the diagram's own words. */
-  text: string;
-  /** A few words to write on the canvas beside `focus`, whiteboard-style — the finding at a glance. */
-  note?: string;
-  /** The shapes the note circles: what the finding is *about*, which isn't always `nodeIds[0]`. */
-  focus?: string[];
 }
 
 export type TrafficStatus =
@@ -223,10 +162,6 @@ export interface TrafficAnalysis {
    * leg of a Junction fan-in) takes the strongest of them.
    */
   edges: Map<string, { class: TrafficClass; participation: 'flow' | 'uncertain' | 'none'; paths: PathCount }>;
-  /** `tier !== 'none'` nodes, by group then rank, at most `MAX_HOTSPOTS`. */
-  hotspots: string[];
-  /** Ordered by severity, then kind order above, then id; at most `MAX_INSIGHTS`. */
-  insights: TrafficInsight[];
   entries: string[];
   /** Work was cut off by a bound (`TrafficLimits`); results cover what was reached. */
   truncated: boolean;
@@ -246,6 +181,4 @@ export interface TrafficLimits {
 }
 
 export const DEFAULT_TRAFFIC_LIMITS: TrafficLimits = { maxJunctionSteps: 200_000, maxInteractions: 20_000 };
-export const MAX_HOTSPOTS = 8;
-export const MAX_INSIGHTS = 12;
 export const MAX_LISTED = 50;

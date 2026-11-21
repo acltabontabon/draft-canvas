@@ -43,8 +43,7 @@ import { useThemeValue } from '../theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 import { layerBehind } from './insideMark';
 import { emphasisColorOf, emphasisOf } from './emphasis';
-import { pathsLabel } from './trafficLabels';
-import { trafficNodeOf, trafficNodeReading, trafficScenarioOf } from '../store/traffic';
+import { outageNodeReading } from '../store/outage';
 import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
 import { attachmentTabWidth, markerRail, RAIL_SIZE } from '../document/markerRail';
@@ -86,18 +85,11 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     const role = explainRoleFor(state, id);
     if (role === 'target' || role === 'both') return stepContextOf(state)?.transitionKey ?? null;
     if (role === 'source') return 'source';
-    // Where traffic concentrates is lit along the same contour a presented step's shapes are —
-    // never a box around it. Presentation and traffic never show together (`setMode`).
-    const traffic = trafficNodeReading(state, id);
-    return traffic === 'top' || traffic === 'raised' ? `traffic-${traffic}` : null;
+    return null;
   });
-  const trafficReading = useEditorStore((state) => trafficNodeReading(state, id));
-  // The analysis's own object for this node, identity-stable until the room changes — read only
-  // while the traffic reading is visible.
-  const trafficNode = useEditorStore((state) =>
-    state.traffic.active ? trafficNodeOf(state, id) : undefined,
-  );
-  const scenarioLabel = useEditorStore((state) => trafficScenarioOf(state)?.get(id));
+  // During an outage walk: what the outage does to this shape — a string out of the room's one
+  // memoized reading (`store/outage.ts`), so only the shapes whose state changes re-render.
+  const outageReading = useEditorStore((state) => outageNodeReading(state, id));
   const focused = useEditorStore((state) => isNodeFocused(state.focus, id));
   const lensMember = useEditorStore((state) => lensMemberFor(state, id));
   const theme = useThemeValue();
@@ -504,7 +496,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-explain-crossed={explainRole === 'crossed' ? 'true' : undefined}
       data-focused={focused ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
-      data-traffic={trafficReading ?? undefined}
+      data-outage={outageReading ?? undefined}
       data-editing={editing ? 'true' : undefined}
       data-attach-target={isAttachTarget ? 'true' : undefined}
       data-drag-capsule={capsule ? 'true' : undefined}
@@ -676,7 +668,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         <SvgSurface
           key={emphasisKey ?? undefined}
           className="dc-emphasis"
-          data-role={explainRole ?? (emphasisKey?.startsWith('traffic-') ? emphasisKey : undefined)}
+          data-role={explainRole ?? undefined}
           width={effectiveWidth}
           height={effectiveHeight}
           bleed={EMPHASIS_BLEED}
@@ -694,15 +686,6 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
 
       {sequenceLayout && liveNode && !capsule && (
         <SequenceOverlay node={liveNode} layout={sequenceLayout} readOnly={readOnly} selected={Boolean(selected)} preset={preset} />
-      )}
-
-      {/* Illustrative work per minute, in words as well as the halo — never a colour alone.
-          Chrome, like the halo: it never reaches an export. */}
-      {trafficNode && scenarioLabel && !capsule && (
-        <span className="dc-traffic-badge" data-tier={trafficNode.tier}>
-          <span className="dc-sr-only">Traffic: </span>
-          {scenarioLabel ?? pathsLabel(trafficNode.paths)}
-        </span>
       )}
 
       {!editing && !capsule && liveNode && nodeTechnologyIcon(liveNode) && (

@@ -20,6 +20,7 @@ import { categoryOf } from '../document/connectorSemantics';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlowStep, DraftNode } from '../document/types';
 import { AgentError } from './errors';
 import { reviewView, type ReviewFinding } from './review';
+import { analyzeTraffic, outageOf } from '../traffic';
 import { sequenceRead } from './sequences';
 import { groupKindOf, lineStyleOf, typeWordOf } from './vocabulary';
 import { routeGeometry } from './route';
@@ -44,6 +45,7 @@ export interface ReadArgs {
   focus?: { nodes?: unknown; group?: unknown; flow?: unknown };
   include?: unknown;
   cursor?: unknown;
+  outage?: { element?: unknown; allInstances?: unknown };
 }
 
 export function viewPathOf(file: DraftDocument, view: unknown): DepthPath {
@@ -246,6 +248,7 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
   const review = offsets.every((offset) => offset === 0)
     ? reviewView(view.nodes, view.edges, { level, nested: path.length > 0 }).filter((finding) => !scope || finding.ids.some((id) => scope.has(id)))
     : [];
+  const outage = offsets.every((offset) => offset === 0) ? outageRead(view, args.outage) : undefined;
   // Fitting a UTF-8 page may project it several times. Route each connector once for this snapshot.
   const geometryCache = new Map<string, ReturnType<typeof routeGeometry>>();
   const sizes = [READ_LIMITS.elementsPerPage, READ_LIMITS.relationshipsPerPage, READ_LIMITS.flows, 50];
@@ -253,6 +256,7 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
   for (;;) {
     const page = all.slice(offsets[0], offsets[0]! + sizes[0]!);
     const result = project(file, view, page, all, path, level, ownLevel, owner, includes, revision, diagramId, offsets, sizes, scope !== undefined, signature, args.focus, geometryCache, review);
+    if (outage) result.outage = outage;
     if (new TextEncoder().encode(JSON.stringify(result)).length <= READ_LIMITS.bytes) return result;
     if (sizes.every((size) => size <= 1)) {
       // Several individually bounded items can exceed the ceiling together. A page may exhaust
@@ -267,6 +271,32 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
     }
     for (let i = 0; i < sizes.length; i += 1) sizes[i] = Math.max(1, Math.floor(sizes[i]! / 2));
   }
+}
+
+/**
+ * "What if this goes down?" for one element of the view, as the editor's outage walk reads it
+ * (`traffic/outage.ts`): from the drawing alone, with no load or timing assumed. What the drawing
+ * leaves open comes back as `open` questions — facts for the agent to reason about and the person to
+ * decide, never a change to make unasked.
+ */
+function outageRead(view: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] }, input: ReadArgs['outage']): Record<string, unknown> | undefined {
+  if (input === undefined || input === null) return undefined;
+  if (typeof input !== 'object' || Array.isArray(input)) throw new AgentError('INVALID_INPUT', 'outage is {element, allInstances?}.');
+  const element = typeof input.element === 'string' ? input.element : '';
+  if (!view.nodes.some((node) => node.id === element)) {
+    throw new AgentError('INVALID_INPUT', 'outage.element is not an element or group of this view.', { hint: 'Read the view first and pass one of its element or group ids.' });
+  }
+  const outage = outageOf(analyzeTraffic({ nodes: view.nodes, edges: view.edges }), view.nodes, view.edges, { id: element, whole: input.allInstances === true });
+  if (!outage) return { element, readable: false, reason: 'Nothing that runs here depends on it or is reached through it, so the drawing says nothing about its outage.' };
+  return {
+    element,
+    basis: 'Read from the drawing alone: no load, timing or likelihood is assumed.',
+    ...(outage.instances ? { instances: outage.instances } : {}),
+    headline: outage.headline,
+    affected: [...outage.nodes].filter(([, state]) => state !== 'unaffected').map(([id, state]) => ({ id, state })),
+    unaffected: [...outage.nodes].filter(([, state]) => state === 'unaffected').map(([id]) => id),
+    notes: outage.notes.map((note) => ({ kind: note.tone, ids: note.focus, text: note.text, ...(note.ask ? { open: note.ask } : {}) })),
+  };
 }
 
 function findOwner(file: DraftDocument, path: DepthPath): DraftNode | undefined {
