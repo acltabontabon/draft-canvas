@@ -10,6 +10,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Fixed
 
+- **Joining to view says so** — A person let in with **Can view** was told “Edits you make are
+  shared live.” They are now told they can view the diagram; the editing message is kept for people
+  who can edit.
 - **A connector dragged from several shapes connects them all to a new shape** — Dragging from one
   of several selected shapes to empty canvas and choosing what to add connected only the dragged
   shape. Every selected shape is now connected, as when dropping on an existing shape, in one undo
