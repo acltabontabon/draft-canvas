@@ -77,6 +77,12 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   up moves from its old line to its new one instead of jumping. Reduced motion turns this off.
 - **Less small print when zoomed out** — Below about 55% zoom, captions, conditions and chips beside
   connectors step back; below about 28%, so do labels. Exports are unaffected.
+- **Smart Ink reads hurried boxes** — A box drawn in one quick stroke used to stay ink: the flick of
+  the pen before its first corner or past its last, a lean, or a few degrees off level was enough.
+  Those are boxes now, placed where the box is rather than where its tails reach. Diamonds,
+  triangles and a box with a line out of it still stay as drawn.
+- **No border round the canvas** — The coloured frame that appeared round the whole canvas after a
+  keyboard shortcut is gone. Selected shapes still show which ones the arrow keys will move.
 - **File format 29** — Held shapes and portals are new in the file. Older versions say they cannot
   open a file saved by this one rather than drop them.
 

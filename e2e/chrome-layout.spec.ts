@@ -64,28 +64,22 @@ test.describe('narrow windows', () => {
 });
 
 test.describe('keyboard and assistive technology', () => {
-  test('Tab onto the canvas shows where focus is, as an inset ring that moves nothing', async ({ page }) => {
+  test('Tab onto the canvas draws no border round it, and moves nothing', async ({ page }) => {
     await newCanvas(page, 'Canvas focus ring');
     const canvas = page.locator('.dc-canvas');
     // From the title field, so the last input was the keyboard and `:focus-visible` applies.
     await page.getByLabel('Diagram title').focus();
     await page.keyboard.press('Shift+Tab');
-    // Measured here, with the title field settled and just before the canvas takes focus: the ring is
-    // what must move nothing. Taken any earlier it caught the toolbar still settling by 0.015px on
-    // Firefox, which is not the ring's doing.
+    // Measured here, with the title field settled and just before the canvas takes focus. Taken any
+    // earlier it caught the toolbar still settling by 0.015px on Firefox, which is not focus's doing.
     const before = await canvas.boundingBox();
     await canvas.focus();
     await expect(canvas).toBeFocused();
-    // The ring keys on `:focus-visible`, and whether an engine treats scripted focus after a key press
-    // as keyboard focus is its own call; where it does not there is no ring to measure.
-    if (await canvas.evaluate((element) => element.matches(':focus-visible'))) {
-      await expect(canvas).toHaveCSS('outline-style', 'solid');
-      await expect(canvas).toHaveCSS('outline-width', '2px');
-      await expect(canvas).toHaveCSS('outline-offset', '-2px');
-    } else {
-      test.info().annotations.push({ type: 'note', description: 'This engine did not mark the script-focused canvas :focus-visible.' });
-    }
-    // Within half a pixel, not exactly: a ring that took room would move the box by its own width (2px).
+    // Keyboard focus used to draw an inset ring here. It held for as long as the last input was a
+    // key — and tools are keys — so it read as a border round the canvas, and is gone: neither that
+    // ring nor the browser's own.
+    await expect(canvas).toHaveCSS('outline-style', 'none');
+    // Within half a pixel, not exactly.
     const after = (await canvas.boundingBox())!;
     for (const key of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(after[key] - before![key]), key).toBeLessThan(0.5);
   });

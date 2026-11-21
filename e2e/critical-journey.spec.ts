@@ -437,7 +437,7 @@ test.describe('Draft Canvas', () => {
     expect(await contains('.dc-node[data-type="database"]'), 'the shape is under the cursor after the camera moved').toBe(true);
   });
 
-  test('the canvas is one Tab stop, with keyboard feedback on shapes and an inset ring when nothing is selected', async ({
+  test('the canvas is one Tab stop, with keyboard feedback on shapes and no border of its own', async ({
     page,
     browserName,
   }) => {
@@ -493,15 +493,10 @@ test.describe('Draft Canvas', () => {
     await expect(page.locator('.dc-node')).toHaveCount(0);
     const canvas = page.locator('.dc-canvas');
     await expect(canvas).toBeFocused();
-    // With nothing selected there is no shape to carry the focus signal, so the canvas carries it: an
-    // inset ring (a negative offset, so no box and no layout shift). It used to be removed because it
-    // lingered after a deletion, which left the one Tab stop with no visible indicator at all.
+    // With nothing selected the canvas draws no frame of its own: its ring held for as long as the
+    // last input was a key, so it sat round the whole drawing as a border and was removed.
     await expect(canvas).toHaveCSS('box-shadow', 'none');
-    // (Where the automation did not mark the Tab-focused canvas `:focus-visible`, there is no ring to check.)
-    if (keyboardFocused) {
-      await expect(canvas).toHaveCSS('outline-style', 'solid');
-      await expect(canvas).toHaveCSS('outline-offset', '-2px');
-    }
+    await expect(canvas).toHaveCSS('outline-style', 'none');
   });
 
   test('double-clicking empty canvas opens a type picker, and choosing a type creates it', async ({ page }) => {

@@ -168,6 +168,8 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
 - **Smart Ink** separates geometry from meaning. `ink/recognize.ts` scores a drawing as a
   rectangle, ellipse, cylinder, tube, stick figure, line or arrow in screen pixels; `ink/interpret.ts`
   reads that against the canvas (containment, endpoints) and offers only existing shape kinds.
+  A one-stroke outline is read as the loop inside it, without overshoot tails, and a box against
+  its own four corners as well as its extent, so a leaning one still reads.
   Strokes are kept as ink first, so a conversion is one undo step that undo reverses to them; a
   later choice amends that step (`HistoryEntry.amendKey`). Recognition loads on first use.
 - **View levels** change how rooms are shown, not the tree.

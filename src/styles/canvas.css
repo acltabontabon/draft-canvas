@@ -41,14 +41,13 @@
   will-change: auto;
 }
 
-/* The canvas is the one Tab stop for the drawing, so keyboard focus on it has to be visible: with
- * `outline: none` there was no sign of where Tab had landed. An inset ring — a negative offset, so it
- * never moves the layout — and only for keyboard modality (`:focus-visible`), so a click that focuses
- * the canvas draws nothing. (It once lingered after deleting shapes with the mouse; that was the
- * pointer-focus case, which `:focus-visible` no longer matches.) */
+/* The canvas draws no frame of its own when it has focus. It once did — an inset ring in the
+ * selection colour, for keyboard focus — but `:focus-visible` holds for as long as the last input was
+ * a key, and nearly every tool here is one key (V, P, S, D, Q), so the ring sat round the whole
+ * drawing through ordinary mouse and pen work and read as a border on the canvas. Keyboard focus
+ * still shows where it acts: the selected shapes' rings below. */
 .dc-canvas:focus-visible {
-  outline: 2px solid var(--dc-selection);
-  outline-offset: -2px;
+  outline: none;
 }
 
 /* ------------------------------------------------------- 5.1 background -- */
