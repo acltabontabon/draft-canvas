@@ -507,6 +507,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     if (type === 'text' && candidate.annotation === true) {
       node.annotation = true;
     }
+    if (candidate.held === true) node.held = true;
     if (type === 'text') {
       const textRole = oneOfOptional<TextRole>(candidate.textRole, TEXT_ROLES);
       if (textRole !== undefined) node.textRole = textRole;
@@ -658,6 +659,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     if (condition) edge.condition = condition;
     const cadence = text(candidate.cadence, LIMITS.maxCadenceLength)?.trim();
     if (cadence) edge.cadence = cadence;
+    if (candidate.portal === true) edge.portal = true;
 
     const response = text(candidate.response, LIMITS.maxResponseLength)?.trim();
     if (response) edge.response = response;

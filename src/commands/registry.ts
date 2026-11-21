@@ -744,6 +744,32 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       },
     });
   }
+  // Held shapes are the ones Arrange and Tidy up leave alone. Offered by what the selection is:
+  // hold what is free, let go what is held, both when it is mixed.
+  if (!ctx.ui.readOnly && ctx.editor.selection.nodes.length > 0) {
+    const chosen = new Set(ctx.editor.selection.nodes);
+    const picked = ctx.editor.document.nodes.filter((node) => chosen.has(node.id));
+    if (picked.some((node) => !node.held)) {
+      commands.push({
+        id: 'hold-in-place',
+        title: 'Hold in place',
+        group: 'selection',
+        keywords: ['pin', 'lock', 'fix', 'keep', 'anchor', 'stay', 'freeze', 'arrange', 'layout'],
+        hint: 'Arrange and Tidy up leave it where you put it',
+        run: (inner) => void inner.editor.holdSelection(true),
+      });
+    }
+    if (picked.some((node) => node.held)) {
+      commands.push({
+        id: 'let-go',
+        title: 'Let go',
+        group: 'selection',
+        keywords: ['unpin', 'unlock', 'release', 'free', 'unhold', 'arrange', 'layout'],
+        hint: 'Arrange and Tidy up may move it again',
+        run: (inner) => void inner.editor.holdSelection(false),
+      });
+    }
+  }
   // Room for one more shape in the middle of a finished diagram, without dragging half of it over
   // by hand: only worth offering once there is something to push.
   if (!ctx.ui.readOnly && ctx.editor.document.nodes.length > 1) {

@@ -150,6 +150,8 @@ export interface TidyPreview {
   partial?: boolean;
   /** How many sketches the room holds: they stay where they are, which the bar says. */
   sketches?: number;
+  /** Shapes held in place that the cleanup left alone. */
+  held?: number;
 }
 
 /** Tidy up found nothing to change. */
@@ -196,6 +198,8 @@ export interface ArrangePreview {
   alternativeSkipped?: boolean;
   /** How many sketches the room holds: they stay where they are, which the bar says. */
   sketches?: number;
+  /** Shapes held in place that the arrangement was worked out around: the bar says they stay. */
+  held?: number;
   /** Places two connectors cross, now and in each arrangement offered: the bar's "Crossings 12 → 3". */
   crossings?: { before: number; after: Partial<Record<ArrangeDirection, number>> };
   /** The flow this arrangement lays out in one line, when one was chosen. */

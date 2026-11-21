@@ -512,6 +512,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
       data-traced={traced ? 'true' : undefined}
+      data-held={node.held ? 'true' : undefined}
       data-settle={settling ? 'true' : undefined}
       data-arriving={arriving && !settling ? 'true' : undefined}
       data-changed={changed ? 'true' : undefined}

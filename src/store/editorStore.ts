@@ -144,6 +144,7 @@ import { plainShortcut } from '../lib/platform';
 import { technologyKindPatch } from '../document/technologyKind';
 import { lineageOf } from '../document/dataFlow';
 import { makeRoom as makeRoomOp, type RoomPush } from '../document/makeRoom';
+import { fixedIds } from '../document/held';
 import { replicasField, splitReplicaCount } from '../document/replicas';
 import { CONVERTIBLE_TYPE_NAMES, convertNodeType, isConvertibleType, type ConvertibleType } from '../document/convert';
 import { bridgeProblems, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
@@ -709,6 +710,9 @@ export interface EditorStore {
    *  what is visibly inside. One write, because every write re-derives the whole diagram's routing
    *  and crossings, and doing that twice per drop was the largest part of its cost. */
   commitMove: (positions: Map<string, { x: number; y: number }>, movedIds: Iterable<string>) => void;
+  /** Holds the selected shapes in place (`DraftNode.held`), or lets them go: Arrange and Tidy up
+   *  leave a held shape where it is. One undo step; `false` when nothing changed. */
+  holdSelection: (held: boolean) => boolean;
   /** One frame of the Make room drag: `base` (the room as the drag found it) with everything past
    *  the line moved by `push.delta`. Inside the drag's interaction, so the whole drag is one step. */
   pushRoom: (base: DraftDocument, push: RoomPush) => void;
@@ -2592,6 +2596,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       scoped: Boolean(scope),
       partial: result.plan.partial,
       sketches: inkOf(current.document).length,
+      ...(result.plan.held ? { held: result.plan.held } : {}),
     };
   },
 
@@ -2634,6 +2639,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       alternativeSkipped: plan.alternativeSkipped,
       sketches: inkOf(current.document).length,
       crossings: plan.crossings,
+      ...(plan.held ? { held: plan.held } : {}),
       ...(plan.followed ? { followed: plan.followed } : {}),
     };
   },
@@ -2812,6 +2818,24 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   commitPositions(positions) {
     get().apply('Move', (doc) => moveNodes(doc, positions));
+  },
+
+  holdSelection(held) {
+    const { selection, apply } = get();
+    const ids = new Set(selection.nodes);
+    if (ids.size === 0) return false;
+    let changed = false;
+    apply(held ? 'Hold in place' : 'Let go', (doc) => {
+      const nodes = doc.nodes.map((node) => {
+        if (!ids.has(node.id) || Boolean(node.held) === held) return node;
+        changed = true;
+        if (held) return { ...node, held: true };
+        const { held: _held, ...free } = node;
+        return free;
+      });
+      return changed ? { ...doc, nodes } : doc;
+    });
+    return changed;
   },
 
   pushRoom(base, push) {
@@ -3100,9 +3124,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   straighten() {
     if (interaction) return false;
     const { selection, apply } = get();
-    const movable = selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
+    const chosen = selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
     let moved = false;
     apply('Straighten', (doc) => {
+      // A held shape is never nudged, selected or not.
+      const fixed = fixedIds(doc.nodes);
+      const movable = fixed.size > 0 ? new Set([...(chosen ?? doc.nodes.map((node) => node.id))].filter((id) => !fixed.has(id))) : chosen;
       const next = straightenConnectors(doc, movable);
       moved = next !== doc;
       return next;

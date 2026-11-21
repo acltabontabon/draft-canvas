@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 28;
+export const CURRENT_VERSION = 29;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -484,6 +484,13 @@ export interface DraftNode {
   inside?: DraftInside;
   /** `sequence` nodes only — what the sequence says. See `DraftSequence`. */
   sequence?: DraftSequence;
+  /**
+   * Held in place: Arrange and Tidy up leave this shape exactly where the person put it and lay
+   * everything else out around it. A held boundary holds what is inside it too. Absent means free.
+   * It says nothing about dragging — a held shape still moves under the hand — and is never drawn
+   * in an export: it is a note to the layout, not part of the diagram.
+   */
+  held?: boolean;
 }
 
 /**
@@ -784,6 +791,14 @@ export interface DraftEdge {
    * bend the person dragged, or a path they drew by hand between two shapes (Smart Ink).
    */
   waypoints?: DraftPoint[];
+  /**
+   * Drawn as a portal: a short labelled stub leaving the source ("→ Billing") and one arriving at
+   * the target ("← Checkout"), with no line between them. For a connector that would otherwise
+   * cross the whole diagram. Everything else about it — its meaning, its place in flows, what
+   * Traffic and agents read — is exactly a connector's; only how it is drawn changes. Absent means
+   * drawn in full. Never set by inference or layout.
+   */
+  portal?: boolean;
   /**
    * Whether `semantic`/`kind` were set by `connectorSemantics.ts`'s inference
    * or chosen by the user. Absent means "never explicitly chosen" — the same
