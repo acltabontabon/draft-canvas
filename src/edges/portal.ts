@@ -1,6 +1,6 @@
 import type { DraftEdge, DraftNode } from '../document/types';
 import type { PortalSlot } from './portalPlan';
-import type { RoutedEdge } from './routing';
+import { anchorPoint, sideSpan, type Rect, type RoutedEdge } from './routing';
 
 /**
  * A connector drawn as a portal (`DraftEdge.portal`): a short stub leaving its source and one arriving
@@ -64,20 +64,15 @@ export function portalName(node: Pick<DraftNode, 'text'> | undefined): string {
   return name.length > NAME_MAX ? `${name.slice(0, NAME_MAX - 1).trimEnd()}…` : name;
 }
 
-/** Where a slot (`portalPlan.ts`) is on a shape's outline: the point a stub leaves from or arrives at. */
-export function slotPoint(rect: { x: number; y: number; width: number; height: number }, slot: PortalSlot): RoutedEdge['source'] {
-  const cx = rect.x + rect.width / 2;
-  const cy = rect.y + rect.height / 2;
-  switch (slot.side) {
-    case 'top':
-      return { x: cx + slot.shift, y: rect.y, side: 'top' };
-    case 'bottom':
-      return { x: cx + slot.shift, y: rect.y + rect.height, side: 'bottom' };
-    case 'left':
-      return { x: rect.x, y: cy + slot.shift, side: 'left' };
-    case 'right':
-      return { x: rect.x + rect.width, y: cy + slot.shift, side: 'right' };
-  }
+/**
+ * Where a slot (`portalPlan.ts`) is on a shape's outline: the point a stub leaves from or arrives at.
+ * Placed by the router's own rule (`anchorPoint`), so a stub meets a Data Store's or a Queue's drawn
+ * glyph exactly where a line would, not the edge of the wider box its name makes.
+ */
+export function slotPoint(rect: Rect, slot: PortalSlot): RoutedEdge['source'] {
+  const span = sideSpan(rect, slot.side).length;
+  const offset = span > 0 ? Math.max(0.08, Math.min(0.92, 0.5 + slot.shift / span)) : 0.5;
+  return { ...anchorPoint(rect, slot.side, offset), side: slot.side };
 }
 
 export function portalOf(

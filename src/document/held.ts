@@ -2,8 +2,8 @@ import type { DraftNode } from './types';
 
 /**
  * Shapes held in place (`DraftNode.held`), as the layout reads them. Holding a shape fixes more than
- * the shape: a held boundary keeps everything inside it where it is, and a boundary with a held shape
- * inside cannot move out from under it. Everything else is free to be laid out around them.
+ * the shape: a held boundary keeps everything inside it where it is, and a held shape inside a
+ * boundary keeps that whole boundary as it is. Everything else is free to be laid out around them.
  */
 
 /** Every shape Arrange and Tidy up must leave exactly where it is. Empty when nothing is held. */
@@ -11,25 +11,24 @@ export function fixedIds(nodes: readonly DraftNode[]): Set<string> {
   const fixed = new Set<string>();
   if (!nodes.some((node) => node.held)) return fixed;
   const byId = new Map(nodes.map((node) => [node.id, node]));
-  for (const node of nodes) {
-    // Held itself, or inside a held boundary at any depth.
+  /** The outermost boundary a shape sits in, or the shape itself when it is in none. */
+  const rootOf = (node: DraftNode): DraftNode => {
     const seen = new Set<string>();
-    for (let at: DraftNode | undefined = node; at && !seen.has(at.id); at = at.parentId ? byId.get(at.parentId) : undefined) {
+    let at = node;
+    while (at.parentId && !seen.has(at.id)) {
       seen.add(at.id);
-      if (at.held) {
-        fixed.add(node.id);
-        break;
-      }
+      const parent = byId.get(at.parentId);
+      if (!parent) break;
+      at = parent;
     }
-    // The boundaries around a held shape stay under it.
-    if (node.held) {
-      const up = new Set<string>([node.id]);
-      for (let at = node.parentId ? byId.get(node.parentId) : undefined; at && !up.has(at.id); at = at.parentId ? byId.get(at.parentId) : undefined) {
-        up.add(at.id);
-        fixed.add(at.id);
-      }
-    }
-  }
+    return at;
+  };
+  // A held shape inside a boundary holds the whole of its outermost boundary: a boundary that had to
+  // stay under one shape while the rest of what it holds was laid out elsewhere would stretch across
+  // the diagram to keep them. A held boundary holds what is inside it for the same reason.
+  const roots = new Set<string>();
+  for (const node of nodes) if (node.held) roots.add(rootOf(node).id);
+  for (const node of nodes) if (roots.has(rootOf(node).id)) fixed.add(node.id);
   return fixed;
 }
 

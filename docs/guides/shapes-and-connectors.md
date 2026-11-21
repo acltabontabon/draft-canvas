@@ -100,9 +100,11 @@ out, and the bar says so. The bar also counts where connectors cross, now and af
 When the diagram has flows, **Follow** in the bar (or **Arrange around a flow…** in `⌘K`) lays one
 flow out in a straight line and arranges the rest around it.
 
+![The Arrange preview following a flow: its steps in one line, the rest around it.](../media/guides/arrange-follow-flow.png)
+
 **Hold in place** in `⌘K` pins the selected shapes: a small pin appears at their corner, and Arrange
 and Tidy up leave them exactly where they are and lay everything else out around them. A held
-boundary holds what is inside it. **Let go** frees them. Dragging a held shape still moves it.
+boundary holds what is inside it, and holding a shape inside a boundary holds that whole boundary. **Let go** frees them. Dragging a held shape still moves it.
 
 Boundaries keep what they hold and notes stay beside their shapes. A long name gets a wider box, and
 gaps are only as long as their captions need. **Apply** is one undo step and frames the result;
@@ -240,6 +242,8 @@ A connector that would cross the whole diagram can be drawn as a **portal**: sel
 ring and naming the shape at the other end ("→ Billing", "Checkout →"). Click the words to move the
 view there. The connector is otherwise unchanged: flows, Traffic and agents read it as before, and
 **Draw as line** draws it in full again.
+
+![A portal between a Data Store and the gateway, a held shape with its pin, and the legend.](../media/guides/portal-legend-held.png)
 
 A portal's own label rides with the stub that leaves its source. Its caption, condition, attachments
 and open-point marker are not shown while it is a portal. A connector with a reply line cannot be

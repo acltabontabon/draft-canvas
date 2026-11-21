@@ -14,14 +14,14 @@ function tangle(held: string[] = []) {
 }
 
 describe('shapes held in place', () => {
-  it('fix themselves, what a held boundary holds, and the boundaries around a held shape', () => {
+  it('fix themselves, what a held boundary holds, and the whole boundary around a held shape', () => {
     const group = { ...createNode({ id: 'g', type: 'group', x: 0, y: 0, width: 400, height: 300, text: 'Zone' }), held: true };
     const inside = createNode({ id: 'in', type: 'service', x: 40, y: 60, text: 'In', parentId: 'g' });
     const outer = createNode({ id: 'o', type: 'group', x: 600, y: 0, width: 400, height: 300, text: 'Other' });
     const pinned = { ...createNode({ id: 'p', type: 'service', x: 640, y: 60, text: 'P', parentId: 'o' }), held: true };
     const sibling = createNode({ id: 's', type: 'service', x: 800, y: 60, text: 'S', parentId: 'o' });
     const nodes = [group, inside, outer, pinned, sibling];
-    expect([...fixedIds(nodes)].sort()).toEqual(['g', 'in', 'o', 'p']);
+    expect([...fixedIds(nodes)].sort()).toEqual(['g', 'in', 'o', 'p', 's']);
     expect(heldCount(nodes)).toBe(2);
     expect(fixedIds([inside, sibling]).size).toBe(0);
   });
