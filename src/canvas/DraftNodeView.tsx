@@ -116,6 +116,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const isReconnectTarget = useUiStore((state) => state.reconnectHoverTarget === id);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
+  const traced = useUiStore((state) => state.traceIds?.has(id) ?? false);
   const settling = useSettle(id);
   // Just placed, pasted, undone back or added by someone else: settles in once. Changed in place by
   // an undo or redo: a brief pulse says what the step touched. See `useChangeFeedback.ts`.
@@ -510,6 +511,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-reconnect-target={isReconnectTarget ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
+      data-traced={traced ? 'true' : undefined}
       data-settle={settling ? 'true' : undefined}
       data-arriving={arriving && !settling ? 'true' : undefined}
       data-changed={changed ? 'true' : undefined}

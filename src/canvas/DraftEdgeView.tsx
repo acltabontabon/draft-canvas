@@ -362,6 +362,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const compensating = Boolean(edge?.compensationFor);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
+  const traced = useUiStore((state) => state.traceIds?.has(id) ?? false);
   // Just connected (or undone back, or added by someone else): drawn on once, source to target.
   // An undo or redo that changed this connector in place pulses it instead. See `useChangeFeedback.ts`.
   const arriving = useUiStore((state) => state.arrivingIds.has(id));
@@ -786,6 +787,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       data-lens-member={lensMember ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
+      data-traced={traced ? 'true' : undefined}
       data-arriving={arriving ? 'true' : undefined}
       data-changed={changed ? 'true' : undefined}
       data-lens-dimmed={lensDimmed ? 'true' : undefined}
@@ -1060,7 +1062,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       <EdgeLabels>
         {/* `display: contents` — no box of its own, so every chip below still positions against the
             label layer. It only tells `edgePick.ts` whose chip the pointer is on. */}
-        <div className="dc-edge-overlay" data-edge-overlay={edge.id}>
+        <div className="dc-edge-overlay" data-edge-overlay={edge.id} data-traced={traced ? 'true' : undefined}>
           {hovering && edge.compensationFor && (
             <RecoveryHoverTooltip parentId={edge.compensationFor} x={labelX} y={labelY} side={route.labelSide} />
           )}

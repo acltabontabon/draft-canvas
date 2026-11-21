@@ -81,6 +81,7 @@ import {
 } from './projection';
 import { sameGuides, type Guide } from './snapping';
 import { NO_DRAG_SNAP, NO_GUIDES, snapChanges, snapResizeChanges, type DragLink, type DragSnapContext, type NodeLookup } from './dragSnap';
+import { useHoverTrace } from './useHoverTrace';
 import { zoomBand } from './zoomBand';
 import { snapBypassed, trackSnapBypass } from './snapBypass';
 import { useIdSet } from './useIdSet';
@@ -428,6 +429,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     return playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)?.accent;
   });
   const focusActive = useEditorStore((state) => state.focus.active);
+  const traceActive = useUiStore((state) => state.traceIds !== null);
   // A flow merely selected (not presented) acts as a gentler lens — see
   // `docs/reference/architecture.md`'s "Flows and presentation". `lensFlow` owns the rule for when that
   // lens is on (never during Presentation/Focus, never for an empty flow).
@@ -570,6 +572,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   useInkInput(paneRef, drawing);
 
   useZoomVariable();
+  useHoverTrace(mode === 'edit');
   useChangeFeedback();
 
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -2248,6 +2251,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       data-explain={explainActive ? 'on' : undefined}
       data-explain-stage={explainOverview ? 'overview' : undefined}
       data-focus={focusActive ? 'on' : undefined}
+      data-trace={traceActive ? 'on' : undefined}
       data-lens={lensActive ? 'on' : undefined}
       data-traffic={trafficActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}

@@ -635,6 +635,12 @@ export interface UiStore {
    */
   pointedIds: ReadonlySet<string> | null;
   /**
+   * The shapes and connectors lit while Shift rests the pointer on a shape: everything its data comes
+   * from and everything it feeds (`canvas/useHoverTrace.ts`). Transient: never saved, undone or
+   * exported. A set, so each node's and edge's selector is one lookup, and only members re-render.
+   */
+  traceIds: ReadonlySet<string> | null;
+  /**
    * The id of a document that has just arrived and still needs its opening viewport computed —
    * set once as it arrives (see `arriveWith` in `useDocumentSession.ts`) for a genuine new open,
    * never for reopening the canvas already on screen or for a freshly created one (which already
@@ -833,6 +839,7 @@ export interface UiStore {
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
   setPointedIds: (ids: ReadonlySet<string> | null) => void;
+  setTraceIds: (ids: ReadonlySet<string> | null) => void;
   /** Marks `documentId` as just arrived and awaiting its opening viewport fit. */
   requestOpenFit: (documentId: string) => void;
   /** Consumes the pending fit for `documentId` — a no-op if a newer request has already replaced
@@ -1013,6 +1020,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   exportSelectionRequested: false,
   jumpFlashId: null,
   pointedIds: null,
+  traceIds: null,
   openFitDocumentId: null,
   continuation: null,
   agentPreview: null,
@@ -1219,6 +1227,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setJumpFlashId: (jumpFlashId) =>
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
   setPointedIds: (pointedIds) => set((state) => (state.pointedIds === pointedIds ? state : { pointedIds })),
+  setTraceIds: (traceIds) => set((state) => (state.traceIds === traceIds ? state : { traceIds })),
   requestOpenFit: (documentId) => set({ openFitDocumentId: documentId }),
   clearOpenFit: (documentId) =>
     set((state) => (state.openFitDocumentId === documentId ? { openFitDocumentId: null } : state)),
