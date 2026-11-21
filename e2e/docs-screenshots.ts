@@ -33,6 +33,7 @@ import { storeDocument } from './fixtures/outage';
  *   npx tsx e2e/docs-screenshots.ts --outage-only
  *   npx tsx e2e/docs-screenshots.ts --sequence-only
  *   npx tsx e2e/docs-screenshots.ts --walk-only
+ *   npx tsx e2e/docs-screenshots.ts --layout-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -591,6 +592,64 @@ async function walkScreenshots(page: Page) {
   await page.keyboard.press('Escape');
 }
 
+/** A palette command that asks for one more choice before it runs. */
+async function paletteChoice(page: Page, query: string, choice: string) {
+  await page.keyboard.press('Control+k');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  const dialog = page.getByRole('dialog');
+  await page.keyboard.type(query);
+  // Enter takes the first row, so wait for the rows the words narrowed it to.
+  await expect(dialog.getByRole('option').first()).toContainText(query);
+  await page.keyboard.press('Enter');
+  // The second list replaces the first in the same field, under its own prompt.
+  await expect(page.getByRole('combobox', { name: 'Search commands' })).toHaveCount(0);
+  await page.keyboard.type(choice);
+  await expect(dialog.getByRole('option').first()).toContainText(choice);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toBeHidden();
+}
+
+/**
+ * The layout tools on a starter with flows in it: Arrange following one of them, then a portal, a
+ * held shape and the legend together.
+ */
+async function layoutScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1200, height: 700 });
+  await openStarter(page, 'Microservices');
+  const shape = (name: string) => page.locator('.dc-node', { hasText: name }).last();
+  // A starter arrives selected; the commands below are offered by what is selected.
+  await page.keyboard.press('Escape');
+
+  await paletteChoice(page, 'Arrange around', 'Handle a request');
+  await expect(page.getByRole('region', { name: 'Arrange preview' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Arrange preview' }).getByRole('button', { name: 'Apply' })).toBeEnabled();
+  await shot(page, 'arrange-follow-flow');
+  await page.getByRole('region', { name: 'Arrange preview' }).getByRole('button', { name: 'Cancel' }).click();
+
+  await expect(page.getByRole('region', { name: 'Arrange preview' })).toBeHidden();
+  // Arrange leaves the shapes it would have moved selected; a click on one of many keeps them all.
+  await page.mouse.click(60, 300);
+  await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
+
+  // A connector right across the diagram, drawn as a portal instead.
+  await shape('Capability C Store').click();
+  await expect(page.locator('.react-flow__node.selected')).toHaveCount(1);
+  await paletteChoice(page, 'Connect to', 'API Gateway');
+  await palette(page, 'Draw as portal');
+  await page.keyboard.press('Escape');
+  await shape('Capability A Service').click();
+  await palette(page, 'Hold in place');
+  await page.keyboard.press('Escape');
+  await palette(page, 'Show legend');
+  await palette(page, 'Fit to view');
+  // Empty canvas: nothing selected, so the pin and the stubs are what the picture shows.
+  await page.mouse.click(1080, 180);
+  // The palette hands keyboard focus back to the canvas, which rings it; the picture is of the
+  // diagram at rest.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await shot(page, 'portal-legend-held');
+}
+
 async function readerScreenshots(page: Page) {
   await page.setViewportSize({ width: VIEWPORT.width, height: 760 });
   for (const guided of [true, false]) {
@@ -657,6 +716,11 @@ async function main() {
 
     if (process.argv.includes('--walk-only')) {
       await walkScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--layout-only')) {
+      await layoutScreenshots(page);
       return;
     }
 
