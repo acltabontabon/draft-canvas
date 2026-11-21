@@ -10,7 +10,7 @@ import type { DraftEdge, DraftNode, DraftPoint } from '../document/types';
 import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
 import { edgeTierInPlayback, findFlow, lensEdgeTier, stepIndexOf, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
-import { markerRef } from '../render/svg/markers';
+import { markerRef, originRef } from '../render/svg/markers';
 import {
   rectOf,
   snappedAnchorForDrop,
@@ -140,6 +140,33 @@ function labelChipTransform(side: Side, x: number, y: number): string {
     case 'bottom':
       return `translate(-50%, 0) translate(${x}px, ${y + LABEL_LINE_GAP - LABEL_PADDING_Y}px)`;
   }
+}
+
+/**
+ * A settled route that differs from the one this line last had eases into place (`routeMorph.ts`).
+ * Not while `still`: a gesture's frames are already continuous, Sketch's arrowhead is its own path
+ * and would be left behind, and a line drawing itself in for the first time has nothing to leave.
+ *
+ * The route it last had is kept by id, outside React: React Flow mounts a connector afresh when its
+ * shapes move, and a ref would forget the very line it is leaving. Its own component, drawing
+ * nothing, so the effect is declared unconditionally whatever the connector's render returns early on.
+ */
+function RouteMorph({ id, line, styledPath, still }: { id: string; line: React.RefObject<SVGPathElement | null>; styledPath: string; still: boolean }) {
+  useLayoutEffect(() => {
+    const element = line.current;
+    const was = LAST_DRAWN.get(id);
+    LAST_DRAWN.set(id, styledPath);
+    if (!element) return;
+    if (still) settleRoute(element);
+    else if (was !== undefined && was !== styledPath) morphRoute(element, was, styledPath);
+  }, [id, line, styledPath, still]);
+  useEffect(() => {
+    const element = line.current;
+    return () => {
+      if (element) settleRoute(element);
+    };
+  }, [line]);
+  return null;
 }
 
 /**
@@ -393,6 +420,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
   const traced = useUiStore((state) => state.traceIds?.has(id) ?? false);
+  // The drawn line, for `RouteMorph` below. Declared here, before this component's early returns.
+  const lineRef = useRef<SVGPathElement>(null);
   // Stable per plan: the plan interns nothing, but its slot objects live as long as it does, and it
   // is rebuilt only when the document's shapes or connectors change.
   const portalSlots = useEditorStore((state) => (edge?.portal ? portalPlan(state.document.nodes, state.document.edges).slotsFor(id) : undefined));
@@ -756,27 +785,6 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )
     : null;
 
-  // A settled route that differs from the one this line last had eases into place (`routeMorph.ts`).
-  // Not a gesture's frames, which are already continuous; not Sketch, whose arrowhead is its own
-  // path and would be left behind; not a line drawing itself in for the first time.
-  // The route it last had is kept by id, outside the component: React Flow mounts a connector afresh
-  // when its shapes move, and a ref would forget the very line it is leaving.
-  const lineRef = useRef<SVGPathElement>(null);
-  useLayoutEffect(() => {
-    const line = lineRef.current;
-    const was = LAST_DRAWN.get(id);
-    LAST_DRAWN.set(id, styledPath);
-    if (!line) return;
-    if (transient || usesHandDrawnArrow || arriving) settleRoute(line);
-    else if (was !== undefined && was !== styledPath) morphRoute(line, was, styledPath);
-  }, [id, styledPath, transient, usesHandDrawnArrow, arriving]);
-  useEffect(() => {
-    const line = lineRef.current;
-    return () => {
-      if (line) settleRoute(line);
-    };
-  }, []);
-
   // The reply half of a request/response connector — reuses `routeBetween` a second time with
   // source/target (and their anchors) swapped, so the path naturally runs target → source, and a
   // small addition to this edge's own lane slot, so it reads as a quieter sibling of the request
@@ -874,6 +882,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       {hoverShown && (
         <path className="dc-edge-hover" d={drawnPath} fill="none" pointerEvents="none" stroke={theme.selection} strokeLinecap="round" />
       )}
+      <RouteMorph id={id} line={lineRef} styledPath={styledPath} still={transient || usesHandDrawnArrow || arriving} />
       <path
         ref={lineRef}
         className="react-flow__edge-path dc-edge-line"
@@ -881,6 +890,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         fill="none"
         pointerEvents="none"
         markerEnd={edge.directed && !usesHandDrawnArrow ? markerRef(strokeColor, markerVariantForEdge(edge)) : undefined}
+        // Where a directed line leaves its shape: the origin dot. Mirrors `edges/describe.ts`.
+        markerStart={edge.directed && !usesHandDrawnArrow ? originRef(strokeColor) : undefined}
         style={{
           stroke: strokeColor,
           strokeWidth: Math.max(CONNECTOR_STYLE.lineWidth,

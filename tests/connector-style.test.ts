@@ -3,14 +3,18 @@ import { markerDefs } from '../src/render/svg/markers';
 import { PERSONALITY_PROFILES } from '../src/render/roughness/presets';
 
 describe('arrowhead marker viewports', () => {
-  it('contains the entire head, including jitter and the open head’s round stroke', () => {
+  it('contains the entire head and origin dot, including jitter and the open head’s round stroke', () => {
     for (const profile of Object.values(PERSONALITY_PROFILES)) {
       for (const color of ['#7c8492', '#6d7885', '#357a72']) {
         for (const marker of markerDefs([color], profile.arrowJitter)) {
           const [x, y, width, height] = String(marker.attrs!.viewBox).split(' ').map(Number) as [number, number, number, number];
           const path = marker.children![0]!;
           const stroke = Number(path.attrs!['stroke-width'] ?? 0) / 2;
-          const points = String(path.attrs!.d).match(/-?\d*\.?\d+(?:e-?\d+)?/gi)!.map(Number);
+          // The origin dot is a circle: its extent is its centre out to its radius, each way.
+          const dot = path.tag === 'circle' ? { cx: Number(path.attrs!.cx), cy: Number(path.attrs!.cy), r: Number(path.attrs!.r) } : null;
+          const points = dot
+            ? [dot.cx - dot.r, dot.cy - dot.r, dot.cx + dot.r, dot.cy + dot.r]
+            : String(path.attrs!.d).match(/-?\d*\.?\d+(?:e-?\d+)?/gi)!.map(Number);
           for (let i = 0; i < points.length; i += 2) {
             expect(points[i]! - stroke).toBeGreaterThanOrEqual(x);
             expect(points[i]! + stroke).toBeLessThanOrEqual(x + width);

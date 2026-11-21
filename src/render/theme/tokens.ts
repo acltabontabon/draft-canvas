@@ -113,7 +113,7 @@ export const LIGHT: Theme = {
   edgeLabelBg: '#ffffff',
   codeBg: '#f7f8fa',
   codeBorder: '#e2e6eb',
-  shadow: 'rgba(19, 24, 32, 0.10)',
+  shadow: 'rgba(19, 24, 32, 0.13)',
   danger: '#b0334d',
   accents: {
     // Same reasoning as DARK.neutral, tuned independently rather than inverted:

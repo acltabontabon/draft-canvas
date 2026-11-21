@@ -68,14 +68,14 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Port
   const byId = new Map(nodes.map((node) => [node.id, node]));
   // The sides real lines use, by shape.
   const busy = new Map<string, Set<Side>>();
-  const use = (nodeId: string, side: Side) => (busy.get(nodeId) ?? busy.set(nodeId, new Set()).get(nodeId)!).add(side);
+  const occupy = (nodeId: string, side: Side) => (busy.get(nodeId) ?? busy.set(nodeId, new Set()).get(nodeId)!).add(side);
   for (const edge of edges) {
     if (edge.portal) continue;
     const source = byId.get(edge.source);
     const target = byId.get(edge.target);
     if (!source || !target) continue;
-    use(source.id, edge.sourceAnchor?.side ?? facing(source, target));
-    use(target.id, edge.targetAnchor?.side ?? facing(target, source));
+    occupy(source.id, edge.sourceAnchor?.side ?? facing(source, target));
+    occupy(target.id, edge.targetAnchor?.side ?? facing(target, source));
   }
   // Portals already seated on each side of each shape, so the next one sits a step along.
   const seated = new Map<string, number>();

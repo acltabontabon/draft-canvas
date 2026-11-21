@@ -4,7 +4,7 @@ import { MARKER_SIZE, describeMarker, type OccupiedRect } from '../openPoints/ma
 import type { Shape, TextAlign } from '../render/displayList';
 import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
-import { markerRef } from '../render/svg/markers';
+import { markerRef, originRef } from '../render/svg/markers';
 import type { Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { baselineOf, layoutText, type TextLayout } from '../render/text/layout';
@@ -264,7 +264,7 @@ function describePortal(edge: DraftEdge, nodes: Map<string, DraftNode>, route: R
     stroke: { color, width: CONNECTOR_STYLE.openArrowWidth },
   });
   const line: Shape[] = [
-    { t: 'path', d: portal.out.line, fill: 'none', stroke },
+    { t: 'path', d: portal.out.line, fill: 'none', stroke, markerStart: edge.directed ? originRef(color) : undefined },
     { t: 'path', d: portal.into.line, fill: 'none', stroke, markerEnd: edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined },
     ring(portal.out.ring),
     ring(portal.into.ring),
@@ -350,6 +350,8 @@ export function describeEdge(
       fill: 'none',
       stroke: strokeBase,
       markerEnd,
+      // Where a directed line leaves its shape: the origin dot. Mirrors `DraftEdgeView.tsx`.
+      markerStart: markerEnd ? originRef(color) : undefined,
     },
     ...(profile.strokes === 2
       ? ([
