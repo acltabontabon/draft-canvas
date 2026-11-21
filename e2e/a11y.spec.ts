@@ -1,6 +1,6 @@
 import AxeBuilder from '@axe-core/playwright';
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas } from './canvas';
+import { newCanvas, toggleFlows } from './canvas';
 import { serveStarterGallery } from './gallery';
 
 /**
@@ -84,7 +84,7 @@ test.describe('accessibility (axe)', () => {
 
     // The Flows panel is a tree (a treeitem per flow, its steps a nested group), scanned open on a
     // flow so the nested level is in the page: axe checks the required owned/parent roles.
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
+    await toggleFlows(page);
     const flows = page.getByRole('tree', { name: 'Flows' });
     await expect(flows).toBeVisible();
     await flows.getByRole('treeitem', { level: 1 }).nth(1).locator('.dc-flow-expand').click();

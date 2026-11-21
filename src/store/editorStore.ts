@@ -177,7 +177,7 @@ import type {
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
 import { addInk, INK_ID_PREFIX, inkOf, inkUnionBounds, removeInk, translateInk } from '../document/ink';
 import { createId } from '../document/ids';
-import { flowFromWalk } from '../presentation/walk';
+import { flowFromWalk, tellNext } from '../presentation/walk';
 import { boxForChoice, INK_CHOICE_LABEL, INK_CHOICE_TYPE, type InkShapeChoice } from '../ink/choices';
 import type { Box } from '../ink/geometry';
 import { routingPlan } from '../edges/bundles';
@@ -746,6 +746,9 @@ export interface EditorStore {
   /** Saves the walk being presented as a flow of the file, in one undo step, and carries on
    *  presenting it from the same moment. The new flow's id, or `null` when nothing was kept. */
   keepWalk: () => string | null;
+  /** Tells a connector next in the walk being presented (`presentation/walk.ts`'s `tellNext`):
+   *  the walk is reshaped to the order the presenter takes. Never touches the document. */
+  tellWalkNext: (edgeId: string) => boolean;
   renameFlow: (flowId: string, title: string) => void;
   /** Sets, or clears (`accent: null`), a flow's lens accent — see `DraftFlow.accent`. */
   setFlowAccent: (flowId: string, accent: Accent | null) => void;
@@ -3497,6 +3500,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // `addFlow` silently refuses at the cap; without this check a caller would go on to select
     // and append steps to a flow that doesn't exist.
     return get().document.flows.some((f) => f.id === flow.id) ? flow.id : null;
+  },
+
+  tellWalkNext(edgeId) {
+    const state = get();
+    const { active, walk, flowId, step, stage } = state.flowPlayback;
+    if (state.mode !== 'present' || !active || !walk || walk.id !== flowId) return false;
+    const next = tellNext(walk, edgeId, stage === 'opening' ? 0 : step, new Set(state.document.edges.map((edge) => edge.id)));
+    if (!next) return false;
+    set((s) => ({ flowPlayback: { ...s.flowPlayback, walk: next.flow, step: next.step, stage: undefined } }));
+    return true;
   },
 
   keepWalk() {

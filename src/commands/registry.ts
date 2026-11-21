@@ -33,7 +33,7 @@ import { ALT_SYMBOL, MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
-import { walkOfSelection } from '../presentation/walk';
+import { WALK_OF_DIAGRAM, walkOfSelection } from '../presentation/walk';
 import { fileOf, fileWithLiveViewport, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
 import { pointer, pointerFlow, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
@@ -440,6 +440,15 @@ function flowCommands(ctx: CommandContext): Command[] {
       shortcut: `${MOD_SYMBOL} Enter`,
       hint: selectionWalk ? selectionWalk.flow.title : flows.length === 1 ? flows[0]!.title : `${flows.length} flows`,
       run: startPresentation,
+    });
+    // With flows, Present chooses one of them; the diagram's own order is still a command away.
+    commands.push({
+      id: 'present-diagram',
+      title: 'Present the whole diagram',
+      group: 'flow',
+      keywords: ['walk', 'walkthrough', 'arrows', 'everything', 'play'],
+      hint: 'Following the arrows',
+      run: (inner) => inner.onPresent(WALK_OF_DIAGRAM),
     });
     if (flows.length > 1) {
       commands.push({

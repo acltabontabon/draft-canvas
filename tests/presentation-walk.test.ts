@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEdge, createNode } from '../src/document/factory';
 import type { DraftEdge, DraftNode } from '../src/document/types';
-import { isWalkId, walkOfDiagram, walkOfSelection, walkToPresent } from '../src/presentation/walk';
+import { isWalkId, tellNext, walkOfDiagram, walkOfSelection, walkToPresent } from '../src/presentation/walk';
 
 /**
  * A walk is the flow Present tells when nobody has made one: the diagram's own connectors, in the
@@ -125,5 +125,53 @@ describe('walkToPresent', () => {
     expect(walkToPresent(doc, { nodes: ['c'], edges: [] }, true)).toBeNull();
     expect(walkToPresent(doc, NONE, true)).toBeNull();
     expect(walkToPresent(doc, NONE, false)?.about).toBe('diagram');
+  });
+});
+
+describe('tellNext', () => {
+  const doc = graph({ a: [0, 0], b: [200, 0], c: [400, 0], d: [400, 200], e: [600, 200] }, ['a>b', 'b>c', 'b>d', 'd>e']);
+  const live = new Set(doc.edges.map((edge) => edge.id));
+  const walk = walkOfDiagram(doc)!.flow;
+  const order = (flow: typeof walk) => flow.steps.map((step) => step.edgeId);
+
+  it('starts from the derived order', () => {
+    expect(order(walk)).toEqual(['a>b', 'b>c', 'b>d', 'd>e']);
+  });
+
+  it('brings a connector still to come forward, right after the step being told', () => {
+    const next = tellNext(walk, 'b>d', 1, live)!;
+    expect(order(next.flow)).toEqual(['a>b', 'b>d', 'b>c', 'd>e']);
+    expect(next.step).toBe(2);
+    expect(next.flow.id).toBe(walk.id);
+  });
+
+  it('makes a connector the first step when clicked in the opening', () => {
+    const next = tellNext(walk, 'd>e', 0, live)!;
+    expect(order(next.flow)).toEqual(['d>e', 'a>b', 'b>c', 'b>d']);
+    expect(next.step).toBe(1);
+  });
+
+  it('goes back to a connector already told without moving anything', () => {
+    const next = tellNext(walk, 'a>b', 3, live)!;
+    expect(order(next.flow)).toEqual(order(walk));
+    expect(next.step).toBe(1);
+    expect(next.flow).not.toBe(walk);
+  });
+
+  it('adds a connector the walk never had, and moves a shared step whole', () => {
+    const part = walkOfSelection(doc, { nodes: ['a', 'c'], edges: [] })!.flow;
+    expect(order(tellNext(part, 'b>d', 2, live)!.flow)).toEqual(['a>b', 'b>c', 'b>d']);
+
+    const fan = graph({ gw: [0, 0], x: [200, -100], y: [200, 100], z: [-200, 0] }, ['z>gw', 'gw>x', 'gw>y']);
+    const fanned = walkOfDiagram(fan)!.flow;
+    const first = tellNext(fanned, 'gw>y', 0, new Set(fan.edges.map((edge) => edge.id)))!.flow;
+    expect(first.steps[0]).toMatchObject({ edgeId: 'gw>x', extraEdgeIds: ['gw>y'] });
+  });
+
+  it('drops steps whose connectors are gone, and refuses a connector that is', () => {
+    const fewer = new Set(['a>b', 'b>d', 'd>e']);
+    expect(tellNext(walk, 'b>c', 1, fewer)).toBeNull();
+    const next = tellNext(walk, 'd>e', 1, fewer)!;
+    expect(order(next.flow)).toEqual(['a>b', 'd>e', 'b>d']);
   });
 });

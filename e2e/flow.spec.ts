@@ -1,6 +1,6 @@
 import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
-import { newCanvas, connect, create, reopenAfterReload } from './canvas';
+import { cameraAtRest, newCanvas, connect, create, reopenAfterReload, toggleFlows } from './canvas';
 
 /**
  * Flows: build one from existing connectors, present it, and reuse the same
@@ -9,12 +9,12 @@ import { newCanvas, connect, create, reopenAfterReload } from './canvas';
 
 /**
  * Shows the Flows panel — the one surface for flows — unless it is already showing. Creating
- * a flow opens the panel on its own (to name it), and the toolbar's "Flows" button is a toggle,
+ * a flow opens the panel on its own (to name it), and the toolbar's Flows row is a toggle,
  * so clicking blindly would close it again.
  */
 async function openFlowPanel(page: Page) {
   const panel = page.locator('.dc-flow-panel');
-  if (!(await panel.isVisible())) await page.getByRole('button', { name: 'Flows', exact: true }).click();
+  if (!(await panel.isVisible())) await toggleFlows(page);
   await expect(panel).toBeVisible();
 }
 
@@ -454,5 +454,55 @@ test.describe('Flows', () => {
     await expect(page.locator('.dc-explain-flow-title')).toContainText('Walkthrough');
     await page.keyboard.press('ArrowRight');
     await expect(page.locator('.dc-explain-count')).toContainText('Step 1 / 1');
+  });
+
+  test('Present walks a diagram with no flows; a clicked connector is told next, and the walk is kept', async ({ page }) => {
+    await newCanvas(page, 'Walk');
+    await buildArchitecture(page);
+    await page.keyboard.press('Escape');
+
+    // No flow was ever made: Present follows the arrows instead of showing a still picture.
+    await page.getByRole('button', { name: 'Present', exact: true }).click();
+    await expect(page.locator('.dc-present-card[data-kind="opening"]')).toContainText('Whole diagram');
+    await expect(page.locator('.dc-explain-count')).toHaveText('3 steps');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 1 / 3');
+
+    // The last connector, clicked, is told next: the walk takes the order the presenter does.
+    await cameraAtRest(page);
+    await clickEdgeBetween(page, 2);
+    await expect(page.locator('.dc-explain-count')).toHaveText('Step 2 / 3');
+    await expect(page.locator('.dc-present-caption')).toContainText('Payment');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.dc-present-caption')).toContainText('API');
+
+    // Nothing is the file's until it is kept; then it is a flow like any other, in that order.
+    await page.getByRole('button', { name: 'Keep as a flow' }).click();
+    await expect(page.getByRole('button', { name: 'Keep as a flow' })).toHaveCount(0);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-editor')).toHaveAttribute('data-mode', 'edit');
+    await openFlowPanel(page);
+    await expect(page.locator('.dc-flow-item')).toHaveCount(1);
+    await expect(page.locator('.dc-flow-item')).toContainText('Whole diagram');
+    await expect(page.locator('.dc-flow-item')).toContainText('3 steps');
+  });
+
+  test('the Present menu offers the whole diagram beside a saved flow, and the selection', async ({ page }) => {
+    await newCanvas(page, 'Menu');
+    await buildArchitecture(page);
+    await addToFlow(page, 0);
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+
+    // One shape chosen: the button says it will walk on from there, and the menu names all three.
+    await page.locator('.dc-node').nth(1).click();
+    await expect(page.getByRole('button', { name: 'Present selection', exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'What to present', exact: true }).click();
+    const menu = page.getByRole('menu', { name: 'What to present' });
+    await expect(menu.getByRole('menuitem')).toHaveCount(4);
+    await expect(menu.getByRole('menuitem').nth(0)).toContainText('From API');
+    await menu.getByRole('menuitem', { name: /^Whole diagram/ }).click();
+    await expect(page.locator('.dc-present-card[data-kind="opening"]')).toContainText('Whole diagram');
+    await expect(page.locator('.dc-explain-count')).toHaveText('3 steps');
   });
 });

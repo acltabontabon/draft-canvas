@@ -201,3 +201,9 @@ export async function nextFrames(page: Page) {
 export async function afterDropGuard(page: Page) {
   await page.evaluate(() => new Promise<void>((resolve) => setTimeout(resolve, 0)));
 }
+
+/** Opens (or, when it is open, closes) the Flows panel from the toolbar: the last row of Present's menu. */
+export async function toggleFlows(page: Page) {
+  await page.getByRole('button', { name: 'What to present', exact: true }).click();
+  await page.getByRole('menuitem', { name: /^(Show|Hide) flows/ }).click();
+}

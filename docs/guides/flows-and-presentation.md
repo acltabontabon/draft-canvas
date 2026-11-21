@@ -7,8 +7,8 @@ Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
 
 ## Trace a flow
 
-1. Press `F` to open **Flows**, then choose **Trace a flow** at the bottom of the panel (also in
-   `⌘K`).
+1. Press `F` to open **Flows** (or choose **Show flows** in the menu beside **Present**), then
+   choose **Trace a flow** at the bottom of the panel (also in `⌘K`).
 2. Name it and click connectors in order.
 3. Choose **Finish**.
 
@@ -57,13 +57,23 @@ Click **Present** (`⌘Enter`). What it walks through depends on what you have:
 ![Two shapes selected; the toolbar button reads Present selection.](../media/guides/present-selection.png)
 
 The button reads **Present selection** when the selection will be walked. A selection that makes
-fewer than two steps, or that takes in every connector, is ignored. To present a flow while something is selected, use its **Present**
-button in **Flows**.
+fewer than two steps, or that takes in every connector, is ignored.
+
+To choose for yourself, open the menu beside **Present**. It lists the selection, the whole diagram
+and each flow, and **Show flows** (`F`) at the end opens the panel where flows are made and edited.
+
+![The menu beside Present, listing the selection, the whole diagram and Show flows.](../media/guides/present-menu.png)
 
 A walk in arrow order starts at the shapes nothing points into and follows one path to its end
 before the next. Connectors that fan out to end points, or fan in from starting points, share a
-step. Nothing is saved until you choose **Keep as a flow** (`K`), which adds the walk to **Flows**
-in one undo step; rename or reorder it there.
+step.
+
+If that order is not the one you would tell it in, click a connector: it becomes the next step, and
+the walk carries on from there. Clicking one already told goes back to it. This reshapes the walk
+only; a flow you have kept or traced stays in its own order.
+
+Nothing is saved until you choose **Keep as a flow** (`K`), which adds the walk to **Flows** in one
+undo step, in the order you took; rename or reorder it there.
 
 ![The opening of a walk from Orders API to Fulfilment worker, with Keep as a flow on the bar.](../media/guides/present-walk.png)
 

@@ -36,12 +36,10 @@ const SPECS = {
     description: 'Every action, searchable.',
     usageHint: 'Reach any command, flow, or starter without leaving the keyboard.',
   },
-  flows: {
-    title: 'Flows',
-    // Handled directly by the editor's key map, not as a registered command.
-    literalShortcut: 'F',
-    description: 'A named, ordered walkthrough of connectors already on the canvas.',
-    usageHint: 'An explanation layer over the architecture — dim everything else, or step through it.',
+  presentMenu: {
+    title: 'What to present',
+    description: 'The selection, the whole diagram, or a flow you have made.',
+    usageHint: 'Flows are made and edited from here too (F).',
   },
   present: {
     title: 'Present',

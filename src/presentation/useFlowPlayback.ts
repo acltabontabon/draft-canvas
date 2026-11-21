@@ -544,6 +544,15 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
     else moment.frameFlow(moment.flow, 'guided', RESIZE_MS);
   }, [viewWidth, viewHeight]);
 
+  // A walk reshaped under the presenter (`editorStore.tellWalkNext`: a connector clicked to be
+  // told next) lands on a step nobody framed, since the store has no camera. Keyed on the walk
+  // alone: starting one frames its own opening, where there is no step to frame here.
+  useEffect(() => {
+    const moment = momentRef.current;
+    if (!moment.active || !flowPlayback.walk || !moment.current) return;
+    moment.frameStepFor(moment.current);
+  }, [flowPlayback.walk]);
+
   // One stable object per actual change, so consumers keyed on it (`useKeyboard`'s window listener,
   // `useCommandContext`, `FlowBar`) don't tear down and rebuild on unrelated renders.
   return useMemo(

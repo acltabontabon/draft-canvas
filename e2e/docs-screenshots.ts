@@ -575,6 +575,12 @@ async function walkScreenshots(page: Page) {
   await page.setViewportSize({ width: 1340, height: VIEWPORT.height });
   await shot(page, 'present-selection');
 
+  // The menu beside Present: everything it could walk, and the way to the Flows panel.
+  await page.getByRole('button', { name: 'What to present', exact: true }).click();
+  await expect(page.getByRole('menu', { name: 'What to present' })).toBeVisible();
+  await shot(page, 'present-menu', { x: 700, y: 0, width: 640, height: 330 });
+  await page.keyboard.press('Escape');
+
   await present.click();
   await expect(page.locator('.dc-present-card')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Keep as a flow' })).toBeVisible();

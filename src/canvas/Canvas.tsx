@@ -2165,6 +2165,19 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         else useEditorStore.getState().setSelection({ nodes: [], edges: [] });
         return;
       }
+      // Presenting a walk: a connector clicked is the one told next, so an order nobody chose
+      // becomes the one the presenter takes (`editorStore.tellWalkNext`). A flow the file holds
+      // stays as written, and a click on a shape or a chip is still that shape's or chip's.
+      const presented = useEditorStore.getState();
+      if (presented.mode === 'present' && presented.flowPlayback.walk && event.button === 0) {
+        if (event.target instanceof Element && event.target.closest('.react-flow__node, button, [role="button"], [data-callout-scroll]')) return;
+        const pick = edgeAtEvent(event);
+        if (pick && pick.part !== 'control' && presented.tellWalkNext(pick.id)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
       const trace = useUiStore.getState().flowTrace;
       if (trace && event.button === 0) {
         const pick = edgeAtEvent(event);

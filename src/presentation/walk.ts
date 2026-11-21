@@ -18,6 +18,10 @@ import type { DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode } fr
 
 const PREFIX = 'walk:';
 
+/** The ids a walk is known by — also what Present is asked for by name (`EditorScreen.onPresent`). */
+export const WALK_OF_SELECTION = `${PREFIX}selection`;
+export const WALK_OF_DIAGRAM = `${PREFIX}diagram`;
+
 /** Whether a playback flow id names a walk rather than a flow the file holds. */
 export const isWalkId = (flowId: string | null | undefined): boolean => Boolean(flowId?.startsWith(PREFIX));
 
@@ -129,7 +133,7 @@ function arrowOrder(edges: readonly DraftEdge[], nodes: ReadonlyMap<string, Draf
 
 function flowOf(id: string, title: string, steps: readonly (readonly string[])[]): DraftFlow {
   return {
-    id: `${PREFIX}${id}`,
+    id,
     title: title.slice(0, LIMITS.maxFlowTitleLength),
     steps: steps.slice(0, LIMITS.maxStepsPerFlow).map(
       ([edgeId, ...extra], index): DraftFlowStep => ({
@@ -225,7 +229,7 @@ export function walkOfSelection(graph: Graph, picked: Picked): Walk | null {
   const byId = new Map(edges.map((edge) => [edge.id, edge]));
   const name = (id: string) => displayNameFor(nodes.get(id)!);
   const made = (title: string, steps: string[][]): Walk | null =>
-    steps.length >= MIN_SELECTION_STEPS ? { about: 'selection', flow: flowOf('selection', title, steps) } : null;
+    steps.length >= MIN_SELECTION_STEPS ? { about: 'selection', flow: flowOf(WALK_OF_SELECTION, title, steps) } : null;
 
   const shapes = picked.nodes.filter((id) => nodes.has(id));
   if (picked.edges.length === 0 && shapes.length === 1 && nodes.get(shapes[0]!)!.type !== 'group') {
@@ -254,7 +258,7 @@ export function walkOfSelection(graph: Graph, picked: Picked): Walk | null {
 export function walkOfDiagram(graph: Graph): Walk | null {
   const nodes = new Map(graph.nodes.map((node) => [node.id, node]));
   const steps = arrowOrder(liveEdges(graph, nodes), nodes);
-  return steps.length > 0 ? { about: 'diagram', flow: flowOf('diagram', 'Whole diagram', steps) } : null;
+  return steps.length > 0 ? { about: 'diagram', flow: flowOf(WALK_OF_DIAGRAM, 'Whole diagram', steps) } : null;
 }
 
 /**
@@ -272,4 +276,38 @@ export function flowFromWalk(walk: DraftFlow, id: string, stepId: () => string, 
     title: title.slice(0, LIMITS.maxFlowTitleLength),
     steps: walk.steps.map((step) => ({ ...step, id: stepId() })),
   };
+}
+
+/**
+ * A walk with one connector told next — what clicking a connector does while a walk is presented,
+ * so an order nobody chose becomes the one the presenter takes.
+ *
+ * `told` is how many steps have been told so far, the current one included (`0` in the opening).
+ * A connector already told is gone back to and nothing moves. One still to come is brought forward,
+ * with whatever shares its step; one the walk never had joins it. `live` is what the diagram still
+ * holds: steps whose connectors are gone are dropped first, so a step's number is its place.
+ *
+ * Returns the walk (always a new object, so playback frames the step it lands on) and that step's
+ * number, or `null` when the connector cannot be told.
+ */
+export function tellNext(
+  walk: DraftFlow,
+  edgeId: string,
+  told: number,
+  live: ReadonlySet<string>,
+): { flow: DraftFlow; step: number } | null {
+  if (!live.has(edgeId)) return null;
+  const steps: DraftFlowStep[] = [];
+  for (const step of walk.steps) {
+    const [first, ...extra] = [step.edgeId, ...(step.extraEdgeIds ?? [])].filter((id): id is string => id !== undefined && live.has(id));
+    if (first === undefined) continue;
+    steps.push({ id: step.id, edgeId: first, ...(extra.length > 0 ? { extraEdgeIds: extra } : {}) });
+  }
+  const done = Math.max(0, Math.min(told, steps.length));
+  const at = steps.findIndex((step) => step.edgeId === edgeId || step.extraEdgeIds?.includes(edgeId));
+  if (at >= 0 && at < done) return { flow: { ...walk, steps }, step: at + 1 };
+  if (at < 0 && steps.length >= LIMITS.maxStepsPerFlow) return null;
+  const [next] = at >= 0 ? steps.splice(at, 1) : [{ id: `${PREFIX}+${edgeId}`, edgeId }];
+  steps.splice(done, 0, next!);
+  return { flow: { ...walk, steps }, step: done + 1 };
 }

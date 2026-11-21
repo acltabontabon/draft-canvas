@@ -523,4 +523,33 @@ describe('useFlowPlayback — a walk', () => {
     act(() => result.current.stop());
     expect(useEditorStore.getState().flowPlayback).toMatchObject({ active: false, flowId: null, walk: undefined });
   });
+
+  it('takes the order the presenter does: a connector told next reshapes the walk, never the file', () => {
+    const state = useEditorStore.getState();
+    const a = state.addNode({ type: 'service', x: 0, y: 0, text: 'A' });
+    const b = state.addNode({ type: 'service', x: 300, y: 0, text: 'B' });
+    const c = state.addNode({ type: 'service', x: 600, y: 0, text: 'C' });
+    const first = state.connect(a.id, b.id)!;
+    const second = state.connect(b.id, c.id)!;
+    const walk = walkOfDiagram(useEditorStore.getState().document)!.flow;
+    const { result } = mount();
+
+    // Only while a walk is being presented.
+    expect(useEditorStore.getState().tellWalkNext(second.id)).toBe(false);
+    act(() => useEditorStore.getState().setMode('present'));
+    act(() => result.current.startWalk(walk));
+    act(() => {
+      useEditorStore.getState().tellWalkNext(second.id);
+    });
+    expect(result.current.steps.map((step) => step.edge?.id)).toEqual([second.id, first.id]);
+    expect(result.current).toMatchObject({ derived: true, stage: 'step', step: 1 });
+    expect(useEditorStore.getState().document.flows).toEqual([]);
+
+    // Kept, it is that order; and a flow the file holds stays as written.
+    act(() => {
+      useEditorStore.getState().keepWalk();
+    });
+    expect(useEditorStore.getState().document.flows[0]!.steps.map((step) => step.edgeId)).toEqual([second.id, first.id]);
+    expect(useEditorStore.getState().tellWalkNext(first.id)).toBe(false);
+  });
 });

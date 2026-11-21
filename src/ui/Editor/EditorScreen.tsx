@@ -50,7 +50,7 @@ import { END_MESSAGES } from '../collab/collabCopy';
 import { PresenceDock } from '../collab/PresenceDock';
 import { SessionEnded } from '../collab/SessionEnded';
 import type { DocumentSession } from '../../store/useDocumentSession';
-import { walkToPresent } from '../../presentation/walk';
+import { isWalkId, WALK_OF_DIAGRAM, WALK_OF_SELECTION, walkOfDiagram, walkOfSelection, walkToPresent } from '../../presentation/walk';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { presentationScope, revealIn } from '../../presentation/presentationAttachments';
 import { useThemeValue } from '../../theme/useTheme';
@@ -471,9 +471,20 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // store, which is why it is handed over rather than picked up there.
       // Read before `setMode`, which puts the selection away for the length of the presentation.
       const editing = useEditorStore.getState();
-      const walk = flowId || editing.mode !== 'edit' ? null : walkToPresent(editing.document, editing.selection, playback.canStart);
+      // A walk can be asked for by name too (the toolbar's menu, the palette), whatever flows exist.
+      const named = isWalkId(flowId);
+      const walk =
+        editing.mode !== 'edit'
+          ? null
+          : flowId === WALK_OF_DIAGRAM
+            ? walkOfDiagram(editing.document)
+            : flowId === WALK_OF_SELECTION
+              ? walkOfSelection(editing.document, editing.selection)
+              : flowId
+                ? null
+                : walkToPresent(editing.document, editing.selection, playback.canStart);
       setMode('present', getViewport());
-      if (flowId) playback.pickFlow(flowId, sequenceNodeId);
+      if (flowId && !named) playback.pickFlow(flowId, sequenceNodeId);
       else if (walk) playback.startWalk(walk.flow);
       else if (playback.canStart) playback.start();
       // A flow that started has framed its own opening (`useFlowPlayback`'s directed camera). Only
@@ -633,6 +644,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       className="dc-editor"
       data-mode={mode}
       data-tracing={tracing || undefined}
+      data-walk={(presenting && playback.derived) || undefined}
       data-armed={armed ? 'true' : undefined}
       data-reconnecting={reconnecting ? 'true' : undefined}
       data-session-ended={sessionOver ? 'true' : undefined}
@@ -866,7 +878,7 @@ export function useKeyboard({
   playback,
 }: {
   createAtPointer: (preset: Preset) => void;
-  onPresent: () => void;
+  onPresent: (flowId?: string) => void;
   playback: ReturnType<typeof useFlowPlayback>;
 }) {
   const setExportOpen = useUiStore((state) => state.setExportOpen);

@@ -11,7 +11,7 @@ On Home, choose **Quick Draft**. To see a finished diagram first, choose **Try a
 **Play explanation**.
 
 The web app saves in your browser as you draw; on desktop, `⌘S` saves a file. Shape tools are at the
-top, and **Present**, **Flows** and **Share** at the top right. `⌘K` finds any command and `?` lists
+top, and **Present** and **Share** at the top right. `⌘K` finds any command and `?` lists
 shortcuts. The back arrow beside the title returns to your diagrams.
 
 On a blank canvas, double-click (long-press on touch) to choose your first shape, or point at the

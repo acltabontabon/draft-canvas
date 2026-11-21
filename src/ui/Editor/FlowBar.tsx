@@ -657,7 +657,7 @@ function PresentationCard({
       {base && <span className="dc-present-text">A variant of {base.title}</span>}
       {/* Says what this is, once, where the presenter is still reading: an order nobody chose. */}
       {playback.derived && kind === 'opening' && (
-        <span className="dc-present-text">Following the arrows, one connector at a time.</span>
+        <span className="dc-present-text">Following the arrows. Click a connector to tell it next.</span>
       )}
       {route.length > 0 && (
         <span className="dc-present-route" aria-hidden={kind === 'closing' ? true : undefined}>

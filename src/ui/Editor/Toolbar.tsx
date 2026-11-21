@@ -11,7 +11,7 @@ interface ToolbarProps {
   onTitleChange: (title: string) => void;
   /** Absent when there's nothing to go back to (an embedded host's single file). */
   onBack?: () => void;
-  onPresent: () => void;
+  onPresent: (flowId?: string) => void;
   onExport: () => void;
   /** A shared diagram on screen (`uiStore.readOnly`): no renaming, no create tools. The editor
    *  store's own guard is what protects the document; this just stops offering what it refuses. */
