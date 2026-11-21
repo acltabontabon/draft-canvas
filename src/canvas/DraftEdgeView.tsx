@@ -1674,8 +1674,8 @@ type InternalNodeLike = { internals: { positionAbsolute: { x: number; y: number 
 
 /** The flow being presented, if any. */
 function playingFlowOf(state: EditorStore) {
-  const { active, flowId, sequenceNodeId } = state.flowPlayback;
-  return active && flowId ? playbackFlowOf(state.document, flowId, sequenceNodeId) : undefined;
+  const { active, flowId, sequenceNodeId, walk } = state.flowPlayback;
+  return active && flowId ? playbackFlowOf(state.document, flowId, sequenceNodeId, walk) : undefined;
 }
 
 /** This connector's Presentation tier — a string, so only connectors whose tier flips re-render.

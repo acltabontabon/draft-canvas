@@ -50,6 +50,7 @@ import { END_MESSAGES } from '../collab/collabCopy';
 import { PresenceDock } from '../collab/PresenceDock';
 import { SessionEnded } from '../collab/SessionEnded';
 import type { DocumentSession } from '../../store/useDocumentSession';
+import { isWalkId, WALK_OF_DIAGRAM, WALK_OF_SELECTION, walkOfDiagram, walkOfSelection, walkToPresent } from '../../presentation/walk';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { presentationScope, revealIn } from '../../presentation/presentationAttachments';
 import { useThemeValue } from '../../theme/useTheme';
@@ -456,8 +457,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   // and the Flows panel all come through here, so "Present" means the same thing wherever it is
   // pressed: start the flow, frame it, and remember where the editing was left.
   //
-  // With a `flowId`, that flow; without one, whatever `start()` decides (the active flow, the one
-  // playable flow, else the picker).
+  // With a `flowId`, that flow. Without one, a selection that makes a story is walked
+  // (`presentation/walk.ts`); else whatever `start()` decides (the active flow, the one playable
+  // flow, else the picker); and a diagram with no flows at all is walked in arrow order, so the
+  // first Present anyone presses has something to step through.
   const onPresent = useCallback(
     (requested?: string, sequenceNodeId?: string) => {
       // Every consumer types this as `() => void`, so nothing stops a `onClick={onPresent}` from
@@ -466,8 +469,23 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       const flowId = typeof requested === 'string' ? requested : undefined;
       // The camera has to be read before the fit below moves it. React Flow owns it, not the
       // store, which is why it is handed over rather than picked up there.
+      // Read before `setMode`, which puts the selection away for the length of the presentation.
+      const editing = useEditorStore.getState();
+      // A walk can be asked for by name too (the toolbar's menu, the palette), whatever flows exist.
+      const named = isWalkId(flowId);
+      const walk =
+        editing.mode !== 'edit'
+          ? null
+          : flowId === WALK_OF_DIAGRAM
+            ? walkOfDiagram(editing.document)
+            : flowId === WALK_OF_SELECTION
+              ? walkOfSelection(editing.document, editing.selection)
+              : flowId
+                ? null
+                : walkToPresent(editing.document, editing.selection, playback.canStart);
       setMode('present', getViewport());
-      if (flowId) playback.pickFlow(flowId, sequenceNodeId);
+      if (flowId && !named) playback.pickFlow(flowId, sequenceNodeId);
+      else if (walk) playback.startWalk(walk.flow);
       else if (playback.canStart) playback.start();
       // A flow that started has framed its own opening (`useFlowPlayback`'s directed camera). Only
       // with none chosen — the picker, or nothing to present — is the whole diagram fitted, with
@@ -626,6 +644,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       className="dc-editor"
       data-mode={mode}
       data-tracing={tracing || undefined}
+      data-walk={(presenting && playback.derived) || undefined}
       data-armed={armed ? 'true' : undefined}
       data-reconnecting={reconnecting ? 'true' : undefined}
       data-session-ended={sessionOver ? 'true' : undefined}
@@ -859,7 +878,7 @@ export function useKeyboard({
   playback,
 }: {
   createAtPointer: (preset: Preset) => void;
-  onPresent: () => void;
+  onPresent: (flowId?: string) => void;
   playback: ReturnType<typeof useFlowPlayback>;
 }) {
   const setExportOpen = useUiStore((state) => state.setExportOpen);

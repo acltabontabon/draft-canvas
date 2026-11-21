@@ -1,6 +1,6 @@
 import { openGallery } from './library';
 import { expect, test, type Page } from '@playwright/test';
-import { armTool, cameraAtRest, newCanvas, nextFrames, reopenAfterReload } from './canvas';
+import { armTool, cameraAtRest, newCanvas, nextFrames, reopenAfterReload, toggleFlows } from './canvas';
 import { readFileSync, existsSync } from 'node:fs';
 
 /**
@@ -23,12 +23,12 @@ async function createNode(page: Page, tool: string, at: { x: number; y: number }
 
 /**
  * Shows the Flows panel — the one surface for flows — unless it is already showing. Creating
- * a flow opens the panel on its own (to name it), and the toolbar's "Flows" button is a toggle,
+ * a flow opens the panel on its own (to name it), and the toolbar's Flows row is a toggle,
  * so clicking blindly would close it again.
  */
 async function openFlowPanel(page: Page) {
   const panel = page.locator('.dc-flow-panel');
-  if (!(await panel.isVisible())) await page.getByRole('button', { name: 'Flows', exact: true }).click();
+  if (!(await panel.isVisible())) await toggleFlows(page);
   await expect(panel).toBeVisible();
 }
 

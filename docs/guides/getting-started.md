@@ -11,7 +11,7 @@ On Home, choose **Quick Draft**. To see a finished diagram first, choose **Try a
 **Play explanation**.
 
 The web app saves in your browser as you draw; on desktop, `⌘S` saves a file. Shape tools are at the
-top, and **Present**, **Flows** and **Share** at the top right. `⌘K` finds any command and `?` lists
+top, and **Present** and **Share** at the top right. `⌘K` finds any command and `?` lists
 shortcuts. The back arrow beside the title returns to your diagrams.
 
 On a blank canvas, double-click (long-press on touch) to choose your first shape, or point at the
@@ -41,6 +41,9 @@ throws it away). Click the chip to reopen it.
 Select all three shapes, press `⌘G`, then `Enter` to name the [boundary](shapes-and-connectors.md#boundaries).
 
 ## Present a flow
+
+**Present** (`⌘Enter`) already walks the diagram in the order its arrows point. A flow is a
+walkthrough in an order you choose:
 
 1. Click the API-to-queue connector and choose **Add to flow**. Name it `Place an order`.
 2. Click the queue-to-worker connector and choose **Add to Place an order**.

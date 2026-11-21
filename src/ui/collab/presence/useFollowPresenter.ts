@@ -78,7 +78,7 @@ export function useFollowPresenter(path: DepthPath): void {
       shown = next !== null;
       useEditorStore
         .getState()
-        .setFlowPlayback(next ? { active: true, ...next } : { active: false, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined });
+        .setFlowPlayback(next ? { active: true, walk: undefined, ...next } : { active: false, flowId: null, sequenceNodeId: undefined, walk: undefined, step: 0, stage: undefined });
       // The camera is the presenter's: playback's own guided framing must not reframe on a resize.
       useUiStore.getState().setPresentation({ framing: next ? 'manual' : 'guided' });
       writing = false;

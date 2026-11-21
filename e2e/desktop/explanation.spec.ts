@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { toggleFlows } from '../canvas';
 import { installMockShell } from './mockShell';
 
 test('the complete example is a desktop Quick Draft with an editable flow', async ({ page }) => {
@@ -11,7 +12,7 @@ test('the complete example is a desktop Quick Draft with an editable flow', asyn
   await expect(page.locator('.dc-editor')).toHaveAttribute('data-mode', 'present');
   await page.keyboard.press('Escape');
   await expect(page.locator('.dc-editor')).toHaveAttribute('data-mode', 'edit');
-  await page.getByRole('button', { name: 'Flows', exact: true }).click();
+  await toggleFlows(page);
   await page.getByRole('button', { name: 'Trace a flow', exact: true }).click();
   await expect(page.getByRole('region', { name: 'Trace a flow' })).toBeVisible();
   await page.getByRole('button', { name: 'Cancel', exact: true }).click();

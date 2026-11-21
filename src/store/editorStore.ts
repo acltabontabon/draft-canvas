@@ -177,6 +177,7 @@ import type {
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
 import { addInk, INK_ID_PREFIX, inkOf, inkUnionBounds, removeInk, translateInk } from '../document/ink';
 import { createId } from '../document/ids';
+import { flowFromWalk, tellNext } from '../presentation/walk';
 import { boxForChoice, INK_CHOICE_LABEL, INK_CHOICE_TYPE, type InkShapeChoice } from '../ink/choices';
 import type { Box } from '../ink/geometry';
 import { routingPlan } from '../edges/bundles';
@@ -217,6 +218,12 @@ export interface FlowPlaybackState {
   active: boolean;
   flowId: string | null;
   sequenceNodeId?: string;
+  /**
+   * The walk being presented, when `flowId` names one (`presentation/walk.ts`): the diagram's own
+   * arrows followed because nobody has made a flow of them. The file does not hold it — it lives
+   * here, with the rest of playback, until the presenter keeps it (`keepWalk`) or stops.
+   */
+  walk?: DraftFlow;
   step: number;
   /**
    * Which half of the current step's exchange is animating — irrelevant (and never read) unless
@@ -736,6 +743,12 @@ export interface EditorStore {
   traceEdge: (edgeId: string) => void;
   finishFlowTrace: () => boolean;
   createFlow: (title?: string) => string | null;
+  /** Saves the walk being presented as a flow of the file, in one undo step, and carries on
+   *  presenting it from the same moment. The new flow's id, or `null` when nothing was kept. */
+  keepWalk: () => string | null;
+  /** Tells a connector next in the walk being presented (`presentation/walk.ts`'s `tellNext`):
+   *  the walk is reshaped to the order the presenter takes. Never touches the document. */
+  tellWalkNext: (edgeId: string) => boolean;
   renameFlow: (flowId: string, title: string) => void;
   /** Sets, or clears (`accent: null`), a flow's lens accent — see `DraftFlow.accent`. */
   setFlowAccent: (flowId: string, accent: Accent | null) => void;
@@ -1245,7 +1258,7 @@ export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefin
   const flow =
     lensFlow(state) ??
     (state.flowPlayback.active && state.flowPlayback.flowId
-      ? playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)
+      ? playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId, state.flowPlayback.walk)
       : undefined);
   if (!flow) return undefined;
   const ids = flowMemberNodeIds(state.document, flow);
@@ -3487,6 +3500,37 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // `addFlow` silently refuses at the cap; without this check a caller would go on to select
     // and append steps to a flow that doesn't exist.
     return get().document.flows.some((f) => f.id === flow.id) ? flow.id : null;
+  },
+
+  tellWalkNext(edgeId) {
+    const state = get();
+    const { active, walk, flowId, step, stage } = state.flowPlayback;
+    if (state.mode !== 'present' || !active || !walk || walk.id !== flowId) return false;
+    const next = tellNext(walk, edgeId, stage === 'opening' ? 0 : step, new Set(state.document.edges.map((edge) => edge.id)));
+    if (!next) return false;
+    set((s) => ({ flowPlayback: { ...s.flowPlayback, walk: next.flow, step: next.step, stage: undefined } }));
+    return true;
+  },
+
+  keepWalk() {
+    const { walk, flowId } = get().flowPlayback;
+    if (!walk || walk.id !== flowId || useUiStore.getState().readOnly) return null;
+    const full = () => {
+      useUiStore.getState().notify(`A diagram holds up to ${LIMITS.maxFlows} flows. Delete one to keep this.`, 'error');
+      return null;
+    };
+    if (totals(fileOf(get())).flows >= LIMITS.maxFlows) return full();
+    const taken = new Set(get().document.flows.map((flow) => flow.title));
+    let title = walk.title;
+    for (let n = 2; taken.has(title); n += 1) title = `${walk.title} ${n}`;
+    const flow = flowFromWalk(walk, createId('f'), () => createId('fs'), title);
+    get().apply('Keep as a flow', (doc) => addFlow(doc, flow));
+    if (!get().document.flows.some((f) => f.id === flow.id)) return full();
+    // The same telling, now the file's: the step and stage stay where the presenter is.
+    set((s) => ({ selectedFlowId: flow.id, flowPlayback: { ...s.flowPlayback, flowId: flow.id, walk: undefined } }));
+    // Says where it went: the Flows panel is out of sight for as long as the presentation lasts.
+    useUiStore.getState().notify('Kept as a flow. Rename or reorder it in Flows.');
+    return flow.id;
   },
 
   renameFlow(flowId, title) {

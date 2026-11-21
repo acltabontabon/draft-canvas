@@ -33,6 +33,7 @@ import { ALT_SYMBOL, MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
+import { WALK_OF_DIAGRAM, walkOfSelection } from '../presentation/walk';
 import { fileOf, fileWithLiveViewport, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
 import { pointer, pointerFlow, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
@@ -258,6 +259,19 @@ function presentModeCommands(ctx: CommandContext): Command[] {
         run: (inner) => inner.ui.setPresentation({ pointer: !inner.ui.presentation.pointer }),
       },
     );
+    // A walk is nobody's until it is kept (`presentation/walk.ts`) — the bar's own button, by name.
+    if (playback.derived && !ctx.ui.readOnly) {
+      commands.push({
+        id: 'present-keep',
+        title: 'Keep as a flow',
+        group: 'flow',
+        shortcut: 'K',
+        keywords: ['save', 'walk', 'walkthrough', 'steps', 'remember'],
+        run: (inner) => {
+          inner.editor.keepWalk();
+        },
+      });
+    }
     // Moving between flows, offered *while* a flow is playing — the whole point being that a
     // question from the room doesn't have to end the presentation to be answered.
     if (playback.flows.length > 1) {
@@ -415,15 +429,26 @@ function flowCommands(ctx: CommandContext): Command[] {
     id: `flow-trace-${flow.id}`, title: `Trace more steps: ${flow.title}`, group: 'flow',
     run: (inner) => inner.editor.beginFlowTrace(flow.id),
   }))];
+  // Present walks a selection that makes a story before anything else (`presentation/walk.ts`).
+  const selectionWalk = walkOfSelection(ctx.editor.document, ctx.editor.selection);
   if (flows.length > 0) {
     commands.push({
       id: 'present',
-      title: 'Start presentation',
+      title: selectionWalk ? 'Present selection' : 'Start presentation',
       group: 'flow',
       keywords: ['present', 'walkthrough', 'play', 'story', 'meeting'],
       shortcut: `${MOD_SYMBOL} Enter`,
-      hint: flows.length === 1 ? flows[0]!.title : `${flows.length} flows`,
+      hint: selectionWalk ? selectionWalk.flow.title : flows.length === 1 ? flows[0]!.title : `${flows.length} flows`,
       run: startPresentation,
+    });
+    // With flows, Present chooses one of them; the diagram's own order is still a command away.
+    commands.push({
+      id: 'present-diagram',
+      title: 'Present the whole diagram',
+      group: 'flow',
+      keywords: ['walk', 'walkthrough', 'arrows', 'everything', 'play'],
+      hint: 'Following the arrows',
+      run: (inner) => inner.onPresent(WALK_OF_DIAGRAM),
     });
     if (flows.length > 1) {
       commands.push({
@@ -463,11 +488,11 @@ function flowCommands(ctx: CommandContext): Command[] {
   } else {
     commands.push({
       id: 'present',
-      title: 'Start presentation',
+      title: selectionWalk ? 'Present selection' : 'Start presentation',
       group: 'flow',
       keywords: ['present', 'walkthrough', 'play'],
       shortcut: `${MOD_SYMBOL} Enter`,
-      hint: 'No flows yet — presents the diagram',
+      hint: selectionWalk ? selectionWalk.flow.title : 'Walks the diagram in arrow order',
       run: startPresentation,
     });
   }

@@ -439,7 +439,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // colour — handed to every arrival ring, boundary outline and caption through a single variable.
   const explainAccent = useEditorStore((state) => {
     if (!state.flowPlayback.active || !state.flowPlayback.flowId) return undefined;
-    return playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)?.accent;
+    return playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId, state.flowPlayback.walk)?.accent;
   });
   const focusActive = useEditorStore((state) => state.focus.active);
   const traceActive = useUiStore((state) => state.traceIds !== null);
@@ -2163,6 +2163,19 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       ) {
         if (useUiStore.getState().armed) onPaneClick(event);
         else useEditorStore.getState().setSelection({ nodes: [], edges: [] });
+        return;
+      }
+      // Presenting a walk: a connector clicked is the one told next, so an order nobody chose
+      // becomes the one the presenter takes (`editorStore.tellWalkNext`). A flow the file holds
+      // stays as written, and a click on a shape or a chip is still that shape's or chip's.
+      const presented = useEditorStore.getState();
+      if (presented.mode === 'present' && presented.flowPlayback.walk && event.button === 0) {
+        if (event.target instanceof Element && event.target.closest('.react-flow__node, button, [role="button"], [data-callout-scroll]')) return;
+        const pick = edgeAtEvent(event);
+        if (pick && pick.part !== 'control' && presented.tellWalkNext(pick.id)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
         return;
       }
       const trace = useUiStore.getState().flowTrace;

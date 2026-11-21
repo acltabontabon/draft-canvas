@@ -10,6 +10,15 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Present without a flow** — **Present** now walks a diagram that has no flows, following its
+  arrows one connector at a time. Select one shape to present from it onward, two shapes to present
+  the way between them, or several to present that part; the button reads **Present selection**.
+  **Keep as a flow** (`K`) saves the walk.
+- **Tell a walk in your own order** — While presenting a walk, click a connector to tell it next.
+  **Keep as a flow** saves the order you took.
+- **One Present button** — The menu beside **Present** lists what it can walk: the selection, the
+  whole diagram and each flow. **Show flows** there (or `F`) opens the Flows panel, which the
+  separate Flows button used to.
 - **Outage** — Take a shape down and see what the drawing says happens next: what fails with it,
   what absorbs the failure and what carries on. Right-click a shape and choose **Take down**, or
   click **Outage** in the status bar. It reads the drawing alone and invents no numbers.

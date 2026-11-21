@@ -32,6 +32,8 @@ import { storeDocument } from './fixtures/outage';
  *   npx tsx e2e/docs-screenshots.ts --reader-only --theme dark   (the guide's `share-*-dark.png` pair)
  *   npx tsx e2e/docs-screenshots.ts --outage-only
  *   npx tsx e2e/docs-screenshots.ts --sequence-only
+ *   npx tsx e2e/docs-screenshots.ts --walk-only
+ *   npx tsx e2e/docs-screenshots.ts --layout-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -164,7 +166,7 @@ async function clickConnector(page: Page, from: number, to: number) {
 }
 
 /** Drags from one shape's right-hand handle onto another shape. */
-async function connectNodes(page: Page, from: number, to: number) {
+async function connectNodes(page: Page, from: number, to: number, level = true) {
   const source = page.locator('.dc-node').nth(from);
   await page.mouse.move(1, 1); // WebKit refreshes hover only on real movement (see e2e/canvas.ts)
   await source.hover();
@@ -175,7 +177,7 @@ async function connectNodes(page: Page, from: number, to: number) {
   await page.mouse.move(target.x, target.y, { steps: 12 });
   await page.mouse.up();
   await page.keyboard.press('Escape');
-  await levelWith(page, from, to);
+  if (level) await levelWith(page, from, to);
 }
 
 /** Runs one palette command by name, the way a reader following the docs would. */
@@ -538,6 +540,116 @@ async function sequenceScreenshots(page: Page) {
   await shot(page, 'sequence-cross-frame');
 }
 
+/**
+ * Present without a flow: a selection that makes a story is what Present walks, and the walk it
+ * makes is offered to keep.
+ */
+async function walkScreenshots(page: Page) {
+  await page.getByRole('button', { name: START_BUTTON }).first().click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  const title = page.getByLabel('Diagram title');
+  await title.fill('Order processing');
+  await title.blur();
+  const shapes: [string, { x: number; y: number }, string][] = [
+    ['s', { x: 190, y: 230 }, 'Orders API'],
+    ['q', { x: 520, y: 230 }, 'orders'],
+    ['s', { x: 860, y: 230 }, 'Fulfilment worker'],
+    ['d', { x: 520, y: 430 }, 'Orders DB'],
+  ];
+  for (const [key, at, name] of shapes) {
+    await drop(page, key, at, name);
+    await page.keyboard.press('Escape');
+  }
+  await expect(page.locator('.dc-node')).toHaveCount(4);
+  await connectNodes(page, 0, 1);
+  await connectNodes(page, 1, 2);
+  await connectNodes(page, 0, 3, false);
+  await page.mouse.click(1000, 520);
+
+  // Two shapes chosen: the button says what it will walk, the way from one to the other.
+  await page.locator('.dc-node').nth(0).click();
+  await page.locator('.dc-node').nth(2).click({ modifiers: ['Shift'] });
+  const present = page.getByRole('button', { name: 'Present selection', exact: true });
+  await expect(present).toBeVisible();
+  // Wide enough for the toolbar to spell the button out; narrower, it is the glyph in the
+  // selection's colour.
+  await page.setViewportSize({ width: 1340, height: VIEWPORT.height });
+  await shot(page, 'present-selection');
+
+  // The menu beside Present: everything it could walk, and the way to the Flows panel.
+  await page.getByRole('button', { name: 'What to present', exact: true }).click();
+  await expect(page.getByRole('menu', { name: 'What to present' })).toBeVisible();
+  await shot(page, 'present-menu', { x: 700, y: 0, width: 640, height: 330 });
+  await page.keyboard.press('Escape');
+
+  await present.click();
+  await expect(page.locator('.dc-present-card')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Keep as a flow' })).toBeVisible();
+  // The strip recedes while nothing moves; a picture of it wants it there.
+  await page.waitForTimeout(900);
+  await page.mouse.move(640, 300);
+  await shot(page, 'present-walk');
+  await page.keyboard.press('Escape');
+}
+
+/** A palette command that asks for one more choice before it runs. */
+async function paletteChoice(page: Page, query: string, choice: string) {
+  await page.keyboard.press('Control+k');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  const dialog = page.getByRole('dialog');
+  await page.keyboard.type(query);
+  // Enter takes the first row, so wait for the rows the words narrowed it to.
+  await expect(dialog.getByRole('option').first()).toContainText(query);
+  await page.keyboard.press('Enter');
+  // The second list replaces the first in the same field, under its own prompt.
+  await expect(page.getByRole('combobox', { name: 'Search commands' })).toHaveCount(0);
+  await page.keyboard.type(choice);
+  await expect(dialog.getByRole('option').first()).toContainText(choice);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toBeHidden();
+}
+
+/**
+ * The layout tools on a starter with flows in it: Arrange following one of them, then a portal, a
+ * held shape and the legend together.
+ */
+async function layoutScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1200, height: 700 });
+  await openStarter(page, 'Microservices');
+  const shape = (name: string) => page.locator('.dc-node', { hasText: name }).last();
+  // A starter arrives selected; the commands below are offered by what is selected.
+  await page.keyboard.press('Escape');
+
+  await paletteChoice(page, 'Arrange around', 'Handle a request');
+  await expect(page.getByRole('region', { name: 'Arrange preview' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Arrange preview' }).getByRole('button', { name: 'Apply' })).toBeEnabled();
+  await shot(page, 'arrange-follow-flow');
+  await page.getByRole('region', { name: 'Arrange preview' }).getByRole('button', { name: 'Cancel' }).click();
+
+  await expect(page.getByRole('region', { name: 'Arrange preview' })).toBeHidden();
+  // Arrange leaves the shapes it would have moved selected; a click on one of many keeps them all.
+  await page.mouse.click(60, 300);
+  await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
+
+  // A connector right across the diagram, drawn as a portal instead.
+  await shape('Capability C Store').click();
+  await expect(page.locator('.react-flow__node.selected')).toHaveCount(1);
+  await paletteChoice(page, 'Connect to', 'API Gateway');
+  await palette(page, 'Draw as portal');
+  await page.keyboard.press('Escape');
+  await shape('Capability A Service').click();
+  await palette(page, 'Hold in place');
+  await page.keyboard.press('Escape');
+  await palette(page, 'Show legend');
+  await palette(page, 'Fit to view');
+  // Empty canvas: nothing selected, so the pin and the stubs are what the picture shows.
+  await page.mouse.click(1080, 180);
+  // The palette hands keyboard focus back to the canvas, which rings it; the picture is of the
+  // diagram at rest.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await shot(page, 'portal-legend-held');
+}
+
 async function readerScreenshots(page: Page) {
   await page.setViewportSize({ width: VIEWPORT.width, height: 760 });
   for (const guided of [true, false]) {
@@ -599,6 +711,16 @@ async function main() {
 
     if (process.argv.includes('--sequence-only')) {
       await sequenceScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--walk-only')) {
+      await walkScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--layout-only')) {
+      await layoutScreenshots(page);
       return;
     }
 

@@ -33,16 +33,19 @@ export function usePresenterBroadcast(): void {
       if (editor.mode !== 'present') return null;
       const { transform, width, height } = storeApi.getState();
       const playback = editor.flowPlayback;
+      const told = playback.active && !playback.walk;
       return {
         path: [...editor.path],
         viewport: encodeFollowViewport({ x: transform[0], y: transform[1], zoom: transform[2] }, { width, height }),
         view: { width, height },
         presenting: true,
-        flowId: playback.active && !playback.sequenceNodeId ? playback.flowId : null,
-        ...(playback.active && playback.sequenceNodeId ? { sequenceNodeId: playback.sequenceNodeId } : {}),
-        step: playback.active && playback.flowId ? playback.step : null,
+        // A walk is this presenter's alone until they keep it: a follower's file has no flow to
+        // light for it, so they follow the camera, as they do when no flow is chosen.
+        flowId: told && !playback.sequenceNodeId ? playback.flowId : null,
+        ...(told && playback.sequenceNodeId ? { sequenceNodeId: playback.sequenceNodeId } : {}),
+        step: told && playback.flowId ? playback.step : null,
         // Without it the opening and the closing read as a numbered step on a follower's side.
-        ...(playback.active && playback.flowId && playback.stage ? { stage: playback.stage } : {}),
+        ...(told && playback.flowId && playback.stage ? { stage: playback.stage } : {}),
       };
     };
 

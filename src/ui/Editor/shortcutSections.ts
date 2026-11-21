@@ -166,6 +166,7 @@ export const SECTIONS: Section[] = [
       { keys: ['O'], label: 'Overview — pull back to the whole flow, keeping the step; again to return' },
       { keys: ['R'], label: 'Re-centre — hand the camera back after panning by hand' },
       { keys: ['P'], label: 'Pointer — a soft ring that follows the cursor' },
+      { keys: ['K'], label: 'Keep as a flow — save the walk Present made from the arrows or the selection' },
       { keys: ['Shift', '→'], label: 'Next flow — without leaving the presentation' },
       { keys: ['Shift', '←'], label: 'Previous flow' },
       { keys: ['Shift', 'F'], label: 'Jump to any flow' },

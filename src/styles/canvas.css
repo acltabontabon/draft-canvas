@@ -7222,6 +7222,10 @@
 /* Tracing keeps connector hit bands active while editing gestures are suspended. */
 .dc-editor[data-tracing] .dc-edge-hit { pointer-events: stroke; cursor: pointer; }
 
+/* Presenting a walk: a connector clicked is told next (`Canvas`'s click capture), so the hit bands
+   that presentation otherwise leaves inert are live, and say so with the pointer. */
+.dc-editor[data-walk] .dc-edge-hit { pointer-events: stroke; cursor: pointer; }
+
 
 .dc-source-evidence { max-width: 320px; font-size: 11px; line-height: 1.5; }
 .dc-source-evidence summary { cursor: pointer; }
