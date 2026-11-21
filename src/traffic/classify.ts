@@ -1,4 +1,4 @@
-import { capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
+import { baseCategory, capabilityFor, categoryOf, type NodeCategory } from '../document/connectorSemantics';
 import { MESSAGING_CATEGORIES, STORE_CATEGORIES } from '../document/edgeSemantics';
 import type { DraftEdge, DraftNode, EdgeSemantic } from '../document/types';
 import type { TrafficClass, UncertaintyReason, WorkloadKind } from './types';
@@ -21,7 +21,7 @@ export function isBaselineClass(value: TrafficClass): boolean {
 }
 
 function isCompute(category: NodeCategory): boolean {
-  return category === 'service' || category === 'external' || category === 'worker' || category === 'scheduler' || category === 'gateway';
+  return category === 'service' || category === 'external' || category === 'worker' || category === 'scheduler' || baseCategory(category) === 'gateway';
 }
 
 function isOrigin(category: NodeCategory): boolean {

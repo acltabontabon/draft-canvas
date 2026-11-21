@@ -10,6 +10,16 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Load Balancer and Proxy** — Two new Service kinds, each drawn as what it does: a load balancer
+  as one address fanning out to identical instances, a proxy as a connection in and a separate one
+  out. HAProxy and an ALB arrive as a Load Balancer; NGINX, Envoy and a CDN as a Proxy.
+- **Artifact** — A new shape for what a system reads, mounts or presents: a File, a Config, a
+  Secret or a Certificate. Find it in **Shapes**; it is not on the toolbar.
+- **Shapes by name** — Type what a thing is called in **Shapes** or `⌘K` and it arrives already set
+  to that kind: `load balancer`, `reverse proxy`, `cdn`, `config`, `tls`, `api key`, `pod`.
+- **Connectors that say what these do** — A Load Balancer *distributes to*, a Proxy *forwards to*,
+  and a service is *configured by* a Config, *authenticates with* a Secret and *presents* a
+  Certificate.
 - **Present without a flow** — **Present** now walks a diagram that has no flows, following its
   arrows one connector at a time. Select one shape to present from it onward, two shapes to present
   the way between them, or several to present that part; the button reads **Present selection**.

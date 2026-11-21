@@ -22,7 +22,7 @@ const ROLE_EVIDENCE: readonly (readonly [AnchorRole, readonly NodeCategory[]])[]
   ['consumer', ['queue', 'topic', 'stream', 'deadLetter']],
   ['scheduled', ['scheduler']],
   // Someone is waiting for an answer.
-  ['request', ['gateway', ...ACTOR_CATEGORIES]],
+  ['request', ['gateway', 'loadBalancer', 'proxy', ...ACTOR_CATEGORIES]],
 ];
 
 /** The anchor's role, from its inbound connectors alone. Nothing pointing at it yet: `plain`. */

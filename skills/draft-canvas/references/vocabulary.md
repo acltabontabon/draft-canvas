@@ -12,7 +12,9 @@ signals that point to each one.
 | An HTTP/gRPC/GraphQL backend whose job is serving an API | `api` | `Spring Boot 3` · `FastAPI` · `Go` |
 | A process that consumes a queue/stream or runs background jobs | `worker` | `Celery` · `Sidekiq` · `Node.js` |
 | Cron, scheduled tasks, `@Scheduled`, Celery beat, CronJob | `scheduler` | `Kubernetes` |
-| Ingress, API gateway, reverse proxy, load balancer, BFF router | `gateway` | `NGINX` · `Kong` · `AWS API Gateway` |
+| Ingress, API gateway, BFF router: authenticates and routes by path | `gateway` | `Kong` · `AWS API Gateway` |
+| Something that spreads requests across instances of one service | `load-balancer` | `HAProxy` · `AWS ALB` |
+| A reverse or forward proxy, CDN, WAF, service-mesh sidecar | `proxy` | `NGINX` · `Envoy` · `Cloudflare` |
 | Any other deployable of this system | `service` | |
 | A system you call but don't own (Stripe, Auth0, a partner API, another team's service) | `external-system` | `Stripe` |
 | PostgreSQL, MySQL, SQL Server, Oracle, SQLite | `sql-database` | `PostgreSQL 16` |
@@ -33,6 +35,10 @@ signals that point to each one.
 | A package/module boundary in a modular monolith | `module` | |
 | A repository/gateway/client class that adapts to infrastructure | `adapter` | `Hibernate` · `Stripe` |
 | An interface the core defines and adapters implement | `port` | `Java` |
+| A config file, env vars or feature flags, when what is configured is the point | `config` | `YAML` |
+| An API key, token or private key a service is handed | `secret` | `Vault` |
+| A TLS/mTLS certificate or CA a service presents or trusts | `certificate` | `X.509` |
+| Any other file that matters to the story (an image, a schema, an export) | `file` | `OpenAPI` |
 
 Redis is the usual trap: used with `GET/SET/EXPIRE` in front of another store it is a `cache`; when it
 is the only place the data lives (a cart, sessions kept nowhere else) it is the store itself — a

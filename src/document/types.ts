@@ -10,7 +10,7 @@
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 29;
+export const CURRENT_VERSION = 30;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -32,16 +32,17 @@ export const NODE_TYPES = [
   'actor',
   'component',
   'sequence',
+  'artifact',
 ] as const;
 
 export type DraftNodeType = (typeof NODE_TYPES)[number];
 
 /**
  * The shapes that stand for a piece of architecture, and so may carry a C4 `description` and
- * `technology`. A note, a label, a code card, a Junction or a Boundary is annotation or structure,
+ * `technology` (an Artifact's technology is its format or where it is kept: YAML, PEM, Vault). A note, a label, a code card, a Junction or a Boundary is annotation or structure,
  * not an element with a responsibility of its own.
  */
-export const C4_TEXT_TYPES = ['service', 'database', 'queue', 'actor', 'component'] as const satisfies readonly DraftNodeType[];
+export const C4_TEXT_TYPES = ['service', 'database', 'queue', 'actor', 'component', 'artifact'] as const satisfies readonly DraftNodeType[];
 
 export const NOTE_KINDS = ['note', 'question', 'warning', 'decision'] as const;
 export type NoteKind = (typeof NOTE_KINDS)[number];
@@ -136,7 +137,7 @@ export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
 
 /** Sub-kinds of the developer presets. Purely a labelling convenience — the
  *  base type's silhouette and accent always dominate; see `nodes/describe.ts`. */
-export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external', 'scheduler', 'gateway'] as const;
+export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external', 'scheduler', 'gateway', 'load-balancer', 'proxy'] as const;
 export type ServiceKind = (typeof SERVICE_KINDS)[number];
 
 export const DATABASE_KINDS = [
@@ -205,6 +206,22 @@ export type ActorFrame = (typeof ACTOR_FRAMES)[number];
  */
 export const COMPONENT_KINDS = ['generic', 'module', 'adapter', 'port'] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];
+
+/**
+ * An Artifact is a thing that is *read, mounted, issued or shipped* rather than a thing that runs
+ * or a place data lives: a file, the configuration a service starts with, a secret or key it is
+ * handed, the certificate it presents. It is the one architecture shape that does no work and
+ * holds no one else's data, which is why it is none of Service, Data Store or Component: a config
+ * file is not a small database, and a certificate is not a module.
+ *
+ * Four kinds, each a different relationship to what uses it: a `file` is read or written, a
+ * `config` is read (and watched for change), a `secret` is read by what it unlocks and never
+ * shown, a `certificate` is presented and trusted. Anything narrower ("Dockerfile", ".env", "JWT
+ * signing key", "TLS cert") is a name typed onto one of the four, and what the shape picker's
+ * search finds them by (`lib/conceptPresets.ts`).
+ */
+export const ARTIFACT_KINDS = ['file', 'config', 'secret', 'certificate'] as const;
+export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 
 /** Loose, technology-neutral presets for a `group` boundary. A preset only
  *  changes a small secondary caption — never the node's own `text`. */
@@ -441,6 +458,8 @@ export interface DraftNode {
   actorFrame?: ActorFrame;
   /** `component` nodes only. */
   componentKind?: ComponentKind;
+  /** `artifact` nodes only. */
+  artifactKind?: ArtifactKind;
   /** `group` nodes only. */
   boundaryPreset?: BoundaryPreset;
   /** Supporting detail collapsed into this node. Any node type may host one. */
@@ -514,7 +533,10 @@ export interface DraftSequence {
 }
 
 /** The shapes a participant may be: the ones that stand for a piece of architecture. */
-export type SeqParticipantType = (typeof C4_TEXT_TYPES)[number];
+/** What can stand on a lifeline: the shapes that act or answer. An Artifact is read or presented,
+ *  never called, so it carries C4 text without being one of these. */
+export const SEQ_PARTICIPANT_TYPES = ['service', 'database', 'queue', 'actor', 'component'] as const satisfies readonly DraftNodeType[];
+export type SeqParticipantType = (typeof SEQ_PARTICIPANT_TYPES)[number];
 
 /**
  * One lifeline. It carries the same identity fields as an architecture shape, on purpose: its head

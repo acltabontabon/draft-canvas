@@ -16,7 +16,9 @@ guidance when a pairing is unusual.
 | `agent` | Actor with `actorKind: 'agent'` |
 | `device` | Actor with `actorKind: 'device'` |
 | `service` | Service shape, `serviceKind` of `generic` or `api` |
-| `external` / `worker` / `scheduler` / `gateway` | Service with that `serviceKind` |
+| `external` / `worker` / `scheduler` | Service with that `serviceKind` |
+| `gateway` | Service with `serviceKind: 'gateway'` |
+| `loadBalancer` / `proxy` | Service with `serviceKind` `load-balancer` or `proxy`. Every rule reads them as `gateway`; only the caption differs (`routes` reads "distributes to" and "forwards to") |
 | `component` | Component shape, `componentKind` of `generic`, `module` or `adapter` |
 | `port` | Component with `componentKind: 'port'` |
 | `database` | Database shape, `databaseKind` of `generic`, `sql`, `nosql` or `table` |
@@ -25,6 +27,8 @@ guidance when a pairing is unusual.
 | `topic` | Queue shape, `queueKind: 'topic'`: one message, every subscriber |
 | `stream` | Queue shape, `queueKind: 'stream'`: a retained log each consumer group reads in full |
 | `deadLetter` | Queue with `deliveryRole: 'dead-letter'` (what **Add DLQ** creates) |
+| `artifact` | Artifact shape, `artifactKind: 'file'` |
+| `config` / `secret` / `certificate` | Artifact with that `artifactKind`. Every rule reads them as `artifact`; only the caption differs (`reads` is "configured by", "authenticates with", "presents") |
 | `junction` | Junction (ellipse) shape |
 | `generic` | Every other shape (text, note, code, group): no rules apply |
 
@@ -34,6 +38,9 @@ A pairing without its own row borrows one (`resolved()` and `capabilityFor`):
 
 - `external`, `worker`, `scheduler`, `gateway` and `component` fold to `service`.
 - `agent` and `device` fold to `actor`. `stream` folds to `topic`. `deadLetter` folds to `queue`.
+- `loadBalancer` and `proxy` are read as `gateway`, and `config`, `secret` and `certificate` as
+  `artifact`, before any lookup (`baseCategory`).
+- `artifact` never folds: nothing queries a certificate, so it borrows no data-store row.
 - `port` never folds. A contract has no verbs of its own beyond its rows.
 - Lookup order: exact pair, source folded, target folded, both folded. A dead-letter source only
   folds with both sides, so DLQ → DLQ stays unlisted.
@@ -52,6 +59,9 @@ Database, anything touching `generic`) is an unrestricted connector with no defa
 | Cache → Service | reads | reads |  |
 | Service → File System | reads, writes, readsWrites, watches, dependsOn | writes |  |
 | File System → Service | reads | reads |  |
+| Service → Artifact | reads, writes, watches, uses, dependsOn | reads |  |
+| Artifact → Service | reads, dependsOn | reads |  |
+| Actor → Artifact | writes, reads, uses | *(none)* |  |
 | Service → Object Storage | reads, writes, readsWrites, dependsOn | writes |  |
 | Object Storage → Service | reads | reads |  |
 | Service → Search Index | searches, indexes, dependsOn | searches |  |

@@ -6,8 +6,8 @@ import type { Rect } from '../edges/routing';
 import { computeSnap, SNAP_THRESHOLD, type Guide } from './snapping';
 
 /** Tagged notes need their tag plus one body line; the generic floor only fits a plain note. */
-export function minResizeSizeFor(node: Pick<DraftNode, 'type' | 'noteKind' | 'sequence' | 'text'>): { width: number; height: number } {
-  const min = minSizeFor(node.type);
+export function minResizeSizeFor(node: Pick<DraftNode, 'type' | 'noteKind' | 'sequence' | 'text'> & Pick<Partial<DraftNode>, 'serviceKind'>): { width: number; height: number } {
+  const min = minSizeFor(node.type, node.serviceKind);
   // A sequence resizes down to what it holds and no further.
   if (node.type === 'sequence') {
     const needed = naturalSequenceSizeFor(node, describeContext(LIGHT));

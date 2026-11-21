@@ -1,5 +1,5 @@
 import type { SimpleIcon } from 'simple-icons';
-import { dataStoreGlyphBounds } from '../document/dataStoreGeometry';
+import { artifactGlyphBounds, dataStoreGlyphBounds, isGlyphServiceKind } from '../document/dataStoreGeometry';
 import { RAIL_SIZE, markerRail } from '../document/markerRail';
 import { C4_TEXT_TYPES, type DraftNode } from '../document/types';
 import catalog from './technologyCatalog/index.json';
@@ -225,8 +225,12 @@ export const TECHNOLOGY_MARK_SIZE = RAIL_SIZE;
  * sit beside the right edge, on top of the label of any connector leaving that side. */
 export function technologyMarkBounds(node: DraftNode, snapshot: TechnologyIconSnapshot = bySlug): { x: number; y: number; width: number; height: number } | undefined {
   if (!nodeTechnologyIcon(node, snapshot)) return undefined;
-  if (node.type === 'database') {
+  if (node.type === 'database' || (node.type === 'service' && isGlyphServiceKind(node.serviceKind))) {
     const glyph = dataStoreGlyphBounds({ ...node, x: 0, y: 0 });
+    return { x: glyph.right + 9, y: glyph.top + 2, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
+  }
+  if (node.type === 'artifact') {
+    const glyph = artifactGlyphBounds({ ...node, x: 0, y: 0 });
     return { x: glyph.right + 9, y: glyph.top + 2, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
   }
   const at = markerRail(node, { technology: true }).technology!;

@@ -646,6 +646,10 @@ const MIGRATIONS: Record<number, Migration> = {
   // Optional `held` on shapes and `portal` on connectors; a diagram without them means the same.
   // The version moves so an older build refuses the file rather than dropping both on its next save.
   28: (document) => document,
+  // The `artifact` shape and two Service kinds (`load-balancer`, `proxy`). Nothing older holds
+  // them; the number moves so a build that has never heard of them refuses the file instead of
+  // opening an Artifact as nothing and a Load Balancer as a plain Service.
+  29: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

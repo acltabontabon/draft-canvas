@@ -40,6 +40,8 @@ export function shapeKindOf(node: DraftNode): ShapeKind | null {
     case 'worker':
     case 'scheduler':
     case 'gateway':
+    case 'loadBalancer':
+    case 'proxy':
       return 'service';
     case 'external':
       return 'external';

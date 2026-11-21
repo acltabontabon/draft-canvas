@@ -10,6 +10,7 @@ import { isEditableTarget } from '../../../lib/isEditableTarget';
 import { MOD_SYMBOL } from '../../../lib/platform';
 import { useTechnologyIcon } from '../../../canvas/useTechnologyIcon';
 import { GENERIC_TECHNOLOGY_ICON } from '../../../nodes/technology';
+import { conceptShapes } from '../../../lib/conceptPresets';
 import { technologyShapes } from './technologyShapes';
 import { ToolGlyph } from './ToolGlyph';
 
@@ -41,6 +42,10 @@ const GROUPS: { title: string; presets: Preset[] }[] = [
  * and its key. So a rail that got shorter did not get harder to read: nothing is reachable only by
  * guessing what a glyph means, and a word typed here finds a shape by any of the names people use
  * for it ("cache", "user", "topic"), the same ones ⌘K knows.
+ *
+ * The name of a thing finds the shape and kind it is (`conceptShapes`): "load balancer" is a Service
+ * set to Load Balancer, "tls" an Artifact that is a TLS certificate. None of those are on the rail
+ * or in a menu; typing is how they are reached.
  *
  * A technology's name finds the shape that technology is (`technologyShapes`): "kafka" offers a
  * Queue that arrives as an Apache Kafka topic, logo and all — so "how do I draw Redis?" is answered
@@ -79,10 +84,14 @@ export function ShapePicker({ anchorRect, trigger, armedId, onPick, onDismiss }:
     const first = query.trim().toLowerCase().split(/\s+/)[0]!;
     const shapes = searchPresets(query);
     const named = shapes.filter((preset) => preset.label.toLowerCase().includes(first));
+    // Then the things that go by that name ("load balancer", "certificate"): a shape already set
+    // to the kind it is, which is a better answer than the family it belongs to.
+    const concepts = conceptShapes(query);
     return [
       { title: '', presets: named },
-      { title: 'Technologies', presets: technologyShapes(query, { guess: named.length === 0 }) },
-      { title: named.length === shapes.length ? '' : 'Shapes', presets: shapes.filter((preset) => !named.includes(preset)) },
+      { title: named.length === 0 ? '' : 'By name', presets: concepts },
+      { title: 'Technologies', presets: technologyShapes(query, { guess: named.length === 0 && concepts.length === 0 }) },
+      { title: named.length === shapes.length && concepts.length === 0 ? '' : 'Shapes', presets: shapes.filter((preset) => !named.includes(preset)) },
     ].filter((section) => section.presets.length > 0);
   }, [searching, query]);
   const flat = useMemo(() => sections.flatMap((section) => section.presets), [sections]);
@@ -175,7 +184,7 @@ export function ShapePicker({ anchorRect, trigger, armedId, onPick, onDismiss }:
         aria-controls="dc-shape-picker-list"
         aria-activedescendant={flat[at] ? `dc-shape-option-${flat[at].id}` : undefined}
         aria-autocomplete="list"
-        placeholder="Search shapes — try “cache” or “kafka”"
+        placeholder="Search shapes — try “load balancer” or “kafka”"
         autoComplete="off"
         spellCheck={false}
         value={query}
@@ -205,7 +214,7 @@ export function ShapePicker({ anchorRect, trigger, armedId, onPick, onDismiss }:
                   onClick={() => onPick(preset)}
                 >
                   <span className="dc-shape-option-glyph" aria-hidden="true">
-                    {preset.technology ? <TechnologyLogo technology={preset.technology} /> : <ToolGlyph id={preset.id} />}
+                    {preset.technology ? <TechnologyLogo technology={preset.technology} /> : <ToolGlyph id={preset.glyph ?? preset.id} />}
                   </span>
                   <span className="dc-toolbar-menu-text">
                     <span className="dc-context-menu-title">{preset.label}</span>

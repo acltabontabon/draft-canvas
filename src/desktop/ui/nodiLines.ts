@@ -996,7 +996,7 @@ export function diagramLines(nodes: readonly DraftNode[], edges: readonly DraftE
   // Only things that call: a store answering its writer isn't a loop.
   const calls = (id: string) => {
     const node = byId.get(id);
-    return node !== undefined && ['service', 'worker', 'gateway'].includes(categoryOf(node));
+    return node !== undefined && ['service', 'worker', 'gateway', 'loadBalancer', 'proxy'].includes(categoryOf(node));
   };
   const loop = edges.find((e) => calls(e.source) && calls(e.target) && edges.some((back) => back.source === e.target && back.target === e.source));
   const [left, right] = loop ? [byId.get(loop.source), byId.get(loop.target)] : [];

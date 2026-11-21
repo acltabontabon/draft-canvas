@@ -112,6 +112,7 @@ function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: string): Dr
     ...(spec.shape.queueKind ? { queueKind: spec.shape.queueKind } : {}),
     ...(spec.shape.actorKind ? { actorKind: spec.shape.actorKind } : {}),
     ...(spec.shape.componentKind ? { componentKind: spec.shape.componentKind } : {}),
+    ...(spec.shape.artifactKind ? { artifactKind: spec.shape.artifactKind } : {}),
     ...(spec.shape.deliveryRole ? { deliveryRole: spec.shape.deliveryRole } : {}),
     ...(spec.description ? { description: spec.description } : {}),
     ...(spec.technology ? { technology: spec.technology } : {}),
@@ -133,6 +134,7 @@ const PEER_SUBKIND_FIELD: Partial<Record<DraftNodeType, keyof DraftNode>> = {
   queue: 'queueKind',
   actor: 'actorKind',
   component: 'componentKind',
+  artifact: 'artifactKind',
 };
 
 /** How much larger than its group's typical size a shape may be before it is left as its own case

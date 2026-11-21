@@ -13,6 +13,7 @@ import {
   createEdge,
   createNode,
   defaultSizeFor,
+  boxForServiceKind,
   defaultTextFor,
   type CreateNodeInput,
 } from '../document/factory';
@@ -138,6 +139,7 @@ import {
   categoryOf,
   isServiceInteraction,
   inferRelationship,
+  baseCategory,
 } from '../document/connectorSemantics';
 import { inferRelationshipThroughJunctions, reinferIfEligible } from '../document/reinfer';
 import { plainShortcut } from '../lib/platform';
@@ -849,7 +851,7 @@ export interface ApplyOptions {
  *  `document/connectorSemantics.ts`) — a change to any of these can make an incident edge's
  *  inferred relationship stale, so `updateNodeById` re-runs `reinferIfEligible` on every edge
  *  touching the node whenever a patch touches one of these. */
-const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'actorKind', 'componentKind'] as const;
+const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'actorKind', 'componentKind', 'artifactKind'] as const;
 
 /**
  * Re-evaluates every edge incident to a node after a patch changes one of `KIND_FIELDS` — the same
@@ -891,6 +893,14 @@ function applyComponentAutoLabel(doc: DraftDocument, nodeId: string, before: Dra
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node) return doc;
   return updateNode(doc, nodeId, { text: defaultTextFor('component', undefined, node.componentKind) });
+}
+
+/** And for an Artifact: "File" becomes "Certificate" while nobody has named it. */
+function applyArtifactAutoLabel(doc: DraftDocument, nodeId: string, before: DraftNode, patch: Partial<DraftNode>): DraftDocument {
+  if (before.type !== 'artifact' || before.textOrigin !== 'auto' || patch.text !== undefined) return doc;
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node) return doc;
+  return updateNode(doc, nodeId, { text: defaultTextFor('artifact', undefined, undefined, undefined, node.artifactKind) });
 }
 
 /**
@@ -2099,9 +2109,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply(label, (doc) => {
       const before = doc.nodes.find((n) => n.id === id);
       let next = updateNode(doc, id, picked && before?.kindOrigin ? { ...patch, kindOrigin: undefined } : patch);
-      if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
+      if (before && 'serviceKind' in patch) {
+        next = applyServiceAutoLabel(next, id, before, patch);
+        // A card becoming a glyph (or back) takes the box that drawing needs.
+        const box = boxForServiceKind(before, before.serviceKind, patch.serviceKind);
+        if (box && !('width' in patch) && !('height' in patch)) next = updateNode(next, id, box);
+      }
       if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
       if (before && 'actorKind' in patch) next = applyActorAutoLabel(next, id, before, patch);
+      if (before && 'artifactKind' in patch) next = applyArtifactAutoLabel(next, id, before, patch);
       if (before?.type === 'note' && 'noteKind' in patch) next = growNoteToFit(next, id);
       if (before?.type === 'text' && TEXT_STYLE_FIELDS.some((field) => field in patch)) {
         next = growTextToFit(next, id);
@@ -2129,6 +2145,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           // The same follow-ups as a kind picked in the inspector: an automatic name follows the
           // kind, and connectors whose meaning was inferred are inferred again.
           next = applyServiceAutoLabel(next, id, before, kind);
+          const box = boxForServiceKind(before, before.serviceKind, (kind as Partial<DraftNode>).serviceKind ?? before.serviceKind);
+          if (box) next = updateNode(next, id, box);
           next = reinferIncidentEdges(next, id, doc);
         }
         return growArchitectureToFit(next, id);
@@ -2490,7 +2508,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   addRoutedService(gatewayId) {
     const source = get().document.nodes.find((n) => n.id === gatewayId);
-    if (!source || categoryOf(source) !== 'gateway') return;
+    if (!source || baseCategory(categoryOf(source)) !== 'gateway') return;
     get().addCompanion(gatewayId, { type: 'service', serviceKind: 'api' }, 'Add Service');
   },
 

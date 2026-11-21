@@ -49,6 +49,7 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   group: 'Boundary',
   ellipse: 'Junction',
   sequence: 'Sequence',
+  artifact: 'Artifact',
 };
 
 /**

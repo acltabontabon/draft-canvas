@@ -10,15 +10,26 @@ technology and it offers the shape that technology is: `kafka` gives a Queue tha
 topic, `redis` a Data Store that is a cache, `s3` object storage, each with its logo where there is
 one. A language or framework (`spring`, `rust`) gives a Service built with it.
 
+Type what a thing is called and it offers the shape already set to that kind: `load balancer`,
+`reverse proxy`, `cdn`, `config`, `tls`, `api key`, `pod`. Where the name says more than the kind
+does, the shape arrives named (`cdn` is a Proxy called CDN). The same names work in `⌘K` as
+**Add Load Balancer**, **Add TLS Certificate** and so on. None of them are on the toolbar.
+
+![A CDN forwarding to a load balancer that distributes to three instances of an API, with the config, secret and certificate each one uses.](../media/guides/shapes-by-name.png)
+
+Their connectors say what each one does: a Load Balancer *distributes to*, a Proxy *forwards to*, and
+a service is *configured by* a Config, *authenticates with* a Secret and *presents* a Certificate.
+
 Select a shape to choose its kind in the toolbar.
 
 | Shape | Key | Kinds |
 | --- | --- | --- |
-| Service | `S` | Generic, API, Worker, External, Scheduler, Gateway |
+| Service | `S` | Generic, API, Worker, External, Scheduler, Gateway, Load Balancer, Proxy |
 | Data Store | `D` | Generic, SQL, NoSQL, Cache, File System, Object Storage, Search Index, Table |
 | Queue | `Q` | Queue, Topic, Stream |
 | Actor | `A` | Human, System, Device, Group, Third Party, AI Agent |
 | Component | `M` | Generic, Module, Adapter, Port |
+| Artifact | | File, Config, Secret, Certificate |
 | Junction | `J` | |
 | Boundary | `B` | See [Boundaries](#boundaries) |
 | Text / Note / Code | `T` / `N` / `C` | |
@@ -26,6 +37,13 @@ Select a shape to choose its kind in the toolbar.
 To turn a shape into another, select it and press `⇧` with the new shape's key: `⇧Q` makes it a
 Queue, `⇧D` a Data Store. Its name, connectors, flows and notes stay. **Turn into…** in `⌘K` does the
 same.
+
+A **Gateway** authenticates and routes by path; a **Load Balancer** spreads requests across
+instances of one service; a **Proxy** stands in the path and passes traffic along, forward or
+reverse. All three route, so their connectors read the same. An **Artifact** is something read,
+mounted or presented rather than run: draw one when the config, secret or certificate is part of
+what you are explaining. For a sidecar, put the service and a Proxy inside a Boundary (`pod` in the
+shape picker gives one).
 
 Use **External** for a service you don't own. **Actor frame → Framed** outlines an actor. Drag a
 corner handle to resize; Actor, Queue and Data Store artwork grows with the box.

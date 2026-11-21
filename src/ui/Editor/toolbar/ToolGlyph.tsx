@@ -120,6 +120,34 @@ const GLYPHS: Record<string, ReactElement> = {
       <path d="M14.5 14.2H6.2" strokeDasharray="1.8 1.5" />
     </>
   ),
+  // A load balancer: one address, three instances it spreads requests across.
+  'load-balancer': (
+    <>
+      <circle cx="4.6" cy="10" r="2.1" />
+      <path d="M6.7 10h5.8M6.7 10c3 0 2.6-5 5.8-5M6.7 10c3 0 2.6 5 5.8 5" />
+      <rect x="13" y="3.4" width="3.6" height="3.2" rx="0.8" />
+      <rect x="13" y="8.4" width="3.6" height="3.2" rx="0.8" />
+      <rect x="13" y="13.4" width="3.6" height="3.2" rx="0.8" />
+    </>
+  ),
+  // A proxy: a connection in, the body standing in the path, a second connection out.
+  proxy: (
+    <>
+      <rect x="8" y="3.5" width="4" height="13" rx="1.6" />
+      <path d="M2.5 10h4M4.9 8.4 6.5 10 4.9 11.6" />
+      <path d="M13.5 10h4M15.9 8.4 17.5 10 15.9 11.6" />
+    </>
+  ),
+  // An artifact: a sheet with its corner turned and a seal on it. (A Note is the same sheet with
+  // the corner turned at the bottom, and words where the seal is.)
+  artifact: (
+    <>
+      <path d="M5 3h6.5L15 6.5V17H5Z" />
+      <path d="M11.5 3v3.5H15" />
+      <path d="M7.5 9.5h3" />
+      <circle cx="11.2" cy="13" r="1.9" />
+    </>
+  ),
   // A component: the UML box with its two tabs.
   component: (
     <>

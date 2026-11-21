@@ -82,3 +82,25 @@ export function dataStoreGlyphBounds(node: { x: number; y: number; width: number
     right: centre + width / 2,
   };
 }
+
+/** An Artifact's sheet is narrower than any Data Store glyph: a connector has to reach it, not the
+ *  width a cylinder would have had. */
+export const ARTIFACT_GLYPH_WIDTH = 36;
+
+/** An Artifact's glyph: a Data Store's arrangement (same top, height and scale), at its own width. */
+export function artifactGlyphBounds(node: { x: number; y: number; width: number; height: number }): DataStoreGlyphBounds {
+  const bounds = dataStoreGlyphBounds(node);
+  const width = Math.min(ARTIFACT_GLYPH_WIDTH * dataStoreScale(node), Math.max(0, node.width - DS_GLYPH_MARGIN * 2));
+  const centre = node.x + node.width / 2;
+  return { ...bounds, left: centre - width / 2, right: centre + width / 2 };
+}
+
+/**
+ * The Service kinds drawn as a glyph with their name underneath rather than as a card: a Load
+ * Balancer is a fan-out and a Proxy a relay, and neither picture survives being squeezed into the
+ * corner of a box. They take a Data Store's arrangement whole (same glyph box, same scale), so
+ * everything that knows where a Data Store's glyph is knows where theirs is.
+ */
+export function isGlyphServiceKind(kind: string | undefined): boolean {
+  return kind === 'load-balancer' || kind === 'proxy';
+}

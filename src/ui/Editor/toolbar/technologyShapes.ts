@@ -15,7 +15,7 @@ export const UNLISTED_TECHNOLOGIES = [
   'Amazon S3', 'Amazon SQS', 'Amazon SNS', 'Amazon DynamoDB', 'Amazon Kinesis', 'Amazon EventBridge', 'Amazon RDS',
   'Amazon Redshift', 'Amazon MSK', 'Amazon ElastiCache', 'Amazon OpenSearch', 'Amazon API Gateway', 'AWS Glue',
   'Azure Service Bus', 'Azure Event Hubs', 'Azure Event Grid', 'Azure Cosmos DB', 'Azure Blob Storage', 'Azure Synapse',
-  'Azure API Management', 'Google Pub/Sub', 'Google Cloud Storage', 'Google Cloud SQL', 'Google BigQuery', 'Google Dataflow',
+  'Azure API Management', 'Application Load Balancer', 'Network Load Balancer', 'Amazon CloudFront', 'Google Pub/Sub', 'Google Cloud Storage', 'Google Cloud SQL', 'Google BigQuery', 'Google Dataflow',
 ];
 
 /**

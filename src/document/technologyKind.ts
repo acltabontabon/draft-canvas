@@ -56,8 +56,17 @@ add(SERVICE, 'worker', [
 ]);
 add(SERVICE, 'scheduler', ['airflow', 'apache airflow', 'databricks workflows', 'lakeflow jobs', 'dagster', 'prefect', 'cron']);
 add(SERVICE, 'external', ['fivetran']);
-add(SERVICE, 'gateway', [
-  'kong', 'nginx', 'envoy', 'traefik', 'api gateway', 'amazon api gateway', 'aws api gateway', 'apigee', 'azure api management',
+add(SERVICE, 'gateway', ['kong', 'api gateway', 'amazon api gateway', 'aws api gateway', 'apigee', 'azure api management']);
+// What stands in front of services and spreads traffic across their instances, and what stands in
+// the path and passes it along. Products that do several of these jobs are filed under the one they
+// are best known for; the kind is one click away when a diagram means another.
+add(SERVICE, 'load-balancer', [
+  'haproxy', 'elb', 'aws elb', 'elastic load balancing', 'alb', 'aws alb', 'application load balancer', 'nlb', 'aws nlb',
+  'network load balancer', 'azure load balancer', 'cloud load balancing', 'google cloud load balancing', 'f5', 'metallb',
+]);
+add(SERVICE, 'proxy', [
+  'nginx', 'envoy', 'traefik', 'caddy', 'squid', 'varnish', 'cloudflare', 'cloudfront', 'amazon cloudfront', 'aws cloudfront',
+  'fastly', 'akamai', 'istio', 'linkerd',
 ]);
 
 /** The product a technology names on its own: lower case, single-spaced, without a trailing

@@ -253,7 +253,7 @@ export function CreateRail() {
                   >
                     {tucked ? (
                       // A shape picked as a technology draws as the shape it is, under the technology's name.
-                      <ToolContent id={basePresetFor(tucked).id} label={tucked.label} />
+                      <ToolContent id={tucked.glyph ?? basePresetFor(tucked).id} label={tucked.label} />
                     ) : (
                       <span className="dc-tool-shapes-word">Shapes</span>
                     )}

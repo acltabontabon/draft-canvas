@@ -163,8 +163,55 @@ export function passiveApplies(semantic: EdgeSemantic, source?: NodeCategory, ta
   return applies && (targetActs || passive.when === 'sourceIsHolder');
 }
 
+/**
+ * "Routes to" is a gateway's word: it picks a destination by path. A load balancer picks an
+ * instance of one destination, and a proxy has no choice to make at all.
+ */
+const ROUTING_VERBS: Partial<Record<NodeCategory, string>> = {
+  loadBalancer: 'distributes to',
+  proxy: 'forwards to',
+};
+
+/**
+ * What something does with each kind of Artifact, said the way it is said out loud. "Reads from" is
+ * true of all four and tells a reader nothing: a service is *configured by* its config,
+ * *authenticates with* a secret and *presents* a certificate, and whatever writes a secret or a
+ * certificate *issues* it. `passive` is the same relationship with the arrow drawn from the
+ * artifact. A plain File keeps the store wording, in both directions.
+ */
+const ARTIFACT_CAPTIONS: Partial<Record<NodeCategory, Partial<Record<EdgeSemantic, { active: string; passive: string }>>>> = {
+  artifact: {
+    reads: { active: 'reads', passive: 'read by' },
+    writes: { active: 'writes', passive: 'written by' },
+    watches: { active: 'watches', passive: 'watched by' },
+  },
+  config: {
+    reads: { active: 'configured by', passive: 'configures' },
+    writes: { active: 'writes', passive: 'written by' },
+    watches: { active: 'reloads on change', passive: 'watched by' },
+  },
+  secret: {
+    reads: { active: 'authenticates with', passive: 'authenticates' },
+    writes: { active: 'issues', passive: 'issued by' },
+    watches: { active: 'watches for rotation', passive: 'watched by' },
+  },
+  certificate: {
+    reads: { active: 'presents', passive: 'presented by' },
+    writes: { active: 'issues', passive: 'issued by' },
+    uses: { active: 'trusts', passive: 'trusted by' },
+    watches: { active: 'watches for renewal', passive: 'watched by' },
+  },
+};
+
 /** The plain caption for a semantic in the arrow's own direction — no response/attempts wording. */
 export function relationLabel(semantic: EdgeSemantic, source?: NodeCategory, target?: NodeCategory): string {
+  // What a router does with a request is the one thing that tells the three apart.
+  if (semantic === 'routes' && source !== undefined && ROUTING_VERBS[source]) return ROUTING_VERBS[source];
+  const toArtifact = target !== undefined ? ARTIFACT_CAPTIONS[target]?.[semantic] : undefined;
+  if (toArtifact) return toArtifact.active;
+  // Drawn from the artifact, the arrow starts at the verb's object: the same relationship, passive.
+  const fromArtifact = source !== undefined ? ARTIFACT_CAPTIONS[source]?.[semantic] : undefined;
+  if (fromArtifact && !(target !== undefined && ARTIFACT_CAPTIONS[target])) return fromArtifact.passive;
   if (passiveApplies(semantic, source, target)) {
     // A stream is read, not drained: every consumer group sees every record, so "consumed by" —
     // a queue's word, one message to one worker — would say the wrong thing about it.
