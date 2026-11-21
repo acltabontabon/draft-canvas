@@ -58,7 +58,7 @@ The operations below are passed as `tool`, with their arguments in `args`.
 | --- | --- | --- |
 | `get_capabilities({tool?, topics?, starter?})` | read | `tool` alone returns that tool's complete input schema. Otherwise vocabulary and rules: an index of topics and common word lists, each topic in full on request (`types`, `relationships`, `c4`, `flows`, `notes`, `sequences`, `starters`, `limits`, `layout`, `readability`). `starters` lists only what the person downloaded from the [starters gallery](../guides/examples.md). |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read | Diagrams in allowed folders, plus `active` (the open one) and `thisSession` (ones this session changed). |
-| `read_diagram({diagramId, query?, view?, focus?, include?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
+| `read_diagram({diagramId, query?, view?, focus?, include?, outage?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read | Full note or code text in 8,192-character chunks. |
 | `read_selection({diagramId})` | read | The current selection. See [Selection-aware editing](#selection-aware-editing). |
 | `get_implementation_context({diagramId, view?, focus?})` | read | Flow steps as stored, sequences (at most 8), notes, decisions, code and boundaries: what to implement, in order. |
@@ -109,6 +109,7 @@ attachments and flows with their ids. Elements, boundaries, notes, relationships
 | `include: ["attachments"]` / `["fullText"]` | Attachment previews, or complete text. |
 | `include: ["suggestions"]` | Up to 5 next-step suggestions per element. Never applied. |
 | `include: ["views"]` | An outline of every inside view. |
+| `outage: {element, allInstances?}` | What the drawing says follows if that element or group goes down: `headline`, `affected` (id and state), `unaffected` and `notes`, an open question carrying `open`. First page only. |
 | `format: "outline"` | File title and revision, plus paths, owners, levels and counts for up to 100 inside views (`viewsTruncated` marks a longer outline). |
 | `format: "mermaid"` / `"plantuml"` / `"c4"` | Flows as sequence-diagram source, or the architecture as C4-PlantUML, as Export writes them. |
 

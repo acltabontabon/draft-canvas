@@ -479,7 +479,7 @@
       "routing": "straight",
       "sourceAnchor": {
         "side": "right",
-        "offset": 0.36
+        "offset": 0.42093582887700587
       },
       "targetAnchor": {
         "side": "left",
@@ -501,7 +501,7 @@
       },
       "targetAnchor": {
         "side": "right",
-        "offset": 0.64
+        "offset": 0.5763903743315519
       }
     },
     {

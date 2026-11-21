@@ -1,0 +1,27 @@
+[
+  {
+    "file": "outage.png",
+    "alt": "The payment provider taken down: the worker that calls it fails, its queue retries into the dead-letter queue, and handwritten notes ask what the drawing leaves open.",
+    "platform": "shared"
+  },
+  {
+    "file": "shapes-drawn-as-what-they-do.png",
+    "alt": "A proxy, load balancer, gateway, module, port, adapter, external system, scheduler and worker, each with its own drawing and its name underneath.",
+    "platform": "shared"
+  },
+  {
+    "file": "hover-to-read.png",
+    "alt": "The pointer resting on the payment worker shows its note beside it without selecting or opening anything.",
+    "platform": "shared"
+  },
+  {
+    "file": "arrange-your-way.png",
+    "alt": "The Arrange preview with one shape held in place: the rest of the diagram is laid out around it and the bar counts connector crossings before and after.",
+    "platform": "shared"
+  },
+  {
+    "file": "present-without-a-flow.png",
+    "alt": "Presenting a diagram that has no flows: the walk has reached the checkout connector, with the steps so far lit and the rest stepped back.",
+    "platform": "shared"
+  }
+]
