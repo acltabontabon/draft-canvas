@@ -349,7 +349,7 @@ never stored. The status bar and depth map show the level in force.
 
 ### When it stays quiet
 
-Next-shape suggestions are off during a flow lens, presentation, focus mode and Traffic; while a gesture is
+Next-shape suggestions are off during a flow lens, presentation, focus mode and an outage walk; while a gesture is
 under way (a drag, a resize, a connector being repointed) or the Pencil is in hand; and while the
 picker a dropped connector opens is showing. A suggestion appears a quarter of a second after the
 selection settles, so passing through shapes shows none; `]` asks at once. Nothing is suggested

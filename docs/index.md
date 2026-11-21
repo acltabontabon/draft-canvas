@@ -14,7 +14,7 @@ first diagram.
 | [Architecture examples](guides/examples.md) | Ready-to-edit diagrams in the starters gallery |
 | [System levels](guides/depth.md) | Move from system context to containers and components |
 | [Open points](guides/open-points.md) | Track unresolved questions |
-| [Traffic](guides/traffic.md) | See where modeled traffic concentrates |
+| [Outage](guides/outage.md) | Take a shape down and see what fails, what holds and what is left open |
 | [Keyboard shortcuts](guides/keyboard-and-commands.md) | Shortcuts and the command palette |
 | [Accessibility](guides/accessibility.md) | Keyboard, screen reader and touch use |
 

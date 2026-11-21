@@ -2,7 +2,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useStore, useStoreApi } from '@xyflow/react';
 import { ReadOnlyCode } from '../../canvas/AttachmentPresentation';
-import { markerLoop } from '../../canvas/trafficSketchPaths';
+import { markerLoop } from '../../canvas/sketchPaths';
 import { familyOf } from '../../render/text/fonts';
 import { OpenPointGlyph } from '../../canvas/OpenPointGlyph';
 import { rectOfInternal } from '../../canvas/edgeGeometry';

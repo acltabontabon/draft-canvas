@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeTraffic } from '../../src/traffic';
-import { edge, insight, interaction, node } from './helpers';
+import { edge, interaction, node } from './helpers';
 
 describe('Junction routes', () => {
   it('flattens A -> J -> B into one definite interaction', () => {
@@ -34,11 +34,8 @@ describe('Junction routes', () => {
     expect(result.edges.get('a-j')?.participation).toBe('flow');
     expect(result.edges.get('j-b')?.participation).toBe('uncertain');
     expect(result.edges.get('j-c')?.participation).toBe('uncertain');
-    expect(result.insights.some((value) => value.kind === 'ambiguous-split')).toBe(true);
-    expect(result.insights.map((value) => value.text).join(' ')).not.toMatch(/50\s*\/\s*50/);
-    expect(result.nodes.get(j.id)).toMatchObject({ role: 'junction', tier: 'none' });
+    expect(result.nodes.get(j.id)).toMatchObject({ role: 'junction' });
     expect(result.entries).not.toContain(j.id);
-    expect(result.hotspots).not.toContain(j.id);
   });
 
   it('keeps a Junction fan-in as separate source interactions and sums the destination paths', () => {
@@ -77,7 +74,6 @@ describe('Junction routes', () => {
     const b = node('b', 'service');
     const result = analyzeTraffic({ nodes: [j, b], edges: [edge('j-b', j.id, b.id, { semantic: 'calls' })] });
     expect(result.status).toBe('nothing-to-analyze');
-    expect(insight(result, 'dangling-junction').text).toMatch(/Nothing leads into/);
   });
 
   it('reports a source whose Junction has no concrete outgoing path', () => {
@@ -85,7 +81,6 @@ describe('Junction routes', () => {
     const j = node('j', 'ellipse');
     const result = analyzeTraffic({ nodes: [a, j], edges: [edge('a-j', a.id, j.id, { semantic: 'calls' })] });
     expect(result.status).toBe('nothing-to-analyze');
-    expect(insight(result, 'dangling-junction').text).toMatch(/nothing leads on from it/);
   });
 
   it('marks semantic disagreement on one Junction route unknown and pathless', () => {
@@ -96,7 +91,6 @@ describe('Junction routes', () => {
     const route = interaction(result, a.id, b.id);
     expect(route.class).toBe('unknown');
     expect(route.paths).toEqual({ definite: 0, possible: 0 });
-    expect(result.insights.some((value) => value.kind === 'conflicting-semantics')).toBe(true);
   });
 
   it('terminates a Junction cycle and still reaches a concrete destination', () => {
@@ -143,7 +137,6 @@ describe('Junction routes', () => {
     const b = node('b', 'service');
     const result = analyzeTraffic({ nodes: [a, j1, j2, b], edges: [edge('a-j1', a.id, j1.id, { semantic: 'calls' }), edge('j1-j2', j1.id, j2.id, { semantic: 'dependsOn' }), edge('j2-b', j2.id, b.id, { semantic: 'calls' })] });
     expect(interaction(result, a.id, b.id).class).toBe('unknown');
-    expect(result.insights.some((value) => value.kind === 'conflicting-semantics')).toBe(true);
   });
 
   it('does not count structural legs as a split', () => {
@@ -153,7 +146,6 @@ describe('Junction routes', () => {
     const c = node('c', 'service');
     const result = analyzeTraffic({ nodes: [a, j, b, c], edges: [edge('a-j', a.id, j.id, { semantic: 'calls' }), edge('j-b', j.id, b.id, { semantic: 'calls' }), edge('j-c', j.id, c.id, { semantic: 'dependsOn' })] });
     expect(interaction(result, a.id, b.id)).toMatchObject({ class: 'request', certainty: 'definite', paths: { definite: 1, possible: 1 } });
-    expect(result.insights.some((value) => value.kind === 'ambiguous-split')).toBe(false);
   });
 
   it('uses the semantic-bearing leg for route direction and class', () => {

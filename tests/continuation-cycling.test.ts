@@ -175,15 +175,15 @@ describe('cycling alternatives', () => {
     expect(showing()).toBeNull();
   });
 
-  it('stays away while Traffic is showing, like Focus and the flow lens', () => {
+  it('stays away during an outage walk, like Focus and the flow lens', () => {
     open(graph([service('pub'), topic('t')], [['pub', 't']]), 't');
     expect(showing()).not.toBeNull();
-    act(() => useEditorStore.getState().showTraffic());
-    expect(useEditorStore.getState().traffic.active).toBe(true);
-    // Before, a ghost drew over the traffic sketches and ] added shapes mid-analysis.
+    act(() => useEditorStore.getState().startOutage());
+    expect(useEditorStore.getState().outage.active).toBe(true);
+    // Before, a ghost drew over the walk's notes and ] added shapes mid-walk.
     expect(showing()).toBeNull();
     expect(stepContinuation(useEditorStore.getState(), 1)).toBe(false);
-    act(() => useEditorStore.setState({ traffic: { ...useEditorStore.getState().traffic, active: false } }));
+    act(() => useEditorStore.getState().endOutage());
   });
 
   it('only candidates with somewhere to go are alternatives; ] skips the rest, and asks back if none fit', () => {

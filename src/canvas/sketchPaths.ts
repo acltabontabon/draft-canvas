@@ -3,7 +3,7 @@ import type { Point, Rect } from '../traffic/sketchLayout';
 
 /**
  * The strokes of a whiteboard markup, as SVG paths: a marker loop around a shape, and an arrow
- * flicked from a note to it. Seeded by the finding's id, so the same finding is drawn the same way
+ * flicked from a note to it. Seeded by the note's id, so the same note is drawn the same way
  * every time — a hand, not noise.
  */
 

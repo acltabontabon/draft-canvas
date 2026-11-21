@@ -1,17 +1,13 @@
 import { categoryOf } from '../document/connectorSemantics';
-import { displayNameFor } from '../document/factory';
 import type { DraftEdge } from '../document/types';
 import { isBaselineClass } from './classify';
 import { trafficGroupOf } from './eligibility';
 import { buildTrafficGraph, compareText, type GraphResult } from './graph';
-import { buildInsights } from './insights';
 import {
   DEFAULT_TRAFFIC_LIMITS,
-  MAX_HOTSPOTS,
   MAX_LISTED,
   PATH_CAP,
   type TrafficAnalysis,
-  type TrafficGroup,
   type TrafficInput,
   type TrafficInteraction,
   type TrafficLimits,
@@ -34,17 +30,7 @@ export interface Component {
   loop: boolean;
 }
 
-export interface AnalysisContext {
-  graph: GraphResult;
-  components: Component[];
-  componentOf: Map<string, number>;
-  /** Baseline interactions by `to` and by `from`, built once for every caller. */
-  incoming: Map<string, TrafficInteraction[]>;
-  outgoing: Map<string, TrafficInteraction[]>;
-}
-
 const WORKLOAD_ORDER: WorkloadKind[] = ['request', 'message', 'data'];
-const GROUP_ORDER: TrafficGroup[] = ['services', 'messaging', 'data'];
 
 function cap(value: number): number {
   return Math.min(PATH_CAP, Math.max(0, value));
@@ -135,7 +121,6 @@ function nodeResult(id: string, graph: GraphResult): TrafficNode {
     workloads: [],
     isEntry: false,
     inLoop: false,
-    tier: 'none',
   };
 }
 
@@ -172,39 +157,6 @@ function applyMessagingCertainty(graph: GraphResult, outgoing: Map<string, Traff
 /** A connector out of a gateway that routes — said so, or left to the gateway's own default. */
 function routesFrom(edge: DraftEdge | undefined, gatewayId: string): boolean {
   return edge !== undefined && edge.source === gatewayId && (edge.semantic === 'routes' || edge.semantic === undefined);
-}
-
-function rank(nodes: Map<string, TrafficNode>, graph: GraphResult): string[] {
-  const hotspots: string[] = [];
-  for (const group of GROUP_ORDER) {
-    // Where paths *meet*: a node with one source only inherits what met upstream of it.
-    const candidates = [...nodes.values()].filter((node) => node.group === group && node.sources.length >= 2 && node.paths.possible >= 2);
-    if (candidates.length === 0) continue;
-    const names = new Map(candidates.map((node) => [node.id, displayNameFor(graph.nodes.get(node.id)!)]));
-    candidates.sort(
-      (a, b) =>
-        b.paths.definite - a.paths.definite ||
-        b.paths.possible - a.paths.possible ||
-        b.sources.length - a.sources.length ||
-        b.entryCount - a.entryCount ||
-        compareText(names.get(a.id)!, names.get(b.id)!) ||
-        compareText(a.id, b.id),
-    );
-    const first = candidates[0]!;
-    candidates.forEach((node, position) => {
-      node.tier = node.paths.definite === first.paths.definite && node.paths.possible === first.paths.possible ? 'top' : 'raised';
-      node.rank = position + 1;
-      hotspots.push(node.id);
-    });
-  }
-  // The canvas lights what the panel lists, and no more: a diagram where everything meets
-  // everything would otherwise light up end to end.
-  for (const id of hotspots.slice(MAX_HOTSPOTS)) {
-    const node = nodes.get(id)!;
-    node.tier = 'none';
-    delete node.rank;
-  }
-  return hotspots.slice(0, MAX_HOTSPOTS);
 }
 
 /**
@@ -384,7 +336,6 @@ export function analyzeTraffic(input: TrafficInput, limits: TrafficLimits = DEFA
         : { definite: interaction.certainty === 'definite' ? from.paths.definite : 0, possible: from.paths.possible };
   }
 
-  const hotspots = rank(nodes, graph);
   readEdges(graph, graph.interactions, nodes);
 
   const anyBaseline = graph.interactions.some((interaction) => isBaselineClass(interaction.class));
@@ -402,11 +353,8 @@ export function analyzeTraffic(input: TrafficInput, limits: TrafficLimits = DEFA
     nodes,
     interactions: graph.interactions,
     edges: graph.edges,
-    hotspots,
-    insights: [],
     entries: [...entries].sort(compareText),
     truncated: graph.truncated,
   };
-  analysis.insights = buildInsights(analysis, { graph, components, componentOf, incoming, outgoing });
   return analysis;
 }

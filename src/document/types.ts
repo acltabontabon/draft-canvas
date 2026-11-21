@@ -427,8 +427,8 @@ export interface DraftNode {
   serviceKind?: ServiceKind;
   /**
    * `service` nodes only. How many instances of it run — 2 to `LIMITS.maxReplicas`, drawn as a
-   * stack with a small ×N. Absent is one. Read by Traffic: a queue's consumer with replicas has
-   * competing consumers.
+   * stack with a small ×N. Absent is one. Read by an outage walk: a
+   * Service with several loses one instance before it loses them all.
    */
   replicas?: number;
   /** `database` nodes only. */
@@ -795,7 +795,7 @@ export interface DraftEdge {
    * Drawn as a portal: a short labelled stub leaving the source ("→ Billing") and one arriving at
    * the target ("← Checkout"), with no line between them. For a connector that would otherwise
    * cross the whole diagram. Everything else about it — its meaning, its place in flows, what
-   * Traffic and agents read — is exactly a connector's; only how it is drawn changes. Absent means
+   * outage walks and agents read — is exactly a connector's; only how it is drawn changes. Absent means
    * drawn in full. Never set by inference or layout.
    */
   portal?: boolean;

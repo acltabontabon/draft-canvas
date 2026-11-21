@@ -16,8 +16,8 @@ import { NodiDock } from '../../desktop/ui/NodiDock';
 import { hostKind } from '../../host/hostInfo';
 import { useUiStore } from '../../store/uiStore';
 import { pointsOf } from '../../document/openPoints';
-import { roomMayHaveTraffic } from '../../store/traffic';
-import { toggleTraffic } from './trafficToggle';
+import { roomMayHaveOutage } from '../../store/outage';
+import { toggleOutage } from '../../commands/outage';
 import type { SaveFailure } from '../../storage/saveFailure';
 
 /**
@@ -238,7 +238,7 @@ export function StatusBar({ durable, presenting = false, onResolveConflict, onSa
       )}
 
       <div className="dc-status-right">
-        <TrafficChip />
+        <OutageChip />
         <OpenPointsChip />
         <LevelChip />
         <HistoryControls />
@@ -253,29 +253,30 @@ export function StatusBar({ durable, presenting = false, onResolveConflict, onSa
 }
 
 /**
- * Where the traffic this diagram describes concentrates — one click, nothing to configure.
+ * "What if this goes down?" — one click, nothing to configure.
  *
- * Same bargain as the chips beside it: absent until the room has something traffic can be read
+ * Same bargain as the chips beside it: absent until the room has something an outage can be read
  * from (a runtime connector between services, queues or data stores), so a plain drawing never
- * grows a control it can't use. Pressed while traffic shows; pressing again hides it.
+ * grows a control it can't use. With one such shape selected it takes that shape down; otherwise
+ * the next shape chosen is. Pressed while the walk is open; pressing again ends it.
  */
-function TrafficChip() {
-  const available = useEditorStore(roomMayHaveTraffic);
-  const active = useEditorStore((state) => state.traffic.active);
+function OutageChip() {
+  const available = useEditorStore(roomMayHaveOutage);
+  const active = useEditorStore((state) => state.outage.active);
   if (!available && !active) return null;
   return (
     <>
       <Tooltip
         content={
           active
-            ? { title: 'Hide traffic', shortcut: 'Esc' }
-            : { title: 'Show traffic', description: 'Where the traffic this diagram describes concentrates.' }
+            ? { title: 'Bring it back up', shortcut: 'Esc' }
+            : { title: 'Take something down', description: 'See what fails, what holds and what the drawing leaves open.' }
         }
       >
         {(tip) => (
-          <button type="button" className="dc-status-traffic" aria-pressed={active} onClick={toggleTraffic} {...tip}>
-            <span className="dc-status-traffic-glyph" aria-hidden="true" />
-            Traffic
+          <button type="button" className="dc-status-outage" aria-pressed={active} onClick={toggleOutage} {...tip}>
+            <span className="dc-status-outage-glyph" aria-hidden="true" />
+            Outage
           </button>
         )}
       </Tooltip>

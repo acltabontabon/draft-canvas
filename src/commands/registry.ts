@@ -1,3 +1,5 @@
+import { mayTakeDown } from '../traffic';
+import { startOutage } from './outage';
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
 import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
@@ -31,7 +33,7 @@ import { ALT_SYMBOL, MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
-import { fileOf, fileWithLiveViewport, lensFlow, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
+import { fileOf, fileWithLiveViewport, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
 import { pointer, pointerFlow, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
 import { setFollowing, useCollabStore } from '../store/collabStore';
@@ -579,25 +581,26 @@ export function viewCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.editor.exitFocus(),
     });
   }
-  // Offered once the room has a connector, the way the status bar chip is; the analysis itself
-  // says so when there turns out to be nothing it can read.
-  if (ctx.editor.traffic?.active) {
+  // Offered once the room has a connector, the way the status bar chip is; the walk itself says
+  // so when there turns out to be nothing it can read.
+  if (ctx.editor.outage?.active) {
     commands.push({
-      id: 'traffic-hide',
-      title: 'Hide traffic',
+      id: 'outage-end',
+      title: 'Bring it back up',
       group: 'view',
-      keywords: ['traffic', 'load', 'hotspots', 'clear'],
+      hint: 'End the outage walk',
+      keywords: ['outage', 'failure', 'restore', 'recover', 'clear', 'end', 'what if'],
       shortcut: 'Esc',
-      run: (inner) => inner.editor.hideTraffic(),
+      run: (inner) => inner.editor.endOutage(),
     });
   } else if (ctx.editor.mode === 'edit' && ctx.editor.document.edges.length > 0) {
     commands.push({
-      id: 'traffic-show',
-      title: 'Show traffic',
+      id: 'outage-start',
+      title: 'Take something down…',
       group: 'view',
-      hint: 'Where modeled traffic concentrates',
-      keywords: ['traffic', 'hotspots', 'load', 'convergence', 'shared', 'analyze', 'requests', 'paths'],
-      run: (inner) => inner.editor.showTraffic(lensFlow(inner.editor)?.id ?? null),
+      hint: 'What fails, what holds, what is left open',
+      keywords: ['outage', 'failure', 'what if', 'down', 'blast radius', 'resilience', 'fails', 'break', 'single point of failure', 'spof', 'dead letter', 'fallback'],
+      run: (inner) => startOutage(inner.editor),
     });
   }
   commands.push({
@@ -1622,6 +1625,8 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       keywords: ['focus', 'highlight', 'dim others'],
       run: (inner) => inner.editor.enterFocus([node.id], []),
     },
+    // An outage walk needs something that runs and something connected to it.
+    ...(ctx.editor.mode === 'edit' ? takeDownCommands(ctx, node) : []),
     // Where its data comes from and what it feeds: offered once a shape has a connector at all.
     ...(node.type !== 'group' && ctx.editor.document.edges.some((e) => e.source === node.id || e.target === node.id)
       ? [
@@ -2159,6 +2164,39 @@ export function arrangeSelectionCommands(ctx: CommandContext): Command[] {
     return node && !['note', 'text', 'code'].includes(node.type);
   })) return [];
   return [{ id: 'arrange-selection', title: 'Arrange selection', group: 'selection', keywords: ['layout', 'tidy'], run: (inner) => void startArrange({ selection: true }, inner) }];
+}
+
+/** "Take down" on a shape or a Boundary, and — for a Service drawn with several instances — the
+ *  choice between losing one of them and losing them all. */
+function takeDownCommands(ctx: CommandContext, node: DraftNode): Command[] {
+  const { document, outage } = ctx.editor;
+  if (!mayTakeDown(document.nodes, node.id)) return [];
+  if (node.type !== 'group' && !document.edges.some((edge) => edge.source === node.id || edge.target === node.id)) return [];
+  const keywords = ['outage', 'failure', 'what if', 'down', 'blast radius', 'resilience', 'fails', 'break'];
+  const several = node.type === 'service' && (node.replicas ?? 1) >= 2;
+  const isDown = outage?.down === node.id;
+  const commands: Command[] = [];
+  if (!isDown || (several && outage.whole)) {
+    commands.push({
+      id: 'take-down',
+      title: several ? 'Take one instance down' : node.type === 'group' ? 'Take everything inside down' : 'Take down',
+      group: 'selection',
+      hint: 'What happens if this fails',
+      keywords,
+      run: (inner) => inner.editor.takeDown(node.id),
+    });
+  }
+  if (several && !(isDown && outage.whole)) {
+    commands.push({
+      id: 'take-down-all',
+      title: `Take all ${node.replicas} instances down`,
+      group: 'selection',
+      hint: 'What happens if every instance fails',
+      keywords,
+      run: (inner) => inner.editor.takeDown(node.id, true),
+    });
+  }
+  return commands;
 }
 
 function selectionCommands(ctx: CommandContext): Command[] {

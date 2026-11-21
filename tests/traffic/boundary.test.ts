@@ -7,7 +7,7 @@ import { edge, node } from './helpers';
 describe('traffic module boundary', () => {
   it('imports only sibling traffic modules and document modules', () => {
     const trafficDirectory = join(process.cwd(), 'src/traffic');
-    const files = ['analyze.ts', 'classify.ts', 'eligibility.ts', 'graph.ts', 'index.ts', 'insights.ts', 'types.ts'];
+    const files = ['analyze.ts', 'classify.ts', 'eligibility.ts', 'graph.ts', 'index.ts', 'outage.ts', 'sketchLayout.ts', 'technology.ts', 'types.ts'];
     const imports = /(?:from|import\()\s*['"]([^'"]+)['"]/g;
     for (const file of files) {
       const source = readFileSync(join(trafficDirectory, file), 'utf8');
