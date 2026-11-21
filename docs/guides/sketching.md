@@ -91,4 +91,7 @@ runs; when nothing is recognised, the strokes stay and you're told so.
 ## Limits
 
 A file holds up to 4,000 strokes. Very long strokes are simplified to 2,000 points. Recognition
-expects roughly straight arrows; a curved arrow stays ink.
+expects roughly straight arrows; a curved arrow stays ink. One stroke drawn from one shape round to
+another (out of the bottom, along and up, say) is the exception: it becomes a plain connector that
+keeps the path you drew as its bends. It needs both ends on two different shapes and no more than
+six turns; a scribble across two shapes stays ink.

@@ -83,6 +83,7 @@ Rules for a new version:
 | v25 → v26 | identity | No-op (the `sequence` node type and its payload) |
 | v26 → v27 | identity | Message attachments and larger sequence frames |
 | v27 → v28 | identity | No-op (optional `ink` on the document and every room) |
+| v28 → v29 | identity | No-op (optional `held` on shapes and `portal` on connectors) |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.

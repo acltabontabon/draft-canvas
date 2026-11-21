@@ -8,6 +8,37 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Shared
 
+#### Added
+
+- **Arrange around a flow** — **Arrange around a flow…** in `⌘K`, or **Follow** in the Arrange
+  preview, lays one flow out in a straight line with the rest of the diagram around it.
+- **Crossings in the Arrange preview** — The preview counts where connectors cross now and after,
+  for example “Crossings 12 → 3”.
+- **Hold in place** — **Hold in place** in `⌘K` marks the selected shapes with a small pin. Arrange
+  and Tidy up leave them where they are and lay the rest out around them. **Let go** frees them.
+- **Make room** — **Make room** in `⌘K`, then drag across or down: everything past the pointer moves
+  away, or back. A boundary the line passes through stretches. One undo step.
+- **Portals** — **Draw as portal** replaces a selected connector's line with a short labelled stub
+  at each end (“→ Billing”). Click a stub's words to go to the other end. **Draw as line** brings
+  the line back.
+- **Draw a route** — In Smart Ink, one stroke drawn from one shape round to another becomes a
+  connector that keeps the path you drew as its bends.
+- **Trace a shape's lineage** — Hold `Shift` and rest the pointer on a shape: everything its data
+  comes from and everything it feeds stays lit while the rest steps back.
+- **Legend** — **Show legend** in `⌘K` names the kinds of line the diagram uses, on the canvas and
+  in exported images. A diagram drawn in one style shows none.
+
+#### Changed
+
+- **Finer connectors** — Lines are a little lighter, arrowheads slimmer, and a directed connector
+  starts from a small dot where it leaves its shape. Shapes rest on a softer shadow.
+- **Connectors ease into place** — A connector whose route changes after a drop, an undo or a Tidy
+  up moves from its old line to its new one instead of jumping. Reduced motion turns this off.
+- **Less small print when zoomed out** — Below about 55% zoom, captions, conditions and chips beside
+  connectors step back; below about 28%, so do labels. Exports are unaffected.
+- **File format 29** — Held shapes and portals are new in the file. Older versions say they cannot
+  open a file saved by this one rather than drop them.
+
 #### Fixed
 
 - **Joining to view says so** — A person let in with **Can view** was told “Edits you make are

@@ -63,6 +63,14 @@ With shapes selected, the bar at the bottom offers **Align**, **Distribute** (th
 **Same width** / **Same height**, which use the largest size among them. A boundary selected with
 shapes keeps its size.
 
+### Make room
+
+**Make room** in `⌘K` opens a gap without dragging half the diagram by hand. Run it, then drag
+across: everything to the right of where you pressed moves away, or back toward it. Drag down to
+move everything below. A boundary the line passes through stretches with what it holds, and room
+closes only until the nearest shape reaches the line. The drag is one undo step, `Esc` gives it up,
+and the tool puts itself down after one use.
+
 ### Tidy up
 
 **Tidy up** is the one to reach for first. Run it from `⌘K` or the canvas's right-click menu. It
@@ -86,7 +94,15 @@ again.
 menu) lays the whole view out again from scratch, so expect shapes to move. It previews first, however
 you start it, and you choose the reading direction: **Across →** or **Down ↓**. It starts on the
 suggested one and counts the shapes it moves. On a very large diagram only one direction is worked
-out, and the bar says so.
+out, and the bar says so. The bar also counts where connectors cross, now and after ("Crossings
+12 → 3").
+
+When the diagram has flows, **Follow** in the bar (or **Arrange around a flow…** in `⌘K`) lays one
+flow out in a straight line and arranges the rest around it.
+
+**Hold in place** in `⌘K` pins the selected shapes: a small pin appears at their corner, and Arrange
+and Tidy up leave them exactly where they are and lay everything else out around them. A held
+boundary holds what is inside it. **Let go** frees them. Dragging a held shape still moves it.
 
 Boundaries keep what they hold and notes stay beside their shapes. A long name gets a wider box, and
 gaps are only as long as their captions need. **Apply** is one undo step and frames the result;
@@ -216,6 +232,33 @@ An agent using the Draft Canvas MCP tools, including Nodi, can add the same asso
   has a **Cadence** (Streaming, Hourly, Daily, Weekly, On demand), shown as a chip under its caption.
 - **Show lineage** (right-click a shape, or `⌘K`): everything its data comes from and everything it
   feeds stays lit, whichever way each arrow points. `Esc` ends it.
+
+### Portals
+
+A connector that would cross the whole diagram can be drawn as a **portal**: select it and run
+**Draw as portal** in `⌘K`. Its line is replaced by a short stub at each end, each ending in a small
+ring and naming the shape at the other end ("→ Billing", "Checkout →"). Click the words to move the
+view there. The connector is otherwise unchanged: flows, Traffic and agents read it as before, and
+**Draw as line** draws it in full again.
+
+A portal's own label rides with the stub that leaves its source. Its caption, condition, attachments
+and open-point marker are not shown while it is a portal. A connector with a reply line cannot be
+drawn as one.
+
+### Legend
+
+**Show legend** in `⌘K` puts a key in the corner of the canvas naming the kinds of line the diagram
+uses (call, asynchronous, event, reply and so on). It lists only what is drawn, and shows nothing for
+a diagram in a single style. While it is on, image exports carry it below the diagram. The switch is
+kept on this device, not in the file.
+
+### Reading a large diagram
+
+- Hold `Shift` and rest the pointer on a shape to light up everything its data comes from and
+  everything it feeds. Let go of `Shift` to return. **Show lineage** in `⌘K` does the same as a
+  lasting focus.
+- Zoomed out below about 55%, the captions, conditions and chips beside connectors step back so the
+  structure reads; below about 28%, labels do too. Zoom in to bring them back.
 
 ## Boundaries
 

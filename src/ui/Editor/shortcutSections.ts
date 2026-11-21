@@ -115,6 +115,7 @@ export const SECTIONS: Section[] = [
       { gesture: 'Drop on a connector', label: 'Put an unconnected Queue, Data Store, Service, Component or Junction into the middle of it' },
       { gesture: 'Drag from a selected shape', label: 'Connect every selected shape to where you drop' },
       { keys: [alt], label: 'Hold while dragging or resizing — turns off snapping' },
+      { gesture: 'Hold Shift over a shape', label: 'Light up everything its data comes from and feeds' },
       { commandId: 'group' },
       { commandId: 'ungroup' },
       { commandId: 'text-toggle-bold', label: 'Bold (selected Text)' },
