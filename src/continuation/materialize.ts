@@ -24,6 +24,13 @@ export interface MaterializeOptions {
   /** Top-left for the fragment's first node — the drop point when the user chose where. Otherwise
    *  the node lands where `placeNear` would put a generated companion. */
   at?: { x: number; y: number };
+  /**
+   * `'automatic'` leaves the new connectors' ends unpinned, as a connector drawn by hand has them:
+   * for a shape the person placed themselves by dragging a connector out to it (#180). A pin there
+   * was one they never made, and it kept the side it was drawn on after the shapes moved, wrapping
+   * round both boxes. The default pins connectors between shapes placed here, together.
+   */
+  ends?: 'automatic';
 }
 
 /**
@@ -152,8 +159,9 @@ export function materialize(
         semanticsOrigin: spec.semantic ? 'explicit' : relationship ? 'inferred' : undefined,
         deliveryAttempts: spec.deliveryAttempts,
         // Pinned only between nodes placed here, together. A connector to a node the user drew
-        // routes dynamically, like any connector drawn by hand to it — preview included.
-        ...(existing.has(spec.from) || existing.has(spec.to) ? {} : anchorsForPlacement(from, to)),
+        // routes dynamically, like any connector drawn by hand to it — preview included. So does
+        // every connector of a fragment the user dragged out themselves (`MaterializeOptions.ends`).
+        ...(options.ends === 'automatic' || existing.has(spec.from) || existing.has(spec.to) ? {} : anchorsForPlacement(from, to)),
         ...(linkedRecovery && parent.source === from.id && parentTarget ? { sourceAnchor: recoveryBranchAnchor(parent, from, parentTarget, to) } : {}),
       }),
     );

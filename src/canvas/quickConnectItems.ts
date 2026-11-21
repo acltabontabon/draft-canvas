@@ -106,9 +106,11 @@ export function offerFor(doc: DraftDocument, state: QuickConnectState, item: Qui
   const source = state.asked ? doc.nodes.find((node) => node.id === state.source) : undefined;
   const offer = source
     ? (materialize(doc, continuation) ?? materialize(doc, continuation, { at: placeNear(doc, source, size) }))
-    : // The point let go at was empty; the box centred on it may still reach a neighbour. It goes to
-      // the closest clear spot, in the preview and the commit alike (#178).
-      materialize(doc, continuation, { at: clearSpotNear(doc, { ...dropped, ...size }) });
+    : // Dragged out by hand. The point let go at was empty, but the box centred on it may still reach
+      // a neighbour: it goes to the closest clear spot, in the preview and the commit alike (#178).
+      // Its ends are automatic, like those of a connector dropped on a shape, so the line the ghost
+      // shows is the line that is added and it keeps facing the shapes as they move (#180).
+      materialize(doc, continuation, { at: clearSpotNear(doc, { ...dropped, ...size }), ends: 'automatic' });
   return offer ? { ...withFanIn(doc, state, offer), trigger: 'drop' } : undefined;
 }
 
