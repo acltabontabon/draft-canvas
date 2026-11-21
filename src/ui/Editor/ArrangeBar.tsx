@@ -119,7 +119,9 @@ export function ArrangeBar() {
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) {
         // The direction choice is a radio group: Escape still cancels from it, Enter is its own.
-        if (!(target instanceof HTMLInputElement && target.type === 'radio' && event.key === 'Escape')) return;
+        // So is the Follow list, which keeps focus after a choice.
+        const choice = (target instanceof HTMLInputElement && target.type === 'radio') || target instanceof HTMLSelectElement;
+        if (!(choice && event.key === 'Escape')) return;
       }
       if (event.key === 'Enter' && !(target instanceof HTMLButtonElement) && !event.metaKey && !event.ctrlKey && !event.altKey) {
         event.preventDefault();

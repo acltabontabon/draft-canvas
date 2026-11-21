@@ -55,7 +55,12 @@ function sameNodes(a: readonly DraftNode[], b: readonly DraftNode[]): boolean {
 export function runtimeOf(state: View): TrafficAnalysis | null {
   if (!state.outage.active) return null;
   const { nodes, edges } = state.document;
-  if (memo && memo.edges === edges && sameNodes(memo.nodes, nodes)) return memo.analysis;
+  if (memo && memo.edges === edges && sameNodes(memo.nodes, nodes)) {
+    // Keep the newest array: after a drag hands over a new one, every per-shape and per-connector
+    // reading would otherwise compare all the shapes again on every store update.
+    memo.nodes = nodes;
+    return memo.analysis;
+  }
   const analysis = analyzeTraffic({ nodes, edges });
   // The nodes the reading was made from are kept with it: names and instance counts come from them.
   memo = { nodes, edges, analysis };

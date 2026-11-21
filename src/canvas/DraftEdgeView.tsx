@@ -421,6 +421,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const stopEditingCondition = useCallback(() => setEditingCondition(false), []);
   const editRequested = useUiStore((state) => state.editRequestId === id);
   const compensating = Boolean(edge?.compensationFor);
+  const isPortal = Boolean(edge?.portal);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
   const traced = useUiStore((state) => state.traceIds?.has(id) ?? false);
@@ -468,8 +469,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     // A recovery connector's chip shows its action's name, not the label this editor would rewrite;
     // double-click refuses it too, and the inspector's name field is where it is renamed.
     // oxlint-disable-next-line react/set-state-in-effect -- one-shot external command, see comment above.
-    if (mode !== 'present' && !compensating && useUiStore.getState().readOnly === null) setEditing(true);
-  }, [editRequested, mode, compensating]);
+    // A portal draws no label, so there would be no field to type in or leave.
+    if (mode !== 'present' && !compensating && !isPortal && useUiStore.getState().readOnly === null) setEditing(true);
+  }, [editRequested, mode, compensating, isPortal]);
 
   // Computed here, ahead of the early returns below, purely so the hooks
   // that follow (`lensPulsing`'s state/ref/effect) never run conditionally —
@@ -782,7 +784,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       : null;
   // Sketch draws its own arrowhead inline instead of referencing the shared marker — see
   // `render/roughness/roughArrow.ts`.
-  const usesHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand';
+  // A portal's head belongs on its stub, as the export draws it: the hand-drawn head is placed by the
+  // hidden line's end, which is somewhere else.
+  const usesHandDrawnArrow = edge.directed && profile.arrowStyle === 'per-edge-hand' && !portal;
   const arrowPath = usesHandDrawnArrow
     ? sketchArrowPath(
         route.target,
@@ -890,7 +894,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       {hoverShown && (
         <path className="dc-edge-hover" d={drawnPath} fill="none" pointerEvents="none" stroke={theme.selection} strokeLinecap="round" />
       )}
-      <RouteMorph id={id} line={lineRef} styledPath={styledPath} still={transient || usesHandDrawnArrow || arriving} />
+      <RouteMorph id={id} line={lineRef} styledPath={styledPath} still={transient || usesHandDrawnArrow || arriving || Boolean(portal)} />
       <path
         ref={lineRef}
         className="react-flow__edge-path dc-edge-line"

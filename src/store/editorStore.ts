@@ -3833,6 +3833,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A card left open from editing carries edit actions (Delete, Detach) that presentation must
     // never offer — while presenting, attachments speak through the callout instead.
     if (mode === 'present') useUiStore.getState().setOpenAttachmentDetail(null);
+    // Make room is an edit in hand: left armed, a drag while presenting would move shapes.
+    if (mode === 'present' && useUiStore.getState().makeRoom) useUiStore.getState().setMakeRoom(null);
     // The pointer, a manual camera, a receded strip: all of it was about the walkthrough that is
     // ending, and none of it may greet the next one.
     if (mode === 'edit') useUiStore.getState().resetPresentation();

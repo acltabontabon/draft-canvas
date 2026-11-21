@@ -48,6 +48,7 @@ import {
 import { reinferIfEligible } from '../document/reinfer';
 import { technologyKindPatch } from '../document/technologyKind';
 import { freeOriginFor } from '../document/geometry';
+import { fixedIds } from '../document/held';
 import { syncLinks } from '../document/sequenceLinks';
 import { messagesOf, sequenceOf } from '../document/sequenceModel';
 import { editMessageAttachments } from '../document/sequenceOps';
@@ -249,8 +250,20 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       return;
     }
     if (kind === 'arrange') {
-      const request = readArrange(r, op, at, view, layout);
+      let request = readArrange(r, op, at, view, layout);
       if (!request || !problems.empty) return;
+      // Shapes the person holds in place stay where they are for an agent too, as they do for
+      // Arrange in the editor (`layoutPlan.ts`): the rest is arranged around them.
+      const fixed = fixedIds(view.nodes);
+      if (fixed.size > 0) {
+        if (request.scope?.group !== undefined) {
+          if (fixed.has(request.scope.group)) return;
+        } else {
+          const moving = (request.scope?.nodes ?? view.nodes.map((n) => n.id)).filter((id) => !fixed.has(id));
+          if (moving.length === 0) return;
+          request = { ...request, scope: { nodes: moving }, keepOutsideFixed: true, bothDirections: false };
+        }
+      }
       if (scope) {
         if (!request.scope) {
           problems.add('OUT_OF_SCOPE', `${at}/scope`, 'a selection scope is active on this request; name what to rearrange with scope: {nodes} or {group} instead of the whole view');
@@ -869,6 +882,8 @@ function updateOne(
         r.problems.add('UNSUPPORTED', `${at}/type`, `can't turn a ${node.type} into a ${shape.type}; remove it and add a new element instead`);
       } else {
         Object.assign(patch, shape);
+        // A kind the agent names is picked, as in the editor: a later technology no longer moves it.
+        if (node.kindOrigin) patch.kindOrigin = undefined;
         if (!shape.deliveryRole && node.deliveryRole) patch.deliveryRole = undefined;
       }
     }

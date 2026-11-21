@@ -124,7 +124,9 @@ export function FlowBar({ playback, follower = false }: { playback: FlowPlayback
           // presentation's bare-key list to Escape and the capture key on purpose) — but the
           // presentation's own F, which is what someone who knows the editor reaches for.
           event.preventDefault();
-          setPickerFor(playback.flow?.id ?? null);
+          // A walk of a diagram with no flows has nothing to pick: an empty menu would take the
+          // keys and leave Escape ending the presentation.
+          if (playback.flows.length > 0) setPickerFor(playback.flow?.id ?? null);
         }
         return;
       }

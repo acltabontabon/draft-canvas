@@ -22,7 +22,8 @@ function markdownFiles(dir: string): string[] {
     // except `.github`, whose issue and PR templates are Markdown a reader lands on.
     // `target` is cargo's build output (src-tauri/), `gen` the schemas Tauri regenerates there.
     // `dist-web` is the assembled site, whose docs copy only the media a guide references.
-    if (['node_modules', 'dist', 'dist-desktop', 'dist-web', 'target', 'gen', 'test-results', 'playwright-report'].includes(entry)) continue;
+    // `marketing/launch-film` is a local-only working folder (git-ignored): its notes link to renders that come and go.
+    if (['node_modules', 'dist', 'dist-desktop', 'dist-web', 'target', 'gen', 'test-results', 'playwright-report', 'launch-film'].includes(entry)) continue;
     if (entry.startsWith('.') && entry !== '.github') continue;
     const path = join(dir, entry);
     if (statSync(path).isDirectory()) out.push(...markdownFiles(path));
