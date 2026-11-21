@@ -26,19 +26,33 @@ is yours to review.
 - **Context for decisions.** Notes, code, sources, and open questions.
 - **Import and export.** Import Mermaid and editable files; export images, editable files, Mermaid, PlantUML, Structurizr, and draw.io.
 
-## Start from a real system
+## Examples
+
+Whole systems from the [starters gallery](https://github.com/acltabontabon/draft-canvas-starters), open in Draft Canvas. Load any of them from
+**Starters** in the app, present their flows, step inside their services, and make them yours.
 
 <a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/food-delivery">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-food-delivery-dark.png">
-  <img width="100%" alt="Forkful, a food delivery marketplace, open in Draft Canvas: customer, kitchen and courier apps meet at a junction before the API gateway; the order saga, payments, kitchen, logistics, data and notification domains sit inside the system boundary." src="docs/media/starter-food-delivery-light.png">
+  <img width="100%" alt="Forkful, a food delivery marketplace, open in Draft Canvas: customer, kitchen and courier apps meet at a junction before the API gateway; ordering, payments, kitchen, logistics, data and notification domains sit inside the system boundary." src="docs/media/starter-food-delivery-light.png">
 </picture>
 </a>
 
 <p align="center"><sub>
-<b>Forkful</b>, a food delivery marketplace from the <a href="https://github.com/acltabontabon/draft-canvas-starters">starters gallery</a>: an order saga
-with its refunds, an outbox, a dead-letter queue, a sequence diagram and eight flows to present.
-Open it from <b>Starters</b> in the app.
+<b>Forkful</b>, a food delivery marketplace: an order saga with its refunds, an outbox, a dead-letter
+queue and eight flows to present.
+</sub></p>
+
+<a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/video-streaming">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-video-streaming-dark.png">
+  <img width="100%" alt="Reelwave, a video streaming platform, open in Draft Canvas: TV, mobile and web apps meet at a junction before the edge gateway; discovery, playback and data domains sit in the cloud, edge appliances inside partner ISPs, and a Press play sequence diagram below." src="docs/media/starter-video-streaming-light.png">
+</picture>
+</a>
+
+<p align="center"><sub>
+<b>Reelwave</b>, a video streaming platform: an edge inside partner ISPs, DRM, a data platform that
+retrains recommendations, and a <i>Press play</i> sequence diagram.
 </sub></p>
 
 ## Get started
