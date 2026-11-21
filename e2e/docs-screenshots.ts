@@ -32,6 +32,7 @@ import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fix
  *   npx tsx e2e/docs-screenshots.ts --reader-only --theme dark   (the guide's `share-*-dark.png` pair)
  *   npx tsx e2e/docs-screenshots.ts --traffic-only
  *   npx tsx e2e/docs-screenshots.ts --sequence-only
+ *   npx tsx e2e/docs-screenshots.ts --tidy-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -438,6 +439,53 @@ async function trafficScreenshots(page: Page) {
  * the suggestion that follows each. Built by keyboard so the picture is whatever the editor draws,
  * at the size the editor gives it.
  */
+/**
+ * Tidying as you draw: a boundary's colour on what it holds, and the dashed line a drag shows where
+ * its connector will be straightened when the shape is dropped.
+ */
+async function tidyScreenshots(page: Page) {
+  const shape = (id: string, type: string, text: string, x: number, y: number, extra: Record<string, unknown> = {}) => ({
+    ...node(id, type, text, x, y, extra),
+    width: type === 'database' ? 172 : 176,
+    height: type === 'database' ? 102 : 68,
+    ...('width' in extra ? { width: extra.width, height: extra.height } : {}),
+  });
+  const document = trafficDocument('Online store');
+  document.nodes = [
+    shape('storefront', 'service', 'Storefront', 0, 0, { serviceKind: 'api' }),
+    shape('orders', 'service', 'Orders', 360, 0),
+    shape('checkout', 'group', 'Checkout', -40, 170, { width: 620, height: 230, accent: 'blue' }),
+    shape('cart', 'service', 'Cart', 0, 250, { parentId: 'checkout' }),
+    shape('carts', 'database', 'Carts', 392, 232, { parentId: 'checkout', databaseKind: 'sql' }),
+    shape('events', 'queue', 'Order events', 680, 10, { height: 72, width: 176 }),
+  ];
+  document.edges = [
+    { id: 'storefront-orders', source: 'storefront', target: 'orders', directed: true, routing: 'smoothstep', semantic: 'calls' },
+    { id: 'cart-carts', source: 'cart', target: 'carts', directed: true, routing: 'smoothstep', semantic: 'reads' },
+  ];
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'tidy-guide.draftcanvas',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(document)),
+  });
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  await expect(page.locator('.dc-node')).toHaveCount(6);
+  // Cart and Carts were never given a colour: they draw in the blue of the boundary around them.
+  await shot(page, 'boundary-colour');
+
+  // Orders dragged a little low and held: the dashed line is where its connector will run once it
+  // is let go. Moved two pixels at a time until the line shows, whatever zoom the room opened at.
+  const orders = await box(page.locator('.dc-node', { hasText: 'Orders' }).first());
+  const from = { x: orders.x + orders.width / 2, y: orders.y + orders.height / 2 };
+  await page.mouse.move(from.x, from.y);
+  await page.mouse.down();
+  const settle = page.locator('.dc-guide[data-kind="settle"]');
+  for (let down = 2; down <= 60 && (await settle.count()) === 0; down += 2) await page.mouse.move(from.x, from.y + down);
+  await expect(settle).toHaveCount(1);
+  await shot(page, 'drop-settle');
+  await page.mouse.up();
+}
+
 async function sequenceScreenshots(page: Page) {
   log('sequence');
   await page.getByRole('button', { name: START_BUTTON }).first().click();
@@ -639,6 +687,11 @@ async function main() {
 
     if (process.argv.includes('--sequence-only')) {
       await sequenceScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--tidy-only')) {
+      await tidyScreenshots(page);
       return;
     }
 

@@ -80,6 +80,8 @@ a small step off straight (up to 32 pixels), a dashed line shows where that conn
 letting go moves the shape the last few pixels onto it. The nudge is part of the same undo step as
 the move.
 
+![Orders dragged a little low: a dashed line shows where its connector will run when it is dropped.](../media/guides/drop-settle.png)
+
 - Only the shapes you dragged move. A shape at rest is never nudged.
 - An axis you lined up with a neighbour's edge, centre or gap stays where you put it.
 - Dragging a boundary leaves what it holds as it was laid out.
@@ -277,6 +279,8 @@ the boundary. Pick a kind and colour in its toolbar:
 A boundary's colour carries to what it holds: a Service, Data Store, Queue, Actor or Component with
 no colour of its own draws in its boundary's colour, and goes back to neutral when it leaves. A
 colour you pick for a shape, neutral included, always wins.
+
+![Cart and Carts drawn in the blue of the Checkout boundary around them; shapes outside stay neutral.](../media/guides/boundary-colour.png)
 
 | Kind | For |
 | --- | --- |
