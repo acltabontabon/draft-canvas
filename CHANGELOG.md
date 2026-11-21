@@ -11,8 +11,14 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 #### Added
 
 - **Load Balancer and Proxy** — Two new Service kinds, each drawn as what it does: a load balancer
-  as one address fanning out to identical instances, a proxy as a connection in and a separate one
-  out. HAProxy and an ALB arrive as a Load Balancer; NGINX, Envoy and a CDN as a Proxy.
+  as one address fanning out to identical instances, a proxy as two plates with a connection ending
+  at one and another leaving the other. HAProxy and an ALB arrive as a Load Balancer; NGINX, Envoy
+  and a CDN as a Proxy.
+- **Service kinds drawn as what they do** — Gateway, Worker, Scheduler and External are no longer
+  cards with a word in the corner: a gateway is a gate with different destinations behind it, a worker a trace
+  with a job still running, a scheduler a page of time slots, an external system a block inside a
+  dashed boundary. Their name sits underneath. In a diagram you already have, each grows taller to
+  fit; check the spacing around them.
 - **Artifact** — A new shape for what a system reads, mounts or presents: a File, a Config, a
   Secret or a Certificate. Find it in **Shapes**; it is not on the toolbar.
 - **Shapes by name** — Type what a thing is called in **Shapes** or `⌘K` and it arrives already set

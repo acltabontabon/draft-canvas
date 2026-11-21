@@ -145,8 +145,8 @@ function presetOf(concept: Concept): Preset {
     shortcut: '',
     hint,
     description: concept.description,
-    // The two Service kinds that are a picture of their own show it; the rest show their family's.
-    glyph: concept.start?.serviceKind === 'load-balancer' || concept.start?.serviceKind === 'proxy' ? concept.start.serviceKind : base.id,
+    // A Service kind that is a picture of its own shows it; everything else shows its family's.
+    glyph: concept.start?.serviceKind && concept.start.serviceKind !== 'generic' && concept.start.serviceKind !== 'api' ? concept.start.serviceKind : base.id,
     start: concept.start,
     ...(concept.named ? { text: concept.label } : {}),
   };

@@ -2277,7 +2277,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
     // Same midpoint-of-both-centers placement `detachFromEdge` already uses for a connector's
     // own detached attachment — no independent placement heuristic invented for this.
-    const size = defaultSizeFor('service');
+    const size = defaultSizeFor('service', 'worker');
     const at = {
       x: Math.round((source.x + source.width / 2 + target.x + target.width / 2) / 2 - size.width / 2),
       y: Math.round((source.y + source.height / 2 + target.y + target.height / 2) / 2 - size.height / 2),
@@ -2457,7 +2457,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!source) return;
     if (!roomFor(1, 1)) return;
 
-    const size = defaultSizeFor(companion.type);
+    const size = defaultSizeFor(companion.type, 'serviceKind' in companion ? companion.serviceKind : undefined);
     // Same capability matrix every other connection reads — it correctly differentiates a queue's
     // competing-consumer `consumes` from a topic's fan-out `deliversTo`, a service's `writes` from
     // a gateway's `routes`, with no special-casing here. Resolved ahead of placement (category only

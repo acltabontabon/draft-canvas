@@ -36,7 +36,7 @@ describe('peer sizing', () => {
         { id: 'focal', type: 'service', label: 'Loan Application System', description: 'Accepts, underwrites, decisions and disburses consumer loan applications.' },
         { id: 'bureau', type: 'external-system', label: 'Credit Bureau', description: 'Third-party credit history and score provider.' },
         { id: 'kyc', type: 'external-system', label: 'KYC Provider', description: 'Identity verification and fraud checks.' },
-        { id: 'core', type: 'external-system', label: 'Core Banking System', description: 'Holds accounts, settles disbursed funds, and reconciles every transaction against the general ledger nightly.' },
+        { id: 'core', type: 'external-system', label: 'Core Banking System', description: 'Holds accounts, settles disbursed funds, and reconciles every transaction against the general ledger nightly, then reports each unmatched posting to the finance operations team for review before the next business day opens.' },
         { id: 'notify', type: 'external-system', label: 'Email/SMS Provider', description: 'Delivers applicant notifications.' },
       ],
       relationships: [
@@ -54,7 +54,9 @@ describe('peer sizing', () => {
     expect(sizeOf(bureau)).toBe(sizeOf(kyc));
     expect(sizeOf(kyc)).toBe(sizeOf(notify));
     // ...and Core Banking's much longer description didn't drag them up to match it.
-    expect(core.height).toBeGreaterThan(bureau.height);
+    // (An External is a glyph with its words underneath: a longer description makes its box wider
+    // before it makes it taller, so the larger box is told by its area.)
+    expect(core.width * core.height).toBeGreaterThan(bureau.width * bureau.height);
     expect(sizeOf(core)).not.toBe(sizeOf(bureau));
   });
 

@@ -38,9 +38,13 @@ To turn a shape into another, select it and press `⇧` with the new shape's key
 Queue, `⇧D` a Data Store. Its name, connectors, flows and notes stay. **Turn into…** in `⌘K` does the
 same.
 
-A **Gateway** authenticates and routes by path; a **Load Balancer** spreads requests across
-instances of one service; a **Proxy** stands in the path and passes traffic along, forward or
-reverse. All three route, so their connectors read the same. An **Artifact** is something read,
+Generic and API are cards. Every other Service kind is drawn as what it does, with its name
+underneath: a **Gateway** is one way in, a gate, and three different destinations behind it; a **Load
+Balancer** one address fanning out to identical instances; a **Proxy** two plates, a connection
+ending at one and another leaving the other, forward or reverse; a **Worker** a trace, the short
+span of the request and the long one of the job it started; a **Scheduler** a page of time slots;
+an **External** system a block inside a dashed boundary. Gateway, Load Balancer and Proxy all
+route. An **Artifact** is something read,
 mounted or presented rather than run: draw one when the config, secret or certificate is part of
 what you are explaining. For a sidecar, put the service and a Proxy inside a Boundary (`pod` in the
 shape picker gives one).

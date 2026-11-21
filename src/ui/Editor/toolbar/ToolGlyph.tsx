@@ -130,12 +130,52 @@ const GLYPHS: Record<string, ReactElement> = {
       <rect x="13" y="13.4" width="3.6" height="3.2" rx="0.8" />
     </>
   ),
-  // A proxy: a connection in, the body standing in the path, a second connection out.
+  // A proxy: two plates with a gap, one connection ending at the first and another leaving the second.
   proxy: (
     <>
-      <rect x="8" y="3.5" width="4" height="13" rx="1.6" />
-      <path d="M2.5 10h4M4.9 8.4 6.5 10 4.9 11.6" />
-      <path d="M13.5 10h4M15.9 8.4 17.5 10 15.9 11.6" />
+      <rect x="6.6" y="3.5" width="2.8" height="13" rx="1.3" />
+      <rect x="10.6" y="3.5" width="2.8" height="13" rx="1.3" />
+      <path d="M2.6 10h3M14.4 10h3" />
+      <circle cx="2.6" cy="10" r="0.9" fill="currentColor" />
+      <circle cx="17.4" cy="10" r="0.9" fill="currentColor" />
+    </>
+  ),
+  // A gateway: one way in, a gate, and three different destinations behind it.
+  gateway: (
+    <>
+      <path d="M2 10h3.6M4.2 8.6 5.6 10 4.2 11.4" />
+      <rect x="6.8" y="3.2" width="2.6" height="13.6" rx="0.8" />
+      <path d="M9.4 5.4h3.2M9.4 10h3.2M9.4 14.6h3.2" />
+      <rect x="13.2" y="3.6" width="3.6" height="3.6" rx="0.9" />
+      <circle cx="15" cy="10" r="1.8" />
+      <path d="M15 12.8 16.9 16.3H13.1Z" />
+    </>
+  ),
+  // A worker: a trace, the short span of the request and the long one of the job it started.
+  worker: (
+    <>
+      <rect x="2.8" y="4" width="14.4" height="12" rx="2.4" />
+      <path d="M5.5 8h3.2M8.7 8v4M8.7 12h6" strokeWidth="1.9" />
+    </>
+  ),
+  // A scheduler: a page of times with the scheduled ones filled.
+  scheduler: (
+    <>
+      <rect x="3.5" y="3.8" width="13" height="12.6" rx="2.2" />
+      <path d="M3.5 7.4h13M6.8 2.8v2M13.2 2.8v2" />
+      <circle cx="7" cy="10.6" r="0.9" />
+      <circle cx="10" cy="10.6" r="0.9" fill="currentColor" />
+      <circle cx="13" cy="10.6" r="0.9" />
+      <circle cx="7" cy="13.6" r="0.9" />
+      <circle cx="10" cy="13.6" r="0.9" />
+      <circle cx="13" cy="13.6" r="0.9" fill="currentColor" />
+    </>
+  ),
+  // An external system: a system inside a boundary that is not yours.
+  external: (
+    <>
+      <rect x="3" y="3" width="14" height="14" rx="3" strokeDasharray="2.2 1.8" />
+      <rect x="7" y="7" width="6" height="6" rx="1.4" />
     </>
   ),
   // An artifact: a sheet with its corner turned and a seal on it. (A Note is the same sheet with

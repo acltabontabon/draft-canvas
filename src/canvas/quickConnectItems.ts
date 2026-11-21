@@ -82,7 +82,7 @@ function representsPreset(item: QuickConnectItem, preset: Preset): boolean {
  */
 export function offerFor(doc: DraftDocument, state: QuickConnectState, item: QuickConnectItem): ContinuationOffer | undefined {
   if (!state.source) return undefined;
-  const size = defaultSizeFor(item.node.type);
+  const size = defaultSizeFor(item.node.type, item.node.serviceKind);
   const dropped = state.center
     ? { x: state.center.x - size.width / 2, y: state.center.y - size.height / 2 }
     : state.flowPosition;

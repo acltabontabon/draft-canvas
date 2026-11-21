@@ -41,7 +41,7 @@ describe('Load Balancer and Proxy', () => {
     expect({ width: balancer.width, height: balancer.height }).toEqual(defaultSizeFor('database'));
     expect(createNode({ type: 'service', serviceKind: 'proxy', x: 0, y: 0 }).text).toBe('Proxy');
     // A card kind keeps the card's box.
-    expect(createNode({ type: 'service', serviceKind: 'gateway', x: 0, y: 0 }).width).toBe(defaultSizeFor('service').width);
+    expect(createNode({ type: 'service', serviceKind: 'api', x: 0, y: 0 }).width).toBe(defaultSizeFor('service').width);
   });
 
   it('take connectors on the glyph, not on the empty box around it', () => {
@@ -60,6 +60,7 @@ describe('Load Balancer and Proxy', () => {
     expect(box.x + box.width / 2).toBeCloseTo(card.x + card.width / 2, 0);
     expect(boxForServiceKind(card, 'generic', 'api')).toBeNull();
     expect(boxForServiceKind({ ...card, ...box }, 'proxy', 'load-balancer')).toBeNull();
+    expect(boxForServiceKind({ ...card, ...box }, 'proxy', 'worker')).toBeNull();
   });
 
   it.each([

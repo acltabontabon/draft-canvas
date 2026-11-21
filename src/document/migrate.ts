@@ -601,6 +601,75 @@ function migrateTextToMarkdown(doc: Record<string, unknown>): Record<string, unk
 }
 
 /**
+ * The heights a glyph kind needs, by what is written under its glyph: a name and a kind; those and a
+ * technology; those and a description. The Data Store family's own boxes for the same three cases,
+ * as they stood at v30.
+ */
+const GLYPH_KIND_HEIGHT = { plain: 114, technology: 128, described: 143 } as const;
+/** The narrowest a glyph kind's box is (the Data Store's default), and roughly what one letter of a
+ *  name is wide at the size a name is set in. An estimate: a migration has no font to measure with. */
+const GLYPH_KIND_WIDTH = 120;
+const NAME_ADVANCE = 8.6;
+const longestLine = (text: unknown): number =>
+  typeof text === 'string' ? Math.max(0, ...text.split(/\r\n|\r|\n/).map((line) => line.trim().length)) : 0;
+const FORMER_CARD_KINDS: ReadonlySet<unknown> = new Set(['worker', 'external', 'scheduler', 'gateway']);
+
+/**
+ * How far below a glyph box's top its glyph's middle sits. `dataStoreGeometry.ts`'s numbers as they
+ * stood at v30, frozen here the way every migration freezes what it read: 9 down to a glyph 42
+ * high, both grown by the box's scale over its 90 by 88 unit, which for a Service stops at the
+ * scale of a 114-high box.
+ */
+function glyphMiddle(width: number, height: number): number {
+  const scale = Math.min(114 / 88, Math.max(1, Math.min(width / 90, height / 88)));
+  return (9 + 42 / 2) * scale;
+}
+
+/**
+ * v30 draws a Worker, an External system, a Scheduler and a Gateway as a glyph with the name
+ * underneath, where they were cards with the name inside. A card's box is too short for that, so
+ * each one grows to the height the new drawing needs for what it carries. It is placed so the
+ * glyph's middle is where the card's middle was: that is where a connector into its side met it,
+ * so a line that ran straight still does, and what stood level with it is still level. The name,
+ * kind and description now hang below that line instead of sitting on it. The width is left
+ * alone: the words were fitted to it.
+ */
+function migrateCardKindsToGlyphs(doc: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(doc.nodes)) return doc;
+  const written = (value: unknown) => typeof value === 'string' && value.trim() !== '';
+  return {
+    ...doc,
+    nodes: doc.nodes.map((raw) => {
+      if (!raw || typeof raw !== 'object') return raw;
+      const node = raw as Record<string, unknown>;
+      if (node.type !== 'service' || !FORMER_CARD_KINDS.has(node.serviceKind)) return raw;
+      const { y, width, height } = node;
+      if (typeof y !== 'number' || typeof width !== 'number' || typeof height !== 'number') return raw;
+      if (!Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) return raw;
+      const needed = written(node.description)
+        ? GLYPH_KIND_HEIGHT.described
+        : written(node.technology)
+          ? GLYPH_KIND_HEIGHT.technology
+          : GLYPH_KIND_HEIGHT.plain;
+      const tall = Math.max(height, needed);
+      // With nothing but a name under it, the box only needs to be as wide as the name: a card's
+      // width left the glyph in the middle of an empty box, its connectors crossing the margins.
+      const { x, text } = node;
+      const narrow =
+        !written(node.description) && typeof x === 'number' && Number.isFinite(x)
+          ? Math.min(width, Math.max(GLYPH_KIND_WIDTH, Math.ceil(longestLine(text) * NAME_ADVANCE) + 24))
+          : width;
+      return {
+        ...node,
+        ...(narrow !== width && typeof x === 'number' ? { x: Math.round(x + (width - narrow) / 2), width: narrow } : {}),
+        y: Math.round(y + height / 2 - glyphMiddle(narrow, tall)),
+        height: tall,
+      };
+    }),
+  };
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
@@ -646,10 +715,9 @@ const MIGRATIONS: Record<number, Migration> = {
   // Optional `held` on shapes and `portal` on connectors; a diagram without them means the same.
   // The version moves so an older build refuses the file rather than dropping both on its next save.
   28: (document) => document,
-  // The `artifact` shape and two Service kinds (`load-balancer`, `proxy`). Nothing older holds
-  // them; the number moves so a build that has never heard of them refuses the file instead of
-  // opening an Artifact as nothing and a Load Balancer as a plain Service.
-  29: (document) => document,
+  // The `artifact` shape and two Service kinds (`load-balancer`, `proxy`), which nothing older
+  // holds, and four kinds that stop being cards (`migrateCardKindsToGlyphs`).
+  29: everyRoom(migrateCardKindsToGlyphs),
 };
 
 export class UnsupportedVersionError extends Error {

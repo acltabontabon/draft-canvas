@@ -84,7 +84,7 @@ Rules for a new version:
 | v26 → v27 | identity | Message attachments and larger sequence frames |
 | v27 → v28 | identity | No-op (optional `ink` on the document and every room) |
 | v28 → v29 | identity | No-op (optional `held` on shapes and `portal` on connectors) |
-| v29 → v30 | identity | No-op (the `artifact` shape; `serviceKind` of `load-balancer` and `proxy`) |
+| v29 → v30 | `migrateCardKindsToGlyphs` | A Service of kind `worker`, `external`, `scheduler` or `gateway` grows to the height its glyph, name and details need (114, 128 with a technology, 143 with a description), placed so the glyph's middle is where the card's middle was: those kinds are drawn as a glyph with the name underneath. Also the first version with the `artifact` shape and `serviceKind` of `load-balancer` and `proxy` |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17 and v20. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
