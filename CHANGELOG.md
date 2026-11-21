@@ -14,6 +14,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   of several selected shapes to empty canvas and choosing what to add connected only the dragged
   shape. Every selected shape is now connected, as when dropping on an existing shape, in one undo
   step.
+- **The Add to canvas picker scrolls in a short window** — In a short or magnified window the
+  picker ran past the bottom edge, and the keyboard could highlight and add a choice you could not
+  see. It now scrolls, and the highlighted choice is always brought into view.
 - **Choose a late arrival's access while presenting** — A join request during a presentation
   offered only **Let in**, which always let the person edit. It now offers **Can edit**, **Can view**
   and **Deny**, so you can let someone watch without leaving the walkthrough.

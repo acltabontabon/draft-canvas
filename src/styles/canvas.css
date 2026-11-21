@@ -3668,6 +3668,9 @@
   flex-direction: column;
   min-width: 210px;
   max-width: calc(100vw - 24px);
+  /* max-height is set inline from the window's height (QuickConnectMenu.tsx) */
+  overflow-y: auto;
+  overscroll-behavior: contain;
   padding: 6px;
   border: 1px solid var(--dc-border);
   border-radius: 12px;
