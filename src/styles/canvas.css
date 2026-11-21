@@ -521,6 +521,12 @@
   display: contents;
 }
 
+/* A route easing into place (`canvas/routeMorph.ts`): the stand-in for the line while it moves. */
+.dc-edge-morph {
+  fill: none;
+  pointer-events: none;
+}
+
 /* Hover: a soft wash of the selection colour beneath a slightly firmer line — "a click takes this
    one" — and deliberately short of selection's own colour, halo and handles. Fixed on screen. */
 .dc-edge-hover {

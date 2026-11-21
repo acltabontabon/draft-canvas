@@ -1,6 +1,6 @@
 import { playbackFlowOf } from '../document/sequenceFlow';
 import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
 import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
@@ -70,6 +70,7 @@ import { endpointPlan } from '../edges/endpoints';
 import { sequenceAnchorRect } from '../edges/sequenceAnchors';
 import { separationPlan } from '../edges/separation';
 import { DRAG_THRESHOLD_PX } from './gestureThresholds';
+import { morphRoute, settleRoute } from './routeMorph';
 
 const NO_OBSTACLES: readonly Rect[] = [];
 
@@ -100,6 +101,10 @@ function RecoveryHoverTooltip({ parentId, x, y, side }: { parentId: string; x: n
  *  renders (selection, lens, playback, hover) move none of them, and building the shared cache's
  *  string key meant serialising every obstacle rect on each of those renders, for every connector. */
 const LAST_ROUTES = new Lru<string, { inputs: readonly unknown[]; routes: EdgeRoutes }>(LIMITS.maxEdges);
+
+/** The route each connector was last drawn along, before wobble or bridges: what a changed route
+ *  eases from (`routeMorph.ts`). */
+const LAST_DRAWN = new Lru<string, string>(LIMITS.maxEdges);
 
 interface DragOverride {
   endpoint: 'source' | 'target';
@@ -711,6 +716,27 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       )
     : null;
 
+  // A settled route that differs from the one this line last had eases into place (`routeMorph.ts`).
+  // Not a gesture's frames, which are already continuous; not Sketch, whose arrowhead is its own
+  // path and would be left behind; not a line drawing itself in for the first time.
+  // The route it last had is kept by id, outside the component: React Flow mounts a connector afresh
+  // when its shapes move, and a ref would forget the very line it is leaving.
+  const lineRef = useRef<SVGPathElement>(null);
+  useLayoutEffect(() => {
+    const line = lineRef.current;
+    const was = LAST_DRAWN.get(id);
+    LAST_DRAWN.set(id, styledPath);
+    if (!line) return;
+    if (transient || usesHandDrawnArrow || arriving) settleRoute(line);
+    else if (was !== undefined && was !== styledPath) morphRoute(line, was, styledPath);
+  }, [id, styledPath, transient, usesHandDrawnArrow, arriving]);
+  useEffect(() => {
+    const line = lineRef.current;
+    return () => {
+      if (line) settleRoute(line);
+    };
+  }, []);
+
   // The reply half of a request/response connector — reuses `routeBetween` a second time with
   // source/target (and their anchors) swapped, so the path naturally runs target → source, and a
   // small addition to this edge's own lane slot, so it reads as a quieter sibling of the request
@@ -807,6 +833,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         <path className="dc-edge-hover" d={drawnPath} fill="none" pointerEvents="none" stroke={theme.selection} strokeLinecap="round" />
       )}
       <path
+        ref={lineRef}
         className="react-flow__edge-path dc-edge-line"
         d={drawnPath}
         fill="none"
