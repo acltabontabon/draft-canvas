@@ -3577,6 +3577,10 @@ export function naturalCodeSize(
   };
 }
 
+
+/** How many lines of name a glyph shape keeps under its glyph while being edited, before the name
+ *  is treated as a paragraph and given the wide column. */
+const GLYPH_NAME_LINES = 3;
 /**
  * The box an architecture shape needs for its name and C4 detail to show in full, starting from its
  * current size and only ever growing — the size an arranged diagram gives it, so nothing it was
@@ -3597,6 +3601,8 @@ export function naturalArchitectureSize(
   const verdict = (width: number, height: number) => captionVerdict(describeNode({ ...node, width, height }, ctx).shapes, node, bounds.maxNameLines ?? 2);
   const start = verdict(node.width, node.height);
   if (start.fits) return { width: node.width, height: node.height, fits: true };
+  // The shapes drawn as a glyph with the name beneath it, not as a card around the name.
+  const glyph = node.type === 'database' || node.type === 'artifact' || (node.type === 'service' && isGlyphServiceKind(node.serviceKind));
 
   // For each width (growing in steps), the least height at which everything shows — by bisection,
   // since more height never shows less. The first width whose shape comes out no taller than it is
@@ -3623,6 +3629,13 @@ export function naturalArchitectureSize(
     if (compactHeight !== undefined && compactHeight <= Math.max(node.height, node.width)) {
       return { width: node.width, height: compactHeight, fits: true };
     }
+    // A glyph shape's name hangs below its glyph, so its box is already about as tall as it is wide
+    // with a one-line name: a second line failed the test above and sent a Gateway renamed "Renamed
+    // orders" to the wide column, 640 across and over its neighbours. A name of a few lines stays
+    // under its glyph; only a pasted paragraph takes the wide column.
+    if (compactHeight !== undefined && glyph && nameLineCount({ ...node, height: compactHeight }, ctx) <= GLYPH_NAME_LINES) {
+      return { width: node.width, height: compactHeight, fits: true };
+    }
     const height = minHeightAt(bounds.maxWidth);
     if (height !== undefined) return { width: bounds.maxWidth, height, fits: true };
     return compactHeight !== undefined
@@ -3631,7 +3644,7 @@ export function naturalArchitectureSize(
   }
   // A Data Store's glyph grows with the smaller of its box's two growths (`dataStoreScale`), so a box
   // grown both ways draws a giant glyph: for one, the shortest box that fits wins outright.
-  const shortest = node.type === 'database' || node.type === 'artifact' || (node.type === 'service' && isGlyphServiceKind(node.serviceKind));
+  const shortest = glyph;
   let best: { width: number; height: number } | undefined;
   for (let width = node.width; ; width = Math.min(bounds.maxWidth, width + WIDTH_STEP)) {
     const height = minHeightAt(width);

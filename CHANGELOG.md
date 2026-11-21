@@ -79,6 +79,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Fixed
 
+- **Longer names on a Data Store** — A name that wraps to a second line now grows the shape down
+  under its glyph. It used to stretch the shape across its neighbours.
+- **Shared-link attachment cards** — A card with no room beside its shape now settles where it
+  covers nothing, when there is such a place along the bottom of the diagram.
 - **Joining to view says so** — A person let in with **Can view** was told “Edits you make are
   shared live.” They are now told they can view the diagram; the editing message is kept for people
   who can edit.

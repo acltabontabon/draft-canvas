@@ -243,9 +243,9 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
 
   const draftNodes = nodeIndex(document.nodes);
   const sourceRect =
-    displayEdge && displaySource ? rectOfInternal(displaySource, draftNodes.get(displayEdge.source)?.type) : null;
+    displayEdge && displaySource ? rectOfInternal(displaySource, draftNodes.get(displayEdge.source)) : null;
   const targetRect =
-    displayEdge && displayTarget ? rectOfInternal(displayTarget, draftNodes.get(displayEdge.target)?.type) : null;
+    displayEdge && displayTarget ? rectOfInternal(displayTarget, draftNodes.get(displayEdge.target)) : null;
 
   // Routed the same way the live edge component draws it, or the panel anchors to a point the
   // line never passes through — see `edgeLabelPoint`.

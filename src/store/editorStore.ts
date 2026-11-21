@@ -42,6 +42,7 @@ import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
   addNodes,
+  anchorOffsetY,
   alignNodes,
   attachToEdge as attachToEdgeOp,
   attachToNode as attachToNodeOp,
@@ -2276,11 +2277,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!roomFor(1, 1)) return;
 
     // Same midpoint-of-both-centers placement `detachFromEdge` already uses for a connector's
-    // own detached attachment — no independent placement heuristic invented for this.
+    // own detached attachment — no independent placement heuristic invented for this. Vertically it
+    // is the anchors that meet in the middle, not the boxes: a Worker's connectors leave its glyph,
+    // which sits above its box's middle, so centring the box drew both legs with a jog, and a jog is
+    // where a caption loses its room ("consumed by" was cut to "consum…").
     const size = defaultSizeFor('service', 'worker');
+    const anchorY = (node: DraftNode) => node.y + anchorOffsetY(node);
     const at = {
       x: Math.round((source.x + source.width / 2 + target.x + target.width / 2) / 2 - size.width / 2),
-      y: Math.round((source.y + source.height / 2 + target.y + target.height / 2) / 2 - size.height / 2),
+      y: Math.round(
+        (anchorY(source) + anchorY(target)) / 2 - anchorOffsetY({ type: 'service', serviceKind: 'worker', ...size }),
+      ),
     };
     const worker = createNode({
       type: 'service',

@@ -159,8 +159,8 @@ function landingPointFor(
   const target = internalNode(edge.target);
   if (!source || !target) return null;
   const byId = nodeIndex(document.nodes);
-  const sourceRect = rectOfInternal(source, byId.get(edge.source)?.type);
-  const targetRect = rectOfInternal(target, byId.get(edge.target)?.type);
+  const sourceRect = rectOfInternal(source, byId.get(edge.source));
+  const targetRect = rectOfInternal(target, byId.get(edge.target));
   if (!sourceRect || !targetRect) return null;
   // A drag is in flight: routed the way the canvas draws the connector right now, which is as at
   // rest unless the dragged shape is one it detours around.

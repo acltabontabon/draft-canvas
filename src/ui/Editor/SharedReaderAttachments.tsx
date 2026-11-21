@@ -149,7 +149,7 @@ function FloatingDetail({ target, children }: { target: ElementTarget; children:
     }
     const placed = placeCallout({
       kind: anchor.kind, centeredMarker: true, marker, host: screenBox(anchor.host), avoid: anchor.avoid.map(screenBox),
-      soft: obstacles.current.map(screenBox), exclusions: [...chrome.current.boxes, ...otherMarkers.current.map((marker) => {
+      soft: obstacles.current.map(screenBox), softIsWhole: true, exclusions: [...chrome.current.boxes, ...otherMarkers.current.map((marker) => {
         const at = frame.flowToScreenPosition(marker);
         return inflate({ x: at.x - marker.width / 2, y: at.y - marker.height - 10, width: marker.width, height: marker.height }, 4);
       })], preferBelow: anchor.below,

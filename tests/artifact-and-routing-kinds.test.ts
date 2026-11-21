@@ -11,7 +11,7 @@ import { ARTIFACT_KINDS, CURRENT_VERSION, SERVICE_KINDS } from '../src/document/
 import { deserializeDocument, serializeDocument } from '../src/export/project';
 import { CONCEPT_PRESETS, conceptShapes } from '../src/lib/conceptPresets';
 import { ALL_PRESETS } from '../src/lib/presets';
-import { describeContext, describeNode } from '../src/nodes/describe';
+import { describeContext, describeNode, naturalArchitectureSize } from '../src/nodes/describe';
 import { LIGHT } from '../src/render/theme/tokens';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { trafficRoleOf } from '../src/traffic/eligibility';
@@ -204,6 +204,30 @@ describe('in the editor', () => {
   it('a Queue with HAProxy on it, turned into a Service, is a Load Balancer in a glyph box', () => {
     const queue = createNode({ type: 'queue', x: 0, y: 0, technology: 'HAProxy' });
     expect(convertedNode(queue, 'service')).toMatchObject({ serviceKind: 'load-balancer', ...defaultSizeFor('service', 'load-balancer') });
+  });
+});
+
+describe('a longer name on a glyph shape', () => {
+  it('grows the box down under its glyph, not out to the wide column', () => {
+    const ctx = describeContext(LIGHT);
+    const bounds = { maxWidth: 640, maxHeight: 4096, maxNameLines: Number.POSITIVE_INFINITY };
+    const variants = [
+      { type: 'service', serviceKind: 'gateway' },
+      { type: 'service', serviceKind: 'worker' },
+      { type: 'database' },
+      { type: 'artifact' },
+    ] as const;
+    for (const variant of variants) {
+      // Two lines at the default width: this sent a Gateway to 640 across, over its neighbours.
+      const node = createNode({ ...variant, x: 0, y: 0, text: 'Order fulfilment gateway' });
+      const grown = naturalArchitectureSize(node, ctx, bounds);
+      expect(grown.fits, variant.type).toBe(true);
+      expect(grown.width, variant.type).toBe(node.width);
+      expect(grown.height, variant.type).toBeGreaterThan(node.height);
+      // A pasted paragraph is not a name: it still takes the wide column.
+      const paragraph = createNode({ ...variant, x: 0, y: 0, text: 'A much longer name that somebody pasted in from a document somewhere else entirely' });
+      expect(naturalArchitectureSize(paragraph, ctx, bounds).width, variant.type).toBe(640);
+    }
   });
 });
 
