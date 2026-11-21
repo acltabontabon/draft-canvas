@@ -227,6 +227,32 @@ test.describe('Intent Continuation', () => {
     await expect(captions(page)).toContainText(['publishes to', 'fans out to']);
   });
 
+  test('a connector dropped beside a shape sets the new one down clear of it, as the preview showed', async ({ page }) => {
+    await newCanvas(page, 'Clear drop');
+    await create(page, 'Service', { x: 200, y: 300 });
+    await create(page, 'Service', { x: 760, y: 300 });
+    await page.keyboard.press('Escape');
+    const neighbour = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    // Empty canvas, 48px left of the second Service: a Service centred there would reach across it.
+    await dragHandleTo(page, 0, { x: neighbour.x - 48, y: neighbour.y + neighbour.height / 2 });
+
+    const menu = page.locator('.dc-quick-connect');
+    await expect(menu).toBeVisible();
+    await expect(menu.locator('[data-highlighted="true"]')).toHaveText('Service');
+    const apart = (a: { x: number; width: number }, b: { x: number }) => b.x - (a.x + a.width);
+    const ghost = (await page.locator('.dc-ghost-node').boundingBox())!;
+    expect(apart(ghost, neighbour)).toBeGreaterThanOrEqual(15);
+
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.dc-node')).toHaveCount(3);
+    await page.keyboard.press('Escape');
+    const made = (await page.locator('.dc-node').nth(2).boundingBox())!;
+    expect(apart(made, neighbour)).toBeGreaterThanOrEqual(15);
+    // What Enter added is where the ghost was.
+    expect(Math.abs(made.x - ghost.x)).toBeLessThan(2);
+    expect(Math.abs(made.y - ghost.y)).toBeLessThan(2);
+  });
+
   test('the ghost scales with the diagram at a different zoom level and stays functional', async ({ page }) => {
     await newCanvas(page, 'Continuation zoom');
     await publisherAndTopic(page);

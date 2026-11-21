@@ -354,8 +354,18 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     }
     if (!quickConnect?.center) return undefined;
     const { center } = quickConnect;
-    const topLeft = flowToScreenPosition({ x: center.x - DEFAULTS.nodeWidth / 2, y: center.y - DEFAULTS.nodeHeight / 2 });
-    const bottomRight = flowToScreenPosition({ x: center.x + DEFAULTS.nodeWidth / 2, y: center.y + DEFAULTS.nodeHeight / 2 });
+    // The first row's shape too, where it was moved off a neighbour the drop would have covered: the
+    // menu stands clear of where the ghost really is, not only of where it was aimed.
+    const first = quickConnect.source ? quickConnectRows[0] : undefined;
+    const moved = first ? offerFor(useEditorStore.getState().document, quickConnect, first)?.nodes[0] : undefined;
+    const box = { x: center.x - DEFAULTS.nodeWidth / 2, y: center.y - DEFAULTS.nodeHeight / 2, width: DEFAULTS.nodeWidth, height: DEFAULTS.nodeHeight };
+    const left = Math.min(box.x, moved?.x ?? box.x);
+    const top = Math.min(box.y, moved?.y ?? box.y);
+    const topLeft = flowToScreenPosition({ x: left, y: top });
+    const bottomRight = flowToScreenPosition({
+      x: Math.max(box.x + box.width, moved ? moved.x + moved.width : -Infinity),
+      y: Math.max(box.y + box.height, moved ? moved.y + moved.height : -Infinity),
+    });
     return { x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y };
     // Measured once per menu: `quickConnect` identity is the open/close signal.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
