@@ -46,6 +46,7 @@ import {
   updateNode,
 } from '../document/operations';
 import { reinferIfEligible } from '../document/reinfer';
+import { technologyKindPatch } from '../document/technologyKind';
 import { freeOriginFor } from '../document/geometry';
 import { syncLinks } from '../document/sequenceLinks';
 import { messagesOf, sequenceOf } from '../document/sequenceModel';
@@ -846,6 +847,8 @@ function updateOne(
     else if (set.description !== undefined) patch.description = r.text(set.description, `${at}/description`, AGENT_LIMITS.descriptionLength);
     if (clear('technology')) patch.technology = undefined;
     else if (set.technology !== undefined) patch.technology = r.text(set.technology, `${at}/technology`, AGENT_LIMITS.technologyLength, { singleLine: true });
+    // A known product moves a kind nobody picked, as typing it in the editor does (`technologyKind.ts`).
+    if ('technology' in patch && set.type === undefined) Object.assign(patch, technologyKindPatch(node, patch.technology) ?? {});
     if (set.replicas !== undefined) {
       const replicas = readReplicas(r, set.replicas, `${at}/replicas`, node.type);
       if (replicas === null) patch.replicas = undefined;
@@ -956,7 +959,7 @@ function updateOne(
       }
     }
     // A new kind re-derives the connectors inference owns, exactly as a kind change in the inspector does.
-    if (set.type !== undefined) {
+    if (set.type !== undefined || 'technology' in patch) {
       const byId = new Map(next.nodes.map((n) => [n.id, n]));
       for (const edge of next.edges) {
         if ((edge.source !== id && edge.target !== id) || !isEligibleForReinference(edge)) continue;

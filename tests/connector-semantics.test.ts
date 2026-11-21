@@ -11,6 +11,7 @@ import {
   resolveJunctionEndpoint,
   resolveTransparentCategory,
 } from '../src/document/connectorSemantics';
+import { relationLabel } from '../src/document/edgeSemantics';
 import { createDocument, createEdge, createNode, type CreateNodeInput } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
 import { deserializeDocument, serializeDocument } from '../src/export/project';
@@ -1849,5 +1850,34 @@ describe('resolveJunctionEndpoint — a diamond of Junctions', () => {
     const j1 = createNode({ type: 'ellipse', x: 200, y: 0 });
     const edges = [createEdge({ source: j0.id, target: j1.id }), createEdge({ source: j1.id, target: j0.id })];
     expect(resolveJunctionEndpoint({ nodes: [j0, j1], edges }, j0.id, 'source').status).toBe('unresolved');
+  });
+});
+
+describe('what the technology says about a connector', () => {
+  it('a CDN or web server in front of a bucket or a disk serves from it, where a gateway is still nudged', () => {
+    for (const target of ['objectStorage', 'fileSystem'] as const) {
+      const cap = capabilityFor('proxy', target)!;
+      expect(cap.status).toBeUndefined();
+      expect(cap.defaultRelation).toBe('reads');
+      expect(relationLabel('reads', 'proxy', target)).toBe('serves from');
+      expect(capabilityFor('gateway', target)!.status).toBe('unusual');
+      expect(capabilityFor('loadBalancer', target)!.status).toBe('unusual');
+    }
+    // Every other proxy pairing is still a gateway's.
+    expect(capabilityFor('proxy', 'service')).toEqual(capabilityFor('gateway', 'service'));
+    expect(capabilityFor('proxy', 'database')!.status).toBe('unusual');
+    const cdn = { type: 'service', serviceKind: 'proxy', technology: 'Amazon CloudFront' } as const;
+    expect(inferRelationship(cdn, { type: 'database', databaseKind: 'object-storage' })).toMatchObject({ semantic: 'reads' });
+  });
+
+  it('a database drawn into a change-data-capture tool streams its changes; any other reader reads', () => {
+    const orders = { type: 'database', databaseKind: 'sql' } as const;
+    expect(inferRelationship(orders, { type: 'service', serviceKind: 'worker', technology: 'Debezium 2.5' })).toEqual({ semantic: 'cdc' });
+    expect(inferRelationship(orders, { type: 'service', technology: 'AWS DMS' })).toEqual({ semantic: 'cdc' });
+    expect(inferRelationship(orders, { type: 'service', serviceKind: 'worker', technology: 'Spring Boot' })).toMatchObject({ semantic: 'reads' });
+    expect(inferRelationship(orders, { type: 'service', serviceKind: 'worker', technology: 'Debezium client' })).toMatchObject({ semantic: 'reads' });
+    // Not a cache, and not the other way round: the tool pointed at a database may be loading it.
+    expect(inferRelationship({ type: 'database', databaseKind: 'cache' }, { type: 'service', technology: 'Debezium' })).toMatchObject({ semantic: 'reads' });
+    expect(inferRelationship({ type: 'service', technology: 'AWS DMS' }, orders)).toMatchObject({ semantic: 'readsWrites' });
   });
 });

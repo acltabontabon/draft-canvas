@@ -114,12 +114,16 @@ Database, anything touching `generic`) is an unrestricted connector with no defa
 | Gateway → File System | dependsOn, reads, writes, watches | *(none)* | unusual |
 | Gateway → Object Storage | dependsOn, reads, writes | *(none)* | unusual |
 | Gateway → Search Index | dependsOn, searches, indexes | *(none)* | unusual |
+| Proxy → Object Storage | reads, dependsOn | reads | a CDN's origin; captioned "serves from". A Gateway or Load Balancer here keeps the nudge |
+| Proxy → File System | reads, dependsOn | reads | a web server's files; captioned "serves from" |
 
 - Offered relations are suggestions. The inspector keeps a connector's current value selectable.
 - Unusual pairings draw normally, with a marker and guidance note. **Insert Worker** splices a
   Service between the Queue and Topic and re-infers both connectors.
 - "Dashed" rows set `defaultAsync`. Topics and streams use the `event` behaviour's dotted line.
-- Reconnecting, reversing or changing a node's kind re-infers only inferred relationships, and
+- A technology can refine a default: a database drawn into a change-data-capture tool (Debezium,
+  AWS DMS, Datastream, GoldenGate) infers `cdc` instead of `reads`.
+- Reconnecting, reversing or changing a node's kind or technology re-infers only inferred relationships, and
   drops a dash only inference added. Explicit choices are kept.
 
 ## Captions read in the arrow's direction

@@ -7,7 +7,7 @@ Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘` and `Alt` for
 Press a key to add a shape, or pick one from the toolbar. **Shapes** at the end of the toolbar lists
 every shape with its key and finds one by any name you'd use (`cache`, `user`, `topic`). Type a
 technology and it offers the shape that technology is: `kafka` gives a Queue that arrives as a Kafka
-topic, `redis` a Data Store that is a cache, `s3` object storage, each with its logo where there is
+stream, `redis` a Data Store that is a cache, `s3` object storage, each with its logo where there is
 one. A language or framework (`spring`, `rust`) gives a Service built with it.
 
 Type what a thing is called and it offers the shape already set to that kind: `load balancer`,
@@ -60,10 +60,15 @@ corner handle to resize; Actor, Queue and Data Store artwork grows with the box.
   `Rust 1.90`. The shape shows a matching icon. The same panel edits the description; drag the
   card's top edge to move it, and click empty canvas to dismiss it.
 - A known product also sets the kind, unless you've picked one: Redis makes a Data Store a Cache,
-  PostgreSQL makes it SQL, Kafka makes a Queue a Topic, Kinesis a Stream, Stripe a Service External.
-  A kind you choose yourself always stays.
+  PostgreSQL makes it SQL, Pinecone a Search Index, EFS a File System; Kafka and Kinesis make a Queue
+  a Stream (a retained log its consumers read at their own pace), SNS a Topic; Stripe makes a Service
+  External, Debezium a Worker. A kind you choose yourself always stays.
+- A few connectors follow the technology too: a database drawn into Debezium or AWS DMS *streams
+  changes to* it, and a CDN or web server in front of a bucket or a disk *serves from* it.
 - Instances: type `×3` (or `x3`) after a Service's name, or use **− ×1 +** in its toolbar. It draws
   as a stack, and an [outage](outage.md#instances) loses one instance before all of them.
+
+![A storefront drawn from technology names alone: CloudFront as a Proxy that serves from an S3 bucket, Aurora as SQL streaming changes to a Debezium worker, a Kafka stream read by a recommender that searches a Qdrant index.](../media/guides/technology-aware.png)
 
 ![Technology suggestions for PostgreSQL.](../media/guides/technology-suggestions.png)
 

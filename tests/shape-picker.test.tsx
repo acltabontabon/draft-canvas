@@ -50,7 +50,7 @@ describe('searchPresets', () => {
 
 describe('technologyShapes', () => {
   it('offers the shape a technology is, with the kind it implies', () => {
-    expect(technologyShapes('kafka')[0]).toMatchObject({ label: 'Apache Kafka', type: 'queue', technology: 'Apache Kafka', hint: 'Queue · Topic' });
+    expect(technologyShapes('kafka')[0]).toMatchObject({ label: 'Apache Kafka', type: 'queue', technology: 'Apache Kafka', hint: 'Queue · Stream' });
     expect(technologyShapes('redis')[0]).toMatchObject({ label: 'Redis', type: 'database', hint: 'Data Store · Cache' });
     expect(technologyShapes('postgres')[0]).toMatchObject({ label: 'PostgreSQL', type: 'database', hint: 'Data Store · SQL' });
     expect(technologyShapes('stripe')[0]).toMatchObject({ label: 'Stripe', type: 'service', hint: 'Service · External' });
@@ -95,7 +95,7 @@ describe('technologyShapes', () => {
   });
 
   it('starts the shape the way typing the technology onto it would', () => {
-    expect(technologyStart('queue', 'Apache Kafka')).toEqual({ technology: 'Apache Kafka', queueKind: 'topic', kindOrigin: 'technology' });
+    expect(technologyStart('queue', 'Apache Kafka')).toEqual({ technology: 'Apache Kafka', queueKind: 'stream', kindOrigin: 'technology' });
     // RabbitMQ is a plain queue: nothing to move, nothing to mark.
     expect(technologyStart('queue', 'RabbitMQ')).toEqual({ technology: 'RabbitMQ' });
     expect(technologyStart('service', 'Spring Boot')).toEqual({ technology: 'Spring Boot' });
@@ -103,7 +103,7 @@ describe('technologyShapes', () => {
 
   it('makes a shape that still follows its technology', () => {
     const node = createNode({ type: 'queue', x: 0, y: 0, ...technologyStart('queue', 'Apache Kafka') });
-    expect(node).toMatchObject({ technology: 'Apache Kafka', queueKind: 'topic', kindOrigin: 'technology' });
+    expect(node).toMatchObject({ technology: 'Apache Kafka', queueKind: 'stream', kindOrigin: 'technology' });
     // Swapped for a plain queue, the kind goes back with it: it was never picked by hand.
     expect(technologyKindPatch(node, 'RabbitMQ')).toEqual({ queueKind: 'queue', kindOrigin: undefined });
   });
@@ -184,7 +184,7 @@ describe('create rail and shape picker', () => {
 
     // The technology is the more exact answer, so it leads; the plain Queue is still offered.
     expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Apache Kafka');
-    expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Queue · Topic');
+    expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Queue · Stream');
     expect(screen.getByRole('option', { name: /^Queue/ })).toBeInTheDocument();
 
     await user.keyboard('{Enter}');

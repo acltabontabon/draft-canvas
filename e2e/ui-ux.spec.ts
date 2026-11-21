@@ -295,9 +295,9 @@ test('a technology typed into Shapes places the shape it is', async ({ page }) =
   await page.keyboard.press('Escape');
   const node = page.locator('.dc-node[data-type="queue"]');
   await expect(node).toHaveCount(1);
-  // It arrives as what Kafka is — a topic — with the technology on it.
+  // It arrives as what Kafka is — a stream, a retained log — with the technology on it.
   const inspector = page.locator('.dc-element-inspector');
-  await expect(inspector).toContainText('Topic');
+  await expect(inspector).toContainText('Stream');
   await expect(inspector).toContainText('Apache Kafka');
   await expect(page.getByRole('button', { name: 'All shapes' })).toBeVisible();
 });

@@ -413,7 +413,7 @@ export interface DraftNode {
    * What it is built with ("Spring Boot", "PostgreSQL 16") — displayed as a recognized technology
    * logo or a generic technology mark. The full value is retained for details and source exports.
    * Architecture shapes only (`C4_TEXT_TYPES`). Setting a known product can set the kind as well —
-   * Redis makes a Data Store a cache, Kafka a Queue a topic (`technologyKind.ts`) — but only a kind
+   * Redis makes a Data Store a cache, Kafka a Queue a stream (`technologyKind.ts`) — but only a kind
    * still at its default or one an earlier technology set (`kindOrigin`); a picked kind stays.
    */
   technology?: string;

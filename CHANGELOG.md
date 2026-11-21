@@ -68,6 +68,21 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Changed
 
+- **Kafka is a Stream** — Kafka, Amazon MSK, Confluent and Redpanda on a Queue now make it a Stream
+  rather than a Topic: a retained log its consumers read at their own pace. Their connectors read
+  *read by*, and an outage knows the log is kept. Queues you already have keep their kind.
+- **More products set the kind** — About 150 more names are recognised: Aurora, Spanner and Supabase
+  as SQL; Neo4j, ScyllaDB and Bigtable as NoSQL; Pinecone, Qdrant and pgvector as a Search Index;
+  EFS, NFS and HDFS as a File System; NATS and MQTT as a Topic; Celery, Sidekiq and Debezium as a
+  Worker; OpenAI, Slack and Salesforce as External.
+- **Connectors that follow the technology** — A database drawn into Debezium, AWS DMS or another
+  change-data-capture tool *streams changes to* it. A CDN or web server in front of a bucket or a
+  disk *serves from* it, and is no longer marked unusual.
+- **Outages know more brokers** — Notes add the documented default for Google Pub/Sub, Kinesis,
+  Azure Service Bus, Pulsar, EventBridge, Event Grid, NATS, MQTT, Redis Pub/Sub and Valkey, and for
+  managed Kafka. A technology written with a note in brackets, `Kafka (orders)`, is recognised.
+- **Agents' shapes follow the technology** — A `database` an agent draws with `Redis` arrives as a
+  Cache, as it does when you type it. A kind the agent names stays.
 - **Outage replaces Traffic** — Traffic, its example rates and its field notes are gone. What it
   found worth knowing (a missing fallback, a queue with no replay route) now shows when you take a
   shape down.

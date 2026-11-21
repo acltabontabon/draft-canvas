@@ -1,4 +1,5 @@
 import { relationLabel, SEMANTIC_DEFAULTS } from './edgeSemantics';
+import { tailsChangeLog } from './technologyKind';
 import type { ConnectorKind, DraftEdge, DraftNode, EdgeSemantic } from './types';
 
 /**
@@ -66,7 +67,7 @@ export type NodeCategory =
   | 'generic';
 
 type CategorizableNode = Pick<DraftNode, 'type'> &
-  Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind' | 'queueKind' | 'deliveryRole' | 'componentKind' | 'actorKind' | 'artifactKind'>>;
+  Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind' | 'queueKind' | 'deliveryRole' | 'componentKind' | 'actorKind' | 'artifactKind' | 'technology'>>;
 
 export function categoryOf(node: CategorizableNode): NodeCategory {
   switch (node.type) {
@@ -518,6 +519,13 @@ export const MATRIX: Record<string, ConnectionCapability> = {
     status: 'unusual',
     guidance: 'A Gateway routing directly to a data store is unusual — most gateways route to services, not storage.',
   }),
+  // The one router whose ordinary origin *is* storage: a CDN in front of a bucket, a web server
+  // handing out files from disk. A Proxy shares every other gateway row (`baseCategory`), which
+  // made the commonest static-site drawing there is, CloudFront → S3, read as a mistake. Its own
+  // rows, checked before that fold (`capabilityFor`): the proxy reads what it serves, captioned
+  // "serves from" (`relationLabel`). A Gateway or Load Balancer in front of a store keeps the nudge.
+  'proxy>objectStorage': capability(['reads', 'dependsOn'], 'reads', []),
+  'proxy>fileSystem': capability(['reads', 'dependsOn'], 'reads', []),
 };
 
 /** `port` never folds — a contract is not a flavour of anything, and an unlisted pairing that touched
@@ -573,6 +581,9 @@ export function capabilityFor(source: NodeCategory, target: NodeCategory): Conne
   // skipping past it to `service>queue`, and a Gateway reach `gateway>service` for a Worker target.
   // A dead-letter queue only folds with both sides at once: folding it alone as a *source* would
   // make DLQ → DLQ read as `queue>deadLetter`, a dead-letter path out of a dead-letter queue.
+  // Ahead of all of it, a caption-only category's own row, for the rare rule its base doesn't share.
+  const own = MATRIX[`${source}>${target}`];
+  if (own) return own;
   source = baseCategory(source);
   target = baseCategory(target);
   const resolvedSource = resolved(source);
@@ -817,8 +828,16 @@ export function inferRelationship(source: CategorizableNode, target: Categorizab
  * copy: `transforms`, where any other Data Store pair keeps `ingests`. Both are Tables because that
  * is the one case where the kind says "a dataset in a pipeline"; an operational database landing in
  * a table is still ingestion.
+ *
+ * And one the technology decides: a database drawn into a change-data-capture tool (Debezium, AWS
+ * DMS — `tailsChangeLog`) is its change log being tailed, `cdc`, where any other service reading it
+ * is an ordinary read. Only in that direction: the same tool pointed *at* a database may be loading
+ * a copy into it.
  */
 export function refinementBetween(source: CategorizableNode, target: CategorizableNode): Relationship | undefined {
+  if (source.type === 'database' && target.type === 'service' && categoryOf(source) === 'database' && tailsChangeLog(target.technology)) {
+    return { semantic: 'cdc' };
+  }
   if (source.type !== 'database' || target.type !== 'database') return undefined;
   if (source.databaseKind !== 'table' || target.databaseKind !== 'table') return undefined;
   return { semantic: 'transforms' };
