@@ -468,8 +468,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     useUiStore.getState().requestEdit(null);
     // A recovery connector's chip shows its action's name, not the label this editor would rewrite;
     // double-click refuses it too, and the inspector's name field is where it is renamed.
-    // oxlint-disable-next-line react/set-state-in-effect -- one-shot external command, see comment above.
     // A portal draws no label, so there would be no field to type in or leave.
+    // oxlint-disable-next-line react/set-state-in-effect -- one-shot external command, see comment above.
     if (mode !== 'present' && !compensating && !isPortal && useUiStore.getState().readOnly === null) setEditing(true);
   }, [editRequested, mode, compensating, isPortal]);
 
