@@ -31,6 +31,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **New File asks about unsaved changes once** — Choosing **New File…** over a diagram with unsaved
   changes asked whether to save them, then asked again after the new file was already created. It
   now asks once, before the Save dialog.
+- **Agents can render a selection of any size** — `render_diagram` with the current selection
+  failed above 200 selected shapes with an error about unknown shapes. The 200 limit now applies
+  only to shapes an agent lists itself, and going past it says so.
 - **A failed agent change no longer ends a live session** — An agent's change that was rejected or
   cancelled could still switch the open diagram, which ended the session for everyone on it. A
   diagram an agent asks to show now opens only after its change is made, and never over a canvas

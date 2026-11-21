@@ -500,6 +500,9 @@ async function render(host: AgentHost, args: Record<string, unknown>, context: A
     path = candidate.path;
   }
   let focus = args.focus;
+  // The person's selection, resolved here: it is not a list the caller wrote, so it is not held to
+  // the length `focus.nodes` is.
+  let selected: string[] | undefined;
   if (focus && typeof focus === 'object' && 'selection' in focus) {
     if ((focus as { selection?: unknown }).selection !== true || !snapshot.selection) throw new AgentError('NOT_ACTIVE', 'Selection rendering needs an open diagram.');
     if (Object.keys(focus).some((key) => !['selection', 'neighbors'].includes(key))) throw new AgentError('INVALID_INPUT', 'Selection cannot be combined with another focus.');
@@ -509,12 +512,13 @@ async function render(host: AgentHost, args: Record<string, unknown>, context: A
     const nodes = new Set(snapshot.selection.nodes);
     for (const edge of room.edges) if (snapshot.selection.edges.includes(edge.id)) { nodes.add(edge.source); nodes.add(edge.target); }
     if (!nodes.size) throw new AgentError('NOT_FOUND', 'Nothing is selected.');
-    focus = { nodes: [...nodes], neighbors: (focus as { neighbors?: unknown }).neighbors };
+    selected = [...nodes];
+    focus = { neighbors: (focus as { neighbors?: unknown }).neighbors };
   }
   const view = path.length ? viewOf(file, path) : file;
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
 
-  const only = renderFocus(view, focus);
+  const only = renderFocus(view, focus, selected);
   await loadTechnologyIcons(view.nodes);
   const rendered = renderDocumentSvg(view, { theme, only, ...(focus && typeof focus === 'object' && 'flow' in focus ? { selectedFlowId: String(focus.flow) } : {}), includeBackground: false, idScope: path.length ? `agent-${path.join('.')}` : 'agent' });
   const base = { diagramId, title: file.metadata.title, revision, ...(args.previewId ? { previewId: args.previewId, provisional: true } : {}), ...(only ? { focus: [...only] } : {}), ...(path.length ? { view: { path } } : {}) };
