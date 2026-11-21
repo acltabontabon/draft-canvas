@@ -5,7 +5,7 @@ import { createDocument, createNode, defaultSizeFor, defaultTextFor, displayName
 import { DEFAULTS } from '../src/document/limits';
 import { anchorBandOf } from '../src/document/queueGeometry';
 import { deserializeDocument, serializeDocument } from '../src/export/project';
-import { describeContext, describeNode } from '../src/nodes/describe';
+import { describeContext, describeNode, naturalArchitectureSize } from '../src/nodes/describe';
 import { THEMES } from '../src/render/theme/tokens';
 import { PERSONALITY_PRESETS } from '../src/theme/usePersonality';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
@@ -236,6 +236,25 @@ describe('Component — visual family: a card, and three glyphs in one notation'
       expect(shape.y + shape.layout.height).toBeLessThanOrEqual(port.height);
     }
     expect(texts[0]!.y + texts[0]!.layout.height).toBeLessThanOrEqual(texts[1]!.y);
+  });
+
+  it('a described glyph kind takes a balanced box, not the widest one around a small glyph', () => {
+    // At 280 across, a connector into the glyph's side crossed a hundred pixels of the shape's own
+    // empty box and its caption had nowhere to sit but on it: an agent's diagram with a described
+    // Adapter failed its readability check (`e2e/desktop/skill-architecture.spec.ts`).
+    const adapter = createNode({
+      type: 'component',
+      componentKind: 'adapter',
+      text: 'Peer transport',
+      description: 'Carries patches and numbered commits over WebRTC or LAN.',
+      technology: 'TypeScript',
+      x: 0,
+      y: 0,
+    });
+    const size = naturalArchitectureSize(adapter, ctx);
+    expect(size.fits).toBe(true);
+    expect(size.width).toBeLessThanOrEqual(200);
+    expect(size.height).toBeLessThanOrEqual(Math.max(adapter.height, size.width));
   });
 
   it('connectors meet a glyph kind at its glyph, and a Generic card at its box', () => {

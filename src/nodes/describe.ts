@@ -3574,7 +3574,14 @@ export function naturalArchitectureSize(
   }
   // A Data Store's glyph grows with the smaller of its box's two growths (`dataStoreScale`), so a box
   // grown both ways draws a giant glyph: for one, the shortest box that fits wins outright.
-  const shortest = glyph;
+  //
+  // A glyph Component is left out. Its glyph stays one size, and the shortest box for a description
+  // is the widest one: 280 across around a glyph 54 across. A connector into the glyph's side then
+  // crosses a hundred pixels of the shape's own empty box, with nowhere for its caption but on it,
+  // and an arranged diagram with a described Adapter failed its readability check. It takes the
+  // balanced box every card does. (A glyph Service has the same wide box and keeps it for now: the
+  // layouts drawn around it are held to it.)
+  const shortest = glyph && node.type !== 'component';
   let best: { width: number; height: number } | undefined;
   for (let width = node.width; ; width = Math.min(bounds.maxWidth, width + WIDTH_STEP)) {
     const height = minHeightAt(width);
