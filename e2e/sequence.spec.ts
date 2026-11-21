@@ -141,14 +141,25 @@ test.describe('Sequence', () => {
 
     // Pressing on the sequence where none of its parts are picks the whole of it up.
     const node = page.locator('.react-flow__node').first();
-    const before = (await node.boundingBox())!;
+    // The undo above re-lays the sequence out. Measure only once its box has stopped changing, and
+    // hover before pressing, so WebKit has the pointer over the node when the drag starts. Pressing
+    // at once lost the first moves of the drag there (34px moved of 100), a flake seen in CI.
+    let before = (await node.boundingBox())!;
+    await expect
+      .poll(async () => {
+        const box = (await node.boundingBox())!;
+        const settled = box.x === before.x && box.y === before.y && box.width === before.width;
+        before = box;
+        return settled;
+      })
+      .toBe(true);
     await page.mouse.move(before.x + 60, before.y + 12);
     await page.mouse.down();
+    await page.mouse.move(before.x + 62, before.y + 14);
     await page.mouse.move(before.x + 160, before.y + 72, { steps: 6 });
     await page.mouse.up();
-    const after = (await node.boundingBox())!;
-    expect(after.x - before.x).toBeGreaterThan(60);
-    expect(after.y - before.y).toBeGreaterThan(30);
+    await expect.poll(async () => (await node.boundingBox())!.x - before.x).toBeGreaterThan(60);
+    await expect.poll(async () => (await node.boundingBox())!.y - before.y).toBeGreaterThan(30);
     expect(await said(page)).toEqual(['Client to API: GET /orders', 'API to Database: SELECT orders']);
   });
 
