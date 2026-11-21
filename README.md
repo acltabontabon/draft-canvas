@@ -31,29 +31,37 @@ is yours to review.
 Whole systems from the [starters gallery](https://github.com/acltabontabon/draft-canvas-starters), open in Draft Canvas. Load any of them from
 **Starters** in the app, present their flows, step inside their services, and make them yours.
 
+<table>
+<tr>
+<td width="33%" valign="top">
 <a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/food-delivery">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-food-delivery-dark.png">
-  <img width="100%" alt="Forkful, a food delivery marketplace, open in Draft Canvas: customer, kitchen and courier apps meet at a junction before the API gateway; ordering, payments, kitchen, logistics, data and notification domains sit inside the system boundary." src="docs/media/starter-food-delivery-light.png">
+  <img width="100%" alt="Forkful, a food delivery marketplace, open in Draft Canvas." src="docs/media/starter-food-delivery-light.png">
 </picture>
 </a>
-
-<p align="center"><sub>
-<b>Forkful</b>, a food delivery marketplace: an order saga with its refunds, an outbox, a dead-letter
-queue and eight flows to present.
-</sub></p>
-
+<p align="center"><b>Food delivery</b><br><sub>An order saga with refunds, an outbox and a dead-letter queue.</sub></p>
+</td>
+<td width="33%" valign="top">
 <a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/video-streaming">
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-video-streaming-dark.png">
-  <img width="100%" alt="Reelwave, a video streaming platform, open in Draft Canvas: TV, mobile and web apps meet at a junction before the edge gateway; discovery, playback and data domains sit in the cloud, edge appliances inside partner ISPs, and a Press play sequence diagram below." src="docs/media/starter-video-streaming-light.png">
+  <img width="100%" alt="Reelwave, a video streaming platform, open in Draft Canvas." src="docs/media/starter-video-streaming-light.png">
 </picture>
 </a>
-
-<p align="center"><sub>
-<b>Reelwave</b>, a video streaming platform: an edge inside partner ISPs, DRM, a data platform that
-retrains recommendations, and a <i>Press play</i> sequence diagram.
-</sub></p>
+<p align="center"><b>Video streaming</b><br><sub>An edge inside ISPs, DRM, and a Press play sequence diagram.</sub></p>
+</td>
+<td width="33%" valign="top">
+<a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/ride-hailing">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-ride-hailing-dark.png">
+  <img width="100%" alt="Swiftride, a ride-hailing platform, open in Draft Canvas." src="docs/media/starter-ride-hailing-light.png">
+</picture>
+</a>
+<p align="center"><b>Ride-hailing</b><br><sub>Live driver locations, dispatch, surge pricing and payouts.</sub></p>
+</td>
+</tr>
+</table>
 
 ## Get started
 
