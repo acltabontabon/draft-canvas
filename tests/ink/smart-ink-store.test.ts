@@ -212,6 +212,17 @@ describe('Smart Ink conversion', () => {
     expect(strokes()).toBe(1);
   });
 
+  it('a path drawn between two shapes becomes a connector bent through its corners, as one undo step', () => {
+    const stroke = draw(c.line({ x: 90, y: 60 }, { x: 490, y: 60 }, c.hand(21))[0]!);
+    const id = store.getState().inkToConnector([stroke.id], 'n_api', 'n_db', false, [{ x: 90, y: 200 }, { x: 490, y: 200 }]);
+    const edge = store.getState().document.edges.find((e) => e.id === id)!;
+    expect(edge.waypoints).toEqual([{ x: 90, y: 200 }, { x: 490, y: 200 }]);
+    expect(strokes()).toBe(0);
+    store.getState().undo();
+    expect(store.getState().document.edges).toHaveLength(0);
+    expect(strokes()).toBe(1);
+  });
+
   it('never draws a second connector over an existing one; the line stays a sketch', () => {
     store.getState().connect('n_api', 'n_db');
     const stroke = draw(c.line({ x: 180, y: 34 }, { x: 395, y: 40 }, c.hand(9))[0]!);

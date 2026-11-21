@@ -34,6 +34,10 @@ export const MIN_DIAGONAL_PX = 18;
 export const END_REACH_PX = 14;
 /** How far a drawn box may miss the edge of a shape it goes round and still enclose it. */
 export const ENCLOSE_TOLERANCE_PX = 6;
+/** How closely a traced route follows the hand: bends smaller than this are wobble, not intent. */
+export const TRACE_EPSILON_PX = 12;
+/** A stroke between two shapes with more bends than this is a scribble across them, not a route. */
+export const TRACE_MAX_BENDS = 6;
 /** A stroke that starts this close to the drawing in progress continues it (or, at least,
  *  `CONTINUES_FRACTION` of its larger side — whichever is further). */
 export const CONTINUES_WITHIN_PX = 28;

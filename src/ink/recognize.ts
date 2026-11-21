@@ -28,7 +28,7 @@ import {
   type Box,
   type Pt,
 } from './geometry';
-import { CONVERT_CONFIDENCE, MIN_DIAGONAL_PX, OFFER_CONFIDENCE, RESAMPLE_STEP_PX } from './thresholds';
+import { CONVERT_CONFIDENCE, MIN_DIAGONAL_PX, OFFER_CONFIDENCE, RESAMPLE_STEP_PX, TRACE_EPSILON_PX } from './thresholds';
 
 export type InkGeometry = 'rectangle' | 'ellipse' | 'cylinder' | 'tube' | 'person' | 'line' | 'arrow';
 
@@ -46,6 +46,12 @@ export interface Recognition {
   line?: { from: Pt; to: Pt; heads: InkHeads };
   /** Every candidate's own score, for tests and for the alternatives offered. */
   scores: Partial<Record<InkGeometry, number>>;
+  /**
+   * A drawing of one stroke, as the path the hand took: its corners in room coordinates, start to
+   * end, with the wobble taken out. Geometry only, whatever the best reading is — whether a path
+   * between two shapes is a route for a connector is `interpret.ts`'s question.
+   */
+  trace?: Pt[];
 }
 
 // Every threshold, with its unit, is in `thresholds.ts`; the two a caller reads are re-exported.
@@ -66,6 +72,7 @@ export function recognize(strokes: readonly (readonly Pt[])[], options: { scale:
   const empty: Recognition = { geometry: null, confidence: 0, box: roomBox, scores: {} };
   if (prepared.all.length < 2 || Math.hypot(prepared.box.width, prepared.box.height) < MIN_DIAGONAL_PX) return empty;
 
+  const trace = prepared.strokes.length === 1 ? simplify(prepared.strokes[0]!, TRACE_EPSILON_PX).map((p) => toRoomPt(p, scale)) : undefined;
   const scores: Partial<Record<InkGeometry, number>> = {};
   const line = lineReading(prepared);
   if (line) scores.line = line.score;
@@ -79,14 +86,14 @@ export function recognize(strokes: readonly (readonly Pt[])[], options: { scale:
 
   const ranked = (Object.entries(scores) as Array<[InkGeometry, number]>).filter(([, score]) => score > 0).sort((a, b) => b[1] - a[1]);
   const best = ranked[0];
-  if (!best) return { ...empty, scores };
+  if (!best) return { ...empty, scores, ...(trace ? { trace } : {}) };
   const [geometry, score] = best;
   // A rival that nearly matched makes the reading less certain. A cylinder is also, partly, an
   // ellipse and a rectangle, and an arrow partly a line: those overlaps are expected, not rivals.
   const rival = ranked.slice(1).find(([other]) => !nested(geometry, other))?.[1] ?? 0;
   const confidence = score * (0.7 + 0.3 * ramp(score - rival, 0, 0.35));
 
-  const result: Recognition = { geometry, confidence, box: roomBox, scores };
+  const result: Recognition = { geometry, confidence, box: roomBox, scores, ...(trace ? { trace } : {}) };
   if (geometry === 'line' && line) result.line = { from: toRoomPt(line.from, scale), to: toRoomPt(line.to, scale), heads: 'none' };
   if (geometry === 'arrow' && arrow) result.line = { from: toRoomPt(arrow.from, scale), to: toRoomPt(arrow.to, scale), heads: arrow.heads };
   return result;

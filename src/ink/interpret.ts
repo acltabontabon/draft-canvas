@@ -12,13 +12,17 @@
  * - **Endpoints.** A line or arrow whose two ends land on two different shapes is a connector between
  *   them. One that starts or ends in empty space, or both ends on the same shape (an underline), is not.
  *
+ * - **A traced route.** One stroke that leaves one shape and arrives at another by a path of its own
+ *   (round the bottom, over the top) is a connector between them that keeps that path: its corners
+ *   become the connector's bends (`via`). A straight stroke needs none and is read as a line, above.
+ *
  * Anything overlapping existing shapes without enclosing them is annotation on them and stays ink.
  */
 import type { DraftNodeType } from '../document/types';
 import type { InkShapeChoice } from './choices';
-import { boxContains, boxIntersects, distToSegment, pointInBox, type Box, type Pt } from './geometry';
+import { angleBetween, boxContains, boxIntersects, distToSegment, heading, pointInBox, type Box, type Pt } from './geometry';
 import type { InkGeometry, Recognition } from './recognize';
-import { CONVERT_CONFIDENCE, END_REACH_PX, ENCLOSE_TOLERANCE_PX, FORCED_OFFER_FRACTION, LARGE_BOX, OFFER_CONFIDENCE, SMALL_CIRCLE } from './thresholds';
+import { CONVERT_CONFIDENCE, END_REACH_PX, ENCLOSE_TOLERANCE_PX, FORCED_OFFER_FRACTION, LARGE_BOX, OFFER_CONFIDENCE, SMALL_CIRCLE, TRACE_MAX_BENDS } from './thresholds';
 
 /** A shape on the canvas, as the interpreter needs it. */
 export interface InkContextNode {
@@ -43,11 +47,22 @@ export type InkInterpretation =
       /** Shapes the drawing goes round — what a Boundary made from it would hold. */
       encloses: string[];
     }
-  | { kind: 'connector'; source: string; target: string; directed: boolean; confident: boolean }
+  | {
+      kind: 'connector';
+      source: string;
+      target: string;
+      directed: boolean;
+      confident: boolean;
+      /** The corners of the path drawn between the two shapes, source to target (room coordinates):
+       *  the bends the connector keeps. Absent for a straight line, which the router draws itself. */
+      via?: Pt[];
+    }
   | { kind: 'none'; reason: 'unrecognized' | 'annotation' | 'unanchored' | 'same-shape' };
 
 export function interpret(recognition: Recognition, nodes: readonly InkContextNode[], options: { scale: number; forced?: boolean }): InkInterpretation {
   const { geometry, confidence } = recognition;
+  const traced = tracedRoute(recognition, nodes, options);
+  if (traced) return traced;
   // Asked for explicitly ("Convert to shape"), a weaker reading is still worth offering.
   const offerAt = options.forced ? OFFER_CONFIDENCE * FORCED_OFFER_FRACTION : OFFER_CONFIDENCE;
   if (!geometry || confidence < offerAt) return { kind: 'none', reason: 'unrecognized' };
@@ -87,6 +102,38 @@ export function interpret(recognition: Recognition, nodes: readonly InkContextNo
   const choices = choicesFor(geometry, box, encloses.length > 0);
   if (!choices) return { kind: 'none', reason: encloses.length > 0 ? 'annotation' : 'unrecognized' };
   return { kind: 'shape', geometry, box, choices, confident, encloses };
+}
+
+/**
+ * One stroke from one shape to another by a path with corners of its own: a connector that keeps
+ * them. Conservative on every count, since the alternative (the stroke stays a sketch) costs
+ * nothing: both ends must land on two different shapes, the path between them must leave both, a
+ * drawing that reads confidently as a shape is that shape, and a stroke with many turns is a scribble.
+ */
+/** Radians a traced path must turn at a corner for it to be kept as a bend. */
+const TRACE_TURN = (25 * Math.PI) / 180;
+
+function tracedRoute(recognition: Recognition, nodes: readonly InkContextNode[], options: { scale: number }): InkInterpretation | null {
+  const trace = recognition.trace;
+  if (!trace || trace.length < 3 || trace.length - 2 > TRACE_MAX_BENDS) return null;
+  // Straight enough to read as a line or an arrow: that reading knows about heads, and needs no bends.
+  if (recognition.geometry === 'line' || recognition.geometry === 'arrow') return null;
+  if (recognition.geometry !== null && recognition.confidence >= CONVERT_CONFIDENCE) return null;
+  const from = trace[0]!;
+  const to = trace[trace.length - 1]!;
+  const reach = END_REACH_PX / Math.max(options.scale, 0.05);
+  const source = shapeAt(from, nodes, reach);
+  const target = shapeAt(to, nodes, reach);
+  if (!source || !target || source.id === target.id) return null;
+  if (source.type === 'group' || target.type === 'group' || insideBoth(from, to, source, target)) return null;
+  // The corners that are the route: those outside both shapes. A path that never leaves them is a
+  // mark across two touching shapes.
+  const outside = trace.slice(1, -1).filter((p) => !pointInBox(p, source, reach) && !pointInBox(p, target, reach));
+  // …and that really turn: a point the hand merely drifted through on a straight run is no bend.
+  const path = [from, ...outside, to];
+  const via = outside.filter((p, i) => angleBetween(heading(path[i]!, p), heading(p, path[i + 2]!)) > TRACE_TURN);
+  if (via.length === 0) return null;
+  return { kind: 'connector', source: source.id, target: target.id, directed: false, confident: true, via };
 }
 
 function choicesFor(geometry: InkGeometry, box: Box, enclosing: boolean): InkShapeChoice[] | null {

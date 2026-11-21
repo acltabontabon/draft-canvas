@@ -780,7 +780,8 @@ export interface DraftEdge {
    * as before this field existed; present, the line is drawn through these points in the
    * connector's own `routing` style (a stepped connector stays orthogonal, inserting the elbows
    * it needs), and only the two ends still follow their shapes. Moving both ends together moves
-   * the points with them; "Reset route" clears it. Never set by inference or layout.
+   * the points with them; "Reset route" clears it. Never set by inference or layout: only by a
+   * bend the person dragged, or a path they drew by hand between two shapes (Smart Ink).
    */
   waypoints?: DraftPoint[];
   /**

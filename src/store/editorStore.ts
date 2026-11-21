@@ -437,7 +437,7 @@ export interface EditorStore {
   /** The shape a drawing became, back to the drawing. */
   revertInkShape: (nodeId: string, strokes: readonly DraftInk[]) => void;
   /** Turns strokes into a connector between two shapes, as one undo step. Returns its id, or null. */
-  inkToConnector: (strokeIds: readonly string[], source: string, target: string, directed: boolean) => string | null;
+  inkToConnector: (strokeIds: readonly string[], source: string, target: string, directed: boolean, via?: readonly DraftPoint[]) => string | null;
   /** One undoable bulk add. `flows` (a starter's predefined walkthroughs) join the same entry, so
    *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. False
    *  (and nothing added) when the result would pass the document limits. */
@@ -1835,7 +1835,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Back to sketch', (doc) => addInk(removeElements(doc, [nodeId], []), strokes), { selection: EMPTY_SELECTION });
   },
 
-  inkToConnector(strokeIds, source, target, directed) {
+  inkToConnector(strokeIds, source, target, directed, via) {
     const state = get();
     const sourceNode = state.document.nodes.find((n) => n.id === source);
     const targetNode = state.document.nodes.find((n) => n.id === target);
@@ -1858,7 +1858,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       async: relationship?.async,
       semanticsOrigin: relationship ? 'inferred' : undefined,
     });
-    state.apply(directed ? 'Draw connector' : 'Draw line', (doc) => addEdges(removeInk(doc, strokeIds), [edge]), { selection: EMPTY_SELECTION });
+    // A path drawn by hand between the two is the route the person asked for: its corners are kept
+    // as the connector's bends, exactly as if they had been dragged there.
+    state.apply(
+      directed ? 'Draw connector' : 'Draw line',
+      (doc) => {
+        const drawn = addEdges(removeInk(doc, strokeIds), [edge]);
+        return via?.length ? setEdgeWaypointsOp(drawn, edge.id, via) : drawn;
+      },
+      { selection: EMPTY_SELECTION },
+    );
     return get().document.edges.some((e) => e.id === edge.id) ? edge.id : null;
   },
 
