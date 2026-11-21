@@ -18,7 +18,14 @@ export { collectRooms, roomTitleFor, type ExportRoom };
 
 /** The shapes that stand for a piece of architecture — what every format exports as an element. */
 export function isArchitecture(node: DraftNode): boolean {
-  return node.type === 'service' || node.type === 'database' || node.type === 'queue' || node.type === 'actor' || node.type === 'component';
+  return (
+    node.type === 'service' ||
+    node.type === 'database' ||
+    node.type === 'queue' ||
+    node.type === 'actor' ||
+    node.type === 'component' ||
+    node.type === 'artifact'
+  );
 }
 
 export function isBoundary(node: DraftNode): boolean {

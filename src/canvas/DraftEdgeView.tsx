@@ -399,6 +399,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const committedTarget = useEditorStore((state) => (edge && (edge.waypoints || edge.portal || edge.targetAnchor?.participantId) ? selectNode(state.document, edge.target) : undefined));
   const sourceType = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.type);
   const targetType = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.type);
+  // With the type, what a Service is drawn as: a Worker's connectors meet its glyph, not its box.
+  const sourceServiceKind = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.serviceKind);
+  const targetServiceKind = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.serviceKind);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
   /** A dragged, unconnected shape would go into the middle of this connector on drop. Tinted like
    *  an attach target, with no landing dot: the shape lands where it is, not at the label point. */
@@ -550,8 +553,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
   if (!edge || !sourceNode || !targetNode) return null;
 
-  const sourceRect = rectOfInternal(sourceNode, sourceType);
-  const targetRect = rectOfInternal(targetNode, targetType);
+  const sourceRect = rectOfInternal(sourceNode, sourceType && { type: sourceType, serviceKind: sourceServiceKind });
+  const targetRect = rectOfInternal(targetNode, targetType && { type: targetType, serviceKind: targetServiceKind });
   if (!sourceRect || !targetRect) return null;
 
   // While an endpoint is being dragged, the path tracks the live pointer
@@ -581,6 +584,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     targetNode,
     sourceType,
     targetType,
+    sourceServiceKind,
+    targetServiceKind,
     dragOverride,
     bendPreview,
     committedSource,

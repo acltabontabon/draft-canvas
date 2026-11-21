@@ -10,6 +10,22 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Load Balancer and Proxy** — Two new Service kinds, each drawn as what it does: a load balancer
+  as one address fanning out to identical instances, a proxy as two plates with a connection ending
+  at one and another leaving the other. HAProxy and an ALB arrive as a Load Balancer; NGINX, Envoy
+  and a CDN as a Proxy.
+- **Service kinds drawn as what they do** — Gateway, Worker, Scheduler and External are no longer
+  cards with a word in the corner: a gateway is a gate with different destinations behind it, a worker a trace
+  with a job still running, a scheduler a page of time slots, an external system a block inside a
+  dashed boundary. Their name sits underneath. In a diagram you already have, each grows taller to
+  fit; check the spacing around them.
+- **Artifact** — A new shape for what a system reads, mounts or presents: a File, a Config, a
+  Secret or a Certificate. Find it in **Shapes**; it is not on the toolbar.
+- **Shapes by name** — Type what a thing is called in **Shapes** or `⌘K` and it arrives already set
+  to that kind: `load balancer`, `reverse proxy`, `cdn`, `config`, `tls`, `api key`, `pod`.
+- **Connectors that say what these do** — A Load Balancer *distributes to*, a Proxy *forwards to*,
+  and a service is *configured by* a Config, *authenticates with* a Secret and *presents* a
+  Certificate.
 - **Present without a flow** — **Present** now walks a diagram that has no flows, following its
   arrows one connector at a time. Select one shape to present from it onward, two shapes to present
   the way between them, or several to present that part; the button reads **Present selection**.
@@ -63,6 +79,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Fixed
 
+- **Longer names on a Data Store** — A name that wraps to a second line now grows the shape down
+  under its glyph. It used to stretch the shape across its neighbours.
+- **Shared-link attachment cards** — A card with no room beside its shape now settles where it
+  covers nothing, when there is such a place along the bottom of the diagram.
 - **Joining to view says so** — A person let in with **Can view** was told “Edits you make are
   shared live.” They are now told they can view the diagram; the editing message is kept for people
   who can edit.

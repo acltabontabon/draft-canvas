@@ -33,6 +33,12 @@ const NAMES: Record<NodeCategory, string> = {
   stream: 'Stream',
   junction: 'Junction',
   deadLetter: 'Dead-letter queue',
+  artifact: 'Artifact',
+  loadBalancer: 'Load Balancer',
+  proxy: 'Proxy',
+  config: 'Config',
+  secret: 'Secret',
+  certificate: 'Certificate',
   generic: 'Generic',
 };
 

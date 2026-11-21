@@ -263,7 +263,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       : { ...node, width: effectiveWidth, height: effectiveHeight };
   // Relative to the node box (x, y: 0) — the handles are positioned inside it.
   const handleBand = liveNode
-    ? anchorBandOf({ type: liveNode.type, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
+    ? anchorBandOf({ type: liveNode.type, serviceKind: liveNode.serviceKind, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
     : undefined;
   // `DraftHandle` is memoized, so each keeps its style object until the band itself moves —
   // twelve fresh objects per node render would re-render every handle every time.

@@ -252,6 +252,6 @@ export function QuickConnectMenu({
 
 /** Fixed-pixel details need a real node's logical size; CSS alone scales the result to an icon. */
 function QuickConnectShape({ node }: { node: QuickConnectItem['node'] }) {
-  const size = minSizeFor(node.type);
+  const size = minSizeFor(node.type, node.serviceKind);
   return <ShapePreview node={node} width={size.width} height={size.height} />;
 }

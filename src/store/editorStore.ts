@@ -13,6 +13,7 @@ import {
   createEdge,
   createNode,
   defaultSizeFor,
+  boxForServiceKind,
   defaultTextFor,
   type CreateNodeInput,
 } from '../document/factory';
@@ -41,6 +42,7 @@ import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
   addNodes,
+  anchorOffsetY,
   alignNodes,
   attachToEdge as attachToEdgeOp,
   attachToNode as attachToNodeOp,
@@ -138,6 +140,7 @@ import {
   categoryOf,
   isServiceInteraction,
   inferRelationship,
+  baseCategory,
 } from '../document/connectorSemantics';
 import { inferRelationshipThroughJunctions, reinferIfEligible } from '../document/reinfer';
 import { plainShortcut } from '../lib/platform';
@@ -849,7 +852,7 @@ export interface ApplyOptions {
  *  `document/connectorSemantics.ts`) — a change to any of these can make an incident edge's
  *  inferred relationship stale, so `updateNodeById` re-runs `reinferIfEligible` on every edge
  *  touching the node whenever a patch touches one of these. */
-const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'actorKind', 'componentKind'] as const;
+const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'actorKind', 'componentKind', 'artifactKind'] as const;
 
 /**
  * Re-evaluates every edge incident to a node after a patch changes one of `KIND_FIELDS` — the same
@@ -891,6 +894,14 @@ function applyComponentAutoLabel(doc: DraftDocument, nodeId: string, before: Dra
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node) return doc;
   return updateNode(doc, nodeId, { text: defaultTextFor('component', undefined, node.componentKind) });
+}
+
+/** And for an Artifact: "File" becomes "Certificate" while nobody has named it. */
+function applyArtifactAutoLabel(doc: DraftDocument, nodeId: string, before: DraftNode, patch: Partial<DraftNode>): DraftDocument {
+  if (before.type !== 'artifact' || before.textOrigin !== 'auto' || patch.text !== undefined) return doc;
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node) return doc;
+  return updateNode(doc, nodeId, { text: defaultTextFor('artifact', undefined, undefined, undefined, node.artifactKind) });
 }
 
 /**
@@ -2099,9 +2110,15 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply(label, (doc) => {
       const before = doc.nodes.find((n) => n.id === id);
       let next = updateNode(doc, id, picked && before?.kindOrigin ? { ...patch, kindOrigin: undefined } : patch);
-      if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
+      if (before && 'serviceKind' in patch) {
+        next = applyServiceAutoLabel(next, id, before, patch);
+        // A card becoming a glyph (or back) takes the box that drawing needs.
+        const box = boxForServiceKind(before, before.serviceKind, patch.serviceKind);
+        if (box && !('width' in patch) && !('height' in patch)) next = updateNode(next, id, box);
+      }
       if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
       if (before && 'actorKind' in patch) next = applyActorAutoLabel(next, id, before, patch);
+      if (before && 'artifactKind' in patch) next = applyArtifactAutoLabel(next, id, before, patch);
       if (before?.type === 'note' && 'noteKind' in patch) next = growNoteToFit(next, id);
       if (before?.type === 'text' && TEXT_STYLE_FIELDS.some((field) => field in patch)) {
         next = growTextToFit(next, id);
@@ -2129,6 +2146,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           // The same follow-ups as a kind picked in the inspector: an automatic name follows the
           // kind, and connectors whose meaning was inferred are inferred again.
           next = applyServiceAutoLabel(next, id, before, kind);
+          const box = boxForServiceKind(before, before.serviceKind, (kind as Partial<DraftNode>).serviceKind ?? before.serviceKind);
+          if (box) next = updateNode(next, id, box);
           next = reinferIncidentEdges(next, id, doc);
         }
         return growArchitectureToFit(next, id);
@@ -2258,11 +2277,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!roomFor(1, 1)) return;
 
     // Same midpoint-of-both-centers placement `detachFromEdge` already uses for a connector's
-    // own detached attachment — no independent placement heuristic invented for this.
-    const size = defaultSizeFor('service');
+    // own detached attachment — no independent placement heuristic invented for this. Vertically it
+    // is the anchors that meet in the middle, not the boxes: a Worker's connectors leave its glyph,
+    // which sits above its box's middle, so centring the box drew both legs with a jog, and a jog is
+    // where a caption loses its room ("consumed by" was cut to "consum…").
+    const size = defaultSizeFor('service', 'worker');
+    const anchorY = (node: DraftNode) => node.y + anchorOffsetY(node);
     const at = {
       x: Math.round((source.x + source.width / 2 + target.x + target.width / 2) / 2 - size.width / 2),
-      y: Math.round((source.y + source.height / 2 + target.y + target.height / 2) / 2 - size.height / 2),
+      y: Math.round(
+        (anchorY(source) + anchorY(target)) / 2 - anchorOffsetY({ type: 'service', serviceKind: 'worker', ...size }),
+      ),
     };
     const worker = createNode({
       type: 'service',
@@ -2439,7 +2464,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!source) return;
     if (!roomFor(1, 1)) return;
 
-    const size = defaultSizeFor(companion.type);
+    const size = defaultSizeFor(companion.type, 'serviceKind' in companion ? companion.serviceKind : undefined);
     // Same capability matrix every other connection reads — it correctly differentiates a queue's
     // competing-consumer `consumes` from a topic's fan-out `deliversTo`, a service's `writes` from
     // a gateway's `routes`, with no special-casing here. Resolved ahead of placement (category only
@@ -2490,7 +2515,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   addRoutedService(gatewayId) {
     const source = get().document.nodes.find((n) => n.id === gatewayId);
-    if (!source || categoryOf(source) !== 'gateway') return;
+    if (!source || baseCategory(categoryOf(source)) !== 'gateway') return;
     get().addCompanion(gatewayId, { type: 'service', serviceKind: 'api' }, 'Add Service');
   },
 

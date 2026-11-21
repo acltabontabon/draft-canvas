@@ -3,12 +3,13 @@ import { startOutage } from './outage';
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
 import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
+import { CONCEPT_PRESETS, conceptKeywords } from '../lib/conceptPresets';
 import { sequenceCommands, sequenceFromSelectionCommands, sequenceQuickCommands } from './sequence';
 import { sequenceActions } from '../store/sequenceActions';
 import { bridgeProblems } from '../document/splice';
 import { CONVERTIBLE_TYPES, CONVERTIBLE_TYPE_NAMES, isConvertibleType } from '../document/convert';
 import { reconnectProblem } from '../document/reconnect';
-import { capabilityFor, categoryOf, edgeRelationLabel, isServiceInteraction } from '../document/connectorSemantics';
+import { baseCategory, capabilityFor, categoryOf, edgeRelationLabel, isServiceInteraction } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
 import { createAttachment, defaultSizeFor, displayNameFor } from '../document/factory';
 import { stepIndexOf } from '../document/flow';
@@ -81,14 +82,21 @@ import type { OpenPointTarget } from '../document/types';
  * Every `run` is one call into an existing store action or hook — see `types.ts`.
  */
 
+/**
+ * How far a shape-by-name command (`conceptPresets.ts`) stands behind everything else. More than a
+ * keyword match costs (`fuzzy.ts`), so "events" is still the Event-Driven starter and "service"
+ * still Add Service, and "load balancer", which nothing else answers to, is still found.
+ */
+const CONCEPT_HANDICAP = 4;
+
 function createCommand(preset: Preset): Command {
   return {
     id: `add-${preset.id}`,
     title: `Add ${preset.label}`,
     group: 'create',
-    keywords: PRESET_KEYWORDS[preset.id],
+    keywords: PRESET_KEYWORDS[preset.id] ?? conceptKeywords(preset),
     hint: preset.hint,
-    shortcut: preset.shortcut,
+    shortcut: preset.shortcut || undefined,
     run: (ctx) => {
       const node = ctx.createAtPointer(preset);
       // Select what was just made, so "Add Service → Connect to…" chains without a mouse.
@@ -1056,6 +1064,7 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   group: 'Boundary',
   ellipse: 'Junction',
   sequence: 'Sequence',
+  artifact: 'Artifact',
 };
 
 function captionFor(node: DraftNode): string {
@@ -1085,7 +1094,7 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
     if (edge) inner.editor.setSelection({ nodes: [], edges: [edge.id] });
   });
   // Not a Junction (nothing to name) and not a Sequence (a connector does not lead to one).
-  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse' && preset.id !== 'sequence').map((preset) => ({
+  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse' && preset.id !== 'sequence' && preset.id !== 'artifact').map((preset) => ({
     id: `connect-new:${preset.id}`,
     title: `New ${preset.label}`,
     keywords: PRESET_KEYWORDS[preset.id],
@@ -1484,7 +1493,7 @@ function serviceQuickCommands(node: DraftNode, level?: ViewLevel): Command[] {
       run: (inner) => inner.editor.addDataStore(node.id),
     });
   }
-  if (categoryOf(node) === 'gateway') {
+  if (baseCategory(categoryOf(node)) === 'gateway') {
     commands.push({
       id: 'add-routed-service',
       title: 'Route to Service',
@@ -2450,6 +2459,8 @@ function editCommands(ctx: CommandContext): Command[] {
     ...inkCommands(ctx),
     ...selectionCommands(ctx),
     ...ALL_PRESETS.map(createCommand),
+    // The same shapes by the names people call them: "Add Load Balancer", "Add TLS Certificate".
+    ...CONCEPT_PRESETS.map((preset) => ({ ...createCommand(preset), handicap: CONCEPT_HANDICAP })),
     ...pencilCommands(ctx),
     { id: 'try-example', title: 'Try an example', group: 'canvas', keywords: ['order', 'processing', 'learn'], run: (inner) => inner.ui.requestExample() },
     { id: 'browse-starters', title: 'Browse starters…', group: 'canvas', keywords: ['starter', 'gallery', 'template', 'example', 'architecture', 'pattern'], hint: 'Ready-made architectures from the starters gallery', run: () => useGalleryStore.getState().openDialog() },

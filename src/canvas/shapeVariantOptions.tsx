@@ -33,6 +33,8 @@ export function shapeVariantOptions<K extends string>(
     size?: { width: number; height: number };
     /** Crop the preview to this top-left region — see `ShapePreview`'s `frame`. */
     frame?: { width: number; height: number };
+    /** A kind that draws at a different size from the rest of its family (a Service drawn as a glyph). */
+    sizeFor?: (kind: K) => { width: number; height: number } | undefined;
   } = {},
 ): InspectorSelectOption[] {
   const size = extras.size ?? minSizeFor(type);
@@ -40,6 +42,13 @@ export function shapeVariantOptions<K extends string>(
     value: kind,
     label: labels[kind],
     description: extras.descriptions?.[kind],
-    icon: <ShapePreview node={{ type, ...nodeFor(kind) }} width={size.width} height={size.height} frame={extras.frame} />,
+    icon: (
+      <ShapePreview
+        node={{ type, ...nodeFor(kind) }}
+        width={(extras.sizeFor?.(kind) ?? size).width}
+        height={(extras.sizeFor?.(kind) ?? size).height}
+        frame={extras.frame}
+      />
+    ),
   }));
 }

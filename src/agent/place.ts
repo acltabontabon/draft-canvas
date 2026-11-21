@@ -112,6 +112,7 @@ function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: string): Dr
     ...(spec.shape.queueKind ? { queueKind: spec.shape.queueKind } : {}),
     ...(spec.shape.actorKind ? { actorKind: spec.shape.actorKind } : {}),
     ...(spec.shape.componentKind ? { componentKind: spec.shape.componentKind } : {}),
+    ...(spec.shape.artifactKind ? { artifactKind: spec.shape.artifactKind } : {}),
     ...(spec.shape.deliveryRole ? { deliveryRole: spec.shape.deliveryRole } : {}),
     ...(spec.description ? { description: spec.description } : {}),
     ...(spec.technology ? { technology: spec.technology } : {}),
@@ -133,6 +134,7 @@ const PEER_SUBKIND_FIELD: Partial<Record<DraftNodeType, keyof DraftNode>> = {
   queue: 'queueKind',
   actor: 'actorKind',
   component: 'componentKind',
+  artifact: 'artifactKind',
 };
 
 /** How much larger than its group's typical size a shape may be before it is left as its own case
@@ -291,7 +293,7 @@ export function arrangedSize(node: DraftNode, ctx: DescribeContext): { width: nu
   const lines = node.text?.trim() ? nameLineCount(node, ctx) : 0;
   if (lines > 2) {
     // From the type's own height, so the search can find a shorter box than the column it was.
-    const floor = Math.min(node.height, defaultSizeFor(node.type).height);
+    const floor = Math.min(node.height, defaultSizeFor(node.type, node.serviceKind).height);
     const balanced = balancedSize({ ...node, height: floor }, ctx);
     if (balanced && nameLineCount({ ...node, ...balanced }, ctx) < lines) {
       return { width: Math.max(node.width, balanced.width), height: balanced.height };

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createAttachment, createDocument, createEdge, createNode, minSizeFor } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
 import { addFlow, addStepToFlow, createFlow } from '../src/document/flow';
-import { ACCENTS, BOUNDARY_PRESETS, EDGE_ROUTINGS, NODE_TYPES, type EdgeRouting } from '../src/document/types';
+import { ACCENTS, BOUNDARY_PRESETS, EDGE_ROUTINGS, NODE_TYPES, SERVICE_KINDS, type EdgeRouting, type ServiceKind } from '../src/document/types';
 import { describeContext, describeNode } from '../src/nodes/describe';
 import type { Shape } from '../src/render/displayList';
 import { renderDocumentSvg } from '../src/render/svg/document';
@@ -957,87 +957,34 @@ describe('live resize', () => {
     expect(geometry(queueShapes)).not.toBe(geometry(databaseShapes));
   });
 
-  it('gives each new Service subtype a genuinely different silhouette, not just a different caption', () => {
+  it('draws Generic and API as cards and every other Service kind as its own glyph', () => {
     const ctx = describeContext(LIGHT);
-    const node = (serviceKind: 'generic' | 'api' | 'worker' | 'external' | 'scheduler' | 'gateway') =>
-      createNode({ type: 'service', x: 0, y: 0, width: 176, height: 68, text: 'Orders', serviceKind });
+    const drawn = (serviceKind: ServiceKind) => {
+      const node = createNode({ type: 'service', x: 0, y: 0, text: 'Orders', serviceKind });
+      return { node, shapes: describeNode(node, ctx).shapes };
+    };
+    const flat = (shapes: Shape[]): Shape[] => shapes.flatMap((s) => (s.t === 'group' ? flat(s.children) : [s]));
 
-    const genericShapes = describeNode(node('generic'), ctx).shapes;
-    const apiShapes = describeNode(node('api'), ctx).shapes;
-    const workerShapes = describeNode(node('worker'), ctx).shapes;
-    const externalShapes = describeNode(node('external'), ctx).shapes;
-    const gatewayShapes = describeNode(node('gateway'), ctx).shapes;
+    // A card fills its box: its outline starts at the box's own corner.
+    for (const kind of ['generic', 'api'] as const) {
+      const { node, shapes } = drawn(kind);
+      const outline = flat(shapes).find((s) => s.t === 'rect' || s.t === 'path')!;
+      if (outline.t === 'rect') expect(outline.w).toBeCloseTo(node.width - 1.5, 1);
+    }
 
-    // Generic's outline stays a plain rect at Clean; API's and Gateway's own
-    // outline is a hand-built path (the notch/funnel), not a rounded rect.
-    expect(genericShapes.some((s) => s.t === 'rect')).toBe(true);
-    expect(apiShapes.some((s) => s.t === 'path')).toBe(true);
-    expect(gatewayShapes.some((s) => s.t === 'path')).toBe(true);
+    // A glyph kind draws nothing as wide as its box, and says its kind under its name.
+    const glyphKinds = SERVICE_KINDS.filter((kind) => kind !== 'generic' && kind !== 'api');
+    for (const kind of glyphKinds) {
+      const { node, shapes } = drawn(kind);
+      for (const shape of flat(shapes)) if (shape.t === 'rect') expect(shape.w, kind).toBeLessThan(node.width * 0.6);
+      const words = shapes.filter((s) => s.t === 'text').map((s) => (s.t === 'text' ? s.layout.lines.map((line) => line.text).join(' ') : ''));
+      expect(words, kind).toContain('Orders');
+      expect(words.some((word) => word === word.toUpperCase() && word.length > 3), kind).toBe(true);
+    }
 
-    // Worker is two stacked cards, not one.
-    const fillBearing = (shapes: typeof genericShapes) =>
-      shapes.filter((s) => (s.t === 'rect' || s.t === 'path') && s.fill && s.fill !== 'none');
-    expect(fillBearing(workerShapes).length).toBe(2);
-    expect(fillBearing(genericShapes).length).toBe(1);
-
-    // External is a dashed outer frame plus an inset inner card — two
-    // outline-shaped elements, one of them unfilled.
-    const outlineShapes = externalShapes.filter((s) => s.t === 'rect' || s.t === 'path');
-    expect(outlineShapes.length).toBe(2);
-    expect(outlineShapes.some((s) => s.fill === 'none')).toBe(true);
-
-    // Every kind's non-text geometry is a genuinely distinct shape list.
-    const signatures = [genericShapes, apiShapes, workerShapes, externalShapes, gatewayShapes].map((shapes) =>
-      JSON.stringify(shapes.filter((s) => s.t !== 'text')),
-    );
-    expect(new Set(signatures).size).toBe(signatures.length);
-  });
-
-  it('gives Scheduler a grouped, compact tick cluster — not a full-width perforated rail', () => {
-    const ctx = describeContext(LIGHT);
-    const scheduler = createNode({ type: 'service', x: 0, y: 0, width: 176, height: 68, text: 'Nightly job', serviceKind: 'scheduler' });
-
-    const schedulerShapes = describeNode(scheduler, ctx).shapes;
-    const schedulerGroups = schedulerShapes.filter((s): s is Extract<typeof s, { t: 'group' }> => s.t === 'group');
-    // One group, for the tick cluster — a single cohesive mark, the way Generic's cap is one.
-    expect(schedulerGroups.length).toBe(1);
-    const ticks = schedulerGroups[0]!.children;
-    expect(ticks.length).toBe(3);
-    const edges = ticks.map((t) => (t.t === 'rect' ? { left: t.x, right: t.x + t.w } : { left: 0, right: 0 }));
-    const clusterLeft = Math.min(...edges.map((e) => e.left));
-    const clusterRight = Math.max(...edges.map((e) => e.right));
-    // Compact, not a rail spanning the full top edge — a full-width run of evenly spaced dashes is
-    // what would risk reading as a perforation rather than a rhythm accent.
-    expect(clusterRight - clusterLeft).toBeLessThan(scheduler.width * 0.25);
-    // Pinned to the top-right corner, opposite the calendar glyph on the left, so the two details
-    // read as two marks rather than crowding each other.
-    expect(clusterLeft).toBeGreaterThan(scheduler.width * 0.5);
-    expect(clusterRight).toBeLessThanOrEqual(scheduler.width);
-  });
-
-  it('gives Gateway a capless body whose whole left edge is one inward chevron', () => {
-    const ctx = describeContext(LIGHT);
-    const gateway = createNode({ type: 'service', x: 0, y: 0, width: 176, height: 68, text: 'Edge', serviceKind: 'gateway' });
-    const gatewayShapes = describeNode(gateway, ctx).shapes;
-
-    // Its outline is a hand-built path (the chevron rules out the plain-rect `outlineShape`).
-    const body = gatewayShapes.find((s) => s.t === 'path');
-    expect(body).toBeDefined();
-    // No cap: a straight accent band pinned across the top of a chevron fights the silhouette, so
-    // this is the one Service kind that goes capless.
-    expect(gatewayShapes.some((s) => s.t === 'group')).toBe(false);
-
-    // The chevron is concave — both outer corners sit on the card's own left edge and the apex
-    // pushes inward. An apex to the *left* of them would make it a pennant pointing away from the
-    // traffic it receives, which is the bug this guards.
-    const xs = [...(body!.t === 'path' ? body!.d : '').matchAll(/[ML](-?[\d.]+),(-?[\d.]+)/g)].map((m) => ({
-      x: Number(m[1]),
-      y: Number(m[2]),
-    }));
-    const leftEdge = Math.min(...xs.map((p) => p.x));
-    const midY = gateway.height / 2;
-    const apex = xs.reduce((best, p) => (Math.abs(p.y - midY) < Math.abs(best.y - midY) ? p : best), xs[0]!);
-    expect(apex.x).toBeGreaterThan(leftEdge);
+    // No two kinds share a drawing.
+    const signatures = SERVICE_KINDS.map((kind) => JSON.stringify(drawn(kind).shapes.filter((s) => s.t !== 'text')));
+    expect(new Set(signatures).size).toBe(SERVICE_KINDS.length);
   });
 
   it('gives Human/System/Device distinct silhouettes while keeping the same label and stroke weight', () => {

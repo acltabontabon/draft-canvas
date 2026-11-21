@@ -25,6 +25,7 @@ import {
   type ActorFrame,
   type BoundaryPreset,
   type CodeLanguage,
+  type ArtifactKind,
   type ComponentKind,
   type DatabaseKind,
   type DraftNode,
@@ -58,6 +59,7 @@ import {
 } from '../lib/nodeKindLabels';
 import { shapeVariantOptions } from './shapeVariantOptions';
 import { ACTOR_FRAME_OPTIONS, ACTOR_ICON_OPTIONS } from './actorOptions';
+import { ARTIFACT_ICON_OPTIONS } from './artifactOptions';
 import { COMPONENT_ICON_OPTIONS } from './componentOptions';
 import { DATABASE_ICON_OPTIONS } from './dataStoreOptions';
 import { rightClearance } from './canvasFrame';
@@ -568,7 +570,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
             useEditorStore.getState().updateNodeById(node.id, { language: value as CodeLanguage }, 'Change language'),
         };
       case 'service':
-        // Grid, like Data Store: each of the six kinds now has its own real silhouette (see
+        // Grid, like Data Store: each kind has its own real silhouette (see
         // `nodes/describe.ts`'s `serviceApi`/`serviceWorker`/`serviceExternal`/`serviceScheduler`/
         // `serviceGateway`), so the preview tiles are genuinely worth scanning visually rather than
         // reading as six copies of one shape with different text.
@@ -623,6 +625,15 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
           ariaLabel: 'Component type',
           onChange: (value) =>
             useEditorStore.getState().updateNodeById(node.id, { componentKind: value as ComponentKind }, 'Change component type'),
+        };
+      case 'artifact':
+        return {
+          options: ARTIFACT_ICON_OPTIONS,
+          value: node.artifactKind ?? 'file',
+          ariaLabel: 'Artifact type',
+          onChange: (value) =>
+            useEditorStore.getState().updateNodeById(node.id, { artifactKind: value as ArtifactKind }, 'Change artifact type'),
+          layout: 'grid',
         };
       case 'text':
         return {

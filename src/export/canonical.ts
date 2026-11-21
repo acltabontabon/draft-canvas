@@ -72,6 +72,7 @@ const NODE_KEYS = [
   'actorKind',
   'actorFrame',
   'componentKind',
+  'artifactKind',
   'boundaryPreset',
   'attachments',
   'evidence',

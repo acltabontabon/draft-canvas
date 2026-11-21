@@ -118,7 +118,9 @@ describe('the create_diagram repair ladder', () => {
     const found = checkQuality(parsed.document.nodes, parsed.document.edges, measureContext());
     expect(found.warnings).toEqual([]);
     expect(found.errors).toEqual([]);
-    expect(composed.receipt.layout).toEqual({ direction: 'right', spacing: 'comfortable' });
+    // The rung it lands on: three Workers are glyphs with their names underneath, so the clean
+    // attempt is the one with more room between rows.
+    expect(composed.receipt.layout).toEqual({ direction: 'right', spacing: 'spacious' });
     expect(composed.receipt.quality).toMatchObject({ scope: 'whole-diagram', errors: 0, warnings: 0 });
   });
 

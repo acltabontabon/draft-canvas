@@ -165,9 +165,9 @@ function OpenPointPopoverBody({ state, closing, listening }: { state: OpenPointP
   const rect: PlacementRect | null = (() => {
     if (node && nodeInternal) return rectOfInternal(nodeInternal);
     if (edge && sourceInternal && targetInternal) {
-      const types = new Map(document.nodes.map((n) => [n.id, n.type]));
-      const source = rectOfInternal(sourceInternal, types.get(edge.source));
-      const target = rectOfInternal(targetInternal, types.get(edge.target));
+      const kinds = new Map(document.nodes.map((n) => [n.id, n]));
+      const source = rectOfInternal(sourceInternal, kinds.get(edge.source));
+      const target = rectOfInternal(targetInternal, kinds.get(edge.target));
       if (!source || !target) return null;
       // Beside the marker, which sits at the connector's own label point (shared label or not).
       const point = edgeLabelPoint(document, edge, source, target, { interactionActive, moving: movingNodeIds, own: true });

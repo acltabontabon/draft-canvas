@@ -1,4 +1,4 @@
-import { categoryOf } from '../document/connectorSemantics';
+import { baseCategory, categoryOf } from '../document/connectorSemantics';
 import type { DraftEdge } from '../document/types';
 import { isBaselineClass } from './classify';
 import { trafficGroupOf } from './eligibility';
@@ -131,7 +131,7 @@ function nodeResult(id: string, graph: GraphResult): TrafficNode {
 function applyMessagingCertainty(graph: GraphResult, outgoing: Map<string, TrafficInteraction[]>): void {
   const drawn = new Map(graph.edgeList.map((edge) => [edge.id, edge]));
   for (const [sourceId, list] of outgoing) {
-    if (categoryOf(graph.nodes.get(sourceId)!) === 'gateway') {
+    if (baseCategory(categoryOf(graph.nodes.get(sourceId)!)) === 'gateway') {
       const routed = list.filter((interaction) => interaction.class === 'request' && interaction.edgeIds.some((id) => routesFrom(drawn.get(id), sourceId)));
       if (new Set(routed.map((interaction) => interaction.to)).size >= 2) {
         for (const interaction of routed) {

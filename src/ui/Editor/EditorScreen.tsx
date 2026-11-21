@@ -258,7 +258,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         const seat = sequenceSeatAt({ x: position.x + 88, y: position.y + 34 });
         if (seat) {
           const started = preset.technology ? technologyStart(preset.type, preset.technology) : {};
-          const is = { type: preset.type, ...started } as Omit<SeqParticipant, 'id' | 'name'>;
+          const is = { type: preset.type, ...preset.start, ...started } as Omit<SeqParticipant, 'id' | 'name'>;
           const name = preset.technology ?? preset.text ?? nameOfShape({ ...is, text: undefined });
           sequenceActions.addParticipant(seat.nodeId, { ...is, name }, seat.index);
           arm(null);
@@ -270,7 +270,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // Every caller hands the top-left a default 176×68 shape centred on the point would have
       // (`point - 88,34`); centred by its own size instead, a Junction lands under the cursor rather
       // than beside it, and a Boundary or code card doesn't hang off below and to the right.
-      const { width, height } = size ?? defaultSizeFor(preset.type);
+      const { width, height } =
+        size ?? defaultSizeFor(preset.type, preset.technology ? technologyStart(preset.type, preset.technology).serviceKind : preset.start?.serviceKind);
       // Placed onto a connector: made and put into its middle as one undo step.
       const editor = useEditorStore.getState();
       const startSequence = autoEdit && preset.type === 'sequence';
@@ -287,6 +288,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         noteKind: preset.noteKind,
         language: preset.language,
         code,
+        // Picked by one of its names ("load balancer" in the shape picker): it arrives as that kind.
+        ...preset.start,
         // Picked as a technology ("kafka" in the shape picker): it arrives as that technology, with
         // the kind it implies.
         ...(preset.technology ? technologyStart(preset.type, preset.technology) : {}),

@@ -95,6 +95,9 @@ function shapeOf(node: DraftNode, label: string): string {
       return `[[${label}]]`;
     case 'actor':
       return `((${label}))`;
+    case 'artifact':
+      // Mermaid has no document in its bracket shapes; the flag is the one nothing else here uses.
+      return `>${label}]`;
     case 'ellipse':
       // A junction is a point, drawn as the smallest circle Mermaid has.
       return `(( ))`;

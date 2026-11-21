@@ -96,6 +96,10 @@ function roleOf(node: DraftNode, level: Exclude<ViewLevel, 'none'> | undefined):
     case 'component':
       if (level === 'component') return { role: 'component', basis: `component at ${at}` };
       return { role: 'unspecified', basis: level ? `component shape at ${at}` : 'no level set' };
+    // Not in `isC4Element`, so never asked; said here so the reason is written down once. C4 has
+    // no element for a file, a config or a certificate: they are detail on a container.
+    case 'artifact':
+      return { role: 'unspecified', basis: 'an artifact has no C4 role' };
     default:
       return { role: 'unspecified', basis: '' };
   }

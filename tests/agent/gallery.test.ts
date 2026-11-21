@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { starterOf } from '../fixtures/gallery';
 import { compose } from '../../src/agent/compile';
 import { applyUpdate } from '../../src/agent/patch';
-import { measureContext } from '../../src/agent/place';
+import { lineOf, measureContext } from '../../src/agent/place';
 import { checkQuality } from '../../src/agent/quality';
 import { bendsOf, drawnRoute, routeGeometry } from '../../src/agent/route';
 import { walkGraphs } from '../../src/depth/tree';
@@ -174,7 +174,9 @@ describe('layout gallery', { timeout: 45_000 }, () => {
       expect(sides.from, id).toBe('right');
       expect(sides.to, id).toBe('left');
     }
-    expect(at('fraud').y + at('fraud').height / 2).toBeCloseTo(worker.y + worker.height / 2, -1);
+    // Level by where their connectors meet them: a Worker and an External are glyphs, and a line
+    // lands on the glyph, not on the middle of the box its name hangs in.
+    expect(lineOf(at('fraud')).y).toBeCloseTo(lineOf(worker).y, -1);
     expect(at('mail').y).toBeGreaterThanOrEqual(at('notify').y + at('notify').height);
     expect(at('mail').x).toBeLessThan(batch.x + batch.width);
     const legibility = legibilityOf(doc.nodes, doc.edges);

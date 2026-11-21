@@ -61,7 +61,7 @@ const HEAD_MAX_HEIGHT = 132;
 
 /** The shape a participant's head is: an architecture shape with the participant's identity. */
 export function headNode(host: Pick<DraftNode, 'id'>, participant: SeqParticipant, size?: { width: number; height: number }): DraftNode {
-  const floor = minSizeFor(participant.type);
+  const floor = minSizeFor(participant.type, participant.serviceKind);
   // A queue with a name needs the taller box that holds the name under its tube (`DEFAULTS.queueNamedHeight`).
   const height = participant.type === 'queue' && participant.name.trim() ? 72 : floor.height;
   const node: DraftNode = {

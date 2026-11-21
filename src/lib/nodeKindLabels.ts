@@ -1,5 +1,6 @@
 import type {
   ActorKind,
+  ArtifactKind,
   BoundaryPreset,
   ComponentKind,
   DatabaseKind,
@@ -50,6 +51,8 @@ export const SERVICE_KIND_OPTION_LABELS: Record<ServiceKind, string> = {
   external: 'External',
   scheduler: 'Scheduler',
   gateway: 'Gateway',
+  'load-balancer': 'Load Balancer',
+  proxy: 'Proxy',
 };
 
 export const DATABASE_KIND_OPTION_LABELS: Record<DatabaseKind, string> = {
@@ -76,6 +79,13 @@ export const ACTOR_KIND_OPTION_LABELS: Record<ActorKind, string> = {
   group: 'Group',
   thirdParty: 'Third Party',
   agent: 'AI Agent',
+};
+
+export const ARTIFACT_KIND_OPTION_LABELS: Record<ArtifactKind, string> = {
+  file: 'File',
+  config: 'Config',
+  secret: 'Secret',
+  certificate: 'Certificate',
 };
 
 export const COMPONENT_KIND_OPTION_LABELS: Record<ComponentKind, string> = {

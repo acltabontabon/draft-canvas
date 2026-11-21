@@ -6,6 +6,7 @@ import type {
   ActorFrame,
   BoundaryPreset,
   CodeLanguage,
+  ArtifactKind,
   ComponentKind,
   DatabaseKind,
   NoteKind,
@@ -14,6 +15,7 @@ import type {
 } from '../../document/types';
 import { sizeMatchTargets, type AlignEdge } from '../../document/operations';
 import { ACTOR_FRAME_OPTIONS, ACTOR_ICON_OPTIONS } from '../../canvas/actorOptions';
+import { ARTIFACT_ICON_OPTIONS } from '../../canvas/artifactOptions';
 import { COMPONENT_ICON_OPTIONS } from '../../canvas/componentOptions';
 import { DATABASE_ICON_OPTIONS } from '../../canvas/dataStoreOptions';
 import { InspectorSelect } from '../../canvas/InspectorSelect';
@@ -253,6 +255,25 @@ export function Inspector() {
               useEditorStore.getState().updateNodeById(onlyNode.id, { actorFrame: value as ActorFrame }, 'Change actor frame')
             }
             preferredDirection="up"
+          />
+        </>
+      )}
+
+      {onlyNode?.type === 'artifact' && (
+        <>
+          <span className="dc-inspector-divider" />
+          <InspectorSelect
+            className="dc-inspector-toolbar-select"
+            ariaLabel="Artifact type"
+            value={onlyNode.artifactKind ?? 'file'}
+            options={ARTIFACT_ICON_OPTIONS}
+            onChange={(value) =>
+              useEditorStore
+                .getState()
+                .updateNodeById(onlyNode.id, { artifactKind: value as ArtifactKind }, 'Change artifact type')
+            }
+            preferredDirection="up"
+            layout="grid"
           />
         </>
       )}

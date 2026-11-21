@@ -44,6 +44,8 @@ export function looksLikeSystemOverview(view: DraftDocument): boolean {
       theirs += 1;
       continue;
     }
+    // A config or a certificate beside a system says nothing about the altitude it is drawn at.
+    if (node.type === 'artifact') continue;
     if (node.type !== 'service') return false;
     if (node.serviceKind === 'external') theirs += 1;
     else ours += 1;

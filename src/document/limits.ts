@@ -145,6 +145,9 @@ export const DEFAULTS = {
    *  Only the *default* differs — an existing or manually resized Component is never touched (see
    *  `document/factory.ts`'s `createNode`, which reads this only when a caller omits `width`/
    *  `height` entirely). */
+  // An Artifact is a small sheet with its name under it: the Data Store family's arrangement.
+  artifactWidth: 120,
+  artifactHeight: 104,
   componentWidth: 152,
   componentHeight: 56,
   /** An empty sequence: room for its title and the first participant. It is sized to what it holds

@@ -128,7 +128,8 @@ describe('create rail and shape picker', () => {
     for (const [index, preset] of ALL_PRESETS.entries()) {
       expect(options[index]).toHaveTextContent(preset.label);
       expect(options[index]).toHaveTextContent(preset.hint);
-      expect(options[index]).toHaveTextContent(preset.shortcut);
+      // An Artifact has no key: it is reached by name.
+      if (preset.shortcut) expect(options[index]).toHaveTextContent(preset.shortcut);
     }
   });
 
@@ -138,12 +139,24 @@ describe('create rail and shape picker', () => {
     await user.click(screen.getByRole('button', { name: 'All shapes' }));
     await user.keyboard('cache');
 
-    expect(screen.getAllByRole('option')).toHaveLength(1);
-    expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Data Store');
+    // The thing by that name leads: a Data Store already set to Cache. The plain shape is still offered.
+    expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Cache');
+    expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Data Store · Cache');
+    expect(screen.getByRole('option', { name: /^Data Store/ })).toBeInTheDocument();
 
     await user.keyboard('{Enter}');
-    expect(useUiStore.getState().armed?.id).toBe('database');
+    expect(useUiStore.getState().armed).toMatchObject({ type: 'database', start: { databaseKind: 'cache' } });
     expect(screen.queryByRole('dialog', { name: 'All shapes' })).not.toBeInTheDocument();
+    // Like a technology, it is held at the end of the rail under its own name.
+    expect(screen.getByRole('button', { name: 'Cache — all shapes' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('arms a built-in shape found by its own name on its own button', async () => {
+    const user = userEvent.setup();
+    renderToolbar();
+    await user.click(screen.getByRole('button', { name: 'All shapes' }));
+    await user.keyboard('data store{Enter}');
+    expect(useUiStore.getState().armed?.id).toBe('database');
     // It has a button of its own: that one is pressed, and Shapes stays Shapes.
     expect(screen.getByRole('button', { name: 'Data Store' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: 'All shapes' })).toBeInTheDocument();

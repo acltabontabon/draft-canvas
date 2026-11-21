@@ -87,6 +87,7 @@ function tagsOf(node: DraftNode): string[] {
   const tags: string[] = [];
   if (node.type === 'database') tags.push('Database');
   if (node.type === 'queue') tags.push('Queue');
+  if (node.type === 'artifact') tags.push('Artifact');
   if (node.type === 'service' && node.serviceKind === 'external') tags.push('External');
   if (node.type === 'actor' && (node.actorKind === 'system' || node.actorKind === 'thirdParty' || node.actorKind === 'agent')) tags.push('External');
   return tags;

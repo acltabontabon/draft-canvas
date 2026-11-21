@@ -12,7 +12,7 @@ import { isBranching } from './sequenceModel';
 import {
   ACCENTS,
   ACTOR_KINDS,
-  C4_TEXT_TYPES,
+  SEQ_PARTICIPANT_TYPES,
   COMPONENT_KINDS,
   DATABASE_KINDS,
   DELIVERY_ROLES,
@@ -65,7 +65,7 @@ function idOf(value: unknown): string | null {
 
 export function normalizeParticipant(raw: unknown, id: string): SeqParticipant | null {
   if (!isRecord(raw)) return null;
-  const type = oneOf<SeqParticipantType>(raw.type, C4_TEXT_TYPES) ?? 'service';
+  const type = oneOf<SeqParticipantType>(raw.type, SEQ_PARTICIPANT_TYPES) ?? 'service';
   const participant: SeqParticipant = { id, name: line(raw.name, LIMITS.maxSequenceNameLength), type };
   if (type === 'service') participant.serviceKind = oneOf(raw.serviceKind, SERVICE_KINDS) ?? 'generic';
   if (type === 'database') participant.databaseKind = oneOf(raw.databaseKind, DATABASE_KINDS) ?? 'generic';

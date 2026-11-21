@@ -161,6 +161,7 @@ const KIND_CAPTIONS: Record<DraftNode['type'], string> = {
   actor: 'Actor',
   component: 'Component',
   sequence: 'Sequence',
+  artifact: 'Artifact',
 };
 
 function nodeHeader(node: DraftNode): Extract<ContextMenuEntry, { type: 'header' }> {

@@ -1,4 +1,4 @@
-import { categoryOf } from '../document/connectorSemantics';
+import { baseCategory, categoryOf } from '../document/connectorSemantics';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { classifyConnector, isBaselineClass } from './classify';
 import type { TrafficGroup, TrafficRole } from './types';
@@ -7,7 +7,7 @@ import type { TrafficGroup, TrafficRole } from './types';
 export function trafficRoleOf(node: DraftNode): TrafficRole {
   if (node.type === 'database' && node.databaseKind === 'table') return 'excluded';
 
-  switch (categoryOf(node)) {
+  switch (baseCategory(categoryOf(node))) {
     case 'service':
     case 'external':
     case 'worker':

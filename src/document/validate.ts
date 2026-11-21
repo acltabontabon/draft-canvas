@@ -20,6 +20,7 @@ import {
   ACCENTS,
   ACTOR_KINDS,
   ACTOR_FRAMES,
+  ARTIFACT_KINDS,
   BACKGROUND_FITS,
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
@@ -46,6 +47,7 @@ import {
   type Accent,
   type ActorKind,
   type ActorFrame,
+  type ArtifactKind,
   type BackgroundFit,
   type BoundaryPreset,
   type CodeLanguage,
@@ -503,6 +505,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     }
     if (type === 'component') {
       node.componentKind = oneOf<ComponentKind>(candidate.componentKind, COMPONENT_KINDS, 'generic');
+    }
+    if (type === 'artifact') {
+      node.artifactKind = oneOf<ArtifactKind>(candidate.artifactKind, ARTIFACT_KINDS, 'file');
     }
     if (type === 'text' && candidate.annotation === true) {
       node.annotation = true;

@@ -114,7 +114,7 @@ export function rank<T extends CommandOption>(
   const ranked: RankedEntry<T>[] = [];
   for (const entry of entries) {
     const scored = scoreEntry(query, entry);
-    if (scored) ranked.push({ ...scored, score: scored.score + bonus(entry) });
+    if (scored) ranked.push({ ...scored, score: scored.score + bonus(entry) - (entry.handicap ?? 0) });
   }
   return ranked.sort((a, b) => b.score - a.score);
 }

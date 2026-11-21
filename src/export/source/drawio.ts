@@ -39,6 +39,9 @@ function styleOf(node: DraftNode): string {
         : 'shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;outlineConnect=0;';
     case 'component':
       return 'shape=module;align=left;spacingLeft=20;align=center;verticalAlign=top;whiteSpace=wrap;html=1;';
+    case 'artifact':
+      // The sheet with its corner turned, name underneath: what the canvas draws.
+      return 'shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;size=12;verticalLabelPosition=bottom;verticalAlign=top;';
     case 'ellipse':
       return 'ellipse;whiteSpace=wrap;html=1;aspect=fixed;';
     case 'note':

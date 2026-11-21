@@ -269,6 +269,10 @@ for (const withFlow of [false, true]) {
     // Browsing may still be framing the destination room; judge the settled placement.
     await expectAttachmentClearsDiagram(page);
     await page.screenshot({ path: testInfo.outputPath('reader-refined-attachments.png') });
+    // Browsing left the camera on the Worker, at full size in the middle of the canvas: a shape
+    // drawn as a glyph over its name is tall enough there that no card fits above or below the
+    // row. Judge the next card with the diagram fitted to the canvas, as a reader opens it.
+    await page.getByRole('button', { name: 'Fit diagram', exact: true }).click();
     await page.getByRole('button', { name: 'Attachments on Orders database', exact: true }).click();
     await expect(card).toContainText('Awaiting input');
     await expect(card).toContainText('Confirm how long completed orders should be retained.');
