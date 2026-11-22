@@ -128,8 +128,8 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   resolved (`render/style/scheme.ts`), not in `document/`.
 - Dashes and open arrowheads encode what a connector means (`edges/kindStyle.ts`). A style never
   offers them, nor anything that would move a route, such as arrowhead size.
-- An SVG becomes a drawing only through `import/svgArt` (main thread, `DOMParser`, never attached to
-  the page). What is stored is path data and colours (`StyleAsset`); no markup, URL or text is kept,
+- An SVG becomes a drawing only through `import/svgArt`, which reads the file with its own small
+  reader (`markup.ts`): no `DOMParser`, no document, so it needs no DOM. What is stored is path data and colours (`StyleAsset`); no markup, URL or text is kept,
   so there is nothing to sanitise later. `render/style/art.ts` places a drawing by scaling its
   numbers into the box the built-in drawing took, and keeps the shape's own words.
 - How a new shape starts ("Save as my default Service") is a device preference too

@@ -1,18 +1,20 @@
 import { normalizeAsset, STYLE_LIMITS, type ArtPaint, type ArtPath, type StyleAsset } from '../../document/style';
 import { luminance } from '../../lib/colour';
 import { IDENTITY, multiply, readPath, transformed, written, type Matrix, type Segment } from '../../render/style/pathData';
+import { descendants, readMarkup, type SvgElement } from './markup';
 
 /**
  * An SVG picture someone chose, made into a drawing a style can keep.
  *
- * The file is untrusted, and none of it is kept. It is read by the browser's own XML parser into a
- * document that is never put on the page, walked for the shapes it draws, and what comes out is a
- * `StyleAsset`: numbers, four path commands and colours. Scripts, event handlers, links, images,
- * text, style sheets and anything that refers outside the file have nowhere to go in that form, so
- * there is nothing to strip and nothing to miss. `normalizeAsset` then checks the result like any
- * other drawing, here and again wherever it is read back.
+ * The file is untrusted, and none of it is kept. It is never given to the browser's parser and
+ * never becomes a document: `readMarkup` reads its element names and attribute values into plain
+ * objects, those are walked for the shapes they draw, and what comes out is a `StyleAsset`:
+ * numbers, four path commands and colours. Scripts, event handlers, links, images, text, style
+ * sheets and anything that refers outside the file have nowhere to go in that form, so there is
+ * nothing to strip and nothing to miss. `normalizeAsset` then checks the result like any other
+ * drawing, here and again wherever it is read back.
  *
- * Main thread only: it needs `DOMParser`. The check that makes a stored drawing safe does not.
+ * It needs no DOM, so it reads a picture the same way in a browser, a worker and Node.
  */
 
 /** `diagram`: painted in the shape's own colour, so it follows a recolour and light or dark. `original`: its own colours, always. */
@@ -97,20 +99,20 @@ function unit(raw: string | undefined, fallback: number): number {
 }
 
 /** An element's presentation: its attributes, then its own `style="…"`, which wins as it does in a browser. */
-function presentation(element: Element): Record<string, string> {
+function presentation(element: SvgElement): Record<string, string> {
   const out: Record<string, string> = {};
   for (const name of ['fill', 'stroke', 'stroke-width', 'opacity', 'fill-opacity', 'stroke-opacity', 'fill-rule', 'display', 'visibility', 'stop-color']) {
-    const value = element.getAttribute(name);
-    if (value !== null) out[name] = value;
+    const value = element.attributes.get(name);
+    if (value !== undefined) out[name] = value;
   }
-  for (const part of (element.getAttribute('style') ?? '').split(';')) {
+  for (const part of (element.attributes.get('style') ?? '').split(';')) {
     const colon = part.indexOf(':');
     if (colon > 0) out[part.slice(0, colon).trim().toLowerCase()] = part.slice(colon + 1).trim();
   }
   return out;
 }
 
-function inherit(parent: Inherited, element: Element): Inherited {
+function inherit(parent: Inherited, element: SvgElement): Inherited {
   const own = presentation(element);
   const fill = own.fill === undefined ? null : readPaint(own.fill);
   const stroke = own.stroke === undefined ? null : readPaint(own.stroke);
@@ -127,7 +129,7 @@ function inherit(parent: Inherited, element: Element): Inherited {
   };
 }
 
-function transformOf(raw: string | null): Matrix {
+function transformOf(raw: string | undefined): Matrix {
   if (!raw) return IDENTITY;
   let matrix = IDENTITY;
   for (const match of raw.matchAll(/(matrix|translate|scale|rotate|skewX|skewY)\s*\(([^)]*)\)/g)) {
@@ -163,19 +165,19 @@ function transformOf(raw: string | null): Matrix {
 }
 
 /** The path data a basic shape draws, or `null` for one with no size. */
-function outline(element: Element): string | null {
-  const n = (name: string) => length(element.getAttribute(name));
-  switch (element.localName) {
+function outline(element: SvgElement): string | null {
+  const n = (name: string) => length(element.attributes.get(name));
+  switch (element.name) {
     case 'path':
-      return element.getAttribute('d');
+      return element.attributes.get('d') ?? null;
     case 'rect': {
       const w = n('width');
       const h = n('height');
       if (w <= 0 || h <= 0) return null;
       const x = n('x');
       const y = n('y');
-      const hasRx = element.hasAttribute('rx');
-      const hasRy = element.hasAttribute('ry');
+      const hasRx = element.attributes.has('rx');
+      const hasRy = element.attributes.has('ry');
       const rx = Math.min(w / 2, Math.max(0, hasRx ? n('rx') : hasRy ? n('ry') : 0));
       const ry = Math.min(h / 2, Math.max(0, hasRy ? n('ry') : hasRx ? n('rx') : 0));
       if (rx === 0 || ry === 0) return `M${x} ${y}H${x + w}V${y + h}H${x}Z`;
@@ -183,8 +185,8 @@ function outline(element: Element): string | null {
     }
     case 'circle':
     case 'ellipse': {
-      const rx = element.localName === 'circle' ? n('r') : n('rx');
-      const ry = element.localName === 'circle' ? n('r') : n('ry');
+      const rx = element.name === 'circle' ? n('r') : n('rx');
+      const ry = element.name === 'circle' ? n('r') : n('ry');
       if (rx <= 0 || ry <= 0) return null;
       const cx = n('cx');
       const cy = n('cy');
@@ -194,11 +196,11 @@ function outline(element: Element): string | null {
       return `M${n('x1')} ${n('y1')}L${n('x2')} ${n('y2')}`;
     case 'polyline':
     case 'polygon': {
-      const points = (element.getAttribute('points') ?? '').match(/[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g) ?? [];
+      const points = (element.attributes.get('points') ?? '').match(/[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g) ?? [];
       if (points.length < 4) return null;
       let d = '';
       for (let i = 0; i + 1 < points.length; i += 2) d += `${i === 0 ? 'M' : 'L'}${points[i]} ${points[i + 1]}`;
-      return element.localName === 'polygon' ? `${d}Z` : d;
+      return element.name === 'polygon' ? `${d}Z` : d;
     }
     default:
       return null;
@@ -241,25 +243,17 @@ export function importSvgArt(text: string, mode: SvgArtMode = 'diagram'): SvgArt
   if (text.length > MAX_SVG_BYTES) return { ok: false, message: TOO_DETAILED };
   // An entity can expand to anything, many times over. A picture needs none, so none are read.
   if (/<!DOCTYPE|<!ENTITY/i.test(text)) return { ok: false, message: NOT_A_PICTURE };
-  if (typeof DOMParser === 'undefined') return { ok: false, message: NOT_A_PICTURE };
-  let root: Element;
-  try {
-    const parsed = new DOMParser().parseFromString(text, 'image/svg+xml');
-    root = parsed.documentElement;
-    if (!root || root.localName !== 'svg' || parsed.getElementsByTagName('parsererror').length > 0) return { ok: false, message: NOT_A_PICTURE };
-  } catch {
-    return { ok: false, message: NOT_A_PICTURE };
-  }
+  const markup = readMarkup(text, MAX_ELEMENTS);
+  if (markup === 'limit') return { ok: false, message: TOO_DETAILED };
+  if (!markup || markup.root.name !== 'svg') return { ok: false, message: NOT_A_PICTURE };
+  const root = markup.root;
 
   const notes = new Set<string>();
-  const byId = new Map<string, Element>();
-  let seen = 0;
-  for (const element of [root, ...root.querySelectorAll('*')]) {
-    seen += 1;
-    if (seen > MAX_ELEMENTS) return { ok: false, message: TOO_DETAILED };
-    const id = element.getAttribute('id');
+  const byId = new Map<string, SvgElement>();
+  for (const element of markup.all) {
+    const id = element.attributes.get('id');
     if (id && !byId.has(id)) byId.set(id, element);
-    if (element.localName.toLowerCase() === 'style') notes.add(NOTE_SHEET);
+    if (element.name.toLowerCase() === 'style') notes.add(NOTE_SHEET);
   }
 
   /** A gradient or pattern as the one colour it starts with. */
@@ -267,7 +261,8 @@ export function importSvgArt(text: string, mode: SvgArtMode = 'diagram'): SvgArt
     if (paint.kind !== 'reference') return paint;
     notes.add(NOTE_GRADIENT);
     const target = byId.get(paint.id);
-    for (const stop of target?.querySelectorAll('stop') ?? []) {
+    for (const stop of target ? descendants(target) : []) {
+      if (stop.name !== 'stop') continue;
       const colour = readPaint(presentation(stop)['stop-color'] ?? '');
       if (colour?.kind === 'colour') return colour;
     }
@@ -278,9 +273,9 @@ export function importSvgArt(text: string, mode: SvgArtMode = 'diagram'): SvgArt
   let uses = 0;
   let segments = 0;
   let tooMuch = false;
-  const walk = (element: Element, inherited: Inherited, matrix: Matrix, depth: number, viaUse: boolean): void => {
+  const walk = (element: SvgElement, inherited: Inherited, matrix: Matrix, depth: number, viaUse: boolean): void => {
     if (tooMuch || depth > MAX_DEPTH) return;
-    const name = element.localName.toLowerCase();
+    const name = element.name.toLowerCase();
     if (LEFT_OUT.has(name)) {
       notes.add(NOTE_LEFT_OUT);
       return;
@@ -289,15 +284,15 @@ export function importSvgArt(text: string, mode: SvgArtMode = 'diagram'): SvgArt
     if (DEFINITIONS.has(name) && !(viaUse && name === 'symbol')) return;
     const own = inherit(inherited, element);
     if (own.hidden) return;
-    if (element.hasAttribute('filter') || element.hasAttribute('mask') || element.hasAttribute('clip-path')) notes.add(NOTE_LEFT_OUT);
-    const here = multiply(matrix, transformOf(element.getAttribute('transform')));
+    if (element.attributes.has('filter') || element.attributes.has('mask') || element.attributes.has('clip-path')) notes.add(NOTE_LEFT_OUT);
+    const here = multiply(matrix, transformOf(element.attributes.get('transform')));
     if (name === 'use') {
-      const href = element.getAttribute('href') ?? element.getAttribute('xlink:href') ?? element.getAttributeNS('http://www.w3.org/1999/xlink', 'href') ?? '';
+      const href = element.attributes.get('href') ?? element.attributes.get('xlink:href') ?? '';
       // Only something in this same file: a reference anywhere else is simply not followed.
       const target = href.startsWith('#') ? byId.get(href.slice(1)) : undefined;
       uses += 1;
       if (!target || uses > MAX_USES) return;
-      const moved = multiply(here, [1, 0, 0, 1, length(element.getAttribute('x')), length(element.getAttribute('y'))]);
+      const moved = multiply(here, [1, 0, 0, 1, length(element.attributes.get('x')), length(element.attributes.get('y'))]);
       walk(target, own, moved, depth + 1, true);
       return;
     }
@@ -343,10 +338,10 @@ export function importSvgArt(text: string, mode: SvgArtMode = 'diagram'): SvgArt
   if (drawn.length === 0) return { ok: false, message: NOTHING_DRAWN };
 
   // The picture's own frame: its viewBox, else its stated size, else whatever it drew on.
-  const viewBox = (root.getAttribute('viewBox') ?? '').match(/[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g)?.map(Number);
+  const viewBox = (root.attributes.get('viewBox') ?? '').match(/[-+]?(?:\d+\.?\d*|\.\d+)(?:[eE][-+]?\d+)?/g)?.map(Number);
   let frame: { x: number; y: number; w: number; h: number } | null = null;
   if (viewBox?.length === 4 && viewBox[2]! > 0 && viewBox[3]! > 0) frame = { x: viewBox[0]!, y: viewBox[1]!, w: viewBox[2]!, h: viewBox[3]! };
-  else if (length(root.getAttribute('width')) > 0 && length(root.getAttribute('height')) > 0) frame = { x: 0, y: 0, w: length(root.getAttribute('width')), h: length(root.getAttribute('height')) };
+  else if (length(root.attributes.get('width')) > 0 && length(root.attributes.get('height')) > 0) frame = { x: 0, y: 0, w: length(root.attributes.get('width')), h: length(root.attributes.get('height')) };
   if (!frame) {
     let minX = Infinity;
     let minY = Infinity;
