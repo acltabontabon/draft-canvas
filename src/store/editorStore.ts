@@ -1524,7 +1524,7 @@ function restoreSnapshot(
   const inside = target !== touched;
   const moved = pathKey(inside ? path : ROOT_PATH) !== pathKey(state.path);
   const file = touched;
-  const view = !inside ? file : file === touched ? target : (viewOf(file, path) ?? file);
+  const view = inside ? target : file;
   const cleared = moved ? resetViewSession() : undefined;
   set((s) => ({
     history: restored.history,
