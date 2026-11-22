@@ -323,6 +323,7 @@ describe('contextMenuCommandsFor — an edge', () => {
       'open-point-add',
       'sep',
       'spotlight',
+      'cut-connector',
       'sep',
       'delete',
     ]);

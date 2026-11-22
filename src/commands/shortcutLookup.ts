@@ -74,7 +74,7 @@ function buildFixtureContext(selection: { nodes: string[]; edges: string[] }): C
     mode: 'edit',
     clipboard: { nodes: [NODE_A], edges: [] },
     focus: { active: false, nodeIds: [], edgeIds: [] },
-    outage: { active: false, down: null, whole: false },
+    outage: { active: false, down: null, whole: false, cut: null },
     canUndo: () => true,
     canRedo: () => true,
   };

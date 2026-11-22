@@ -921,6 +921,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       {/* The route an outage brings into use (a fallback, a dead-letter route): light travelling
           along the very path drawn, so what now carries the work reads at a glance. Pure CSS — see
           `.dc-outage-flow` — and still under reduced motion. Chrome: never exported. */}
+      {/* The connector taken down: struck through at its middle, as a shape taken down is. */}
+      {outageReading === 'cut' && (
+        <g className="dc-outage-cut" fill="none" pointerEvents="none">
+          <path d={`M ${labelX - 15} ${labelY - 14} Q ${labelX - 1} ${labelY + 3} ${labelX + 15} ${labelY + 14}`} />
+          <path d={`M ${labelX + 15} ${labelY - 14} Q ${labelX + 2} ${labelY - 2} ${labelX - 15} ${labelY + 14}`} />
+        </g>
+      )}
       {outageReading === 'recovery' && (
         <g className="dc-outage-flow" fill="none" pointerEvents="none">
           <path className="dc-outage-channel" d={drawnPath} />

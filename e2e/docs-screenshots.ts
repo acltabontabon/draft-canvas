@@ -1,6 +1,6 @@
 import { openGallery, openStarter } from './library';
 import { createReaderExample } from './reader-example';
-import { storeDocument } from './fixtures/outage';
+import { storeWithFlows } from './fixtures/outage';
 
 // The guides picture the starters people get today, not the set pinned for the test journeys (`gallery.ts`).
 process.env.STARTERS_SNAPSHOT ??= 'current';
@@ -372,7 +372,7 @@ async function outageScreenshots(page: Page) {
   await page.locator('input[type="file"]').setInputFiles({
     name: 'outage-guide.draftcanvas',
     mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(storeDocument())),
+    buffer: Buffer.from(JSON.stringify(storeWithFlows())),
   });
   await expect(page.locator('.dc-editor')).toBeVisible();
   const settled = () => expect(page.locator('.dc-outage-note, .dc-outage-actions').last()).toHaveCSS('opacity', '1', { timeout: 10000 });
@@ -381,6 +381,14 @@ async function outageScreenshots(page: Page) {
     await settled();
   };
   await page.locator('.dc-status-outage').click();
+  await expect(page.locator('.dc-outage-card[data-listing]')).toBeVisible();
+  // Dismissed here, not by `shot`: its click would take the pointer off the row.
+  for (const dismiss of await page.locator('.dc-toast-dismiss').all()) await dismiss.click();
+  await page.locator('.dc-outage-card summary').click();
+  await page.locator('.dc-outage-card ul:not(details ul) button', { hasText: 'Order events' }).hover();
+  await expect(page.locator('.dc-outage-point .dc-sketch-loop')).toHaveCSS('opacity', /0\.9/, { timeout: 10000 });
+  await shot(page, 'outage-review');
+  await page.mouse.move(720, 120);
   await takeDown('payments');
   await shot(page, 'outage-overview');
   const calls = page.locator('button.dc-outage-note', { hasText: 'calls fail' });
@@ -393,8 +401,17 @@ async function outageScreenshots(page: Page) {
   await shot(page, 'outage-fix');
   await takeDown('checkout');
   await shot(page, 'outage-instances');
+  await page.locator('.react-flow__edge[data-id="orders-fulfilment"]').click({ force: true });
+  await settled();
+  await page.mouse.move(720, 120);
+  await shot(page, 'outage-connector');
   await takeDown('cache');
+  await page.locator('button.dc-outage-note', { hasText: 'every read falls to' }).click();
   await shot(page, 'outage-cache');
+  await page.locator('.react-flow__edge[data-id="checkout-orders"]').click({ force: true });
+  await settled();
+  await page.locator('button.dc-outage-note', { hasText: "can't publish" }).click();
+  await shot(page, 'outage-half-done');
 }
 
 /** Import a real example and follow the same share-link route as a recipient. */

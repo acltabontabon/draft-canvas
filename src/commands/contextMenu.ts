@@ -283,7 +283,7 @@ function edgeMenu(ctx: CommandContext, edge: DraftEdge, commands: Command[]): Co
       'edge-pin-ends',
     ]),
     pick(commands, ATTACH),
-    pick(commands, ['spotlight']),
+    pick(commands, ['spotlight', 'cut-connector']),
     pick(commands, ['delete']),
   ]);
 }

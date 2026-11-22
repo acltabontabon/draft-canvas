@@ -8,6 +8,27 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Shared
 
+#### Added
+
+- **Outage: every outage at once** — opening an outage with nothing selected lists what losing each
+  shape, boundary and connector would do: whom it reaches, which flows break and what it leaves
+  open. Point at a row to circle it on the canvas, click it to take it down.
+- **Outage: a connection down** — click a connector during an outage, or choose **Take this
+  connection down** from its menu, to see what happens when two shapes stay up but can't reach
+  each other.
+- **Outage: which flows break** — an outage says what it does to each flow: the first step that can
+  no longer happen, a failure path that comes into use, or that it carries on.
+- **Outage: work caught half-done** — an outage asks what undoes a write that happened before the
+  step that failed, whether a consumer is safe to run twice when its queue redelivers, and what
+  keeps a store and a message in step when the publish fails. A recovery action drawn for the
+  earlier step answers it.
+- **Outage: sources** — a note that quotes a product's documented behaviour (Amazon SQS, Kafka,
+  Redis and the rest) links to the vendor's page it was read from. Unfold the note to see it.
+- **Outage: one card** — the strip along the bottom of an outage is now a card: what the outage
+  does to each flow, what the colours mean, and the way out.
+- **Outage for agents** — `read_diagram`'s `outage` returns each flow's reading, takes a
+  `connector`, and with `{}` returns the whole list.
+
 #### Changed
 
 - **Replies by dragging back** — Drag from whoever was called back to its caller and the line is
@@ -23,6 +44,17 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Fixed
 
+- **Outage: a queue's limit** — a queue with no product named no longer reads as holding messages
+  "until it's back". It says the drawing doesn't show how long or how much it keeps.
+- **Outage: calls nobody waits on** — an asynchronous call to something that is down no longer
+  passes without comment: the outage asks what becomes of the calls.
+- **Outage: a store that is only read** — a data store nothing reaches any more says "is no longer
+  read", and "stops being updated" only when something wrote to it.
+- **Outage: Redis, Valkey and Memcached** — a cache taken down no longer says Redis or Valkey come
+  back empty: by default they reload their last snapshot. Memcached's note now allows for a warm
+  restart.
+- **Outage: unfolded notes** — a note's full sentence no longer covers a neighbouring shape or its
+  own answers.
 - **Participants with a technology** — A lifeline no longer runs through the kind written under a
   data store, queue or external service.
 - **Files that would not open** — A diagram with sequence fragments nested extremely deep, or a

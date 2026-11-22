@@ -5535,9 +5535,17 @@
   transition: opacity 180ms ease;
 }
 
-.dc-canvas[data-outage='on'] .dc-edge[data-outage='failing'] .dc-edge-line {
+.dc-canvas[data-outage='on'] .dc-edge[data-outage='failing'] .dc-edge-line,
+.dc-canvas[data-outage='on'] .dc-edge[data-outage='cut'] .dc-edge-line {
   stroke: var(--dc-danger) !important;
   stroke-dasharray: 2 6 !important;
+}
+
+/* The connector taken down: the same two marker strokes that strike out a shape. */
+.dc-outage-cut path {
+  stroke: var(--dc-danger);
+  stroke-width: 3;
+  stroke-linecap: round;
 }
 
 .dc-canvas[data-outage='on'] .dc-edge[data-outage='stopped'] {
@@ -5730,23 +5738,6 @@
   cursor: pointer;
 }
 
-/* In the lower half of what is written, the rest of the thought goes up, not off the board. */
-.dc-outage-note[data-up] {
-  display: flex;
-  flex-direction: column-reverse;
-  /* Grows upward from where the words sit: the button is anchored by its bottom edge. */
-  translate: 0 calc(-100% + var(--dc-note-height));
-}
-
-.dc-outage-note[data-up] .dc-outage-note-more {
-  margin-top: 0;
-  margin-bottom: 6px;
-}
-
-.dc-outage-note[data-up] .dc-outage-note-mark {
-  align-self: flex-start;
-}
-
 .dc-outage-note-mark {
   display: block;
 }
@@ -5806,6 +5797,30 @@
 .dc-outage-actions {
   display: flex;
   gap: 6px;
+}
+
+/* Where a product's documented behaviour was read. Quiet, under the sentence it supports. */
+.dc-outage-source {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: max-content;
+  margin: 0;
+  color: var(--dc-text-muted);
+  font-size: 11px;
+  line-height: 16px;
+  pointer-events: all;
+}
+
+.dc-outage-source a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.dc-outage-source a:hover,
+.dc-outage-source a:focus-visible {
+  color: var(--dc-caution);
 }
 
 .dc-outage-actions button {
@@ -5893,74 +5908,214 @@
 }
 
 /* The walk's own strip stays at the canvas edge, outside the zooming drawing, so it reads at any zoom. */
-.dc-outage-strip {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
+.dc-outage-dock {
   max-width: calc(100% - 32px);
+  max-height: calc(100% - 96px);
   margin: 16px;
-  padding: 4px 10px;
+}
+
+/* The walk's one card. Its title is in the walk's own hand; everything under it is the quiet type
+   of the chrome around it, so twenty rows still read at a glance. A dot's colour means on the card
+   what it means on the canvas: red fails, amber absorbs, hollow goes quiet. */
+.dc-outage-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 264px;
+  max-width: min(460px, 100%);
+  max-height: 56vh;
+  padding: 12px 8px 8px;
   border: 1px solid var(--dc-border);
-  border-radius: 8px;
+  border-radius: 12px;
   background: var(--dc-surface);
+  box-shadow: 0 8px 24px -14px color-mix(in srgb, var(--dc-text) 50%, transparent);
   color: var(--dc-text-muted);
-  font-size: 11px;
-  line-height: 24px;
+  font-size: 11.5px;
+  line-height: 16px;
 }
 
-.dc-outage-strip-title {
-  color: var(--dc-text);
+/* Listing, the rows share one width so their questions line up down the right edge. */
+.dc-outage-card[data-listing] {
+  width: min(460px, 100%);
+}
+
+.dc-outage-card-title {
+  margin: 0 8px 4px;
+  color: var(--dc-caution);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 22px;
+  transform: rotate(-0.6deg);
+  transform-origin: left center;
+}
+
+.dc-outage-card-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* A group's label sits on its rows; the space goes above it, between the groups. */
+.dc-outage-card h3,
+.dc-outage-card summary {
+  margin: 10px 8px 2px;
+  color: var(--dc-text-muted);
+  font-size: 10px;
   font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 16px;
+  text-transform: uppercase;
 }
 
-.dc-outage-legend {
-  display: inline-flex;
-  gap: 10px;
+.dc-outage-card ul {
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
-.dc-outage-legend li {
-  display: inline-flex;
+/* A row: its dot, its name, what happens to it. The same in the list and for a flow, where the
+   row is plain text rather than something to press. */
+.dc-outage-rows li:not(:has(button)),
+.dc-outage-rows button {
+  display: grid;
+  grid-template-columns: 7px minmax(0, auto) minmax(0, 1fr) auto;
   align-items: center;
-  gap: 5px;
+  gap: 8px;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.dc-outage-rows button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-outage-rows li:not(:has(button))::before,
+.dc-outage-rows button::before,
+.dc-outage-legend li::before {
+  content: '';
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  border: 1px solid var(--dc-outage-dot, currentColor);
+  border-radius: 50%;
+  background: var(--dc-outage-dot, transparent);
+}
+
+.dc-outage-card [data-tone='fails'],
+.dc-outage-legend [data-key='fails'] {
+  --dc-outage-dot: var(--dc-danger);
+}
+
+.dc-outage-card [data-tone='absorbs'],
+.dc-outage-legend [data-key='absorbs'] {
+  --dc-outage-dot: var(--dc-caution);
+}
+
+.dc-outage-rows button:hover,
+.dc-outage-rows button:focus-visible {
+  background: color-mix(in srgb, var(--dc-outage-dot) 11%, transparent);
+  outline: none;
+}
+
+.dc-outage-rows button:focus-visible {
+  box-shadow: inset 0 0 0 1.5px var(--dc-outage-dot);
+}
+
+.dc-outage-rows strong {
+  overflow: hidden;
+  color: var(--dc-text);
+  font-weight: 600;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.dc-outage-legend li::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--dc-outage-key, currentColor);
+.dc-outage-rows strong::first-letter {
+  text-transform: uppercase;
 }
 
-.dc-outage-legend [data-key='fails'] {
-  --dc-outage-key: var(--dc-danger);
+.dc-outage-rows span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dc-outage-legend [data-key='absorbs'] {
-  --dc-outage-key: var(--dc-caution);
+/* A flow that only carries on is the quiet row: its name steps back with its dot. */
+.dc-outage-rows [data-tone='quiet'] strong {
+  color: inherit;
+  font-weight: 500;
 }
 
-.dc-outage-legend [data-key='quiet']::before {
-  background: none;
-  border: 1px solid currentColor;
+/* What the drawing leaves open about this outage: the walk's dashed loop, as a chip. */
+.dc-outage-rows em {
+  padding: 0 7px;
+  border: 1px dashed color-mix(in srgb, var(--dc-caution) 70%, transparent);
+  border-radius: 9px;
+  color: var(--dc-caution);
+  font-style: normal;
+  white-space: nowrap;
 }
 
+/* Connections fold away under their own label, which reads as a third group's heading. */
+.dc-outage-card summary {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.dc-outage-card summary::-webkit-details-marker {
+  display: none;
+}
+
+.dc-outage-card summary::after {
+  content: '▸';
+  font-size: 9px;
+}
+
+.dc-outage-card details[open] summary::after {
+  content: '▾';
+}
+
+.dc-outage-card summary:hover,
+.dc-outage-card summary:focus-visible {
+  color: var(--dc-caution);
+  outline: none;
+}
+
+.dc-outage-card summary span {
+  font-weight: 500;
+}
+
+.dc-outage-card .dc-outage-legend {
+  display: flex;
+  gap: 14px;
+  padding: 3px 8px;
+}
+
+.dc-outage-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+/* One instance or all of them: two halves of one control, under the title it qualifies. */
 .dc-outage-extent {
   display: inline-flex;
+  margin: 4px 8px 0;
   border: 1px solid var(--dc-border);
-  border-radius: 6px;
+  border-radius: 7px;
   overflow: hidden;
 }
 
-.dc-outage-extent button,
-.dc-outage-strip > button {
+.dc-outage-extent button {
   min-height: 24px;
-  padding: 0 8px;
+  padding: 0 10px;
   border: 0;
   background: transparent;
   color: var(--dc-text-muted);
@@ -5973,17 +6128,51 @@
   color: var(--dc-text);
 }
 
-.dc-outage-strip > button {
-  padding: 0;
-  text-decoration: underline;
-  text-underline-offset: 3px;
+.dc-outage-extent button:hover,
+.dc-outage-extent button:focus-visible {
+  color: var(--dc-caution);
 }
 
-.dc-outage-extent button:hover,
-.dc-outage-strip > button:hover,
-.dc-outage-extent button:focus-visible,
-.dc-outage-strip > button:focus-visible {
+.dc-outage-card-rest {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 10px 8px 0;
+}
+
+/* The way out, and beside it the sentence it begins: "Bring it back up, or click anything else". */
+.dc-outage-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 0;
+  padding: 8px 8px 0;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-outage-card-foot button {
+  flex: none;
+  min-height: 26px;
+  padding: 0 11px;
+  border: 1px solid var(--dc-border);
+  border-radius: 7px;
+  background: var(--dc-canvas);
+  color: var(--dc-text);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dc-outage-card-foot button:hover,
+.dc-outage-card-foot button:focus-visible {
+  border-color: var(--dc-caution);
   color: var(--dc-caution);
+  outline: none;
+}
+
+/* The shape a row of the list points at, circled the way the walk circles what it writes about. */
+.dc-outage-point[data-reaches] {
+  --dc-sketch-ink: var(--dc-danger);
 }
 
 .dc-editor[data-armed='true'] .react-flow__pane {

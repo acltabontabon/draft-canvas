@@ -1,5 +1,5 @@
-import type { DraftEdge, DraftNode } from '../document/types';
-import { analyzeTraffic, mayHaveTraffic, outageOf, type Outage, type OutageEdgeState, type OutageState, type TrafficAnalysis } from '../traffic';
+import type { DraftEdge, DraftFlow, DraftNode } from '../document/types';
+import { analyzeTraffic, mayHaveTraffic, outageOf, outageReview, type Outage, type OutageEdgeState, type OutageReview, type OutageState, type TrafficAnalysis } from '../traffic';
 import type { EditorStore } from './editorStore';
 import { nodeIndex } from './selectors';
 
@@ -14,6 +14,10 @@ import { nodeIndex } from './selectors';
  * order, keeps the reading it already has rather than running it again sixty times a second.
  * Anything else (a connector drawn, a kind changed, an undo, a collaborator's edit) gives a fresh
  * one, so the canvas never shows the outage of a graph that has since changed.
+ *
+ * Three readings come off that one analysis, each kept against it: the outage of whatever is taken
+ * down (`outageIn`), which also depends on the room's flows; the review of everything at once while
+ * nothing is (`outageReviewIn`); and the junctions lit along routes that carry on.
  */
 type View = Pick<EditorStore, 'document' | 'outage'>;
 
@@ -67,20 +71,44 @@ export function runtimeOf(state: View): TrafficAnalysis | null {
   return analysis;
 }
 
-const outages = new WeakMap<TrafficAnalysis, { down: string; whole: boolean; outage: Outage | null }>();
+const outages = new WeakMap<TrafficAnalysis, { down: string; whole: boolean; connector: boolean; flows: readonly DraftFlow[]; outage: Outage | null }>();
 
 /** The outage being walked — identity-stable until the graph, the shape or its extent changes.
  *  `null` while nothing is down yet, or once the shape taken down is gone or no longer runs. */
 export function outageIn(state: View): Outage | null {
-  const { down, whole } = state.outage;
+  const { whole, cut } = state.outage;
+  // A shape or a connector: whichever is taken down, one reading at a time.
+  const down = cut ?? state.outage.down;
+  const connector = cut !== null;
   if (!down) return null;
   const analysis = runtimeOf(state);
   if (!analysis || !memo) return null;
   const known = outages.get(analysis);
-  if (known && known.down === down && known.whole === whole) return known.outage;
-  const outage = outageOf(analysis, memo.nodes, state.document.edges, { id: down, whole });
-  outages.set(analysis, { down, whole, outage });
+  // Flows are read against the outage too, and editing one leaves the graph's reading as it was.
+  const { flows } = state.document;
+  if (known && known.down === down && known.whole === whole && known.connector === connector && known.flows === flows) return known.outage;
+  const outage = outageOf(analysis, memo.nodes, state.document.edges, connector ? { id: down, connector } : { id: down, whole }, flows);
+  outages.set(analysis, { down, whole, connector, flows, outage });
   return outage;
+}
+
+const reviews = new WeakMap<TrafficAnalysis, { flows: readonly DraftFlow[]; review: OutageReview }>();
+
+/**
+ * Every shape's outage at once, while a walk is open and nothing is down yet: what the person is
+ * choosing between. Each shape is read as the walk would read it, so it is worked out once per
+ * graph and kept — never on a drag frame, and not at all once a shape is picked.
+ */
+export function outageReviewIn(state: View): OutageReview | null {
+  if (!state.outage.active || state.outage.down || state.outage.cut) return null;
+  const analysis = runtimeOf(state);
+  if (!analysis || !memo) return null;
+  const { flows } = state.document;
+  const known = reviews.get(analysis);
+  if (known && known.flows === flows) return known.review;
+  const review = outageReview(analysis, memo.nodes, state.document.edges, flows);
+  reviews.set(analysis, { flows, review });
+  return review;
 }
 
 /**
@@ -112,13 +140,16 @@ function litJunctions(analysis: TrafficAnalysis): ReadonlySet<string> {
 }
 
 /**
- * How a connector reads during a walk: what the outage does to it, `flow` when it carries on, `none`
+ * How a connector reads during a walk: what the outage does to it, `cut` when it is the connector
+ * taken down, `flow` when it carries on, `none`
  * when it carries no work at all. `null` outside a walk. A string, so only the connectors whose
  * reading changes re-render.
  */
-export function outageEdgeOf(state: View, id: string): OutageEdgeState | 'flow' | 'none' | null {
+export function outageEdgeOf(state: View, id: string): OutageEdgeState | 'cut' | 'flow' | 'none' | null {
   const outage = outageIn(state);
   if (!outage) return null;
+  // The connector taken down is struck through, whatever the walk says of the work it carried.
+  if (outage.connector && outage.target === id) return 'cut';
   const changed = outage.edges.get(id);
   if (changed) return changed;
   const edge = runtimeOf(state)!.edges.get(id);
