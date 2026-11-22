@@ -5,6 +5,7 @@ import { renderDocumentSvg } from '../../render/svg/document';
 import { useTechnologyIcons } from '../../canvas/useTechnologyIcon';
 import { Button } from '../../ui/common/Button';
 import { usePersonality } from '../../theme/usePersonality';
+import { deviceStyle } from '../../store/styleStore';
 import { useTheme } from '../../theme/useTheme';
 import { agentActivity, type AgentOp } from '../agentActivity';
 import { companion } from '../companion';
@@ -94,7 +95,7 @@ function GenerationView({ op }: { op: AgentOp }) {
     if (!op.candidate) return null;
     const document = { ...createDocument(op.title), nodes: op.candidate.nodes, edges: op.candidate.edges, flows: op.candidate.flows };
     try {
-      return renderDocumentSvg(document, { theme: themeName, preset, transparent: true });
+      return renderDocumentSvg(document, { theme: themeName, preset, deviceStyle: deviceStyle(), transparent: true });
     } catch {
       return null;
     }

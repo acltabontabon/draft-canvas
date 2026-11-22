@@ -1,0 +1,154 @@
+{
+  "format": "draft-canvas-style",
+  "version": 1,
+  "name": "Professional",
+  "style": {
+    "v": 1,
+    "name": "Professional",
+    "hand": {
+      "base": "clean"
+    },
+    "general": {
+      "shadow": false
+    },
+    "schemes": {
+      "light": {
+        "canvas": "#f7f8fa",
+        "grid": "#e3e6eb",
+        "text": "#16202e",
+        "textMuted": "#55606f",
+        "edge": "#6b7686",
+        "edgeText": "#55606f",
+        "edgeLabelBg": "#ffffff",
+        "codeBg": "#eef0f4",
+        "codeBorder": "#dde1e7",
+        "accents": {
+          "neutral": {
+            "fill": "#ffffff",
+            "line": "#6b7686",
+            "text": "#16202e",
+            "chip": "#4a5565"
+          },
+          "teal": {
+            "fill": "#eef6f5",
+            "line": "#3a7f78",
+            "text": "#184640",
+            "chip": "#2f6f68"
+          },
+          "blue": {
+            "fill": "#edf3fa",
+            "line": "#3f6ea0",
+            "text": "#1b3a5e",
+            "chip": "#2f5f92"
+          },
+          "violet": {
+            "fill": "#f1eff9",
+            "line": "#6659a0",
+            "text": "#33295f",
+            "chip": "#574a90"
+          },
+          "amber": {
+            "fill": "#f9f4e8",
+            "line": "#96762f",
+            "text": "#55400f",
+            "chip": "#846526"
+          },
+          "rose": {
+            "fill": "#f9eff0",
+            "line": "#a1626c",
+            "text": "#5e2a33",
+            "chip": "#8c4f59"
+          },
+          "green": {
+            "fill": "#eff5ee",
+            "line": "#4f7f4a",
+            "text": "#254623",
+            "chip": "#426f3d"
+          }
+        }
+      },
+      "dark": {
+        "canvas": "#12161d",
+        "grid": "#232a34",
+        "text": "#e6eaf0",
+        "textMuted": "#9aa5b4",
+        "edge": "#7d8898",
+        "edgeText": "#aab4c2",
+        "edgeLabelBg": "#1a2029",
+        "codeBg": "#171c24",
+        "codeBorder": "#2a323d",
+        "accents": {
+          "neutral": {
+            "fill": "#1b212b",
+            "line": "#7d8898",
+            "text": "#e6eaf0",
+            "chip": "#aab4c2"
+          },
+          "teal": {
+            "fill": "#16282a",
+            "line": "#4fa89f",
+            "text": "#cfeeea",
+            "chip": "#6fc0b7"
+          },
+          "blue": {
+            "fill": "#17263a",
+            "line": "#5f93cc",
+            "text": "#d4e5f8",
+            "chip": "#80ade0"
+          },
+          "violet": {
+            "fill": "#221f3a",
+            "line": "#8f82cf",
+            "text": "#e1dcf8",
+            "chip": "#a99de0"
+          },
+          "amber": {
+            "fill": "#2c2616",
+            "line": "#c2a05a",
+            "text": "#f4e7c6",
+            "chip": "#d6b877"
+          },
+          "rose": {
+            "fill": "#2f1c20",
+            "line": "#c98793",
+            "text": "#f6dade",
+            "chip": "#dba2ac"
+          },
+          "green": {
+            "fill": "#1a2a1b",
+            "line": "#6faa68",
+            "text": "#d6efd3",
+            "chip": "#8cc285"
+          }
+        }
+      }
+    },
+    "shapes": {
+      "ellipse": {
+        "builtin": true
+      },
+      "service": {
+        "builtin": true
+      },
+      "database": {
+        "builtin": true
+      },
+      "queue": {
+        "builtin": true
+      },
+      "actor": {
+        "builtin": true
+      },
+      "component": {
+        "builtin": true
+      },
+      "artifact": {
+        "builtin": true
+      }
+    },
+    "connectors": {
+      "head": "triangle",
+      "colour": "plain"
+    }
+  }
+}

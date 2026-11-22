@@ -86,6 +86,7 @@ import { isRecord } from '../lib/isRecord';
 import { normalizeOpenPointText, normalizeTargets, OPEN_POINT_ID_PREFIX } from './openPoints';
 import { normalizeSequence } from './validateSequence';
 import { INK_ID_PREFIX, parseInkStroke } from './ink';
+import { normalizeStyle } from './style';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
@@ -1072,6 +1073,14 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     ...(() => {
       const level = oneOfOptional<ViewLevel>(raw.level, VIEW_LEVELS);
       return level === undefined ? {} : { level };
+    })(),
+    // The file's own look, read at the root only: a room is drawn the way its file is. Absent stays
+    // absent, which is what keeps an unstyled diagram following the device that opens it.
+    ...(() => {
+      if (!isRoot) return {};
+      const { style, repairs: styleRepairs } = normalizeStyle(raw.style);
+      repairs.push(...styleRepairs);
+      return style === undefined ? {} : { style };
     })(),
   };
 

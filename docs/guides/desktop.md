@@ -85,8 +85,9 @@ them is installed; click it or press `⌘J`. See
 
 ## Settings
 
-**Settings…** (`⌘,`) has five pages: **General** (closing the window), **Canvas** (drawing style,
-next-shape suggestions and the open diagram's background), **AI agents**, **Updates** and **Support**
+**Settings…** (`⌘,`) has six pages: **General** (closing the window), **Appearance** (your style, and
+using it in the open diagram), **Canvas** (next-shape suggestions and the open diagram's background),
+**AI agents**, **Updates** and **Support**
 (a diagnostic report with no diagram content or file paths, never sent automatically).
 **Canvas Settings…** in the menu bar and the sliders button in the status bar open it at **Canvas**.
 Licences are under **About Draft Canvas**.

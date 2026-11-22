@@ -185,3 +185,12 @@ export function applyThemeVariables(theme: Theme, root: HTMLElement): void {
   root.dataset.theme = theme.name;
   root.style.colorScheme = theme.name;
 }
+
+/** Takes back what `applyThemeVariables` put on an element, so it inherits its colours again. */
+export function clearThemeVariables(root: HTMLElement): void {
+  for (const name of [...root.style]) {
+    if (name.startsWith('--dc-')) root.style.removeProperty(name);
+  }
+  delete root.dataset.theme;
+  root.style.removeProperty('color-scheme');
+}

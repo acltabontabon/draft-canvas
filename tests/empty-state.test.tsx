@@ -44,7 +44,7 @@ const GALLERY: GalleryStarter[] = ARCHITECTURE_STARTERS.map((starter, order) => 
 
 beforeEach(() => {
   useEditorStore.setState({ document: createDocument('Empty'), mode: 'edit' });
-  useGalleryStore.setState({ enabled: true, snapshot: { starters: GALLERY, fetchedAt: Date.now() }, failure: null, status: 'idle', dialog: { open: false } });
+  useGalleryStore.setState({ enabled: true, snapshot: { starters: GALLERY, styles: [], fetchedAt: Date.now() }, failure: null, status: 'idle', dialog: { open: false } });
 });
 
 const renderEmpty = (onAddStarter = vi.fn()) => ({

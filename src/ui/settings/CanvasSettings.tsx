@@ -8,16 +8,7 @@ import { getRepository } from '../../storage';
 import { QuotaExceededError } from '../../storage/DraftRepository';
 import { Button } from '../common/Button';
 import { SegmentedControl } from '../common/SegmentedControl';
-import { PERSONALITY_PRESETS, usePersonality, type PersonalityPreset } from '../../theme/usePersonality';
-import { PersonalityPreview } from '../personality/PersonalityPreview';
-import { useTheme } from '../../theme/useTheme';
 import { ChoiceRow, RangeRow, SettingRow, SettingsPage, SettingsSection } from './layout';
-
-const STYLES: Record<PersonalityPreset, { label: string; description: string }> = {
-  clean: { label: 'Clean', description: 'Crisp, exact lines.' },
-  draft: { label: 'Draft', description: 'A restrained, slightly hand-drawn outline.' },
-  sketch: { label: 'Sketch', description: 'A more pronounced sketch quality.' },
-};
 
 const FIT_LABELS: Record<BackgroundFit, string> = {
   cover: 'Cover',
@@ -41,26 +32,9 @@ export function CanvasSettings({ documentOpen = true }: { documentOpen?: boolean
   const readOnly = useUiStore((state) => Boolean(state.readOnly));
   const continuationsEnabled = useUiStore((state) => state.continuationsEnabled);
   const setContinuationsEnabled = useUiStore((state) => state.setContinuationsEnabled);
-  const { preset, setPreset } = usePersonality();
-  const { theme } = useTheme();
 
   return (
-    <SettingsPage title="Canvas" lead="Style and suggestions are yours, on this device. The background is part of the open diagram.">
-      <SettingsSection title="Drawing style" description="How shapes and connectors are drawn on this device, in every diagram." group list>
-        {PERSONALITY_PRESETS.map((p) => (
-          <ChoiceRow
-            key={p}
-            type="radio"
-            name="personality"
-            label={STYLES[p].label}
-            description={STYLES[p].description}
-            checked={preset === p}
-            onChange={() => setPreset(p)}
-            aside={<PersonalityPreview preset={p} theme={theme} />}
-          />
-        ))}
-      </SettingsSection>
-
+    <SettingsPage title="Canvas" lead="Suggestions are yours, on this device. The background is part of the open diagram.">
       <SettingsSection
         title="Next-shape suggestions"
         description="Select a shape with an obvious follow-on — a queue after a topic, a worker after a queue — and Draft Canvas sketches it in place. The shape picker a dropped connector opens still lists these first."

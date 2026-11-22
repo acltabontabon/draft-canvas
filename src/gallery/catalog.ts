@@ -4,7 +4,7 @@
  * `scripts/catalog.mjs` writes it; `catalog.schema.json` there documents the shape.
  */
 
-import { GALLERY_SCHEMA, MAX_STARTER_BYTES, MAX_STARTERS } from './source';
+import { GALLERY_SCHEMA, MAX_STARTER_BYTES, MAX_STARTERS, MAX_STYLE_PACK_BYTES, MAX_STYLE_PACKS } from './source';
 
 export type GalleryCategory = 'architecture' | 'data' | 'pattern' | 'example';
 
@@ -36,10 +36,31 @@ export interface GalleryEntry {
   updated: string;
 }
 
+/**
+ * A style pack: a ready-made style (`.draftstyle`) someone can add to their own. Listed beside the
+ * starters in the same catalog, and held to the same rules: nothing is read until the person
+ * chooses to load the gallery, and a file is kept only if it hashes to what is written here.
+ */
+export interface GalleryStyleEntry {
+  id: string;
+  name: string;
+  summary: string;
+  /** Who drew it and what it may be used under, shown with it. Empty when the catalog does not say. */
+  author: string;
+  licence: string;
+  order: number;
+  path: string;
+  sha256: string;
+  bytes: number;
+  updated: string;
+}
+
 export interface GalleryCatalog {
   schema: number;
   updated: string;
   starters: GalleryEntry[];
+  /** Absent in a catalog written before style packs, and in one cached from then. */
+  styles?: GalleryStyleEntry[];
 }
 
 export type CatalogResult = { ok: true; catalog: GalleryCatalog } | { ok: false; reason: 'invalid' | 'newer' };
@@ -48,6 +69,7 @@ const ID = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
 const SHA256 = /^[0-9a-f]{64}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const PATH = /^starters\/[a-z]+\/[a-z0-9-]+\/[a-z0-9-]+\.draftcanvas$/;
+const STYLE_PATH = /^styles\/[a-z0-9-]+\/[a-z0-9-]+\.draftstyle$/;
 const CATEGORIES = new Set<string>(GALLERY_CATEGORIES.map((c) => c.id));
 
 const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -98,6 +120,29 @@ function entryOf(raw: unknown): GalleryEntry | null {
   };
 }
 
+function styleEntryOf(raw: unknown): GalleryStyleEntry | null {
+  if (!isRecord(raw)) return null;
+  const id = typeof raw.id === 'string' && ID.test(raw.id) && raw.id.length <= 64 ? raw.id : null;
+  const name = shortText(raw.name, 60);
+  const summary = shortText(raw.summary, 120);
+  const path = typeof raw.path === 'string' && STYLE_PATH.test(raw.path) ? raw.path : null;
+  const sha256 = typeof raw.sha256 === 'string' && SHA256.test(raw.sha256) ? raw.sha256 : null;
+  const bytes = Number.isInteger(raw.bytes) && (raw.bytes as number) > 0 && (raw.bytes as number) <= MAX_STYLE_PACK_BYTES ? (raw.bytes as number) : null;
+  if (!id || !name || !summary || !path || !sha256 || !bytes) return null;
+  return {
+    id,
+    name,
+    summary,
+    author: shortText(raw.author, 80) ?? '',
+    licence: shortText(raw.licence, 40) ?? '',
+    order: Number.isInteger(raw.order) ? (raw.order as number) : 0,
+    path,
+    sha256,
+    bytes,
+    updated: typeof raw.updated === 'string' && DATE.test(raw.updated) ? raw.updated : '',
+  };
+}
+
 /** Reads `catalog.json`. Invalid entries are skipped; a catalog with none usable is invalid. */
 export function parseCatalog(text: string): CatalogResult {
   let raw: unknown;
@@ -117,11 +162,21 @@ export function parseCatalog(text: string): CatalogResult {
     starters.push(entry);
   }
   if (starters.length === 0) return { ok: false, reason: 'invalid' };
+  // Style packs are an addition: a catalog with none, or with some this app cannot trust, is still a catalog.
+  const styleIds = new Set<string>();
+  const styles: GalleryStyleEntry[] = [];
+  for (const item of Array.isArray(raw.styles) ? raw.styles.slice(0, MAX_STYLE_PACKS) : []) {
+    const entry = styleEntryOf(item);
+    if (!entry || styleIds.has(entry.id)) continue;
+    styleIds.add(entry.id);
+    styles.push(entry);
+  }
+  styles.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
   const order = GALLERY_CATEGORIES.map((c) => c.id);
   starters.sort((a, b) => order.indexOf(a.category) - order.indexOf(b.category) || a.order - b.order || a.name.localeCompare(b.name));
   return {
     ok: true,
-    catalog: { schema: raw.schema as number, updated: typeof raw.updated === 'string' && DATE.test(raw.updated) ? raw.updated : '', starters },
+    catalog: { schema: raw.schema as number, updated: typeof raw.updated === 'string' && DATE.test(raw.updated) ? raw.updated : '', starters, styles },
   };
 }
 

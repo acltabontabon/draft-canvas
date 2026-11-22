@@ -20,6 +20,7 @@ import { dropParticipantLinks, mapSequenceText, repointParticipantLinks } from '
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
 import { BACKGROUND_FITS, GRID_MODES } from './types';
+import { canonicalStyle, type DocumentStyle } from './style';
 import type {
   BackgroundFit,
   BackgroundSettings,
@@ -1873,6 +1874,22 @@ export function setSettings(doc: DraftDocument, patch: Partial<DraftSettings>): 
         background.imageId === was.background.imageId &&
         background.image === was.background.image));
   return same ? doc : { ...doc, settings: next };
+}
+
+/**
+ * Gives the diagram a look of its own, or with `undefined` takes it away so the diagram follows
+ * the device again. Held to the same rules as a style read from a file (`canonicalStyle`), and the
+ * same document when nothing would change, so re-applying the style it already has is no undo step.
+ */
+export function setStyle(doc: DraftDocument, style: DocumentStyle | undefined): DraftDocument {
+  const next = style === undefined ? undefined : canonicalStyle(style);
+  if (next === doc.style) return doc;
+  if (next !== undefined && doc.style !== undefined && JSON.stringify(next) === JSON.stringify(canonicalStyle(doc.style))) return doc;
+  if (next === undefined) {
+    const { style: _style, ...rest } = doc;
+    return rest;
+  }
+  return { ...doc, style: next };
 }
 
 function heldBackground(patch: BackgroundSettings, was: BackgroundSettings): BackgroundSettings {

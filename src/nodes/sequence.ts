@@ -19,7 +19,7 @@ import { messagesOf, sequenceOf } from '../document/sequenceModel';
 import type { Accent, Attachment, DraftNode, DraftSequence, SeqItem, SeqOperator, SeqParticipant } from '../document/types';
 import type { DisplayList, Shape, Stroke } from '../render/displayList';
 import { connectorHead, connectorStrokePath } from '../render/connectorStyle';
-import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import type { StyleHead } from '../document/style';
 import { FONTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
@@ -226,8 +226,8 @@ const text = (label: LabelLayout, fill: string, extra: Partial<Extract<Shape, { 
 });
 
 /** An arrowhead with its tip at (`x`, `y`), pointing along `direction`: the connector's own nib, a little smaller. */
-function arrowHead(x: number, y: number, direction: 1 | -1, open: boolean): string {
-  const tokens = connectorHead(open).match(/[A-Za-z]|-?\d+(?:\.\d+)?/g) ?? [];
+function arrowHead(x: number, y: number, direction: 1 | -1, open: boolean, head: StyleHead = 'nib'): string {
+  const tokens = connectorHead(open, head).match(/[A-Za-z]|-?\d+(?:\.\d+)?/g) ?? [];
   const out: string[] = [];
   let first = true;
   for (const token of tokens) {
@@ -266,8 +266,8 @@ function messageNumber(message: MessageLayout, colour: string, ctx: DescribeCont
   ];
 }
 
-export function sequenceArrowShapes(message: MessageLayout, color: string, seed: string, preset: DescribeContext['preset']): Shape[] {
-  const profile = PERSONALITY_PROFILES[preset];
+export function sequenceArrowShapes(message: MessageLayout, color: string, seed: string, style: DescribeContext['style']): Shape[] {
+  const profile = style.hand;
   const open = message.kind === 'async' || message.kind === 'reply' || message.kind === 'create';
   const dashed = message.kind === 'reply' || message.kind === 'create';
   const stroke: Stroke = { color, width: LINE_WIDTH, linecap: 'round', ...(dashed ? { dash: REPLY_DASH } : {}) };
@@ -281,8 +281,8 @@ export function sequenceArrowShapes(message: MessageLayout, color: string, seed:
     shapes.push({ t: 'path', d: connectorStrokePath(d, seed, profile, false), fill: 'none', stroke });
     shapes.push(
       open
-        ? { t: 'path', d: arrowHead(message.x2, message.yEnd, -1, true), fill: 'none', stroke: headStroke }
-        : { t: 'path', d: arrowHead(message.x2, message.yEnd, -1, false), fill: color },
+        ? { t: 'path', d: arrowHead(message.x2, message.yEnd, -1, true, style.connector.head), fill: 'none', stroke: headStroke }
+        : { t: 'path', d: arrowHead(message.x2, message.yEnd, -1, false, style.connector.head), fill: color },
     );
     return shapes;
   }
@@ -295,8 +295,8 @@ export function sequenceArrowShapes(message: MessageLayout, color: string, seed:
   shapes.push({ t: 'path', d: connectorStrokePath(d, seed, profile, false), fill: 'none', stroke });
   shapes.push(
     open
-      ? { t: 'path', d: arrowHead(tip, message.y, direction, true), fill: 'none', stroke: headStroke }
-      : { t: 'path', d: arrowHead(tip, message.y, direction, false), fill: color },
+      ? { t: 'path', d: arrowHead(tip, message.y, direction, true, style.connector.head), fill: 'none', stroke: headStroke }
+      : { t: 'path', d: arrowHead(tip, message.y, direction, false, style.connector.head), fill: color },
   );
   return shapes;
 }
@@ -512,7 +512,7 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
     lit.add(message.from);
     lit.add(message.to);
     const color = lineColor(theme, byId.get(message.from));
-    shapes.push(...sequenceArrowShapes(message, color, `${node.id}:${message.id}`, ctx.preset));
+    shapes.push(...sequenceArrowShapes(message, color, `${node.id}:${message.id}`, ctx.style));
     if (sequence.numberMessages !== false) shapes.push(...messageNumber(message, color, ctx));
     if (message.kind === 'destroy') {
       const x = layout.columns.find((column) => column.id === message.to)?.x ?? message.x2;

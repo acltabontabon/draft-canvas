@@ -98,7 +98,9 @@ test('global drawing style controls all arrows without per-arrow appearance cont
   for (const style of ['Sketch', 'Draft', 'Clean']) {
     await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
     const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-    await settings.getByRole('radio', { name: new RegExp(`^${style}`) }).check();
+    // An imported file carries no style of its own, so it follows the style in use on this device.
+    await settings.getByRole('tab', { name: 'Appearance', exact: true }).click();
+    await settings.getByRole('group', { name: 'My style' }).getByRole('radio', { name: new RegExp(`^${style}`) }).check();
     await settings.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(page.locator(':root')).toHaveAttribute('data-personality', style.toLowerCase());
     const paths = await page.locator('.dc-edge-line').evaluateAll(paths => paths.map(p => p.getAttribute('d')));
@@ -118,7 +120,8 @@ test('global drawing style controls all arrows without per-arrow appearance cont
   await expect(page.getByRole('group', { name: 'Connector shape' })).toBeVisible();
   await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
   const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-  await settings.getByRole('radio', { name: /^Sketch/ }).check();
+  await settings.getByRole('tab', { name: 'Appearance', exact: true }).click();
+  await settings.getByRole('group', { name: 'My style' }).getByRole('radio', { name: /^Sketch/ }).check();
   await settings.getByRole('button', { name: 'Close', exact: true }).click();
   await page.reload();
   await expect(page.locator('.dc-editor')).toBeVisible();

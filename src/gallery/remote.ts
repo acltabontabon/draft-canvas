@@ -9,7 +9,7 @@
 import { GALLERY_BASE, REQUEST_TIMEOUT_MS } from './source';
 
 /** A path inside the gallery repository: lowercase segments, never `..`, never absolute. */
-const SAFE_PATH = /^(?:[a-z0-9][a-z0-9._-]*\/)*[a-z0-9][a-z0-9._-]*\.(?:json|draftcanvas)$/;
+const SAFE_PATH = /^(?:[a-z0-9][a-z0-9._-]*\/)*[a-z0-9][a-z0-9._-]*\.(?:json|draftcanvas|draftstyle)$/;
 
 export class GalleryRequestError extends Error {
   readonly reason: 'offline' | 'not-found' | 'too-large' | 'refused';

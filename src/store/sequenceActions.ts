@@ -54,8 +54,7 @@ import {
 import { addEdges, addNodes, hasAttachmentRoom, removeElements, removeParticipantEdges } from '../document/operations';
 import { isLinkable, participantFromNode } from '../document/sequenceLinks';
 import type { Attachment, DraftNode, DraftSequence, SeqMessage, SeqMessageKind, SeqOperator, SeqParticipant } from '../document/types';
-import { describeContext, sequenceLayoutFor } from '../nodes/describe';
-import { LIGHT } from '../render/theme/tokens';
+import { sequenceLayoutFor, sizingContext } from '../nodes/describe';
 import { participantIndexAt } from '../sequence/layout';
 import type { SequenceFinding } from '../sequence/check';
 import { executionsOf } from '../sequence/executions';
@@ -158,7 +157,7 @@ export function sequenceSeatAt(point: { x: number; y: number }): { nodeId: strin
     if (!host || node.z >= host.z) host = node;
   }
   if (!host) return null;
-  return { nodeId: host.id, index: participantIndexAt(sequenceLayoutFor(host, describeContext(LIGHT)), point.x - host.x) };
+  return { nodeId: host.id, index: participantIndexAt(sequenceLayoutFor(host, sizingContext()), point.x - host.x) };
 }
 
 /** Clear fields specific to the previous type before applying a participant suggestion. */

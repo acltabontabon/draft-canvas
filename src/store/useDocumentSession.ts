@@ -20,6 +20,7 @@ import { getRepository, reconcileMetadata, type DraftRepository } from '../stora
 import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
 import { useCollabStore } from './collabStore';
 import { useUiStore } from './uiStore';
+import { deviceStyle } from './styleStore';
 
 type EditorStoreModule = typeof import('./editorStore');
 
@@ -791,7 +792,9 @@ export function useDocumentSession(): DocumentSession {
       // A newer navigation: anything still opening gives way to this canvas.
       navigation.current += 1;
       try {
-        const created = starter === 'example' ? exampleCanvas() : starter ?? createDocument(title ?? DEFAULT_TITLE);
+        const started = starter === 'example' ? exampleCanvas() : starter ?? createDocument(title ?? DEFAULT_TITLE);
+        // Its own look from the first moment, so it never changes with whoever opens it later.
+        const created = started.style ? started : { ...started, style: deviceStyle() };
         const document = projectId ? { ...created, metadata: { ...created.metadata, projectId } } : created;
         await adoptDocument(document, { fresh: true });
         if (starter === 'example') {

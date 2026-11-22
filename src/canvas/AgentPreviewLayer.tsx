@@ -3,7 +3,7 @@ import { pathKey } from '../depth/tree';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
-import { usePersonality } from '../theme/usePersonality';
+import { useDiagramStyle } from './useDiagramStyle';
 import { useThemeValue } from '../theme/useTheme';
 import { agentGhostDiff, changedBeyondPlace, movedShapes, type AgentGhostDiff, type MovedShape } from './agentGhostDiff';
 import { GhostEdge, GhostNode } from './ContinuationGhost';
@@ -117,7 +117,7 @@ function PreviewBody({
   marked?: ReadonlySet<string>;
 }) {
   const theme = useThemeValue();
-  const { preset } = usePersonality();
+  const diagramStyle = useDiagramStyle();
   const liveNodes = useEditorStore((state) => state.document.nodes);
   const liveEdges = useEditorStore((state) => state.document.edges);
   // An agent's live change is told apart from the view it read, not the one on screen: the person
@@ -183,7 +183,7 @@ function PreviewBody({
         </g>
       </svg>
       {changedNodes.map((node) => (
-        <GhostNode key={node.id} node={node} theme={theme} preset={preset} />
+        <GhostNode key={node.id} node={node} theme={theme} diagramStyle={diagramStyle} />
       ))}
     </div>
   );
@@ -226,7 +226,7 @@ function TracingSheet({
   marked?: ReadonlySet<string>;
 }) {
   const theme = useThemeValue();
-  const { preset } = usePersonality();
+  const diagramStyle = useDiagramStyle();
   // With trails on request, the ones shown: the shape under the pointer, one clicked to keep its
   // trail up (clicked again, or another, to let it go), and whatever is selected in the diagram.
   const picking = trails === 'picked';
@@ -330,7 +330,7 @@ function TracingSheet({
               setPinned((id) => (id === node.id ? null : node.id));
             } : undefined}
           >
-            <GhostNode node={node} theme={theme} preset={preset} />
+            <GhostNode node={node} theme={theme} diagramStyle={diagramStyle} />
           </div>
         );
       })}

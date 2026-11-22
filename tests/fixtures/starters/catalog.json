@@ -1,7 +1,7 @@
 {
   "$schema": "./catalog.schema.json",
   "schema": 1,
-  "updated": "2026-11-21",
+  "updated": "2026-11-22",
   "starters": [
     {
       "id": "monolith",
@@ -741,6 +741,92 @@
       "bytes": 18651,
       "formatVersion": 28,
       "updated": "2026-11-21"
+    }
+  ],
+  "styles": [
+    {
+      "id": "professional",
+      "name": "Professional",
+      "summary": "Flat and quiet in slate and navy, for documents and slides",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 10,
+      "path": "styles/professional/professional.draftstyle",
+      "sha256": "d969b2841f3ddc9ba53e52848941e0551bcad7c93b8df7c94c231430614225c4",
+      "bytes": 3558,
+      "updated": "2026-11-22"
+    },
+    {
+      "id": "geek",
+      "name": "Geek",
+      "summary": "A green-screen terminal: floppy disks, CRTs, chips and paper tape",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 20,
+      "path": "styles/geek/geek.draftstyle",
+      "sha256": "d56ecf732d878d5d4622c02c64a5d1952a06e17a0098cf742100212fc6b19582",
+      "bytes": 33015,
+      "updated": "2026-11-22"
+    },
+    {
+      "id": "arena",
+      "name": "Arena",
+      "summary": "Navy and gold: crests, shields, gems and the lane between them",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 30,
+      "path": "styles/arena/arena.draftstyle",
+      "sha256": "b44515b3a0bfe01ced8b614914dcd524d378463a5d9e26044d2589927e29ff99",
+      "bytes": 29693,
+      "updated": "2026-11-22"
+    },
+    {
+      "id": "high-seas",
+      "name": "High seas",
+      "summary": "A sea chart on parchment: ships, barrels, crates and bottles",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 40,
+      "path": "styles/high-seas/high-seas.draftstyle",
+      "sha256": "dd4cb5d3466f1f7d44c3e8c2438c022076e7ed1dbd89b7abdc33f768be3f0fe3",
+      "bytes": 36434,
+      "updated": "2026-11-22"
+    },
+    {
+      "id": "high-fantasy",
+      "name": "High fantasy",
+      "summary": "Ink on vellum: banners, towers, rune stones and scrolls",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 50,
+      "path": "styles/high-fantasy/high-fantasy.draftstyle",
+      "sha256": "ca6e1b873eff593cd43fdabcee4f40f6b0756b106e94fbfd9656ca98ea549e66",
+      "bytes": 33137,
+      "updated": "2026-11-22"
+    },
+    {
+      "id": "cyberpunk",
+      "name": "Cyberpunk",
+      "summary": "A night city in magenta and cyan: cut corners and glitched outlines",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 60,
+      "path": "styles/cyberpunk/cyberpunk.draftstyle",
+      "sha256": "6b4e3bbccff6ff5b9680efc3058a9d0a6206fde6ec7c22ae7203f63c4e2b5853",
+      "bytes": 30643,
+      "updated": "2026-11-22"
+    },
+    {
+      "id": "cute",
+      "name": "Cute",
+      "summary": "Soft, round and smiling: clouds, jam jars, toy blocks and a caterpillar",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 70,
+      "path": "styles/cute/cute.draftstyle",
+      "sha256": "14164ca96fcc85a8001ebfe54e4d7e8610eaf802c8a8acdd12e70b6084703203",
+      "bytes": 49871,
+      "updated": "2026-11-22"
     }
   ]
 }

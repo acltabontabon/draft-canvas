@@ -169,7 +169,9 @@ function sameContent(a: DraftDocument, b: DraftDocument, path: readonly string[]
     // Read off the file, not the view, because open points are root-only — and compared for the same
     // reason the rest of this is: a point's context typed and erased again within the coalesce
     // window has to come out as a burst that changed nothing, not a dead undo step.
-    equivalent(a.openPoints, b.openPoints, 5)
+    equivalent(a.openPoints, b.openPoints, 5) &&
+    // Root-only too. Deep enough for a colour inside a scheme and a path inside a drawing.
+    equivalent(a.style, b.style, 6)
   );
 }
 

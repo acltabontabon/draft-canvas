@@ -9,7 +9,8 @@ import { edgeIndex, nodeIndex } from '../store/selectors';
 import { useCollabStore } from '../store/collabStore';
 import { useEditorStore } from '../store/editorStore';
 import { holdingsOf, peersInRoom, roomOf, type PeerPresence } from '../ui/collab/presence/model';
-import { usePersonality } from '../theme/usePersonality';
+import { useDiagramStyle } from './useDiagramStyle';
+import type { ResolvedStyle } from '../render/style/resolve';
 import { useThemeValue } from '../theme/useTheme';
 import { emphasisOf } from './emphasis';
 import '../styles/presence.css';
@@ -45,7 +46,7 @@ export const PresenceLayer = memo(function PresenceLayer() {
   const nodes = useEditorStore((state) => (holdsShapes ? state.document.nodes : NO_NODES));
   const byId = holdsShapes ? nodeIndex(nodes) : null;
   const theme = useThemeValue();
-  const { preset } = usePersonality();
+  const diagramStyle = useDiagramStyle();
   // Only connectors that exist in this room get a rule — a peer can name any ids it likes.
   const holdsEdges = holdings.edges.size > 0;
   const edges = useEditorStore((state) => (holdsEdges ? state.document.edges : NO_EDGES));
@@ -71,7 +72,7 @@ export const PresenceLayer = memo(function PresenceLayer() {
           colors={holders.slice(0, MAX_RINGS).map((peer) => peer.color).join(',')}
           faint={holders.every((peer) => peer.faint)}
           theme={theme}
-          preset={preset}
+          diagramStyle={diagramStyle}
         />,
       );
     }
@@ -182,18 +183,18 @@ const PresenceRing = memo(function PresenceRing({
   colors,
   faint,
   theme,
-  preset,
+  diagramStyle,
 }: {
   node: DraftNode;
   /** The holders' palette indexes, nearest ring first. A string, so the memo compares it by value. */
   colors: string;
   faint: boolean;
   theme: ReturnType<typeof useThemeValue>;
-  preset: ReturnType<typeof usePersonality>['preset'];
+  diagramStyle: ResolvedStyle;
 }) {
   const silhouette = useMemo(() => {
-    return emphasisOf(describeNode(node, describeContext(theme, preset)).shapes);
-  }, [node, theme, preset]);
+    return emphasisOf(describeNode(node, describeContext(theme, diagramStyle)).shapes);
+  }, [node, theme, diagramStyle]);
 
   const rings = useMemo<RingMarkup[]>(() => {
     if (silhouette.length === 0) return [];

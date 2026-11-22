@@ -20,11 +20,10 @@ import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
 import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect, type TitleSpan } from '../layout/anchors';
 import { compatibilityKey } from '../edges/bundles';
-import { boundaryHeaderTextBox, describeContext, nameLineCount, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext } from '../nodes/describe';
+import { boundaryHeaderTextBox, nameLineCount, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext, sizingContext } from '../nodes/describe';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { getMeasurer } from '../render/text/measure';
-import { LIGHT } from '../render/theme/tokens';
 import { BAND, BOUNDARY_HEADER, INNER_BAND, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD, GUTTER } from './compose';
 import { AgentError } from './errors';
 import type { AttachmentSpec, FlowSpec, LayoutSpec, NodeSpec, NoteSpec, RelationshipSpec, RoomSpec } from './input';
@@ -49,7 +48,7 @@ export interface PlacedRoom {
 
 export function measureContext(): DescribeContext {
   // Colour never changes where text goes; the light theme is as good as any for measuring.
-  return { ...describeContext(LIGHT), measurer: getMeasurer() };
+  return { ...sizingContext(), measurer: getMeasurer() };
 }
 
 /**

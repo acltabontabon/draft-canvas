@@ -46,6 +46,7 @@ import { centerOf, overlapArea } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, hasSomethingToFit, lensFlow, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
 import { pointer, pointerFlow, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
+import { shapeStartFields } from '../../store/styleStore';
 import { useCollabStore } from '../../store/collabStore';
 import { END_MESSAGES } from '../collab/collabCopy';
 import { PresenceDock } from '../collab/PresenceDock';
@@ -271,8 +272,15 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // Every caller hands the top-left a default 176×68 shape centred on the point would have
       // (`point - 88,34`); centred by its own size instead, a Junction lands under the cursor rather
       // than beside it, and a Boundary or code card doesn't hang off below and to the right.
+      // How this person's shapes of this type start ("Save as my default Service"), unless the
+      // shape was picked by a name of its own, which already says what it is.
+      const mine = preset.start || preset.technology ? {} : shapeStartFields(preset.type);
       const { width, height } =
-        size ?? defaultSizeFor(preset.type, preset.technology ? technologyStart(preset.type, preset.technology).serviceKind : preset.start?.serviceKind);
+        size ??
+        defaultSizeFor(
+          preset.type,
+          preset.technology ? technologyStart(preset.type, preset.technology).serviceKind : (preset.start?.serviceKind ?? mine.serviceKind ?? mine.componentKind),
+        );
       // Placed onto a connector: made and put into its middle as one undo step.
       const editor = useEditorStore.getState();
       const startSequence = autoEdit && preset.type === 'sequence';
@@ -285,8 +293,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         width: size?.width,
         height: size?.height,
         text: preset.text,
-        accent: preset.accent,
-        noteKind: preset.noteKind,
+        ...mine,
+        // A preset that names its own colour or kind keeps it.
+        ...(preset.accent ? { accent: preset.accent } : {}),
+        ...(preset.noteKind ? { noteKind: preset.noteKind } : {}),
         language: preset.language,
         code,
         // Picked by one of its names ("load balancer" in the shape picker): it arrives as that kind.

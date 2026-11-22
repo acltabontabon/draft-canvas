@@ -15,7 +15,7 @@ import { randomEdit, rngFrom, seededFile } from './support';
 const anyId = fc.oneof(fc.constant(''), fc.constant('n_1'), fc.constant('e_1'), fc.string({ maxLength: 8 }), fc.string({ minLength: 129, maxLength: 140 }), fc.integer());
 const changeLike = fc.record(
   {
-    kind: fc.constantFrom('node', 'edge', 'flow', 'point', 'move', 'title', 'settings', 'level', 'order', 'bogus'),
+    kind: fc.constantFrom('node', 'edge', 'flow', 'point', 'move', 'title', 'settings', 'style', 'level', 'order', 'bogus'),
     id: anyId,
     room: fc.oneof(fc.constant(''), anyId),
     target: fc.constantFrom('node', 'edge', 'flow', 'x'),
@@ -154,9 +154,9 @@ describe('the wire', () => {
  * stop reaching collaborators — so adding one fails here until someone decides which it is.
  */
 it('accounts for every field of a document', () => {
-  const shared = ['metadata', 'nodes', 'edges', 'flows', 'ink', 'settings', 'openPoints', 'level'];
+  const shared = ['metadata', 'nodes', 'edges', 'flows', 'ink', 'settings', 'openPoints', 'level', 'style'];
   const notShared = ['format', 'version', 'viewport'];
-  const keys = Object.keys({ ...createDocument(), level: 'context', ink: [] }).sort();
+  const keys = Object.keys({ ...createDocument(), level: 'context', ink: [], style: { v: 1, hand: { base: 'clean' } } }).sort();
   expect(keys).toEqual([...shared, ...notShared].sort());
 });
 

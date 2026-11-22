@@ -27,7 +27,8 @@ import { el, serialize, n, type SvgEl } from './element';
 import { beginClipScope, emitDisplayList, emitShape, shadowFilter } from './emit';
 import { beginIdScope, endIdScope, scopedId } from './ids';
 import { markerDefs } from './markers';
-import { PERSONALITY_PROFILES } from '../roughness/presets';
+import { resolveStyle, type ResolvedStyle } from '../style/resolve';
+import type { DocumentStyle } from '../../document/style';
 import type { PersonalityPreset } from '../../theme/usePersonality';
 import type { Shape } from '../displayList';
 import { inkOf, inkPaintBounds } from '../../document/ink';
@@ -64,7 +65,12 @@ export interface ExportOptions {
   /** Whether to draw a configured background — see `ResolvedBackground`. Defaults to `true`. */
   includeBackground?: boolean;
   background?: ResolvedBackground;
-  /** Intentional Roughness preset. Defaults to `'clean'`. */
+  /** How the picture is drawn, in place of the diagram's own style. For a preview of a style the
+   *  diagram does not carry (yet). */
+  style?: ResolvedStyle;
+  /** The style a diagram with none of its own is drawn in: the one in use on this device. */
+  deviceStyle?: DocumentStyle;
+  /** The drawing hand such a diagram is drawn in when no device style is given. Defaults to `'clean'`. */
   preset?: PersonalityPreset;
   /**
    * Whether the picture keeps the open-point markers, with a key naming the kinds that appear.
@@ -298,7 +304,8 @@ export function buildScene(
     theme: Theme;
     measurer: ReturnType<typeof getMeasurer>;
     showSequence: boolean;
-    preset: PersonalityPreset;
+    style?: ResolvedStyle;
+    preset?: PersonalityPreset;
   },
   options: SceneOptions = {},
 ): Scene {
@@ -477,15 +484,17 @@ export function renderDocumentSvg(
   document: DraftDocument,
   options: ExportOptions = {},
 ): RenderedSvg {
-  const theme = themeFor(options.theme ?? 'dark');
+  // The diagram's own look wins: a picture of a styled diagram is the same from every device. One
+  // that carries no style is drawn in the style its caller gives for this device.
+  const style = options.style ?? resolveStyle(document.style ?? options.deviceStyle, options.preset ?? 'clean');
+  const theme = style.theme(options.theme ?? 'dark');
   const padding = options.padding ?? DEFAULT_PADDING;
   const measurer = getMeasurer();
-  const preset = options.preset ?? 'clean';
   // Every id in this export carries what it is of (see `ids.ts`): two diagrams on one page keep
   // their own shadows and arrowheads, and the same export is still the same bytes.
   beginIdScope(`${options.idScope ?? 'export'}-${document.metadata.id}`);
-  const nodeCtx = describeContext(theme, preset);
-  const edgeCtx = { theme, measurer, showSequence: document.settings.showSequence, preset };
+  const nodeCtx = describeContext(theme, style);
+  const edgeCtx = { theme, measurer, showSequence: document.settings.showSequence, style };
   const selectedFlow = options.selectedFlowId ? findFlow(document, options.selectedFlowId) : undefined;
 
   const openPoints = options.openPoints === false ? [] : unresolvedOpenPoints(document);
@@ -512,7 +521,7 @@ export function renderDocumentSvg(
     );
   }
   // The line styles among the connectors drawn, under the key when there is one.
-  const legend = options.legend ? describeLegend(scene.edgeEntries.map((entry) => entry.edge), { theme, measurer }) : null;
+  const legend = options.legend ? describeLegend(scene.edgeEntries.map((entry) => entry.edge), { theme, measurer, connector: style.connector }) : null;
   const keyBlock = key ? key.height + KEY_GAP : 0;
   const legendBlock = legend ? legend.height + KEY_GAP : 0;
   const width = Math.max(1, Math.round(Math.max(bounds.width, key?.width ?? 0, legend?.width ?? 0) + padding * 2));
@@ -522,7 +531,7 @@ export function renderDocumentSvg(
 
   const defs: SvgEl[] = [
     shadowFilter(theme.shadow),
-    ...markerDefs(scene.arrowColors, PERSONALITY_PROFILES[preset].arrowJitter),
+    ...markerDefs(scene.arrowColors, style.hand.arrowJitter, style.connector.head),
   ];
 
   const showBackground = options.includeBackground !== false && options.background !== undefined;

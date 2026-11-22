@@ -225,10 +225,42 @@ editable return path with a suggested response. Async shows a break mark and has
 The colour wheel means automatic colour; click it to fix a colour. A shape has no automatic colour.
 Hover any icon to see what it does.
 
-**Settings → Canvas → Drawing style** controls shapes and connectors together: **Clean** is the
-Sculpted Ink default, **Draft** adds a restrained hand-drawn quality, **Sketch** adds visible
-graphite drift and retraced strokes. It is a device preference that applies to every diagram and
-export, and never changes the diagram or its undo history.
+**Settings → Appearance** sets how shapes and connectors are drawn. **Clean** is the Sculpted Ink
+default, **Draft** adds a restrained hand-drawn quality, and **Sketch** adds visible graphite drift
+and retraced strokes. From any of them you can change the line weight, corners, shadows and colours
+for everything, give one shape or one kind of it a different look, and choose the arrowhead, weight
+and colour rule for connectors. What a line means stays out of it: a dashed asynchronous call is
+dashed in every style.
+
+A shape can also be drawn with a picture of your own. In **Shapes**, pick the shape (or one kind of
+it), then **Choose SVG…** or **Paste SVG**. The picture replaces the built-in drawing only: the
+shape keeps its size, its name stays where it was, and connectors meet it at the same points, so a
+Data store drawn as a barrel is still a Data store. It can take the diagram's colours, which follow
+a recolour and light or dark, or keep its own. Text, images, effects and anything that refers
+outside the file are left out, and the page says so. Shapes that hold their own content (text,
+notes, code, sequences and boundaries) take line, corner and shadow changes but no picture.
+
+**Style packs** on the same page are ready-made styles from the
+[starters gallery](https://github.com/acltabontabon/draft-canvas-starters#style-packs), each with a
+drawing for every shape and every kind of it: Professional, Geek, Arena, High seas, High fantasy,
+Cyberpunk and Cute. **Load style packs** reads that public gallery from GitHub, as loading starters
+does, and sends nothing about your diagrams. **Add** makes a pack a style of your own, to change as
+you like. Some packs are drawn on a dark canvas and some on a light one whatever your device is set
+to, and their exports are too.
+
+A style of your own can be saved to a file with **Export…** and brought in on another device with
+**Import style…**. A `.draftstyle` file holds the style and nothing about any diagram.
+
+To make new shapes start the way you like them, right-click one you have set up and choose **Save
+as my default Service** (or whichever shape it is): the next one of that type starts with its kind
+and colour. **Reset my default Service** in the same menu, or **Forget** under **Shapes** in
+Settings, goes back to the usual start.
+
+Your style is a device preference. A diagram carries a copy from the moment it is made, so its
+exports and everyone it is shared with see the same picture. While a diagram is drawn in your style,
+it follows the changes you make in Settings as you make them. A diagram with no style of its own
+(any made before styles, or opened from a file without one) is drawn in the style of whoever opens
+it. One with a different look of its own keeps it until you choose **Use my style in this diagram**.
 
 ![Connector controls for meaning, routing and colour.](../media/connectors/style-inspector-light.png)
 

@@ -10,6 +10,8 @@ interface ImagePanelProps {
   onScaleChange: (scale: PngScale) => void;
   paletteName: ThemeName;
   onPaletteChange: (name: ThemeName) => void;
+  /** Set when the diagram's own style is always drawn in one theme: there is nothing to choose. */
+  pinnedPalette?: ThemeName;
   transparent: boolean;
   onTransparentChange: (value: boolean) => void;
   hasBackground: boolean;
@@ -43,6 +45,7 @@ export function ExportImagePanel({
   onScaleChange,
   paletteName,
   onPaletteChange,
+  pinnedPalette,
   transparent,
   onTransparentChange,
   hasBackground,
@@ -87,16 +90,21 @@ export function ExportImagePanel({
         </span>
 
         <span className="dc-export-label" aria-hidden="true">Look</span>
-        <SegmentedControl
-          name="image-palette"
-          legend="Palette"
-          value={paletteName}
-          onChange={onPaletteChange}
-          options={[
-            { value: 'light', label: 'Light' },
-            { value: 'dark', label: 'Dark' },
-          ]}
-        />
+        {pinnedPalette ? (
+          // Said, not shown as a choice that does nothing: this diagram's style has one set of colours.
+          <span className="dc-export-note">This diagram’s style is always drawn {pinnedPalette}.</span>
+        ) : (
+          <SegmentedControl
+            name="image-palette"
+            legend="Palette"
+            value={paletteName}
+            onChange={onPaletteChange}
+            options={[
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
+          />
+        )}
 
         <span className="dc-export-label dc-export-label-top" aria-hidden="true">Options</span>
         <div className="dc-export-checks">

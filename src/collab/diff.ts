@@ -52,6 +52,7 @@ export function diffFile(prev: DraftDocument, next: DraftDocument, options: Diff
     const settings = wireSettings(next.settings);
     if (!sameValue(wireSettings(prev.settings), settings)) out.push({ kind: 'settings', value: settings });
   }
+  if (prev.style !== next.style && !sameValue(prev.style, next.style)) out.push({ kind: 'style', value: next.style ?? null });
 
   const implied = options.implied === true;
   diffElements(before, after, 'node', out, implied);

@@ -39,12 +39,12 @@ import { PresentationPointer } from './presentation/PresentationPointer';
 import { edgeIndex, nodeIndex, selectSequenceMessage, sequenceNodes } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
+import { DiagramTheme } from './DiagramTheme';
 import { CanvasBackground } from './CanvasBackground';
 import { ATTACH_DWELL_MS, evaluateAttachCandidates, isAttachableType } from './dragTargets';
 import { isLinkable, isPartOfDiagram } from '../document/sequenceLinks';
 import { LIMITS } from '../document/limits';
-import { describeContext, sequenceLayoutFor } from '../nodes/describe';
-import { LIGHT } from '../render/theme/tokens';
+import { sequenceLayoutFor, sizingContext } from '../nodes/describe';
 import { hitSequence, participantIndexAt } from '../sequence/layout';
 import { sequenceActions } from '../store/sequenceActions';
 import {
@@ -816,7 +816,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       if (!host || !sequence || sequence.participants.length >= LIMITS.maxSequenceParticipants || sequence.participants.some((participant) => participant.ref === dragged.id)) {
         return clearSequenceDrop();
       }
-      const index = participantIndexAt(sequenceLayoutFor(host, describeContext(LIGHT)), centre.x - host.x);
+      const index = participantIndexAt(sequenceLayoutFor(host, sizingContext()), centre.x - host.x);
       // A shape that is part of a diagram stays in it and is stood in for. One with nothing attached
       // to it is simply being put into the sequence: leaving a copy behind would be a duplicate.
       const stays = isPartOfDiagram(useEditorStore.getState().document, dragged);
@@ -996,7 +996,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             }, undefined)
             : undefined;
           const hit = host?.type === 'sequence'
-            ? hitSequence(sequenceLayoutFor(host, describeContext(LIGHT)), aim.x - host.x, aim.y - host.y)
+            ? hitSequence(sequenceLayoutFor(host, sizingContext()), aim.x - host.x, aim.y - host.y)
             : null;
           const message = hit?.kind === 'message' && host?.sequence
             ? selectSequenceMessage(state.document, host.id, hit.id)
@@ -2496,7 +2496,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
  */
 export const Canvas = memo(function Canvas(props: CanvasProps) {
   return (
-    <>
+    <DiagramTheme>
       <EdgeLabelRoot>
         <CanvasBody {...props} />
       </EdgeLabelRoot>
@@ -2504,6 +2504,6 @@ export const Canvas = memo(function Canvas(props: CanvasProps) {
           context menu, a tap deselects) must never see a press on this offer's buttons. */}
       <FollowPrompt />
       <CanvasLegend />
-    </>
+    </DiagramTheme>
   );
 });

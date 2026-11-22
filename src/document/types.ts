@@ -6,11 +6,12 @@
  * IndexedDB stores. Rendering libraries are adapted *to* this model, never the
  * other way around, so that upgrading the canvas engine cannot break user files.
  */
+import type { DocumentStyle } from './style';
 
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 31;
+export const CURRENT_VERSION = 32;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -1080,6 +1081,13 @@ export interface DraftDocument {
   openPoints: OpenPoint[];
   /** The canvas's own level, when it has one — same rule as `DraftInside.level`. */
   level?: ViewLevel;
+  /**
+   * How the diagram is drawn (`document/style.ts`), when it carries its own look. Root-only like
+   * `openPoints`: one diagram has one style, in every room. Absent — every file written before v32,
+   * and any diagram nobody has styled — means it follows the drawing hand of whichever device opens
+   * it, exactly as before.
+   */
+  style?: DocumentStyle;
 }
 
 /** Bump when `libraryShapeOf` changes what it records — the only lever for

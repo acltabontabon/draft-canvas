@@ -110,6 +110,9 @@ export function growthOf(before: DraftDocument, after: DraftDocument, changes: r
         // settings change would take its size off the total again.
         bytes += written(change.value, 1).bytes - written(wireSettings(before.settings), 1).bytes;
         break;
+      case 'style':
+        bytes += (change.value ? written(change.value, 1).bytes : 0) - (before.style ? written(before.style, 1).bytes : 0);
+        break;
       // The same bytes elsewhere — but at another depth, every line of it indented more or less (a
       // shape takes its rooms along).
       case 'move': {

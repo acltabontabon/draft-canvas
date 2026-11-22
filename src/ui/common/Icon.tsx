@@ -69,6 +69,8 @@ const PATHS = {
   // with, so the glyph is the product's own vocabulary rather than a generic "path" pictogram.
   flow: 'M4 7h4a3 3 0 0 1 3 3v4a3 3 0 0 0 3 3h4 M15 14l3 3-3 3',
   sliders: 'M4 7h9 M17 7h3 M15 5v4 M4 17h3 M11 17h9 M9 15v4',
+  // A painter's palette: how a diagram is drawn, as opposed to what the canvas does.
+  palette: 'M12 4a8 8 0 1 0 0 16c1.2 0 2-.8 2-1.8 0-.5-.2-.9-.5-1.3-.3-.4-.5-.8-.5-1.3 0-1 .8-1.8 1.8-1.8H17a3 3 0 0 0 3-3c0-3.8-3.6-6.8-8-6.8z M8 12h.01 M10 8.5h.01 M14.5 8.5h.01',
   // Two shapes and the connector an agent drew between them — the product's own vocabulary again.
   // Collaboration: two people, the second a step behind — someone you're working with.
   people: 'M9 11a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z M3 20a6 6 0 0 1 12 0 M15.5 4.3a3.5 3.5 0 0 1 0 6.4 M17.5 14.2A6 6 0 0 1 21 20',

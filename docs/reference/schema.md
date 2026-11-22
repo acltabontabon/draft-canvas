@@ -10,13 +10,14 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | Field | Contents |
 | --- | --- |
 | `format` | Always `"draft-canvas"` |
-| `version` | Format version, currently **31** (`CURRENT_VERSION`) |
+| `version` | Format version, currently **32** (`CURRENT_VERSION`) |
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
 | `ink` | Optional handwritten strokes over the top-level graph (`DraftInk`). Absent when there are none |
 | `settings` | Canvas settings, including the background |
 | `openPoints` | Unsettled questions attached to elements. Root only |
 | `level` | Optional `ViewLevel` |
+| `style` | Optional: how the diagram is drawn (see [Style](#style)). Root only |
 
 A node may own a room (`DraftNode.inside`): its own `nodes`, `edges`, `flows`, `viewport`, and
 optional `ink` and `level`. A document is a tree of graphs, nested at most 3 levels below the root.
@@ -86,6 +87,7 @@ Rules for a new version:
 | v28 → v29 | identity | No-op (optional `held` on shapes and `portal` on connectors) |
 | v29 → v30 | `migrateCardKindsToGlyphs` | A Service of kind `worker`, `external`, `scheduler` or `gateway` grows to the height its glyph, name and details need (114, 128 with a technology, 143 with a description), placed so the glyph's middle is where the card's middle was: those kinds are drawn as a glyph with the name underneath. Also the first version with the `artifact` shape and `serviceKind` of `load-balancer` and `proxy` |
 | v30 → v31 | `migrateComponentKindsToGlyphs` | A Component of kind `module`, `adapter` or `port` grows the same way, for the same reason: those kinds are drawn as a glyph with the name underneath |
+| v31 → v32 | identity | No-op (optional root `style`: how the diagram is drawn) |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17, v20, v29 and v30. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
@@ -157,6 +159,34 @@ From `LIMITS` in `src/document/limits.ts`:
 | `maxTextLength` / `maxCodeLength` | 20,000 / 200,000 |
 | `maxDescriptionLength` / `maxTechnologyLength` | 280 / 60 |
 | `maxEmbeddedBackgroundBytes` | 2 MB |
+
+## Style
+
+`style` (`DocumentStyle`, `src/document/style.ts`) is root-only and optional. Absent, the diagram
+is drawn in the style in use on the device that opens it, as every file before v32 is.
+
+| Field | Notes |
+| --- | --- |
+| `v` | `1`. Anything else is read as no style. |
+| `name` | For display only. Nothing looks a style up by name. |
+| `hand` | `base` (`clean`, `draft`, `sketch`), optional `wobble` (`calm`, `lively`) and `retrace`. |
+| `general` | `weight` (`fine`, `regular`, `bold`), `corners` (`sharp`, `soft`, `round`), `shadow`. No typeface: it would change how big a shape has to be. |
+| `schemes` | `light` and `dark`, each a set of `#rrggbb` canvas colours and accent colours. With one, the diagram is always drawn in that theme. |
+| `shapes` | Keyed by shape type (`service`) or type and kind (`service:gateway`). Each entry has the `general` fields, plus `art` (an asset id), `fit` and `builtin` where a drawing applies. A kind inherits from its type, a type from `general`. |
+| `connectors` | `weight`, `head` (`nib`, `triangle`), `colour` (`source`, `plain`). |
+| `assets` | Custom drawings: `id`, `w`, `h` and `paths` of `d` (absolute `M`, `L`, `C`, `Z` only), `fill`, `stroke`, `sw`, `o`, `rule`. No markup is ever stored. |
+
+`normalizeStyle` rebuilds a style from this whitelist wherever one is read: a file, a collaborator's
+change, a profile or a gallery pack. A drawing that is not exactly the stored form is dropped whole, a
+drawing no shape uses is dropped, and a colour that could not be read falls back when the style is
+resolved (`src/render/style/scheme.ts`). Limits are `STYLE_LIMITS`: 64 drawings, 48 paths and 8,192
+characters of path data each, 262,144 characters across a style.
+
+### Style files
+
+A `.draftstyle` file (`src/document/styleFile.ts`) is `{ "format": "draft-canvas-style", "version": 1,
+"name", "style" }`, where `style` is the same `DocumentStyle`. It is read through `normalizeStyle`
+like a style in a diagram. A newer `version` is refused by name.
 
 ## Serialization
 

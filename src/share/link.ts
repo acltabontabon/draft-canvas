@@ -2,6 +2,7 @@ import { viewOf, ownerAt } from '../depth/tree';
 import { flowIsPlayable } from '../document/flow';
 import { cloneDocumentAsNew } from '../document/factory';
 import { LIMITS } from '../document/limits';
+import { withoutAssets } from '../document/style';
 import type { DraftDocument } from '../document/types';
 import { parseDocument, type NormalizeResult } from '../document/validate';
 import { serializeDocument } from '../export/project';
@@ -49,7 +50,8 @@ export function validatedShareStart(document: DraftDocument, value: unknown): Sh
  *  refusing, so the honest answer is "export the file" rather than a link that only sometimes works. */
 export const MAX_SHARE_PAYLOAD_BYTES = 32 * 1024;
 
-export type EncodeShareLinkResult = { url: string } | { tooLarge: true; bytes: number };
+/** `withoutArtwork`: the diagram's custom drawings did not fit a link, so it carries the rest of its style and the built-in drawings. */
+export type EncodeShareLinkResult = { url: string; withoutArtwork?: true } | { tooLarge: true; bytes: number };
 
 const CHUNK = 0x8000;
 
@@ -128,7 +130,16 @@ export async function encodeShareLink(document: DraftDocument, base?: string, st
   // Let the progress UI paint before serializing the snapshot or starting its worker.
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   checkShareCancelled(options.signal);
-  const serialized = serializeDocument(withoutBackgroundImage(document));
+  const whole = await linkFor(withoutBackgroundImage(document), base, start, passphrase, options);
+  // Custom drawings are the one part of a style that can outgrow a link. The diagram is still the
+  // diagram without them, so the link carries the rest and says so, where failing would not.
+  if (!('tooLarge' in whole) || !document.style?.assets) return whole;
+  const plain = await linkFor(withoutBackgroundImage({ ...document, style: withoutAssets(document.style) }), base, start, passphrase, options);
+  return 'tooLarge' in plain ? whole : { ...plain, withoutArtwork: true };
+}
+
+async function linkFor(document: DraftDocument, base: string | undefined, start: ShareStart | undefined, passphrase: string | undefined, options: ShareOptions): Promise<EncodeShareLinkResult> {
+  const serialized = serializeDocument(document);
   const json = `{"document":${serialized},"start":${JSON.stringify(start ?? null)}}`;
   const compressed = await compressShare(json, passphrase !== undefined, options);
   checkShareCancelled(options.signal);

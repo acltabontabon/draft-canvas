@@ -229,6 +229,7 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
     pick(commands, ATTACH),
     pick(commands, COPY_AND_ORDER),
     pick(commands, lastGroup),
+    pick(commands, ['save-shape-default', 'reset-shape-default']),
     pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }

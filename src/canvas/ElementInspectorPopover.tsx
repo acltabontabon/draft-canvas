@@ -9,7 +9,7 @@ import { useInternalNode, useReactFlow, useStore } from '@xyflow/react';
 import { nodeCommands, primaryCommandsFor } from '../commands/registry';
 import { menuLabelOf } from '../commands/contextMenu';
 import { DepthGlyph } from './DepthGlyph';
-import { usePersonality } from '../theme/usePersonality';
+import { useDiagramStyle } from './useDiagramStyle';
 import type { Command, CommandContext } from '../commands/types';
 import {
   BOUNDARY_PRESETS,
@@ -286,12 +286,12 @@ function ElementInspectorBody({
   // With something inside a sequence selected, this is that thing's inspector: it sits by the
   // message or participant in question, not by the sequence as a whole, and offers what can be done
   // to it. The geometry is the sequence's own (kept by its identity), so this costs no new layout.
-  const { preset: sequencePreset } = usePersonality();
+  const diagramStyle = useDiagramStyle();
   const insideSequence = sequenceFocus && displayNode?.type === 'sequence' && displayNode.sequence ? sequenceFocus : null;
   const nodeRect = displayInternal ? rectOfInternal(displayInternal) : null;
   const rect = (() => {
     if (!nodeRect || !insideSequence || !displayNode) return nodeRect;
-    const boxes = sequenceLayoutFor(displayNode, describeContext(theme, sequencePreset)).boxes;
+    const boxes = sequenceLayoutFor(displayNode, describeContext(theme, diagramStyle)).boxes;
     let left = Infinity;
     let top = Infinity;
     let right = -Infinity;
@@ -530,8 +530,8 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   getMenuAvoidRect: () => { top: number; bottom: number } | null;
   buildCommandContext: () => CommandContext;
 }) {
-  const { preset: personality } = usePersonality();
   const technologyIcon = useTechnologyIcon(node.technology) ?? GENERIC_TECHNOLOGY_ICON;
+  const diagramStyle = useDiagramStyle();
 
   // The 0-3 shape-native quick actions for this node — memoized on the specific fields that can
   // change the result, never on `node` itself or `document` wholesale. `node` gets a new identity
@@ -789,7 +789,7 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
                       {...tip}
                       onClick={() => command.run(buildCommandContext())}
                     >
-                      {command.id === 'look-inside' && <DepthGlyph className="dc-popover-glyph" preset={personality} seedId={node.id} />}
+                      {command.id === 'look-inside' && <DepthGlyph className="dc-popover-glyph" diagramStyle={diagramStyle} seedId={node.id} />}
                       {menuLabelOf(command)}
                     </Button>
                   )}

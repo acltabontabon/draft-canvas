@@ -1,0 +1,8 @@
+{
+  "id": "geek",
+  "name": "Geek",
+  "summary": "A green-screen terminal: floppy disks, CRTs, chips and paper tape",
+  "author": "Draft Canvas",
+  "licence": "Apache-2.0",
+  "order": 20
+}

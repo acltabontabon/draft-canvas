@@ -201,6 +201,8 @@ export function sameAt(current: DraftDocument, left: DraftDocument, key: string)
       return current.metadata.title === left.metadata.title;
     case 'settings':
       return sameValue(wireSettings(current.settings), wireSettings(left.settings));
+    case 'style':
+      return sameValue(current.style, left.style);
     case 'level':
       return (a.rooms.get(rest)?.graph.level ?? null) === (b.rooms.get(rest)?.graph.level ?? null);
     case 'order': {

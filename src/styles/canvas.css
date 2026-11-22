@@ -7493,3 +7493,8 @@ g[data-ink-erasing='true'] .dc-ink-stroke {
     height: 40px;
   }
 }
+
+/* Carries a styled diagram's colours to the canvas (`canvas/DiagramTheme.tsx`). No box of its own. */
+.dc-diagram-theme {
+  display: contents;
+}

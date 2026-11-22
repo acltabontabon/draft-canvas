@@ -42,6 +42,7 @@ import { ExportShareResult } from './ExportShareResult';
 import { ExportShareProgress } from './ExportShareProgress';
 import type { ShareStage } from '../../share/compress';
 import { usePersonality } from '../../theme/usePersonality';
+import { activeStyleOf, useStyleStore } from '../../store/styleStore';
 import { useTheme } from '../../theme/useTheme';
 import { Button } from '../common/Button';
 import { SegmentedControl } from '../common/SegmentedControl';
@@ -59,6 +60,7 @@ import { copyMarkdownLine } from '../../export/clipboard';
 import { SecureExportPrompt } from './SecureExportPrompt';
 import { DEFAULT_PNG_SCALE, PNG_SCALES, type DocumentFormat, type ExportMode, type ImageFormat, type PngScale } from '../../export/exportTypes';
 import type { ThemeName } from '../../render/theme/tokens';
+import { resolveStyle } from '../../render/style/resolve';
 import { fittedScale } from '../../render/png/rasterize';
 import { count } from '../../lib/plural';
 import { hasUnresolvedIn } from '../../openPoints/collect';
@@ -134,6 +136,8 @@ export function ExportDialog() {
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const { name } = useTheme();
   const { preset } = usePersonality();
+  // What a diagram with no style of its own is drawn in here, as on the canvas.
+  const mine = useStyleStore((state) => activeStyleOf(state, preset));
 
   const [mode, setModeState] = useState<ExportMode>(readExportModePreference);
   const [documentFormat, setDocumentFormatState] = useState<DocumentFormat>(readDocumentFormatPreference);
@@ -321,6 +325,7 @@ export function ExportDialog() {
     selectedFlowId: selectedFlowId ?? undefined,
     includeBackground: hasBackground ? includeBackground : false,
     preset,
+    deviceStyle: mine,
     openPoints: hasOpenPoints ? includeOpenPoints : false,
     // What the canvas shows is what the image carries: the legend follows the canvas's own switch.
     legend: legendShown,
@@ -346,7 +351,7 @@ export function ExportDialog() {
     effectiveMode === 'share'
       ? { fileName: shareFile.metadata.title || 'Untitled diagram', visual: {
           type: 'thumbnail', document: sharePreview, theme: name,
-          options: { theme: name, preset, selectedFlowId: chosenShare.start?.flowId }, onlyKey: '',
+          options: { theme: name, preset, deviceStyle: mine, selectedFlowId: chosenShare.start?.flowId }, onlyKey: '',
           describe: () => `View only · ${count(rooms.length, 'level')} · ${count(countPlayableFlows(shareFile), 'Flow')}`,
         } }
       : effectiveMode === 'document'
@@ -621,6 +626,7 @@ export function ExportDialog() {
               onScaleChange={setPngScale}
               paletteName={paletteName}
               onPaletteChange={setPaletteName}
+              pinnedPalette={document?.style ? resolveStyle(document.style).pinned : undefined}
               transparent={transparent}
               onTransparentChange={setTransparent}
               hasBackground={hasBackground}

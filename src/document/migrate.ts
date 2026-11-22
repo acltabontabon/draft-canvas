@@ -740,6 +740,10 @@ const MIGRATIONS: Record<number, Migration> = {
   29: everyRoom(migrateCardKindsToGlyphs),
   // Three Component kinds stop being cards too (`migrateComponentKindsToGlyphs`).
   30: everyRoom(migrateComponentKindsToGlyphs),
+  // Optional root `style`: how the diagram is drawn. A diagram without one means what it always
+  // did, the opening device's own drawing hand. Root-only, so not wrapped in `everyRoom`. The
+  // version moves so an older build refuses a styled file rather than dropping its look on save.
+  31: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

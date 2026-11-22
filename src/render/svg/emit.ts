@@ -79,6 +79,7 @@ function emitPath(shape: PathShape): SvgEl {
   return el('path', {
     d: shape.d,
     fill: shape.fill ?? 'none',
+    'fill-rule': shape.fillRule,
     opacity: shape.opacity,
     filter: shape.shadow ? `url(#${scopedId(SHADOW_FILTER_ID)})` : undefined,
     'marker-end': shape.markerEnd,

@@ -1163,7 +1163,7 @@ test('the full changelog renders as a link and opens in the system browser', asy
 });
 
 /** Opens Settings the way the menu does, on the page named. */
-async function openSettings(page: Page, category?: 'General' | 'Canvas' | 'AI agents' | 'Updates' | 'Support') {
+async function openSettings(page: Page, category?: 'General' | 'Appearance' | 'Canvas' | 'AI agents' | 'Updates' | 'Support') {
   await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'settings' }));
   const settings = page.getByRole('dialog', { name: 'Settings' });
   if (category) await settings.getByRole('tab', { name: category }).click();
@@ -1180,7 +1180,7 @@ test('Settings fits a compact window and keeps every page accessible in both the
     // changed, a tab still fading between the two themes' greys measured 3.34:1.
     await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' });
     await expect(page.locator(':root')).toHaveAttribute('data-theme', theme);
-    for (const category of ['General', 'Canvas', 'AI agents', 'Updates', 'Support']) {
+    for (const category of ['General', 'Appearance', 'Canvas', 'AI agents', 'Updates', 'Support']) {
       await settings.getByRole('tab', { name: category, exact: true }).click();
       const panel = settings.getByRole('tabpanel', { name: category, exact: true });
       await expect(panel).toBeVisible();
@@ -1195,11 +1195,14 @@ test('Canvas settings is a page of Settings, however it is asked for', async ({ 
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
 
-  // On Home: this device's drawing style and suggestions, and no diagram to give a background.
-  let settings = await openSettings(page, 'Canvas');
-  let panel = settings.getByRole('tabpanel', { name: 'Canvas', exact: true });
-  await panel.getByRole('radio', { name: /^Sketch/ }).check();
+  // On Home: this device's style and suggestions, and no diagram to give a style or a background.
+  let settings = await openSettings(page, 'Appearance');
+  let panel = settings.getByRole('tabpanel', { name: 'Appearance', exact: true });
+  await panel.getByRole('group', { name: 'My style' }).getByRole('radio', { name: /^Sketch/ }).check();
   await expect(page.locator(':root')).toHaveAttribute('data-personality', 'sketch');
+  await expect(panel.getByText('Open a diagram to give it this style.')).toBeVisible();
+  await settings.getByRole('tab', { name: 'Canvas', exact: true }).click();
+  panel = settings.getByRole('tabpanel', { name: 'Canvas', exact: true });
   await expect(panel.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeChecked();
   await expect(panel.getByText('Open a diagram to give it a background.')).toBeVisible();
   await settings.getByRole('button', { name: 'Close', exact: true }).click();
@@ -1306,6 +1309,8 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
     .toContainEqual({ closeBehavior: 'quit' });
 
   await general.focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(settings.getByRole('tab', { name: 'Appearance' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(settings.getByRole('tab', { name: 'Canvas' })).toBeFocused();
   await page.keyboard.press('ArrowDown');

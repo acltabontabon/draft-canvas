@@ -12,6 +12,7 @@
  * lenient reader) goes after the known ones, sorted, with its own value deep-sorted the same way.
  * A key whose value is `undefined` is not written at all — "absent" is the only spelling of none.
  */
+import { canonicalStyle } from '../document/style';
 import type {
   Attachment,
   BackgroundSettings,
@@ -263,4 +264,6 @@ export const canonical = {
   flows: flows as (flows: DraftFlow[]) => unknown,
   ink: ink as (strokes: DraftInk[]) => unknown,
   openPoints: list(openPoint) as (points: OpenPoint[]) => unknown,
+  // A style orders its own keys: the check that makes it safe is also what makes it canonical.
+  style: canonicalStyle,
 } satisfies Partial<Record<keyof DraftDocument, unknown>>;

@@ -689,3 +689,332 @@
     width: 72px;
   }
 }
+
+/* ---- appearance: a style, drawn ---------------------------------------------- */
+
+/* The renderer's own picture of a style (`StylePreview.tsx`), scaled to the room it is given. */
+.dc-style-preview {
+  display: flex;
+  justify-content: center;
+  min-width: 0;
+}
+
+.dc-style-preview svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+
+.dc-style-preview[data-size='row'] svg {
+  width: 132px;
+}
+
+/* A choice's picture already carries its style's own canvas colour, so the frame adds none. */
+.dc-prefs-aside:has(.dc-style-preview) {
+  padding: 0;
+  overflow: hidden;
+  background: none;
+}
+
+/* The style being edited, kept in view while the controls under it are worked. */
+.dc-prefs-stage {
+  position: sticky;
+  top: -30px;
+  z-index: 1;
+  padding: 10px 0;
+  background: var(--dc-surface-raised);
+}
+
+.dc-prefs-stage .dc-style-preview {
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+}
+
+.dc-prefs-stage .dc-style-preview svg {
+  max-height: 132px;
+  border-radius: 0;
+}
+
+/* What can be done with the styles themselves: name, save to a file, delete, bring one in. */
+.dc-prefs-style-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.dc-prefs-own-style {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+  min-width: 0;
+}
+
+.dc-prefs-own-style .dc-field {
+  flex: 1;
+  min-width: 0;
+  color: var(--dc-text-muted);
+}
+
+/* Sets of colours: each a swatch of its canvas and three of its colours, with its name. */
+.dc-prefs-palettes {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dc-prefs-palette {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+}
+
+.dc-prefs-palette:hover {
+  background: var(--dc-surface);
+}
+
+.dc-prefs-palette:has(input:checked) {
+  border-color: var(--dc-prefs-accent);
+  color: var(--dc-text);
+}
+
+.dc-prefs-palette:has(input:focus-visible) {
+  outline: 1px solid var(--dc-prefs-accent);
+  box-shadow: 0 0 0 3px var(--dc-prefs-focus);
+}
+
+.dc-prefs-palette-chips {
+  display: flex;
+  gap: 4px;
+  padding: 7px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: 6px;
+  background: var(--dc-canvas);
+}
+
+.dc-prefs-palette-chips span {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+/* Every shape there is, to pick one: the same miniature the shape pickers on the canvas draw. */
+.dc-prefs-shapes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.dc-prefs-shape {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: 8px;
+  font-size: 12px;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+}
+
+.dc-prefs-shape .dc-shape-preview {
+  width: 44px;
+  height: 30px;
+}
+
+.dc-prefs-shape:hover {
+  background: var(--dc-surface);
+}
+
+.dc-prefs-shape:has(input:checked) {
+  border-color: var(--dc-prefs-accent);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+}
+
+.dc-prefs-shape:has(input:focus-visible) {
+  outline: 1px solid var(--dc-prefs-accent);
+  box-shadow: 0 0 0 3px var(--dc-prefs-focus);
+}
+
+/* A shape with a look of its own says so before it is opened. */
+.dc-prefs-shape[data-styled]::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--dc-prefs-accent);
+}
+
+.dc-prefs-shape-editor {
+  display: grid;
+  grid-template-columns: 168px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.dc-prefs-shape-editor > .dc-prefs-rows {
+  margin-top: 0;
+}
+
+.dc-prefs-shape-stage {
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+}
+
+.dc-prefs-shape-stage .dc-style-preview svg {
+  border-radius: 0;
+}
+
+@media (max-width: 720px) {
+  .dc-prefs-stage {
+    top: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .dc-style-preview[data-size='row'] svg {
+    width: 84px;
+  }
+
+  .dc-prefs-shape-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dc-prefs-shape-stage {
+    max-width: 200px;
+  }
+
+  .dc-prefs-palettes {
+    justify-content: flex-start;
+  }
+
+  .dc-prefs-style-actions,
+  .dc-prefs-own-style {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* A shape's own drawing: the ways to give it one, and where SVG code is pasted. */
+.dc-prefs-artwork-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dc-prefs-paste {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.dc-prefs-paste-box {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-code-bg);
+  color: var(--dc-text);
+  font-family: var(--dc-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.dc-prefs-paste-box:focus-visible {
+  outline: 1px solid var(--dc-prefs-accent);
+  box-shadow: 0 0 0 3px var(--dc-prefs-focus);
+}
+
+@media (max-width: 560px) {
+  .dc-prefs-artwork-actions {
+    justify-content: flex-start;
+  }
+
+  .dc-prefs-paste {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* Style packs from the gallery: each a picture of itself, what it is, and one way to take it. */
+.dc-prefs-packs {
+  display: flex;
+  flex-direction: column;
+  margin: 14px 0 0;
+  padding: 0;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+  list-style: none;
+  overflow: hidden;
+}
+
+.dc-prefs-pack {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 14px;
+}
+
+.dc-prefs-pack + .dc-prefs-pack {
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-prefs-pack-picture {
+  flex: none;
+  width: 132px;
+  min-height: 44px;
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+}
+
+.dc-prefs-pack-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.dc-prefs-link {
+  font-size: 12.5px;
+  color: var(--dc-text-muted);
+}
+
+.dc-prefs-link:hover {
+  color: var(--dc-text);
+}
+
+@media (max-width: 560px) {
+  .dc-prefs-pack {
+    flex-wrap: wrap;
+  }
+
+  .dc-prefs-pack-picture {
+    width: 84px;
+  }
+}

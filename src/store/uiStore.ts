@@ -27,6 +27,9 @@ export interface FlowTrace {
   message: string;
 }
 
+/** The Settings pages the editor itself can ask for, on the web and the desktop. */
+export type SettingsPage = 'canvas' | 'appearance';
+
 export type ToastAction = { label: string; run: () => void };
 /**
  * A toast's optional button — e.g. "Undo" for something that was just removed — and, for the rare
@@ -452,6 +455,8 @@ export interface UiStore {
   diagnosticsOpen: boolean;
   /** Canvas Settings — background image and personality preset. */
   settingsOpen: boolean;
+  /** The page Settings opens on: what the way in asked for. */
+  settingsPage: SettingsPage;
   /** Whether the Collaborate dialog (`ui/collab/CollaborateDialog.tsx`) is open. */
   collabOpen: boolean;
   /**
@@ -797,7 +802,7 @@ export interface UiStore {
   setReadOnly: (readOnly: UiStore['readOnly']) => void;
   setAboutOpen: (open: boolean) => void;
   setDiagnosticsOpen: (open: boolean) => void;
-  setSettingsOpen: (open: boolean) => void;
+  setSettingsOpen: (open: boolean, page?: SettingsPage) => void;
   setCollabOpen: (open: boolean) => void;
   setJoinInvite: (payload: string | null) => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
@@ -997,6 +1002,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   aboutOpen: false,
   diagnosticsOpen: false,
   settingsOpen: false,
+  settingsPage: 'canvas',
   collabOpen: false,
   joinInvite: null,
   readOnly: null,
@@ -1088,7 +1094,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setReadOnly: (readOnly) => set({ readOnly }),
   setAboutOpen: (aboutOpen) => set({ aboutOpen }),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+  setSettingsOpen: (settingsOpen, settingsPage = 'canvas') => set({ settingsOpen, settingsPage }),
   setCollabOpen: (collabOpen) => set({ collabOpen }),
   setJoinInvite: (joinInvite) => set({ joinInvite }),
   setQuickConnect: (quickConnect) => set({ quickConnect }),

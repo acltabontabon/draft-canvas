@@ -55,7 +55,10 @@ Library and editor are two states of `src/App.tsx` with no router, so the build 
 
 Shapes and text are pure display lists (`nodes/describe.ts`, `render/text/layout.ts`) shared by canvas
 and export. Selection, handles and other chrome are React and CSS only, so they never reach an export.
-Drawing styles are parameters of that renderer and a device preference, not document data.
+How a diagram is drawn is one resolved style (`render/style/resolve.ts`) that both read, and nothing
+else about style reaches a renderer. A diagram that carries a `style` is drawn in it on every device;
+one that carries none is drawn in the style in use on this device. A style changes how a shape
+looks, never its size, where a connector meets it, or what it means.
 
 ## The two seams
 

@@ -14,6 +14,7 @@
 import { LIMITS } from '../document/limits';
 import { cleanTitle } from '../document/sanitize';
 import { CURRENT_VERSION, DRAFT_FORMAT, VIEW_LEVELS, type DraftEdge, type DraftFlow, type DraftSettings, type OpenPoint, type ViewLevel } from '../document/types';
+import { normalizeStyle } from '../document/style';
 import { normalizeDocument } from '../document/validate';
 import { parseInkStroke } from '../document/ink';
 import { isRecord } from '../lib/isRecord';
@@ -122,6 +123,12 @@ function sanitizeChange(candidate: unknown): Change | string {
     case 'settings': {
       const value = sanitizeSettings(candidate.value);
       return value ? { kind: 'settings', value } : 'unreadable settings';
+    }
+    case 'style': {
+      if (candidate.value === null) return { kind: 'style', value: null };
+      // The same check a style in a file gets: rebuilt from a whitelist, drawings kept only whole.
+      const value = normalizeStyle(candidate.value).style;
+      return value ? { kind: 'style', value } : 'unreadable style';
     }
     case 'level': {
       const room = roomOf(candidate.room);

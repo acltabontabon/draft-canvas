@@ -1,4 +1,5 @@
 import { useUiStore } from '../store/uiStore';
+import { deviceStyle } from '../store/styleStore';
 import { isSharedEditing } from '../store/collabStore';
 import { createDocument } from '../document/factory';
 import { DEFAULT_TITLE } from '../document/sanitize';
@@ -280,6 +281,11 @@ function describe(error: unknown): string {
  * the snapshots of unsaved changes — lives in the app's data folder, where a crash or a restart
  * leaves it for Home to offer back.
  */
+/** A new diagram with a copy of the style in use, so it keeps its look whoever opens it later. */
+function styled(document: DraftDocument): DraftDocument {
+  return document.style ? document : { ...document, style: deviceStyle() };
+}
+
 export class DesktopController {
   private readonly api: DesktopApi;
   private readonly docs: DocsPublisher;
@@ -948,7 +954,7 @@ export class DesktopController {
     this.store.getSnapshot().explorerSave?.cancel();
     await this.swap('Couldn’t start a Quick Draft', async () => {
       if (!(await this.settleBeforeLeaving())) return;
-      const document = starter === 'example' ? exampleCanvas() : starter ?? createDocument(QUICK_DRAFT_TITLE);
+      const document = styled(starter === 'example' ? exampleCanvas() : starter ?? createDocument(QUICK_DRAFT_TITLE));
       if (starter === 'example') useUiStore.getState().setExampleDocumentId(document.metadata.id);
       this.session = { kind: 'quick', id: `q_${uuid()}` };
       this.edited = false;
@@ -962,7 +968,7 @@ export class DesktopController {
     this.store.getSnapshot().explorerSave?.cancel();
     await this.swap('Couldn’t create the canvas', async () => {
       if (!(await this.settleBeforeLeaving())) return;
-      const blank = encoder.encode(serializeDocument(createDocument()));
+      const blank = encoder.encode(serializeDocument(styled(createDocument())));
       const saved = await this.api.saveAs(DEFAULT_TITLE, blank);
       if (!saved) {
         // Whatever was open stays open; its snapshot was settled above and is only rewritten on the next edit.
@@ -984,7 +990,7 @@ export class DesktopController {
   async newCanvasIn(project: Handle, relPath = ''): Promise<void> {
     await this.swap('Couldn’t create the canvas', async () => {
       if (!(await this.settleBeforeLeaving())) return;
-      const document = createDocument();
+      const document = styled(createDocument());
       this.session = { kind: 'pending', id: `q_${uuid()}`, project, relPath };
       this.edited = false;
       this.load(serializeDocument(document), document.metadata.title, { baseline: true });

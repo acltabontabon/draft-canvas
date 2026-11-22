@@ -11,8 +11,7 @@
 import { boundsOf, type Bounds } from '../document/geometry';
 import { lensNodeTier } from '../document/flow';
 import type { DraftEdge, DraftFlow, DraftNode, SeqMessage } from '../document/types';
-import { describeContext, sequenceLayoutFor } from '../nodes/describe';
-import { LIGHT } from '../render/theme/tokens';
+import { sequenceLayoutFor, sizingContext } from '../nodes/describe';
 import type { FlowPlaybackStep } from './steps';
 
 export interface StepComposition {
@@ -49,7 +48,7 @@ const SEQUENCE_STEP_MARGIN = 36;
  */
 export function sequenceStepBounds(host: DraftNode | undefined, message: SeqMessage): Bounds | null {
   if (host?.type !== 'sequence') return null;
-  const layout = sequenceLayoutFor(host, describeContext(LIGHT));
+  const layout = sequenceLayoutFor(host, sizingContext());
   const boxes = [message.id, message.from, message.to].map((id) => layout.boxes.get(id)).filter((box): box is NonNullable<typeof box> => !!box);
   if (!layout.boxes.has(message.id) || boxes.length === 0) return null;
   const left = Math.min(...boxes.map((box) => box.x)) - SEQUENCE_STEP_MARGIN;

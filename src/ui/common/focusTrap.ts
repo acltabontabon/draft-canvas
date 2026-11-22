@@ -12,6 +12,9 @@ const FOCUSABLE_SELECTOR =
  *  checked one (the browser Tabs only to a group's checked member). */
 function isTabbable(element: HTMLElement): boolean {
   if (element.closest('[hidden], [inert]')) return false;
+  // Taken out of the Tab order on purpose: the tabs of a rail other than the selected one, which
+  // arrows move between. Stopping at each made Tab walk the whole rail before reaching the page.
+  if (element.tabIndex < 0) return false;
   if (element instanceof HTMLInputElement && element.type === 'radio' && !element.checked && element.name) {
     const group = Array.from(element.ownerDocument.getElementsByName(element.name));
     if (group.some((member) => member instanceof HTMLInputElement && member.checked)) return false;

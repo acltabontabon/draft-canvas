@@ -6,9 +6,8 @@ import { resolveEdgeColor } from '../edges/kindStyle';
 import { markerDefs } from '../render/svg/markers';
 import { shadowFilter } from '../render/svg/emit';
 import { serialize } from '../render/svg/element';
-import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import type { Theme } from '../render/theme/tokens';
-import { usePersonality } from '../theme/usePersonality';
+import { useDiagramStyle } from './useDiagramStyle';
 import { useThemeValue } from '../theme/useTheme';
 
 /**
@@ -33,7 +32,7 @@ import { useThemeValue } from '../theme/useTheme';
  */
 export const Markers = memo(function Markers() {
   const theme = useThemeValue();
-  const { preset } = usePersonality();
+  const diagramStyle = useDiagramStyle();
   // A primitive, so a commit that changes no connector colour (a move, a text edit, an undo of
   // either) re-renders nothing here — not even a fresh `__html` object for React to write back.
   const colorKey = useEditorStore((state) => edgeColorKey(state.document.nodes, state.document.edges, theme));
@@ -51,11 +50,11 @@ export const Markers = memo(function Markers() {
       ...Object.values(theme.accents).map((accent) => accent.chip),
       ...(colorKey ? colorKey.split('|') : []),
     ]);
-    const markup = [shadowFilter(theme.shadow), ...markerDefs(colors, PERSONALITY_PROFILES[preset].arrowJitter)]
+    const markup = [shadowFilter(theme.shadow), ...markerDefs(colors, diagramStyle.hand.arrowJitter, diagramStyle.connector.head)]
       .map(serialize)
       .join('');
     return { __html: `<defs>${markup}</defs>` };
-  }, [colorKey, theme, preset]);
+  }, [colorKey, theme, diagramStyle]);
 
   return <svg className="dc-defs" aria-hidden="true" focusable="false" dangerouslySetInnerHTML={html} />;
 });
