@@ -12,6 +12,34 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 - **Watch the film** — **Help → Watch the film** opens the product film on the Draft Canvas website.
 
+#### Fixed
+
+- **Files that would not open** — A diagram with sequence fragments nested extremely deep, or a
+  shape name of hundreds of thousands of lines, now opens instead of being refused.
+- **Shared links keep sequences linked** — A lifeline in a shared copy still points at the shape
+  it stands for.
+- **Deleting mid-drag** — Starting to drag a shape while a connector is selected no longer lets
+  Delete remove the shape being dragged.
+- **Tidy up and Arrange previews** — Enter and Escape in a dialog opened over a preview now answer
+  the dialog, not the preview behind it.
+- **Going home** — A diagram still loading when you go home no longer opens afterwards.
+- **A panel that fails to load** — An invite that cannot be fetched says so instead of blanking
+  the app.
+- **Diagrams dated in the future** — A file with a date years ahead no longer stays first in the
+  library.
+- **Flow variants and open points** — A variant of a flow whose id is used twice attaches to the
+  right flow, and an open point keeps the attachment that is still there.
+- **Sketches while sharing** — A stroke a collaborator erases is no longer left selected.
+
+### Desktop
+
+#### Fixed
+
+- **Typing to Nodi with an input method** — The Enter that confirms a conversion no longer sends
+  the prompt.
+- **Rename File** — Pressing Enter twice renames once, and the dialog stays until the rename has
+  answered.
+
 ## [1.21.0] - 2026-11-22
 
 Take a shape down. Present any diagram.
