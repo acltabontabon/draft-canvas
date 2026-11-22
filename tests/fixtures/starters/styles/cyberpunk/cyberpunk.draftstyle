@@ -74,7 +74,7 @@
         "art": "a02dwb6o0s7lw96"
       },
       "service:generic": {
-        "art": "a165surk176hkjq"
+        "art": "a0srzrpy12mbqj8"
       },
       "service:api": {
         "art": "a0i0paj41ngp4c7"
@@ -1363,7 +1363,7 @@
         ]
       },
       {
-        "id": "a165surk176hkjq",
+        "id": "a0srzrpy12mbqj8",
         "w": 348,
         "h": 132,
         "paths": [
@@ -1381,10 +1381,6 @@
           {
             "d": "M38 3L98 3L98 10L38 10Z",
             "fill": "amber:chip"
-          },
-          {
-            "d": "M22 100L28 100L28 112L22 112ZM32.5 100L36.25 100L36.25 112L32.5 112ZM40 100L47.5 100L47.5 112L40 112ZM52 100L55.75 100L55.75 112L52 112ZM59.5 100L65.5 100L65.5 112L59.5 112ZM70 100L73.75 100L73.75 112L70 112ZM77.5 100L85 100L85 112L77.5 112Z",
-            "fill": "line"
           }
         ]
       },

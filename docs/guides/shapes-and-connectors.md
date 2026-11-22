@@ -232,6 +232,8 @@ for everything, give one shape or one kind of it a different look, and choose th
 and colour rule for connectors. What a line means stays out of it: a dashed asynchronous call is
 dashed in every style.
 
+![Settings on its Appearance page: the styles to draw with, Clean, Draft and Sketch, each with a small diagram drawn in it.](../media/guides/appearance.png)
+
 A shape can also be drawn with a picture of your own. In **Shapes**, pick the shape (or one kind of
 it), then **Choose SVG…** or **Paste SVG**. The picture replaces the built-in drawing only: the
 shape keeps its size, its name stays where it was, and connectors meet it at the same points, so a
@@ -247,6 +249,15 @@ Cyberpunk and Cute. **Load style packs** reads that public gallery from GitHub, 
 does, and sends nothing about your diagrams. **Add** makes a pack a style of your own, to change as
 you like. Some packs are drawn on a dark canvas and some on a light one whatever your device is set
 to, and their exports are too.
+
+![The style packs in Settings: Professional, Geek, Arena and High seas, each with a small diagram drawn in it and an Add button.](../media/guides/style-packs.png)
+
+The same diagram in two packs. Every shape is the shape it was, where it was: a gateway is a
+lighthouse on the high seas and a scanner arch in the night city, and still a gateway.
+
+![The Microservices starter drawn in High seas, on parchment: a lighthouse for the gateway, a ledger for the SQL database, signal flags for the topic.](../media/guides/style-pack-high-seas.png)
+
+![The same diagram drawn in Cyberpunk, on a dark canvas: a scanner arch for the gateway, a tower for the SQL database, a battery for the cache.](../media/guides/style-pack-cyberpunk.png)
 
 A style of your own can be saved to a file with **Export…** and brought in on another device with
 **Import style…**. A `.draftstyle` file holds the style and nothing about any diagram.

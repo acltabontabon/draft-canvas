@@ -74,7 +74,7 @@
         "art": "a1x2oqel0j5u6ym"
       },
       "service:generic": {
-        "art": "a18rx8ow0v4ytq5"
+        "art": "a0x3vryu1m8lyrz"
       },
       "service:api": {
         "art": "a1wgomx90x7rgzb"
@@ -1153,7 +1153,7 @@
         ]
       },
       {
-        "id": "a18rx8ow0v4ytq5",
+        "id": "a0x3vryu1m8lyrz",
         "w": 348,
         "h": 132,
         "paths": [
@@ -1176,10 +1176,6 @@
           {
             "d": "M30 8L42 8L42 20L30 20ZM48 8L60 8L60 20L48 20Z",
             "fill": "canvas"
-          },
-          {
-            "d": "M16 92L23 92L23 99L16 99ZM23 99L30 99L30 106L23 106ZM16 106L23 106L23 113L16 113ZM36 106L52 106L52 113L36 113Z",
-            "fill": "chip"
           }
         ]
       },

@@ -37,6 +37,7 @@ process.env.STARTERS_SNAPSHOT ??= 'current';
  *   npx tsx e2e/docs-screenshots.ts --sequence-only
  *   npx tsx e2e/docs-screenshots.ts --walk-only
  *   npx tsx e2e/docs-screenshots.ts --layout-only
+ *   npx tsx e2e/docs-screenshots.ts --appearance-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -69,10 +70,13 @@ const CANVAS = '.react-flow__pane';
 const log = (line: string) => process.stdout.write(`${line}\n`);
 
 async function startServer(): Promise<() => Promise<void>> {
+  // On Windows npm is a script, which only a shell can start, and there is no process group to signal.
+  const windows = process.platform === 'win32';
   const child: ChildProcess = spawn('npm', ['run', 'dev', '--', '--port', String(PORT), '--strictPort'], {
     cwd: REPO_ROOT,
     stdio: 'pipe',
-    detached: true,
+    detached: !windows,
+    shell: windows,
     env: { ...process.env, VITE_COLLAB_RELAY: `ws://localhost:${RELAY_PORT}` },
   });
   let exited = false;
@@ -82,7 +86,8 @@ async function startServer(): Promise<() => Promise<void>> {
   const stop = async () => {
     if (child.pid === undefined || exited) return;
     try {
-      process.kill(-child.pid, 'SIGTERM'); // the process group: `npm run dev` wraps vite
+      if (windows) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      else process.kill(-child.pid, 'SIGTERM'); // the process group: `npm run dev` wraps vite
     } catch {
       // already gone
     }
@@ -728,6 +733,53 @@ async function layoutScreenshots(page: Page) {
   await shot(page, 'portal-legend-held');
 }
 
+/** Settings → Appearance on the page it opens at, as a person reaches it: from the palette. */
+async function openAppearance(page: Page) {
+  await page.keyboard.press('Control+k');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.keyboard.type('Appearance');
+  await page.keyboard.press('Enter');
+  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
+  await expect(settings.getByRole('tab', { name: 'Appearance', exact: true })).toHaveAttribute('aria-selected', 'true');
+  return settings;
+}
+
+/** A style of one's own, the gallery's packs, and a diagram drawn in two of them. */
+async function appearanceScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1200, height: 700 });
+  await openStarter(page, 'Microservices');
+  // A starter arrives selected; the pictures are of the diagram at rest.
+  await page.locator(CANVAS).click({ position: { x: 40, y: 420 } });
+  await expect(page.locator('.dc-node.selected, .react-flow__node.selected')).toHaveCount(0);
+
+  let settings = await openAppearance(page);
+  await expect(settings.locator('.dc-prefs-stage .dc-style-preview svg')).toBeVisible();
+  await page.waitForTimeout(600);
+  await settings.screenshot({ path: join(OUT, 'appearance.png') });
+  log('  appearance.png');
+
+  // The gallery is already loaded (the starter came from it), so its packs are listed.
+  const pack = (name: string) => settings.locator('.dc-prefs-pack', { hasText: name });
+  await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
+  await settings.getByRole('heading', { name: 'Style packs', exact: true }).evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
+  await page.waitForTimeout(600);
+  await settings.screenshot({ path: join(OUT, 'style-packs.png') });
+  log('  style-packs.png');
+
+  for (const [name, file] of [
+    ['High seas', 'style-pack-high-seas'],
+    ['Cyberpunk', 'style-pack-cyberpunk'],
+  ] as const) {
+    await pack(name).getByRole('button', { name: `Add ${name} to my styles`, exact: true }).click();
+    await expect(settings.getByRole('group', { name: 'My style' }).getByRole('radio', { name: new RegExp(`^${name}`) })).toBeChecked();
+    await settings.getByRole('button', { name: 'Close', exact: true }).click();
+    await expect(settings).toBeHidden();
+    await shot(page, file);
+    settings = await openAppearance(page);
+    await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
+  }
+}
+
 async function readerScreenshots(page: Page) {
   await page.setViewportSize({ width: VIEWPORT.width, height: 760 });
   for (const guided of [true, false]) {
@@ -799,6 +851,11 @@ async function main() {
 
     if (process.argv.includes('--layout-only')) {
       await layoutScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--appearance-only')) {
+      await appearanceScreenshots(page);
       return;
     }
 

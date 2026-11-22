@@ -764,8 +764,8 @@
       "licence": "Apache-2.0",
       "order": 20,
       "path": "styles/geek/geek.draftstyle",
-      "sha256": "51d6793391a8016ea68e3f9e8d1b41bab7af4bad18407958c4a5e091709cff65",
-      "bytes": 40175,
+      "sha256": "50262f5194216c5e0ead3eafa2965378d9ad5406553ca127f70eebde4086b000",
+      "bytes": 39992,
       "updated": "2026-11-22"
     },
     {
@@ -812,8 +812,8 @@
       "licence": "Apache-2.0",
       "order": 60,
       "path": "styles/cyberpunk/cyberpunk.draftstyle",
-      "sha256": "e9ba2e3a036837927ea6484538f8f4d5e907c6a078c2c2532d8c5c06dafeb04b",
-      "bytes": 42582,
+      "sha256": "cb9f0d32e60852a9b1de1cd0db47d20a9f76f6f2b13d4a28e1b4be18c3fa45b6",
+      "bytes": 42268,
       "updated": "2026-11-22"
     },
     {
