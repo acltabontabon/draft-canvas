@@ -6,6 +6,12 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+### Shared
+
+#### Added
+
+- **Watch the film** — **Help → Watch the film** opens the product film on the Draft Canvas website.
+
 ## [1.21.0] - 2026-11-22
 
 Take a shape down. Present any diagram.

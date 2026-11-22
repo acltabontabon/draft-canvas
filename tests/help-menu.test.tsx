@@ -42,7 +42,7 @@ describe('help menu', () => {
     render(<HelpMenu />);
     await openMenu(user);
 
-    for (const name of ['Commands', 'Keyboard shortcuts', 'Documentation', 'About Draft Canvas']) {
+    for (const name of ['Commands', 'Keyboard shortcuts', 'Documentation', 'Watch the film', 'About Draft Canvas']) {
       expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
     }
   });

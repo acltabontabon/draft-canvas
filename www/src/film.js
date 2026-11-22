@@ -6,7 +6,7 @@
  * if that is refused, started silent with captions and a plain "Sound on" button. It pauses when scrolled
  * away and resumes on return, unless the visitor paused it themselves. The dashes are its parts (the
  * editor's own presentation bar, borrowed): they fill as it plays and a press jumps there. So does the
- * timecode beside each feature at the top of the page. When it ends, the screen becomes the way in.
+ * timecode beside each feature at the top of the page. When it ends, the screen says so and points back up to the ways in.
  * Nothing is fetched until the room is near, and nothing starts by itself for a visitor who asked for
  * less motion.
  */
@@ -66,7 +66,7 @@ export function setUpFilm() {
     setState('ended');
     end.hidden = false;
     if (document.fullscreenElement === stage) void document.exitFullscreen();
-    end.querySelector('a')?.focus({ preventScroll: true });
+    end.querySelector('.film-replay').focus({ preventScroll: true });
   });
 
   toggle.addEventListener('click', () => {
@@ -96,8 +96,7 @@ export function setUpFilm() {
       if (t >= step.at) current = index;
     });
     steps.forEach((step, index) => { if (index === current) step.button.setAttribute('aria-current', 'step'); else step.button.removeAttribute('aria-current'); });
-    now.replaceChildren(Object.assign(document.createElement('span'), { textContent: `${steps[current].name} · `, }), `${clock(t)} / ${clock(total)}`);
-    now.firstElementChild.dataset.filmName = '';
+    now.textContent = `${clock(t)} / ${clock(total)}`;
   };
   film.addEventListener('timeupdate', paint);
   film.addEventListener('seeked', paint);

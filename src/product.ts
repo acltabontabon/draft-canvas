@@ -36,6 +36,8 @@ export const PRODUCT = {
     github: 'https://github.com/acltabontabon',
     /** The guides and reference, where the in-app handbook used to be. */
     docs: 'https://draftcanvas.dev/docs/',
+    /** The product film, on the site's landing page. */
+    film: 'https://draftcanvas.dev/#film',
     linkedin: 'https://www.linkedin.com/in/acltabontabon/',
     website: author.url,
     email: author.email,

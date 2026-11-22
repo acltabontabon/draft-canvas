@@ -30,23 +30,24 @@ redirects and 404 pages.
 
 ## The landing page
 
-`www/index.html` is a static page in two rooms, plus a download dialog: the statement with its
-feature list, then the film. Behavior worth knowing before you edit it:
+`www/index.html` is a static page in two rooms, plus a download dialog: one screen of words (the
+statement, two ways in, and a line naming what the film shows), then the film. Behavior worth knowing before you edit it:
 
-- **The features are the film's contents.** Each feature in the overview carries a timecode
-  (`data-film-jump`, in seconds) that scrolls to the film and starts it at that moment. **Watch the
-  film** does the same from the start.
+- **What the page names, the film shows.** Each name under the headline (`data-film-jump`, in
+  seconds) scrolls to the film and starts it at that moment. **Watch it happen** does the same from
+  the start. The editor's Help menu links here too (**Watch the film**).
 - **The film** (`#film`, files in `www/public/film/`) fills the window. It starts by itself when it is
   most of what the visitor can see, pauses when scrolled away, and resumes on return unless the visitor
   paused it. A browser only starts a video with sound after the visitor has pressed something, so it is
   tried with sound and, if refused, started silent with captions and a **Sound on** button. Reduced
   motion never starts it: the poster and a play mark wait. Nothing of it is fetched before it is wanted.
-- **Its parts.** The dashes under the film are its parts, as the editor's presentation bar shows a
-  flow's steps: they fill as it plays and a press jumps there. Their times are `data-film-step`
-  attributes; a re-cut film needs them, the feature timecodes and the captions file updated together.
-- **The end.** When the film ends the room becomes the way in: the web editor, the desktop download,
-  or **Watch again**.
-- **The pencil.** It draws the headline underline and connects the feature icons once, on load.
+- **Its parts.** The labelled dashes under the film are its parts, as the editor's presentation bar
+  shows a flow's steps: they fill as it plays and a press jumps there. Their times are
+  `data-film-step` attributes; a re-cut film needs them, the jump links and the captions file updated
+  together.
+- **The end.** When the film ends the room says so, with **Back to top** (where the ways in are) and
+  **Watch again**.
+- **The pencil.** It draws the headline underline once, on load.
 
 ## The build
 

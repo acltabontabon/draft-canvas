@@ -29,8 +29,8 @@ test('the landing page is served at the root, and points at the editor\'s own ad
 
   const hero = page.getByRole('region', { name: 'Make your system clear.' });
   await expect(hero.getByRole('heading', { level: 1 })).toBeInViewport();
-  await expect(hero.getByRole('heading', { name: /Shapes that know their technology/ })).toBeInViewport();
-  await expect(hero.getByRole('link', { name: 'Watch the film' })).toBeInViewport();
+  await expect(hero.getByRole('link', { name: /Watch it happen/ })).toBeInViewport();
+  await expect(hero.getByRole('link', { name: /C4 levels/ })).toBeInViewport();
   await expect(page.getByRole('link', { name: 'Open web editor' }).first()).toHaveAttribute(
     'href',
     'https://app.draftcanvas.dev/',
@@ -79,17 +79,17 @@ test('the feature overview passes the accessibility scan at desktop width', asyn
   expect(audit.violations).toEqual([]);
 });
 
-test('each feature is a moment of the film, and its timecode starts the film there', async ({ page }) => {
+test('each thing the page names is a moment of the film, and starts the film there', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto(SITE);
   const film = page.locator('#film video');
   // Nothing of the film is fetched or playing until it is wanted.
   expect(await film.evaluate((video: HTMLVideoElement) => video.paused && video.currentTime === 0)).toBe(true);
-  await page.getByRole('link', { name: /Ask what breaks.*in the film/ }).click();
+  await page.getByRole('link', { name: /^Outage: watch it in the film/ }).click();
   await expect(page).toHaveURL(SITE + '#film');
   await expect(page.locator('#film')).toBeInViewport({ ratio: 0.9 });
   await expect.poll(() => film.evaluate((video: HTMLVideoElement) => video.currentTime)).toBeGreaterThanOrEqual(68);
-  await expect(page.locator('#film [data-film-now]')).toContainText('Outage');
+  await expect(page.locator('#film [aria-current="step"]')).toHaveAccessibleName(/^Outage/);
   // The room is the whole window.
   const box = (await page.locator('#film').boundingBox())!;
   expect(Math.round(box.height)).toBe(768);
@@ -116,7 +116,7 @@ test('the film starts by itself only when it fills the view, and never for reduc
   await expect(page.getByRole('button', { name: 'Play the film' })).toBeVisible();
 });
 
-test('when the film ends, the screen is the way in', async ({ page }) => {
+test('when the film ends, the screen points back to the ways in', async ({ page }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
   await page.goto(`${SITE}#film`);
   const film = page.locator('#film video');
@@ -125,7 +125,7 @@ test('when the film ends, the screen is the way in', async ({ page }) => {
   await film.evaluate((video: HTMLVideoElement) => { video.currentTime = video.duration - 0.2; });
   const end = page.locator('#film .film-end');
   await expect(end).toBeVisible({ timeout: 15_000 });
-  await expect(end.getByRole('link', { name: 'Open web editor' })).toHaveAttribute('href', 'https://app.draftcanvas.dev/');
+  await expect(end.getByRole('link', { name: 'Back to top' })).toHaveAttribute('href', '#features');
   await end.getByRole('button', { name: 'Watch again' }).click();
   await expect(end).toBeHidden();
   await expect.poll(() => film.evaluate((video: HTMLVideoElement) => !video.paused && video.currentTime < 5)).toBe(true);

@@ -89,6 +89,7 @@ export function HelpMenu() {
     { id: 'commands', label: toolbarLabel('commands'), shortcut: toolbarTooltip('commands').shortcut, onSelect: choose(() => ui().setCommandPaletteOpen(true)) },
     { id: 'shortcuts', label: toolbarLabel('shortcuts'), shortcut: toolbarTooltip('shortcuts').shortcut, onSelect: choose(() => ui().setShortcutsOpen(true)) },
     { id: 'help', label: toolbarLabel('help'), onSelect: choose(() => openLink(PRODUCT.links.docs)) },
+    { id: 'film', label: 'Watch the film', onSelect: choose(() => openLink(PRODUCT.links.film)) },
     { id: 'about', label: toolbarLabel('about'), ...(dot ? { dot } : {}), onSelect: choose(() => ui().setAboutOpen(true)) },
     ...(!__DESKTOP__ ? [{ id: 'diagnostics', label: 'Diagnostic report…', onSelect: choose(() => ui().setDiagnosticsOpen(true)) }] : []),
   ];

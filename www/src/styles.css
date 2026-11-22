@@ -1937,22 +1937,37 @@ html:has(.landing) { scroll-padding-top: 0; }
 
 @keyframes features-write { from { clip-path: inset(-0.16em 100% -0.25em -0.1em); } to { clip-path: inset(-0.16em -0.2em -0.25em -0.1em); } }
 
-/* Each feature is a moment of the film: its timecode jumps there. */
-.feature-time {
-  margin-inline-start: 8px;
-  padding: 2px 7px 2px 6px;
-  border: 1px solid var(--rule);
-  border-radius: 999px;
-  color: var(--ink-faint);
-  font: 500 0.7rem/1 var(--mono);
-  letter-spacing: 0.02em;
-  text-decoration: none;
-  vertical-align: 0.15em;
-  white-space: nowrap;
-  transition: color 160ms, border-color 160ms, background-color 160ms;
+/* One screen of words: the statement, two ways in, and the film just below. */
+.features-sheet { grid-template-rows: auto 1fr auto; }
+.features-layout { grid-template-columns: 1fr; justify-items: center; text-align: center; }
+.features-intro { display: grid; justify-items: center; }
+.features-lead { max-width: 34ch; }
+.features-actions { justify-content: center; }
+.features-film {
+  margin-top: clamp(30px, 6vh, 64px);
+  color: var(--accent-ink);
+  font: 500 1.3rem/1.25 var(--features-hand);
+  text-decoration-color: var(--accent-line);
+  text-underline-offset: 6px;
 }
-.feature-time::after { margin-inline-start: 5px; content: '▷'; font-size: 0.85em; }
-.feature-time:is(:hover, :focus-visible) { border-color: var(--accent-line); color: var(--accent-ink); background: var(--accent-soft); }
+.features-film:is(:hover, :focus-visible) { color: var(--ink); }
+/* What the film shows, each a way into that moment of it. */
+.features-moments {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 0;
+  max-width: 92ch;
+  margin: 16px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--ink-faint);
+  font-size: 0.86rem;
+}
+.features-moments li + li::before { margin-inline: 10px; color: var(--ink-ghost); content: '·'; }
+.features-moments a { color: var(--ink-soft); text-decoration: none; }
+.features-moments a:is(:hover, :focus-visible) { color: var(--accent-ink); text-decoration: underline; text-underline-offset: 4px; }
+.features-sheet > .features-license { margin: 0; text-align: center; }
 
 /* Two rooms: the statement, then the film. They settle one at a time. */
 @media (min-height: 560px) and (prefers-reduced-motion: no-preference) {
@@ -2081,9 +2096,24 @@ html:has(.landing) { scroll-padding-top: 0; }
   content: '';
 }
 .film-steps button:is(:hover, :focus-visible) span { background: rgba(239, 240, 241, 0.42); }
+.film-steps button em {
+  display: block;
+  margin-top: 8px;
+  overflow: hidden;
+  color: var(--ink-faint);
+  font: 500 0.7rem/1.2 var(--sans);
+  font-style: normal;
+  text-align: start;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 160ms;
+}
+.film-steps button:is(:hover, :focus-visible, [aria-current]) em { color: var(--ink); }
+.film-hud { align-items: flex-start; }
+.film-hud > :not(.film-steps) { margin-top: 1px; }
 .film-steps button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
 .film-now {
-  min-width: 21ch;
+  min-width: 11ch;
   margin: 0;
   color: var(--ink-soft);
   font: 500 0.78rem/1.2 var(--mono);
@@ -2143,6 +2173,8 @@ html:has(.landing) { scroll-padding-top: 0; }
   .features-layout { grid-template-columns: 1fr; }
   .film-now { min-width: 0; }
   .film-now [data-film-name] { display: none; }
+  .film-steps button em { display: none; }
+  .film-hud { align-items: center; }
 }
 
 @media (max-width: 560px) {
