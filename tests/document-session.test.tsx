@@ -208,6 +208,10 @@ describe('useDocumentSession — adoptDocument stale projectId repair', () => {
 });
 
 describe('useDocumentSession — overlapping opens', () => {
+  // The address is the page's, not a test's: a canvas one test left open is in it, and the next test's
+  // session would arrive at that address and try to open it beside whatever the test opens itself.
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
   it('a slow open that resolves after a later one does not replace it', async () => {
     const slow = createDocument('Slow A');
     const fast = createDocument('Fast B');
@@ -318,10 +322,13 @@ describe('useDocumentSession — overlapping opens', () => {
     const current = createDocument('On screen');
     let releaseSave: () => void = () => {};
     let holdSaves = false;
+    let held = 0;
     const repository = stubRepository({
       load: async (id) => (id === current.metadata.id ? structuredClone(current) : (others.find((doc) => doc.metadata.id === id) ?? null)),
       save: async () => {
-        if (holdSaves) await new Promise<void>((resolve) => (releaseSave = resolve));
+        if (!holdSaves) return;
+        held += 1;
+        await new Promise<void>((resolve) => (releaseSave = resolve));
       },
     });
     const session = renderSession(repository);
@@ -336,17 +343,19 @@ describe('useDocumentSession — overlapping opens', () => {
       holdSaves = false;
       releaseSave();
     };
-    return { current, session, tick, release };
+    /** Resolves once a save is really waiting: what makes "while it is still saving" true, not assumed. */
+    const saving = () => waitFor(() => expect(held).toBeGreaterThan(0));
+    return { current, session, tick, release, saving };
   }
 
   it('a new canvas asked for first does not take the place of a diagram asked for after it', async () => {
     // "Try an example" while the last save is still being written, then another diagram.
     const next = createDocument('Asked for next');
-    const { session, tick, release } = await openWithPendingSave([next]);
+    const { session, tick, release, saving } = await openWithPendingSave([next]);
 
     await act(async () => {
       const replacing = session().replaceWithNew('example');
-      await tick();
+      await saving();
       const opening = session().openDocument(next.metadata.id);
       await tick();
       release();
@@ -359,10 +368,10 @@ describe('useDocumentSession — overlapping opens', () => {
   });
 
   it('a new canvas takes the place of the one on screen when nothing newer is asked for', async () => {
-    const { current, session, tick, release } = await openWithPendingSave();
+    const { current, session, release, saving } = await openWithPendingSave();
     await act(async () => {
       const replacing = session().replaceWithNew();
-      await tick();
+      await saving();
       release();
       await replacing;
     });
@@ -371,15 +380,17 @@ describe('useDocumentSession — overlapping opens', () => {
   });
 
   it('Back then Forward while the last save is still being written leaves the canvas open', async () => {
-    const { current, session, tick, release } = await openWithPendingSave();
+    const { current, session, tick, release, saving } = await openWithPendingSave();
     const here = window.location.href;
     expect(docIdFromLocation()).toBe(current.metadata.id);
+    const loads = vi.spyOn(session().repository!, 'load');
 
     await act(async () => {
       // Back: the address names no diagram, so the canvas starts to close, and waits on its save.
       clearDocUrl();
       window.dispatchEvent(new PopStateEvent('popstate'));
-      await tick();
+      await saving();
+      expect(session().openId).toBe(current.metadata.id);
       // Forward: the address names the diagram on screen again.
       window.history.replaceState(null, '', here);
       window.dispatchEvent(new PopStateEvent('popstate'));
@@ -390,6 +401,8 @@ describe('useDocumentSession — overlapping opens', () => {
     });
 
     expect(session().openId).toBe(current.metadata.id);
+    // Still open because the close stood down, not because it closed and the diagram was read again.
+    expect(loads).not.toHaveBeenCalled();
     window.history.replaceState(null, '', '/');
   });
 
