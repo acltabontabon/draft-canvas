@@ -25,6 +25,11 @@ export function compactShareSnapshot(json: string): { document: DraftDocument; s
     for (const node of graph.nodes) {
       node.id = remap(nodes, node.id);
       if (node.parentId) node.parentId = remap(nodes, node.parentId);
+      // A lifeline names the shape it stands for by id (`SeqParticipant.ref`). Left as it was, every
+      // such link in a shared copy pointed at nothing, and an editable copy was saved that way.
+      for (const participant of node.sequence?.participants ?? []) {
+        if (participant.ref) participant.ref = remap(nodes, participant.ref);
+      }
       for (const entry of node.attachments ?? []) entry.id = `a_${(attachment++).toString(36)}`;
     }
     for (const edge of graph.edges) {
