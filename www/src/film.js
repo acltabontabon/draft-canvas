@@ -45,7 +45,7 @@ export function setUpFilm() {
   };
 
   /** With sound if the browser allows it; silently, with captions, if it does not. */
-  const play = async (wantSound = !film.muted || stage.dataset.state === 'idle') => {
+  const play = async (wantSound = !film.muted || stage.dataset.state === 'idle', byItself = false) => {
     end.hidden = true;
     film.muted = !wantSound;
     try { await film.play(); } catch {
@@ -53,6 +53,9 @@ export function setUpFilm() {
       try { await film.play(); } catch { /* not allowed to play at all: the play mark stays */ }
     }
     reflectSound();
+    // Starting takes a moment. If it started by itself and the visitor has scrolled away meanwhile, it
+    // must not be left playing out of sight (WebKit resolves the start late enough for this to happen).
+    if (byItself && !inView) film.pause();
   };
   const seek = (at) => {
     const go = () => { film.currentTime = at; };
@@ -106,7 +109,7 @@ export function setUpFilm() {
   if (!('IntersectionObserver' in window)) return;
   new IntersectionObserver(([entry]) => {
     inView = entry.intersectionRatio >= 0.6;
-    if (inView) { if (!calm && !held && film.paused && !film.ended) void play(); }
-    else if (!film.paused) film.pause();
+    if (inView) { if (!calm && !held && film.paused && !film.ended) void play(undefined, true); }
+    else film.pause();
   }, { threshold: [0, 0.6, 1] }).observe(stage);
 }
