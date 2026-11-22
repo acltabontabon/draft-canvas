@@ -40,6 +40,26 @@ describe('importing untrusted files', () => {
     expect(result.document.nodes).toHaveLength(1);
   });
 
+  it('never dates a file later than tomorrow, so one cannot sit first in the library for good', () => {
+    const before = Date.now();
+    const result = parse({ ...base, metadata: { id: 'doc1', title: 'From the future', createdAt: 1e15, updatedAt: 1e15 + 5 }, nodes: [], edges: [] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+    const { createdAt, updatedAt } = result.document.metadata;
+    expect(createdAt).toBeGreaterThanOrEqual(before);
+    expect(createdAt).toBeLessThanOrEqual(tomorrow);
+    expect(updatedAt).toBeGreaterThanOrEqual(createdAt);
+    expect(updatedAt).toBeLessThanOrEqual(tomorrow);
+  });
+
+  it('keeps the dates a file was given, and an edit never earlier than its making', () => {
+    const result = parse({ ...base, metadata: { id: 'doc1', title: 'Old', createdAt: 5000, updatedAt: 1000 }, nodes: [], edges: [] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.metadata).toMatchObject({ createdAt: 5000, updatedAt: 5000 });
+  });
+
   it('preserves an explicit neutral accent instead of falling back to the type default', () => {
     // Regression test: a node's accent is an explicit override of its type's
     // default colour (teal for a service, blue for a database, ...), and

@@ -372,7 +372,11 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
   const meta = isRecord(raw.metadata) ? raw.metadata : {};
   const now = Date.now();
-  const createdAt = finite(meta.createdAt, now);
+  // Not later than tomorrow: a file dated years ahead (a wrong clock, or a hand-written number) stayed
+  // first in the library for good, because every edit's fresh `updatedAt` was raised back to it below
+  // on the next load. A day's grace covers a clock that is merely a time zone out.
+  const latest = now + 24 * 60 * 60 * 1000;
+  const createdAt = clamp(finite(meta.createdAt, now), 0, latest);
 
   const rawNodes = Array.isArray(raw.nodes) ? raw.nodes : [];
   const rawEdges = Array.isArray(raw.edges) ? raw.edges : [];
@@ -1023,7 +1027,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       id: safeId(meta.id) ?? createId('d'),
       title: typeof meta.title === 'string' ? cleanTitle(meta.title) : DEFAULT_TITLE,
       createdAt,
-      updatedAt: Math.max(createdAt, finite(meta.updatedAt, now)),
+      updatedAt: clamp(finite(meta.updatedAt, now), createdAt, latest),
       ...(safeId(meta.projectId) ? { projectId: safeId(meta.projectId)! } : {}),
       ...(originOf(meta.origin) ? { origin: originOf(meta.origin)! } : {}),
     },
