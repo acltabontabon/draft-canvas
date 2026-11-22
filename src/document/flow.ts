@@ -148,7 +148,7 @@ function nodeStepsOf(steps: readonly DraftFlowStep[], edges: readonly DraftEdge[
 
 /** Whether presenting the flow would show at least one step — `flowHasMembers`, or a step that
  *  pins its own viewport (a "frame" step with nothing but a camera position still plays). Mirrors
- *  `resolveFlowStep`'s non-null rule in `presentation/useFlowPlayback.ts`. */
+ *  `resolveFlowStep`'s non-null rule in `presentation/steps.ts`. */
 export function flowIsPlayable(doc: DraftDocument, flow: DraftFlow): boolean {
   return flowHasMembers(doc, flow) || flow.steps.some((step) => step.viewport !== undefined);
 }

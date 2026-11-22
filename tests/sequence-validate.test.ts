@@ -111,6 +111,34 @@ describe('reading a sequence', () => {
     expect(heightOf(sequence.items[0]!)).toBe(LIMITS.maxSequenceDepth);
   });
 
+  it('a file nested tens of thousands deep is opened out, not followed until the stack gives out', () => {
+    // Built as text: a megabyte of brackets is what a hostile file, link or paste actually is, and
+    // `JSON.stringify` could not write an object this deep either.
+    const depth = 50_000;
+    const open = '{"t":"fragment","operator":"loop","operands":[{"items":[';
+    const text = serializeDocument(documentWith({ participants: [who('a'), who('b')], items: ['NEST'] })).replace(
+      '"NEST"',
+      `${open.repeat(depth)}{"id":"deep","t":"message","from":"a","to":"b","kind":"sync","label":"deep"}${']}]}'.repeat(depth)}`,
+    );
+    const result = parseDocument(text);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const sequence = result.document.nodes[0]!.sequence!;
+    expect(messagesOf(sequence).map((message) => message.id)).toEqual(['deep']);
+    expect(heightOf(sequence.items[0]!)).toBe(LIMITS.maxSequenceDepth);
+  });
+
+  it('what is opened out still counts toward the limit', () => {
+    const message = (index: number) => ({ id: `m${index}`, t: 'message', from: 'a', to: 'b', kind: 'sync', label: '' });
+    let items: unknown[] = Array.from({ length: LIMITS.maxSequenceItems + 25 }, (_, index) => message(index));
+    for (let depth = 0; depth < LIMITS.maxSequenceDepth + 3; depth += 1) {
+      items = [{ id: `f${depth}`, t: 'fragment', operator: 'loop', operands: [{ id: `o${depth}`, items }] }];
+    }
+    const { sequence } = normalizeSequence({ participants: [who('a'), who('b')], items });
+    expect(countItems(sequence.items)).toBe(LIMITS.maxSequenceItems);
+    expect(messagesOf(sequence).slice(0, 3).map((entry) => entry.id)).toEqual(['m0', 'm1', 'm2']);
+  });
+
   it('never keeps more than the limit, whatever it is handed', () => {
     const items = Array.from({ length: LIMITS.maxSequenceItems + 50 }, (_, index) => ({ id: `m${index}`, t: 'message', from: 'a', to: 'b', kind: 'sync', label: '' }));
     const participants = Array.from({ length: LIMITS.maxSequenceParticipants + 9 }, (_, index) => who(index === 0 ? 'a' : index === 1 ? 'b' : `p${index}`));

@@ -5,7 +5,7 @@
  * places whatever this returns, and `FlowBar` reads the same answer for its screen-reader status.
  */
 import type { Attachment, DraftEdge, DraftNode } from '../document/types';
-import type { FlowPlaybackStep } from './useFlowPlayback';
+import type { FlowPlaybackStep } from './steps';
 
 export type PresentationHostKind = 'node' | 'edge';
 

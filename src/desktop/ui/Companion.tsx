@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { Icon } from '../../ui/common/Icon';
 import { SegmentedControl } from '../../ui/common/SegmentedControl';
 import { Tooltip } from '../../ui/common/Tooltip';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { MOD_SYMBOL } from '../../lib/platform';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { walkGraphs } from '../../depth/tree';
@@ -702,7 +703,9 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   };
 
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.nativeEvent.isComposing) return;
+    // `isImeKeyEvent`, not `isComposing` alone: WebKit (the macOS window) reports the Enter that
+    // confirms a conversion with `isComposing` already false, and that Enter sent a half-written prompt.
+    if (isImeKeyEvent(event)) return;
     if (query !== null) {
       const picked = skills[skillShown];
       if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && skills.length) {
@@ -1094,7 +1097,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
       // Its own keys (see the resting one), and Escape closes it from anywhere inside, not only the composer.
       data-dc-keyboard-region=""
       onKeyDown={(event) => {
-        if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return;
+        if (event.key !== 'Escape' || event.defaultPrevented || isImeKeyEvent(event)) return;
         event.preventDefault();
         setOpen(false);
       }}

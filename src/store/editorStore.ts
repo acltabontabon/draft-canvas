@@ -1370,9 +1370,42 @@ export function roomFor(nodeCount: number, edgeCount: number, flowCount = 0): bo
   return false;
 }
 
-/** The history fields for an entry, while edits are shared: what it touched, for selective undo. */
-function sharedKeys(before: DraftDocument, after: DraftDocument): Pick<HistoryEntry, 'keys'> {
-  return isSharedEditing() ? { keys: changeKeys(before, after) } : {};
+/**
+ * The history entry for one change to the file: every place that records a step builds it here.
+ *
+ * While edits are shared it also carries what the step touched (`keys`), which selective undo
+ * depends on. That was four hand-written entries each having to remember it; an entry made here
+ * cannot leave it out.
+ */
+function recorded(
+  label: string,
+  before: DraftDocument,
+  after: DraftDocument,
+  path: readonly string[],
+  selectionBefore: Selection,
+  selectionAfter: Selection,
+  extra?: Pick<HistoryEntry, 'coalesceKey' | 'amendKey' | 'flowSessionBefore' | 'flowSessionAfter'>,
+): HistoryEntry {
+  return {
+    label,
+    before,
+    after,
+    path,
+    selectionBefore,
+    selectionAfter,
+    at: Date.now(),
+    ...extra,
+    ...(isSharedEditing() ? { keys: changeKeys(before, after) } : {}),
+  };
+}
+
+/**
+ * Whether the diagram takes no edits just now: opened read-only from a share link, or showing a
+ * flow being traced. What `apply` and the actions that write the file themselves all ask.
+ */
+function editingLocked(): boolean {
+  const ui = useUiStore.getState();
+  return Boolean(ui.readOnly || ui.flowTrace);
 }
 
 /** The selection without anything `document` no longer holds — checked by id, not by count: a remote
@@ -1491,7 +1524,7 @@ function restoreSnapshot(
   const inside = target !== touched;
   const moved = pathKey(inside ? path : ROOT_PATH) !== pathKey(state.path);
   const file = touched;
-  const view = !inside ? file : file === touched ? target : (viewOf(file, path) ?? file);
+  const view = inside ? target : file;
   const cleared = moved ? resetViewSession() : undefined;
   set((s) => ({
     history: restored.history,
@@ -1600,7 +1633,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A diagram opened from a share link is read-only (`uiStore.readOnly`): every operation funnels
     // through here or `applyToFile`, so refusing at this one gate is what keeps a shared diagram
     // exactly as it arrived, whichever key or menu asked. Camera moves don't come this way.
-    if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return;
+    if (editingLocked()) return;
     const state = get();
     const before = state.document;
     // A sequence is sized by what it holds, whichever edit changed that — typing a message, a paste,
@@ -1627,26 +1660,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // back a shape you deleted two rooms ago, and it carries the path so it can take you there.
     const fileBefore = fileOf(state);
     const fileAfter = fileOf({ ...state, document: next });
-    const keys = sharedKeys(fileBefore, fileAfter);
+    const entry = recorded(label, fileBefore, fileAfter, state.path, state.selection, selectionAfter, {
+      coalesceKey: options?.coalesceKey,
+      amendKey: options?.amendKey,
+      flowSessionBefore: options?.flowSessionBefore,
+      flowSessionAfter: options?.flowSessionAfter,
+    });
     set((s) => ({
       document: next,
       selection: selectionAfter,
       revision: s.revision + 1,
       ...focusThatSurvives(next, s),
-      history: pushEntry(s.history, {
-        label,
-        before: fileBefore,
-        after: fileAfter,
-        path: state.path,
-        selectionBefore: state.selection,
-        selectionAfter,
-        at: Date.now(),
-        coalesceKey: options?.coalesceKey,
-        amendKey: options?.amendKey,
-        flowSessionBefore: options?.flowSessionBefore,
-        flowSessionAfter: options?.flowSessionAfter,
-        ...keys,
-      }),
+      history: pushEntry(s.history, entry),
     }));
     closeStaleAttachmentDetail(next);
   },
@@ -1655,7 +1680,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A gesture in flight would otherwise absorb this change into its own undo entry — or record
     // its baseline over it. The caller refuses while `isInteracting()`; this is the last guard.
     if (interaction) return false;
-    // Same gate as `apply`: a shared, read-only diagram takes no changes.
+    // A shared, read-only diagram takes no changes. Narrower than `editingLocked()`, which `apply`
+    // asks, and on purpose: a write to the file from outside (the file changing on disk) lands
+    // during a flow trace and cancels the trace, so nothing provisional is saved over it
+    // (`e2e/explanation-journey.spec.ts`, "an external edit cancels a trace"). An agent's commit does
+    // not get this far while someone is tracing: `host/agentBridge.ts`'s `busyReason` makes it wait.
     if (useUiStore.getState().readOnly) return false;
     const state = get();
     if (expectedRevision !== undefined && state.revision !== expectedRevision) return false;
@@ -1673,7 +1702,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A file recipe can remove and add elements in one step, so equal or growing counts do not
     // mean every selected id survived (unlike the room actions selectionIn optimizes for).
     const selectionAfter = cleared ? EMPTY_SELECTION : selectionThatExists(document, state.selection);
-    const keys = sharedKeys(file, nextFile);
     set((s) => ({
       ...(cleared ?? {}),
       document,
@@ -1683,16 +1711,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: selectionAfter,
       revision: s.revision + 1,
       ...focusThatSurvives(document, s),
-      history: pushEntry(s.history, {
-        label,
-        before: file,
-        after: nextFile,
-        path: inside ? path : ROOT_PATH,
-        selectionBefore: s.selection,
-        selectionAfter,
-        at: Date.now(),
-        ...keys,
-      }),
+      history: pushEntry(s.history, recorded(label, file, nextFile, inside ? path : ROOT_PATH, s.selection, selectionAfter)),
     }));
     closeStaleAttachmentDetail(document);
     return true;
@@ -1727,6 +1746,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       history: markCrossed(s.history),
     }));
     closeStaleAttachmentDetail(document);
+    // A stroke someone else erased is no longer chosen here: left named, Delete took the "erase the
+    // chosen strokes" path for a stroke that was gone, and did nothing.
+    pruneInkSelection(document);
     return true;
   },
 
@@ -1759,18 +1781,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // standing in now would write the old room's shapes at the new room's address.
     if (!samePath(active.path, state.path)) return;
     const after = fileOf(state);
-    const keys = sharedKeys(active.file, after);
     set((s) => ({
-      history: pushEntry(s.history, {
-        label: label ?? active.label,
-        before: active.file,
-        after,
-        path: active.path,
-        selectionBefore: active.selection,
-        selectionAfter: s.selection,
-        at: Date.now(),
-        ...keys,
-      }),
+      history: pushEntry(s.history, recorded(label ?? active.label, active.file, after, active.path, active.selection, s.selection)),
     }));
   },
 
@@ -2669,7 +2681,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   async planTidy(options = {}) {
     const before = get();
-    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    if (interaction || editingLocked()) return null;
     const [{ runOffThread, cancelled }, { reuseOf }] = await Promise.all([import('../agent/offThread'), import('../agent/layoutPlan')]);
     const current = get();
     // The room, or what is selected in it, changed while the engine loaded: what was asked for is
@@ -2699,12 +2711,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   async planArrange(selection = false, options = {}) {
     const before = get();
     if (selection && before.selection.nodes.length === 0) return null;
-    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    if (interaction || editingLocked()) return null;
     const [{ runOffThread, cancelled }, { reuseOf }] = await Promise.all([import('../agent/offThread'), import('../agent/layoutPlan')]);
     const current = get();
     // As `planTidy`: what was asked about is no longer what is on screen.
     if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) return null;
-    if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    if (editingLocked()) return null;
     const done = await runLayoutJob(
       { kind: 'arrange', doc: current.document, ...(selection ? { selection: [...current.selection.nodes] } : {}), ...(options.preset ? { preset: options.preset } : {}) },
       options.signal,
@@ -3715,7 +3727,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   undo() {
     // Read-only takes undo too: a collaborator the owner made view-only undoing here would change a
     // copy the owner never hears about, and the next edit once they may edit again sends it all.
-    if (useUiStore.getState().flowTrace || useUiStore.getState().readOnly) return;
+    if (editingLocked()) return;
     const state = get();
     // Mid-gesture (a drag or resize still held), swapping the document out from under it would
     // fold the restored state into the gesture's own entry and clear the redo stack.
@@ -3737,7 +3749,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   redo() {
-    if (useUiStore.getState().flowTrace || useUiStore.getState().readOnly) return;
+    if (editingLocked()) return;
     const state = get();
     if (interaction) return;
     if (isSharedEditing() || state.history.future[0]?.crossed) return selectiveStep(set, get, 'redo');
@@ -3970,9 +3982,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
    * recorded against the room it changed, so undo takes it back where it happened.
    */
   setOuterViewLevel(depth, level) {
-    // The gates `applyToFile` keeps, since this writes the file and history itself: a gesture in
-    // flight would record its baseline over the change, and a shared or traced diagram takes none.
-    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return;
+    // Its own gates, since this writes the file and history itself: a gesture in flight would record
+    // its baseline over the change, and a shared or traced diagram takes none (as `apply` refuses).
+    if (interaction || editingLocked()) return;
     const state = get();
     if (depth < 0 || depth >= state.path.length) return;
     const file = fileOf(state);
@@ -3983,21 +3995,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const nextFile = at.length === 0 ? after : embed(file, at, after);
     const room = viewOf(nextFile, state.path);
     if (!room) return;
-    const keys = sharedKeys(file, nextFile);
     set((s) => ({
       document: room,
       outer: nextFile,
       revision: s.revision + 1,
-      history: pushEntry(s.history, {
-        label: labelForLevel(level),
-        before: file,
-        after: nextFile,
-        path: at,
-        selectionBefore: s.selection,
-        selectionAfter: s.selection,
-        at: Date.now(),
-        ...keys,
-      }),
+      history: pushEntry(s.history, recorded(labelForLevel(level), file, nextFile, at, s.selection, s.selection)),
     }));
   },
 }));
@@ -4094,11 +4096,6 @@ export function documentLoadCount(kind: 'all' | 'openings'): number {
 
 /** Whether a drag or resize is in progress — an outside edit waits rather than joining it. */
 export function isInteracting(): boolean {
-  return interaction !== null;
-}
-
-/** Whether a gesture (a drag, a resize) is holding the document: nothing may be applied until it ends. */
-export function gestureInProgress(): boolean {
   return interaction !== null;
 }
 

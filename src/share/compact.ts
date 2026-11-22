@@ -13,8 +13,27 @@ export function compactShareSnapshot(json: string): { document: DraftDocument; s
   const nodes = new Map<string, string>();
   const edges = new Map<string, string>();
   const flows = new Map<string, string>();
+  // A lifeline may still name a shape that has since been deleted (`SeqParticipant.ref` is kept even
+  // when nothing answers to it). Such a name is never handed out below: sharing an editable copy of
+  // a shared diagram starts from ids of this same form, and a deleted shape's `n_0` given to a
+  // surviving one bound the orphaned lifeline to it, so renaming either changed the other.
+  const present = new Set<string>();
+  const referred = new Set<string>();
   walkGraphs(document, (graph) => {
-    for (const node of graph.nodes) nodes.set(node.id, `n_${nodes.size.toString(36)}`);
+    for (const node of graph.nodes) {
+      present.add(node.id);
+      for (const participant of node.sequence?.participants ?? []) if (participant.ref) referred.add(participant.ref);
+    }
+  });
+  let minted = 0;
+  const nextNodeId = (): string => {
+    for (;;) {
+      const id = `n_${(minted++).toString(36)}`;
+      if (!referred.has(id) || present.has(id)) return id;
+    }
+  };
+  walkGraphs(document, (graph) => {
+    for (const node of graph.nodes) nodes.set(node.id, nextNodeId());
     for (const edge of graph.edges) edges.set(edge.id, `e_${edges.size.toString(36)}`);
     for (const flow of graph.flows) flows.set(flow.id, `f_${flows.size.toString(36)}`);
   });
@@ -25,6 +44,11 @@ export function compactShareSnapshot(json: string): { document: DraftDocument; s
     for (const node of graph.nodes) {
       node.id = remap(nodes, node.id);
       if (node.parentId) node.parentId = remap(nodes, node.parentId);
+      // A lifeline names the shape it stands for by id (`SeqParticipant.ref`). Left as it was, every
+      // such link in a shared copy pointed at nothing, and an editable copy was saved that way.
+      for (const participant of node.sequence?.participants ?? []) {
+        if (participant.ref) participant.ref = remap(nodes, participant.ref);
+      }
       for (const entry of node.attachments ?? []) entry.id = `a_${(attachment++).toString(36)}`;
     }
     for (const edge of graph.edges) {

@@ -49,8 +49,32 @@ export function pushDocUrl(id: string): void {
 export function clearDocUrl(): void {
   const id = docIdFromLocation();
   if (!id) return;
-  if (isDocState(window.history.state) && window.history.state.draftCanvasDoc === id) window.history.back();
-  else window.history.replaceState(null, '', urlFor(null));
+  if (isDocState(window.history.state) && window.history.state.draftCanvasDoc === id) {
+    ownStepsBack.push(Date.now());
+    window.history.back();
+  } else window.history.replaceState(null, '', urlFor(null));
+}
+
+/**
+ * The steps back `clearDocUrl` has asked for that have not been heard yet, by when each was asked.
+ *
+ * `history.back()` only asks: the address moves, and `popstate` fires, in a later task. By then the
+ * app may already be showing something else, and the event is indistinguishable from the person
+ * pressing Back. Taken for one, it closed the diagram just opened after going home, or reopened the
+ * one just closed. `takeOwnStepBack` lets the listener tell its own bookkeeping from a navigation.
+ */
+const ownStepsBack: number[] = [];
+/** A step back that has not been heard within this long never will be; it must not claim a later Back. */
+const OWN_STEP_BACK_MS = 2000;
+
+/**
+ * Whether the `popstate` being handled is a step back this module made itself. Call once per event:
+ * a `true` uses that step up.
+ */
+export function takeOwnStepBack(): boolean {
+  const now = Date.now();
+  while (ownStepsBack.length > 0 && now - ownStepsBack[0]! > OWN_STEP_BACK_MS) ownStepsBack.shift();
+  return ownStepsBack.shift() !== undefined;
 }
 
 /** The address named a canvas this browser doesn't have: forget it without adding an entry. */

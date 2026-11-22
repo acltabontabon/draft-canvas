@@ -13,7 +13,7 @@ import { lensNodeTier } from '../document/flow';
 import type { DraftEdge, DraftFlow, DraftNode, SeqMessage } from '../document/types';
 import { describeContext, sequenceLayoutFor } from '../nodes/describe';
 import { LIGHT } from '../render/theme/tokens';
-import type { FlowPlaybackStep } from './useFlowPlayback';
+import type { FlowPlaybackStep } from './steps';
 
 export interface StepComposition {
   /** The flow-space box the camera frames. */

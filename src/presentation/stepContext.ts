@@ -11,7 +11,7 @@ import type { DraftDocument } from '../document/types';
 import type { FlowPlaybackState } from '../store/editorStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { ancestorsOf, crossedBoundaries } from './composition';
-import { resolveFlowStep } from './useFlowPlayback';
+import { resolveFlowStep } from './steps';
 
 export interface StepContext {
   /** Changes exactly when a new transition should play: another step, stage, flow or reply phase. */

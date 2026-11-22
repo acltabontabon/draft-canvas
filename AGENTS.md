@@ -193,6 +193,10 @@ imports `document/`, `depth/` and `lib/`. `history/` imports `document/` and `de
 `render/text` and `edges/` routing helpers; `openPoints/` also imports `depth/` and `render/` types. None of these import UI, canvas or
 store modules. `agent/` may consume these and rendering/export helpers, never UI or store modules. `depth/c4.ts` shares C4 role and scope derivation with the editor and agent.
 
+`tests/layering.test.ts` holds these rules and fails on a new import cycle. A new exception is added there,
+with its reason, in the change that needs it. Pure helpers a hook module shares with a lower layer live
+in a module of their own (`presentation/steps.ts`), never in the hook's file.
+
 `www/` is a separate Vite project with its own lockfile and no shared app dependencies. Web assembly
 copies `dist/` unchanged into `dist-web/app/` (app.draftcanvas.dev) and `dist-web/legacy/editor/` (the
 old address, kept for the diagram handoff). Never set `Cross-Origin-Opener-Policy` on the app. Keep marketing code out of the editor and website
