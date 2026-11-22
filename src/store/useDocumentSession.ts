@@ -804,6 +804,7 @@ export function useDocumentSession(): DocumentSession {
   const closeDocument = useCallback(async () => {
     // A shared diagram has nothing to flush and nothing stored to prune: it simply leaves the screen.
     if (sharedRef.current) {
+      navigation.current += 1;
       leaveShared();
       editorStoreModule?.useEditorStore.getState().setDocument(createDocument());
       setOpenId(null);
@@ -848,6 +849,10 @@ export function useDocumentSession(): DocumentSession {
         logDiagnostic(error, { operation: 'remove-background-image', documentId: id });
       });
     }
+    // Going home is a navigation too, and the newest one: a diagram still being read when this was
+    // asked for (Back pressed twice quickly) must not arrive afterwards and put its canvas back up.
+    // Only once the close is certain, so a close that was refused cancels nothing.
+    navigation.current += 1;
     setOpenId(null);
     // Home is already showing; a list that can't be re-read just stays as it was.
     await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));

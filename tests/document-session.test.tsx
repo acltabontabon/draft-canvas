@@ -237,6 +237,43 @@ describe('useDocumentSession — overlapping opens', () => {
     expect(session().openId).toBe(fast.metadata.id);
   });
 
+  it('a slow open that resolves after going home does not bring its canvas up', async () => {
+    // Back pressed twice quickly: the first asks for the previous diagram, the second for home.
+    const current = createDocument('On screen');
+    const slow = createDocument('Slow A');
+    let releaseSlow: () => void = () => {};
+    const repository = stubRepository({
+      load: async (id) => {
+        if (id === slow.metadata.id) {
+          await new Promise<void>((resolve) => (releaseSlow = resolve));
+          return slow;
+        }
+        return id === current.metadata.id ? current : null;
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(current.metadata.id);
+    });
+
+    let openingSlow!: Promise<void>;
+    await act(async () => {
+      openingSlow = session().openDocument(slow.metadata.id);
+      // Let the open reach its read, so the close below is the later of the two.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(await session().closeDocument()).toBe(true);
+    });
+    expect(session().openId).toBeNull();
+    await act(async () => {
+      releaseSlow();
+      await openingSlow;
+    });
+
+    expect(session().openId).toBeNull();
+    expect(useEditorStore.getState().document.metadata.id).not.toBe(slow.metadata.id);
+  });
+
   it('keeps a reload stash over a rename made elsewhere, and opens it unsaved when writing it fails', async () => {
     const original = createDocument('Draft');
     const edited: DraftDocument = { ...original, metadata: { ...original.metadata, title: 'Draft edited', updatedAt: 1_000 } };
