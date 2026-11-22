@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { requestPersistentStorage } from '../lib/storagePersistence';
-import { parseDocument } from '../document/validate';
+import { isPlausibleDate, parseDocument } from '../document/validate';
 import { decryptDocument } from '../crypto/documentCipher';
 import { getMasterKey } from '../crypto/keyStore';
 import { isEncryptedBody, isLegacyBody, isPlainBody, type LegacyBody } from '../crypto/bodyShapes';
@@ -254,7 +254,11 @@ export class IndexedDbRepository implements DraftRepository {
     if (!read) return null;
     this.stamps.set(id, summary?.contentStamp);
     const { document, priorVersion } = read;
-    if (isLegacyBody(read.row) || priorVersion !== document.version) {
+    // A row dated years ahead sorts first in the library for good, and only a write moves it: the
+    // listing reads the stored summary, never the copy a load corrects. One of the few repairs worth
+    // writing back on an open that changes nothing else.
+    const misdated = summary !== undefined && !(isPlausibleDate(summary.updatedAt) && isPlausibleDate(summary.createdAt));
+    if (isLegacyBody(read.row) || priorVersion !== document.version || misdated) {
       // Best-effort: the caller still gets the correctly migrated in-memory
       // document either way, and the next real edit persists it through the
       // ordinary `save()` path — a failure here only loses the "derive once"

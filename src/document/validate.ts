@@ -348,6 +348,11 @@ export function parseDocument(input: unknown): NormalizeResult {
   return normalizeDocument(migrated, repairs);
 }
 
+/** Whether `at` can be when something was made or edited: not later than a day from `now`. */
+export function isPlausibleDate(at: number, now = Date.now()): boolean {
+  return at <= now + 24 * 60 * 60 * 1000;
+}
+
 /**
  * Repairs and reshapes a raw value into a valid `DraftDocument` — does NOT
  * run schema migrations (see `migrateToCurrent` / `parseDocument`). Calling
@@ -372,11 +377,17 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
   const meta = isRecord(raw.metadata) ? raw.metadata : {};
   const now = Date.now();
-  // Not later than tomorrow: a file dated years ahead (a wrong clock, or a hand-written number) stayed
-  // first in the library for good, because every edit's fresh `updatedAt` was raised back to it below
-  // on the next load. A day's grace covers a clock that is merely a time zone out.
-  const latest = now + 24 * 60 * 60 * 1000;
-  const createdAt = clamp(finite(meta.createdAt, now), 0, latest);
+  // A date later than tomorrow is not one: a file dated years ahead (a wrong clock, or a hand-written
+  // number) stayed first in the library for good, because every edit's fresh `updatedAt` was raised
+  // back to it below on the next load. Such a date becomes now, not "tomorrow": a limit that moves
+  // with the clock would keep the file first on every load just the same. A day's grace covers a
+  // clock that is merely a time zone out. `storage/IndexedDbRepository.ts` writes the corrected
+  // dates back when it opens a row stored with one (`hasImplausibleDate`).
+  const dated = (value: unknown): number => {
+    const at = finite(value, now);
+    return isPlausibleDate(at, now) ? Math.max(0, at) : now;
+  };
+  const createdAt = dated(meta.createdAt);
 
   const rawNodes = Array.isArray(raw.nodes) ? raw.nodes : [];
   const rawEdges = Array.isArray(raw.edges) ? raw.edges : [];
@@ -1027,7 +1038,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       id: safeId(meta.id) ?? createId('d'),
       title: typeof meta.title === 'string' ? cleanTitle(meta.title) : DEFAULT_TITLE,
       createdAt,
-      updatedAt: clamp(finite(meta.updatedAt, now), createdAt, latest),
+      updatedAt: Math.max(createdAt, dated(meta.updatedAt)),
       ...(safeId(meta.projectId) ? { projectId: safeId(meta.projectId)! } : {}),
       ...(originOf(meta.origin) ? { origin: originOf(meta.origin)! } : {}),
     },

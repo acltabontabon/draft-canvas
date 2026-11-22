@@ -138,6 +138,41 @@ describe('local persistence', () => {
     expect(list[0]).not.toHaveProperty('nodes');
   });
 
+  it('a diagram already stored with a date years ahead stops being first once it has been opened', async () => {
+    const repository = await IndexedDbRepository.open();
+    const future = { ...documentWith('From the future'), metadata: { ...documentWith('From the future').metadata, createdAt: 1e15, updatedAt: 1e15 } };
+    await repository.save(future);
+    expect((await repository.list())[0]!.updatedAt).toBe(1e15);
+
+    // Opened and nothing edited: the stored dates are put right all the same, because the library
+    // sorts by what is stored.
+    const before = Date.now();
+    const opened = await repository.load(future.metadata.id);
+    expect(opened!.metadata.updatedAt).toBeLessThanOrEqual(Date.now());
+    const stored = (await repository.list())[0]!;
+    expect(stored.updatedAt).toBeGreaterThanOrEqual(before);
+    expect(stored.updatedAt).toBeLessThanOrEqual(Date.now());
+    expect(stored.createdAt).toBeLessThanOrEqual(Date.now());
+
+    // Anything edited later now sorts above it, today and on every later day.
+    const later = { ...documentWith('Edited after'), metadata: { ...documentWith('Edited after').metadata, updatedAt: Date.now() + 1000 } };
+    await repository.save(later);
+    expect((await repository.list()).map((entry) => entry.title)).toEqual(['Edited after', 'From the future']);
+    // And a second open leaves it where it is.
+    await repository.load(future.metadata.id);
+    expect((await repository.list()).map((entry) => entry.title)).toEqual(['Edited after', 'From the future']);
+  });
+
+  it('opening a diagram with ordinary dates writes nothing', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = { ...documentWith('Ordinary'), metadata: { ...documentWith('Ordinary').metadata, createdAt: 1000, updatedAt: 2000 } };
+    await repository.save(doc);
+    const put = vi.spyOn(IDBObjectStore.prototype, 'put');
+    await repository.load(doc.metadata.id);
+    expect(put).not.toHaveBeenCalled();
+    put.mockRestore();
+  });
+
   it('deletes a document and its contents together', async () => {
     const repository = await IndexedDbRepository.open();
     const doc = documentWith('Temporary');
