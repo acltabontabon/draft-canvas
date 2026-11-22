@@ -94,6 +94,21 @@ function LazyShortcutSheet() {
 }
 
 /**
+ * What a panel mounted beside the screens does when its chunk, or its own render, fails: says so and
+ * stays out of the way. These three sat outside every boundary, so one that could not be fetched (an
+ * invite link opened in a tab a deploy had left behind) took the whole app down to a blank page.
+ */
+function panelFailed(operation: string, chunk: { reset: () => void }, message: string, close?: () => void) {
+  return (error: Error, componentStack: string) => {
+    logDiagnostic(error, { operation }, componentStack);
+    chunk.reset();
+    close?.();
+    const notice = loadFailureNotice(error, message);
+    useUiStore.getState().notify(notice.message, 'error', notice.action);
+  };
+}
+
+/**
  * There is no router.
  *
  * The library and the editor are two states of one screen, which keeps the app
@@ -187,11 +202,19 @@ function Shell() {
         </p>
       )}
       {joinInvite !== null && (
-        <Suspense fallback={null}>
-          {/* Keyed by the invite: a second link opened over the dialog starts a dialog of its own, and the
-              first one's attempt is cancelled as it unmounts — not finished under the second's name. */}
-          <JoinChunk.Component key={joinInvite} session={session} invite={joinInvite} />
-        </Suspense>
+        // Keyed by the invite: a second link opened over the dialog starts a dialog of its own, and the
+        // first one's attempt is cancelled as it unmounts — not finished under the second's name. The
+        // boundary is keyed with it, so a link that failed once is tried afresh when opened again.
+        <PanelBoundary
+          key={joinInvite}
+          onError={panelFailed('join-panel', JoinChunk, 'The invitation couldn’t open. Check your connection and open the link again.', () =>
+            useUiStore.getState().setJoinInvite(null),
+          )}
+        >
+          <Suspense fallback={null}>
+            <JoinChunk.Component session={session} invite={joinInvite} />
+          </Suspense>
+        </PanelBoundary>
       )}
       <Toasts />
       <LiveAnnouncer />
@@ -199,14 +222,18 @@ function Shell() {
       <LazyShortcutSheet />
       {!__DESKTOP__ && <DiagnosticsDialog />}
       {DesktopSettingsChunk && hostKind() === 'desktop' && (
-        <Suspense fallback={null}>
-          <DesktopSettingsChunk.Component />
-        </Suspense>
+        <PanelBoundary onError={panelFailed('desktop-settings-panel', DesktopSettingsChunk, 'Settings couldn’t open. Restart Draft Canvas and try again.')}>
+          <Suspense fallback={null}>
+            <DesktopSettingsChunk.Component />
+          </Suspense>
+        </PanelBoundary>
       )}
       {AgentActivityChunk && hostKind() === 'desktop' && (
-        <Suspense fallback={null}>
-          <AgentActivityChunk.Component />
-        </Suspense>
+        <PanelBoundary onError={panelFailed('agent-activity-panel', AgentActivityChunk, 'Agent activity can’t be shown. Restart Draft Canvas to see it again.')}>
+          <Suspense fallback={null}>
+            <AgentActivityChunk.Component />
+          </Suspense>
+        </PanelBoundary>
       )}
     </>
   );
