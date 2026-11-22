@@ -884,4 +884,23 @@ describe('importing what is inside a shape', () => {
     if (!result.ok) return;
     expect(result.repairs.join(' ')).toContain('What was inside a shape had 2 nodes; kept the first 1.');
   });
+
+  it('a variant of a flow whose id is used twice belongs to the first of them, the one that keeps the id', () => {
+    const result = parse({
+      ...base,
+      nodes: [],
+      edges: [],
+      flows: [
+        { id: 'f1', title: 'Checkout', steps: [] },
+        { id: 'f1', title: 'A second flow under the same id', steps: [] },
+        { id: 'f2', title: 'Checkout, card declined', variantOf: 'f1', steps: [] },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [checkout, twin, variant] = result.document.flows;
+    expect(checkout!.id).toBe('f1');
+    expect(twin!.id).not.toBe('f1');
+    expect(variant!.variantOf).toBe('f1');
+  });
 });

@@ -817,7 +817,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       renamedFlows += 1;
     }
     seenFlowIds.add(id);
-    if (rawId) flowIdRemap.set(rawId, id);
+    // First claimant keeps the name, as for shapes and connectors: of two flows with one id the
+    // first keeps it, so that is the one another flow's `variantOf` means.
+    if (rawId && !flowIdRemap.has(rawId)) flowIdRemap.set(rawId, id);
     if (typeof candidateFlow.variantOf === 'string') pendingVariantOf.set(id, candidateFlow.variantOf);
     const title = text(candidateFlow.title, LIMITS.maxFlowTitleLength)?.trim() || 'Untitled flow';
     // Same discipline as a node/edge's own accent: absent or unrecognised
