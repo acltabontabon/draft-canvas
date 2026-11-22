@@ -1,10 +1,10 @@
-import { messageOfStep, playbackFlowOf } from '../document/sequenceFlow';
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useReactFlow, useStore, useStoreApi } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import { flowIsPlayable } from '../document/flow';
 import { boundsOf, type Bounds } from '../document/operations';
-import type { DraftEdge, DraftFlowStep, DraftFlow, DraftNode, DraftViewport, SeqMessage } from '../document/types';
+import type { DraftEdge, DraftFlow, DraftNode, DraftViewport } from '../document/types';
 import { flattenPath } from '../edges/routing';
 import { clamp } from '../lib/math';
 import { nodeIndex } from '../store/selectors';
@@ -15,82 +15,10 @@ import { captionCornerFor, composeStep, frameManualStep, frameOverview, frameSte
 import { RESPONSE_PHASE_DELAY_MS } from './responsePhase';
 import { motionMs } from '../lib/motion';
 
-export interface FlowPlaybackStep {
-  /** The step's primary connector, when it has one — absent for a "frame" step. */
-  edge?: DraftEdge;
-  /** Every connector this step highlights: the primary one (if any) followed by `extraEdgeIds`. */
-  edges: DraftEdge[];
-  /** Nodes this step spotlights beyond its edges' own endpoints. */
-  extraNodes: DraftNode[];
-  index: number;
-  step: number;
-  caption?: string;
-  /** An explicit viewport this step shows verbatim — `focusOn` skips auto-fit when present. */
-  viewport?: DraftViewport;
-  /**
-   * The message this step is about, when the flow is a sequence telling itself
-   * (`document/sequenceFlow.ts`): the step lights that one message inside the sequence, not the
-   * sequence as a whole.
-   */
-  part?: { nodeId: string; message: SeqMessage };
-}
+import { resolveFlowStep, resolveFlowSteps, type FlowPlaybackStep } from './steps';
 
-/**
- * Resolves one flow step's dangling-safe references into the concrete
- * edges/nodes it lights up. Shared by the `steps` memo and `pickFlow`, which
- * needs to resolve a step before the memo (driven by store state one render
- * behind) has caught up. Exported for unit testing — pure, no React Flow
- * dependency.
- */
-export function resolveFlowStep(
-  stepEntry: DraftFlowStep,
-  index: number,
-  step: number,
-  edgesById: Map<string, DraftEdge>,
-  nodesById: Map<string, DraftNode>,
-): FlowPlaybackStep | null {
-  const edge = stepEntry.edgeId ? edgesById.get(stepEntry.edgeId) : undefined;
-  const extraEdges = (stepEntry.extraEdgeIds ?? [])
-    .map((id) => edgesById.get(id))
-    .filter((e): e is DraftEdge => Boolean(e));
-  const edges = edge ? [edge, ...extraEdges] : extraEdges;
-  const extraNodes = (stepEntry.extraNodeIds ?? [])
-    .map((id) => nodesById.get(id))
-    .filter((n): n is DraftNode => Boolean(n));
-  if (edges.length === 0 && extraNodes.length === 0 && !stepEntry.viewport) return null;
-  // A sequence's own step is named after its message, and shows nothing but that sequence.
-  const host = edges.length === 0 && extraNodes.length === 1 ? extraNodes[0] : undefined;
-  const message = messageOfStep(host, stepEntry.id);
-  return {
-    edge,
-    edges,
-    extraNodes,
-    index,
-    step,
-    caption: stepEntry.caption,
-    viewport: stepEntry.viewport,
-    ...(host && message ? { part: { nodeId: host.id, message } } : {}),
-  };
-}
-
-/**
- * A flow's playable steps, numbered 1..n after dangling steps drop out — what `flowPlayback.step`
- * indexes into. Shared by the hook and Presentation Mode's callout layer, which must agree on it.
- */
-export function resolveFlowSteps(
-  flow: DraftFlow,
-  edges: readonly DraftEdge[],
-  nodes: readonly DraftNode[],
-): FlowPlaybackStep[] {
-  const edgesById = new Map(edges.map((e) => [e.id, e]));
-  const nodesById = new Map(nodes.map((n) => [n.id, n]));
-  const result: FlowPlaybackStep[] = [];
-  flow.steps.forEach((stepEntry, index) => {
-    const resolved = resolveFlowStep(stepEntry, index, result.length + 1, edgesById, nodesById);
-    if (resolved) result.push(resolved);
-  });
-  return result;
-}
+// Re-exported for the editor's own callers: the resolver itself lives in `steps.ts`, free of React.
+export { resolveFlowStep, resolveFlowSteps, type FlowPlaybackStep };
 
 /** Where the presentation is in its telling of a flow — see `FlowPlaybackState.stage`. */
 export type PlaybackStage = 'opening' | 'step' | 'closing';

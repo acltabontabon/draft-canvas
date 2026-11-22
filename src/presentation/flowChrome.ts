@@ -7,7 +7,7 @@ import { categoryOf } from '../document/connectorSemantics';
 import { effectiveConnectorText } from '../document/edgeSemantics';
 import { displayNameFor } from '../document/factory';
 import type { DraftFlow, DraftNode } from '../document/types';
-import type { FlowPlaybackStep } from './useFlowPlayback';
+import type { FlowPlaybackStep } from './steps';
 
 /** The shapes a flow passes through, in the order its connectors first reach them. */
 export function routeOf(steps: readonly FlowPlaybackStep[], nodes: ReadonlyMap<string, DraftNode>): string[] {
