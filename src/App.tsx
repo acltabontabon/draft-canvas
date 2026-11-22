@@ -56,14 +56,9 @@ function LazyAboutDialog() {
   if (!open) return null;
   return (
     <PanelBoundary
-      onError={(error, componentStack) => {
-        logDiagnostic(error, { operation: 'about-panel' }, componentStack);
-        AboutChunk.reset();
-        const ui = useUiStore.getState();
-        ui.setAboutOpen(false);
-        const notice = loadFailureNotice(error, 'About couldn’t open. Check your connection and try again.');
-        ui.notify(notice.message, 'error', notice.action);
-      }}
+      onError={panelFailed('about-panel', AboutChunk, 'About couldn’t open. Check your connection and try again.', () =>
+        useUiStore.getState().setAboutOpen(false),
+      )}
     >
       <Suspense fallback={null}>
         <AboutChunk.Component />
@@ -77,14 +72,9 @@ function LazyShortcutSheet() {
   if (!open) return null;
   return (
     <PanelBoundary
-      onError={(error, componentStack) => {
-        logDiagnostic(error, { operation: 'shortcuts-panel' }, componentStack);
-        ShortcutsChunk.reset();
-        const ui = useUiStore.getState();
-        ui.setShortcutsOpen(false);
-        const notice = loadFailureNotice(error, 'Keyboard shortcuts couldn’t open. Check your connection and try again.');
-        ui.notify(notice.message, 'error', notice.action);
-      }}
+      onError={panelFailed('shortcuts-panel', ShortcutsChunk, 'Keyboard shortcuts couldn’t open. Check your connection and try again.', () =>
+        useUiStore.getState().setShortcutsOpen(false),
+      )}
     >
       <Suspense fallback={null}>
         <ShortcutsChunk.Component />
@@ -94,9 +84,10 @@ function LazyShortcutSheet() {
 }
 
 /**
- * What a panel mounted beside the screens does when its chunk, or its own render, fails: says so and
- * stays out of the way. These three sat outside every boundary, so one that could not be fetched (an
- * invite link opened in a tab a deploy had left behind) took the whole app down to a blank page.
+ * What a panel mounted beside the screens does when its chunk, or its own render, fails: says so,
+ * closes, and stays out of the way. The invite, Settings and agent-activity panels once sat outside
+ * every boundary, so one that could not be fetched (an invite link opened in a tab a deploy had left
+ * behind) took the whole app down to a blank page.
  */
 function panelFailed(operation: string, chunk: { reset: () => void }, message: string, close?: () => void) {
   return (error: Error, componentStack: string) => {
