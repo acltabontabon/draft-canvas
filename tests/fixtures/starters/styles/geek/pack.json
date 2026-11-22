@@ -1,7 +1,7 @@
 {
   "id": "geek",
   "name": "Geek",
-  "summary": "A green-screen terminal: floppy disks, CRTs, chips and paper tape",
+  "summary": "A retro computing lab in phosphor green: every shape its own piece of pixel hardware",
   "author": "Draft Canvas",
   "licence": "Apache-2.0",
   "order": 20
