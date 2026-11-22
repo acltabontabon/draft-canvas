@@ -7,7 +7,7 @@ import { LIMITS } from '../document/limits';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { adoptEmbeddedBackground } from '../export/background';
 import { hostKind } from '../host/hostInfo';
-import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl } from '../lib/documentUrl';
+import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl, takeOwnStepBack } from '../lib/documentUrl';
 import { clearShareFragment, decodeShareLink, sharePayloadFromHash, shareLinkIsProtected } from '../share';
 import { holdOpen, openAnywhere } from '../storage/openPresence';
 import { discardReloadStash, stashForReload, takeReloadStash } from '../storage/reloadStash';
@@ -935,6 +935,16 @@ export function useDocumentSession(): DocumentSession {
   useEffect(() => {
     if (!urlRouting) return;
     const onPopState = () => {
+      // The app's own step back after a close (`clearDocUrl`), heard a task later: bookkeeping, not
+      // somebody pressing Back. It is never followed. If something was opened in the meantime, the
+      // address has just moved off it, so it is put back to naming what is on screen. Followed as a
+      // navigation, this closed a diagram opened straight after going home, or reopened the one
+      // just closed, and it could cancel a navigation that was still under way.
+      if (takeOwnStepBack()) {
+        const showing = openIdRef.current;
+        if (showing && !sharedRef.current) pushDocUrl(showing);
+        return;
+      }
       // A share link pasted into the address bar of a tab already on the app is a same-document
       // navigation: no reload, so the arrival effect above never sees it — this does.
       if (sharePayloadFromHash(window.location.hash) !== null) {
@@ -944,10 +954,14 @@ export function useDocumentSession(): DocumentSession {
       const id = docIdFromLocation();
       const open = openIdRef.current;
       if (id === open) {
-        // The address names what is on screen again, and that is the newest thing asked for. Without
-        // a number of its own, Back then Forward while the last save was still being written left the
-        // close from Back running, and the canvas the address had just returned to was closed.
-        navigation.current += 1;
+        // The address names the canvas on screen again, and that is the newest thing asked for.
+        // Without a number of its own, Back then Forward while the last save was still being written
+        // left the close from Back running, and the canvas the address had just returned to was closed.
+        //
+        // Only for a canvas: "Home, and Home is showing" asks for nothing, and counting it would
+        // cancel whatever is on its way (an example `replaceWithNew` is about to make, a diagram
+        // being opened).
+        if (id !== null) navigation.current += 1;
         return;
       }
       if (id) {
