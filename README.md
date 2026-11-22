@@ -1,8 +1,9 @@
 <h1 align="center"><img src="www/public/favicon.svg" width="40" height="40" alt="" align="absmiddle">&nbsp;Draft Canvas</h1>
 
 <p align="center">
-Draw how your software works, follow a request through it, and see what breaks.<br>
-Your diagrams stay on your device.
+A simple diagramming tool built for developers to explain how a system works.<br>
+Tech-aware shapes, C4 views, sequence diagrams, flows you can present, live collaboration and AI agents.<br>
+Free, open source, and your diagrams stay on your device.
 </p>
 
 <img width="100%" alt="Draft Canvas in action: sketch an architecture, present a request flow, explore inside a service, and share the diagram." src="docs/media/demo.gif">
