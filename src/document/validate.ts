@@ -994,7 +994,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       if (seenPointIds.has(id)) id = createId(OPEN_POINT_ID_PREFIX);
       seenPointIds.add(id);
 
-      const point: OpenPoint = { id, kind, targets: normalizeTargets(targets) };
+      // Every readable target for now: the cap waits until the ones that lead nowhere are gone (below).
+      const point: OpenPoint = { id, kind, targets };
       const context = text(candidate.context, LIMITS.maxOpenPointContextLength);
       const normalizedContext = context === undefined ? '' : normalizeOpenPointText(context);
       if (normalizedContext) point.context = normalizedContext;
@@ -1075,13 +1076,15 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     let orphanedPoints = 0;
     const survivingPoints: OpenPoint[] = [];
     for (const point of document.openPoints) {
-      const kept = point.targets.filter((target) => (target.kind === 'node' ? ctx.nodeIds : ctx.edgeIds).has(target.id));
-      strandedTargets += point.targets.length - kept.length;
-      if (kept.length === 0) {
+      const live = point.targets.filter((target) => (target.kind === 'node' ? ctx.nodeIds : ctx.edgeIds).has(target.id));
+      strandedTargets += point.targets.length - live.length;
+      if (live.length === 0) {
         orphanedPoints += 1;
         continue;
       }
-      if (kept.length !== point.targets.length) point.targets = kept;
+      // Capped after the dangling ones are out, not before: a point whose first forty attachments had
+      // all gone lost the one that was still there, and the point with it.
+      point.targets = normalizeTargets(live);
       survivingPoints.push(point);
     }
     if (survivingPoints.length !== document.openPoints.length) document.openPoints = survivingPoints;
