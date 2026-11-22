@@ -201,7 +201,6 @@ function cycles(): string[][] {
 const KNOWN_CYCLES: string[][] = [
   // Arrange, place and compile call each other by design: a layout is compiled, placed and judged in turns.
   ['arrange', 'compile', 'input', 'place', 'placeExplicit', 'proportion', 'quality', 'starter'].map((name) => `src/agent/${name}.ts`),
-  ['src/edges/attachmentChips.ts', 'src/nodes/attachmentLook.ts', 'src/nodes/describe.ts', 'src/nodes/sequence.ts', 'src/sequence/layout.ts'],
   ['src/commands/depthNavigation.ts', 'src/commands/search.ts'],
 ];
 

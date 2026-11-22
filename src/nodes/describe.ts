@@ -5,7 +5,6 @@ import type {
   ComponentKind,
   DatabaseKind,
   DraftNode,
-  NoteKind,
   QueueKind,
   ServiceKind,
   TextAlign,
@@ -30,6 +29,7 @@ import { getMeasurer, type TextMeasurer } from '../render/text/measure';
 import type { PersonalityPreset } from '../theme/usePersonality';
 import { clamp } from '../lib/math';
 import { nodeTechnologyIcon, technologyIconSnapshot, technologyMarkBounds, TECHNOLOGY_MARK_SIZE, type TechnologyIconSnapshot } from './technology';
+import { NOTE_ACCENTS, NOTE_LABELS } from './noteKinds';
 import { describeSequence, naturalSequenceSize, sequenceFrame, sequenceLayoutOf, type SequenceKit } from './sequence';
 import type { SequenceLayout } from '../sequence/layout';
 
@@ -71,22 +71,8 @@ const NOTE_PADDING_BOTTOM = 8;
  */
 export const NOTE_AUTO_MAX_HEIGHT = 320;
 
-/** Notes are colour-coded by intent — the whole point of having four kinds. Exported so an edge
- *  attachment (`AttachmentChipRow` in `AttachmentPresentation.tsx`) can match a note's own look exactly
- *  rather than duplicating this table. */
-export const NOTE_ACCENTS: Record<NoteKind, 'amber' | 'blue' | 'rose' | 'green'> = {
-  note: 'amber',
-  question: 'blue',
-  warning: 'rose',
-  decision: 'green',
-};
-
-export const NOTE_LABELS: Record<NoteKind, string> = {
-  note: 'NOTE',
-  question: 'QUESTION',
-  warning: 'WARNING',
-  decision: 'DECISION',
-};
+// A note's colour and tag by kind live in `noteKinds.ts`; re-exported here for this file's callers.
+export { NOTE_ACCENTS, NOTE_LABELS };
 
 /**
  * How each boundary kind says what it is — through its outline, its header and a small marker,
