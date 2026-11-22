@@ -811,7 +811,14 @@ export function useDocumentSession(): DocumentSession {
       await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
       return true;
     }
+    // Going home is a navigation too, numbered when it is asked for like every open: a diagram still
+    // being read (Back pressed twice quickly) gives way to it and must not put its canvas back up
+    // afterwards, and an open asked for while this is still saving is the newer of the two and wins.
+    // Numbered only after the awaits, as it first was, this close cancelled that newer open.
+    const request = (navigation.current += 1);
     const saved = (await autosave.current?.flush()) ?? true;
+    // Superseded: the newer navigation owns the screen now, and says so itself if it cannot leave.
+    if (request !== navigation.current) return true;
     if (!saved) {
       // Leaving now would drop the only copy of the unsaved edits — the editor
       // still holds them, so stay there where Export can rescue them. A pending
@@ -831,6 +838,7 @@ export function useDocumentSession(): DocumentSession {
     // tab has the canvas open (`openPresence.ts`), nor when the browser can't say: that tab's undo
     // history may name an image this one replaced, and pruning left its undo pointing at nothing.
     const editor = await loadEditorStore();
+    if (request !== navigation.current) return true;
     const closing = editor.useEditorStore.getState().document;
     // A host's file has no other tab, and its in-memory copy is never autosaved: the file on screen
     // names the background to keep.
@@ -849,10 +857,6 @@ export function useDocumentSession(): DocumentSession {
         logDiagnostic(error, { operation: 'remove-background-image', documentId: id });
       });
     }
-    // Going home is a navigation too, and the newest one: a diagram still being read when this was
-    // asked for (Back pressed twice quickly) must not arrive afterwards and put its canvas back up.
-    // Only once the close is certain, so a close that was refused cancels nothing.
-    navigation.current += 1;
     setOpenId(null);
     // Home is already showing; a list that can't be re-read just stays as it was.
     await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));

@@ -274,6 +274,44 @@ describe('useDocumentSession — overlapping opens', () => {
     expect(useEditorStore.getState().document.metadata.id).not.toBe(slow.metadata.id);
   });
 
+  it('an open asked for while going home is still saving is the one that happens', async () => {
+    // The other order: Home first, its last save still being written, then another diagram.
+    const current = createDocument('On screen');
+    const next = createDocument('Asked for next');
+    let releaseSave: () => void = () => {};
+    let holdSaves = false;
+    const repository = stubRepository({
+      load: async (id) => (id === current.metadata.id ? structuredClone(current) : id === next.metadata.id ? next : null),
+      save: async () => {
+        if (holdSaves) await new Promise<void>((resolve) => (releaseSave = resolve));
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(current.metadata.id);
+    });
+    // An unsaved edit, so going home has something to write first.
+    act(() => useEditorStore.getState().rename('On screen, edited'));
+    holdSaves = true;
+
+    let closing!: Promise<boolean>;
+    let opening!: Promise<void>;
+    await act(async () => {
+      closing = session().closeDocument();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      opening = session().openDocument(next.metadata.id);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      holdSaves = false;
+      releaseSave();
+      await closing;
+      await opening;
+    });
+
+    expect(session().openId).toBe(next.metadata.id);
+    expect(useEditorStore.getState().document.metadata.id).toBe(next.metadata.id);
+  });
+
   it('keeps a reload stash over a rename made elsewhere, and opens it unsaved when writing it fails', async () => {
     const original = createDocument('Draft');
     const edited: DraftDocument = { ...original, metadata: { ...original.metadata, title: 'Draft edited', updatedAt: 1_000 } };
