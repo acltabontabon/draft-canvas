@@ -1,5 +1,6 @@
 import { openGallery, openStarter } from './library';
 import { createReaderExample } from './reader-example';
+import { clickEdge } from './canvas';
 import { storeWithFlows } from './fixtures/outage';
 
 // The guides picture the starters people get today, not the set pinned for the test journeys (`gallery.ts`).
@@ -401,14 +402,14 @@ async function outageScreenshots(page: Page) {
   await shot(page, 'outage-fix');
   await takeDown('checkout');
   await shot(page, 'outage-instances');
-  await page.locator('.react-flow__edge[data-id="orders-fulfilment"]').click({ force: true });
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="orders-fulfilment"] .dc-edge-line').first());
   await settled();
   await page.mouse.move(720, 120);
   await shot(page, 'outage-connector');
   await takeDown('cache');
   await page.locator('button.dc-outage-note', { hasText: 'every read falls to' }).click();
   await shot(page, 'outage-cache');
-  await page.locator('.react-flow__edge[data-id="checkout-orders"]').click({ force: true });
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="checkout-orders"] .dc-edge-line').first());
   await settled();
   await page.locator('button.dc-outage-note', { hasText: "can't publish" }).click();
   await shot(page, 'outage-half-done');

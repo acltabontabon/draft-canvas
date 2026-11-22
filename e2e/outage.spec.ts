@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
+import { clickEdge } from './canvas';
 import { notesOnlyDocument, storeDocument, storeWithFlows, type OutageDocument } from './fixtures/outage';
 
 async function importDocument(page: Page, document: OutageDocument, fileName: string) {
@@ -13,6 +14,12 @@ async function importDocument(page: Page, document: OutageDocument, fileName: st
 const shape = (page: Page, id: string) => page.locator(`.react-flow__node[data-id="${id}"] .dc-node`);
 const headline = (page: Page) => page.locator('.dc-outage-headline');
 const note = (page: Page, text: string | RegExp) => page.locator('button.dc-outage-note', { hasText: text });
+
+/** Clicks a connector on its own line. Opening the walk moves the camera to sit beside the list,
+ *  and `clickEdge` waits for it to rest: a click aimed while it eases lands where the line was. */
+async function cut(page: Page, id: string) {
+  await clickEdge(page, page.locator(`.react-flow__edge[data-id="${id}"] .dc-edge-line`).first());
+}
 
 async function takeDown(page: Page, id: string) {
   await shape(page, id).click();
@@ -95,7 +102,7 @@ test.describe('Outage walk', () => {
   test('takes a connector down by clicking it, with both of its ends left up', async ({ page }) => {
     await importDocument(page, storeWithFlows(), 'store.draftcanvas');
     await page.locator('.dc-status-outage').click();
-    await page.locator('.react-flow__edge[data-id="orders-fulfilment"]').click({ force: true });
+    await cut(page, 'orders-fulfilment');
 
     await expect(headline(page)).toContainText("Order events can't reach Fulfilment.");
     await expect(page.locator('.dc-edge[data-outage="cut"] .dc-outage-cut')).toHaveCount(1);
@@ -112,7 +119,7 @@ test.describe('Outage walk', () => {
   test('says a write and a message have come apart when the publish between them fails', async ({ page }) => {
     await importDocument(page, storeWithFlows(), 'store.draftcanvas');
     await page.locator('.dc-status-outage').click();
-    await page.locator('.react-flow__edge[data-id="checkout-orders"]').click({ force: true });
+    await cut(page, 'checkout-orders');
 
     await expect(headline(page)).toContainText("Checkout can't reach Order events.");
     await note(page, "can't publish").click();
