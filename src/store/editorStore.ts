@@ -1727,6 +1727,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       history: markCrossed(s.history),
     }));
     closeStaleAttachmentDetail(document);
+    // A stroke someone else erased is no longer chosen here: left named, Delete took the "erase the
+    // chosen strokes" path for a stroke that was gone, and did nothing.
+    pruneInkSelection(document);
     return true;
   },
 
