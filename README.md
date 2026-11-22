@@ -1,17 +1,9 @@
-<div align="center">
+<h1 align="center"><img src="www/public/favicon.svg" width="40" height="40" alt="" align="absmiddle">&nbsp;Draft Canvas</h1>
 
-<img src="www/public/favicon.svg" width="64" height="64" alt="">
-
-# Draft Canvas
-
-Draft Canvas is a local-first architecture canvas for developers. Spend more time explaining how
-software works and less time making diagrams accurate and tidy. Map systems, trace request flows,
-and decide what to build next—with your team.
-
-**Your architecture. Your decisions.** Your diagrams stay on your device, and every proposed change
-is yours to review.
-
-</div>
+<p align="center">
+Draw how your software works, follow a request through it, and see what breaks.<br>
+Your diagrams stay on your device.
+</p>
 
 <img width="100%" alt="Draft Canvas in action: sketch an architecture, present a request flow, explore inside a service, and share the diagram." src="docs/media/demo.gif">
 
