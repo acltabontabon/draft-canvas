@@ -32,13 +32,18 @@ export function RenameFileDialog({
     input.select();
   }, []);
 
+  // A ref beside `busy`, as in `ExportDialog`: `busy` only lands on the next render, so a second
+  // Enter in the same moment ran the rename again, on a file the first had already moved.
+  const running = useRef(false);
+
   const submit = async () => {
-    if (busy) return;
+    if (running.current) return;
     const stem = value.trim();
     if (!stem) {
       setError('Type a name for the file.');
       return;
     }
+    running.current = true;
     setBusy(true);
     setError(null);
     try {
@@ -46,6 +51,7 @@ export function RenameFileDialog({
       onClose();
     } catch (err) {
       setError(err instanceof DesktopError ? err.message : 'Draft Canvas couldn’t rename that file.');
+      running.current = false;
       setBusy(false);
     }
   };
@@ -55,7 +61,11 @@ export function RenameFileDialog({
   return (
     <Modal
       title="Rename File"
-      onClose={onClose}
+      // Not while the rename is under way: Escape closed the dialog, and a failure that came back
+      // afterwards had nowhere to be shown.
+      onClose={() => {
+        if (!running.current) onClose();
+      }}
       footer={
         <>
           <Button variant="quiet" onClick={onClose} disabled={busy}>
