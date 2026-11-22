@@ -176,6 +176,33 @@ describe('local persistence', () => {
     expect((await repository.list()).map((entry) => entry.title)).toEqual(['Edited after', 'From the future']);
   });
 
+  it('a diagram whose date was put right keeps that date when it is opened again and only panned', async () => {
+    const repository = await IndexedDbRepository.open();
+    const future = { ...documentWith('From the future'), metadata: { ...documentWith('From the future').metadata, createdAt: 1e15, updatedAt: 1e15 } };
+    await repository.save(future);
+    await repository.load(future.metadata.id);
+    const repaired = (await repository.list())[0]!;
+
+    // Something else is edited afterwards, so it is the most recent.
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    const later = { ...documentWith('Edited after'), metadata: { ...documentWith('Edited after').metadata, updatedAt: Date.now() } };
+    await repository.save(later);
+    await new Promise((resolve) => setTimeout(resolve, 15));
+
+    // Opened again: the dates it was given the first time, not this moment's.
+    const reopened = (await repository.load(future.metadata.id))!;
+    expect(reopened.metadata.updatedAt).toBe(repaired.updatedAt);
+    expect(reopened.metadata.createdAt).toBe(repaired.createdAt);
+
+    // Looked at and panned: a write of the camera alone, which carries the diagram's dates as they are.
+    await repository.save({ ...reopened, viewport: { x: 40, y: 20, zoom: 1 } });
+    const list = await repository.list();
+    expect(list.map((entry) => entry.title)).toEqual(['Edited after', 'From the future']);
+    expect(list[1]!.updatedAt).toBe(repaired.updatedAt);
+    // And that write put the stored diagram's own dates right, so later opens need no special care.
+    expect((await repository.load(future.metadata.id))!.metadata.updatedAt).toBe(repaired.updatedAt);
+  });
+
   it('putting a stored date right writes the summary’s dates and leaves the stored diagram as it was', async () => {
     const repository = await IndexedDbRepository.open();
     // A date years ahead, and something else a load repairs: a connector to a shape that is gone.
