@@ -30,27 +30,27 @@ redirects and 404 pages.
 
 ## The landing page
 
-`www/index.html` is a static page with a feature overview, an **Architecture examples** index, six
-exhibits, a download dialog and a closing connector. Behavior worth knowing before you edit it:
+`www/index.html` is a static page in two rooms, plus a download dialog: the statement with its
+feature list, then the film. Behavior worth knowing before you edit it:
 
-- **Exhibits are drawn from editable files.** Each of the six (Shopify inventory reservations, Slack
-  real-time messaging, Netflix Live Origin, Uber IngestionNext, Stripe Ledger, Discord message search)
-  is a `.draftcanvas` file in `www/examples/`, rendered by the editor's own SVG renderer. Each links
-  to the engineering write-up it models, and models only what that source describes.
-- **The pencil.** It draws the headline underline, connects the feature icons and plays each
-  exhibit's drawing sequence the first time that exhibit opens on a page load; after that the
-  finished diagram shows at once. Escape skips it, and reduced motion shows the finished diagram
-  immediately. A handwritten draft holds briefly before the finished diagram fades in.
-- **Exhibit interactions.** Pencil marks flag featured elements; hovering or focusing an element, or a
-  phrase under the caption, shows its note. Attachments (the paperclip) preview on hover or focus and
-  stay open on click. The Stripe Ledger exhibit nests C4 levels: breadcrumb, Escape and browser
-  Back/Forward move through the same level history.
-- Direct links open their exhibit or section; narrow windows scroll the diagram horizontally.
+- **The features are the film's contents.** Each feature in the overview carries a timecode
+  (`data-film-jump`, in seconds) that scrolls to the film and starts it at that moment. **Watch the
+  film** does the same from the start.
+- **The film** (`#film`, files in `www/public/film/`) fills the window. It starts by itself when it is
+  most of what the visitor can see, pauses when scrolled away, and resumes on return unless the visitor
+  paused it. A browser only starts a video with sound after the visitor has pressed something, so it is
+  tried with sound and, if refused, started silent with captions and a **Sound on** button. Reduced
+  motion never starts it: the poster and a play mark wait. Nothing of it is fetched before it is wanted.
+- **Its parts.** The dashes under the film are its parts, as the editor's presentation bar shows a
+  flow's steps: they fill as it plays and a press jumps there. Their times are `data-film-step`
+  attributes; a re-cut film needs them, the feature timecodes and the captions file updated together.
+- **The end.** When the film ends the room becomes the way in: the web editor, the desktop download,
+  or **Watch again**.
+- **The pencil.** It draws the headline underline and connects the feature icons once, on load.
 
 ## The build
 
-- `www/vite.config.js` fills in the root `package.json` version for desktop installer links and
-  inserts the generated diagram scenes.
+- `www/vite.config.js` fills in the root `package.json` version for desktop installer links.
 - It generates the CSP with `connect-src 'none'`.
 - `scripts/assemble-web.mjs` builds `dist-web/` from `site/` (`www/dist/`), `app/` (`dist/`),
   `legacy/` (`www/legacy/` plus `dist/` under `editor/`) and `cloudflare/` (Wrangler configs), then

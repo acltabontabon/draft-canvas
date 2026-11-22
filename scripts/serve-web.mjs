@@ -84,10 +84,26 @@ function serve(root, notFound) {
       return;
     }
 
-    response.writeHead(200, {
+    // The hosts answer byte ranges, which is what lets a video seek: so does this.
+    const size = statSync(file).size;
+    const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.range ?? '');
+    const headers = {
       'content-type': TYPES[extname(file)] ?? 'application/octet-stream',
       'cache-control': 'no-store',
-    });
+      'accept-ranges': 'bytes',
+    };
+    if (range && (range[1] || range[2])) {
+      const start = range[1] ? Number(range[1]) : Math.max(0, size - Number(range[2]));
+      const end = range[1] && range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+      if (start > end || start >= size) {
+        response.writeHead(416, { 'content-range': `bytes */${size}` }).end();
+        return;
+      }
+      response.writeHead(206, { ...headers, 'content-range': `bytes ${start}-${end}/${size}`, 'content-length': end - start + 1 });
+      createReadStream(file, { start, end }).pipe(response);
+      return;
+    }
+    response.writeHead(200, { ...headers, 'content-length': size });
     createReadStream(file).pipe(response);
   });
 }

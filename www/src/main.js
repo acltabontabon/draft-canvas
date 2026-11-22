@@ -1,5 +1,5 @@
+import { setUpFilm } from './film.js';
 import { setUpDownloads } from './downloads.js';
-import { setUpGallery } from './gallery.js';
 import { animateOverviewInk } from './pencil.js';
 
 function setUpCopyButtons() {
@@ -70,20 +70,8 @@ function setUpDownloadSheet() {
   });
 }
 
-function animateClosingCanvas() {
-  if (!matchMedia('(prefers-reduced-motion: no-preference)').matches || !('IntersectionObserver' in window)) return;
-  const closing = document.getElementById('closing');
-  const observer = new IntersectionObserver(([entry]) => {
-    if (entry.intersectionRatio < 0.35) return;
-    closing.dataset.drawn = '';
-    observer.disconnect();
-  }, { threshold: 0.35 });
-  observer.observe(closing);
-}
-
 setUpDownloads();
 setUpDownloadSheet();
 setUpCopyButtons();
 animateOverviewInk();
-setUpGallery();
-animateClosingCanvas();
+setUpFilm();

@@ -4,13 +4,13 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Draft Canvas — Draw software architecture</title>
-    <meta name="description" content="Draw software systems, attach code and decisions where they belong, and review diagram changes proposed by your coding agent. Free, open source, and local-first." />
+    <meta name="description" content="Draw how your software works, follow a request through it, see what breaks, and walk your team through it. Free, open source, and local-first." />
     <link rel="canonical" href="https://draftcanvas.dev/" />
     <meta property="og:type" content="website" />
     <meta property="og:site_name" content="Draft Canvas" />
     <meta property="og:url" content="https://draftcanvas.dev/" />
     <meta property="og:title" content="Draft Canvas — Draw software architecture" />
-    <meta property="og:description" content="Explore six production architectures, from Netflix Live Origin to Shopify inventory reservations, drawn in Draft Canvas." />
+    <meta property="og:description" content="An architecture canvas for developers. Draw the system, follow one request through it, and see what breaks. Free, open source, and local-first." />
     <meta property="og:image" content="https://draftcanvas.dev/og-image.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
@@ -41,6 +41,8 @@
           <header class="features-bar">
             <a class="features-brand" href="./"><img src="./favicon.svg" width="26" height="26" alt="" /> Draft Canvas</a>
             <nav class="features-nav" aria-label="Explore the site">
+              <a href="./docs/getting-started/">Docs</a>
+              <a href="https://github.com/acltabontabon/draft-canvas">GitHub</a>
               <a href="#download" data-download>Download desktop app</a>
             </nav>
           </header>
@@ -48,43 +50,43 @@
             <header class="features-intro">
               <p class="features-eyebrow">An architecture canvas for developers</p>
               <h1 id="features-title">Make your<br />system <em>clear.<svg class="features-underline" viewBox="0 0 144 12" preserveAspectRatio="none" aria-hidden="true"><path pathLength="1" d="M3 9C39 2 94 2 141 6" /></svg></em></h1>
-              <p class="features-lead">Draw how your software works. Keep code and decisions beside the diagram, then walk your team through it.</p>
+              <p class="features-lead">Draw how your software works. Follow a request through it, see what breaks, and walk your team through the answer.</p>
               <div class="features-actions">
                 <a class="features-primary" href="https://app.draftcanvas.dev/">Open web editor <span aria-hidden="true">↗</span></a>
-                <a class="features-explore" href="#examples">Explore examples <span aria-hidden="true">↓</span></a>
+                <a class="features-explore" href="#film" data-film-jump="0">Watch the film <span aria-hidden="true">↓</span></a>
               </div>
-              <p class="features-license">Free and open source under <a href="https://github.com/acltabontabon/draft-canvas/blob/main/LICENSE">Apache 2.0</a>.</p>
+              <p class="features-license">Free and open source under <a href="https://github.com/acltabontabon/draft-canvas/blob/main/LICENSE">Apache 2.0</a>. No account. Your files stay on your device.</p>
             </header>
             <div class="feature-stack">
               <span class="feature-rail" aria-hidden="true"></span>
               <ul class="feature-list" role="list">
                 <li>
                   <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M3 7V4h6v6H3V7Zm6 0h3v9h3m0-3h6v6h-6v-6Z" /></svg>
-                  <div><h2>Technology-aware shapes</h2><p>Set a shape’s technology and get suggested connector labels, like “reads / writes” from an API to PostgreSQL.</p></div>
-                </li>
-                <li>
-                  <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M3 4h18v16H3zM7 8h10v8H7zM10 11h4v2h-4z" /></svg>
-                  <div><h2>Look inside a system</h2><p>Move from a C4 system context to its containers and components without leaving the diagram.</p></div>
-                </li>
-                <li>
-                  <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M8 14l6-6a2 2 0 0 1 3 3l-7 7a4 4 0 0 1-6-6l8-8a5 5 0 0 1 7 7l-7 7" /></svg>
-                  <div><h2>Keep decisions with the diagram</h2><p>Attach code and notes where they matter. Mark open questions where the team can find them.</p></div>
-                </li>
-                <li>
-                  <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="m4 3 3 12 3-4 5-2L4 3Zm9 11 2 7 2-3 4-1-8-3Z" /></svg>
-                  <div><h2>Collaborate live</h2><p>Invite teammates to view or edit the same canvas. See their pointers, selections, and edits as they happen.</p></div>
-                </li>
-                <li>
-                  <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="m9 6 9 6-9 6V6Z" /></svg>
-                  <div><h2>Present flows step by step</h2><p>Use Presentation Mode to walk through a flow, highlighting the relevant shapes and connectors at each step.</p></div>
-                </li>
-                <li>
-                  <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="m8 6-5 6 5 6m8-12 5 6-5 6m-2-14-4 16" /></svg>
-                  <div><h2>Bring your own agent</h2><p>Connect your coding agent to Draft Canvas Desktop via MCP. Review its proposed edits on the canvas.</p></div>
+                  <div><h2>Shapes that know their technology <a class="feature-time" href="#film" data-film-jump="31.9" aria-label="Watch “Shapes that know their technology” in the film, at 0:31">0:31</a></h2><p>Say Postgres, Stripe or Kafka and the shape becomes that thing, logo and all.</p></div>
                 </li>
                 <li>
                   <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M5 3h9l5 5v13H5zM14 3v6h5M8 14h8m-8 3h6" /></svg>
-                  <div><h2>Keep your files on your device</h2><p>Work in the browser or on Desktop. Save editable diagram files you own, without an account.</p></div>
+                  <div><h2>Arrows that know what they mean <a class="feature-time" href="#film" data-film-jump="20.3" aria-label="Watch “Arrows that know what they mean” in the film, at 0:20">0:20</a></h2><p>A call, an event, a queue being read: captioned and drawn apart, without styling.</p></div>
+                </li>
+                <li>
+                  <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="m9 6 9 6-9 6V6Z" /></svg>
+                  <div><h2>Follow one request <a class="feature-time" href="#film" data-film-jump="40.5" aria-label="Watch “Follow one request” in the film, at 0:40">0:40</a></h2><p>Present a flow step by step, or draw the same flow as a sequence diagram.</p></div>
+                </li>
+                <li>
+                  <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M3 4h18v16H3zM7 8h10v8H7zM10 11h4v2h-4z" /></svg>
+                  <div><h2>Look inside a system <a class="feature-time" href="#film" data-film-jump="61.5" aria-label="Watch “Look inside a system” in the film, at 1:01">1:01</a></h2><p>Open a service and go down a C4 level without leaving the diagram.</p></div>
+                </li>
+                <li>
+                  <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="M8 14l6-6a2 2 0 0 1 3 3l-7 7a4 4 0 0 1-6-6l8-8a5 5 0 0 1 7 7l-7 7" /></svg>
+                  <div><h2>Ask what breaks <a class="feature-time" href="#film" data-film-jump="68.1" aria-label="Watch “Ask what breaks” in the film, at 1:08">1:08</a></h2><p>Take something down. See what fails, what holds, and what the drawing never said.</p></div>
+                </li>
+                <li>
+                  <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="m8 6-5 6 5 6m8-12 5 6-5 6m-2-14-4 16" /></svg>
+                  <div><h2>Bring your own agent <a class="feature-time" href="#film" data-film-jump="78.7" aria-label="Watch “Bring your own agent” in the film, at 1:18">1:18</a></h2><p>Your coding agent reads and edits the diagram over MCP. You decide what stays.</p></div>
+                </li>
+                <li>
+                  <svg class="feature-mark" viewBox="0 0 24 24" aria-hidden="true"><path pathLength="1" d="m4 3 3 12 3-4 5-2L4 3Zm9 11 2 7 2-3 4-1-8-3Z" /></svg>
+                  <div><h2>Collaborate live <a class="feature-time" href="#film" data-film-jump="86.3" aria-label="Watch “Collaborate live” in the film, at 1:26">1:26</a></h2><p>One link, no accounts. Pointers, selections and edits as they happen.</p></div>
                 </li>
               </ul>
             </div>
@@ -93,236 +95,48 @@
         <img class="features-pencil" src="./canvas-pencil.svg" width="20" height="20" alt="" aria-hidden="true" />
       </section>
 
-      <section class="drawing" id="example" aria-labelledby="exhibit-title">
-        <header class="drawing-intro">
-          <p class="exhibit-brand" id="exhibit-title"><img src="./favicon.svg" width="24" height="24" alt="" /> Draft Canvas <span class="exhibit-brand-detail">/ Examples</span></p>
-          <nav class="exhibit-actions" aria-label="Get Draft Canvas">
-            <a class="download-desktop" href="#download" data-download>
-              <span class="exhibit-action-ink"><span class="exhibit-action-label">Download desktop app</span></span>
-            </a>
-            <a class="launch-editor" href="https://app.draftcanvas.dev/">
-              <span class="exhibit-action-ink"><span class="exhibit-action-label">Open web editor</span> <span class="exhibit-action-arrow" aria-hidden="true">↗</span></span>
-            </a>
-          </nav>
-        </header>
-
-        <a class="exhibit-overview" href="#features"><span aria-hidden="true">↑</span> Overview</a>
-        <a class="exhibit-browse" href="#examples"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M2 2h4v4H2zM10 2h4v4h-4zM2 10h4v4H2zM10 10h4v4h-4z" /></svg> All examples</a>
-        <div class="example-gallery" role="region" aria-label="Architecture exhibits">
-          <span class="exhibit-announcement" data-exhibit-announcement role="status"></span>
-          <section class="example-index" id="examples" aria-labelledby="example-index-title" tabindex="-1">
-            <div class="drawing-width">
-              <header class="example-index-header">
-                <h2 id="example-index-title">Architecture examples</h2>
-              </header>
-              <ul class="example-index-grid" role="list">
-                <li><a class="example-card" href="#system-title">
-                  <span class="example-card-preview" aria-hidden="true"></span>
-                  <span class="example-card-caption"><strong>Shopify inventory reservations</strong><span>Attached SQL and decisions</span></span>
-                </a></li>
-                <li><a class="example-card" href="#pipeline-title">
-                  <span class="example-card-preview" aria-hidden="true"></span>
-                  <span class="example-card-caption"><strong>Slack real-time messaging</strong><span>Junctions and regional fan-out</span></span>
-                </a></li>
-                <li><a class="example-card" href="#video-title">
-                  <span class="example-card-preview" aria-hidden="true"></span>
-                  <span class="example-card-caption"><strong>Netflix Live Origin</strong><span>Technology-aware shapes and connectors</span></span>
-                </a></li>
-                <li><a class="example-card" href="#lakehouse-title">
-                  <span class="example-card-preview" aria-hidden="true"></span>
-                  <span class="example-card-caption"><strong>Uber IngestionNext</strong><span>Data lineage and recovery</span></span>
-                </a></li>
-                <li><a class="example-card" href="#payment-title">
-                  <span class="example-card-preview" aria-hidden="true"></span>
-                  <span class="example-card-caption"><strong>Stripe Ledger</strong><span>Three levels of C4</span></span>
-                </a></li>
-                <li><a class="example-card" href="#search-title">
-                  <span class="example-card-preview" aria-hidden="true"></span>
-                  <span class="example-card-caption"><strong>Discord message search</strong><span>Multiple instances and shard replicas</span></span>
-                </a></li>
-              </ul>
-            </div>
-          </section>
-          <figure class="system-example" id="system-title" tabindex="-1" aria-label="Shopify inventory reservations"
-            data-exhibit-node-paths="units:reserve,refill,pool-access,refill-units held:reserve,claim,record-hold,clear-hold ledger:claim,refill,deduct-stock"
-            data-exhibit-sketch="buyer purchase checkout request-hold reserve mysql pool-access units record-hold held empty-pool refill refill-units request-claim claim clear-hold deduct-stock ledger">
-            <figcaption class="exhibit-footer">
-              <div class="exhibit-brief">
-                <h2>Shopify inventory reservations</h2>
-                <p id="brief-checkout">Shopify reserves stock while payment is in progress. When payment succeeds, checkout clears the hold and deducts stock in one MySQL transaction.</p>
-              </div>
-              <p class="exhibit-note">
-                <span class="exhibit-callouts">
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="reserve" data-exhibit-related="checkout request-hold pool-access record-hold units held" data-isolate-path aria-describedby="note-checkout-sql">Attached SQL</button>
-                  <span class="exhibit-detail" id="note-checkout-sql">Open the paperclip for an illustrative SKIP LOCKED query and the lock-order decision. Draft Canvas keeps both beside the operation they explain.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="claim" data-exhibit-related="checkout request-claim clear-hold deduct-stock held ledger" data-isolate-path aria-describedby="note-checkout-claim">Atomic claim</button>
-                  <span class="exhibit-detail" id="note-checkout-claim">When payment succeeds, Shopify clears the reservation and deducts inventory in the same MySQL database.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="refill" data-exhibit-related="reserve empty-pool refill-units units ledger" data-isolate-path aria-describedby="note-checkout-refill">Pool replenishment</button>
-                  <span class="exhibit-detail" id="note-checkout-refill">Shopify caps the pool at 1,000 rows per item and location. When it empties, one transaction refills it from the ledger while concurrent reservations wait.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="checkout" aria-describedby="note-checkout-proxy">Connection tracing</button>
-                  <span class="exhibit-detail" id="note-checkout-proxy">Shopify tags SQL with the business process so ProxySQL can measure who holds connections and for how long.</span>
-                </span>
-              </p>
-              <a class="exhibit-source" href="https://shopify.engineering/scaling-inventory-reservations">Shopify Engineering <span aria-hidden="true">↗</span></a>
-            </figcaption>
-            <div class="example-art" role="region" aria-label="Shopify inventory reservations diagram" aria-describedby="brief-checkout" tabindex="0">__CHECKOUT_SYSTEM__</div>
-            <template data-exhibit-attachments>__CHECKOUT_ATTACHMENTS__</template>
-          </figure>
-
-          <figure class="system-example" id="pipeline-title" tabindex="-1" aria-label="Slack real-time messaging"
-            data-exhibit-branches="fan-region-a:gateway-a fan-region-b:gateway-b"
-            data-exhibit-sketch="sender core send webapp admin-call admin route channel ring ring-config consul discover channel-config broadcast fan-out edge-a fan-region-a gateway-a envoy tls deliver-a reader-a edge-b fan-region-b gateway-b deliver-b reader-b">
-            <figcaption class="exhibit-footer">
-              <div class="exhibit-brief">
-                <h2>Slack real-time messaging</h2>
-                <p id="brief-pipeline">A channel server fans out each message to subscribed gateways. Each gateway then pushes it to its connected readers.</p>
-              </div>
-              <p class="exhibit-note">
-                <span class="exhibit-callouts">
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="fan-out broadcast" data-exhibit-related="fan-region-a fan-region-b gateway-a gateway-b" aria-describedby="note-pipeline-fan">Regional fan-out</button>
-                  <span class="exhibit-detail" id="note-pipeline-fan">The junction shows one broadcast splitting across subscribed gateways. Hover over a branch to isolate its destination.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="route channel" data-exhibit-related="admin discover" aria-describedby="note-pipeline-route">Channel routing</button>
-                  <span class="exhibit-detail" id="note-pipeline-route">The admin server hashes the channel ID to find its owner. Channel servers hold in-memory history for the channels they own.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="ring consul" data-exhibit-related="ring-config discover channel-config" aria-describedby="note-pipeline-ring">Ring management</button>
-                  <span class="exhibit-detail" id="note-pipeline-ring">Ring managers replace unhealthy channel servers. Consul gives the admin and channel servers the updated ring configuration.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="tls envoy" data-exhibit-related="gateway-a deliver-a" aria-describedby="note-pipeline-socket">WebSockets</button>
-                  <span class="exhibit-detail" id="note-pipeline-socket">Envoy terminates TLS at the edge. The gateway holds the client connection and pushes subscribed events over it.</span>
-                </span>
-              </p>
-              <a class="exhibit-source" href="https://slack.engineering/real-time-messaging/">Slack Engineering <span aria-hidden="true">↗</span></a>
-            </figcaption>
-            <div class="example-art" role="region" aria-label="Slack real-time messaging diagram" aria-describedby="brief-pipeline" tabindex="0">__PIPELINE_SYSTEM__</div>
-          </figure>
-
-          <figure class="system-example" id="video-title" tabindex="-1" aria-label="Netflix Live Origin"
-            data-exhibit-sketch="region-a feed-a acquire-a encode-a encode-to-pack-a pack-a region-b feed-b acquire-b encode-b encode-to-pack-b pack-b live-origin publish-a publish-b origin-publish persist-segment kv-write durable-write segment-store replicate-segments peer-store write-through chunk-cache open-connect viewer player-request edge-oca edge-miss fill-oca origin-request origin-cdn read-segment kv-read cache-read store-fallback player-response">
-            <figcaption class="exhibit-footer">
-              <div class="exhibit-brief">
-                <h2>Netflix Live Origin</h2>
-                <p id="brief-video">Two regional pipelines publish live segments. An independent retrieval stack serves Open Connect.</p>
-              </div>
-              <p class="exhibit-note">
-                <span class="exhibit-callouts">
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="publish-a publish-b origin-publish" data-exhibit-related="pack-a pack-b origin-cdn" aria-describedby="note-video-failover">Regional failover</button>
-                  <span class="exhibit-detail" id="note-video-failover">Trace both PUT paths. Each packager reports segment defects. On a GET, the origin checks candidates in order and serves the first valid one.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="write-through kv-write" data-exhibit-related="durable-write segment-store chunk-cache" aria-describedby="note-video-write">Write-through cache</button>
-                  <span class="exhibit-detail" id="note-video-write">Follow a segment into two stores. KeyValue splits the payload into chunks, writes them to Cassandra, and keeps copies in EVCache.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="cache-read" data-exhibit-related="kv-read chunk-cache store-fallback segment-store" data-trace-connector="cache-read" aria-describedby="note-video-database">Cache-first reads</button>
-                  <span class="exhibit-detail" id="note-video-database">Use a cache shape for EVCache and a separate connector for misses. KeyValue reads from EVCache first and falls back to Cassandra when needed.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="origin-request" data-exhibit-related="edge-miss fill-oca player-request player-response origin-cdn" aria-describedby="note-video-live-edge">Live-edge requests</button>
-                  <span class="exhibit-detail" id="note-video-live-edge">Trace a cache miss upstream. Designated Open Connect nodes fetch from the origin, which can hold a request for the next segment until it arrives.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="origin-cdn" data-exhibit-related="origin-publish" aria-describedby="note-video-priority">Traffic priority</button>
-                  <span class="exhibit-detail" id="note-video-priority">Keep the read and write stacks distinct. Under storage pressure, the retrieval stack gives live-edge requests priority over DVR playback.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="replicate-segments peer-store" data-exhibit-related="segment-store" aria-describedby="note-video-replication">Cross-region replication</button>
-                  <span class="exhibit-detail" id="note-video-replication">Use a replication arrow to distinguish data copies from API calls. Cassandra replicates chunks across regions behind the KeyValue layer.</span>
-                </span>
-              </p>
-              <a class="exhibit-source" href="https://netflixtechblog.com/netflix-live-origin-41f1b0ad5371">Netflix TechBlog <span aria-hidden="true">↗</span></a>
-            </figcaption>
-            <div class="example-art" role="region" aria-label="Netflix Live Origin diagram" aria-describedby="brief-video" tabindex="0">__VIDEO_SYSTEM__</div>
-          </figure>
-
-          <figure class="system-example" id="lakehouse-title" tabindex="-1" aria-label="Uber IngestionNext"
-            data-exhibit-sketch="streaming kafka consume poll decode flink stage writer commit lake lifecycle start sync-checkpoint checkpoint match-commit batch-input batch batch-output compact compact-files">
-            <figcaption class="exhibit-footer">
-              <div class="exhibit-brief">
-                <h2>Uber IngestionNext</h2>
-                <p id="brief-lakehouse">Follow Kafka events through Flink into Hudi, with checkpoints to resume streaming and a batch path for outages.</p>
-              </div>
-              <p class="exhibit-note">
-                <span class="exhibit-callouts">
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="kafka poll flink writer consume lake" data-exhibit-related="decode stage commit" data-isolate-path aria-describedby="note-lakehouse-stream">Streaming lineage</button>
-                  <span class="exhibit-detail" id="note-lakehouse-stream">Trace the data from Kafka partitions through Flink to the raw lake. The streaming chip distinguishes continuous ingestion from the fallback path.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="checkpoint sync-checkpoint match-commit" data-exhibit-related="flink writer" data-isolate-path aria-describedby="note-lakehouse-recovery">Checkpoint recovery</button>
-                  <span class="exhibit-detail" id="note-lakehouse-recovery">Hudi stores the Flink checkpoint ID in each commit so recovery can match Kafka offsets to the data already written.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="batch batch-input batch-output" data-exhibit-related="kafka lake" data-isolate-path aria-describedby="note-lakehouse-fallback">Batch fallback</button>
-                  <span class="exhibit-detail" id="note-lakehouse-fallback">During an outage, Uber can temporarily run ingestion in batch mode or shift it to another region.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="compact" data-exhibit-related="compact-files lake" aria-describedby="note-lakehouse-compaction">File compaction</button>
-                  <span class="exhibit-detail" id="note-lakehouse-compaction">Small Parquet files slow down queries. Uber merges row groups that share the same schema, avoiding record-by-record recompression.</span>
-                </span>
-              </p>
-              <a class="exhibit-source" href="https://www.uber.com/us/en/blog/from-batch-to-streaming-accelerating-data-freshness-in-ubers-data-lake/">Uber Engineering <span aria-hidden="true">↗</span></a>
-            </figcaption>
-            <div class="example-art" role="region" aria-label="Uber IngestionNext diagram" aria-describedby="brief-lakehouse" tabindex="0">__LAKEHOUSE_SYSTEM__</div>
-          </figure>
-
-          <figure class="system-example" id="payment-title" tabindex="-1" aria-label="Stripe Ledger">
-            <figcaption class="exhibit-footer">
-              <div class="exhibit-brief">
-                <h2>Stripe Ledger</h2>
-                <p id="brief-payment">Stripe’s immutable ledger tracks money movement. Look inside to see how the Data Quality platform finds and investigates inconsistencies.</p>
-              </div>
-              <p class="exhibit-note">
-                <span class="exhibit-callouts">
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="ledger-system" data-note-depth aria-describedby="note-payment-depth">Nested views</button>
-                  <span class="exhibit-detail" id="note-payment-depth">Open Ledger and Data Quality to see how fund flows are built and checked, then open Data Quality checks to see its three metrics.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="payments partners producers close ownership" data-exhibit-related="publish-reports readiness anomalies" aria-describedby="note-payment-context">Sources and teams</button>
-                  <span class="exhibit-detail" id="note-payment-context">Stripe brings payment events and financial reporting into the ledger. Finance uses readiness scores, while engineering investigates issues with the relevant system owners.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="quality" data-note-room="ledger-system" data-note-depth hidden aria-describedby="note-payment-quality-depth">Nested views</button>
-                  <span class="exhibit-detail" id="note-payment-quality-depth">Open Data Quality checks to see clearing, timeliness, and completeness as separate components.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="event-log project" data-exhibit-related="projections" data-note-room="ledger-system" hidden aria-describedby="note-payment-log">Immutable events</button>
-                  <span class="exhibit-detail" id="note-payment-log">Ledger reconstructs balances from events. The immutable log keeps past states available for audit.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="repair impact commit-repair" data-exhibit-related="event-log" data-note-room="ledger-system" hidden aria-describedby="note-payment-repair">Reviewed corrections</button>
-                  <span class="exhibit-detail" id="note-payment-repair">Corrections use a review and commit sequence. An out-of-band report shows the expected impact before the change is committed.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="clearing clearing-score" data-exhibit-related="scores" data-note-room="ledger-system/quality" hidden aria-describedby="note-payment-clearing">Clearing</button>
-                  <span class="exhibit-detail" id="note-payment-clearing">A balance left in a clearing account can reveal a missing or mismatched release event.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="timeliness time-score" data-exhibit-related="scores" data-note-room="ledger-system/quality" hidden aria-describedby="note-payment-time">Timeliness</button>
-                  <span class="exhibit-detail" id="note-payment-time">Producer timestamps help Stripe measure the delay between entry into the platform and arrival in Ledger.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="completeness completeness-score" data-exhibit-related="scores" data-note-room="ledger-system/quality" hidden aria-describedby="note-payment-complete">Completeness</button>
-                  <span class="exhibit-detail" id="note-payment-complete">Stripe checks that producer records have matching Ledger events and uses expected arrival patterns to spot gaps.</span>
-                </span>
-              </p>
-              <nav class="exhibit-depth" aria-label="C4 levels">
-                <ol role="list" data-exhibit-trail><li aria-current="location">System context</li></ol>
-              </nav>
-              <a class="exhibit-source" href="https://stripe.dev/blog/ledger-stripe-system-for-tracking-and-validating-money-movement">Stripe Engineering <span aria-hidden="true">↗</span></a>
-            </figcaption>
-            __PAYMENT_VIEWS__
-          </figure>
-
-          <figure class="system-example" id="search-title" tabindex="-1" aria-label="Discord message search"
-            data-exhibit-sketch="client search-request search query-dm dm-cell new-messages enqueue index-queue pull destination-router bulk-dm guild-cluster query-guild bulk-guild ingest-nodes route-to-data data-nodes master-nodes cluster-state zone-a host-primary primary-shard zone-b host-replica replicate replica-shard">
-            <figcaption class="exhibit-footer">
-              <div class="exhibit-brief">
-                <h2>Discord message search</h2>
-                <p id="brief-search">Discord batches new messages for indexing and routes queries to separate search cells for servers and DMs.</p>
-              </div>
-              <p class="exhibit-note">
-                <span class="exhibit-callouts">
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="destination-router pull" data-exhibit-related="index-queue bulk-dm bulk-guild" aria-describedby="note-search-batching">Bulk indexing</button>
-                  <span class="exhibit-detail" id="note-search-batching">Trace the async path from Pub/Sub. The router groups messages by cluster and index, so each bulk write stays with one destination.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="dm-cell query-dm" data-exhibit-related="query-guild bulk-dm" aria-describedby="note-search-cells">Search cells</button>
-                  <span class="exhibit-detail" id="note-search-cells">Show two search scopes on one canvas. Discord routes server queries by guild and cross-DM queries by user.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="ingest-nodes master-nodes data-nodes" data-exhibit-related="route-to-data cluster-state" aria-describedby="note-search-instances">Node instances</button>
-                  <span class="exhibit-detail" id="note-search-instances">Stack instances by role. The cluster illustrated by Discord has three ingest, three master-eligible, and five data nodes.</span>
-                  <button type="button" class="exhibit-phrase" data-exhibit-highlight="replicate primary-shard replica-shard" data-exhibit-related="zone-a zone-b" aria-describedby="note-search-replicas">Shard replicas</button>
-                  <span class="exhibit-detail" id="note-search-replicas">Trace a primary shard and its replica across zones. Discord uses allocation rules to keep the copies in separate zones.</span>
-                </span>
-              </p>
-              <a class="exhibit-source" href="https://discord.com/blog/how-discord-indexes-trillions-of-messages">Discord Engineering <span aria-hidden="true">↗</span></a>
-            </figcaption>
-            <div class="example-art" role="region" aria-label="Discord message search diagram" aria-describedby="brief-search" tabindex="0">__SEARCH_SYSTEM__</div>
-          </figure>
-        </div>
-        <img class="exhibit-pencil" src="./canvas-pencil.svg" width="20" height="20" alt="" aria-hidden="true" />
-        <aside id="attachment-peek" class="attachment-peek" data-attachment-peek aria-label="Attached code and notes" hidden></aside>
-      </section>
-
-      <section class="closing-canvas" id="closing" aria-labelledby="closing-title">
-        <div class="drawing-width closing-layout">
-          <div class="closing-copy">
-            <h2 id="closing-title">There’s always <em>one more arrow.</em></h2>
-            <a class="closing-return" href="#features">Back to top <span aria-hidden="true">↑</span></a>
+      <section class="film-room" id="film" aria-label="The film" tabindex="-1">
+        <div class="film-stage" data-film data-film-steps="Question|Draw|Events|Suggestions|Technology|Follow one order|Sequence|C4 levels|Outage|Your agent|Together|One picture" data-state="idle">
+          <video class="film-video" playsinline preload="none" poster="./film/poster.jpg" aria-label="Draft Canvas, the film: one order followed through a system. 1 minute 48 seconds.">
+            <source src="./film/follow-one-order.mp4" type="video/mp4" />
+            <track kind="captions" src="./film/follow-one-order.vtt" srclang="en" label="English" default />
+          </video>
+          <button class="film-toggle" type="button" aria-label="Play the film">
+            <svg viewBox="0 0 96 96" aria-hidden="true" fill="none"><path class="film-play-ring" pathLength="1" d="M48 6c25 0 42 18 42 42S72 90 48 90 6 73 6 48 22 6 48 6Z" /><path class="film-play-mark" d="M40 32v32l26-16-26-16Z" /></svg>
+          </button>
+          <div class="film-hud">
+            <button class="film-sound" type="button" aria-pressed="false">
+              <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none"><path d="M3 8h3l4-3.5v11L6 12H3V8Z" /><path class="film-sound-waves" d="M13 7.5a3.6 3.6 0 0 1 0 5M15.3 5.4a6.6 6.6 0 0 1 0 9.2" /><path class="film-sound-off" d="m13.5 8 4 4m0-4-4 4" /></svg>
+              <span data-film-sound-label>Sound on</span>
+            </button>
+            <ol class="film-steps" role="list">
+              <li><button type="button" data-film-step="0" aria-label="Question, 0:00"><span></span></button></li>
+              <li><button type="button" data-film-step="6.2" aria-label="Draw, 0:06"><span></span></button></li>
+              <li><button type="button" data-film-step="20.3" aria-label="Events, 0:20"><span></span></button></li>
+              <li><button type="button" data-film-step="24.4" aria-label="Suggestions, 0:24"><span></span></button></li>
+              <li><button type="button" data-film-step="31.9" aria-label="Technology, 0:31"><span></span></button></li>
+              <li><button type="button" data-film-step="40.5" aria-label="Follow one order, 0:40"><span></span></button></li>
+              <li><button type="button" data-film-step="54.6" aria-label="Sequence, 0:54"><span></span></button></li>
+              <li><button type="button" data-film-step="61.5" aria-label="C4 levels, 1:01"><span></span></button></li>
+              <li><button type="button" data-film-step="68.1" aria-label="Outage, 1:08"><span></span></button></li>
+              <li><button type="button" data-film-step="78.7" aria-label="Your agent, 1:18"><span></span></button></li>
+              <li><button type="button" data-film-step="86.3" aria-label="Together, 1:26"><span></span></button></li>
+              <li><button type="button" data-film-step="95.2" aria-label="One picture, 1:35"><span></span></button></li>
+            </ol>
+            <p class="film-now" data-film-now>1:48</p>
+            <button class="film-full" type="button" aria-label="Full screen" hidden>
+              <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true" fill="none"><path d="M3 7.5V3h4.5M12.5 3H17v4.5M17 12.5V17h-4.5M7.5 17H3v-4.5" /></svg>
+            </button>
           </div>
-          <svg class="closing-art" viewBox="0 0 470 264" fill="none" aria-hidden="true">
-            <path class="closing-guides" d="M32 34h16m-8-8v16m176-8h16m-8-8v16m-192 104h16m-8-8v16m176-8h16m-8-8v16m16 76h16m-8-8v16m174-8h16m-8-8v16" />
-            <rect class="closing-shape" x="57" y="48" width="148" height="82" rx="12" />
-            <rect class="closing-shape" x="310" y="145" width="120" height="72" rx="11" />
-            <path class="closing-lines" d="M84 79h60m-60 18h37m246 75h39m-39 16h21" />
-            <path class="closing-route" d="M205 89h154q11 0 11 11v45m-5-7 5 7 5-7" />
-            <path class="closing-connector" pathLength="1" d="M310 181H143q-12 0-12-12v-39" />
-            <path class="closing-arrow" d="m126 137 5-7 5 7" />
-          </svg>
+          <div class="film-end" hidden>
+            <p class="film-eyebrow">That took 1:48.</p>
+            <h2>Now draw <em>yours.</em></h2>
+            <div class="film-end-actions">
+              <a class="features-primary" href="https://app.draftcanvas.dev/">Open web editor <span aria-hidden="true">↗</span></a>
+              <a class="features-explore" href="#download" data-download>Download desktop app</a>
+              <button class="features-explore film-replay" type="button">Watch again <span aria-hidden="true">↺</span></button>
+            </div>
+          </div>
         </div>
       </section>
 
