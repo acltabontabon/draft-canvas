@@ -1681,9 +1681,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // its baseline over it. The caller refuses while `isInteracting()`; this is the last guard.
     if (interaction) return false;
     // A shared, read-only diagram takes no changes. Narrower than `editingLocked()`, which `apply`
-    // asks: a flow being traced does not refuse a write to the file (an agent's commit, the file
-    // changing on disk). Kept exactly as it has been; whether a trace should refuse those too is a
-    // decision nobody has made, not something to settle by tidying two checks into one.
+    // asks, and on purpose: a write to the file from outside (the file changing on disk) lands
+    // during a flow trace and cancels the trace, so nothing provisional is saved over it
+    // (`e2e/explanation-journey.spec.ts`, "an external edit cancels a trace"). An agent's commit does
+    // not get this far while someone is tracing: `host/agentBridge.ts`'s `busyReason` makes it wait.
     if (useUiStore.getState().readOnly) return false;
     const state = get();
     if (expectedRevision !== undefined && state.revision !== expectedRevision) return false;
