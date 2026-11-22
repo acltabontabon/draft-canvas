@@ -163,7 +163,7 @@ function readFragment(raw: Record<string, unknown>, reading: Reading, depth: num
 
   if (depth >= LIMITS.maxSequenceDepth) {
     reading.dropped += 1;
-    return rawOperands.flatMap((branch) => readItems(branch.items, reading, depth));
+    return openedOut(rawOperands, reading);
   }
 
   const fragment: SeqFragment = { id: freshId(raw.id, 'sf', reading), t: 'fragment', operator, operands: [] };
@@ -193,6 +193,48 @@ function readFragment(raw: Record<string, unknown>, reading: Reading, depth: num
   }
   fragment.operands = operands;
   return [fragment];
+}
+
+/**
+ * The messages and notes inside branches nested too deep to keep, in the order they were written,
+ * with every frame around them gone.
+ *
+ * A loop, not a call per level: this is the one place the reader follows a file as far down as the
+ * file goes, and a file nested tens of thousands deep (a megabyte of JSON) ran `readItems` and
+ * `readFragment` into each other until the stack gave out. `parseDocument` threw instead of answering,
+ * for an import, a paste, a share link and a collaborator's change alike.
+ */
+function openedOut(operands: readonly Record<string, unknown>[], reading: Reading): SeqItem[] {
+  const items: SeqItem[] = [];
+  // What is still to read, last first, so `pop` hands entries back in the order they were written.
+  const pending: unknown[] = [];
+  const queue = (branches: readonly Record<string, unknown>[]) => {
+    for (let b = branches.length - 1; b >= 0; b -= 1) {
+      const inner = branches[b]!.items;
+      if (Array.isArray(inner)) for (let i = inner.length - 1; i >= 0; i -= 1) pending.push(inner[i]);
+    }
+  };
+  queue(operands);
+  while (pending.length > 0) {
+    const entry = pending.pop();
+    if (reading.kept >= LIMITS.maxSequenceItems || !isRecord(entry)) {
+      reading.dropped += 1;
+      continue;
+    }
+    if (entry.t === 'fragment') {
+      reading.dropped += 1;
+      if (Array.isArray(entry.operands)) queue(entry.operands.filter(isRecord));
+      continue;
+    }
+    const item = entry.t === 'message' ? readMessage(entry, reading) : entry.t === 'note' ? readNote(entry, reading) : null;
+    if (!item) {
+      reading.dropped += 1;
+      continue;
+    }
+    reading.kept += 1;
+    items.push(item);
+  }
+  return items;
 }
 
 function readItems(raw: unknown, reading: Reading, depth: number): SeqItem[] {
