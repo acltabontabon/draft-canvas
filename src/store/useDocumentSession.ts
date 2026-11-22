@@ -168,8 +168,14 @@ export interface DocumentSession {
   openCollaborative: (document: DraftDocument) => Promise<boolean>;
   /** Copies the shared diagram on screen into the library, under a fresh id, and opens that copy editable. */
   makeEditableCopy: () => Promise<void>;
-  /** Resolves `true` once the canvas is closed, `false` when unsaved work kept it open. */
+  /**
+   * Resolves `true` once the canvas is closed, `false` when unsaved work kept it open. Also `true`
+   * when a newer navigation took over while this one was saving: the canvas was left, by that one.
+   */
   closeDocument: () => Promise<boolean>;
+  /** Leaves the canvas on screen for a new one (blank, the example, or a starter), as one navigation:
+   *  nothing is made if unsaved work keeps the canvas open, or if something newer was asked for meanwhile. */
+  replaceWithNew: (starter?: 'example' | DraftDocument) => Promise<void>;
   /**
    * After another tab deleted or changed the open canvas: `keep` saves this tab's copy over it;
    * `discard` reloads the stored copy, or closes the canvas when it was deleted.
@@ -863,6 +869,19 @@ export function useDocumentSession(): DocumentSession {
     return true;
   }, [leaveShared, notify, openId, refreshLibrary, repository, setOpenId]);
 
+  const replaceWithNew = useCallback(
+    async (starter?: 'example' | DraftDocument) => {
+      // One intent under one number: the close takes the next one as it starts, and only if that is
+      // still the newest when it has finished is the new canvas made. Done as two steps by the
+      // caller, a close that a newer open had superseded still answered "closed", and the canvas
+      // made after it took a fresh number and cancelled that open.
+      const request = navigation.current + 1;
+      if (!(await closeDocument()) || request !== navigation.current) return;
+      await newDocument(undefined, starter);
+    },
+    [closeDocument, newDocument],
+  );
+
   // The open canvas in the address (`lib/documentUrl.ts`), so a refresh, Back/Forward and a bookmark
   // all come back to it. The web app only: the desktop shell opens files and owns its own navigation.
   const urlRouting = typeof window !== 'undefined' && !hostKind();
@@ -924,7 +943,13 @@ export function useDocumentSession(): DocumentSession {
       }
       const id = docIdFromLocation();
       const open = openIdRef.current;
-      if (id === open) return;
+      if (id === open) {
+        // The address names what is on screen again, and that is the newest thing asked for. Without
+        // a number of its own, Back then Forward while the last save was still being written left the
+        // close from Back running, and the canvas the address had just returned to was closed.
+        navigation.current += 1;
+        return;
+      }
       if (id) {
         void openDocument(id);
         return;
@@ -1178,6 +1203,7 @@ export function useDocumentSession(): DocumentSession {
     openCollaborative,
     makeEditableCopy,
     closeDocument,
+    replaceWithNew,
     resolveConflict,
     retrySave,
     exportUnsaved,

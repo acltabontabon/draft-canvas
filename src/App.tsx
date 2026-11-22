@@ -121,7 +121,7 @@ function Shell() {
     if (__DESKTOP__ && hostKind() === 'desktop') {
       void import('./desktop/useDesktop').then(({ getDesktopController }) => getDesktopController().newQuickDraft(starter));
     } else {
-      void session.closeDocument().then((closed) => { if (closed) return session.newDocument(undefined, starter); });
+      void session.replaceWithNew(starter);
     }
   }, [newCanvasRequest, session]);
 

@@ -12,6 +12,7 @@ import { setFileSaver } from '../src/export/download';
 import { deserializeDocument } from '../src/export/project';
 import { stashForReload } from '../src/storage/reloadStash';
 import { encodeShareLink } from '../src/share/link';
+import { clearDocUrl, docIdFromLocation } from '../src/lib/documentUrl';
 
 /** A minimal, fully-stubbed `DraftRepository` — every method resolves with a
  *  harmless default; a test overrides only the method it needs to control or
@@ -310,6 +311,86 @@ describe('useDocumentSession — overlapping opens', () => {
 
     expect(session().openId).toBe(next.metadata.id);
     expect(useEditorStore.getState().document.metadata.id).toBe(next.metadata.id);
+  });
+
+  /** A canvas open with an unsaved edit, and saves that wait until `release` is called. */
+  async function openWithPendingSave(others: DraftDocument[] = []) {
+    const current = createDocument('On screen');
+    let releaseSave: () => void = () => {};
+    let holdSaves = false;
+    const repository = stubRepository({
+      load: async (id) => (id === current.metadata.id ? structuredClone(current) : (others.find((doc) => doc.metadata.id === id) ?? null)),
+      save: async () => {
+        if (holdSaves) await new Promise<void>((resolve) => (releaseSave = resolve));
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(current.metadata.id);
+    });
+    act(() => useEditorStore.getState().rename('On screen, edited'));
+    holdSaves = true;
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const release = () => {
+      holdSaves = false;
+      releaseSave();
+    };
+    return { current, session, tick, release };
+  }
+
+  it('a new canvas asked for first does not take the place of a diagram asked for after it', async () => {
+    // "Try an example" while the last save is still being written, then another diagram.
+    const next = createDocument('Asked for next');
+    const { session, tick, release } = await openWithPendingSave([next]);
+
+    await act(async () => {
+      const replacing = session().replaceWithNew('example');
+      await tick();
+      const opening = session().openDocument(next.metadata.id);
+      await tick();
+      release();
+      await replacing;
+      await opening;
+    });
+
+    expect(session().openId).toBe(next.metadata.id);
+    expect(useEditorStore.getState().document.metadata.id).toBe(next.metadata.id);
+  });
+
+  it('a new canvas takes the place of the one on screen when nothing newer is asked for', async () => {
+    const { current, session, tick, release } = await openWithPendingSave();
+    await act(async () => {
+      const replacing = session().replaceWithNew();
+      await tick();
+      release();
+      await replacing;
+    });
+    expect(session().openId).not.toBeNull();
+    expect(session().openId).not.toBe(current.metadata.id);
+  });
+
+  it('Back then Forward while the last save is still being written leaves the canvas open', async () => {
+    const { current, session, tick, release } = await openWithPendingSave();
+    const here = window.location.href;
+    expect(docIdFromLocation()).toBe(current.metadata.id);
+
+    await act(async () => {
+      // Back: the address names no diagram, so the canvas starts to close, and waits on its save.
+      clearDocUrl();
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await tick();
+      // Forward: the address names the diagram on screen again.
+      window.history.replaceState(null, '', here);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await tick();
+      release();
+      await tick();
+      await tick();
+    });
+
+    expect(session().openId).toBe(current.metadata.id);
+    window.history.replaceState(null, '', '/');
   });
 
   it('keeps a reload stash over a rename made elsewhere, and opens it unsaved when writing it fails', async () => {

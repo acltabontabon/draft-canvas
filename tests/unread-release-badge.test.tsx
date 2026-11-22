@@ -28,6 +28,7 @@ function stubSession(overrides: Partial<DocumentSession> = {}): DocumentSession 
     openCollaborative: async () => false,
     makeEditableCopy: async () => {},
     closeDocument: async () => true,
+    replaceWithNew: async () => {},
     resolveConflict: async () => {},
     retrySave: async () => true,
     exportUnsaved: async () => {},
