@@ -610,8 +610,14 @@ const GLYPH_KIND_HEIGHT = { plain: 114, technology: 128, described: 143 } as con
  *  name is wide at the size a name is set in. An estimate: a migration has no font to measure with. */
 const GLYPH_KIND_WIDTH = 120;
 const NAME_ADVANCE = 8.6;
-const longestLine = (text: unknown): number =>
-  typeof text === 'string' ? Math.max(0, ...text.split(/\r\n|\r|\n/).map((line) => line.trim().length)) : 0;
+// A loop, not `Math.max(...lines)`: a migration reads text no validator has cut yet, and a name of a
+// few hundred thousand lines is more arguments than a call can take. The file was refused.
+const longestLine = (text: unknown): number => {
+  if (typeof text !== 'string') return 0;
+  let longest = 0;
+  for (const line of text.split(/\r\n|\r|\n/)) longest = Math.max(longest, line.trim().length);
+  return longest;
+};
 const FORMER_CARD_KINDS: ReadonlySet<unknown> = new Set(['worker', 'external', 'scheduler', 'gateway']);
 
 /**
