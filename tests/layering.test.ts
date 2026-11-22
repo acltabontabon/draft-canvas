@@ -41,7 +41,7 @@ interface Import {
   relative: boolean;
   /**
    * `static`: an `import`/`export … from` that runs when the module loads. `type`: erased by the
-   * compiler (`import type`, a clause of only `type` names, `typeof import(…)`). `dynamic`: an
+   * compiler (`import type`, `export type … from`, `typeof import(…)`). `dynamic`: an
    * `import(…)` call, a seam that loads later. Every kind counts for the layer rules; only `static`
    * can close a ring.
    */
@@ -65,20 +65,19 @@ function code(file: string): string {
     .replace(/(^|[^:\\])\/\/.*$/gm, '$1');
 }
 
-/** Whether an import or export clause names only types: `type { A }`, or `{ type A, type B }`. */
+/**
+ * Whether the compiler erases the whole statement: `import type …` and `export type … from` only.
+ * Not `import { type A, type B } from './m'`: under `verbatimModuleSyntax`, which every project
+ * here sets, the names go and `import {} from './m'` stays, so the module is still loaded.
+ */
 function erased(clause: string): boolean {
-  const text = clause.trim();
-  if (/^type\b/.test(text)) return true;
-  const braces = /^\{([\s\S]*)\}$/.exec(text);
-  if (!braces) return false;
-  const names = braces[1]!.split(',').map((name) => name.trim()).filter(Boolean);
-  return names.length > 0 && names.every((name) => /^type\s/.test(name));
+  return /^type\b/.test(clause.trim());
 }
 
 /**
  * A file's imports, read by pattern: this project's compiler ships no parser a test can call. What
  * the patterns are relied on for is narrow, and "the scanner" tests below hold each case: a statement's
- * specifier, whether its clause is types only, and an `import(…)` call apart from a `typeof import(…)`
+ * specifier, whether the whole statement is erased, and an `import(…)` call apart from a `typeof import(…)`
  * type. An `import('x').T` written as a type without `typeof` reads as `dynamic`; either way it
  * counts for the layer rules and cannot close a ring.
  */
@@ -126,16 +125,20 @@ describe('the dependency rules are kept', () => {
         'static resolved:./c',
         'static resolved:./side-effect',
       ]);
-      expect(scan("import type { A } from './a';\nimport { type B, type C } from './b';\nexport type { D } from './d';\nexport { type E } from './e';")).toEqual([
+      expect(scan("import type { A } from './a';\nexport type { D } from './d';\nimport type E from './e';")).toEqual([
         'type resolved:./a',
-        'type resolved:./b',
         'type resolved:./d',
         'type resolved:./e',
       ]);
     });
 
+    it('counts a clause of only inline `type` names as loading the module, which it does', () => {
+      // `verbatimModuleSyntax` leaves `import {} from './b'` behind: the module still runs.
+      expect(scan("import { type B, type C } from './b';\nexport { type E } from './e';")).toEqual(['static resolved:./b', 'static resolved:./e']);
+    });
+
     it('reads a clause spread over several lines', () => {
-      expect(scan("import {\n  a,\n  type B,\n} from './a';\nimport {\n  type C,\n  type D,\n} from './b';")).toEqual(['static resolved:./a', 'type resolved:./b']);
+      expect(scan("import {\n  a,\n  type B,\n} from './a';\nimport type {\n  C,\n  D,\n} from './b';")).toEqual(['static resolved:./a', 'type resolved:./b']);
     });
 
     it('keeps a later-loading import() and a typeof import() type out of the static imports', () => {
