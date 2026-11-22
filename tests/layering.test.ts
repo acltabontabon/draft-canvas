@@ -39,15 +39,23 @@ interface Import {
   /** What it names: a file in `src/` for a relative import, the package name otherwise. */
   to: string;
   relative: boolean;
-  typeOnly: boolean;
+  /**
+   * `static`: an `import`/`export … from` that runs when the module loads. `type`: erased by the
+   * compiler (`import type`, a clause of only `type` names, `typeof import(…)`). `dynamic`: an
+   * `import(…)` call, a seam that loads later. Every kind counts for the layer rules; only `static`
+   * can close a ring.
+   */
+  kind: 'static' | 'type' | 'dynamic';
 }
 
 const FILES = sourceFiles(SRC);
 const KNOWN = new Set(FILES.map(named));
 
+/** The file a relative specifier names, as the compiler resolves it: `./x.js` is `./x.ts` here. */
 function target(file: string, specifier: string): string | undefined {
-  const base = named(resolve(dirname(file), specifier));
-  return [base, `${base}.ts`, `${base}.tsx`, `${base}/index.ts`, `${base}/index.tsx`].find((candidate) => KNOWN.has(candidate));
+  const base = named(resolve(dirname(file), specifier.replace(/\?.*$/, '')));
+  const bare = base.replace(/\.(js|jsx|mjs)$/, '');
+  return [base, `${bare}.ts`, `${bare}.tsx`, `${bare}/index.ts`, `${bare}/index.tsx`].find((candidate) => KNOWN.has(candidate));
 }
 
 /** Source with its comments removed, so an import named in prose isn't read as one. */
@@ -57,22 +65,39 @@ function code(file: string): string {
     .replace(/(^|[^:\\])\/\/.*$/gm, '$1');
 }
 
-const IMPORTS: Import[] = FILES.flatMap((file) => {
+/** Whether an import or export clause names only types: `type { A }`, or `{ type A, type B }`. */
+function erased(clause: string): boolean {
+  const text = clause.trim();
+  if (/^type\b/.test(text)) return true;
+  const braces = /^\{([\s\S]*)\}$/.exec(text);
+  if (!braces) return false;
+  const names = braces[1]!.split(',').map((name) => name.trim()).filter(Boolean);
+  return names.length > 0 && names.every((name) => /^type\s/.test(name));
+}
+
+/**
+ * A file's imports, read by pattern: this project's compiler ships no parser a test can call. What
+ * the patterns are relied on for is narrow, and "the scanner" tests below hold each case: a statement's
+ * specifier, whether its clause is types only, and an `import(…)` call apart from a `typeof import(…)`
+ * type. An `import('x').T` written as a type without `typeof` reads as `dynamic`; either way it
+ * counts for the layer rules and cannot close a ring.
+ */
+function importsIn(from: string, text: string, resolveTo: (specifier: string) => string | undefined): Import[] {
   const found: Import[] = [];
-  const text = code(file);
-  const add = (specifier: string, typeOnly: boolean) => {
-    if (specifier.startsWith('.')) {
-      const to = target(file, specifier);
-      if (to) found.push({ from: named(file), to, relative: true, typeOnly });
-    } else {
-      found.push({ from: named(file), to: specifier, relative: false, typeOnly });
+  const add = (specifier: string, kind: Import['kind']) => {
+    if (!specifier.startsWith('.')) found.push({ from, to: specifier, relative: false, kind });
+    else {
+      const to = resolveTo(specifier);
+      if (to) found.push({ from, to, relative: true, kind });
     }
   };
-  for (const match of text.matchAll(/(?:^|\n)\s*(?:import|export)\s+(type\s+)?[^;'"]*?from\s+['"]([^'"]+)['"]/g)) add(match[2]!, Boolean(match[1]));
-  for (const match of text.matchAll(/(?:^|\n)\s*import\s+['"]([^'"]+)['"]/g)) add(match[1]!, false);
-  for (const match of text.matchAll(/\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) add(match[1]!, false);
+  for (const match of text.matchAll(/(?:^|\n)\s*(?:import|export)\s+([^;'"]*?)\s*from\s+['"]([^'"]+)['"]/g)) add(match[2]!, erased(match[1]!) ? 'type' : 'static');
+  for (const match of text.matchAll(/(?:^|\n)\s*import\s+['"]([^'"]+)['"]/g)) add(match[1]!, 'static');
+  for (const match of text.matchAll(/(\btypeof\s+)?\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) add(match[2]!, match[1] ? 'type' : 'dynamic');
   return found;
-});
+}
+
+const IMPORTS: Import[] = FILES.flatMap((file) => importsIn(named(file), code(file), (specifier) => target(file, specifier)));
 
 /** Every relative import out of `layer`, as `file -> file`, that `allowed` doesn't accept. */
 function strays(layer: string, allowed: (to: string) => boolean): string[] {
@@ -88,6 +113,45 @@ describe('the dependency rules are kept', () => {
     expect(FILES.length).toBeGreaterThan(400);
     expect(IMPORTS.filter((entry) => entry.relative).length).toBeGreaterThan(3000);
     expect(existsSync(join(SRC, 'document', 'types.ts'))).toBe(true);
+  });
+
+  // The rules above are only as good as what the scanner sees.
+  describe('the scanner', () => {
+    const scan = (text: string) => importsIn('src/a/file.ts', text, (specifier) => `resolved:${specifier}`).map((entry) => `${entry.kind} ${entry.to}`);
+
+    it('tells an import that runs from one the compiler erases', () => {
+      expect(scan("import { a } from './a';\nimport b, { type B } from './b';\nexport * from './c';\nimport './side-effect';")).toEqual([
+        'static resolved:./a',
+        'static resolved:./b',
+        'static resolved:./c',
+        'static resolved:./side-effect',
+      ]);
+      expect(scan("import type { A } from './a';\nimport { type B, type C } from './b';\nexport type { D } from './d';\nexport { type E } from './e';")).toEqual([
+        'type resolved:./a',
+        'type resolved:./b',
+        'type resolved:./d',
+        'type resolved:./e',
+      ]);
+    });
+
+    it('reads a clause spread over several lines', () => {
+      expect(scan("import {\n  a,\n  type B,\n} from './a';\nimport {\n  type C,\n  type D,\n} from './b';")).toEqual(['static resolved:./a', 'type resolved:./b']);
+    });
+
+    it('keeps a later-loading import() and a typeof import() type out of the static imports', () => {
+      expect(scan("const later = () => import('./worker');\nlet module: typeof import('./types');\nconst pkg = await import('react');")).toEqual([
+        'dynamic resolved:./worker',
+        'type resolved:./types',
+        'dynamic react',
+      ]);
+    });
+
+    it('resolves a .js specifier to the TypeScript file it names', () => {
+      expect(target(join(SRC, 'edges', 'describe.ts'), './routing.js')).toBe('src/edges/routing.ts');
+      expect(target(join(SRC, 'edges', 'describe.ts'), './routing')).toBe('src/edges/routing.ts');
+      expect(target(join(SRC, 'edges', 'describe.ts'), '../document/types.js')).toBe('src/document/types.ts');
+      expect(target(join(SRC, 'edges', 'describe.ts'), './no-such-module')).toBeUndefined();
+    });
   });
 
   // "`depth/`, `gallery/` and `traffic/` import only `document/`; `layout/` also imports
@@ -157,7 +221,7 @@ describe('the dependency rules are kept', () => {
 function cycles(): string[][] {
   const edges = new Map<string, string[]>();
   for (const entry of IMPORTS) {
-    if (!entry.relative || entry.typeOnly) continue;
+    if (!entry.relative || entry.kind !== 'static') continue;
     edges.set(entry.from, [...(edges.get(entry.from) ?? []), entry.to]);
   }
   const index = new Map<string, number>();
