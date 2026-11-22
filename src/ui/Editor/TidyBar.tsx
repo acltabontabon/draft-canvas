@@ -1,6 +1,6 @@
 import { Fragment, useEffect } from 'react';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
-import { gestureInProgress, useEditorStore } from '../../store/editorStore';
+import { isInteracting, useEditorStore } from '../../store/editorStore';
 import { useUiStore, type TidyPreview } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { layoutNotes } from './arrangeSummary';
@@ -88,7 +88,7 @@ function applyTidy(preview: TidyPreview) {
   const editor = useEditorStore.getState();
   const before = editor.history.past.at(-1);
   // A drag in progress holds the diagram; the preview stays up for when it ends (see `applyArrange`).
-  if (gestureInProgress()) {
+  if (isInteracting()) {
     ui.notify('Finish what you are dragging first, then apply the cleanup.');
     return;
   }

@@ -4098,11 +4098,6 @@ export function isInteracting(): boolean {
   return interaction !== null;
 }
 
-/** Whether a gesture (a drag, a resize) is holding the document: nothing may be applied until it ends. */
-export function gestureInProgress(): boolean {
-  return interaction !== null;
-}
-
 /** Test seam: interaction state lives outside the store, so it needs resetting. */
 export function __resetInteraction(): void {
   interaction = null;

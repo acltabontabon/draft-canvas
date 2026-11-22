@@ -5,7 +5,7 @@ import { focusBoundsInView } from '../../commands/search';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument } from '../../document/types';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
-import { gestureInProgress, useEditorStore } from '../../store/editorStore';
+import { isInteracting, useEditorStore } from '../../store/editorStore';
 import { useUiStore, type ArrangeDirection, type ArrangePreview, type ArrangeShow } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { LayoutNotes } from './LayoutBusyBar';
@@ -76,7 +76,7 @@ export function ArrangeBar() {
     // A drag or resize in progress holds the diagram: nothing is wrong with the preview, it just
     // cannot go in yet. It stays up (and the camera where it is), rather than being thrown away with
     // a message about the diagram having changed.
-    if (gestureInProgress()) {
+    if (isInteracting()) {
       useUiStore.getState().notify('Finish what you are dragging first, then apply the arrangement.');
       return;
     }
