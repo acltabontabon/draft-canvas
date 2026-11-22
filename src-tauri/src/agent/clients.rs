@@ -14,6 +14,10 @@
 //! - **Junie** (in JetBrains IDEs and the Junie CLI alike) reads `~/.junie/mcp/mcp.json`, a file of
 //!   servers only, and has no command to add one, so it's edited here as Codex's is: only the Draft
 //!   Canvas entry changes; every other server keeps its place and the exact text it was written as.
+//! - **OpenCode** reads `opencode.json` and `opencode.jsonc` in `~/.config/opencode`, in two layouts
+//!   (servers directly under `mcp` for OpenCode 1, under `mcp.servers` for OpenCode 2). Its own
+//!   `opencode mcp add` writes only the newer one, so the file is edited here as Junie's is: one Draft
+//!   Canvas entry across both files, and a file with comments is read but never rewritten.
 //!
 //! Cursor needs none of this: its `cursor://` link has Cursor write its own configuration.
 
@@ -42,6 +46,7 @@ pub enum Client {
     ClaudeCode,
     Gemini,
     Junie,
+    Opencode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -865,6 +870,333 @@ fn junie_connect(sidecar: &Path) -> Result<(), AppError> {
     edit_config(&path, "Junie", |text| junie_with_connector(text, sidecar))
 }
 
+// --- OpenCode ----------------------------------------------------------------------------------
+
+/// The two global files OpenCode reads, lowest precedence first: both are loaded, and `.jsonc`
+/// outranks `.json` in OpenCode 1 and 2 alike.
+const OPENCODE_FILES: [&str; 2] = ["opencode.json", "opencode.jsonc"];
+
+/// Named in a file Draft Canvas creates, as OpenCode 1 would otherwise rewrite the file to add it.
+const OPENCODE_SCHEMA: &str = "https://opencode.ai/config.json";
+
+/// OpenCode's global configuration folder: `$XDG_CONFIG_HOME/opencode`, else `~/.config/opencode`,
+/// on Windows too. `OPENCODE_CONFIG_DIR` is left out on purpose: OpenCode 2 reads it in place of
+/// this folder and OpenCode 1 on top of it, so following it would be wrong for one of them.
+fn opencode_dir_in(xdg: Option<PathBuf>, home: Option<PathBuf>) -> Option<PathBuf> {
+    xdg.or_else(|| home.map(|h| h.join(".config")))
+        .map(|dir| dir.join("opencode"))
+}
+
+fn opencode_dir() -> Option<PathBuf> {
+    opencode_dir_in(env_dir("XDG_CONFIG_HOME"), home())
+}
+
+/// `text` as strict JSON, for reading only: comments blanked out and the comma before a closing
+/// bracket dropped, both of which OpenCode accepts in `.json` and `.jsonc` alike. Lines keep their
+/// numbers, so a mistake is still reported where it is.
+fn relaxed_json(text: &str) -> String {
+    let text = without_comments(text);
+    let mut out = String::with_capacity(text.len());
+    let (mut in_string, mut escaped) = (false, false);
+    for (at, c) in text.char_indices() {
+        if in_string {
+            out.push(c);
+            match c {
+                _ if escaped => escaped = false,
+                '\\' => escaped = true,
+                '"' => in_string = false,
+                _ => {}
+            }
+            continue;
+        }
+        match c {
+            ',' if text[at + 1..].trim_start().starts_with(['}', ']']) => out.push(' '),
+            _ => {
+                in_string = c == '"';
+                out.push(c);
+            }
+        }
+    }
+    out
+}
+
+/// A Draft Canvas server in an OpenCode file: one named `draft-canvas`, or one that launches a
+/// connector under any name.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct Found {
+    /// Under `mcp.servers` (OpenCode 2's own layout) rather than directly under `mcp`.
+    native: bool,
+    name: String,
+    /// A `"type": "local"` server with a command line, the only kind Draft Canvas repoints.
+    local: bool,
+    command: Vec<String>,
+    enabled: bool,
+}
+
+/// Every Draft Canvas server in one file, in both layouts. OpenCode 1 turns a server off with
+/// `enabled: false` and OpenCode 2 with `disabled: true`; each ignores or honours the other's flag
+/// differently, so either one counts as off.
+fn opencode_found(config: &Value) -> Vec<Found> {
+    let Some(mcp) = config.get("mcp").and_then(Value::as_object) else {
+        return Vec::new();
+    };
+    let flat = mcp
+        .iter()
+        .filter(|(name, _)| name.as_str() != "servers")
+        .map(|(name, server)| (false, name, server));
+    let native = mcp
+        .get("servers")
+        .and_then(Value::as_object)
+        .into_iter()
+        .flatten()
+        .map(|(name, server)| (true, name, server));
+    flat.chain(native)
+        .filter_map(|(native, name, server)| {
+            let command: Vec<String> = server
+                .get("command")
+                .and_then(Value::as_array)
+                .and_then(|parts| {
+                    parts
+                        .iter()
+                        .map(|part| part.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
+            let ours = name == SERVER_NAME || command.first().is_some_and(|c| is_connector(c));
+            ours.then(|| Found {
+                native,
+                name: name.clone(),
+                local: server.get("type").and_then(Value::as_str) == Some("local")
+                    && !command.is_empty(),
+                enabled: server.get("enabled") != Some(&Value::Bool(false))
+                    && server.get("disabled") != Some(&Value::Bool(true)),
+                command,
+            })
+        })
+        .collect()
+}
+
+/// One OpenCode file as OpenCode reads it. An empty file is an empty configuration.
+fn opencode_parsed(text: &str, file: &str) -> Result<Value, AppError> {
+    if text.trim().is_empty() {
+        return Ok(Value::Object(Default::default()));
+    }
+    serde_json::from_str(&relaxed_json(text)).map_err(|e| {
+        unavailable(format!(
+            "OpenCode’s {file} has a mistake on line {}, so Draft Canvas left it alone. Fix it, then try again.",
+            e.line().max(1)
+        ))
+    })
+}
+
+/// Whether Draft Canvas can rewrite `text` without losing anything: its writer keeps plain JSON
+/// only, so a file with comments or trailing commas is read but never changed.
+fn opencode_writable(text: &str) -> bool {
+    text.trim().is_empty() || serde_json::from_str::<Value>(text).is_ok()
+}
+
+fn opencode_commented(file: &str) -> AppError {
+    unavailable(format!(
+        "OpenCode’s {file} has comments or trailing commas Draft Canvas can’t keep, so it left the file alone. Paste the config below into it instead."
+    ))
+}
+
+/// OpenCode 1 and 2 settle two entries for one server in opposite ways (merged or replaced across
+/// files, `mcp` or `mcp.servers` first within one), so which of them is in force depends on the
+/// version: Draft Canvas never guesses, and never leaves a second one.
+fn opencode_several(a: &str, b: &str) -> AppError {
+    unavailable(if a == b {
+        format!("OpenCode has Draft Canvas set up twice in {a}. Keep one entry, then try again.")
+    } else {
+        format!("OpenCode has Draft Canvas set up in both {a} and {b}. Keep one, then try again.")
+    })
+}
+
+/// Which of the two files gets the connector, given the text of each that exists: the one already
+/// holding a Draft Canvas server, else the first Draft Canvas can rewrite. A commented
+/// `opencode.jsonc` is left as it is and `opencode.json` written beside it, which OpenCode reads too.
+fn opencode_target(json: Option<&str>, jsonc: Option<&str>) -> Result<&'static str, AppError> {
+    let mut holders = Vec::new();
+    for (file, text) in OPENCODE_FILES.into_iter().zip([json, jsonc]) {
+        let found = opencode_found(&opencode_parsed(text.unwrap_or(""), file)?);
+        holders.extend(found.iter().map(|_| file));
+    }
+    let [first, second] = OPENCODE_FILES;
+    let (file, text) = match holders.as_slice() {
+        [] if json.is_none_or(opencode_writable) => (first, json),
+        [] if jsonc.is_some_and(opencode_writable) => (second, jsonc),
+        [] => (first, json),
+        [holder] if *holder == first => (first, json),
+        [_] => (second, jsonc),
+        [a, .., b] => return Err(opencode_several(a, b)),
+    };
+    if text.is_none_or(opencode_writable) {
+        Ok(file)
+    } else {
+        Err(opencode_commented(file))
+    }
+}
+
+/// `text` (the file named `file`) with the connector set up. A Draft Canvas server already there is
+/// pointed at `sidecar` and switched on, where it is and in the layout it has, keeping its arguments,
+/// environment and timeouts. Otherwise a new one is added directly under `mcp`: the layout every
+/// OpenCode reads, where `mcp.servers` alone stops OpenCode 1.18.23 and older from starting. Refused,
+/// with nothing changed, when the entry isn't a local connector or there is more than one.
+pub fn opencode_with_connector(text: &str, sidecar: &Path, file: &str) -> Result<String, AppError> {
+    let new = text.trim().is_empty();
+    let source = if new { "{}" } else { text };
+    let config = opencode_parsed(source, file)?;
+    if !opencode_writable(source) {
+        return Err(opencode_commented(file));
+    }
+    let refuse = || {
+        unavailable(format!(
+            "OpenCode’s {file} isn’t laid out in a way Draft Canvas can change. Add the server by hand instead."
+        ))
+    };
+    let raw = |value: Value| {
+        serde_json::value::to_raw_value(&value)
+            .map(Json::Raw)
+            .map_err(|_| refuse())
+    };
+    if config
+        .pointer("/mcp/servers")
+        .is_some_and(|servers| !servers.is_object())
+    {
+        return Err(refuse());
+    }
+    let sidecar = sidecar.to_string_lossy().into_owned();
+    let mut root = object_of(source).ok_or_else(refuse)?;
+    if new {
+        root.push(("$schema".to_string(), raw(OPENCODE_SCHEMA.into())?));
+    }
+    let mcp = member_object(&mut root, "mcp").ok_or_else(refuse)?;
+    match &opencode_found(&config)[..] {
+        [] => mcp.push((
+            SERVER_NAME.to_string(),
+            Json::Object(vec![
+                ("type".to_string(), raw("local".into())?),
+                ("command".to_string(), raw(vec![sidecar].into())?),
+                // Said outright, so OpenCode 1 can't merge in an `enabled: false` from its older
+                // `config.json`.
+                ("enabled".to_string(), raw(true.into())?),
+            ]),
+        )),
+        [entry] => {
+            if !entry.local || !is_connector(&entry.command[0]) {
+                return Err(unavailable(format!(
+                    "OpenCode already has a different server named {} in {file}. Rename or remove it, then try again.",
+                    entry.name
+                )));
+            }
+            let servers = if entry.native {
+                member_object(mcp, "servers").ok_or_else(refuse)?
+            } else {
+                mcp
+            };
+            let server = member_object(servers, &entry.name).ok_or_else(refuse)?;
+            let mut set = |key: &str, value: Value| -> Result<(), AppError> {
+                if let Some((_, old)) = server.iter_mut().rfind(|(k, _)| k == key) {
+                    *old = raw(value)?;
+                }
+                Ok(())
+            };
+            // Left as written when it already points here, so a second run changes nothing.
+            if entry.command[0] != sidecar {
+                let mut command = entry.command.clone();
+                command[0] = sidecar;
+                set("command", command.into())?;
+            }
+            set("enabled", true.into())?;
+            set("disabled", false.into())?;
+        }
+        _ => return Err(opencode_several(file, file)),
+    }
+
+    let mut out = Vec::new();
+    let formatter = serde_json::ser::PrettyFormatter::with_indent(indent_of(source).as_bytes());
+    let mut serializer = serde_json::Serializer::with_formatter(&mut out, formatter);
+    Json::Object(root)
+        .serialize(&mut serializer)
+        .map_err(|_| refuse())?;
+    let mut out = String::from_utf8(out).map_err(|_| refuse())?;
+    out.push('\n');
+    // The formatter ends lines with `\n`; a file saved on Windows keeps its own endings throughout.
+    if text.contains("\r\n") {
+        out = out.replace("\r\n", "\n").replace('\n', "\r\n");
+    }
+    Ok(out)
+}
+
+/// What the two files say, as far as they can be read: whether Draft Canvas is configured, which is
+/// not the same as connected. A project's own `opencode.json`, `OPENCODE_CONFIG` and managed
+/// settings can all override these files and can't be seen from here; `opencode mcp list` can.
+fn opencode_setup(dir: Option<&Path>, sidecar: &Path) -> ClientSetup {
+    let texts = OPENCODE_FILES.map(|file| std::fs::read_to_string(dir?.join(file)).ok());
+    let mut found = Vec::new();
+    let mut holder = None;
+    for (file, text) in OPENCODE_FILES.into_iter().zip(&texts) {
+        // A file that can't be read counts for nothing here; setting up says what is wrong with it.
+        let Some(config) = text.as_deref().and_then(|t| opencode_parsed(t, file).ok()) else {
+            continue;
+        };
+        let here = opencode_found(&config);
+        if holder.is_none() && !here.is_empty() {
+            holder = Some(file);
+        }
+        found.extend(here);
+    }
+    let state = if found.is_empty() {
+        SetupState::NotSetUp
+    } else if found
+        .iter()
+        .all(|f| f.local && f.enabled && f.command.first().is_some_and(|c| same_path(c, sidecar)))
+    {
+        SetupState::Ready
+    } else {
+        SetupState::Outdated
+    };
+    let file = holder
+        .or_else(|| opencode_target(texts[0].as_deref(), texts[1].as_deref()).ok())
+        .unwrap_or(OPENCODE_FILES[0]);
+    ClientSetup {
+        client: Client::Opencode,
+        state,
+        automatic: dir.is_some(),
+        location: dir.map(|d| crate::paths::display_path(&d.join(file))),
+        configured_command: found.first().and_then(|f| f.command.first().cloned()),
+    }
+}
+
+fn opencode_connect_in(dir: &Path, sidecar: &Path) -> Result<(), AppError> {
+    let mut texts = [None, None];
+    for (file, text) in OPENCODE_FILES.into_iter().zip(&mut texts) {
+        let path = dir.join(file);
+        *text = match std::fs::read_to_string(&path) {
+            Ok(text) => Some(text),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => {
+                return Err(AppError::from_io(
+                    &e,
+                    crate::errors::Verb::Open,
+                    crate::errors::Subject::Path(&path),
+                ));
+            }
+        };
+    }
+    let file = opencode_target(texts[0].as_deref(), texts[1].as_deref())?;
+    edit_config(&dir.join(file), "OpenCode", |text| {
+        opencode_with_connector(text, sidecar, file)
+    })
+}
+
+fn opencode_connect(sidecar: &Path) -> Result<(), AppError> {
+    let dir = opencode_dir().ok_or_else(|| {
+        unavailable("Draft Canvas couldn’t find your home folder to set up OpenCode.")
+    })?;
+    opencode_connect_in(&dir, sidecar)
+}
+
 // --- Settings ----------------------------------------------------------------------------------
 
 pub fn status(sidecar: &Path) -> Vec<ClientSetup> {
@@ -873,6 +1205,7 @@ pub fn status(sidecar: &Path) -> Vec<ClientSetup> {
         claude_status(sidecar),
         gemini_status(sidecar),
         junie_status(sidecar),
+        opencode_setup(opencode_dir().as_deref(), sidecar),
     ]
 }
 
@@ -893,6 +1226,10 @@ pub fn connect(client: Client, sidecar: &Path) -> Result<ClientSetup, AppError> 
         Client::Junie => {
             junie_connect(sidecar)?;
             Ok(junie_status(sidecar))
+        }
+        Client::Opencode => {
+            opencode_connect(sidecar)?;
+            Ok(opencode_setup(opencode_dir().as_deref(), sidecar))
         }
     }
 }
@@ -1217,6 +1554,342 @@ mod tests {
             SetupState::Ready
         );
         assert_eq!(without_comments(r#"{"a": "\"/*"}"#), r#"{"a": "\"/*"}"#);
+    }
+
+    const OC_FILE: &str = "opencode.json";
+    const OC_COMMENTED: &str = "{\n  // mine\n  \"theme\": \"dark\",\n}\n";
+
+    fn oc(text: &str) -> Result<String, AppError> {
+        opencode_with_connector(text, Path::new(SIDECAR), OC_FILE)
+    }
+
+    fn oc_found(text: &str) -> Vec<Found> {
+        opencode_found(&opencode_parsed(text, OC_FILE).unwrap())
+    }
+
+    /// A configuration folder holding the given `opencode.json` and `opencode.jsonc`.
+    fn oc_dir(json: Option<&str>, jsonc: Option<&str>) -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        for (file, text) in OPENCODE_FILES.into_iter().zip([json, jsonc]) {
+            if let Some(text) = text {
+                std::fs::write(dir.path().join(file), text).unwrap();
+            }
+        }
+        dir
+    }
+
+    fn oc_state(json: Option<&str>, jsonc: Option<&str>) -> SetupState {
+        opencode_setup(Some(oc_dir(json, jsonc).path()), Path::new(SIDECAR)).state
+    }
+
+    /// `text` without its Draft Canvas servers, to compare what else a file holds.
+    fn oc_rest(text: &str) -> Value {
+        let mut config = opencode_parsed(text, OC_FILE).unwrap();
+        for found in opencode_found(&config) {
+            let at = if found.native { "/mcp/servers" } else { "/mcp" };
+            let servers = config.pointer_mut(at).unwrap().as_object_mut().unwrap();
+            servers.remove(&found.name);
+        }
+        config
+    }
+
+    #[test]
+    fn opencode_keeps_its_settings_in_the_same_folder_on_every_platform() {
+        let home = || Some(PathBuf::from("/home/ada"));
+        assert_eq!(
+            opencode_dir_in(None, home()),
+            Some(PathBuf::from("/home/ada/.config/opencode"))
+        );
+        assert_eq!(
+            opencode_dir_in(Some(PathBuf::from("/xdg")), home()),
+            Some(PathBuf::from("/xdg/opencode"))
+        );
+        // No %APPDATA% on Windows: OpenCode uses .config in the user folder there too.
+        assert_eq!(
+            opencode_dir_in(None, Some(PathBuf::from(r"C:\Users\ada"))),
+            Some(Path::new(r"C:\Users\ada").join(".config").join("opencode"))
+        );
+        assert_eq!(opencode_dir_in(None, None), None);
+    }
+
+    #[test]
+    fn an_empty_opencode_config_gets_the_schema_and_one_server() {
+        let entry = format!(
+            "  \"mcp\": {{\n    \"draft-canvas\": {{\n      \"type\": \"local\",\n      \"command\": [\"{SIDECAR}\"],\n      \"enabled\": true\n    }}\n  }}\n}}\n"
+        );
+        for empty in ["", "\n"] {
+            assert_eq!(
+                oc(empty).unwrap(),
+                format!("{{\n  \"$schema\": \"https://opencode.ai/config.json\",\n{entry}")
+            );
+        }
+        // A file that is already there keeps its own choice of schema line.
+        let text = oc("{}").unwrap();
+        assert_eq!(text, format!("{{\n{entry}"));
+        assert_eq!(oc_state(Some(&text), None), SetupState::Ready);
+    }
+
+    #[test]
+    fn everything_else_in_the_opencode_config_is_kept() {
+        // A server of each layout that isn't ours: the new one goes directly under `mcp` all the
+        // same, the layout every OpenCode reads.
+        let before = "{\n    \"theme\": \"dark\",\n    \"mcp\": {\n        \"zeta\": {\n            \"type\": \"local\",\n            \"command\": [\"npx\", \"-y\", \"z\"]\n        },\n        \"servers\": {\n            \"x\": { \"type\": \"remote\", \"url\": \"https://example.com/mcp\" }\n        }\n    },\n    \"model\": \"a/b\"\n}\n";
+        let after = oc(before).unwrap();
+        assert_eq!(
+            after,
+            before.replace(
+                "        }\n    },\n    \"model\"",
+                &format!("        }},\n        \"draft-canvas\": {{\n            \"type\": \"local\",\n            \"command\": [\"{SIDECAR}\"],\n            \"enabled\": true\n        }}\n    }},\n    \"model\"")
+            )
+        );
+        assert_eq!(oc_found(&after).len(), 1);
+        assert!(!oc_found(&after)[0].native);
+        // Doing it again changes nothing.
+        assert_eq!(oc(&after).unwrap(), after);
+
+        // Spacing is the writer's own where it had to open an object; what the file says is not.
+        let compact = r#"{"mcp":{"x":{"type":"remote","url":"u"}},"agent":{"b":[1,2]}}"#;
+        let after = oc(compact).unwrap();
+        assert_eq!(oc_rest(&after), oc_rest(compact));
+        assert!(after.contains(r#"{"b":[1,2]}"#), "{after}");
+        assert_eq!(oc(&after).unwrap(), after);
+
+        let windows = before.replace('\n', "\r\n");
+        let after = oc(&windows).unwrap();
+        assert_eq!(oc_rest(&after), oc_rest(&windows));
+        assert_eq!(after.matches('\n').count(), after.matches("\r\n").count());
+        assert_eq!(oc(&after).unwrap(), after);
+    }
+
+    #[test]
+    fn an_opencode_1_entry_is_repointed_in_place_keeping_what_the_person_added() {
+        let before = "{\n  \"mcp\": {\n    \"dc\": {\n      \"type\": \"local\",\n      \"command\": [\"/old/draft-canvas-mcp\", \"--full-tools\"],\n      \"environment\": { \"A\": \"1\" },\n      \"timeout\": 5000,\n      \"enabled\": false\n    }\n  }\n}\n";
+        assert_eq!(oc_state(Some(before), None), SetupState::Outdated);
+        let after = oc(before).unwrap();
+        assert_eq!(
+            after,
+            before
+                .replace(
+                    "[\"/old/draft-canvas-mcp\", \"--full-tools\"]",
+                    &format!("[\"{SIDECAR}\",\"--full-tools\"]")
+                )
+                .replace("\"enabled\": false", "\"enabled\": true")
+        );
+        let found = oc_found(&after);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].name, "dc");
+        assert_eq!(oc_state(Some(&after), None), SetupState::Ready);
+        assert_eq!(oc(&after).unwrap(), after);
+    }
+
+    #[test]
+    fn an_opencode_2_entry_stays_under_servers() {
+        let before = "{\n  \"mcp\": {\n    \"servers\": {\n      \"draft-canvas\": {\n        \"type\": \"local\",\n        \"command\": [\"/old/draft-canvas-mcp\"],\n        \"cwd\": \".\",\n        \"codemode\": false,\n        \"timeout\": { \"execution\": 600000 },\n        \"disabled\": true,\n        \"enabled\": false\n      }\n    }\n  }\n}\n";
+        assert_eq!(oc_state(Some(before), None), SetupState::Outdated);
+        let after = oc(before).unwrap();
+        assert_eq!(
+            after,
+            before
+                .replace("/old/draft-canvas-mcp", SIDECAR)
+                .replace("\"disabled\": true", "\"disabled\": false")
+                .replace("\"enabled\": false", "\"enabled\": true")
+        );
+        let found = oc_found(&after);
+        assert_eq!(found.len(), 1);
+        assert!(found[0].native);
+        assert_eq!(oc_state(Some(&after), None), SetupState::Ready);
+        assert_eq!(oc(&after).unwrap(), after);
+    }
+
+    #[test]
+    fn an_opencode_entry_turned_off_either_way_is_not_ready() {
+        // OpenCode 1 honours `enabled` on an entry under `servers` and OpenCode 2 ignores it, so
+        // neither flag alone may read as set up.
+        for flags in ["\"enabled\": false", "\"disabled\": true"] {
+            for (open, close) in [("", ""), ("\"servers\": {", "}")] {
+                let text = format!(
+                    "{{ \"mcp\": {{ {open} \"draft-canvas\": {{ \"type\": \"local\", \"command\": [\"{SIDECAR}\"], {flags} }} {close} }} }}"
+                );
+                assert_eq!(oc_state(Some(&text), None), SetupState::Outdated, "{text}");
+                let after = oc(&text).unwrap();
+                assert_eq!(oc_state(Some(&after), None), SetupState::Ready, "{after}");
+            }
+        }
+    }
+
+    #[test]
+    fn an_opencode_config_draft_canvas_cant_change_is_refused_not_replaced() {
+        let broken = oc("{\n  \"mcp\": {\n").unwrap_err();
+        assert!(broken.message.contains("line 3"), "{}", broken.message);
+        let late = oc("{\n  // fine\n  \"mcp\": {},\n  \"a\": nope,\n}\n").unwrap_err();
+        assert!(late.message.contains("line 4"), "{}", late.message);
+        // Valid for OpenCode, but nothing Draft Canvas could write back whole.
+        let commented = oc(OC_COMMENTED).unwrap_err();
+        assert!(
+            commented.message.contains("comments"),
+            "{}",
+            commented.message
+        );
+        for odd in ["[]", r#"{ "mcp": "x" }"#, r#"{ "mcp": { "servers": [] } }"#] {
+            let refused = oc(odd).unwrap_err();
+            assert!(
+                refused.message.contains("laid out"),
+                "{odd}: {}",
+                refused.message
+            );
+        }
+        // A server of that name that isn't the connector is someone else's: never turned into ours.
+        for other in [
+            r#"{ "mcp": { "draft-canvas": { "type": "remote", "url": "https://example.com/mcp" } } }"#,
+            r#"{ "mcp": { "draft-canvas": { "type": "local", "command": ["npx", "-y", "other"] } } }"#,
+            r#"{ "mcp": { "draft-canvas": { "type": "local", "command": "draft-canvas-mcp" } } }"#,
+            r#"{ "mcp": { "servers": { "draft-canvas": { "enabled": false } } } }"#,
+        ] {
+            assert_eq!(oc_state(Some(other), None), SetupState::Outdated, "{other}");
+            let refused = oc(other).unwrap_err();
+            assert!(
+                refused.message.contains("different server"),
+                "{other}: {}",
+                refused.message
+            );
+        }
+        // Both layouts in one file: OpenCode 1 takes the first, OpenCode 2 the second.
+        let twice = format!(
+            r#"{{ "mcp": {{ "draft-canvas": {{ "type": "local", "command": ["{SIDECAR}"] }}, "servers": {{ "dc": {{ "type": "local", "command": ["{SIDECAR}"] }} }} }} }}"#
+        );
+        let refused = oc(&twice).unwrap_err();
+        assert!(refused.message.contains("twice"), "{}", refused.message);
+    }
+
+    #[test]
+    fn opencode_settings_with_comments_and_trailing_commas_are_still_read() {
+        let text = format!(
+            "// mine\n{{\n  \"theme\": \"a // b,}}\", /* note */\n  \"mcp\": {{\n    \"draft-canvas\": {{\n      \"type\": \"local\",\n      \"command\": [\"{SIDECAR}\",],\n    }},\n  }},\n}}\n"
+        );
+        let relaxed = relaxed_json(&text);
+        assert_eq!(relaxed.lines().count(), text.lines().count());
+        let config: Value = serde_json::from_str(&relaxed).unwrap();
+        assert_eq!(config["theme"], "a // b,}");
+        assert_eq!(oc_state(None, Some(&text)), SetupState::Ready);
+        assert_eq!(
+            relaxed_json(r#"{"a": ",}", "b": [1, 2,], }"#),
+            r#"{"a": ",}", "b": [1, 2 ]  }"#
+        );
+        assert_eq!(relaxed_json(r#"{"a": "\",}"}"#), r#"{"a": "\",}"}"#);
+        // A mistake stays one: a comma with nothing before it is not a trailing comma.
+        assert!(opencode_parsed("{ \"a\": 1,, }", OC_FILE).is_err());
+        assert_eq!(oc_state(Some("{ \"mcp\": "), None), SetupState::NotSetUp);
+    }
+
+    #[test]
+    fn opencode_gets_the_connector_in_the_one_file_that_can_take_it() {
+        let ours = format!(
+            "{{\n  // ours\n  \"mcp\": {{ \"draft-canvas\": {{ \"type\": \"local\", \"command\": [\"{SIDECAR}\"] }} }}\n}}\n"
+        );
+        let plain = ours.replace("  // ours\n", "");
+        let target = |json, jsonc| opencode_target(json, jsonc).map_err(|e| e.message);
+        assert_eq!(target(None, None), Ok("opencode.json"));
+        assert_eq!(target(Some("{}"), None), Ok("opencode.json"));
+        assert_eq!(target(Some("{}"), Some("{}")), Ok("opencode.json"));
+        assert_eq!(target(None, Some("{}")), Ok("opencode.json"));
+        // A commented file is left alone when the other can be written.
+        assert_eq!(target(None, Some(OC_COMMENTED)), Ok("opencode.json"));
+        assert_eq!(target(Some(OC_COMMENTED), Some("{}")), Ok("opencode.jsonc"));
+        for jsonc in [None, Some(OC_COMMENTED)] {
+            let refused = target(Some(OC_COMMENTED), jsonc).unwrap_err();
+            assert!(refused.contains("opencode.json has comments"), "{refused}");
+        }
+        // An entry is updated where it is, never joined by a second one in the other file.
+        assert_eq!(target(None, Some(&plain)), Ok("opencode.jsonc"));
+        assert_eq!(target(Some("{}"), Some(&plain)), Ok("opencode.jsonc"));
+        assert_eq!(target(Some(&plain), Some("{}")), Ok("opencode.json"));
+        let refused = target(Some("{}"), Some(&ours)).unwrap_err();
+        assert!(refused.contains("opencode.jsonc has comments"), "{refused}");
+        let refused = target(Some(&plain), Some(&ours)).unwrap_err();
+        assert!(
+            refused.contains("both opencode.json and opencode.jsonc"),
+            "{refused}"
+        );
+        let refused = target(Some("{}"), Some("{\n\"a\": \n}")).unwrap_err();
+        assert!(
+            refused.contains("opencode.jsonc has a mistake on line 3"),
+            "{refused}"
+        );
+    }
+
+    #[test]
+    fn two_opencode_files_that_disagree_are_not_ready() {
+        let entry = |command: &str| {
+            format!(
+                r#"{{ "mcp": {{ "draft-canvas": {{ "type": "local", "command": ["{command}"] }} }} }}"#
+            )
+        };
+        // OpenCode lets the .jsonc entry win over, or merge into, the .json one.
+        let (current, stale) = (entry(SIDECAR), entry("/old/draft-canvas-mcp"));
+        assert_eq!(oc_state(Some(&current), Some(&stale)), SetupState::Outdated);
+        assert_eq!(oc_state(Some(&current), Some(&current)), SetupState::Ready);
+        let dir = oc_dir(Some(&current), Some(&stale));
+        assert!(opencode_connect_in(dir.path(), Path::new(SIDECAR)).is_err());
+        for (file, text) in OPENCODE_FILES.into_iter().zip([&current, &stale]) {
+            assert_eq!(
+                &std::fs::read_to_string(dir.path().join(file)).unwrap(),
+                text
+            );
+        }
+    }
+
+    #[test]
+    fn windows_paths_are_escaped_for_opencode() {
+        let sidecar = r"C:\Program Files\Draft Canvas\draft-canvas-mcp.exe";
+        let text = opencode_with_connector("", Path::new(sidecar), OC_FILE).unwrap();
+        assert!(text.contains(r#"["C:\\Program Files\\Draft Canvas\\draft-canvas-mcp.exe"]"#));
+        assert_eq!(oc_found(&text)[0].command, [sidecar]);
+    }
+
+    #[test]
+    fn an_opencode_config_written_in_a_new_home_reads_back_ready() {
+        // No OpenCode yet, so no folder: the file is there for when it's installed.
+        let home = tempfile::tempdir().unwrap();
+        let dir = home.path().join(".config/opencode");
+        let sidecar = Path::new(SIDECAR);
+        assert_eq!(
+            opencode_setup(Some(&dir), sidecar).state,
+            SetupState::NotSetUp
+        );
+        opencode_connect_in(&dir, sidecar).unwrap();
+        let setup = opencode_setup(Some(&dir), sidecar);
+        assert_eq!(setup.state, SetupState::Ready);
+        assert!(setup.location.unwrap().ends_with("opencode.json"));
+        let first = std::fs::read_to_string(dir.join("opencode.json")).unwrap();
+        opencode_connect_in(&dir, sidecar).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.join("opencode.json")).unwrap(),
+            first
+        );
+        assert!(!dir.join("opencode.jsonc").exists());
+    }
+
+    #[test]
+    fn a_commented_opencode_file_is_left_alone_and_its_neighbour_written() {
+        let dir = oc_dir(None, Some(OC_COMMENTED));
+        let sidecar = Path::new(SIDECAR);
+        opencode_connect_in(dir.path(), sidecar).unwrap();
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join("opencode.jsonc")).unwrap(),
+            OC_COMMENTED
+        );
+        let setup = opencode_setup(Some(dir.path()), sidecar);
+        assert_eq!(setup.state, SetupState::Ready);
+        assert!(setup.location.unwrap().ends_with("opencode.json"));
+        // With nowhere safe to write, nothing is written at all.
+        let dir = oc_dir(Some(OC_COMMENTED), Some(OC_COMMENTED));
+        assert!(opencode_connect_in(dir.path(), sidecar).is_err());
+        for file in OPENCODE_FILES {
+            assert_eq!(
+                std::fs::read_to_string(dir.path().join(file)).unwrap(),
+                OC_COMMENTED
+            );
+        }
     }
 
     #[test]

@@ -1,6 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentClientSetup, AgentProject, AgentSettings, AgentSkillSetup } from '../../src/desktop/api';
-import { claudeCodeCommand, clientLine, codexConfigToml, connectionSummary, folderRows, geminiCommand, skillLine, skillTargetOf } from '../../src/desktop/ui/settings/agentModel';
+import {
+  claudeCodeCommand,
+  clientLine,
+  codexConfigToml,
+  connectionSummary,
+  folderRows,
+  geminiCommand,
+  OPENCODE_CHECK,
+  opencodeConfigJson,
+  skillLine,
+  skillTargetOf,
+} from '../../src/desktop/ui/settings/agentModel';
 
 const AGENT: AgentSettings = {
   enabled: true,
@@ -106,6 +117,17 @@ describe('codexConfigToml', () => {
   });
 });
 
+describe('opencodeConfigJson', () => {
+  it('is the entry Add to OpenCode writes: directly under mcp, the command a list, switched on', () => {
+    const windows = 'C:\\Program Files\\Draft Canvas\\draft-canvas-mcp.exe';
+    expect(JSON.parse(opencodeConfigJson(windows))).toEqual({ mcp: { 'draft-canvas': { type: 'local', command: [windows], enabled: true } } });
+    expect(opencodeConfigJson(AGENT.sidecarPath!)).toContain('"/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"');
+    // OpenCode 1.18 and older stop on `mcp.servers`, so the pasted entry never uses it.
+    expect(opencodeConfigJson(windows)).not.toContain('servers');
+    expect(OPENCODE_CHECK).toBe('opencode mcp list');
+  });
+});
+
 describe('clientLine', () => {
   const setup = (patch: Partial<AgentClientSetup>): AgentClientSetup => ({
     client: 'codex',
@@ -125,6 +147,20 @@ describe('clientLine', () => {
       text: 'Adds Draft Canvas to Junie’s MCP servers in ~/.junie/mcp/mcp.json — Junie in JetBrains IDEs and the Junie CLI both use it.',
     });
     expect(clientLine(setup({ client: 'junie', state: 'outdated' }))?.action).toBe('Update Junie');
+    expect(clientLine(setup({ client: 'opencode', location: '~/.config/opencode/opencode.json' }))).toEqual({
+      action: 'Add to OpenCode',
+      text: 'Adds Draft Canvas to OpenCode’s MCP servers in ~/.config/opencode/opencode.json, for every project.',
+      tone: null,
+    });
+    // Set up, not connected: the file is all Settings can see.
+    expect(clientLine(setup({ client: 'opencode', state: 'ready', location: '~/.config/opencode/opencode.json' }))?.text).toBe(
+      'Set up in ~/.config/opencode/opencode.json. Restart OpenCode to use it.',
+    );
+    expect(clientLine(setup({ client: 'opencode', state: 'outdated', configuredCommand: '/old/draft-canvas-mcp' }))).toEqual({
+      action: 'Update OpenCode',
+      text: 'OpenCode is set up for a different copy of Draft Canvas (/old/draft-canvas-mcp), has it turned off, or has more than one entry for it.',
+      tone: 'warn',
+    });
     const outdated = clientLine(setup({ state: 'outdated', configuredCommand: '/old/draft-canvas-mcp' }));
     expect(outdated).toMatchObject({ action: 'Update Codex', tone: 'warn' });
     expect(outdated?.text).toContain('/old/draft-canvas-mcp');
@@ -154,17 +190,18 @@ describe('skillLine', () => {
     ...patch,
   });
 
-  it('installs for Claude Code in its own folder, and for Codex, Cursor, Gemini CLI, Junie and others in the shared one', () => {
+  it('installs for Claude Code in its own folder, and for Codex, Cursor, Gemini CLI, Junie, OpenCode and others in the shared one', () => {
     expect(skillTargetOf('claude-code')).toBe('claude-code');
     expect(skillTargetOf('codex')).toBe('agents');
     expect(skillTargetOf('cursor')).toBe('agents');
     expect(skillTargetOf('gemini')).toBe('agents');
     expect(skillTargetOf('junie')).toBe('agents');
+    expect(skillTargetOf('opencode')).toBe('agents');
     expect(skillTargetOf('other')).toBe('agents');
     const line = skillLine(skill({}));
     expect(line).toMatchObject({ action: 'Install skill', removable: false });
     expect(line?.text).toContain('Installs in ~/.claude/skills for every project.');
-    expect(skillLine(skill({ target: 'agents', location: '~/.agents/skills/draft-canvas' }))?.text).toContain('Teaches Codex, Cursor, Gemini CLI and Junie');
+    expect(skillLine(skill({ target: 'agents', location: '~/.agents/skills/draft-canvas' }))?.text).toContain('Teaches Codex, Cursor, Gemini CLI, Junie and OpenCode');
   });
 
   it('says the skill updates with the app, and never offers to touch a newer copy', () => {

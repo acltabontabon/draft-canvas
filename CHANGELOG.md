@@ -33,6 +33,11 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Desktop
 
+#### Added
+
+- **OpenCode** — **Settings → AI agents** connects OpenCode 1 and 2 in one click, alongside Claude
+  Code, Codex, Cursor, Gemini CLI and Junie, and shows how to check the connection.
+
 #### Fixed
 
 - **Typing to Nodi with an input method** — The Enter that confirms a conversion no longer sends

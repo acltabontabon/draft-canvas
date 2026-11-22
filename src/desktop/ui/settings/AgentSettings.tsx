@@ -14,6 +14,8 @@ import {
   folderRows,
   geminiCommand,
   genericConfigJson,
+  OPENCODE_CHECK,
+  opencodeConfigJson,
   skillLine,
   skillTargetOf,
 } from './agentModel';
@@ -168,6 +170,7 @@ const CLIENTS: { value: Client; label: string }[] = [
   { value: 'cursor', label: 'Cursor' },
   { value: 'gemini', label: 'Gemini CLI' },
   { value: 'junie', label: 'Junie' },
+  { value: 'opencode', label: 'OpenCode' },
   { value: 'other', label: 'Other MCP clients' },
 ];
 
@@ -255,6 +258,24 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
                 <p className="dc-prefs-step">Paste into {setupOf('junie')?.location ?? (platform === 'windows' ? '.junie\\mcp\\mcp.json in your user folder' : '~/.junie/mcp/mcp.json')}:</p>
                 <CopyField label="Junie MCP config" value={genericConfigJson(sidecarPath)} multiline />
               </OneClick>
+            )}
+            {client === 'opencode' && (
+              <>
+                <OneClick setup={setupOf('opencode')} blocked={!!agent.sidecarWarning} onConnected={connected}>
+                  <p className="dc-prefs-step">
+                    Paste into {setupOf('opencode')?.location ?? (platform === 'windows' ? '.config\\opencode\\opencode.json in your user folder' : '~/.config/opencode/opencode.json')}, or a
+                    project’s opencode.json:
+                  </p>
+                  <CopyField label="OpenCode MCP config" value={opencodeConfigJson(sidecarPath)} multiline />
+                </OneClick>
+                {/* "Set up" is what the file says. Whether OpenCode connected is its own to tell: a project's
+                    opencode.json or OPENCODE_CONFIG can override the file, out of this app's sight. */}
+                <p className="dc-prefs-step">
+                  To check, run this in your project folder. It should list draft-canvas as connected; a project’s own opencode.json or OPENCODE_CONFIG can override
+                  this setup.
+                </p>
+                <CopyField label="Check the connection" value={OPENCODE_CHECK} />
+              </>
             )}
             {client === 'other' && (
               <>

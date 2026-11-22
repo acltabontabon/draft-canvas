@@ -125,7 +125,17 @@ export function codexConfigToml(sidecarPath: string): string {
   return `[mcp_servers.draft-canvas]\ncommand = ${JSON.stringify(sidecarPath)}\ntool_timeout_sec = ${CODEX_TOOL_TIMEOUT_SECS}\n`;
 }
 
-const CLIENT_NAMES: Record<AgentClient, string> = { codex: 'Codex', 'claude-code': 'Claude Code', gemini: 'Gemini CLI', junie: 'Junie' };
+/** What "Add to OpenCode" writes, for pasting by hand into the global `opencode.json` or a project's own.
+ *  Servers sit directly under `mcp`, the layout OpenCode 1 and 2 both read; `mcp.servers` is OpenCode 2 only. */
+export function opencodeConfigJson(sidecarPath: string): string {
+  return JSON.stringify({ mcp: { 'draft-canvas': { type: 'local', command: [sidecarPath], enabled: true } } }, null, 2);
+}
+
+/** OpenCode's own check: it starts each server and says whether it connected. Settings only knows what the
+ *  configuration file says, which a project's `opencode.json` or `OPENCODE_CONFIG` can override. */
+export const OPENCODE_CHECK = 'opencode mcp list';
+
+const CLIENT_NAMES: Record<AgentClient, string> = { codex: 'Codex', 'claude-code': 'Claude Code', gemini: 'Gemini CLI', junie: 'Junie', opencode: 'OpenCode' };
 
 /** How a client picks up a new server: each reads its MCP configuration as a session starts. Gemini CLI
  *  turns every server off, its user-level ones too, in a folder the person hasn't trusted. */
@@ -134,6 +144,7 @@ const RESTART: Record<AgentClient, string> = {
   'claude-code': 'Start a new Claude Code session to use it.',
   gemini: 'Start a new Gemini CLI session in a trusted folder to use it.',
   junie: 'Start a new Junie session to use it.',
+  opencode: 'Restart OpenCode to use it.',
 };
 
 /** What the one-click button does, before it's done. */
@@ -147,6 +158,8 @@ function addText(client: AgentClient, where: string): string {
       return 'Runs gemini mcp add for you, so every project can use Draft Canvas.';
     case 'junie':
       return `Adds Draft Canvas to Junie’s MCP servers${where} — Junie in JetBrains IDEs and the Junie CLI both use it.`;
+    case 'opencode':
+      return `Adds Draft Canvas to OpenCode’s MCP servers${where}, for every project.`;
   }
 }
 
@@ -167,20 +180,21 @@ export function clientLine(setup: AgentClientSetup | undefined): ClientLine | nu
   if (setup.state === 'outdated') {
     return {
       action: `Update ${name}`,
-      text: `${name} is set up for a different copy of Draft Canvas${setup.configuredCommand ? ` (${setup.configuredCommand})` : ''}, or has it turned off.`,
+      // OpenCode reads two files in two layouts, so its entry can also be there twice, or be another server by that name.
+      text: `${name} is set up for a different copy of Draft Canvas${setup.configuredCommand ? ` (${setup.configuredCommand})` : ''}, ${setup.client === 'opencode' ? 'has it turned off, or has more than one entry for it' : 'or has it turned off'}.`,
       tone: 'warn',
     };
   }
   return { action: `Add to ${name}`, text: addText(setup.client, where), tone: null };
 }
 
-/** Which skills folder a client in Settings reads: Claude Code its own; Codex, Cursor, Gemini CLI, Junie
- *  and other agents the shared `~/.agents/skills` (`src-tauri/src/agent/skill.rs`). */
+/** Which skills folder a client in Settings reads: Claude Code its own; Codex, Cursor, Gemini CLI, Junie,
+ *  OpenCode and other agents the shared `~/.agents/skills` (`src-tauri/src/agent/skill.rs`). */
 export function skillTargetOf(client: AgentClient | 'cursor' | 'other'): AgentSkillTarget {
   return client === 'claude-code' ? 'claude-code' : 'agents';
 }
 
-const SKILL_READERS: Record<AgentSkillTarget, string> = { 'claude-code': 'Claude Code', agents: 'Codex, Cursor, Gemini CLI and Junie' };
+const SKILL_READERS: Record<AgentSkillTarget, string> = { 'claude-code': 'Claude Code', agents: 'Codex, Cursor, Gemini CLI, Junie and OpenCode' };
 
 export interface SkillLine {
   /** The main button's label, or null when there's nothing to do. */
