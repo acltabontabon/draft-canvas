@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
-import { cloneDocumentAsNew, createDocument, createNode } from '../src/document/factory';
+import { cloneDocumentAsNew, createDocument, createEdge, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
 import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
@@ -31,6 +31,19 @@ function writeRawRow<T extends { id: string }>(row: T): Promise<void> {
       tx.objectStore('bodies').put(row);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+
+/** A `bodies` row exactly as stored, read past the repository. */
+function readRawBody(id: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('draft-canvas');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const get = req.result.transaction('bodies', 'readonly').objectStore('bodies').get(id);
+      get.onsuccess = () => resolve(get.result);
+      get.onerror = () => reject(get.error);
     };
   });
 }
@@ -161,6 +174,36 @@ describe('local persistence', () => {
     // And a second open leaves it where it is.
     await repository.load(future.metadata.id);
     expect((await repository.list()).map((entry) => entry.title)).toEqual(['Edited after', 'From the future']);
+  });
+
+  it('putting a stored date right writes the summary’s dates and leaves the stored diagram as it was', async () => {
+    const repository = await IndexedDbRepository.open();
+    // A date years ahead, and something else a load repairs: a connector to a shape that is gone.
+    const base = documentWith('From the future');
+    const dangling = createEdge({ source: base.nodes[0]!.id, target: 'gone' });
+    const future: DraftDocument = { ...base, edges: [dangling], metadata: { ...base.metadata, createdAt: 1e15, updatedAt: 1e15 } };
+    await repository.save(future);
+    const bodyBefore = JSON.stringify(await readRawBody(future.metadata.id));
+    expect(bodyBefore).toContain(dangling.id);
+    const summaryBefore = (await repository.list())[0]!;
+
+    const written: string[] = [];
+    const put = IDBObjectStore.prototype.put;
+    const spy = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args: Parameters<typeof put>) {
+      written.push(this.name);
+      return put.apply(this, args);
+    });
+    const opened = await repository.load(future.metadata.id);
+    spy.mockRestore();
+
+    // In memory the connector is repaired away, to be kept on the next edit, as the person is told.
+    expect(opened!.edges).toHaveLength(0);
+    // In storage only the summary was written, and only its dates changed.
+    expect(written).toEqual(['documents']);
+    expect(JSON.stringify(await readRawBody(future.metadata.id))).toBe(bodyBefore);
+    const summaryAfter = (await repository.list())[0]!;
+    expect(summaryAfter.updatedAt).toBeLessThanOrEqual(Date.now());
+    expect({ ...summaryAfter, createdAt: 0, updatedAt: 0 }).toEqual({ ...summaryBefore, createdAt: 0, updatedAt: 0 });
   });
 
   it('opening a diagram with ordinary dates writes nothing', async () => {

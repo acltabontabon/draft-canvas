@@ -254,11 +254,7 @@ export class IndexedDbRepository implements DraftRepository {
     if (!read) return null;
     this.stamps.set(id, summary?.contentStamp);
     const { document, priorVersion } = read;
-    // A row dated years ahead sorts first in the library for good, and only a write moves it: the
-    // listing reads the stored summary, never the copy a load corrects. One of the few repairs worth
-    // writing back on an open that changes nothing else.
-    const misdated = summary !== undefined && !(isPlausibleDate(summary.updatedAt) && isPlausibleDate(summary.createdAt));
-    if (isLegacyBody(read.row) || priorVersion !== document.version || misdated) {
+    if (isLegacyBody(read.row) || priorVersion !== document.version) {
       // Best-effort: the caller still gets the correctly migrated in-memory
       // document either way, and the next real edit persists it through the
       // ordinary `save()` path — a failure here only loses the "derive once"
@@ -271,8 +267,33 @@ export class IndexedDbRepository implements DraftRepository {
           error,
         );
       }
+    } else if (summary && !(isPlausibleDate(summary.updatedAt) && isPlausibleDate(summary.createdAt))) {
+      await this.redateSummary(id, document.metadata.createdAt, document.metadata.updatedAt);
     }
     return document;
+  }
+
+  /**
+   * Puts right the dates on a stored summary that is dated years ahead: such a row sorts first in
+   * the library for good, and the listing reads the summary, never the copy a load corrects.
+   *
+   * The summary's two dates and nothing else. The stored diagram is not touched: whatever else the
+   * load repaired in memory (a dangling connector dropped) is still "kept on your next edit", as
+   * the person is told, and not written because a date happened to be wrong too. Best-effort, like
+   * the migration write-back: the next real save writes the dates in any case.
+   */
+  private async redateSummary(id: string, createdAt: number, updatedAt: number): Promise<void> {
+    try {
+      const tx = this.db.transaction('documents', 'readwrite');
+      const current = await tx.store.get(id);
+      // Only a row still dated ahead: another tab may have saved it properly in the meantime.
+      if (current && !(isPlausibleDate(current.updatedAt) && isPlausibleDate(current.createdAt))) {
+        await tx.store.put({ ...current, createdAt, updatedAt });
+      }
+      await tx.done;
+    } catch (error) {
+      console.warn(`[draft-canvas] Could not correct the stored dates of record ${id}:`, error);
+    }
   }
 
   /**
