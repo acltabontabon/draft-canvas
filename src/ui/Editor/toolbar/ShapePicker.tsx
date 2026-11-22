@@ -6,7 +6,7 @@ import {
   type PlacementPoint,
 } from '../../../canvas/popoverPlacement';
 import { DEV_PRESETS, PRESETS, searchPresets, type Preset } from '../../../lib/presets';
-import { isEditableTarget } from '../../../lib/isEditableTarget';
+import { isEditableTarget, isImeKeyEvent } from '../../../lib/isEditableTarget';
 import { MOD_SYMBOL } from '../../../lib/platform';
 import { useTechnologyIcon } from '../../../canvas/useTechnologyIcon';
 import { GENERIC_TECHNOLOGY_ICON } from '../../../nodes/technology';
@@ -125,7 +125,7 @@ export function ShapePicker({ anchorRect, trigger, armedId, onPick, onDismiss }:
           return;
         case 'Enter': {
           // Composing (an IME's Enter confirms the word, not the choice).
-          if (event.isComposing) return;
+          if (isImeKeyEvent(event)) return;
           event.preventDefault();
           const preset = flat[at];
           if (preset) onPick(preset);
