@@ -27,10 +27,12 @@ export async function startBenchServer(opts: {
     execSync('npm run build', { stdio: 'inherit', cwd: REPO_ROOT });
   }
 
+  // Vite's own entry under this Node, not `npm run preview`: `spawn('npm')` finds no executable on
+  // Windows (it is `npm.cmd` there), and one process is also one thing to stop.
   const child: ChildProcess = spawn(
-    'npm',
-    ['run', 'preview', '--', '--port', String(opts.port), '--strictPort', ...(opts.distDir ? ['--outDir', opts.distDir] : [])],
-    { cwd: REPO_ROOT, stdio: 'pipe', detached: true },
+    process.execPath,
+    [join(REPO_ROOT, 'node_modules', 'vite', 'bin', 'vite.js'), 'preview', '--port', String(opts.port), '--strictPort', ...(opts.distDir ? ['--outDir', opts.distDir] : [])],
+    { cwd: REPO_ROOT, stdio: 'pipe', detached: process.platform !== 'win32' },
   );
 
   const url = `http://localhost:${opts.port}`;
@@ -38,7 +40,9 @@ export async function startBenchServer(opts: {
   const stop = async () => {
     if (child.pid === undefined) return;
     try {
-      process.kill(-child.pid, 'SIGTERM');
+      // A process group is a POSIX idea; on Windows the child is the server itself.
+      if (process.platform === 'win32') child.kill();
+      else process.kill(-child.pid, 'SIGTERM');
     } catch {
       // Already exited, or the process group is gone — nothing left to clean up.
     }

@@ -29,9 +29,16 @@ export interface LaunchOptions {
 export async function launchBrowser(options: LaunchOptions = {}): Promise<Browser> {
   const args = options.uncapFrames ? [...BACKGROUND_FLAGS, UNCAP_FLAG] : BACKGROUND_FLAGS;
   if (options.headed) return chromium.launch({ headless: false, args });
-  if (options.newHeadless) return chromium.launch({ channel: 'chromium', headless: true, args });
+  if (options.newHeadless) return chromium.launch({ channel: NEW_HEADLESS_CHANNEL, headless: true, args });
   return chromium.launch({ headless: true });
 }
+
+/**
+ * Which full browser the new headless mode runs in. Playwright's own Chromium unless
+ * `BENCH_CHANNEL` names an installed one (`chrome`, `msedge`), for a machine where the bundled
+ * build won't start. A run on another channel is comparable only with runs on that same channel.
+ */
+const NEW_HEADLESS_CHANNEL = process.env.BENCH_CHANNEL || 'chromium';
 
 /** A window nobody is looking at is a window Chromium is entitled to throttle; a benchmark must not be. */
 const BACKGROUND_FLAGS = [
