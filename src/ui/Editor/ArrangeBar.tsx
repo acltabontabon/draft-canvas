@@ -4,6 +4,7 @@ import { withArrangeMotion } from '../../canvas/arrangeMotion';
 import { focusBoundsInView } from '../../commands/search';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument } from '../../document/types';
+import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
 import { gestureInProgress, useEditorStore } from '../../store/editorStore';
 import { useUiStore, type ArrangeDirection, type ArrangePreview, type ArrangeShow } from '../../store/uiStore';
 import { Button } from '../common/Button';
@@ -116,6 +117,8 @@ export function ArrangeBar() {
   useEffect(() => {
     if (!preview) return;
     const onKey = (event: KeyboardEvent) => {
+      // As in `TidyBar`: a dialog, the palette or a menu over the canvas owns these keys while it is up.
+      if (isImeKeyEvent(event) || overlayAboveCanvasIsOpen()) return;
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) {
         // The direction choice is a radio group: Escape still cancels from it, Enter is its own.
