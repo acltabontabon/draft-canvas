@@ -462,6 +462,36 @@ describe('useDocumentSession — overlapping opens', () => {
     expect(session().openId).toBe(next.metadata.id);
   });
 
+  it('going home from a diagram opened over another leaves the address naming no diagram', async () => {
+    const first = createDocument('Opened first');
+    const second = createDocument('Opened over it');
+    const repository = stubRepository({
+      load: async (id) => (id === first.metadata.id ? structuredClone(first) : id === second.metadata.id ? structuredClone(second) : null),
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(first.metadata.id);
+    });
+    await act(async () => {
+      await session().openDocument(second.metadata.id);
+    });
+    expect(docIdFromLocation()).toBe(second.metadata.id);
+
+    let heard = 0;
+    const onPopState = () => (heard += 1);
+    window.addEventListener('popstate', onPopState);
+    await act(async () => {
+      expect(await session().closeDocument()).toBe(true);
+    });
+    await waitFor(() => expect(heard).toBeGreaterThan(0));
+    window.removeEventListener('popstate', onPopState);
+
+    // The step back landed on the first diagram's entry. Home is showing, so a reload must not reopen it.
+    expect(session().openId).toBeNull();
+    expect(docIdFromLocation()).toBeNull();
+  });
+
   it('Back then Forward while the last save is still being written leaves the canvas open', async () => {
     const { current, session, release, saving } = await openWithPendingSave();
     expect(docIdFromLocation()).toBe(current.metadata.id);

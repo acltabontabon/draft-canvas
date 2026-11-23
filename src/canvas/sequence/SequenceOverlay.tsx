@@ -138,7 +138,11 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
         .map((frame): Arrival => ({ id: frame.id, what: 'frame', box: frame.box, operator: frame.operator })),
     ];
     // A paste or an undo brings many at once: that is not something arriving, it is a new picture.
-    if (fresh.length > 0 && fresh.length <= 3) setArrived((marks) => [...marks.filter((mark) => now.has(mark.id)), ...fresh]);
+    // An undo then a redo inside one sweep brings back an id whose mark is still playing: it is
+    // replaced, not added beside itself (two marks under one key).
+    if (fresh.length > 0 && fresh.length <= 3) {
+      setArrived((marks) => [...marks.filter((mark) => now.has(mark.id) && !fresh.some((entry) => entry.id === mark.id)), ...fresh]);
+    }
   }, [layout]);
 
   const setGesture = (next: Gesture | null) => {
