@@ -54,14 +54,16 @@ test('a style is made beside the canvas, kept on this device, and the open diagr
   // The first change makes it a style of the person's own, and the diagram on the canvas, which
   // was drawn in that style, follows at once with the panel still open beside it.
   await show(settings, 'Drawing');
+  // One after the other, with nothing between: changes to a style fold into one undo step only
+  // while they keep coming (the history's coalesce window), and a look at another tab is a pause.
   await settings.getByRole('radiogroup', { name: 'Line weight', exact: true }).getByText('Bold', { exact: true }).click();
+  await settings.getByRole('radiogroup', { name: 'Corners', exact: true }).getByText('Round', { exact: true }).click();
+  await expect.poll(() => outlineWidth(page)).toBeGreaterThan(regular);
+  await expect.poll(async () => (await documentStyle(page))?.general).toEqual({ weight: 'bold', corners: 'round' });
   await show(settings, 'Styles');
   await expect(mine.getByRole('radio', { name: /^My style/ })).toBeChecked();
-  await show(settings, 'Drawing');
-  await expect.poll(() => outlineWidth(page)).toBeGreaterThan(regular);
-  await settings.getByRole('radiogroup', { name: 'Corners', exact: true }).getByText('Round', { exact: true }).click();
-  await expect.poll(async () => (await documentStyle(page))?.general).toEqual({ weight: 'bold', corners: 'round' });
   await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await expect(settings).toBeHidden();
 
   // Everything changed in that visit is one step, which undo takes back.
   await page.locator('.react-flow__pane').click({ position: { x: 40, y: 40 } });
@@ -119,8 +121,8 @@ test('the diagram is framed again in the canvas the panel leaves it', async ({ p
     .toBeLessThan(edge);
   expect(Math.min(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().left))))).toBeGreaterThan(0);
 
-  // Done puts the view back where it was before the panel took its room.
-  await page.waitForTimeout(600);
+  // Done puts the view back where it was before the panel took its room, once that fit has settled.
+  await page.waitForTimeout(1200);
   await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
   await expect(settings).toBeHidden();
   await expect

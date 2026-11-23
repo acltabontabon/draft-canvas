@@ -236,3 +236,25 @@ describe('style packs', () => {
     expect(await stylePackFile(professional!)).toBeNull();
   });
 });
+
+describe('the gallery, as the interface sees it', () => {
+  it('stays busy from "Load starters" until the starters arrive, however the list is opened meanwhile', async () => {
+    serve();
+    const { useGalleryStore } = await import('../src/store/galleryStore');
+    useGalleryStore.setState({ enabled: false, status: 'idle', snapshot: null, failure: null });
+    // What a list would have shown at each moment: nothing downloaded and not busy reads as a failure.
+    const stranded: string[] = [];
+    const stop = useGalleryStore.subscribe((state) => {
+      if (state.enabled && !state.snapshot && state.status === 'idle' && !state.failure) stranded.push('idle with nothing');
+    });
+    // "Load starters", and the list it opens reading the copy on this device at the same moment.
+    const enabling = useGalleryStore.getState().enable();
+    const opening = useGalleryStore.getState().load();
+    await Promise.all([enabling, opening]);
+    stop();
+    expect(stranded).toEqual([]);
+    expect(useGalleryStore.getState()).toMatchObject({ status: 'idle', failure: null });
+    expect(useGalleryStore.getState().snapshot?.starters.length).toBeGreaterThan(0);
+    await useGalleryStore.getState().disable();
+  });
+});

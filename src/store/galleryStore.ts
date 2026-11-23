@@ -68,9 +68,13 @@ export const useGalleryStore = create<GalleryState>()((set, get) => ({
 
   async load(options = {}) {
     if (!get().snapshot) {
-      set({ status: 'loading' });
+      // A refresh may already be on its way ("Load starters" starts one, and the list it opens
+      // calls this): its status and whatever it brings stand. Saying "idle" over it, with nothing
+      // downloaded yet, is what the list read as "couldn't reach GitHub" until the refresh landed.
+      if (!inFlight) set({ status: 'loading' });
       const cached = await loadGallery();
-      set({ snapshot: cached, status: 'idle' });
+      if (!get().snapshot && cached) set({ snapshot: cached });
+      if (!inFlight) set({ status: 'idle' });
     }
     const { enabled, snapshot } = get();
     if (options.refresh === false) return;
@@ -96,7 +100,9 @@ export const useGalleryStore = create<GalleryState>()((set, get) => ({
 
   async enable() {
     writePreference(PREFERENCE, 'on');
-    set({ enabled: true });
+    // On and busy in one step: on, idle and empty-handed, even for a moment, is what a list shows
+    // as a failure to reach GitHub.
+    set({ enabled: true, status: 'refreshing', failure: null });
     await get().refresh();
   },
 

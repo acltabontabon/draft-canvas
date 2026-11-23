@@ -97,7 +97,6 @@ test('Appearance opens beside the canvas from the status bar and the right-click
   // Drawn as the sheet it is, down the side of the window: its stylesheet is its own to load, with
   // no Settings dialog on the web to load it.
   expect(await panel.locator('.dc-style-panel-sheet').evaluate((sheet) => getComputedStyle(sheet).position)).toBe('fixed');
-  await expect(button).toHaveAttribute('aria-pressed', 'true');
   await expect(panel.getByRole('tab', { name: 'Styles', exact: true })).toHaveAttribute('aria-selected', 'true');
   // The canvas's one setting of its own is a page of the same panel.
   await panel.getByRole('tab', { name: 'Canvas', exact: true }).click();

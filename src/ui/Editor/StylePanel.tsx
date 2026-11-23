@@ -101,10 +101,16 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
    * into view, not blown up.
    */
   useEffect(() => {
-    // Once the canvas has finished giving up the room (`dc-style-panel-room`), not while it is still
-    // narrowing: a fit taken mid-way frames the diagram for a canvas wider than the one it ends in.
+    // Once the canvas has finished giving up the room, not while it is still narrowing: a fit taken
+    // mid-way frames the diagram for a canvas wider than the one it ends in. The canvas itself says
+    // when: a timer alone ran ahead of it in WebKit, which reports a resize a frame or two later.
+    const canvas = document.querySelector('.dc-canvas');
+    let quiet = 0;
     let settled = 0;
-    const timer = window.setTimeout(() => {
+    let done = false;
+    const fit = () => {
+      if (done) return;
+      done = true;
       const state = useEditorStore.getState();
       if (!hasSomethingToFit(state)) return;
       void fitView({ padding: 0.2, duration: motionMs(360), maxZoom: getZoom(), nodes: flowFitViewNodes(state) });
@@ -112,9 +118,24 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
       settled = window.setTimeout(() => {
         camera.current.fitted = getViewport();
       }, motionMs(360) + 60);
-    }, motionMs(ROOM_MS) + 40);
+    };
+    // Each change of size puts the fit off a little; it runs when they stop coming.
+    const observer =
+      canvas && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            if (done) return;
+            window.clearTimeout(quiet);
+            quiet = window.setTimeout(fit, 120);
+          })
+        : null;
+    if (canvas) observer?.observe(canvas);
+    // And in any case once the room has been given up, for a canvas whose size never changes (a
+    // narrow window, where the panel sits under it).
+    const last = window.setTimeout(fit, motionMs(ROOM_MS) + 400);
     return () => {
-      window.clearTimeout(timer);
+      observer?.disconnect();
+      window.clearTimeout(quiet);
+      window.clearTimeout(last);
       window.clearTimeout(settled);
     };
   }, [fitView, getZoom, getViewport, camera]);
