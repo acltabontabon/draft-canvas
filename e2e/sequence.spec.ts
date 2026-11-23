@@ -146,9 +146,10 @@ test.describe('Sequence', () => {
     await page.mouse.down();
     await page.mouse.move(before.x + 160, before.y + 72, { steps: 6 });
     await page.mouse.up();
-    const after = (await node.boundingBox())!;
-    expect(after.x - before.x).toBeGreaterThan(60);
-    expect(after.y - before.y).toBeGreaterThan(30);
+    // Polled: WebKit can still be painting an earlier step of the drag when the button comes up, and
+    // a single read then saw the shape halfway (50px of the 100 it was dragged).
+    await expect.poll(async () => (await node.boundingBox())!.x - before.x).toBeGreaterThan(60);
+    await expect.poll(async () => (await node.boundingBox())!.y - before.y).toBeGreaterThan(30);
     expect(await said(page)).toEqual(['Client to API: GET /orders', 'API to Database: SELECT orders']);
   });
 
