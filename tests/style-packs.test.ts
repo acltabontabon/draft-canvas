@@ -99,6 +99,8 @@ describe.each(IDS)('%s', (id) => {
 
   it('keeps only drawings it uses, each inside what a style may hold', () => {
     const used = new Set(Object.values(style.shapes ?? {}).flatMap((shape) => (shape.art ? [shape.art] : [])));
+    // The canvas's backdrop is a drawing too: one tile, used by no shape.
+    if (style.backdrop) used.add(style.backdrop.art);
     const assets = style.assets ?? [];
     expect(assets.map((asset) => asset.id).filter((assetId) => !used.has(assetId))).toEqual([]);
     expect(assets.length).toBeLessThanOrEqual(STYLE_LIMITS.maxAssets);
@@ -144,6 +146,13 @@ describe.each(IDS)('%s', (id) => {
       // A size is worked out without any style at all, so a pack cannot move anything.
       expect(sizingContext().style.shape(node).plain, key).toBe(true);
     }
+  });
+
+  it('prints a backdrop on its canvas, one tile of a size worth repeating', () => {
+    const tile = resolved.backdrop?.art;
+    expect(tile, 'a backdrop').toBeDefined();
+    expect(Math.min(tile!.w, tile!.h)).toBeGreaterThanOrEqual(120);
+    expect(Math.max(tile!.w, tile!.h)).toBeLessThanOrEqual(640);
   });
 
   it('gives every kind that has a drawing one of its own', () => {

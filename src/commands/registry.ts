@@ -1009,7 +1009,8 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       title: 'Appearance…',
       group: 'canvas',
       keywords: ['style', 'my style', 'drawing style', 'clean', 'draft', 'sketch', 'colours', 'colors', 'palette', 'line weight', 'corners', 'shadow', 'arrowhead', 'customise', 'customize', 'personalise', 'personalize', 'look'],
-      run: (inner) => inner.ui.setSettingsOpen(true, 'appearance'),
+      // Beside the canvas, not over it: the diagram is the preview.
+      run: (inner) => inner.ui.setStylePanelOpen(true),
     },
     {
       // The one way a diagram's own look changes outside Settings: asked for by name, one undo step.

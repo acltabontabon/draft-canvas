@@ -213,7 +213,8 @@ describe('style packs', () => {
     const cute = snapshot.styles.find((pack) => pack.id === 'cute')!;
     const file = await stylePackFile(cute);
     expect(file?.name).toBe('Cute');
-    expect(file?.style.assets?.length).toBe(34);
+    // A drawing for every kind of shape, and the backdrop.
+    expect(file?.style.assets?.length).toBe(35);
     // Kept through a reload of the gallery from its cache, with no request made.
     fetch.mockClear();
     expect((await loadGallery())?.styles.map((pack) => pack.id)).toEqual(snapshot.styles.map((pack) => pack.id));

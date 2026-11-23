@@ -733,49 +733,75 @@ async function layoutScreenshots(page: Page) {
   await shot(page, 'portal-legend-held');
 }
 
-/** Settings → Appearance on the page it opens at, as a person reaches it: from the palette. */
+/** Appearance, as a person reaches it: from the palette. It opens beside the canvas, not over it. */
 async function openAppearance(page: Page) {
   await page.keyboard.press('Control+k');
   await expect(page.getByRole('dialog')).toBeVisible();
   await page.keyboard.type('Appearance');
   await page.keyboard.press('Enter');
-  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-  await expect(settings.getByRole('tab', { name: 'Appearance', exact: true })).toHaveAttribute('aria-selected', 'true');
-  return settings;
+  const panel = page.getByRole('complementary', { name: 'Appearance', exact: true });
+  await expect(panel).toBeVisible();
+  return panel;
 }
 
-/** A style of one's own, the gallery's packs, and a diagram drawn in two of them. */
+/** A style of one's own, the canvas it is drawn on, the gallery's packs, and a diagram drawn in three of them. */
 async function appearanceScreenshots(page: Page) {
-  await page.setViewportSize({ width: 1200, height: 700 });
+  await page.setViewportSize({ width: 1360, height: 860 });
   await openStarter(page, 'Microservices');
   // A starter arrives selected; the pictures are of the diagram at rest.
   await page.locator(CANVAS).click({ position: { x: 40, y: 420 } });
   await expect(page.locator('.dc-node.selected, .react-flow__node.selected')).toHaveCount(0);
 
-  let settings = await openAppearance(page);
-  await expect(settings.locator('.dc-prefs-stage .dc-style-preview svg')).toBeVisible();
-  await page.waitForTimeout(600);
-  await settings.screenshot({ path: join(OUT, 'appearance.png') });
-  log('  appearance.png');
+  let panel = await openAppearance(page);
+  // The canvas is narrower with the panel beside it: the diagram is framed again in what is left.
+  const frame = async () => {
+    await palette(page, 'Fit to view');
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.waitForTimeout(500);
+  };
+  await frame();
+  await shot(page, 'appearance');
+
+  // A canvas of one's own: a colour and a backdrop, seen on the diagram as they are chosen.
+  // Chosen through the control itself, wherever the panel is scrolled to.
+  const pick = (input: HTMLElement) => input.click();
+  const styles = panel.getByRole('group', { name: 'My style' });
+  await panel.getByRole('tab', { name: 'Canvas', exact: true }).click();
+  await panel.getByRole('radiogroup', { name: 'Canvas colour' }).getByRole('radio', { name: 'Midnight', exact: true }).evaluate(pick);
+  await panel.getByRole('radiogroup', { name: 'Brand colour' }).getByRole('radio', { name: 'Amber', exact: true }).evaluate(pick);
+  await panel.getByRole('radiogroup', { name: 'Backdrop' }).getByRole('radio', { name: /^Stars/ }).evaluate(pick);
+  await expect(page.locator('.dc-canvas-backdrop')).toBeVisible();
+  await shot(page, 'appearance-canvas');
+  // The pen: each choice drawn as what it does.
+  await panel.getByRole('tab', { name: 'Drawing', exact: true }).click();
+  await shot(page, 'appearance-drawing');
+  // That made a style of one's own; the pictures after it start from Clean again.
+  await panel.getByRole('tab', { name: 'Styles', exact: true }).click();
+  await panel.getByRole('button', { name: 'Delete style', exact: true }).click();
+  await styles.getByRole('radio', { name: /^Clean/ }).evaluate(pick);
 
   // The gallery is already loaded (the starter came from it), so its packs are listed.
-  const pack = (name: string) => settings.locator('.dc-prefs-pack', { hasText: name });
+  const pack = (name: string) => panel.locator('.dc-prefs-pack', { hasText: name });
   await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
-  await settings.getByRole('heading', { name: 'Style packs', exact: true }).evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
-  await page.waitForTimeout(600);
-  await settings.screenshot({ path: join(OUT, 'style-packs.png') });
-  log('  style-packs.png');
 
   for (const [name, file] of [
     ['High seas', 'style-pack-high-seas'],
     ['Cyberpunk', 'style-pack-cyberpunk'],
+    ['Arena', 'style-pack-arena'],
+    ['Cute', 'style-pack-cute'],
   ] as const) {
     await pack(name).getByRole('button', { name: `Add ${name} to my styles`, exact: true }).click();
-    await expect(settings.getByRole('group', { name: 'My style' }).getByRole('radio', { name: new RegExp(`^${name}`) })).toBeChecked();
-    await settings.getByRole('button', { name: 'Close', exact: true }).click();
-    await expect(settings).toBeHidden();
+    await expect(styles.getByRole('radio', { name: new RegExp(`^${name}`) })).toBeChecked();
+    if (name === 'High seas') {
+      // The pack just added, on the diagram, with the packs it came from still beside it.
+      await panel.getByRole('heading', { name: 'Style packs', exact: true }).evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
+      await shot(page, 'style-packs');
+    }
+    await panel.getByRole('button', { name: 'Close appearance', exact: true }).click();
+    await expect(panel).toBeHidden();
+    await frame();
     await shot(page, file);
-    settings = await openAppearance(page);
+    panel = await openAppearance(page);
     await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
   }
 }

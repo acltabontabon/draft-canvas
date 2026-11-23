@@ -692,9 +692,10 @@
 
 /* ---- appearance: a style, drawn ---------------------------------------------- */
 
-/* The renderer's own picture of a style (`StylePreview.tsx`), scaled to the room it is given. */
+/* The renderer's own picture of a style (`StylePreview.tsx`), on the style's own canvas. */
 .dc-style-preview {
   display: flex;
+  align-items: center;
   justify-content: center;
   min-width: 0;
 }
@@ -703,112 +704,464 @@
   display: block;
   width: 100%;
   height: auto;
-  border-radius: 6px;
 }
 
-.dc-style-preview[data-size='row'] svg {
-  width: 132px;
+/* A gallery of styles: each card a diagram drawn in it, the whole card the choice. */
+.dc-look-gallery {
+  min-width: 0;
 }
 
-/* A choice's picture already carries its style's own canvas colour, so the frame adds none. */
-.dc-prefs-aside:has(.dc-style-preview) {
+.dc-look-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(176px, 1fr));
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.dc-look-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
   padding: 0;
   overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: 12px;
+  background: var(--dc-surface-raised);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.dc-look-card:hover {
+  border-color: color-mix(in srgb, var(--dc-text) 28%, var(--dc-border));
+  box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--dc-text) 45%, transparent);
+  transform: translateY(-1px);
+}
+
+.dc-look-card:has(input:checked) {
+  border-color: var(--dc-prefs-accent);
+  box-shadow: 0 0 0 1px var(--dc-prefs-accent), 0 8px 22px -12px color-mix(in srgb, var(--dc-prefs-accent) 70%, transparent);
+}
+
+.dc-look-card:has(input:focus-visible),
+.dc-look-card:focus-visible {
+  outline: 2px solid var(--dc-prefs-accent);
+  outline-offset: 2px;
+}
+
+.dc-look-card-picture {
+  display: flex;
+  height: 108px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-look-card-picture .dc-style-preview {
+  flex: 1;
+  padding: 0 6px;
+}
+
+.dc-look-card-picture .dc-style-preview svg {
+  max-height: 104px;
+}
+
+.dc-look-card-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px 10px;
+}
+
+.dc-look-card-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+
+.dc-look-card-name {
+  overflow: hidden;
+  font-size: 13.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-look-card-description {
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--dc-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-look-card[data-own] .dc-look-card-description {
+  color: var(--dc-prefs-accent);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.dc-look-card-check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--dc-border);
+  border-radius: 50%;
+  color: transparent;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.dc-look-card:has(input:checked) .dc-look-card-check {
+  border-color: var(--dc-prefs-accent);
+  background: var(--dc-prefs-accent);
+  color: var(--dc-surface-raised);
+}
+
+/* The way to bring one in: a slim row under them, drawn as room for one more. */
+.dc-look-card-add {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  align-items: center;
+  border-style: dashed;
   background: none;
 }
 
-/* The style being edited, kept in view while the controls under it are worked. */
-.dc-prefs-stage {
-  position: sticky;
-  top: -30px;
-  z-index: 1;
-  padding: 10px 0;
-  background: var(--dc-surface-raised);
-}
-
-.dc-prefs-stage .dc-style-preview {
-  overflow: hidden;
-  border: 1px solid var(--dc-border);
-  border-radius: 10px;
-}
-
-.dc-prefs-stage .dc-style-preview svg {
-  max-height: 132px;
-  border-radius: 0;
-}
-
-/* What can be done with the styles themselves: name, save to a file, delete, bring one in. */
-.dc-prefs-style-actions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.dc-prefs-own-style {
-  display: flex;
-  flex: 1;
-  flex-wrap: wrap;
-  align-items: flex-end;
-  gap: 12px;
-  min-width: 0;
-}
-
-.dc-prefs-own-style .dc-field {
-  flex: 1;
-  min-width: 0;
-  color: var(--dc-text-muted);
-}
-
-/* Sets of colours: each a swatch of its canvas and three of its colours, with its name. */
-.dc-prefs-palettes {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.dc-prefs-palette {
-  display: flex;
-  flex-direction: column;
+.dc-look-card-add .dc-look-card-picture {
   align-items: center;
-  gap: 5px;
-  padding: 6px 8px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  font-size: 12px;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
   color: var(--dc-text-muted);
-  cursor: pointer;
 }
 
-.dc-prefs-palette:hover {
-  background: var(--dc-surface);
+.dc-look-card-add .dc-look-card-foot {
+  flex: 1;
+  padding-left: 0;
 }
 
-.dc-prefs-palette:has(input:checked) {
-  border-color: var(--dc-prefs-accent);
+.dc-look-card-add .dc-look-card-text {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 10px;
+}
+
+.dc-look-card-add:hover {
+  transform: none;
+}
+
+.dc-look-card-add:hover .dc-look-card-picture {
   color: var(--dc-text);
 }
 
-.dc-prefs-palette:has(input:focus-visible) {
-  outline: 1px solid var(--dc-prefs-accent);
+/* The style in use, when it is one's own: its name, and the two things to do with it, on one line. */
+.dc-look-own {
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  margin-top: -14px;
+}
+
+.dc-look-tabpanel > .dc-look-own {
+  margin-top: -16px;
+}
+
+.dc-look-own-name {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: 36px;
+  padding: 0 11px;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+}
+
+.dc-look-own-name:focus-within {
+  border-color: var(--dc-prefs-accent);
   box-shadow: 0 0 0 3px var(--dc-prefs-focus);
 }
 
-.dc-prefs-palette-chips {
-  display: flex;
-  gap: 4px;
-  padding: 7px 8px;
-  border: 1px solid var(--dc-border);
-  border-radius: 6px;
-  background: var(--dc-canvas);
+.dc-look-own-name input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
 }
 
-.dc-prefs-palette-chips span {
-  width: 12px;
-  height: 12px;
+.dc-look-own-action {
+  flex: none;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 10px;
+}
+
+/* Where a style is changed: a heading, then the picture kept in view above the controls. */
+.dc-look-studio-head {
+  padding-top: 26px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-look-studio-head + .dc-prefs-stage {
+  margin-top: -18px;
+}
+
+.dc-prefs-stage {
+  position: sticky;
+  top: -30px;
+  z-index: 2;
+  /* A little wider than the page, so a chosen option's ring never shows past its edge. */
+  margin: 0 -6px;
+  padding: 10px 6px 12px;
+  background: var(--dc-surface-raised);
+  box-shadow: 0 10px 10px -10px color-mix(in srgb, var(--dc-text) 16%, transparent);
+}
+
+.dc-prefs-stage .dc-style-preview {
+  min-height: 116px;
+  padding: 4px 18px;
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, #fff 6%, transparent);
+}
+
+.dc-prefs-stage .dc-style-preview svg {
+  max-height: 112px;
+}
+
+/* A choice drawn as what it does: a line as heavy as "bold", a corner as round as "round". */
+.dc-look-tiles {
+  display: flex;
+  gap: 6px;
+}
+
+.dc-look-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-width: 76px;
+  padding: 7px 8px 6px;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+  font-size: 12px;
+  color: var(--dc-text-muted);
+  cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
+}
+
+.dc-look-tile:hover {
+  background: var(--dc-surface);
+  color: var(--dc-text);
+}
+
+.dc-look-tile:has(input:checked) {
+  border-color: var(--dc-prefs-accent);
+  background: color-mix(in srgb, var(--dc-prefs-accent) 9%, transparent);
+  box-shadow: 0 0 0 1px var(--dc-prefs-accent);
+  color: var(--dc-text);
+}
+
+.dc-look-tile:has(input:focus-visible) {
+  outline: 2px solid var(--dc-prefs-accent);
+  outline-offset: 2px;
+}
+
+.dc-look-tile-art {
+  display: flex;
+}
+
+.dc-look-tile-label {
+  white-space: nowrap;
+}
+
+/* The canvas: a label and its explanation above a row of things to pick from. */
+.dc-look-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px 0;
+}
+
+.dc-look-block + .dc-look-block {
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-look-block-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dc-look-palettes,
+.dc-look-backdrops {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+}
+
+.dc-look-palette,
+.dc-look-backdrop {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 5px 5px 7px;
+  border: 1px solid var(--dc-border);
+  border-radius: 10px;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 120ms ease, color 120ms ease;
+}
+
+.dc-look-palette:hover,
+.dc-look-backdrop:hover {
+  border-color: color-mix(in srgb, var(--dc-text) 28%, var(--dc-border));
+  color: var(--dc-text);
+}
+
+.dc-look-palette:has(input:checked),
+.dc-look-backdrop:has(input:checked) {
+  border-color: var(--dc-prefs-accent);
+  box-shadow: 0 0 0 1px var(--dc-prefs-accent);
+  color: var(--dc-text);
+}
+
+.dc-look-palette:has(input:focus-visible),
+.dc-look-backdrop:has(input:focus-visible),
+.dc-look-backdrop:focus-visible {
+  outline: 2px solid var(--dc-prefs-accent);
+  outline-offset: 2px;
+}
+
+.dc-look-palette-paper,
+.dc-look-backdrop-paper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 52px;
+  border-radius: 6px;
+  background-color: var(--dc-canvas);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dc-text) 10%, transparent);
+}
+
+.dc-look-palette-paper span {
+  width: 20px;
+  height: 14px;
+  border: 1.5px solid;
+  border-radius: 4px;
+}
+
+.dc-look-palette-paper span:nth-child(2) {
+  height: 20px;
+  border-radius: 50% / 28%;
+}
+
+.dc-look-backdrop-add {
+  border-style: dashed;
+}
+
+.dc-look-backdrop-add .dc-look-backdrop-paper {
+  background: none;
+  box-shadow: none;
+}
+
+.dc-look-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-look-swatch {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
+  cursor: pointer;
+}
+
+.dc-look-swatch > span {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dc-text) 22%, transparent);
+  color: var(--dc-text-muted);
+}
+
+.dc-look-swatch:hover > span {
+  transform: scale(1.08);
+}
+
+.dc-look-swatch:has(input:checked),
+.dc-look-swatch[data-on] {
+  box-shadow: 0 0 0 2px var(--dc-prefs-accent);
+}
+
+.dc-look-swatch:has(input:focus-visible) {
+  outline: 2px solid var(--dc-prefs-accent);
+  outline-offset: 2px;
+}
+
+/* The colour picker itself is the browser's; the swatch over it is what is seen and pressed. */
+.dc-look-colour-input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dc-look-swatch-custom > span {
+  background: conic-gradient(#f87171, #fbbf24, #a3e635, #34d399, #22d3ee, #818cf8, #e879f9, #f87171);
+  box-shadow: none;
+  color: #fff;
+}
+
+.dc-look-swatch-custom[data-on] > span {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--dc-text) 22%, transparent);
+}
+
+/* "The usual colour": the app's own teal, struck through, the way "none" is drawn. */
+.dc-look-swatch-auto > span {
+  background: linear-gradient(135deg, transparent 46%, var(--dc-text-muted) 46%, var(--dc-text-muted) 54%, transparent 54%), var(--dc-surface);
+}
+
+.dc-look-hex {
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--dc-surface);
+  font-family: var(--dc-mono);
+  font-size: 11.5px;
+  color: var(--dc-text-muted);
 }
 
 /* Every shape there is, to pick one: the same miniature the shape pickers on the canvas draw. */
@@ -827,10 +1180,11 @@
   gap: 6px;
   padding: 10px 6px 8px;
   border: 1px solid var(--dc-border);
-  border-radius: 8px;
+  border-radius: 10px;
   font-size: 12px;
   color: var(--dc-text-muted);
   cursor: pointer;
+  transition: border-color 120ms ease, background-color 120ms ease, color 120ms ease;
 }
 
 .dc-prefs-shape .dc-shape-preview {
@@ -840,17 +1194,19 @@
 
 .dc-prefs-shape:hover {
   background: var(--dc-surface);
+  color: var(--dc-text);
 }
 
 .dc-prefs-shape:has(input:checked) {
   border-color: var(--dc-prefs-accent);
-  background: var(--dc-surface);
+  background: color-mix(in srgb, var(--dc-prefs-accent) 9%, transparent);
+  box-shadow: 0 0 0 1px var(--dc-prefs-accent);
   color: var(--dc-text);
 }
 
 .dc-prefs-shape:has(input:focus-visible) {
-  outline: 1px solid var(--dc-prefs-accent);
-  box-shadow: 0 0 0 3px var(--dc-prefs-focus);
+  outline: 2px solid var(--dc-prefs-accent);
+  outline-offset: 2px;
 }
 
 /* A shape with a look of its own says so before it is opened. */
@@ -867,7 +1223,7 @@
 
 .dc-prefs-shape-editor {
   display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
+  grid-template-columns: 176px minmax(0, 1fr);
   gap: 20px;
   align-items: start;
   margin-top: 16px;
@@ -880,41 +1236,12 @@
 .dc-prefs-shape-stage {
   overflow: hidden;
   border: 1px solid var(--dc-border);
-  border-radius: 10px;
+  border-radius: 12px;
 }
 
-.dc-prefs-shape-stage .dc-style-preview svg {
-  border-radius: 0;
-}
-
-@media (max-width: 720px) {
-  .dc-prefs-stage {
-    top: 0;
-  }
-}
-
-@media (max-width: 560px) {
-  .dc-style-preview[data-size='row'] svg {
-    width: 84px;
-  }
-
-  .dc-prefs-shape-editor {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .dc-prefs-shape-stage {
-    max-width: 200px;
-  }
-
-  .dc-prefs-palettes {
-    justify-content: flex-start;
-  }
-
-  .dc-prefs-style-actions,
-  .dc-prefs-own-style {
-    flex-direction: column;
-    align-items: stretch;
-  }
+.dc-prefs-shape-stage .dc-style-preview {
+  min-height: 132px;
+  padding: 8px;
 }
 
 /* A shape's own drawing: the ways to give it one, and where SVG code is pasted. */
@@ -950,47 +1277,101 @@
   box-shadow: 0 0 0 3px var(--dc-prefs-focus);
 }
 
-@media (max-width: 560px) {
-  .dc-prefs-artwork-actions {
-    justify-content: flex-start;
-  }
-
-  .dc-prefs-paste {
-    flex-direction: column;
-    align-items: stretch;
-  }
-}
-
-/* Style packs from the gallery: each a picture of itself, what it is, and one way to take it. */
+/* Style packs from the gallery: each a diagram drawn in it, what it is, and one way to take it. */
 .dc-prefs-packs {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
   margin: 14px 0 0;
   padding: 0;
-  border: 1px solid var(--dc-border);
-  border-radius: 10px;
   list-style: none;
-  overflow: hidden;
 }
 
 .dc-prefs-pack {
   display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 12px 14px;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--dc-border);
+  border-radius: 14px;
+  background: var(--dc-surface-raised);
+  transition: border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
-.dc-prefs-pack + .dc-prefs-pack {
-  border-top: 1px solid var(--dc-border);
+.dc-prefs-pack:hover {
+  border-color: color-mix(in srgb, var(--dc-text) 28%, var(--dc-border));
+  box-shadow: 0 10px 26px -14px color-mix(in srgb, var(--dc-text) 50%, transparent);
+  transform: translateY(-1px);
 }
 
 .dc-prefs-pack-picture {
+  display: flex;
+  height: 148px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-prefs-pack-picture .dc-style-preview {
+  flex: 1;
+  padding: 0 10px;
+}
+
+.dc-prefs-pack-picture .dc-style-preview svg {
+  max-height: 136px;
+}
+
+.dc-prefs-pack-wait {
+  flex: 1;
+  background: linear-gradient(100deg, var(--dc-surface) 40%, color-mix(in srgb, var(--dc-text) 6%, var(--dc-surface)) 50%, var(--dc-surface) 60%) 0 0 / 300% 100%;
+  animation: dc-prefs-pack-wait 1.6s linear infinite;
+}
+
+@keyframes dc-prefs-pack-wait {
+  to {
+    background-position: -300% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-prefs-pack-wait {
+    animation: none;
+  }
+
+  .dc-look-card,
+  .dc-prefs-pack {
+    transition: none;
+  }
+
+  .dc-look-card:hover,
+  .dc-prefs-pack:hover {
+    transform: none;
+  }
+}
+
+.dc-prefs-pack-body {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px 14px;
+}
+
+.dc-prefs-pack-body .dc-prefs-row-text {
+  flex: 1;
+}
+
+.dc-prefs-pack-body .dc-prefs-label {
+  font-size: 14.5px;
+  font-weight: 600;
+}
+
+.dc-prefs-pack-add {
   flex: none;
-  width: 132px;
-  min-height: 44px;
-  overflow: hidden;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius);
+}
+
+.dc-prefs-pack[data-added] .dc-prefs-pack-add {
+  border-color: transparent;
+  color: var(--dc-prefs-accent);
+  opacity: 1;
 }
 
 .dc-prefs-pack-actions {
@@ -1009,12 +1390,414 @@
   color: var(--dc-text);
 }
 
+/* Before the gallery is loaded: three blank cards fanned out, and the one thing to press. */
+.dc-look-invite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  margin-top: 14px;
+  padding: 26px 16px 24px;
+  border: 1px dashed var(--dc-border);
+  border-radius: 14px;
+  background: var(--dc-surface);
+}
+
+.dc-look-invite-art {
+  position: relative;
+  width: 132px;
+  height: 62px;
+}
+
+.dc-look-invite-art span {
+  position: absolute;
+  top: 6px;
+  left: 36px;
+  width: 60px;
+  height: 46px;
+  border: 1px solid var(--dc-border);
+  border-radius: 8px;
+  background: var(--dc-surface-raised);
+  box-shadow: 0 6px 14px -8px color-mix(in srgb, var(--dc-text) 50%, transparent);
+}
+
+.dc-look-invite-art span:nth-child(1) {
+  background: #f6e7c8;
+  transform: translateX(-34px) rotate(-9deg);
+}
+
+.dc-look-invite-art span:nth-child(2) {
+  background: #14102a;
+  transform: translateX(34px) rotate(9deg);
+}
+
+.dc-look-invite-art span:nth-child(3) {
+  background: #fde8ef;
+  transform: translateY(-4px);
+}
+
+@media (max-width: 720px) {
+  .dc-prefs-stage {
+    top: 0;
+  }
+}
+
 @media (max-width: 560px) {
-  .dc-prefs-pack {
+  .dc-prefs-shape-editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dc-prefs-shape-stage {
+    max-width: 200px;
+  }
+
+  .dc-look-tiles {
     flex-wrap: wrap;
   }
 
-  .dc-prefs-pack-picture {
-    width: 84px;
+  .dc-look-tile {
+    flex: 1;
+    min-width: 64px;
+  }
+
+  .dc-prefs-artwork-actions {
+    justify-content: flex-start;
+  }
+
+  .dc-prefs-paste {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* ---- appearance, beside the canvas (`ui/Editor/StylePanel.tsx`) ----------------- */
+
+/* Docked like the Outline, outside the canvas column: the diagram is never covered, so it is the
+   picture every choice here is judged by. */
+.dc-style-panel {
+  --dc-prefs-warn: color-mix(in srgb, #e0a82e 62%, var(--dc-text));
+  --dc-prefs-tint: color-mix(in srgb, var(--dc-text) 3%, var(--dc-surface));
+  --dc-prefs-accent: var(--dc-selection);
+  --dc-prefs-focus: color-mix(in srgb, var(--dc-prefs-accent) 16%, transparent);
+  /* A switch that is on, which the dialogs take from the Library's own palette. */
+  --dc-library-action: var(--dc-selection);
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  width: min(396px, 86vw);
+  min-height: 0;
+  border-left: 1px solid var(--dc-border);
+  background: var(--dc-surface-raised);
+  /* Its own words in the editor's colours, which may be a style's and not the app's. */
+  color: var(--dc-text);
+  box-shadow: -18px 0 36px -30px color-mix(in srgb, var(--dc-text) 55%, transparent);
+  animation: dc-style-panel-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dc-style-panel:focus {
+  outline: none;
+}
+
+@keyframes dc-style-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-style-panel {
+    animation: none;
+  }
+}
+
+.dc-style-panel-header {
+  display: flex;
+  flex: none;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 16px 12px 14px 20px;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-style-panel-title {
+  margin: 0;
+  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
+  font-size: 21px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+.dc-style-panel-lead {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--dc-text-muted);
+}
+
+.dc-style-panel-body {
+  flex: 1;
+  min-height: 0;
+  padding: 18px 20px 36px;
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+/* A column, not a page: three short tabs, a little closer set. */
+.dc-look-column {
+  gap: 0;
+  max-width: none;
+}
+
+/* What to draw in, the paper, the pen: kept in view at the head of the panel as it scrolls. */
+.dc-look-tabs {
+  position: sticky;
+  top: -18px;
+  z-index: 3;
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 2px;
+  margin: -6px -4px 18px;
+  padding: 4px;
+  border: 1px solid var(--dc-border);
+  border-radius: 12px;
+  background: var(--dc-surface);
+  /* A margin of the panel's own colour, so nothing shows round the bar as the page scrolls under it. */
+  box-shadow: 0 0 0 8px var(--dc-surface-raised);
+}
+
+.dc-look-tab {
+  padding: 7px 0;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.dc-look-tab:hover {
+  color: var(--dc-text);
+}
+
+.dc-look-tab[aria-selected='true'] {
+  background: var(--dc-surface-raised);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--dc-text) 14%, transparent), 0 0 0 1px var(--dc-border);
+  color: var(--dc-text);
+}
+
+.dc-look-tab:focus-visible {
+  outline: 2px solid var(--dc-prefs-accent);
+  outline-offset: 1px;
+}
+
+.dc-look-tabpanel {
+  display: flex;
+  flex-direction: column;
+  gap: 26px;
+  min-width: 0;
+}
+
+/* What the tab changes, said once at its head. */
+.dc-look-subject {
+  margin: 0 0 -8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--dc-text-muted);
+}
+
+.dc-look-subject strong {
+  color: var(--dc-text);
+  font-weight: 600;
+}
+
+.dc-look-canvas .dc-look-block:first-child {
+  padding-top: 0;
+}
+
+.dc-look-column .dc-look-cards {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dc-look-column .dc-look-card:not(.dc-look-card-add) .dc-look-card-picture {
+  height: 84px;
+}
+
+.dc-look-column .dc-look-card-picture .dc-style-preview svg {
+  max-height: 80px;
+}
+
+/* Packs as the styles above them: two to a row, each a picture, a name, a line, one button. */
+.dc-look-column .dc-prefs-packs {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dc-look-column .dc-prefs-pack {
+  border-radius: 12px;
+}
+
+.dc-look-column .dc-prefs-pack-picture {
+  height: 84px;
+}
+
+.dc-look-column .dc-prefs-pack-picture .dc-style-preview {
+  padding: 0 6px;
+}
+
+.dc-look-column .dc-prefs-pack-picture .dc-style-preview svg {
+  max-height: 80px;
+}
+
+.dc-look-column .dc-prefs-pack-body {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+  padding: 9px 11px 11px;
+}
+
+.dc-look-column .dc-prefs-pack-body .dc-prefs-label {
+  font-size: 13.5px;
+}
+
+.dc-look-column .dc-prefs-pack-body .dc-prefs-description {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+}
+
+.dc-look-column .dc-prefs-pack-body .dc-prefs-detail {
+  display: none;
+}
+
+.dc-look-column .dc-prefs-pack-add {
+  justify-content: center;
+  margin-top: auto;
+  padding-block: 5px;
+}
+
+/* A choice and its tiles: the label above, the tiles sharing the row beneath it equally. */
+.dc-look-column .dc-prefs-action:has(.dc-look-tiles) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.dc-look-column .dc-prefs-control:has(.dc-look-tiles) {
+  display: block;
+  width: 100%;
+}
+
+.dc-look-column .dc-look-tiles {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+}
+
+.dc-look-column .dc-look-tiles .dc-look-tile {
+  min-width: 0;
+}
+
+/* A switch is a row like the rows round it, not a card among them. */
+.dc-look-column .dc-prefs-choice[data-toggle] {
+  padding: 2px 0;
+  border: 0;
+  background: none;
+}
+
+.dc-look-column .dc-look-palettes {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dc-look-column .dc-look-palette-paper span {
+  width: 14px;
+}
+
+.dc-look-column .dc-look-swatches {
+  gap: 4px;
+}
+
+.dc-look-column .dc-look-backdrops {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.dc-look-column .dc-prefs-shapes {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.dc-look-column .dc-prefs-shape {
+  padding: 8px 2px 6px;
+  font-size: 11px;
+}
+
+.dc-look-column .dc-prefs-shape-editor {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+
+.dc-look-column .dc-prefs-shape-stage .dc-style-preview {
+  min-height: 104px;
+}
+
+.dc-look-column .dc-prefs-shape-stage .dc-style-preview svg {
+  max-height: 96px;
+}
+
+/* A shape's own drawing: what it is, then the ways to give it one, each on a line of its own. */
+.dc-look-column .dc-prefs-action:has(.dc-prefs-artwork-actions) {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+
+.dc-look-column .dc-prefs-artwork-actions {
+  justify-content: flex-start;
+}
+
+/* The open diagram has a look of its own: said first, with the one thing that changes it. */
+.dc-look-notice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px 10px;
+  align-items: start;
+  padding: 12px 14px;
+  border: 1px solid color-mix(in srgb, var(--dc-prefs-warn) 45%, var(--dc-border));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--dc-prefs-warn) 9%, transparent);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.dc-look-notice svg {
+  margin-top: 2px;
+  color: var(--dc-prefs-warn);
+}
+
+.dc-look-notice p {
+  margin: 0;
+}
+
+.dc-look-notice .dc-button {
+  grid-column: 2;
+  justify-self: start;
+}
+
+@media (max-width: 720px) {
+  /* No room beside the canvas: the panel sits under it, like the Outline, the diagram above. */
+  .dc-style-panel {
+    width: auto;
+    height: min(440px, 54%);
+    border-top: 1px solid var(--dc-border);
+    border-left: 0;
+    box-shadow: none;
   }
 }

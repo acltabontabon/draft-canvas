@@ -573,6 +573,8 @@ export interface UiStore {
   flowPanelOpen: boolean;
   /** Whether the Outline — this view as a navigable list (`OutlinePanel.tsx`) — is docked open. */
   outlinePanelOpen: boolean;
+  /** The Appearance panel, docked beside the canvas so a change is seen on the diagram itself. Never saved. */
+  stylePanelOpen: boolean;
   /** Whether the proposal review panel (`desktop/ui/ProposalPanel.tsx`, desktop only) is open, and
    *  which proposal it's showing — `null` shows the list for the current diagram. */
   proposalPanelOpen: boolean;
@@ -830,6 +832,7 @@ export interface UiStore {
   setOpenPointsResolvedOpen: (open: boolean) => void;
   setFlowPanelOpen: (open: boolean) => void;
   setOutlinePanelOpen: (open: boolean) => void;
+  setStylePanelOpen: (open: boolean) => void;
   requestFlowRename: (flowId: string | null) => void;
   /** Opens the proposal panel (optionally straight to one proposal), or closes it. */
   setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
@@ -1034,6 +1037,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   openPointsResolvedOpen: false,
   flowPanelOpen: false,
   outlinePanelOpen: false,
+  stylePanelOpen: false,
   proposalPanelOpen: false,
   proposalPanelId: null,
   companionOpen: false,
@@ -1179,7 +1183,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setOpenPointsPanelOpen: (openPointsPanelOpen) => set({ openPointsPanelOpen }),
   setOpenPointsResolvedOpen: (openPointsResolvedOpen) => set({ openPointsResolvedOpen }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
-  setOutlinePanelOpen: (outlinePanelOpen) => set({ outlinePanelOpen }),
+  // One panel is docked beside the canvas at a time: two would leave little canvas to look at.
+  setOutlinePanelOpen: (outlinePanelOpen) => set(outlinePanelOpen ? { outlinePanelOpen, stylePanelOpen: false } : { outlinePanelOpen }),
+  setStylePanelOpen: (stylePanelOpen) => set(stylePanelOpen ? { stylePanelOpen, outlinePanelOpen: false } : { stylePanelOpen }),
   setProposalPanelOpen: (proposalPanelOpen, proposalId = null) => set({ proposalPanelOpen, proposalPanelId: proposalPanelOpen ? proposalId : null }),
   setCompanionOpen: (companionOpen) => set({ companionOpen }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),

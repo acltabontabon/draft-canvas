@@ -126,6 +126,13 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Every style from outside (file, collaborator, profile, pack) goes through `normalizeStyle`, which
   must stay free of the DOM so it runs in the agent worker. Colours are checked for contrast when
   resolved (`render/style/scheme.ts`), not in `document/`.
+- A style that names a canvas colour dresses the whole editor: `schemeTheme` works the panels' and
+  hairlines' colours out from the canvas, and `canvas/useEditorDress.ts` puts the theme on
+  `.dc-editor`. Dialogs, menus and Home are outside it and stay the app's. CSS that reads the theme
+  by attribute inside the editor must ask the editor's (`.dc-editor[data-theme]`), not the root's.
+- A style's backdrop (`DocumentStyle.backdrop`) is one drawing repeated behind the diagram: paint only,
+  never selected, routed round or measured. `render/style/backdrop.ts` makes the one tile the canvas
+  (`canvas/StyleBackdrop.tsx`), every export and every preview repeat; do not draw it a second way.
 - Dashes and open arrowheads encode what a connector means (`edges/kindStyle.ts`). A style never
   offers them, nor anything that would move a route, such as arrowhead size.
 - An SVG becomes a drawing only through `import/svgArt`, which reads the file with its own small
@@ -137,7 +144,9 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   so it is no part of a style.
 - A person's own styles are a device preference (`store/styleStore.ts`, IndexedDB
   `draft-canvas-styles`), never read by a renderer. A new diagram is stamped with a copy
-  (`deviceStyle()`) by whoever creates it. Settings → Appearance takes the open diagram along with a
+  (`deviceStyle()`) by whoever creates it. With a diagram open, Appearance is the panel docked beside
+  the canvas (`ui/Editor/StylePanel.tsx`, `uiStore.stylePanelOpen`, transient), never a dialog over it:
+  the diagram is the preview. The desktop Settings page is the same `AppearanceSettings`, for Home. Appearance takes the open diagram along with a
   change only while it is drawn in the style being changed (one coalesced undo step); a diagram with
   a different style changes only through an explicit "Use my style in this diagram". Settings → Appearance previews with `renderDocumentSvg`, never a drawing of
   its own.

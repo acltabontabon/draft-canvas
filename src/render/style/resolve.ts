@@ -38,6 +38,18 @@ export interface ResolvedConnector {
   readonly colour: StyleEdgeColour;
 }
 
+export interface ResolvedBackdrop {
+  readonly art: StyleAsset;
+  /** What the drawing's own opacity is multiplied by. */
+  readonly opacity: number;
+  /** Canvas pixels to one unit of the drawing. */
+  readonly scale: number;
+}
+
+/** What a backdrop's own opacity is multiplied by. */
+export const BACKDROP_OPACITY = { faint: 0.5, regular: 1, strong: 1.7 } as const;
+export const BACKDROP_SCALE = { small: 0.66, regular: 1, large: 1.5 } as const;
+
 /** A shape, as far as its look is concerned: its type and whichever kind field that type reads. */
 export type StyledNode = Pick<DraftNode, 'type'> & Partial<DraftNode>;
 
@@ -58,6 +70,8 @@ export interface ResolvedStyle {
   theme(device: ThemeName): Theme;
   /** Set when the style is always drawn in one theme, whatever the device prefers. */
   readonly pinned?: ThemeName;
+  /** The drawing repeated on the canvas behind the diagram, when the style has one. */
+  readonly backdrop?: ResolvedBackdrop;
   /** Short and stable, for caches and memo keys that cannot hold the object. */
   readonly key: string;
 }
@@ -142,6 +156,10 @@ function resolve(style: DocumentStyle): ResolvedStyle {
   const themes = styleThemes(style);
   const pinned = pinnedTheme(style);
   const connectors = style.connectors ?? {};
+  const tile = style.backdrop ? assets.get(style.backdrop.art) : undefined;
+  const backdrop: ResolvedBackdrop | undefined = tile
+    ? { art: tile, opacity: BACKDROP_OPACITY[style.backdrop!.strength ?? 'regular'], scale: BACKDROP_SCALE[style.backdrop!.scale ?? 'regular'] }
+    : undefined;
   serial += 1;
   return Object.freeze({
     hand: handOf(style.hand),
@@ -158,6 +176,7 @@ function resolve(style: DocumentStyle): ResolvedStyle {
     },
     theme: (device: ThemeName) => themes[device],
     ...(pinned ? { pinned } : {}),
+    ...(backdrop ? { backdrop } : {}),
     key: `s${serial}`,
   });
 }

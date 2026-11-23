@@ -1,4 +1,4 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Locator, type Page } from '@playwright/test';
 import { create, newCanvas } from './canvas';
 import { serveStarterGallery } from './gallery';
 
@@ -24,12 +24,20 @@ async function openAppearance(page: Page) {
   await page.keyboard.type('Appearance');
   await expect(page.getByRole('option', { selected: true })).toContainText('Appearance');
   await page.keyboard.press('Enter');
-  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-  await expect(settings.getByRole('tab', { name: 'Appearance', exact: true })).toHaveAttribute('aria-selected', 'true');
+  // Beside the canvas, never over it: the diagram is what a style is judged on.
+  const settings = page.getByRole('complementary', { name: 'Appearance', exact: true });
+  await expect(settings).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
   return settings;
 }
 
-test('a style is made in Settings, kept on this device, and the open diagram follows it', async ({ page }) => {
+/** The panel's three short pages: what to draw in, the paper, the pen. */
+async function show(settings: Locator, tab: 'Styles' | 'Canvas' | 'Drawing') {
+  await settings.getByRole('tab', { name: tab, exact: true }).click();
+  await expect(settings.getByRole('tab', { name: tab, exact: true })).toHaveAttribute('aria-selected', 'true');
+}
+
+test('a style is made beside the canvas, kept on this device, and the open diagram follows it', async ({ page }) => {
   await newCanvas(page, 'My style');
   await create(page, 'Service', { x: 420, y: 320 });
   await page.keyboard.press('Escape');
@@ -43,17 +51,17 @@ test('a style is made in Settings, kept on this device, and the open diagram fol
   await expect(mine.getByRole('radio', { name: /^Clean/ })).toBeChecked();
   await expect(settings.getByText(/following your changes here/)).toBeVisible();
 
-  // The first change makes it a style of the person's own. The picture of it follows at once, and
-  // so does the diagram on the canvas, which was drawn in that style.
-  const stage = settings.locator('.dc-prefs-stage .dc-style-preview');
-  const before = await stage.innerHTML();
+  // The first change makes it a style of the person's own, and the diagram on the canvas, which
+  // was drawn in that style, follows at once with the panel still open beside it.
+  await show(settings, 'Drawing');
   await settings.getByRole('radiogroup', { name: 'Line weight', exact: true }).getByText('Bold', { exact: true }).click();
+  await show(settings, 'Styles');
   await expect(mine.getByRole('radio', { name: /^My style/ })).toBeChecked();
-  await expect.poll(() => stage.innerHTML()).not.toBe(before);
+  await show(settings, 'Drawing');
   await expect.poll(() => outlineWidth(page)).toBeGreaterThan(regular);
   await settings.getByRole('radiogroup', { name: 'Corners', exact: true }).getByText('Round', { exact: true }).click();
   await expect.poll(async () => (await documentStyle(page))?.general).toEqual({ weight: 'bold', corners: 'round' });
-  await settings.getByRole('button', { name: 'Close', exact: true }).click();
+  await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
 
   // Everything changed in that visit is one step, which undo takes back.
   await page.locator('.react-flow__pane').click({ position: { x: 40, y: 40 } });
@@ -84,37 +92,83 @@ test('a diagram with a look of its own keeps it until asked', async ({ page }) =
 
   const settings = await openAppearance(page);
   await expect(settings.getByText(/Your changes here do not touch it/)).toBeVisible();
+  await show(settings, 'Drawing');
   await settings.getByRole('radiogroup', { name: 'Line weight', exact: true }).getByText('Bold', { exact: true }).click();
   expect(await documentStyle(page)).toMatchObject({ name: 'Theirs', general: { weight: 'fine' } });
   expect(await outlineWidth(page)).toBe(theirs);
 
+  await show(settings, 'Styles');
   await settings.getByRole('button', { name: 'Use my style', exact: true }).click();
   await expect(settings.getByRole('button', { name: 'Use my style', exact: true })).toBeDisabled();
   expect(await documentStyle(page)).toMatchObject({ name: 'My style', general: { weight: 'bold' } });
   await expect.poll(() => outlineWidth(page)).toBeGreaterThan(theirs);
 });
 
-test('a style’s colours dress the canvas and leave the app around it alone', async ({ page }) => {
+test('a style’s colours dress the whole editor, and leave the app outside it alone', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await newCanvas(page, 'Colours');
   await create(page, 'Service', { x: 420, y: 320 });
   await page.keyboard.press('Escape');
-  const colours = () =>
-    page.evaluate(() => ({
-      canvas: getComputedStyle(document.querySelector('.dc-canvas')!).getPropertyValue('--dc-canvas').trim(),
-      app: getComputedStyle(document.documentElement).getPropertyValue('--dc-canvas').trim(),
-    }));
+  const read = (selector: string, name: string) => page.evaluate(([at, variable]) => getComputedStyle(document.querySelector(at!)!).getPropertyValue(variable!).trim(), [selector, name]);
+  const colours = async () => ({
+    canvas: await read('.dc-canvas', '--dc-canvas'),
+    bar: await read('.dc-status', '--dc-surface'),
+    app: await read(':root', '--dc-canvas'),
+    appBar: await read(':root', '--dc-surface'),
+  });
   const plain = await colours();
   expect(plain.canvas).toBe(plain.app);
+  expect(plain.bar).toBe(plain.appBar);
 
   const settings = await openAppearance(page);
-  await settings.locator('.dc-prefs-palette', { hasText: 'Paper' }).click();
+  await show(settings, 'Canvas');
+  await settings.locator('.dc-look-palette', { hasText: 'Paper' }).click();
   await expect(settings.getByRole('radio', { name: /^Paper:/ })).toBeChecked();
-  await settings.getByRole('button', { name: 'Close', exact: true }).click();
 
+  // The canvas, and the bars and panels round it: one piece of paper. Home and dialogs are the app's.
   const dressed = await colours();
-  expect(dressed.app).toBe(plain.app);
   expect(dressed.canvas).not.toBe(plain.canvas);
+  expect(dressed.bar).not.toBe(plain.bar);
+  expect([dressed.app, dressed.appBar]).toEqual([plain.app, plain.appBar]);
+
+  // A brand colour marks what is chosen, in the editor and nowhere else.
+  const mark = await read('.dc-status', '--dc-selection');
+  await settings.locator('.dc-look-swatch[title="Indigo"]').click();
+  await expect.poll(() => read('.dc-status', '--dc-selection')).toBe('#4f46e5');
+  expect(await read(':root', '--dc-selection')).toBe(mark);
+  // And it stays when the colours under it change.
+  await settings.locator('.dc-look-palette', { hasText: 'Blueprint' }).click();
+  await expect.poll(() => read('.dc-status', '--dc-selection')).toBe('#4f46e5');
+});
+
+test('a canvas colour of the person’s own and a backdrop are seen on the canvas, and travel with the diagram', async ({ page }) => {
+  await page.emulateMedia({ colorScheme: 'light' });
+  await newCanvas(page, 'Canvas');
+  await create(page, 'Service', { x: 420, y: 320 });
+  await page.keyboard.press('Escape');
+  await expect(page.locator('.dc-canvas-backdrop')).toHaveCount(0);
+
+  const settings = await openAppearance(page);
+  await show(settings, 'Canvas');
+  await settings.locator('.dc-look-swatch[title="Midnight"]').click();
+  await expect(settings.getByRole('radiogroup', { name: 'Canvas colour' }).getByRole('radio', { name: 'Midnight', exact: true })).toBeChecked();
+  await expect.poll(() => page.evaluate(() => getComputedStyle(document.querySelector('.dc-canvas')!).getPropertyValue('--dc-canvas').trim())).toBe('#10162b');
+  // One colour is one scheme: the diagram is drawn on it whatever the device prefers.
+  expect(Object.keys((await documentStyle(page)).schemes)).toEqual(['dark']);
+
+  await settings.locator('.dc-look-backdrop', { hasText: 'Stars' }).click();
+  await expect(settings.getByRole('radiogroup', { name: 'Backdrop' }).getByRole('radio', { name: /^Stars/ })).toBeChecked();
+  const backdrop = page.locator('.dc-canvas-backdrop');
+  await expect(backdrop).toBeVisible();
+  expect(await backdrop.evaluate((element) => getComputedStyle(element).backgroundImage)).toContain('data:image/svg+xml');
+  // Canvas chrome: it never takes a click meant for the diagram.
+  expect(await backdrop.evaluate((element) => getComputedStyle(element).pointerEvents)).toBe('none');
+  const style = await documentStyle(page);
+  expect(style.assets.map((asset: { id: string }) => asset.id)).toEqual([style.backdrop.art]);
+
+  await settings.locator('.dc-look-backdrop', { hasText: 'None' }).click();
+  await expect(backdrop).toHaveCount(0);
+  expect((await documentStyle(page)).assets).toBeUndefined();
 });
 
 test('a shape is drawn with a picture of the person’s own, and stays the shape it was', async ({ page }) => {
@@ -132,6 +186,7 @@ test('a shape is drawn with a picture of the person’s own, and stays the shape
   expect(name).not.toBe('');
 
   const settings = await openAppearance(page);
+  await show(settings, 'Drawing');
   await settings.locator('.dc-prefs-shape', { hasText: 'Data store' }).click();
   await settings.getByRole('button', { name: 'Paste SVG', exact: true }).click();
   await settings.getByRole('textbox', { name: 'SVG code' }).fill(
@@ -141,7 +196,7 @@ test('a shape is drawn with a picture of the person’s own, and stays the shape
   );
   await settings.getByRole('button', { name: 'Use this', exact: true }).click();
   await expect(settings.getByRole('status')).toContainText('left out');
-  await settings.getByRole('button', { name: 'Close', exact: true }).click();
+  await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
 
   // Two paths where the cylinder was; the same box; the same name.
   await expect.poll(() => node.locator('path').count()).toBe(2);
@@ -219,7 +274,7 @@ test('a style pack is loaded from the gallery on request, added, and draws the o
   await expect(pack.getByRole('button', { name: 'High seas is in your styles', exact: true })).toBeDisabled();
   await expect(settings.getByRole('group', { name: 'My style' }).getByRole('radio', { name: /^High seas/ })).toBeChecked();
   await expect.poll(async () => (await documentStyle(page))?.name).toBe('High seas');
-  await settings.getByRole('button', { name: 'Close', exact: true }).click();
+  await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
 
   // The barrel where the cylinder was: the same box, the same name, the pack's own canvas.
   await expect.poll(drawing).not.toBe(builtIn);

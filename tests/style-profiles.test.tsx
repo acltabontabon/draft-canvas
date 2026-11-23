@@ -250,8 +250,8 @@ describe('a style’s preview', () => {
   it('keeps its own arrowheads, so two on a page never share or clash', () => {
     const { container } = render(
       <>
-        <StylePreview style={BOLD} theme="light" size="row" />
-        <StylePreview style={{ v: 1, hand: { base: 'clean' }, connectors: { head: 'triangle' } }} theme="light" size="row" />
+        <StylePreview style={BOLD} theme="light" size="card" />
+        <StylePreview style={{ v: 1, hand: { base: 'clean' }, connectors: { head: 'triangle' } }} theme="light" size="card" />
       </>,
     );
     const ids = [...container.querySelectorAll('[id]')].map((element) => element.id);
@@ -499,7 +499,7 @@ describe('Settings → Appearance', () => {
     await act(async () => fireEvent.click(within(packs).getByRole('button', { name: 'Add High seas to my styles' })));
     const [profile] = useStyleStore.getState().profiles;
     expect(profile).toMatchObject({ name: 'High seas', style: { hand: { base: 'draft' } } });
-    expect(profile!.style.assets).toHaveLength(34);
+    expect(profile!.style.assets).toHaveLength(35);
     expect(mine(/^High seas/)).toBeChecked();
     expect(preferences.get('personality')).toBe('draft');
     // It is theirs now: the pack says so, and changing the style does not change the pack.

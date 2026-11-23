@@ -59,6 +59,8 @@ import { useThemeValue } from '../../theme/useTheme';
 import { backOut, lookInside } from '../../commands/depthNavigation';
 import { OpenPointsPanel } from './OpenPointsPanel';
 import { OutlinePanel } from './OutlinePanel';
+import { StylePanel } from './StylePanel';
+import { useEditorDress } from '../../canvas/useEditorDress';
 import { createNudgeCoalescer } from './nudgeCoalescer';
 import { useSelectionAnnouncements } from './useSelectionAnnouncements';
 import { OpenPointPopover } from '../../canvas/OpenPointPopover';
@@ -643,6 +645,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     [setQuickConnect],
   );
 
+  // The whole editor wears the open diagram's colours, not the canvas alone.
+  const editorRoot = useRef<HTMLDivElement>(null);
+  useEditorDress(editorRoot);
+
   if (readOnly && !readOnly.collaborative) return (
     <SharedReader session={session} playback={playback}>
       <ErrorBoundary key={canvasInstanceKey} message="This diagram could not be rendered." actions={[{ label: 'Reload canvas', onClick: () => setCanvasInstanceKey((key) => key + 1) }]}>
@@ -655,6 +661,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
 
   return (
     <div
+      ref={editorRoot}
       className="dc-editor"
       data-mode={mode}
       data-tracing={tracing || undefined}
@@ -818,6 +825,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         {/* Docked to the right of the canvas, outside it: `canvasFrame.ts` measures the canvas column, so
             every "is it on screen" and "stay clear of the edge" check already accounts for the panel. */}
         {!presenting && <OutlinePanel buildCommandContext={buildCommandContext} />}
+        {!presenting && <StylePanel />}
       </div>
 
       <div style={{ display: 'contents' }} inert={sessionOver}>

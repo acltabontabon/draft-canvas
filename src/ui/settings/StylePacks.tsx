@@ -42,8 +42,13 @@ export function StylePacks({ theme, onAdded }: { theme: ThemeName; onAdded: (han
         title="Style packs"
         description="Ready-made styles from the Draft Canvas starters gallery. Loading reads that public gallery from GitHub, the same one Starters uses; nothing about your diagrams is sent."
       >
-        <div className="dc-prefs-pack-actions">
-          <Button variant="quiet" className="dc-prefs-outline" icon="export" onClick={() => void useGalleryStore.getState().enable()}>
+        <div className="dc-look-invite">
+          <span className="dc-look-invite-art" aria-hidden="true">
+            <span />
+            <span />
+            <span />
+          </span>
+          <Button variant="solid" icon="export" onClick={() => void useGalleryStore.getState().enable()}>
             Load style packs
           </Button>
         </div>
@@ -98,32 +103,34 @@ function PackRow({ pack, theme, onAdded }: { pack: GalleryStyle; theme: ThemeNam
 
   const credit = [pack.author ? `By ${pack.author}` : '', pack.licence].filter(Boolean).join(' · ');
   return (
-    <li className="dc-prefs-pack">
-      <div className="dc-prefs-pack-picture">{style ? <StylePreview style={style} theme={theme} size="row" label={`${pack.name}, drawn`} /> : null}</div>
-      <div className="dc-prefs-row-text">
-        <span className="dc-prefs-label">{pack.name}</span>
-        <span className="dc-prefs-description">{pack.summary}</span>
-        {credit && <span className="dc-prefs-detail">{credit}</span>}
+    <li className="dc-prefs-pack" data-added={added ? '' : undefined}>
+      <div className="dc-prefs-pack-picture">{style ? <StylePreview style={style} theme={theme} size="card" label={`${pack.name}, drawn`} /> : <span className="dc-prefs-pack-wait" aria-hidden="true" />}</div>
+      <div className="dc-prefs-pack-body">
+        <div className="dc-prefs-row-text">
+          <span className="dc-prefs-label">{pack.name}</span>
+          <span className="dc-prefs-description">{pack.summary}</span>
+          {credit && <span className="dc-prefs-detail">{credit}</span>}
+        </div>
+        <Button
+          variant="quiet"
+          className="dc-prefs-outline dc-prefs-pack-add"
+          icon={added ? 'check' : 'plus'}
+          disabled={!style || added}
+          aria-label={added ? `${pack.name} is in your styles` : `Add ${pack.name} to my styles`}
+          onClick={() => {
+            if (!style) return;
+            const id = useStyleStore.getState().add(pack.name, style);
+            if (!id) {
+              notify(`This device keeps up to ${MAX_PROFILES} styles. Delete one to make another.`, 'error');
+              return;
+            }
+            onAdded(style.hand.base);
+            notify(`“${pack.name}” is now your style.`);
+          }}
+        >
+          {!style ? 'Not downloaded' : added ? 'Added' : 'Add'}
+        </Button>
       </div>
-      <Button
-        variant="quiet"
-        className="dc-prefs-outline"
-        icon={added ? 'check' : 'plus'}
-        disabled={!style || added}
-        aria-label={added ? `${pack.name} is in your styles` : `Add ${pack.name} to my styles`}
-        onClick={() => {
-          if (!style) return;
-          const id = useStyleStore.getState().add(pack.name, style);
-          if (!id) {
-            notify(`This device keeps up to ${MAX_PROFILES} styles. Delete one to make another.`, 'error');
-            return;
-          }
-          onAdded(style.hand.base);
-          notify(`“${pack.name}” is now your style.`);
-        }}
-      >
-        {!style ? 'Not downloaded' : added ? 'Added' : 'Add'}
-      </Button>
     </li>
   );
 }

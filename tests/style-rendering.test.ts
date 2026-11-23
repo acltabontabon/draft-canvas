@@ -143,10 +143,28 @@ describe('a style’s colours', () => {
     expect(theme.canvas).toBe('#f6e7c8');
     expect(theme.accents.teal.line).toBe('#2f6f66');
     expect(theme.accents.blue).toBe(LIGHT.accents.blue);
-    // App chrome is never a style's to change.
-    expect([theme.surface, theme.border, theme.selection, theme.danger]).toEqual([LIGHT.surface, LIGHT.border, LIGHT.selection, LIGHT.danger]);
+    // The panels and hairlines beside the canvas follow it, so the editor is one piece of paper;
+    // each still reads against it. What marks a selection or a danger is not a canvas's to change.
+    expect([theme.surface, theme.border]).not.toEqual([LIGHT.surface, LIGHT.border]);
+    expect(contrast(theme.text, theme.surface)).toBeGreaterThanOrEqual(CONTRAST.text);
+    expect(contrast(theme.text, theme.surfaceRaised)).toBeGreaterThanOrEqual(CONTRAST.text);
+    expect(contrast(theme.textFaint, theme.canvas)).toBeGreaterThanOrEqual(CONTRAST.muted);
+    expect([theme.selection, theme.danger]).toEqual([LIGHT.selection, LIGHT.danger]);
+    // A scheme with no canvas of its own leaves them alone.
+    expect(schemeTheme(LIGHT, { accents: parchment.accents }).surface).toBe(LIGHT.surface);
     expect(schemeTheme(LIGHT, undefined)).toBe(LIGHT);
     expect(schemeTheme(LIGHT, {})).toBe(LIGHT);
+  });
+
+  it('are marked in a brand colour, where it can be seen', () => {
+    const branded = schemeTheme(LIGHT, { ...parchment, selection: '#4f46e5' });
+    expect(branded.selection).toBe('#4f46e5');
+    expect(branded.selectionSoft).toBe('rgba(79, 70, 229, 0.12)');
+    // The brand alone, on the built-in colours.
+    expect(schemeTheme(DARK, { selection: '#f59e0b' }).selection).toBe('#f59e0b');
+    expect(schemeTheme(DARK, { selection: '#f59e0b' }).canvas).toBe(DARK.canvas);
+    // One that would vanish into the canvas is not used.
+    expect(schemeTheme(LIGHT, { ...parchment, selection: '#f4e4c4' }).selection).toBe(LIGHT.selection);
   });
 
   it('fall back, alone, when words could not be read on them', () => {

@@ -59,6 +59,13 @@
   pointer-events: none;
 }
 
+.dc-canvas-backdrop {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-repeat: repeat;
+}
+
 .dc-canvas-background-image {
   position: absolute;
   inset: 0;

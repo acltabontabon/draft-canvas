@@ -30,7 +30,6 @@ import {
   SERVICE_KIND_OPTION_LABELS,
   TEXT_ROLE_OPTION_LABELS,
 } from '../../lib/nodeKindLabels';
-import { paletteOf, STYLE_PALETTES, type StylePalette } from '../../render/style/palettes';
 import { downloadText } from '../../export/download';
 import { MAX_STYLE_FILE_BYTES, readStyleFile, serializeStyleFile, STYLE_FILE_EXTENSION, STYLE_FILE_MIME, styleFileName } from '../../document/styleFile';
 import { MAX_PROFILES } from '../../storage/styleProfiles';
@@ -40,20 +39,24 @@ import { useUiStore } from '../../store/uiStore';
 import { usePersonality } from '../../theme/usePersonality';
 import { useTheme } from '../../theme/useTheme';
 import { Button } from '../common/Button';
+import { Icon } from '../common/Icon';
 import { SegmentedControl } from '../common/SegmentedControl';
 import { ChoiceRow, SettingRow, SettingsPage, SettingsSection } from './layout';
+import { CanvasLook } from './CanvasLook';
+import { CORNER_ART, EDGE_COLOUR_ART, HAND_ART, HEAD_ART, STEADY_ART, WEIGHT_ART } from './lookArt';
+import { LookTiles } from './LookTiles';
 import { ShapeArtwork } from './ShapeArtwork';
 import { StylePacks } from './StylePacks';
 import { StylePreview } from './StylePreview';
 
 const BUILTIN_DESCRIPTIONS: Record<HandPreset, string> = {
   clean: 'Crisp, exact lines.',
-  draft: 'A restrained, slightly hand-drawn outline.',
-  sketch: 'A more pronounced sketch quality.',
+  draft: 'A restrained, hand-drawn outline.',
+  sketch: 'Loose, like a pencil sketch.',
 };
 
 const HAND_LABELS: Record<HandPreset, string> = { clean: 'Clean', draft: 'Draft', sketch: 'Sketch' };
-const HANDS = HAND_PRESETS.map((value) => ({ value, label: HAND_LABELS[value] }));
+const HANDS = HAND_PRESETS.map((value) => ({ value, label: HAND_LABELS[value], art: HAND_ART[value] }));
 
 type Steadiness = StyleWobble | 'even';
 const STEADINESS: { value: Steadiness; label: string }[] = [
@@ -61,6 +64,7 @@ const STEADINESS: { value: Steadiness; label: string }[] = [
   { value: 'even', label: 'Regular' },
   { value: 'lively', label: 'Loose' },
 ];
+const STEADINESS_TILES = STEADINESS.map((option) => ({ ...option, art: STEADY_ART[option.value] }));
 
 const WEIGHTS: { value: StyleWeight; label: string }[] = [
   { value: 'fine', label: 'Fine' },
@@ -76,9 +80,21 @@ const HEADS: { value: StyleHead; label: string }[] = [
   { value: 'nib', label: 'Nib' },
   { value: 'triangle', label: 'Triangle' },
 ];
+const WEIGHT_TILES = WEIGHTS.map((option) => ({ ...option, art: WEIGHT_ART[option.value] }));
+const CORNER_TILES = CORNERS.map((option) => ({ ...option, art: CORNER_ART[option.value] }));
+const HEAD_TILES = HEADS.map((option) => ({ ...option, art: HEAD_ART[option.value] }));
 const EDGE_COLOURS: { value: StyleEdgeColour; label: string; name: string }[] = [
   { value: 'source', label: 'From its source', name: 'Colour from its source shape' },
   { value: 'plain', label: 'Plain', name: 'Plain colour' },
+];
+const EDGE_COLOUR_TILES = EDGE_COLOURS.map((option) => ({ ...option, art: EDGE_COLOUR_ART[option.value] }));
+
+/** Beside the canvas the page is three short ones: what to draw in, the paper, and the pen. */
+type PanelTab = 'styles' | 'canvas' | 'drawing';
+const PANEL_TABS: { id: PanelTab; label: string }[] = [
+  { id: 'styles', label: 'Styles' },
+  { id: 'canvas', label: 'Canvas' },
+  { id: 'drawing', label: 'Drawing' },
 ];
 
 /** "Not set here": the value comes from one level up, and the control says which. */
@@ -129,7 +145,9 @@ function withOptional<K extends 'general' | 'connectors' | 'schemes' | 'shapes'>
  * as one step that undo takes back. Changing a built-in style quietly makes it a style of their own
  * first, so there is never a "duplicate before you can edit" step.
  */
-export function AppearanceSettings({ documentOpen = true }: { documentOpen?: boolean }) {
+export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { documentOpen?: boolean; /** `panel`: a column beside the canvas, where the open diagram is the picture. */ layout?: 'page' | 'panel' }) {
+  const panel = layout === 'panel';
+  const [tab, setTab] = useState<PanelTab>('styles');
   const { preset, setPreset } = usePersonality();
   const { name: theme } = useTheme();
   const profiles = useStyleStore((state) => state.profiles);
@@ -186,51 +204,53 @@ export function AppearanceSettings({ documentOpen = true }: { documentOpen?: boo
     took(hand);
   };
 
-  return (
-    <SettingsPage title="Appearance" lead="Your style, on this device. The open diagram follows it as you change it, unless it has a look of its own.">
-      <SettingsSection title="My style" description="Pick one to draw with. Change anything below and it becomes a style of your own." group list>
-        {HAND_PRESETS.map((hand) => (
-          <ChoiceRow
-            key={hand}
-            type="radio"
-            name="style"
-            label={HAND_LABELS[hand]}
-            description={BUILTIN_DESCRIPTIONS[hand]}
-            checked={!activeId && preset === hand}
-            onChange={() => pickBuiltin(hand)}
-            aside={<StylePreview style={builtinProfileStyle(hand)} theme={theme} size="row" label={`${HAND_LABELS[hand]}, drawn`} />}
-          />
-        ))}
-        {profiles.map((profile) => (
-          <ChoiceRow
-            key={profile.id}
-            type="radio"
-            name="style"
-            label={profile.name}
-            description="Your own."
-            checked={activeId === profile.id}
-            onChange={() => pickOwn(profile.id, profile.style.hand.base)}
-            aside={<StylePreview style={profile.style} theme={theme} size="row" label={`${profile.name}, drawn`} />}
-          />
-        ))}
-      </SettingsSection>
+  const gallery = (
+    <>
+      <fieldset className="dc-prefs-section dc-look-gallery" aria-describedby="dc-look-gallery-description">
+        <legend className="dc-prefs-section-title">My style</legend>
+        <p id="dc-look-gallery-description" className="dc-prefs-section-description">
+          Pick one to draw with. Change anything below and it becomes a style of your own.
+        </p>
+        <div className="dc-look-cards">
+          {HAND_PRESETS.map((hand) => (
+            <StyleCard
+              key={hand}
+              name={HAND_LABELS[hand]}
+              description={BUILTIN_DESCRIPTIONS[hand]}
+              style={builtinProfileStyle(hand)}
+              theme={theme}
+              checked={!activeId && preset === hand}
+              onPick={() => pickBuiltin(hand)}
+            />
+          ))}
+          {profiles.map((profile) => (
+            <StyleCard
+              key={profile.id}
+              name={profile.name}
+              description="Yours"
+              own
+              style={profile.style}
+              theme={theme}
+              checked={activeId === profile.id}
+              onPick={() => pickOwn(profile.id, profile.style.hand.base)}
+            />
+          ))}
+          <ImportStyle onImported={took} />
+        </div>
+      </fieldset>
 
-      <div className="dc-prefs-style-actions">
-        {active && <OwnStyle key={active.id} id={active.id} name={active.name} style={active.style} onRemoved={() => follow(preset)} />}
-        <ImportStyle onImported={took} />
-      </div>
+      {active && <OwnStyle key={active.id} id={active.id} name={active.name} style={active.style} onRemoved={() => follow(preset)} />}
 
       <StylePacks theme={theme} onAdded={took} />
-
-      <div className="dc-prefs-stage">
-        <StylePreview style={style} theme={theme} />
-      </div>
-
+    </>
+  );
+  const general = (
       <SettingsSection title="General" description="What every shape and connector shares, unless a shape says otherwise.">
         <SettingRow
           label="Drawing hand"
+          description="How steady the pen is."
           control={
-            <SegmentedControl
+            <LookTiles
               name="style-hand"
               legend="Drawing hand"
               value={style.hand.base}
@@ -249,11 +269,11 @@ export function AppearanceSettings({ documentOpen = true }: { documentOpen?: boo
               label="Steadiness"
               description="How much a line wanders."
               control={
-                <SegmentedControl
+                <LookTiles
                   name="style-wobble"
                   legend="Steadiness"
                   value={style.hand.wobble ?? 'even'}
-                  options={STEADINESS}
+                  options={STEADINESS_TILES}
                   onChange={(wobble) =>
                     edit((current) => {
                       const { wobble: _wobble, ...hand } = current.hand;
@@ -278,21 +298,132 @@ export function AppearanceSettings({ documentOpen = true }: { documentOpen?: boo
           value={style.general}
           onChange={(general) => edit((current) => withOptional(current, 'general', general))}
         />
-        <SettingRow
-          label="Colours"
-          description={paletteOf(style) ? undefined : 'This style has colours of its own. Choosing a set here replaces them.'}
-          control={<PalettePicker theme={theme} current={paletteOf(style)} onPick={(palette) => edit((current) => withOptional(current, 'schemes', palette.schemes))} />}
-        />
       </SettingsSection>
-
+  );
+  const shapes = (
       <ShapesSection style={style} theme={theme} edit={edit} />
-
+  );
+  const connectors = (
       <SettingsSection title="Connectors" description="How a line is drawn. What a line means, such as a dashed asynchronous call, is not a style and stays as it is.">
         <ConnectorRows value={style.connectors} onChange={(connectors) => edit((current) => withOptional(current, 'connectors', connectors))} />
       </SettingsSection>
-
+  );
+  const diagram = (
       <DiagramSection style={style} documentOpen={documentOpen} onAdded={took} />
+  );
+
+  if (panel) {
+    // What the two working tabs change, said once at their head.
+    const subject = <p className="dc-look-subject">{active ? <>Changing <strong>{active.name}</strong>.</> : <>Change anything here and {HAND_LABELS[preset]} becomes a style of your own, kept beside it.</>}</p>;
+    return (
+      <div className="dc-prefs-page dc-look-column">
+        <div className="dc-look-tabs" role="tablist" aria-label="Appearance">
+          {PANEL_TABS.map((entry) => (
+            <button key={entry.id} type="button" role="tab" id={`dc-look-tab-${entry.id}`} aria-selected={tab === entry.id} aria-controls="dc-look-tabpanel" className="dc-look-tab" onClick={() => setTab(entry.id)}>
+              {entry.label}
+            </button>
+          ))}
+        </div>
+        <div id="dc-look-tabpanel" role="tabpanel" aria-labelledby={`dc-look-tab-${tab}`} className="dc-look-tabpanel">
+          {tab === 'styles' && (
+            <>
+              <DiagramNotice style={style} />
+              {gallery}
+              {diagram}
+            </>
+          )}
+          {tab === 'canvas' && (
+            <>
+              {subject}
+              <div className="dc-look-canvas">
+                <CanvasLook style={style} theme={theme} edit={edit} />
+              </div>
+            </>
+          )}
+          {tab === 'drawing' && (
+            <>
+              {subject}
+              {general}
+              {connectors}
+              {shapes}
+            </>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <SettingsPage title="Appearance" lead="How your diagrams are drawn, on this device. Pick a style, add a pack, or make one that is yours.">
+      {gallery}
+      <div className="dc-look-studio-head">
+        <h4 className="dc-prefs-section-title">Make it yours</h4>
+        <p className="dc-prefs-section-description">
+          {active ? `Everything below changes “${active.name}”.` : `Change anything below and ${HAND_LABELS[preset]} becomes a style of your own, kept beside it.`}
+          {' '}The picture is drawn by the same renderer as the canvas.
+        </p>
+      </div>
+      <div className="dc-prefs-stage">
+        <StylePreview style={style} theme={theme} />
+      </div>
+
+      {general}
+      <SettingsSection title="Canvas and colours" description="The paper, what is printed on it, and the colours everything is drawn in.">
+        <CanvasLook style={style} theme={theme} edit={edit} />
+      </SettingsSection>
+      {shapes}
+      {connectors}
+      {diagram}
     </SettingsPage>
+  );
+}
+
+/**
+ * Beside the canvas, a change that does not show on the diagram needs saying at once: the open
+ * diagram has a look of its own, saved with it, and follows nothing here until it is given this one.
+ */
+function DiagramNotice({ style }: { style: DocumentStyle }) {
+  const readOnly = useUiStore((state) => Boolean(state.readOnly));
+  const notify = useUiStore((state) => state.notify);
+  const own = useEditorStore((state) => state.document.style);
+  if (readOnly || !own || sameLook(own, style)) return null;
+  return (
+    <div className="dc-look-notice" role="status">
+      <Icon name="info" size={15} />
+      <p>
+        This diagram is drawn in a look of its own{own.name ? `, “${own.name}”` : ''}, saved with it. What you pick here shows on it once it uses your style.
+      </p>
+      <Button
+        variant="solid"
+        onClick={() => {
+          useEditorStore.getState().setDocumentStyle(style);
+          notify('This diagram is now drawn in your style.');
+        }}
+      >
+        Use my style here
+      </Button>
+    </div>
+  );
+}
+
+/** A style to draw with, shown as a diagram drawn in it. The whole card is the choice. */
+function StyleCard({ name, description, own, style, theme, checked, onPick }: { name: string; description: string; own?: boolean; style: DocumentStyle; theme: 'light' | 'dark'; checked: boolean; onPick: () => void }) {
+  return (
+    <label className="dc-look-card" data-own={own ? '' : undefined}>
+      <input type="radio" name="style" className="dc-sr-only" aria-label={`${name}. ${description}`} checked={checked} onChange={onPick} />
+      <span className="dc-look-card-picture">
+        <StylePreview style={style} theme={theme} size="card" label={`${name}, drawn`} />
+      </span>
+      <span className="dc-look-card-foot">
+        <span className="dc-look-card-text">
+          <span className="dc-look-card-name">{name}</span>
+          <span className="dc-look-card-description">{description}</span>
+        </span>
+        <span className="dc-look-card-check" aria-hidden="true">
+          <Icon name="check" size={12} />
+        </span>
+      </span>
+    </label>
   );
 }
 
@@ -338,9 +469,17 @@ function ImportStyle({ onImported }: { onImported: (hand: HandPreset) => void })
           event.target.value = '';
         }}
       />
-      <Button variant="quiet" className="dc-prefs-outline" icon="upload" onClick={() => input.current?.click()}>
-        Import style…
-      </Button>
+      <button type="button" className="dc-look-card dc-look-card-add" onClick={() => input.current?.click()}>
+        <span className="dc-look-card-picture" aria-hidden="true">
+          <Icon name="upload" size={16} />
+        </span>
+        <span className="dc-look-card-foot">
+          <span className="dc-look-card-text">
+            <span className="dc-look-card-name">Import style…</span>
+            <span className="dc-look-card-description">From a .draftstyle file</span>
+          </span>
+        </span>
+      </button>
     </>
   );
 }
@@ -352,9 +491,10 @@ function OwnStyle({ id, name, style, onRemoved }: { id: string; name: string; st
     else setDraft(name);
   };
   return (
-    <div className="dc-prefs-own-style">
-      <label className="dc-field">
-        Name
+    <div className="dc-look-own">
+      <label className="dc-look-own-name">
+        <span className="dc-sr-only">Name</span>
+        <Icon name="pencil" size={13} />
         <input
           type="text"
           value={draft}
@@ -366,28 +506,29 @@ function OwnStyle({ id, name, style, onRemoved }: { id: string; name: string; st
           }}
         />
       </label>
+      {/* One line, whatever the width: the name takes the room, the two things to do with it stay square. */}
       <Button
         variant="quiet"
-        className="dc-prefs-outline"
+        className="dc-prefs-outline dc-look-own-action"
         icon="export"
+        aria-label="Export…"
+        title="Export as a .draftstyle file"
         onClick={() => {
           // The desktop app asks where to save; choosing nowhere is a change of mind, not a failure.
           void downloadText(serializeStyleFile(name, style), styleFileName(name), STYLE_FILE_MIME).catch(() => {});
         }}
-      >
-        Export…
-      </Button>
+      />
       <Button
         variant="quiet"
-        className="dc-prefs-outline"
+        className="dc-prefs-outline dc-look-own-action"
         icon="trash"
+        aria-label="Delete style"
+        title="Delete this style"
         onClick={() => {
           useStyleStore.getState().remove(id);
           onRemoved();
         }}
-      >
-        Delete style
-      </Button>
+      />
     </div>
   );
 }
@@ -417,25 +558,33 @@ function SurfaceRows({
       <SettingRow
         label="Line weight"
         control={
-          <SegmentedControl
-            name={`${name}-weight`}
-            legend={legend('Line weight')}
-            value={(value?.weight ?? (inherit ? INHERIT : 'regular')) as OrInherit<StyleWeight>}
-            options={weights as { value: OrInherit<StyleWeight>; label: string }[]}
-            onChange={(next) => set('weight', next === INHERIT || (!inherit && next === 'regular') ? undefined : next)}
-          />
+          inherit ? (
+            <SegmentedControl
+              name={`${name}-weight`}
+              legend={legend('Line weight')}
+              value={(value?.weight ?? INHERIT) as OrInherit<StyleWeight>}
+              options={weights as { value: OrInherit<StyleWeight>; label: string }[]}
+              onChange={(next) => set('weight', next === INHERIT ? undefined : next)}
+            />
+          ) : (
+            <LookTiles name={`${name}-weight`} legend={legend('Line weight')} value={value?.weight ?? 'regular'} options={WEIGHT_TILES} onChange={(next) => set('weight', next === 'regular' ? undefined : next)} />
+          )
         }
       />
       <SettingRow
         label="Corners"
         control={
-          <SegmentedControl
-            name={`${name}-corners`}
-            legend={legend('Corners')}
-            value={(value?.corners ?? (inherit ? INHERIT : 'soft')) as OrInherit<StyleCorners>}
-            options={corners as { value: OrInherit<StyleCorners>; label: string }[]}
-            onChange={(next) => set('corners', next === INHERIT || (!inherit && next === 'soft') ? undefined : next)}
-          />
+          inherit ? (
+            <SegmentedControl
+              name={`${name}-corners`}
+              legend={legend('Corners')}
+              value={(value?.corners ?? INHERIT) as OrInherit<StyleCorners>}
+              options={corners as { value: OrInherit<StyleCorners>; label: string }[]}
+              onChange={(next) => set('corners', next === INHERIT ? undefined : next)}
+            />
+          ) : (
+            <LookTiles name={`${name}-corners`} legend={legend('Corners')} value={value?.corners ?? 'soft'} options={CORNER_TILES} onChange={(next) => set('corners', next === 'soft' ? undefined : next)} />
+          )
         }
       />
       {inherit ? (
@@ -475,40 +624,18 @@ function ConnectorRows({ value, onChange }: { value: ConnectorStyle | undefined;
     <>
       <SettingRow
         label="Line weight"
-        control={<SegmentedControl name="connector-weight" legend="Connector line weight" value={value?.weight ?? 'regular'} options={WEIGHTS} onChange={(next) => set('weight', next === 'regular' ? undefined : next)} />}
+        control={<LookTiles name="connector-weight" legend="Connector line weight" value={value?.weight ?? 'regular'} options={WEIGHT_TILES} onChange={(next) => set('weight', next === 'regular' ? undefined : next)} />}
       />
       <SettingRow
         label="Arrowhead"
-        control={<SegmentedControl name="connector-head" legend="Arrowhead" value={value?.head ?? 'nib'} options={HEADS} onChange={(next) => set('head', next === 'nib' ? undefined : next)} />}
+        control={<LookTiles name="connector-head" legend="Arrowhead" value={value?.head ?? 'nib'} options={HEAD_TILES} onChange={(next) => set('head', next === 'nib' ? undefined : next)} />}
       />
       <SettingRow
         label="Colour"
         description="What a connector wears when nobody has coloured it."
-        control={<SegmentedControl name="connector-colour" legend="Connector colour" value={value?.colour ?? 'source'} options={EDGE_COLOURS} onChange={(next) => set('colour', next === 'source' ? undefined : next)} />}
+        control={<LookTiles name="connector-colour" legend="Connector colour" value={value?.colour ?? 'source'} options={EDGE_COLOUR_TILES} onChange={(next) => set('colour', next === 'source' ? undefined : next)} />}
       />
     </>
-  );
-}
-
-/** One swatch per set of colours: the canvas it draws on and three of the colours it draws with. */
-function PalettePicker({ theme, current, onPick }: { theme: 'light' | 'dark'; current: StylePalette | null; onPick: (palette: StylePalette) => void }) {
-  return (
-    <div className="dc-prefs-palettes" role="radiogroup" aria-label="Colours">
-      {STYLE_PALETTES.map((palette) => {
-        const scheme = palette.schemes?.[theme];
-        return (
-          <label key={palette.id} className="dc-prefs-palette" title={palette.description}>
-            <input type="radio" name="style-palette" className="dc-sr-only" aria-label={`${palette.label}: ${palette.description}`} checked={current?.id === palette.id} onChange={() => onPick(palette)} />
-            <span className="dc-prefs-palette-chips" style={scheme?.canvas ? { background: scheme.canvas } : undefined} aria-hidden="true">
-              {(['teal', 'blue', 'amber'] as const).map((accent) => (
-                <span key={accent} style={{ background: scheme?.accents?.[accent]?.chip ?? `var(--dc-accent-${accent}-chip)` }} />
-              ))}
-            </span>
-            {palette.label}
-          </label>
-        );
-      })}
-    </div>
   );
 }
 

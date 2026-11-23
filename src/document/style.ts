@@ -58,6 +58,14 @@ export type StyleEdgeColour = (typeof STYLE_EDGE_COLOURS)[number];
 export const STYLE_FITS = ['contain', 'stretch'] as const;
 export type StyleFit = (typeof STYLE_FITS)[number];
 
+/** How strongly the canvas's backdrop is drawn. `regular` is as its drawing was made. */
+export const BACKDROP_STRENGTHS = ['faint', 'regular', 'strong'] as const;
+export type BackdropStrength = (typeof BACKDROP_STRENGTHS)[number];
+
+/** How large one tile of the backdrop is. `regular` is a unit of the drawing to a canvas pixel. */
+export const BACKDROP_SCALES = ['small', 'regular', 'large'] as const;
+export type BackdropScale = (typeof BACKDROP_SCALES)[number];
+
 export const ACCENT_ROLES = ['fill', 'line', 'text', 'chip'] as const;
 export type AccentRole = (typeof ACCENT_ROLES)[number];
 
@@ -101,6 +109,17 @@ export interface ConnectorStyle {
   colour?: StyleEdgeColour;
 }
 
+/**
+ * What is drawn on the canvas behind the diagram: one drawing, repeated edge to edge. It is paint
+ * and nothing else: no shape is placed, sized or routed by it, and it is never selected.
+ */
+export interface StyleBackdrop {
+  /** The id of a drawing in `DocumentStyle.assets`: one tile. */
+  art: string;
+  strength?: BackdropStrength;
+  scale?: BackdropScale;
+}
+
 export type AccentColours = Record<AccentRole, string>;
 
 /** The canvas's own colours in one theme. Each is `#rrggbb`; whatever is absent keeps the built-in. */
@@ -114,6 +133,8 @@ export interface StyleScheme {
   edgeLabelBg?: string;
   codeBg?: string;
   codeBorder?: string;
+  /** The one colour that marks what is chosen and what to press: a brand's own, say. */
+  selection?: string;
   accents?: Partial<Record<Accent, AccentColours>>;
 }
 
@@ -159,6 +180,7 @@ export interface DocumentStyle {
   /** Per shape, by `STYLE_SHAPE_KEYS`: `service`, or `service:gateway` for one kind of it. */
   shapes?: Record<string, ShapeStyle>;
   connectors?: ConnectorStyle;
+  backdrop?: StyleBackdrop;
   assets?: StyleAsset[];
 }
 
@@ -375,6 +397,8 @@ function scheme(raw: unknown): StyleScheme | undefined {
     const value = colour(raw[key]);
     if (value) out[key] = value;
   }
+  const selection = colour(raw.selection);
+  if (selection) out.selection = selection;
   if (isRecord(raw.accents)) {
     const accents: Partial<Record<Accent, AccentColours>> = {};
     for (const accent of ACCENTS) {
@@ -483,6 +507,16 @@ export function normalizeStyle(raw: unknown): NormalizedStyle {
     const edgeColour = oneOfOptional<StyleEdgeColour>(raw.connectors.colour, STYLE_EDGE_COLOURS);
     if (edgeColour) connectors.colour = edgeColour;
     if (Object.keys(connectors).length > 0) style.connectors = connectors;
+  }
+
+  if (isRecord(raw.backdrop) && typeof raw.backdrop.art === 'string' && known.has(raw.backdrop.art)) {
+    const backdrop: StyleBackdrop = { art: raw.backdrop.art };
+    const strength = oneOfOptional<BackdropStrength>(raw.backdrop.strength, BACKDROP_STRENGTHS);
+    if (strength && strength !== 'regular') backdrop.strength = strength;
+    const scale = oneOfOptional<BackdropScale>(raw.backdrop.scale, BACKDROP_SCALES);
+    if (scale && scale !== 'regular') backdrop.scale = scale;
+    style.backdrop = backdrop;
+    used.add(backdrop.art);
   }
 
   // A drawing nothing uses is dead weight in every copy of the file.

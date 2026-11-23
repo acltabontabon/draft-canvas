@@ -1,6 +1,8 @@
 import { ACCENTS, type Accent } from '../../document/types';
 import type { AccentColours, DocumentStyle, StyleScheme } from '../../document/style';
-import { LIGHT } from '../theme/tokens';
+import { contrast } from '../../lib/colour';
+import { DARK, LIGHT } from '../theme/tokens';
+import { CONTRAST } from './scheme';
 
 /**
  * The palettes a person can pick for a style, each a full set of colours for light and for dark.
@@ -125,7 +127,113 @@ export const STYLE_PALETTES: readonly StylePalette[] = [
 
 /** The palette a style's colours came from, or `null` for colours that are no palette's (a pack's own). */
 export function paletteOf(style: Pick<DocumentStyle, 'schemes'>): StylePalette | null {
-  if (!style.schemes) return STYLE_PALETTES[0]!;
-  const wanted = JSON.stringify(style.schemes);
+  const schemes = withoutBrand(style.schemes);
+  if (!schemes) return STYLE_PALETTES[0]!;
+  const wanted = JSON.stringify(schemes);
   return STYLE_PALETTES.find((entry) => entry.schemes && JSON.stringify(entry.schemes) === wanted) ?? null;
 }
+
+/** Canvas colours offered before a colour of one's own: papers, then boards. */
+export const CANVAS_SWATCHES: readonly { label: string; colour: string }[] = [
+  { label: 'White', colour: '#ffffff' },
+  { label: 'Linen', colour: '#f6f1e7' },
+  { label: 'Mist', colour: '#eef2f6' },
+  { label: 'Sage', colour: '#e9efe6' },
+  { label: 'Blush', colour: '#f8ebe8' },
+  { label: 'Slate', colour: '#1c232d' },
+  { label: 'Midnight', colour: '#10162b' },
+  { label: 'Forest', colour: '#12211c' },
+  { label: 'Charcoal', colour: '#161616' },
+];
+
+/**
+ * A full set of colours for a canvas of any colour: someone's brand colour, say.
+ *
+ * Words and lines are the canvas colour pulled toward black or white, whichever reads better on
+ * it, and each named colour is the built-in one for that side, leaned toward the canvas and
+ * pushed until it clears the floors a style is held to. A canvas of one's own is one colour, so
+ * the result is a single scheme: the diagram is drawn on it in light and in dark alike.
+ */
+export function schemesForCanvas(canvas: string): Schemes {
+  const dark = contrast('#ffffff', canvas) >= contrast('#0b0d10', canvas);
+  const ink = dark ? '#ffffff' : '#0b0d10';
+  const base = dark ? DARK : LIGHT;
+  const reach = (colour: string, against: string, floor: number): string => {
+    let out = colour;
+    for (let step = 0; step < 8 && contrast(out, against) < floor; step += 1) out = mix(out, ink, 0.3);
+    return out;
+  };
+  const accents = {} as Record<Accent, AccentColours>;
+  for (const accent of ACCENTS) {
+    const from = base.accents[accent];
+    const fill = mix(from.fill, canvas, 0.22);
+    accents[accent] = {
+      fill,
+      line: reach(from.line, canvas, CONTRAST.line + 0.4),
+      text: reach(from.text, fill, CONTRAST.label + 0.5),
+      chip: reach(from.chip, canvas, CONTRAST.line + 0.4),
+    };
+  }
+  const edgeLabelBg = mix(canvas, dark ? '#000000' : '#ffffff', 0.35);
+  const scheme: StyleScheme = {
+    canvas,
+    grid: mix(canvas, ink, 0.13),
+    text: reach(mix(canvas, ink, 0.9), canvas, CONTRAST.text + 2),
+    textMuted: reach(mix(canvas, ink, 0.62), canvas, CONTRAST.muted + 1),
+    edge: reach(mix(canvas, ink, 0.5), canvas, CONTRAST.line + 0.6),
+    edgeText: reach(mix(canvas, ink, 0.68), edgeLabelBg, CONTRAST.muted + 1),
+    edgeLabelBg,
+    codeBg: mix(canvas, ink, 0.05),
+    codeBorder: mix(canvas, ink, 0.14),
+    accents,
+  };
+  return dark ? { dark: scheme } : { light: scheme };
+}
+
+/** The canvas colour a style draws on in `theme`, when it names one. */
+export function canvasOf(style: Pick<DocumentStyle, 'schemes'>, theme: 'light' | 'dark'): string | undefined {
+  const schemes = style.schemes;
+  if (!schemes) return undefined;
+  return (schemes[theme] ?? schemes.light ?? schemes.dark)?.canvas;
+}
+
+/** The colour a style marks what is chosen in, when it names one. */
+export function brandOf(style: Pick<DocumentStyle, 'schemes'>): string | undefined {
+  return (style.schemes?.light ?? style.schemes?.dark)?.selection;
+}
+
+/** `schemes` with no brand colour in them: what a palette is compared by. `undefined` when nothing else is left. */
+export function withoutBrand(schemes: Schemes | undefined): Schemes | undefined {
+  if (!schemes) return undefined;
+  const out: Schemes = {};
+  for (const name of ['light', 'dark'] as const) {
+    const scheme = schemes[name];
+    if (!scheme) continue;
+    const { selection: _selection, ...rest } = scheme;
+    if (Object.keys(rest).length > 0) out[name] = rest;
+  }
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
+/**
+ * `schemes` marked in `brand`, in every theme they draw in. A style with no colours of its own
+ * gets the brand alone, for light and for dark, and keeps the built-in colours for the rest.
+ */
+export function withBrand(schemes: Schemes | undefined, brand: string | undefined): Schemes | undefined {
+  const plain = withoutBrand(schemes);
+  if (!brand) return plain;
+  if (!plain) return { light: { selection: brand }, dark: { selection: brand } };
+  const out: Schemes = {};
+  for (const name of ['light', 'dark'] as const) if (plain[name]) out[name] = { ...plain[name], selection: brand };
+  return out;
+}
+
+/** Brand colours offered before one's own. */
+export const BRAND_SWATCHES: readonly { label: string; colour: string }[] = [
+  { label: 'Indigo', colour: '#4f46e5' },
+  { label: 'Azure', colour: '#0b84d8' },
+  { label: 'Emerald', colour: '#0f9d6e' },
+  { label: 'Amber', colour: '#d98a0b' },
+  { label: 'Coral', colour: '#e5533d' },
+  { label: 'Magenta', colour: '#c9338f' },
+];

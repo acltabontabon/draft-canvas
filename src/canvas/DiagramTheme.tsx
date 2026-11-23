@@ -7,9 +7,10 @@ import { useDiagramStyle } from './useDiagramStyle';
  * The colours the open diagram is drawn in, for everything on the canvas.
  *
  * Most diagrams have none of their own and this is the app's theme, untouched. A diagram whose
- * style carries colours gets them here and nowhere else: the canvas and what is drawn on it wear
- * the style, while the toolbars and dialogs around it stay the app's. The wrapper takes no box of
- * its own (`display: contents`), it only carries the colour variables the canvas's CSS reads.
+ * style carries colours gets them here, as a theme everything on the canvas can read
+ * (`ThemeContext`); the bars and panels around it wear the same colours through `useEditorDress`,
+ * while dialogs and Home stay the app's. The wrapper takes no box of its own (`display: contents`),
+ * it only carries the colour variables the canvas's CSS reads.
  */
 export function DiagramTheme({ children }: { children: ReactNode }) {
   const app = useTheme();

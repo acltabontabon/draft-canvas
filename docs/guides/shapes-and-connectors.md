@@ -225,16 +225,40 @@ editable return path with a suggested response. Async shows a break mark and has
 The colour wheel means automatic colour; click it to fix a colour. A shape has no automatic colour.
 Hover any icon to see what it does.
 
-**Settings → Appearance** sets how shapes and connectors are drawn. **Clean** is the Sculpted Ink
-default, **Draft** adds a restrained hand-drawn quality, and **Sketch** adds visible graphite drift
-and retraced strokes. From any of them you can change the line weight, corners, shadows and colours
-for everything, give one shape or one kind of it a different look, and choose the arrowhead, weight
-and colour rule for connectors. What a line means stays out of it: a dashed asynchronous call is
-dashed in every style.
+**Appearance** sets how shapes and connectors are drawn. Press `⌘K` and choose
+**Appearance…**: it opens beside the canvas, never over it, so every choice is seen on your own
+diagram as you make it, and the diagram stays live while it is open. It has three tabs: **Styles**
+to pick what to draw in, **Canvas** for the paper, and **Drawing** for the pen. **My style** is a gallery of the
+styles to draw with, each shown as a small diagram drawn in it: **Clean** is the Sculpted Ink default,
+**Draft** adds a restrained hand-drawn quality, and **Sketch** adds visible graphite drift and
+retraced strokes. Pick one and the open diagram follows. In the desktop app the same page is also in
+**Settings → Appearance**, for when no diagram is open.
 
-![Settings on its Appearance page: the styles to draw with, Clean, Draft and Sketch, each with a small diagram drawn in it.](../media/guides/appearance.png)
+![Appearance open beside the canvas: a gallery of styles, Clean, Draft and Sketch, each a card with a small diagram drawn in it, and the diagram still in view.](../media/guides/appearance.png)
 
-A shape can also be drawn with a picture of your own. In **Shapes**, pick the shape (or one kind of
+**Drawing** changes the style in use. Each choice is drawn as what it does: a heavier line for
+Bold, a rounder corner for Round.
+Change the drawing hand, line weight, corners and shadows for everything, give one shape or one kind
+of it a different look, and choose the arrowhead, weight and colour rule for connectors. What a line
+means stays out of it: a dashed asynchronous call is dashed in every style.
+
+**Canvas** is the paper. **Colours** picks a set for the shapes, lines and canvas
+together. **Canvas colour** takes any colour, your brand's included: words, lines and shapes are
+adjusted to stay readable on it, and the diagram is then drawn on that colour in light and dark
+alike. **Brand colour** is the one colour that marks what is selected and what to press. **Backdrop** prints a quiet pattern on the canvas behind the diagram (drafting paper,
+contours, honeycomb, stars), or your own: **Your SVG…** repeats a picture edge to edge, for a
+watermark or a brand pattern, at the strength and size you choose. The backdrop moves with the
+diagram and is drawn in image exports, except transparent ones.
+
+A style dresses the whole editor, not the canvas alone: the bars above and below it, the panels
+beside it and the chips that float on it take their colours from the canvas, so a diagram on
+parchment is not a parchment page in a grey frame. Home and the dialogs stay Draft Canvas's own.
+
+![A midnight canvas colour and a backdrop of stars chosen in Appearance, and seen at once on the diagram beside it.](../media/guides/appearance-canvas.png)
+
+![The Drawing tab of Appearance: drawing hand, line weight, corners and connectors, each choice a small drawing of what it does.](../media/guides/appearance-drawing.png)
+
+A shape can also be drawn with a picture of your own. Under **Shapes** in the Drawing tab, pick the shape (or one kind of
 it), then **Choose SVG…** or **Paste SVG**. The picture replaces the built-in drawing only: the
 shape keeps its size, its name stays where it was, and connectors meet it at the same points, so a
 Data store drawn as a barrel is still a Data store. It can take the diagram's colours, which follow
@@ -242,22 +266,27 @@ a recolour and light or dark, or keep its own. Text, images, effects and anythin
 outside the file are left out, and the page says so. Shapes that hold their own content (text,
 notes, code, sequences and boundaries) take line, corner and shadow changes but no picture.
 
-**Style packs** on the same page are ready-made styles from the
-[starters gallery](https://github.com/acltabontabon/draft-canvas-starters#style-packs), each with a
-drawing for every shape and every kind of it: Professional, Geek, Arena, High seas, High fantasy,
-Cyberpunk and Cute. **Load style packs** reads that public gallery from GitHub, as loading starters
-does, and sends nothing about your diagrams. **Add** makes a pack a style of your own, to change as
-you like. Some packs are drawn on a dark canvas and some on a light one whatever your device is set
-to, and their exports are too.
+**Style packs**, under Styles, are ready-made styles from the
+[starters gallery](https://github.com/acltabontabon/draft-canvas-starters#style-packs), each an
+illustrated world with a drawing for every shape and every kind of it, its own colours and its own
+backdrop: Professional, Geek, Arena, High seas, High fantasy, Cyberpunk and Cute. **Load style
+packs** reads that public gallery from GitHub, as loading starters does, and sends nothing about
+your diagrams. **Add** makes a pack a style of your own, to change as you like. Some packs are drawn
+on a dark canvas and some on a light one whatever your device is set to, and their exports are too.
 
-![The style packs in Settings: Professional, Geek, Arena and High seas, each with a small diagram drawn in it and an Add button.](../media/guides/style-packs.png)
+![The style packs in Appearance, each a card with a small diagram drawn in the pack on its own canvas and an Add button, beside a diagram now drawn in High seas.](../media/guides/style-packs.png)
 
-The same diagram in two packs. Every shape is the shape it was, where it was: a gateway is a
-lighthouse on the high seas and a scanner arch in the night city, and still a gateway.
+The same diagram in four packs. Every shape is the shape it was, where it was: a gateway is a
+lighthouse on the high seas, a scanner arch in the night city, a castle gate in the arena and a
+little house with a face in the sticker book, and still a gateway.
 
-![The Microservices starter drawn in High seas, on parchment: a lighthouse for the gateway, a ledger for the SQL database, signal flags for the topic.](../media/guides/style-pack-high-seas.png)
+![The Microservices starter drawn in High seas, on an antique sea chart: a lighthouse for the gateway, a ledger for the SQL database, signal flags for the topic.](../media/guides/style-pack-high-seas.png)
 
-![The same diagram drawn in Cyberpunk, on a dark canvas: a scanner arch for the gateway, a tower for the SQL database, a battery for the cache.](../media/guides/style-pack-cyberpunk.png)
+![The same diagram drawn in Cyberpunk, on a night-city grid: a scanner arch for the gateway, a tower for the SQL database, a battery for the cache.](../media/guides/style-pack-cyberpunk.png)
+
+![The same diagram drawn in Arena, on a starlit arena floor: a castle gate for the gateway, bevelled gold plaques for the services.](../media/guides/style-pack-arena.png)
+
+![The same diagram drawn in Cute, on a gingham stationery page: a little house for the gateway, a caterpillar for the queue, a bee for the worker.](../media/guides/style-pack-cute.png)
 
 A style of your own can be saved to a file with **Export…** and brought in on another device with
 **Import style…**. A `.draftstyle` file holds the style and nothing about any diagram.

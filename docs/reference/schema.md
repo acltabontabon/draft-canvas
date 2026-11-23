@@ -171,9 +171,10 @@ is drawn in the style in use on the device that opens it, as every file before v
 | `name` | For display only. Nothing looks a style up by name. |
 | `hand` | `base` (`clean`, `draft`, `sketch`), optional `wobble` (`calm`, `lively`) and `retrace`. |
 | `general` | `weight` (`fine`, `regular`, `bold`), `corners` (`sharp`, `soft`, `round`), `shadow`. No typeface: it would change how big a shape has to be. |
-| `schemes` | `light` and `dark`, each a set of `#rrggbb` canvas colours and accent colours. With one, the diagram is always drawn in that theme. |
+| `schemes` | `light` and `dark`, each a set of `#rrggbb` canvas colours and accent colours, and an optional `selection`: the colour that marks what is chosen. With one, the diagram is always drawn in that theme. |
 | `shapes` | Keyed by shape type (`service`) or type and kind (`service:gateway`). Each entry has the `general` fields, plus `art` (an asset id), `fit` and `builtin` where a drawing applies. A kind inherits from its type, a type from `general`. |
 | `connectors` | `weight`, `head` (`nib`, `triangle`), `colour` (`source`, `plain`). |
+| `backdrop` | Optional: `art` (an asset id), `strength` (`faint`, `strong`) and `scale` (`small`, `large`). One drawing repeated on the canvas behind the diagram, and in exports that have a background. |
 | `assets` | Custom drawings: `id`, `w`, `h` and `paths` of `d` (absolute `M`, `L`, `C`, `Z` only), `fill`, `stroke`, `sw`, `o`, `rule`. No markup is ever stored. |
 
 `normalizeStyle` rebuilds a style from this whitelist wherever one is read: a file, a collaborator's

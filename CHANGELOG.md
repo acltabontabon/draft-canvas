@@ -8,6 +8,22 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Shared
 
+#### Added
+
+- **A style of your own** — **Appearance** (the palette button at the bottom right, a right-click
+  on the canvas, or `⌘K`) opens beside the canvas and fits the diagram
+  to what is left, so every choice is seen on your diagram as you make it. Pick a style from the
+  gallery, then change the drawing hand, line weight, corners, colours, connectors and the look of
+  any shape, with a picture of your own for a shape if you like. The style is saved in the diagram,
+  so it looks the same for everyone. <!-- highlight -->
+- **Your canvas, your brand** — Pick any canvas colour and a brand colour, and print a backdrop on
+  the canvas: a built-in pattern or your own SVG, repeated edge to edge. The whole editor wears
+  the style, its bars and panels included.
+- **Style packs** — Ten illustrated styles from the starters gallery, each with a drawing for
+  every shape, its own colours, its own line and its own backdrop: Professional, Geek, Arena, High
+  seas, High fantasy, Cyberpunk, Cute, Weeb, Hardwood and Match Point.
+- **Styles as files** — Export a style as a `.draftstyle` file and import it on another device.
+
 #### Changed
 
 - **Replies by dragging back** — Drag from whoever was called back to its caller and the line is
@@ -20,9 +36,18 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   more lines instead of ending in an ellipsis, and their fields wrap as you type.
 - **Sequence motion** — A new message or frame is seen to arrive. While presenting, the message
   travels from sender to receiver and the frame it is in lights with it.
+- **A calm place to style** — While Appearance is open the tools, Present and Share and the status
+  bar step back, leaving the diagram and the panel. **Done** brings them back.
+- **Shadows** — Off, Soft or Deep: Deep lifts shapes off the canvas, on dark canvases too.
+- **Canvas settings** — Next-shape suggestions moved to the **Canvas** tab of Appearance; the web's
+  separate Settings dialog is gone.
+- **Help menu** — **Watch the film** is no longer in it.
+- **Background images are gone** — A diagram's canvas is now part of its style: choose a canvas colour and a backdrop in **Appearance**. A diagram that had a background image opens without it.
 
 #### Fixed
 
+- **Load starters** — Loading the gallery no longer says it couldn’t reach GitHub for a moment
+  before the starters arrive.
 - **Participants with a technology** — A lifeline no longer runs through the kind written under a
   data store, queue or external service.
 - **Files that would not open** — A diagram with sequence fragments nested extremely deep, or a

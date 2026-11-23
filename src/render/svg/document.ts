@@ -28,6 +28,7 @@ import { beginClipScope, emitDisplayList, emitShape, shadowFilter } from './emit
 import { beginIdScope, endIdScope, scopedId } from './ids';
 import { markerDefs } from './markers';
 import { resolveStyle, type ResolvedStyle } from '../style/resolve';
+import { backdropTile } from '../style/backdrop';
 import type { DocumentStyle } from '../../document/style';
 import type { PersonalityPreset } from '../../theme/usePersonality';
 import type { Shape } from '../displayList';
@@ -546,6 +547,18 @@ export function renderDocumentSvg(
   const children: SvgEl[] = [el('defs', undefined, defs)];
   if (!options.transparent) {
     children.push(el('rect', { x: 0, y: 0, width, height, fill: theme.canvas }));
+  }
+  // The style's own backdrop: a tile repeated from the canvas's origin, exactly where the canvas
+  // draws it, under any image the diagram has. A transparent export has no canvas to draw it on.
+  const tile = options.transparent || options.includeBackground === false ? null : backdropTile(style, options.theme ?? 'dark');
+  if (tile) {
+    const patternId = scopedId('dc-backdrop');
+    defs.push(
+      el('pattern', { id: patternId, x: n(-originX), y: n(-originY), width: tile.width, height: tile.height, patternUnits: 'userSpaceOnUse' }, [
+        el('g', { opacity: tile.opacity, 'stroke-linejoin': 'round' }, tile.shapes.flatMap(emitShape)),
+      ]),
+    );
+    children.push(el('rect', { x: 0, y: 0, width, height, fill: `url(#${patternId})` }));
   }
   children.push(...(background?.els ?? []));
   children.push(

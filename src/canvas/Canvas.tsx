@@ -41,6 +41,7 @@ import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
 import { DiagramTheme } from './DiagramTheme';
 import { CanvasBackground } from './CanvasBackground';
+import { StyleBackdrop } from './StyleBackdrop';
 import { ATTACH_DWELL_MS, evaluateAttachCandidates, isAttachableType } from './dragTargets';
 import { isLinkable, isPartOfDiagram } from '../document/sequenceLinks';
 import { LIMITS } from '../document/limits';
@@ -2318,6 +2319,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       aria-roledescription="diagram canvas"
       aria-label="Diagram canvas"
     >
+      <StyleBackdrop />
       <CanvasBackground
         settings={document.settings.background}
         documentId={document.metadata.id}
