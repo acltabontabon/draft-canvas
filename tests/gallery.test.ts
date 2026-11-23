@@ -179,7 +179,7 @@ describe('a starter on the canvas', () => {
 describe('style packs', () => {
   it('are listed in the catalog beside the starters, and missing from an older one without harm', () => {
     const catalog = vendoredCatalog();
-    expect((catalog.styles ?? []).map((entry) => entry.id)).toEqual(['professional', 'geek', 'arena', 'high-seas', 'high-fantasy', 'cyberpunk', 'cute']);
+    expect((catalog.styles ?? []).map((entry) => entry.id)).toEqual(['professional', 'geek', 'arena', 'high-seas', 'high-fantasy', 'cyberpunk', 'cute', 'weeb', 'hardwood', 'match-point']);
     for (const entry of catalog.styles ?? []) expect(entry.path).toBe(`styles/${entry.id}/${entry.id}.draftstyle`);
     const older = JSON.parse(vendoredCatalogText()) as { styles?: unknown };
     delete older.styles;
@@ -206,7 +206,7 @@ describe('style packs', () => {
   it('are fetched from the gallery repository, checked, and read back as styles', async () => {
     const fetch = serve();
     const snapshot = await refreshGallery();
-    expect(snapshot.styles).toHaveLength(7);
+    expect(snapshot.styles).toHaveLength(10);
     expect(snapshot.styles.every((pack) => pack.availability === 'ready')).toBe(true);
     for (const [url] of fetch.mock.calls) expect(String(url).startsWith(GALLERY_BASE)).toBe(true);
 

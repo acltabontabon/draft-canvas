@@ -273,14 +273,15 @@ notes, code, sequences and boundaries) take line, corner and shadow changes but 
 **Style packs**, under Styles, are ready-made styles from the
 [starters gallery](https://github.com/acltabontabon/draft-canvas-starters#style-packs), each an
 illustrated world with a drawing for every shape and every kind of it, its own colours and its own
-backdrop: Professional, Geek, Arena, High seas, High fantasy, Cyberpunk and Cute. **Load style
+backdrop: Professional, Geek, Arena, High seas, High fantasy, Cyberpunk, Cute, Weeb, Hardwood and
+Match Point. No two share a canvas colour or a line. **Load style
 packs** reads that public gallery from GitHub, as loading starters does, and sends nothing about
 your diagrams. **Add** makes a pack a style of your own, to change as you like. Some packs are drawn
 on a dark canvas and some on a light one whatever your device is set to, and their exports are too.
 
 ![The style packs in Appearance, each a card with a small diagram drawn in the pack on its own canvas and an Add button, beside a diagram now drawn in High seas.](../media/guides/style-packs.png)
 
-The same diagram in four packs. Every shape is the shape it was, where it was: a gateway is a
+The same diagram in seven of them. Every shape is the shape it was, where it was: a gateway is a
 lighthouse on the high seas, a scanner arch in the night city, a castle gate in the arena and a
 little house with a face in the sticker book, and still a gateway.
 
@@ -291,6 +292,12 @@ little house with a face in the sticker book, and still a gateway.
 ![The same diagram drawn in Arena, on a starlit arena floor: a castle gate for the gateway, bevelled gold plaques for the services.](../media/guides/style-pack-arena.png)
 
 ![The same diagram drawn in Cute, on a gingham stationery page: a little house for the gateway, a caterpillar for the queue, a bee for the worker.](../media/guides/style-pack-cute.png)
+
+![The same diagram drawn in Weeb, on an after-school sky with clouds and petals: a shrine gate for the gateway, ramen bowls for the queue, a bento box for the SQL database.](../media/guides/style-pack-weeb.png)
+
+![The same diagram drawn in Hardwood, on a court's floorboards at night: the hoop for the gateway, a shot clock, ball racks and a sneaker mid-step.](../media/guides/style-pack-hardwood.png)
+
+![The same diagram drawn in Match Point, on a mown lawn with chalk lines: the court gate for the gateway, a scoreboard for the SQL database, balls waiting on the baseline.](../media/guides/style-pack-match-point.png)
 
 A style of your own can be saved to a file with **Export…** and brought in on another device with
 **Import style…**. A `.draftstyle` file holds the style and nothing about any diagram.

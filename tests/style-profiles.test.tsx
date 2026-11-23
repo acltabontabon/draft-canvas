@@ -495,7 +495,7 @@ describe('Settings → Appearance', () => {
     page();
     const packs = screen.getByRole('list');
     await vi.waitFor(() => expect(within(packs).getByRole('button', { name: 'Add High seas to my styles' })).toBeEnabled());
-    expect(within(packs).getAllByRole('listitem')).toHaveLength(7);
+    expect(within(packs).getAllByRole('listitem')).toHaveLength(10);
     // A card is its picture, its name and Add; who drew it and under what is a hover away.
     expect(within(packs).getAllByRole('listitem')[0]).toHaveAttribute('title', expect.stringContaining('By Draft Canvas · Apache-2.0'));
 

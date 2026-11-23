@@ -118,6 +118,14 @@ test('the diagram is framed again in the canvas the panel leaves it', async ({ p
     .poll(async () => Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right)))))
     .toBeLessThan(edge);
   expect(Math.min(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().left))))).toBeGreaterThan(0);
+
+  // Done puts the view back where it was before the panel took its room.
+  await page.waitForTimeout(600);
+  await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await expect(settings).toBeHidden();
+  await expect
+    .poll(async () => Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right)))))
+    .toBeGreaterThan(edge);
 });
 
 test('a style’s colours dress the whole editor, and leave the app outside it alone', async ({ page }) => {

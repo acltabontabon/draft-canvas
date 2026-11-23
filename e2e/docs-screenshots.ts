@@ -741,7 +741,7 @@ async function openAppearance(page: Page) {
   return panel;
 }
 
-/** A style of one's own, the canvas it is drawn on, the gallery's packs, and a diagram drawn in three of them. */
+/** A style of one's own, the canvas it is drawn on, the gallery's packs, and a diagram drawn in seven of them. */
 async function appearanceScreenshots(page: Page) {
   await page.setViewportSize({ width: 1360, height: 860 });
   await openStarter(page, 'Microservices');
@@ -753,6 +753,8 @@ async function appearanceScreenshots(page: Page) {
   // Opening the panel frames the diagram in the canvas it leaves; closing it does not, so the
   // pictures of the whole canvas ask for that themselves.
   const frame = async () => {
+    // After the sidebar has gone and the view has gone back to where it was.
+    await page.waitForTimeout(900);
     await palette(page, 'Fit to view');
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.waitForTimeout(500);
@@ -786,6 +788,9 @@ async function appearanceScreenshots(page: Page) {
     ['Cyberpunk', 'style-pack-cyberpunk'],
     ['Arena', 'style-pack-arena'],
     ['Cute', 'style-pack-cute'],
+    ['Weeb', 'style-pack-weeb'],
+    ['Hardwood', 'style-pack-hardwood'],
+    ['Match Point', 'style-pack-match-point'],
   ] as const) {
     await pack(name).getByRole('button', { name: `Add ${name} to my styles`, exact: true }).click();
     await expect(styles.getByRole('radio', { name: new RegExp(`^${name}`) })).toBeChecked();

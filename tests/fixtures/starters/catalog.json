@@ -827,6 +827,42 @@
       "sha256": "bc1de5db9fe5907c809b1bcfacb21188f7ad46fccbe04ca18bc42d77eb34641e",
       "bytes": 204068,
       "updated": "2026-11-23"
+    },
+    {
+      "id": "weeb",
+      "name": "Weeb",
+      "summary": "Inked manga under an after-school sky: a shrine gate, a bento box, ramen bowls in line, carp streamers in the wind",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 80,
+      "path": "styles/weeb/weeb.draftstyle",
+      "sha256": "dd51152255df22b86b87d3f2500568017c97588c04b53be5c20efb2adb0bdbc0",
+      "bytes": 86274,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "hardwood",
+      "name": "Hardwood",
+      "summary": "Basketball by arena light: orange leather, maple planks, chalk court lines and steel on espresso black",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 90,
+      "path": "styles/hardwood/hardwood.draftstyle",
+      "sha256": "4f813aa0bfd2c3871507692537e375f2fcabcfbfdb1acf4214d2ca8ebd652926",
+      "bytes": 82477,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "match-point",
+      "name": "Match Point",
+      "summary": "A grass-court summer drawn like a vintage club poster: a ball machine, a scoreboard, a kit bag, a rally over the net",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 100,
+      "path": "styles/match-point/match-point.draftstyle",
+      "sha256": "b9ebfa4a1df0e9eb0dd2b0f7475cfdaf5a344431c8f89363b63ecf8d8f36be64",
+      "bytes": 93076,
+      "updated": "2026-11-23"
     }
   ]
 }
