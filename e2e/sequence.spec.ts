@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { connect, create, newCanvas, reopenAfterReload } from './canvas';
+import { connect, create, newCanvas, nextFrames, reopenAfterReload } from './canvas';
 
 /**
  * A sequence on the canvas, driven the way a person drives it: named participants, messages drawn
@@ -145,6 +145,9 @@ test.describe('Sequence', () => {
     await page.mouse.move(before.x + 60, before.y + 12);
     await page.mouse.down();
     await page.mouse.move(before.x + 160, before.y + 72, { steps: 6 });
+    // The shape follows the pointer a frame behind. Let go before that frame and it stays where the
+    // last one left it: WebKit on a busy runner dropped it halfway there.
+    await nextFrames(page);
     await page.mouse.up();
     const after = (await node.boundingBox())!;
     expect(after.x - before.x).toBeGreaterThan(60);
