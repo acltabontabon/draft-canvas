@@ -51,11 +51,10 @@ multiple folders make the destination ambiguous. Keep the returned id and revisi
 - For architectural review or a proposed change, use `submit_proposal` and direct the person to
   review it in Draft Canvas. Only the person accepts a review-only proposal.
 
-Use a fresh UUID `requestId` per mutation. Retry identical requests with the same id. After a
-revision conflict, reread and rebuild. After a refusal, change what its message names (a field, an
-id or the view) before sending again: nothing was applied, and the same request is refused again. If the outcome is unknown, check saved state before writing
-again. Never create a replacement after an update failure. See the [MCP playbook](mcp-playbook.md)
-for ops and recovery.
+Use a fresh UUID `requestId` for each separate mutation. Keep it for an identical retry or a
+correction after a confirmed input refusal. After a revision conflict, reread and rebuild. If the
+outcome is unknown, check the diagram before writing again. Never create a replacement after an
+update failure. See the [MCP playbook](mcp-playbook.md) for ops and recovery.
 
 ## Finish
 

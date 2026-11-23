@@ -362,7 +362,7 @@
       "properties": {
         "requestId": {
           "type": "string",
-          "description": "Fresh UUID per change; reuse only for an identical retry."
+          "description": "Fresh UUID per change. After a confirmed refusal, corrections may reuse it."
         },
         "title": {
           "type": "string"
@@ -601,7 +601,7 @@
       "properties": {
         "requestId": {
           "type": "string",
-          "description": "Fresh UUID per change; reuse only for an identical retry."
+          "description": "Fresh UUID per change. After a confirmed refusal, corrections may reuse it."
         },
         "diagramId": {
           "type": "string"
@@ -670,7 +670,7 @@
               "op"
             ]
           },
-          "description": "Changes, applied in order as one: any refusal changes nothing. {op:\"update\",id,set:{field:value}} changes one thing by its id from read_diagram (an id, never a label; ids belong to one view); null clears an optional field. set fields by target — element: label,type,description,technology,replicas,color,group,evidence,place; group: label,kind,group,color,place; note: label,text,kind,about,near,group,color,attach,place; code: code,language,kind,about,near,group,color,attach,place; label: label,text,kind,style,about,near,group,color,attach,place; relationship: label,semantic,kind,directed,async,condition,color,lineStyle,response,deliveryAttempts,from,to,compensationFor,compensationVisible,compensationName,compensationProtocol,compensationDescription,evidence,route; flow: title,color,steps,variantOf; sequence: title,mermaid,links,place; attachment: label,text,kind,code,language,about,attach; openPoint: kind,context,resolved,resolution,about. {op:\"add\",nodes:[{id,type,label,description?,technology?,group?}],relationships:[{id,from,to,label?}],groups:[{id,label}],flows:[{id,title,steps:[relationshipId]}],notes:[{id,text,about?}]} with new ids; {op:\"remove\",ids:[id],cascade?}; {op:\"arrange\",scope?,direction?,spacing?}; {op:\"setLevel\",level}; {op:\"moveInside\",owner,ids}; {op:\"moveOutside\",ids}. Value types and further fields: get_capabilities({tool:\"update_diagram\"})."
+          "description": "Ops run in order as one change. {op:\"update\",id,set:{field:value}} uses the id from read_diagram in the addressed view; null clears optional fields. set by target — element: label,type,description,technology,replicas,color,group,evidence,place; group: label,kind,group,color,place; note: label,text,kind,about,near,group,color,attach,place; code: code,language,kind,about,near,group,color,attach,place; label: label,text,kind,style,about,near,group,color,attach,place; relationship: label,semantic,kind,directed,async,condition,color,lineStyle,response,deliveryAttempts,from,to,compensationFor,compensationVisible,compensationName,compensationProtocol,compensationDescription,evidence,route; flow: title,color,steps,variantOf; sequence: title,mermaid,links,place; attachment: label,text,kind,code,language,about,attach; openPoint: kind,context,resolved,resolution,about. {op:\"add\",nodes:[{id,type,label}],relationships:[{id,from,to}],groups:[{id,label}],flows:[{id,title,steps:[relationshipId]}],notes:[{id,text}],sequences:[{id,title,mermaid}],openPoints:[{kind,about}],level?}; omit unused lists. {op:\"remove\",ids,cascade?}; {op:\"arrange\",scope?,connectors?,move?,direction?,spacing?,primaryFlow?}; {op:\"setLevel\",level}; {op:\"moveInside\",owner,ids}; {op:\"moveOutside\",ids}. Full schema: get_capabilities({tool:\"update_diagram\"})."
         },
         "rename": {
           "type": "object",
@@ -932,7 +932,7 @@
       "properties": {
         "requestId": {
           "type": "string",
-          "description": "Fresh UUID per change; reuse only for an identical retry."
+          "description": "Fresh UUID per change. After a confirmed refusal, corrections may reuse it."
         },
         "diagramId": {
           "type": "string"

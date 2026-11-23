@@ -83,8 +83,24 @@ test('real MCP sidecar: inspect a candidate, commit, submit a semantic proposal,
     await expect(page.locator('.dc-source-evidence')).toContainText('Observed');
     await page.screenshot({ path: test.info().outputPath('mcp-source-evidence.png') });
     await page.keyboard.press('Escape');
-    const initial = await client.call('read_diagram', { diagramId: 'd_mcp00000001', include: ['attachments'] });
+    const diagramId = 'd_mcp00000001';
+    const before = await client.call('read_diagram', { diagramId });
+    const requestId = randomUUID();
+    const update = { diagramId, requestId, expectedRevision: before.value.revision };
+    const refused = await client.call('update_diagram', { ...update, ops: [{ op: 'update', id: 'Orders API', set: { color: '#ff0000' } }] });
+    expect(refused.ok).toBe(false);
+    expect(refused.value.error).toMatchObject({
+      code: 'INVALID_REFERENCE',
+      message: '/ops/0/id: nothing with id "Orders API" in this view; that is the label of id "api", and an op takes the id',
+      hint: expect.stringMatching(/^Nothing was changed\./),
+      details: { path: '/ops/0/id' },
+    });
+    expect((await client.call('read_diagram', { diagramId })).value.revision).toBe(before.value.revision);
+    const corrected = await client.call('update_diagram', { ...update, ops: [{ op: 'update', id: 'api', set: { color: 'blue' } }] });
+    expect(corrected.ok, JSON.stringify(corrected.value)).toBe(true);
+    const initial = await client.call('read_diagram', { diagramId, include: ['attachments'] });
     expect(initial.ok).toBe(true);
+    expect(initial.value.elements).toContainEqual(expect.objectContaining({ id: 'api', color: 'blue' }));
     const candidate = await client.call('preview_diagram', { diagramId: 'd_mcp00000001', expectedRevision: initial.value.revision, ops: [{ op: 'update', id: 'api', set: { label: 'Checkout API' } }] });
     expect(candidate.ok).toBe(true);
     await expect(page.locator('.react-flow__node[data-id="api"]')).toContainText('Orders API');

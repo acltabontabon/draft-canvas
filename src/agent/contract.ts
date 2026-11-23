@@ -1,5 +1,5 @@
-import { FULL_TOOLS } from './schema';
-import { AgentError, REFUSAL_HINTS } from './errors';
+import { FULL_TOOLS, UPDATE_SET_SCHEMA, UPDATE_SET_VALIDATION_SCHEMA } from './schema';
+import { AgentError } from './errors';
 import { unknownFieldHint } from './fields';
 
 interface Schema {
@@ -47,7 +47,7 @@ const matches = (type: string, item: unknown) => type === 'null' ? item === null
 
 /** The subset of JSON Schema emitted by schema.ts, checked at the page boundary even for clients
  *  that only send raw JSON-RPC. Semantic references and layout are still checked by the engine. */
-export function schemaProblems(schema: unknown, value: unknown): string[] {
+export function schemaProblems(schema: unknown, value: unknown, { path = '', deferUpdateSet = false } = {}): string[] {
   const root = schema as Schema;
   const resolve = (rule: Schema): Schema => (rule.$ref ? root.$defs?.[rule.$ref.replace('#/$defs/', '')] ?? rule : rule);
   /** A field whose one allowed value names the branch (an op's `op`), if `rule` has one. */
@@ -111,6 +111,8 @@ export function schemaProblems(schema: unknown, value: unknown): string[] {
     return far[best]! >= 1000 ? [shapes] : [shapes, ...results[best]!];
   };
   const visit = (rule: Schema, item: unknown, path: string): string[] => {
+    // The patch engine validates the same set schema once it knows what the op addresses.
+    if (deferUpdateSet && rule === UPDATE_SET_SCHEMA) return isObject(item) ? [] : [`${path}: must be object`];
     if (rule.$ref) {
       const target = root.$defs?.[rule.$ref.replace('#/$defs/', '')];
       return target ? visit(target, item, path) : [`${path}: unresolved schema reference`];
@@ -171,12 +173,21 @@ export function schemaProblems(schema: unknown, value: unknown): string[] {
     if (typeof item === 'number' && ((rule.minimum !== undefined && item < rule.minimum) || (rule.maximum !== undefined && item > rule.maximum))) problems.push(`${path}: outside the supported range`);
     return problems.slice(0, 20);
   };
-  return visit(root, value, '');
+  return visit(root, value, path);
 }
 
-export function validateToolInput(name: string, args: unknown): void {
+function throwSchemaProblems(problems: string[]): void {
+  const first = problems[0];
+  if (!first) return;
+  const message = problems.length === 1 ? first : `${problems.length} problems; first — ${first}`;
+  throw new AgentError('INVALID_INPUT', message, { path: first.split(':')[0], details: { problems } });
+}
+
+export function validateToolInput(name: string, args: unknown, options?: { deferUpdateSet?: boolean }): void {
   const tool = FULL_TOOLS.find((tool) => tool.name === name);
-  if (!tool) return; // Internal active_context/open_created are not MCP tools.
-  const problems = schemaProblems(tool.inputSchema, args);
-  if (problems.length) throw new AgentError('INVALID_INPUT', problems.length === 1 ? problems[0]! : `${problems.length} problems; first — ${problems[0]}`, { path: problems[0]!.split(':')[0], hint: REFUSAL_HINTS.INVALID_INPUT, details: { problems } });
+  if (tool) throwSchemaProblems(schemaProblems(tool.inputSchema, args, options));
+}
+
+export function validateUpdateSet(set: unknown, path: string): void {
+  throwSchemaProblems(schemaProblems(UPDATE_SET_VALIDATION_SCHEMA, set, { path }));
 }

@@ -104,13 +104,48 @@ enum Dispatch {
 /// A call the sidecar refuses before the app sees it. Each says which argument is wrong and what to
 /// send: "Invalid entry-point arguments" left an agent that had put an operation's arguments beside
 /// `tool`, or sent `args` as a JSON string, with nothing to correct.
-fn malformed(message: impl AsRef<str>) -> Value {
-    bridge::error(
+fn malformed(path: &str, message: &str) -> Value {
+    let mut error = bridge::error(
         "INVALID_INPUT",
-        message.as_ref(),
-        "Nothing was changed. Correct the call and send it again; unchanged, it fails the same way.",
+        &format!("{path}: {message}"),
+        "Nothing was changed. Correct the call and send it again.",
         false,
-    )
+    );
+    error["details"] = serde_json::json!({ "path": path });
+    error
+}
+
+fn argument_path(parent: &str, name: &str) -> String {
+    format!("{parent}/{}", name.replace('~', "~0").replace('/', "~1"))
+}
+
+fn rename_args(mut args: Value, path: &str) -> Result<Value, Value> {
+    let map = args
+        .as_object_mut()
+        .ok_or_else(|| malformed(path, "Rename arguments must be an object."))?;
+    if let Some(key) = map.keys().find(|key| {
+        !["diagramId", "requestId", "from", "to", "view", "scope"].contains(&key.as_str())
+    }) {
+        return Err(malformed(
+            &argument_path(path, key),
+            "Unknown rename argument. Use diagramId, requestId, from, to, view or scope.",
+        ));
+    }
+    let mut label = |field: &str| {
+        map.remove(field).filter(Value::is_string).ok_or_else(|| {
+            malformed(
+                &argument_path(path, field),
+                "is required and must be a label (a string).",
+            )
+        })
+    };
+    let from = label("from")?;
+    let to = label("to")?;
+    map.insert(
+        "rename".into(),
+        serde_json::json!({ "from": from, "to": to }),
+    );
+    Ok(args)
 }
 
 fn names(allowed: &[Tool]) -> String {
@@ -124,15 +159,19 @@ fn names(allowed: &[Tool]) -> String {
 /// Resolve the wrapper before the bridge: the native broker sees the REAL operation and original
 /// rename payload, so its permission policy, idempotency ledger and review gate cannot be bypassed.
 fn dispatch(name: &str, mut args: Value, allowed: &[Tool]) -> Result<Dispatch, Value> {
-    let invalid = || malformed(format!("{name}: arguments missing or of the wrong type."));
     let target = match name {
         "read_edit" => {
-            let map = args.as_object_mut().ok_or_else(invalid)?;
-            if map
+            let map = args
+                .as_object_mut()
+                .ok_or_else(|| malformed("/", "Read arguments must be an object."))?;
+            if let Some(key) = map
                 .keys()
-                .any(|key| !["query", "inside", "cursor"].contains(&key.as_str()))
+                .find(|key| !["query", "inside", "cursor"].contains(&key.as_str()))
             {
-                return Err(invalid());
+                return Err(malformed(
+                    &argument_path("", key),
+                    "Unknown read argument. Use query, inside or cursor.",
+                ));
             }
             if let Some(inside) = map.remove("inside") {
                 map.insert("view".into(), serde_json::json!({"inside":inside}));
@@ -141,65 +180,71 @@ fn dispatch(name: &str, mut args: Value, allowed: &[Tool]) -> Result<Dispatch, V
             "read_diagram".to_string()
         }
         "rename_element" => {
-            let map = args.as_object_mut().ok_or_else(invalid)?;
-            if map.keys().any(|key| {
-                !["diagramId", "requestId", "from", "to", "view", "scope"].contains(&key.as_str())
-            }) {
-                return Err(invalid());
-            }
-            let from = map.remove("from").ok_or_else(invalid)?;
-            let to = map.remove("to").ok_or_else(invalid)?;
-            map.insert(
-                "rename".into(),
-                serde_json::json!({ "from": from, "to": to }),
-            );
+            args = rename_args(args, "")?;
             "update_diagram".to_string()
         }
         "diagram_tool" => {
             let map = args.as_object().ok_or_else(|| {
-                malformed("diagram_tool takes {tool, args}: an operation name and its arguments.")
+                malformed(
+                    "/",
+                    "diagram_tool takes {tool, args}, an operation name and its arguments.",
+                )
             })?;
             if let Some(key) = map.keys().find(|key| *key != "tool" && *key != "args") {
-                return Err(malformed(format!(
-                    "/{key}: unknown argument. diagram_tool takes only tool and args; an operation's own arguments go inside args."
-                )));
+                return Err(malformed(
+                    &argument_path("", key),
+                    "unknown argument. Put the operation's arguments inside args.",
+                ));
             }
             let target = map
                 .get("tool")
                 .and_then(Value::as_str)
                 .ok_or_else(|| {
-                    malformed("/tool: is required, an operation name or \"help\" (a string).")
+                    malformed(
+                        "/tool",
+                        "is required and must be an operation name or \"help\" (a string).",
+                    )
                 })?
                 .to_string();
             let inner = map
                 .get("args")
                 .filter(|value| value.is_object())
                 .ok_or_else(|| {
-                    malformed("/args: is required and must be a JSON object, not a string: the operation's arguments, {} when it takes none.")
+                    malformed("/args", "is required and must be a JSON object. Send the operation’s arguments here, or {} when it takes none.")
                 })?
                 .clone();
             if target == "rename_element" {
-                return dispatch("rename_element", inner, allowed);
+                return dispatch("update_diagram", rename_args(inner, "/args")?, allowed);
             }
             if target == "help" {
-                if inner.as_object().unwrap().keys().any(|key| key != "tool")
-                    || inner.get("tool").is_some_and(|value| !value.is_string())
-                {
-                    return Err(malformed("/args: help takes {} to list operations, or {tool: \"NAME\"} for one operation's arguments."));
+                if let Some(key) = inner.as_object().unwrap().keys().find(|key| *key != "tool") {
+                    return Err(malformed(
+                        &argument_path("/args", key),
+                        "help takes {} or {tool: \"NAME\"}.",
+                    ));
+                }
+                if inner.get("tool").is_some_and(|value| !value.is_string()) {
+                    return Err(malformed(
+                        "/args/tool",
+                        "must be an operation name (a string).",
+                    ));
                 }
                 let value = if let Some(name) = inner.get("tool").and_then(Value::as_str) {
                     let tool = allowed
                         .iter()
                         .find(|tool| tool.name == name)
                         .ok_or_else(|| {
-                            malformed(format!(
-                                "/args/tool: no operation named {name:?}. Operations: {}.",
-                                names(allowed)
-                            ))
+                            malformed(
+                                "/args/tool",
+                                &format!(
+                                    "no operation named {name:?}. Operations: {}.",
+                                    names(allowed)
+                                ),
+                            )
                         })?;
                     serde_json::to_value(tool).expect("a tool serializes")
                 } else {
-                    serde_json::json!({ "usage": "tool=help,args={tool:NAME} gives NAME's arguments; then call tool=NAME,args={...}. To change a diagram: list_diagrams (diagramId), read_diagram (ids, revision), update_diagram. get_capabilities({tool:NAME}) has value types and advanced fields.", "tools": allowed.iter().map(|tool| serde_json::json!({"name": tool.name, "description": tool.description})).collect::<Vec<_>>() })
+                    serde_json::json!({ "usage": "tool=help,args={tool:NAME} gives NAME's arguments. get_capabilities({tool:NAME}) has its full schema.", "tools": allowed.iter().map(|tool| serde_json::json!({"name": tool.name, "description": tool.description})).collect::<Vec<_>>() })
                 };
                 return Ok(Dispatch::Help(value));
             }
@@ -618,7 +663,7 @@ mod tests {
             ),
             (
                 serde_json::json!({"tool":"update_diagram","args":"{\"diagramId\":\"d\"}"}),
-                "/args: is required and must be a JSON object, not a string",
+                "/args: is required and must be a JSON object.",
             ),
             (
                 serde_json::json!({"tool":"update_diagram"}),
@@ -627,11 +672,15 @@ mod tests {
             (serde_json::json!({"args":{}}), "/tool: is required"),
             (
                 serde_json::json!({"tool":"help","args":{"name":"update_diagram"}}),
-                "/args: help takes {}",
+                "/args/name: help takes {}",
+            ),
+            (
+                serde_json::json!({"tool":"rename_element","args":{"from":"A"}}),
+                "/args/to: is required",
             ),
             (
                 serde_json::json!({"tool":"help","args":{"tool":"update"}}),
-                "no operation named \"update\". Operations: get_capabilities, list_diagrams, read_diagram",
+                "/args/tool: no operation named \"update\". Operations: get_capabilities, list_diagrams, read_diagram",
             ),
             (
                 serde_json::json!({"tool":"edit_diagram","args":{}}),
@@ -641,6 +690,9 @@ mod tests {
             let error = refused(args);
             let message = error["message"].as_str().unwrap();
             assert!(message.contains(says), "{message}");
+            if let Some((path, _)) = says.split_once(':').filter(|(path, _)| path.starts_with('/')) {
+                assert_eq!(error["details"]["path"], path);
+            }
             assert!(error["hint"]
                 .as_str()
                 .unwrap()

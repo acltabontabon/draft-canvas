@@ -9,7 +9,7 @@
 
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS, OPEN_POINT_KINDS, SIDES, TEXT_ALIGNS, TEXT_BACKGROUNDS, TEXT_FONTS, TEXT_ROLES } from '../document/types';
 import { AGENT_LIMITS, NEW_ID } from './input';
-import { SET_FIELDS } from './fields';
+import { OP_FIELDS, SET_FIELDS } from './fields';
 import { INTENT_SCHEMA } from './intent';
 import { outputFor } from './outputs';
 import { ELEMENT_TYPE_NAMES, GROUP_KINDS, LINE_STYLE_NAMES, NOTE_FORM_NAMES, NOTE_KIND_NAMES } from './vocabulary';
@@ -357,7 +357,7 @@ const roomDefs: Record<string, Schema> = {
   ...Object.fromEntries(Array.from({ length: AGENT_LIMITS.insideDepth }, (_, i) => [`element${i + 1}`, undescribed(element(i + 1))])),
 };
 
-const requestId = { type: 'string', minLength: 1, maxLength: 128, description: 'A fresh UUID per change. Retrying with the same id and payload returns the first result, not a second.' };
+const requestId = { type: 'string', minLength: 1, maxLength: 128, description: 'A fresh UUID per change. Reuse after a confirmed refusal, or to replay an identical committed request.' };
 
 const scope: Schema = {
   type: 'object',
@@ -387,7 +387,7 @@ const nullable = (schema: Schema): Schema => ({ anyOf: [schema, { type: 'null' }
 const setProperties: Record<string, Schema> = {
   label: nullable(text(1000)), text: text(1000), type: { anyOf: [ref('elementType'), { type: 'string', maxLength: 64 }] },
   description: nullable(text(280)), technology: nullable(text(60)), replicas: nullable(replicasSchema), color: nullable(ref('accent')),
-  group: nullable({ type: 'string' }), kind: nullable({ enum: [...new Set([...Object.keys(GROUP_KINDS), ...NOTE_FORM_NAMES, ...CONNECTOR_KINDS])] }),
+  group: nullable({ type: 'string' }), kind: nullable({ enum: [...new Set([...Object.keys(GROUP_KINDS), ...NOTE_FORM_NAMES, ...CONNECTOR_KINDS, ...OPEN_POINT_KINDS])] }),
   semantic: nullable({ enum: EDGE_SEMANTICS }), directed: { type: 'boolean' }, async: { type: 'boolean' },
   condition: nullable(text(120)), title: text(100),
   attach: { type: 'boolean', description: 'true folds a free note onto about; false takes an attachment off as a free note. Id kept.' },
@@ -417,13 +417,19 @@ const setSchema: Schema = {
  */
 const SET_BY_TARGET = Object.entries(SET_FIELDS).map(([target, fields]) => `${target}: ${fields.join(',')}`).join('; ');
 
+export const UPDATE_SET_SCHEMA = {
+  ...setSchema,
+  description: `Fields to change; omitted fields stay. null clears optional fields. A field the target does not take is refused. By target — ${SET_BY_TARGET}.`,
+};
+export const UPDATE_SET_VALIDATION_SCHEMA = { ...UPDATE_SET_SCHEMA, $defs: roomDefs };
+
 const opUpdate: Schema = {
   type: 'object',
   description: 'Changes fields of one thing, by id: an element, group, relationship, note, attachment, flow or open point.',
   properties: {
     op: { enum: ['update'] },
     id: { type: 'string' },
-    set: { ...setSchema, description: `Fields to change; omitted fields stay. null clears optional fields. A field the target does not take is refused. By target — ${SET_BY_TARGET}.` },
+    set: UPDATE_SET_SCHEMA,
   },
   required: ['op', 'id', 'set'],
   additionalProperties: false,
@@ -810,8 +816,8 @@ const compactFlow: Schema = {
  * fields and leave the rest to trial and error.
  */
 const compactOps: Schema = {
-  type: 'array', items: { type: 'object', properties: { op: { enum: ['add', 'update', 'remove', 'setLevel', 'arrange', 'moveInside', 'moveOutside'] } }, required: ['op'] },
-  description: `Changes, applied in order as one: any refusal changes nothing. {op:"update",id,set:{field:value}} changes one thing by its id from read_diagram (an id, never a label; ids belong to one view); null clears an optional field. set fields by target — ${SET_BY_TARGET}. {op:"add",nodes:[{id,type,label,description?,technology?,group?}],relationships:[{id,from,to,label?}],groups:[{id,label}],flows:[{id,title,steps:[relationshipId]}],notes:[{id,text,about?}]} with new ids; {op:"remove",ids:[id],cascade?}; {op:"arrange",scope?,direction?,spacing?}; {op:"setLevel",level}; {op:"moveInside",owner,ids}; {op:"moveOutside",ids}. Value types and further fields: get_capabilities({tool:"update_diagram"}).`,
+  type: 'array', items: { type: 'object', properties: { op: { enum: Object.keys(OP_FIELDS) } }, required: ['op'] },
+  description: `Ops run in order as one change. {op:"update",id,set:{field:value}} uses the id from read_diagram in the addressed view; null clears optional fields. set by target — ${SET_BY_TARGET}. {op:"add",nodes:[{id,type,label}],relationships:[{id,from,to}],groups:[{id,label}],flows:[{id,title,steps:[relationshipId]}],notes:[{id,text}],sequences:[{id,title,mermaid}],openPoints:[{kind,about}],level?}; omit unused lists. {op:"remove",ids,cascade?}; {op:"arrange",scope?,connectors?,move?,direction?,spacing?,primaryFlow?}; {op:"setLevel",level}; {op:"moveInside",owner,ids}; {op:"moveOutside",ids}. Full schema: get_capabilities({tool:"update_diagram"}).`,
 };
 /** Where the same ops are taken again: the grammar is stated once, on update_diagram. */
 const sameOps: Schema = { type: 'array', items: { type: 'object' }, description: 'Same ops as update_diagram: help {tool:"update_diagram"}.' };
@@ -834,7 +840,7 @@ function discoverySchema(schema: Schema, tool?: string): Schema {
     if (key === 'properties') {
       out[key] = Object.fromEntries(Object.entries(value as Record<string, Schema>).map(([name, child]) => {
         if (name === 'intent') return [name, briefObject('Exact-label intent + revision. Full fields: get_capabilities.')];
-        if (name === 'requestId') return [name, { type: 'string', description: 'Fresh UUID per change; reuse only for an identical retry.' }];
+        if (name === 'requestId') return [name, { type: 'string', description: 'Fresh UUID per change. After a confirmed refusal, corrections may reuse it.' }];
         if (name === 'ops') return [name, tool === 'update_diagram' ? compactOps : sameOps];
         if (name === 'layout') return [name, briefObject('Optional direction right|down, spacing compact|comfortable|spacious, primaryFlow id. Advanced fields: get_capabilities({tool:"create_diagram"}).')];
         return [name, discoverySchema(child)];

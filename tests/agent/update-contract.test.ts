@@ -51,7 +51,7 @@ const request = (ops: unknown, extra: Record<string, unknown> = {}) => ({ reques
 
 /** A call as the app runs it: the schema first, then the engine, on the view the request names. */
 function update(file: DraftDocument, ops: unknown[], inside: string[] = []): DraftDocument {
-  validateToolInput('update_diagram', request(ops, inside.length ? { view: { inside } } : {}));
+  validateToolInput('update_diagram', request(ops, inside.length ? { view: { inside } } : {}), { deferUpdateSet: true });
   return applyUpdate(file, inside, ops, undefined).file;
 }
 
@@ -141,8 +141,49 @@ describe('a refused update names the real mistake', () => {
     expect(nested.message).toBe('/ops/0/id: nothing with id "ctl" in this view; it is in another view: send this op with view: {inside: ["api"]}');
     expect(update(shop(), [{ op: 'update', id: 'ctl', set: { label: 'Controller', color: 'blue' } }], ['api']).nodes.find((n) => n.id === 'api')?.inside?.nodes[0]?.text).toBe('Controller');
     const outer = refusal(() => update(shop(), [{ op: 'remove', ids: ['db'] }], ['api']));
-    expect(outer.message).toBe('/ops/0/ids: nothing with id "db" in this view; it is in the top view: send this op without view');
+    expect(outer.message).toBe('/ops/0/ids/0: nothing with id "db" in this view; it is in the top view: send this op without view');
     expect(refusal(() => update(shop(), [{ op: 'update', id: 'ghost', set: { technology: 'Go' } }])).message).toBe('/ops/0/id: nothing with id "ghost" in this view');
+  });
+
+  it('uses an exact id from another view ahead of a same-text label in this view', () => {
+    const file = update(shop(), [{ op: 'update', id: 'ctl', set: { label: 'db' } }], ['api']);
+    const change = refusal(() => update(file, [{ op: 'update', id: 'db', set: { technology: 'SQLite' } }], ['api']));
+    expect(change.message).toMatch(/in the top view/);
+    const removal = refusal(() => update(file, [{ op: 'remove', ids: ['ctl', 'db'] }], ['api']));
+    expect(removal.details?.path).toBe('/ops/0/ids/1');
+    expect(removal.message).toMatch(/in the top view/);
+  });
+
+  it('says to reorder an update when a later op adds its id and an existing label matches it', () => {
+    const file = update(shop(), [{ op: 'update', id: 'web', set: { label: 'cache' } }]);
+    const error = refusal(() => update(file, [
+      { op: 'update', id: 'cache', set: { technology: 'Redis' } },
+      { op: 'add', nodes: [{ id: 'cache', type: 'cache', label: 'Orders cache' }] },
+    ]));
+    expect(error.message).toContain('put that add before /ops/0');
+    expect(error.details?.path).toBe('/ops/0/id');
+  });
+
+  it('resolves the target before set values and still checks values for a known field', () => {
+    const file = shop();
+    const badColor = { color: '#ff0000' };
+    const missing = refusal(() => update(file, [{ op: 'update', id: 'Orders API', set: badColor }]));
+    expect(missing.code).toBe('INVALID_REFERENCE');
+    expect(missing.details?.path).toBe('/ops/0/id');
+    const wrongKind = refusal(() => update(file, [{ op: 'update', id: 'order', set: { technology: 42 } }]));
+    expect(wrongKind.message).toContain('not a field of a relationship ("order")');
+    const badValue = refusal(() => update(file, [{ op: 'update', id: 'api', set: badColor }]));
+    expect(badValue.details?.path).toBe('/ops/0/set/color');
+    expect(badValue.message).toContain('must be one of neutral');
+  });
+
+  it('accepts the documented kind of an open point in both schema and patch validation', () => {
+    const ops = [
+      { op: 'add', openPoints: [{ id: 'rollout', kind: 'tentative', about: ['api'] }] },
+      { op: 'update', id: 'rollout', set: { kind: 'awaiting' } },
+    ];
+    validateToolInput('update_diagram', request(ops));
+    expect(update(shop(), ops).openPoints).toMatchObject([{ id: 'rollout', kind: 'awaiting' }]);
   });
 
   it('names the target kind and its fields when a field belongs to another kind', () => {
@@ -176,7 +217,7 @@ describe('a refused update names the real mistake', () => {
     for (const [ops, first] of cases) {
       const error = refusal(() => validateToolInput('update_diagram', request(ops)));
       expect(error.code).toBe('INVALID_INPUT');
-      expect((error.details?.problems as string[])[0]).toBe(first);
+      expect((error.details?.problems as string[] | undefined)?.[0]).toBe(first);
       expect(error.details?.path).toBe(first.split(':')[0]);
       expect(error.hint).toMatch(/^Nothing was changed\./);
     }

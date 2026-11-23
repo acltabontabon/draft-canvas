@@ -582,11 +582,11 @@ async fn a_refused_update_reaches_the_client_whole_and_its_correction_goes_throu
         "INVALID_INPUT"
     );
 
-    let update = |id: &str, request: &str| {
-        json!({"tool": "update_diagram", "args": {"requestId": request, "diagramId": "d_1", "expectedRevision": "f:1",
+    let update = |id: &str| {
+        json!({"tool": "update_diagram", "args": {"requestId": "repair", "diagramId": "d_1", "expectedRevision": "f:1",
             "ops": [{"op": "update", "id": id, "set": {"technology": "Kotlin"}}]}})
     };
-    let refused = call(update("Orders API", "first")).await.unwrap();
+    let refused = call(update("Orders API")).await.unwrap();
     assert_eq!(refused.is_error, Some(true));
     let error = &refused.structured_content.as_ref().unwrap()["error"];
     assert_eq!(error["code"], "INVALID_REFERENCE");
@@ -605,7 +605,7 @@ async fn a_refused_update_reaches_the_client_whole_and_its_correction_goes_throu
         "a client that reads only text content gets the same refusal: {text}"
     );
 
-    let corrected = call(update("api", "second")).await.unwrap();
+    let corrected = call(update("api")).await.unwrap();
     assert_eq!(corrected.is_error, Some(false));
     assert_eq!(corrected.structured_content.unwrap()["revision"], "f:2");
 
@@ -622,4 +622,7 @@ async fn a_refused_update_reaches_the_client_whole_and_its_correction_goes_throu
         "help and the malformed call never reach the app"
     );
     assert!(calls.iter().all(|frame| frame["tool"] == "update_diagram"));
+    assert!(calls
+        .iter()
+        .all(|frame| frame["args"]["requestId"] == "repair"));
 }

@@ -49,7 +49,7 @@ export class AgentError extends Error {
     super(message);
     this.name = 'AgentError';
     this.code = code;
-    this.hint = extra.hint;
+    this.hint = extra.hint ?? REFUSAL_HINTS[code];
     this.retryable = extra.retryable;
     const details = { ...(extra.details ?? {}), ...(extra.path !== undefined ? { path: extra.path } : {}) };
     this.details = Object.keys(details).length ? details : undefined;
@@ -79,11 +79,13 @@ export function toAgentError(error: unknown): AgentErrorJson {
  * (a Junie run) sent variations of the same mistake until its action limit.
  */
 const REFUSED = 'Nothing was changed. ';
-export const REFUSAL_HINTS: Partial<Record<AgentErrorCode, string>> = {
-  INVALID_INPUT: `${REFUSED}Correct each field named in details.problems and send the request again; unchanged, it fails the same way. get_capabilities({tool}) has every field.`,
-  INVALID_REFERENCE: `${REFUSED}An op takes ids, and only those of the view it addresses: read_diagram returns them (query finds a name in any view, with its view path). Correct the id or the view and send again.`,
+const REFUSAL_HINTS: Partial<Record<AgentErrorCode, string>> = {
+  INVALID_INPUT: `${REFUSED}Correct each field named in the error and send the request again. get_capabilities({tool}) has the full schema.`,
+  INVALID_REFERENCE: `${REFUSED}Correct the named reference. For an existing diagram, read_diagram gives ids and view paths. For new content, use its declared id. In a batch, add it before referring to it.`,
   UNSUPPORTED_TYPE: `${REFUSED}Use a listed type (get_capabilities topics: ["types"]) and send again.`,
-  DUPLICATE_ID: `${REFUSED}Ids are unique across the file: choose another id for what is new, or update the existing one, and send again.`,
+  DUPLICATE_ID: `${REFUSED}Ids are unique across the file. Choose another id for new content, then resend.`,
+  CONTAINMENT_CYCLE: `${REFUSED}Choose a parent outside the element's own contents, then resend.`,
+  LIMIT_EXCEEDED: `${REFUSED}Adjust the request to the limit in the message, then resend.`,
 };
 
 /** Collects problems found while checking a request, so one reply lists them all (up to a bound). */
@@ -123,7 +125,6 @@ export class Problems {
       : undefined;
     throw new AgentError(first.code, this.list.length === 1 ? `${first.path}: ${first.message}` : `${this.list.length} problems; first — ${first.path}: ${first.message}`, {
       path: first.path,
-      hint: REFUSAL_HINTS[first.code],
       details: { problems: this.list, ...(conflictingIds?.length ? { conflictingIds } : {}) },
     });
   }
