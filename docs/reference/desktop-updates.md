@@ -108,7 +108,7 @@ fix.
 ## Homebrew releases
 
 `release.yml` calls `.github/workflows/homebrew.yml` after a stable desktop release (not
-prereleases). A failure does not affect the release, Pages or update channels.
+prereleases). A failure does not affect the release, the web deploy or update channels.
 
 It verifies both DMGs against `SHA256SUMS.txt`, runs Homebrew style and audit, and updates only
 `Casks/draft-canvas.rb` in [the tap](https://github.com/acltabontabon/homebrew-tap). Older versions

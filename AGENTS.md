@@ -198,8 +198,8 @@ with its reason, in the change that needs it. Pure helpers a hook module shares 
 in a module of their own (`presentation/steps.ts`), never in the hook's file.
 
 `www/` is a separate Vite project with its own lockfile and no shared app dependencies. Web assembly
-copies `dist/` unchanged into `dist-web/app/` (app.draftcanvas.dev) and `dist-web/legacy/editor/` (the
-old address, kept for the diagram handoff). Never set `Cross-Origin-Opener-Policy` on the app. Keep marketing code out of the editor and website
+copies `dist/` unchanged into `dist-web/app/` (app.draftcanvas.dev). Never set
+`Cross-Origin-Opener-Policy` on the app: the diagram handoff from the retired old address needs `window.opener`. Keep marketing code out of the editor and website
 assembly out of the editor's `vite.config.ts`.
 
 ## Conventions and docs
