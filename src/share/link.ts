@@ -77,15 +77,6 @@ function fromBase64Url(text: string): Uint8Array | null {
   return bytes;
 }
 
-/** The document as a link carries it: the background image stays behind — it alone would be most
- *  of the payload, and a link has no image store for it to land in. */
-function withoutBackgroundImage(document: DraftDocument): DraftDocument {
-  if (!document.settings.background.image) return document;
-  const background = { ...document.settings.background };
-  delete background.image;
-  return { ...document, settings: { ...document.settings, background } };
-}
-
 /** The `d` value in a fragment, or null when the address carries none. */
 export function sharePayloadFromHash(hash: string): string | null {
   return new URLSearchParams(hash.replace(/^#/, '')).get(SHARE_PARAM);
@@ -130,11 +121,11 @@ export async function encodeShareLink(document: DraftDocument, base?: string, st
   // Let the progress UI paint before serializing the snapshot or starting its worker.
   await new Promise<void>((resolve) => setTimeout(resolve, 0));
   checkShareCancelled(options.signal);
-  const whole = await linkFor(withoutBackgroundImage(document), base, start, passphrase, options);
+  const whole = await linkFor(document, base, start, passphrase, options);
   // Custom drawings are the one part of a style that can outgrow a link. The diagram is still the
   // diagram without them, so the link carries the rest and says so, where failing would not.
   if (!('tooLarge' in whole) || !document.style?.assets) return whole;
-  const plain = await linkFor(withoutBackgroundImage({ ...document, style: withoutAssets(document.style) }), base, start, passphrase, options);
+  const plain = await linkFor({ ...document, style: withoutAssets(document.style) }, base, start, passphrase, options);
   return 'tooLarge' in plain ? whole : { ...plain, withoutArtwork: true };
 }
 

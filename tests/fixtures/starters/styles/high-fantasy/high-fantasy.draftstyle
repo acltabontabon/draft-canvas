@@ -10,25 +10,26 @@
       "wobble": "calm"
     },
     "general": {
+      "corners": "round",
       "shadow": false
     },
     "schemes": {
       "light": {
-        "canvas": "#f4ebd3",
-        "grid": "#e3d6b4",
-        "text": "#2a1d14",
-        "textMuted": "#6b5434",
-        "edge": "#6f5a3c",
-        "edgeText": "#5c4628",
-        "edgeLabelBg": "#fbf5e3",
-        "codeBg": "#efe4c6",
-        "codeBorder": "#d6c69c",
+        "canvas": "#e9efd9",
+        "grid": "#d5dec0",
+        "text": "#1c2616",
+        "textMuted": "#55633f",
+        "edge": "#5d6d42",
+        "edgeText": "#4a5a33",
+        "edgeLabelBg": "#f4f7e9",
+        "codeBg": "#e1e8cf",
+        "codeBorder": "#c5d0a8",
         "accents": {
           "neutral": {
-            "fill": "#fbf3dc",
-            "line": "#4e3b26",
-            "text": "#2a1d14",
-            "chip": "#7a6248"
+            "fill": "#f8f9ec",
+            "line": "#3f4f2c",
+            "text": "#1c2616",
+            "chip": "#6f8240"
           },
           "teal": {
             "fill": "#cfe9dc",
@@ -61,10 +62,10 @@
             "chip": "#c8321f"
           },
           "green": {
-            "fill": "#dce9c0",
-            "line": "#44722a",
-            "text": "#213f0f",
-            "chip": "#5a8a34"
+            "fill": "#cfe3b0",
+            "line": "#3d6b22",
+            "text": "#1d3a0c",
+            "chip": "#4f8030"
           }
         }
       }
@@ -174,10 +175,11 @@
       }
     },
     "connectors": {
-      "weight": "fine"
+      "weight": "fine",
+      "colour": "source"
     },
     "backdrop": {
-      "art": "a0i2wzcv1ycg3e3"
+      "art": "a1aar1jq1hveq3w"
     },
     "assets": [
       {
@@ -843,18 +845,18 @@
         ]
       },
       {
-        "id": "a0i2wzcv1ycg3e3",
+        "id": "a1aar1jq1hveq3w",
         "w": 480,
         "h": 360,
         "paths": [
           {
             "d": "M0 20L480 20M0 60L480 60M0 100L480 100M0 140L480 140M0 180L480 180M0 220L480 220M0 260L480 260M0 300L480 300M0 340L480 340",
-            "stroke": "#e5d9b6",
+            "stroke": "#d7e0c3",
             "sw": 1
           },
           {
             "d": "M92 0L92 360M96 0L96 360",
-            "stroke": "#efd8c4",
+            "stroke": "#e2d9ae",
             "sw": 1
           },
           {

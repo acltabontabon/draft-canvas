@@ -7,6 +7,7 @@ import {
   type ShapeStyle,
   type StyleAsset,
   type StyleCorners,
+  type StyleDepth,
   type StyleEdgeColour,
   type StyleFit,
   type StyleHead,
@@ -70,6 +71,8 @@ export interface ResolvedStyle {
   theme(device: ThemeName): Theme;
   /** Set when the style is always drawn in one theme, whatever the device prefers. */
   readonly pinned?: ThemeName;
+  /** How far a shadow lifts a shape, for every shape that has one. */
+  readonly depth: StyleDepth;
   /** The drawing repeated on the canvas behind the diagram, when the style has one. */
   readonly backdrop?: ResolvedBackdrop;
   /** Short and stable, for caches and memo keys that cannot hold the object. */
@@ -92,6 +95,7 @@ function builtin(preset: HandPreset): ResolvedStyle {
     shape: () => PLAIN_SHAPE,
     connector: PLAIN_CONNECTOR,
     theme: (device: ThemeName) => THEMES[device],
+    depth: 'soft',
     key: preset,
   });
 }
@@ -175,6 +179,7 @@ function resolve(style: DocumentStyle): ResolvedStyle {
       colour: connectors.colour ?? 'source',
     },
     theme: (device: ThemeName) => themes[device],
+    depth: style.general?.depth ?? 'soft',
     ...(pinned ? { pinned } : {}),
     ...(backdrop ? { backdrop } : {}),
     key: `s${serial}`,

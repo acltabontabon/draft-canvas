@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useContext, useEffect, useId, useState } from 'react';
 import type { DocumentStyle, HandPreset } from '../../document/style';
 import { GALLERY_PAGE, stylePackFile, type GalleryStyle } from '../../gallery';
 import type { ThemeName } from '../../render/theme/tokens';
@@ -8,7 +8,7 @@ import { useStyleStore } from '../../store/styleStore';
 import { useUiStore } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
-import { SettingsSection } from './layout';
+import { CompactPrefs, Hint, SettingsSection } from './layout';
 import { StylePreview } from './StylePreview';
 
 const FAILURES = {
@@ -30,6 +30,8 @@ export function StylePacks({ theme, onAdded }: { theme: ThemeName; onAdded: (han
   const status = useGalleryStore((state) => state.status);
   const failure = useGalleryStore((state) => state.failure);
   const packs = useGalleryStore((state) => state.snapshot?.styles);
+  const id = useId();
+  const compact = useContext(CompactPrefs);
 
   // The copy already on this device, and a fresh one when it is a day old. Never before consent.
   useEffect(() => {
@@ -40,7 +42,7 @@ export function StylePacks({ theme, onAdded }: { theme: ThemeName; onAdded: (han
     return (
       <SettingsSection
         title="Style packs"
-        description="Ready-made styles from the Draft Canvas starters gallery. Loading reads that public gallery from GitHub, the same one Starters uses; nothing about your diagrams is sent."
+        description="Ready-made styles from the public starters gallery on GitHub. Nothing about your diagrams is sent."
       >
         <div className="dc-look-invite">
           <span className="dc-look-invite-art" aria-hidden="true">
@@ -57,36 +59,45 @@ export function StylePacks({ theme, onAdded }: { theme: ThemeName; onAdded: (han
   }
 
   const busy = status !== 'idle';
+  const some = packs !== undefined && packs.length > 0;
   return (
-    <SettingsSection title="Style packs" description="Ready-made styles from the starters gallery. Adding one makes it a style of your own, to change as you like." busy={busy}>
+    <section className="dc-prefs-section" aria-labelledby={`${id}-title`} aria-busy={busy || undefined}>
+      {/* The heading, and beside it the two small things to do with the whole list. */}
+      <div className="dc-look-section-head">
+        <h4 id={`${id}-title`} className="dc-prefs-section-title">
+          Style packs
+        </h4>
+        {compact && <Hint about="Style packs">Ready-made styles from the starters gallery. Adding one makes it yours to change.</Hint>}
+        <span className="dc-look-section-space" />
+        <a className="dc-prefs-link" href={`${GALLERY_PAGE}/tree/main/styles`} target="_blank" rel="noreferrer noopener">
+          GitHub
+        </a>
+        <Button variant="quiet" className="dc-look-section-action" icon="refresh" disabled={busy} aria-label={status === 'refreshing' ? 'Refreshing style packs' : 'Refresh style packs'} title="Refresh" onClick={() => void useGalleryStore.getState().refresh()} />
+      </div>
+      <p className={compact ? 'dc-sr-only' : 'dc-prefs-section-description'}>Ready-made styles. Adding one makes it yours to change.</p>
       {failure && (
         <p className="dc-prefs-note" data-tone="error" role="alert">
           <Icon name="alert" size={14} />
           <span>{FAILURES[failure]}</span>
         </p>
       )}
-      {packs && packs.length > 0 ? (
+      {some ? (
         <ul className="dc-prefs-packs">
           {packs.map((pack) => (
             <PackRow key={pack.id} pack={pack} theme={theme} onAdded={onAdded} />
           ))}
         </ul>
       ) : (
-        <p className="dc-prefs-empty">{busy ? 'Loading style packs…' : 'The gallery has no style packs yet.'}</p>
+        <p className="dc-look-status" data-quiet="">
+          <span>{busy ? 'Loading style packs…' : 'None in the gallery yet.'}</span>
+        </p>
       )}
-      <div className="dc-prefs-pack-actions">
-        <Button variant="quiet" className="dc-prefs-outline" icon="refresh" disabled={busy} onClick={() => void useGalleryStore.getState().refresh()}>
-          {status === 'refreshing' ? 'Refreshing…' : 'Refresh'}
-        </Button>
-        <a className="dc-prefs-link" href={`${GALLERY_PAGE}/tree/main/styles`} target="_blank" rel="noreferrer noopener">
-          View on GitHub
-        </a>
-      </div>
-    </SettingsSection>
+    </section>
   );
 }
 
 function PackRow({ pack, theme, onAdded }: { pack: GalleryStyle; theme: ThemeName; onAdded: (hand: HandPreset) => void }) {
+  const compact = useContext(CompactPrefs);
   const notify = useUiStore((state) => state.notify);
   const [style, setStyle] = useState<DocumentStyle | null>(null);
   // Added already when one of the person's styles is this pack, unchanged.
@@ -103,14 +114,11 @@ function PackRow({ pack, theme, onAdded }: { pack: GalleryStyle; theme: ThemeNam
 
   const credit = [pack.author ? `By ${pack.author}` : '', pack.licence].filter(Boolean).join(' · ');
   return (
-    <li className="dc-prefs-pack" data-added={added ? '' : undefined}>
+    <li className="dc-prefs-pack" data-added={added ? '' : undefined} title={[pack.summary, credit].filter(Boolean).join('. ')}>
       <div className="dc-prefs-pack-picture">{style ? <StylePreview style={style} theme={theme} size="card" label={`${pack.name}, drawn`} /> : <span className="dc-prefs-pack-wait" aria-hidden="true" />}</div>
       <div className="dc-prefs-pack-body">
-        <div className="dc-prefs-row-text">
-          <span className="dc-prefs-label">{pack.name}</span>
-          <span className="dc-prefs-description">{pack.summary}</span>
-          {credit && <span className="dc-prefs-detail">{credit}</span>}
-        </div>
+        {/* The picture says what it is; its summary and credit are a hover away (`title`), not on the card. */}
+        <span className="dc-prefs-label">{pack.name}</span>
         <Button
           variant="quiet"
           className="dc-prefs-outline dc-prefs-pack-add"
@@ -128,7 +136,8 @@ function PackRow({ pack, theme, onAdded }: { pack: GalleryStyle; theme: ThemeNam
             notify(`“${pack.name}” is now your style.`);
           }}
         >
-          {!style ? 'Not downloaded' : added ? 'Added' : 'Add'}
+          {/* Beside the canvas the card is narrow: the plus says it, and the name keeps its room. */}
+          {compact ? null : !style ? 'Not downloaded' : added ? 'Added' : 'Add'}
         </Button>
       </div>
     </li>

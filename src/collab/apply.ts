@@ -299,11 +299,7 @@ function applyFileFields(file: DraftDocument, changes: readonly Change[]): Draft
 
   let next = file;
   if (title !== undefined && title !== file.metadata.title) next = { ...next, metadata: { ...next.metadata, title } };
-  if (settings !== undefined) {
-    // An embedded image never travels (`wireSettings`); a copy that has one keeps it.
-    const image = file.settings.background.image;
-    next = { ...next, settings: image === undefined ? settings : { ...settings, background: { ...settings.background, image } } };
-  }
+  if (settings !== undefined) next = { ...next, settings };
   if (style === null && next.style !== undefined) {
     const { style: _style, ...rest } = next;
     next = rest;

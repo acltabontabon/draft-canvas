@@ -84,18 +84,40 @@ test('keyboard navigation scrolls the project menu to the highlighted row', asyn
   await expect.poll(() => menu.evaluate((element) => element.scrollTop)).toBeLessThanOrEqual(4);
 });
 
-test('the status bar opens Settings at Canvas, which tabs through every visible control', async ({ page }) => {
-  await newCanvas(page, 'Settings focus');
-  await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
-  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-  // One page, Canvas: no rail to choose from, and focus on the page itself. Appearance is not a
-  // page here: with a diagram open it is the panel beside the canvas.
-  await expect(settings.getByRole('tab')).toHaveCount(0);
-  await expect(settings.getByRole('region', { name: 'Canvas', exact: true })).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(settings.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeFocused();
-  // A new diagram has no background image, so it is offered none: its canvas is its style's.
-  await expect(settings.getByRole('button', { name: 'Choose image…', exact: true })).toHaveCount(0);
+test('Appearance opens beside the canvas from the status bar and the right-click, with no command to type', async ({ page }) => {
+  await newCanvas(page, 'Appearance ways in');
+  const button = page.getByRole('button', { name: 'Appearance', exact: true });
+  const panel = page.getByRole('complementary', { name: 'Appearance', exact: true });
+
+  // The status bar's button: beside the canvas, never a dialog over it, and the keyboard arrives in it.
+  await button.click();
+  await expect(panel).toBeVisible();
+  await expect(panel).toBeFocused();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // Drawn as the sheet it is, down the side of the window: its stylesheet is its own to load, with
+  // no Settings dialog on the web to load it.
+  expect(await panel.locator('.dc-style-panel-sheet').evaluate((sheet) => getComputedStyle(sheet).position)).toBe('fixed');
+  await expect(button).toHaveAttribute('aria-pressed', 'true');
+  await expect(panel.getByRole('tab', { name: 'Styles', exact: true })).toHaveAttribute('aria-selected', 'true');
+  // The canvas's one setting of its own is a page of the same panel.
+  await panel.getByRole('tab', { name: 'Canvas', exact: true }).click();
+  await expect(panel.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeVisible();
+  // While it is open the rest of the editor steps back: the tools, Present and Share, the footer.
+  await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeHidden();
+  await expect(page.locator('.dc-status')).toBeHidden();
+  await expect(page.locator('.dc-toolbar-lead')).toBeVisible();
+  // Done brings it all back.
+  await panel.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await expect(panel).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeVisible();
+  await expect(button).toHaveAttribute('aria-pressed', 'false');
+
+  // A right-click on the empty canvas offers it too.
+  await page.locator('.react-flow__pane').click({ button: 'right', position: { x: 300, y: 300 } });
+  await page.getByRole('menuitem', { name: /^Appearance/ }).click();
+  await expect(panel).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(panel).toBeHidden();
 });
 
 test('Escape during an IME conversion keeps the flow trace in progress', async ({ page }) => {

@@ -76,7 +76,6 @@ import { ArrangeBar } from './ArrangeBar';
 import { LayoutBusyBar } from './LayoutBusyBar';
 import { FlowLensIndicator } from './FlowLensIndicator';
 import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
-import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { CommandPalette } from './CommandPalette';
 import { ContinuationAnnouncer } from './ContinuationAnnouncer';
 import { Inspector } from './Inspector';
@@ -645,6 +644,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     [setQuickConnect],
   );
 
+  const studio = useUiStore((state) => state.stylePanelOpen) && mode !== 'present';
+  const restyleBeat = useUiStore((state) => state.restyleBeat);
   // The whole editor wears the open diagram's colours, not the canvas alone.
   const editorRoot = useRef<HTMLDivElement>(null);
   useEditorDress(editorRoot);
@@ -664,6 +665,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       ref={editorRoot}
       className="dc-editor"
       data-mode={mode}
+      // Appearance is open: the rest of the editor steps back, so the diagram and the panel are all there is.
+      data-studio={studio ? '' : undefined}
+      data-restyled={restyleBeat ?? undefined}
       data-tracing={tracing || undefined}
       data-walk={(presenting && playback.derived) || undefined}
       data-armed={armed ? 'true' : undefined}
@@ -863,7 +867,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           </Suspense>
         </PanelBoundary>
       )}
-      <CanvasSettingsDialog />
       <ClipboardPermissionDialog />
       <CommandPalette createAt={createAt} createAtPointer={createAtPointer} playback={playback} onPresent={onPresent} />
 

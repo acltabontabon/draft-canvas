@@ -752,8 +752,8 @@
       "licence": "Apache-2.0",
       "order": 10,
       "path": "styles/professional/professional.draftstyle",
-      "sha256": "7ca23c77480be0ad21d0d7e34e3449027ec1f18d3dd332db8e3ef6dfbb515037",
-      "bytes": 74072,
+      "sha256": "d9fa0e1692b9119c11d96c01f696ab64970875261daa68da75ce87a35fe65b71",
+      "bytes": 74097,
       "updated": "2026-11-23"
     },
     {
@@ -764,8 +764,8 @@
       "licence": "Apache-2.0",
       "order": 20,
       "path": "styles/geek/geek.draftstyle",
-      "sha256": "d8a3bf6a0b4a54efe5c7f43c3db1ad1eb433c394f8a405d13037ab292b64b429",
-      "bytes": 95963,
+      "sha256": "6ac58e150aa36f5cc600052268d9f789301cbea0bcbee16792edb29f7bbc8daa",
+      "bytes": 96037,
       "updated": "2026-11-23"
     },
     {
@@ -776,8 +776,8 @@
       "licence": "Apache-2.0",
       "order": 30,
       "path": "styles/arena/arena.draftstyle",
-      "sha256": "d6ec46497a721f65dc9b4d7d784fb5012e8e305655ee41b206019e07cc600baa",
-      "bytes": 106822,
+      "sha256": "a37f2bb01abf746046a9485ac48a6aaa86c4c860f4dde3539a37a8aee0ac94cf",
+      "bytes": 106870,
       "updated": "2026-11-23"
     },
     {
@@ -788,20 +788,20 @@
       "licence": "Apache-2.0",
       "order": 40,
       "path": "styles/high-seas/high-seas.draftstyle",
-      "sha256": "7c030ec889006ff6fcbc9a9c8549476b26cc8eda052d06b4659004fd62943f64",
-      "bytes": 82841,
+      "sha256": "2011a50b80fd0083f2e4cbcb62ff083f64dfe3a1f9c17745856db77fc90d0ed1",
+      "bytes": 82852,
       "updated": "2026-11-23"
     },
     {
       "id": "high-fantasy",
       "name": "High fantasy",
-      "summary": "An illuminated storybook in gold leaf and lapis: keeps, cauldrons, rune stones and an owl familiar",
+      "summary": "An illuminated storybook on moss-green vellum, in gold leaf and lapis: keeps, cauldrons, rune stones and an owl",
       "author": "Draft Canvas",
       "licence": "Apache-2.0",
       "order": 50,
       "path": "styles/high-fantasy/high-fantasy.draftstyle",
-      "sha256": "9ab75f2c9ef48d0efd1b1de5832bb879f7ee8e90d15d221f0cd03e8160b0c3e8",
-      "bytes": 83320,
+      "sha256": "99ae24632f2f6b52fcb1a1217e9509fb18c60c38b6c64c2636524e39040f844c",
+      "bytes": 83372,
       "updated": "2026-11-23"
     },
     {
@@ -812,8 +812,8 @@
       "licence": "Apache-2.0",
       "order": 60,
       "path": "styles/cyberpunk/cyberpunk.draftstyle",
-      "sha256": "8c6d514099a3eb3933741a1cee4eafc1302c6ba396a3610edd7695dbe5bdb11e",
-      "bytes": 81388,
+      "sha256": "da962ab7dc63a5599f8a6bd150d0e4b2a728e08c54a4fa25059819ddcc4ad0d6",
+      "bytes": 81437,
       "updated": "2026-11-23"
     },
     {
@@ -824,8 +824,8 @@
       "licence": "Apache-2.0",
       "order": 70,
       "path": "styles/cute/cute.draftstyle",
-      "sha256": "ebda2a88f65862e27fae736bcfeeefc5773629125e32016eadc7f17a0290dbbd",
-      "bytes": 203994,
+      "sha256": "bc1de5db9fe5907c809b1bcfacb21188f7ad46fccbe04ca18bc42d77eb34641e",
+      "bytes": 204068,
       "updated": "2026-11-23"
     }
   ]

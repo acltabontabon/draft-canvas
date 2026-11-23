@@ -154,20 +154,19 @@ describe('undo and redo', () => {
     expect(store.getState().document.nodes.find((n) => n.id === b.id)!.x).toBe(300);
   });
 
-  it('coalesces a slider drag on a setting into one undo step', () => {
-    const background = store.getState().document.settings.background;
+  it('coalesces a burst of changes to a setting into one undo step', () => {
     const before = store.getState().history.past.length;
-    for (const dim of [0.1, 0.2, 0.3]) {
-      store.getState().updateSettings({ background: { ...background, dim } }, { coalesceKey: 'background-dim' });
+    for (const grid of ['lines', 'none', 'lines'] as const) {
+      store.getState().updateSettings({ grid }, { coalesceKey: 'grid' });
     }
     expect(store.getState().history.past).toHaveLength(before + 1);
   });
 
   it('a coalesced burst that ends where it started leaves no undo step', () => {
-    const background = store.getState().document.settings.background;
+    const { grid } = store.getState().document.settings;
     const before = store.getState().history.past.length;
-    for (const dim of [background.dim + 0.1, background.dim + 0.2, background.dim]) {
-      store.getState().updateSettings({ background: { ...background, dim } }, { coalesceKey: 'background-dim' });
+    for (const next of ['lines', 'none', grid] as const) {
+      store.getState().updateSettings({ grid: next }, { coalesceKey: 'grid' });
     }
     expect(store.getState().history.past).toHaveLength(before);
   });
@@ -393,10 +392,9 @@ describe('undo and redo', () => {
 
     store.getState().updateEdgeLabel(edge.id, edge.label ?? '');
     store.getState().updateNodeById(a.id, { text: 'API' }, 'Rename');
-    // Settings too: re-picking the grid or background already in use is not an edit.
+    // Settings too: re-picking the grid already in use is not an edit.
     const { settings } = document;
     store.getState().updateSettings({ grid: settings.grid, showSequence: settings.showSequence });
-    store.getState().updateSettings({ background: { ...settings.background } });
     expect(store.getState().document).toBe(document);
     expect(store.getState().history.past).toHaveLength(past.length);
     expect(store.getState().history.future).toHaveLength(future.length);

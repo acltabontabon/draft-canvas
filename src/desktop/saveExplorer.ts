@@ -12,7 +12,7 @@ export interface ExplorerSaveRequest {
 /** Keep the controller's existing save/close/conflict flows waiting on the in-app chooser, just as
  * they waited on a native picker. Resolve only after a successful write or explicit cancellation. */
 export function createExplorerSaver(api: Pick<DesktopApi, 'explorerSaveFile'>, store: DesktopStore): DesktopApi['saveAs'] {
-  return (suggestedName, bytes, copySidecarFrom, startIn) => new Promise<SavedAs | null>((resolve) => {
+  return (suggestedName, bytes, startIn) => new Promise<SavedAs | null>((resolve) => {
     store.getSnapshot().explorerSave?.cancel();
     let settled = false;
     let writing = false;
@@ -33,7 +33,7 @@ export function createExplorerSaver(api: Pick<DesktopApi, 'explorerSaveFile'>, s
         if (writing) throw new Error('This diagram is already being saved.');
         writing = true;
         try {
-          const result = await api.explorerSaveFile(session, folder, name, bytes, copySidecarFrom, expectedStamp);
+          const result = await api.explorerSaveFile(session, folder, name, bytes, expectedStamp);
           if (result.outcome === 'saved') finish(result.saved);
           return result;
         } finally { writing = false; }

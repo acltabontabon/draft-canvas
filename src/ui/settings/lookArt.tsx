@@ -93,6 +93,18 @@ export const CORNER_ART = {
   ),
 };
 
+const lifted = (blur: number, dy: number, opacity: number) => (
+  <Art>
+    {opacity > 0 && <rect x="14" y={6 + dy} width="28" height="16" rx="4" fill="currentColor" stroke="none" opacity={opacity} style={{ filter: `blur(${blur}px)` }} />}
+    <rect x="14" y="6" width="28" height="16" rx="4" fill="var(--dc-surface-raised)" strokeWidth="1.6" />
+  </Art>
+);
+export const SHADOW_ART = {
+  off: lifted(0, 0, 0),
+  soft: lifted(1.5, 2, 0.28),
+  deep: lifted(3, 6, 0.6),
+};
+
 export const HEAD_ART = {
   nib: (
     <Art>

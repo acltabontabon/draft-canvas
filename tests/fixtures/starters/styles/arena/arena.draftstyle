@@ -10,7 +10,8 @@
     },
     "general": {
       "weight": "bold",
-      "corners": "sharp"
+      "corners": "sharp",
+      "depth": "deep"
     },
     "schemes": {
       "dark": {
@@ -175,7 +176,8 @@
     },
     "connectors": {
       "weight": "bold",
-      "head": "triangle"
+      "head": "triangle",
+      "colour": "plain"
     },
     "backdrop": {
       "art": "a103sorj1lgrmis"

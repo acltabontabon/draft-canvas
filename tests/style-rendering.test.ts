@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
 import { addEdges, addNodes } from '../src/document/operations';
-import { HAND_PRESETS, type DocumentStyle, type StyleScheme } from '../src/document/style';
+import { HAND_PRESETS, normalizeStyle, type DocumentStyle, type StyleScheme } from '../src/document/style';
 import type { DraftDocument } from '../src/document/types';
 import { resolveEdgeColor } from '../src/edges/kindStyle';
 import { contrast } from '../src/lib/colour';
@@ -17,6 +17,7 @@ import { PLAIN_SHAPE, builtinStyle, resolveStyle } from '../src/render/style/res
 import { restyle } from '../src/render/style/restyle';
 import { CONTRAST, pinnedTheme, schemeTheme } from '../src/render/style/scheme';
 import { renderDocumentSvg } from '../src/render/svg/document';
+import { shadowColour } from '../src/render/svg/emit';
 import { DARK, LIGHT } from '../src/render/theme/tokens';
 
 const style = (extra: Partial<DocumentStyle> = {}): DocumentStyle => ({ v: 1, hand: { base: 'clean' }, ...extra });
@@ -154,6 +155,26 @@ describe('a style’s colours', () => {
     expect(schemeTheme(LIGHT, { accents: parchment.accents }).surface).toBe(LIGHT.surface);
     expect(schemeTheme(LIGHT, undefined)).toBe(LIGHT);
     expect(schemeTheme(LIGHT, {})).toBe(LIGHT);
+  });
+
+  it('cast a deeper shadow when asked, one that can be seen on a dark canvas too', () => {
+    expect(resolveStyle(style()).depth).toBe('soft');
+    expect(normalizeStyle({ v: 1, hand: { base: 'clean' }, general: { depth: 'deep' } }).style?.general).toEqual({ depth: 'deep' });
+    // The default is not said, and a depth means nothing with the shadows off.
+    expect(normalizeStyle({ v: 1, hand: { base: 'clean' }, general: { depth: 'soft' } }).style?.general).toBeUndefined();
+    expect(normalizeStyle({ v: 1, hand: { base: 'clean' }, general: { depth: 'deep', shadow: false } }).style?.general).toEqual({ shadow: false });
+    const deep = resolveStyle(style({ general: { depth: 'deep' } }));
+    expect(deep.depth).toBe('deep');
+    expect(shadowColour(LIGHT, 'soft')).toBe(LIGHT.shadow);
+    expect(shadowColour(LIGHT, 'deep')).not.toBe(LIGHT.shadow);
+    expect(shadowColour(DARK, 'deep')).toBe('rgba(0, 0, 0, 0.82)');
+    const doc = { ...addNodes(createDocument('Depth'), [createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'Orders' })]) };
+    const soft = renderDocumentSvg({ ...doc, style: style() }, { theme: 'light' }).svg;
+    const lifted = renderDocumentSvg({ ...doc, style: style({ general: { depth: 'deep' } }) }, { theme: 'light' }).svg;
+    // Two shadows where there was one, and nothing else about the picture changes its size.
+    expect((soft.match(/<feOffset/g) ?? []).length).toBe(1);
+    expect((lifted.match(/<feOffset/g) ?? []).length).toBe(2);
+    expect(lifted.match(/viewBox="[^"]+"/)?.[0]).toBe(soft.match(/viewBox="[^"]+"/)?.[0]);
   });
 
   it('are marked in a brand colour, where it can be seen', () => {

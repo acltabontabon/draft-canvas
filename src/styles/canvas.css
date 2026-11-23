@@ -50,32 +50,13 @@
   outline: none;
 }
 
-/* ------------------------------------------------------- 5.1 background -- */
-
-.dc-canvas-background {
-  position: absolute;
-  inset: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
+/* --------------------------------------------------------------- backdrop -- */
 
 .dc-canvas-backdrop {
   position: absolute;
   inset: 0;
   pointer-events: none;
   background-repeat: repeat;
-}
-
-.dc-canvas-background-image {
-  position: absolute;
-  inset: 0;
-}
-
-.dc-canvas-background-scrim {
-  position: absolute;
-  inset: 0;
-  background: var(--dc-canvas);
-  transition: opacity 200ms ease;
 }
 
 .dc-defs {

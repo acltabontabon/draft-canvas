@@ -67,22 +67,6 @@ describe('encodeShareLink', () => {
     expect(result.repairs).toEqual([]);
   });
 
-  it('leaves the background image behind', async () => {
-    const source = diagram();
-    source.settings.background = {
-      ...source.settings.background,
-      enabled: true,
-      image: { dataUri: `data:image/png;base64,${'A'.repeat(4000)}`, width: 10, height: 10 },
-    };
-    const link = await encodeShareLink(source, BASE);
-    if (!('url' in link)) throw new Error('expected a link');
-    const result = await decodeShareLink(new URL(link.url).hash);
-    if (!result?.ok) throw new Error('expected a document');
-    expect(result.document.settings.background.image).toBeUndefined();
-    // And the source was not mutated to get there.
-    expect(source.settings.background.image).toBeDefined();
-  });
-
   it('refuses a diagram whose encoded payload would pass the cap, and says how big it was', async () => {
     let doc = createDocument('Big');
     // Random text defeats deflate, so a few hundred nodes of it are well past 32 KB.

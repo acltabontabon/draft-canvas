@@ -12,7 +12,6 @@ use crate::explorer::{
 };
 use crate::paths::{validate_rename_stem, DOC_EXT};
 use crate::state::AppState;
-use crate::state::HostEvent;
 use crate::util::lock;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
@@ -198,7 +197,6 @@ struct ExplorerSaveMeta {
     handle: String,
     name: String,
     expected_stamp: Option<String>,
-    copy_sidecar_from: Option<String>,
 }
 
 /// A name is joined only to an explorer-issued folder. Writes are exclusive until the person
@@ -207,18 +205,13 @@ fn save_file(
     state: &AppState,
     meta: &ExplorerSaveMeta,
     bytes: &[u8],
-) -> Result<(ExplorerSaveResult, Option<String>), AppError> {
+) -> Result<ExplorerSaveResult, AppError> {
     docio::ensure_document_size(bytes.len())?;
     let session = lock(&state.explorer).session(&meta.session)?;
     let root = explorer::checked_path(&session, &meta.handle, ExplorerKind::Folder)?;
     let stem = validate_rename_stem(&meta.name)?;
     let target = root.join(format!("{stem}.{DOC_EXT}"));
-    let source = meta
-        .copy_sidecar_from
-        .as_deref()
-        .map(|handle| state.file(handle))
-        .transpose()?;
-    let exists = || -> Result<(ExplorerSaveResult, Option<String>), AppError> {
+    let exists = || -> Result<ExplorerSaveResult, AppError> {
         let metadata = std::fs::symlink_metadata(&target).map_err(|error| {
             AppError::from_io(
                 &error,
@@ -232,13 +225,10 @@ fn save_file(
             ));
         }
         let stamp = docio::read_document(&target)?.stamp;
-        Ok((
-            ExplorerSaveResult::Exists {
-                name: format!("{stem}.{DOC_EXT}"),
-                stamp,
-            },
-            None,
-        ))
+        Ok(ExplorerSaveResult::Exists {
+            name: format!("{stem}.{DOC_EXT}"),
+            stamp,
+        })
     };
     let stamp = if let Some(expected) = meta.expected_stamp.as_deref() {
         // Refuse aliases into another folder even when a page supplies a matching content stamp.
@@ -263,8 +253,8 @@ fn save_file(
             Err(error) => return Err(error),
         }
     };
-    let (saved, warning) = complete_save_as(state, &target, stamp, source.as_ref())?;
-    Ok((ExplorerSaveResult::Saved { saved }, warning))
+    let saved = complete_save_as(state, &target, stamp)?;
+    Ok(ExplorerSaveResult::Saved { saved })
 }
 
 #[tauri::command]
@@ -275,10 +265,7 @@ pub async fn explorer_save_file(
     let (meta, bytes) = raw_request::<ExplorerSaveMeta>(&request)?;
     let bytes = bytes.to_vec();
     run_blocking(&app, move |app, state| {
-        let (result, warning) = save_file(state, &meta, &bytes)?;
-        if let Some(message) = warning {
-            state.events.emit(HostEvent::Notice { message });
-        }
+        let result = save_file(state, &meta, &bytes)?;
         if matches!(result, ExplorerSaveResult::Saved { .. }) {
             recents_changed(app);
         }
@@ -305,7 +292,6 @@ mod tests {
             handle: opened.directory.location.handle,
             name: name.into(),
             expected_stamp: None,
-            copy_sidecar_from: None,
         }
     }
 
@@ -314,27 +300,25 @@ mod tests {
         let (dir, state) = test_state();
         let mut meta = save_meta(&state, dir.path(), "Copy");
         assert!(matches!(
-            save_file(&state, &meta, b"first").unwrap().0,
+            save_file(&state, &meta, b"first").unwrap(),
             ExplorerSaveResult::Saved { .. }
         ));
         let path = dir.path().join("Copy.draftcanvas");
-        let ExplorerSaveResult::Exists { stamp, .. } =
-            save_file(&state, &meta, b"second").unwrap().0
+        let ExplorerSaveResult::Exists { stamp, .. } = save_file(&state, &meta, b"second").unwrap()
         else {
             panic!("must ask before replacing")
         };
         assert_eq!(std::fs::read(&path).unwrap(), b"first");
         std::fs::write(&path, b"outside edit").unwrap();
         meta.expected_stamp = Some(stamp);
-        let ExplorerSaveResult::Exists { stamp, .. } =
-            save_file(&state, &meta, b"second").unwrap().0
+        let ExplorerSaveResult::Exists { stamp, .. } = save_file(&state, &meta, b"second").unwrap()
         else {
             panic!("must ask again after an outside edit")
         };
         assert_eq!(std::fs::read(&path).unwrap(), b"outside edit");
         meta.expected_stamp = Some(stamp);
         assert!(matches!(
-            save_file(&state, &meta, b"second").unwrap().0,
+            save_file(&state, &meta, b"second").unwrap(),
             ExplorerSaveResult::Saved { .. }
         ));
         assert_eq!(std::fs::read(&path).unwrap(), b"second");
@@ -358,27 +342,6 @@ mod tests {
             ErrorKind::InvalidHandle
         );
         assert!(!dir.path().join("Untouched.draftcanvas").exists());
-    }
-
-    #[test]
-    fn save_copies_the_background_beside_the_new_diagram() {
-        let (dir, state) = test_state();
-        let source = dir.path().join("Original.draftcanvas");
-        std::fs::write(&source, b"original").unwrap();
-        docio::sidecar_write(&source, "image/png", b"image bytes").unwrap();
-        let source_handle = state.grant_file(&source).unwrap();
-        let mut meta = save_meta(&state, dir.path(), "Copy.draftcanvas");
-        meta.copy_sidecar_from = Some(source_handle);
-        let (result, warning) = save_file(&state, &meta, b"copy").unwrap();
-        let ExplorerSaveResult::Saved { saved } = result else {
-            panic!("new copy should save")
-        };
-        let target = state.file(&saved.handle).unwrap().path;
-        assert!(warning.is_none());
-        assert_eq!(
-            docio::sidecar_read(&target).unwrap().unwrap().bytes,
-            b"image bytes"
-        );
     }
 
     #[cfg(unix)]

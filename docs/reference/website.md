@@ -35,7 +35,7 @@ statement, two ways in, and a line naming what the film shows), then the film. B
 
 - **What the page names, the film shows.** Each name under the headline (`data-film-jump`, in
   seconds) scrolls to the film and starts it at that moment. **Watch it happen** does the same from
-  the start. The editor's Help menu links here too (**Watch the film**).
+  the start.
 - **The film** (`#film`, files in `www/public/film/`) fills the window. It starts by itself when it is
   most of what the visitor can see, pauses when scrolled away, and resumes on return unless the visitor
   paused it. A browser only starts a video with sound after the visitor has pressed something, so it is

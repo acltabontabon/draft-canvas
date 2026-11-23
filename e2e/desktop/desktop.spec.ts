@@ -1191,14 +1191,16 @@ test('Settings fits a compact window and keeps every page accessible in both the
   }
 });
 
-test('Canvas settings is a page of Settings, however it is asked for', async ({ page }) => {
+test('Canvas settings are a page of Settings on Home, and beside the canvas with a diagram open', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'New Quick Draft' })).toBeVisible();
 
-  // On Home: this device's style and suggestions, and no diagram to give a style or a background.
+  // On Home: this device's style and suggestions, and no diagram to give a style.
   let settings = await openSettings(page, 'Appearance');
   let panel = settings.getByRole('tabpanel', { name: 'Appearance', exact: true });
-  await panel.getByRole('group', { name: 'My style' }).getByRole('radio', { name: /^Sketch/ }).check();
+  // A style is a card, and the card is what is pressed.
+  await panel.locator('.dc-look-card', { has: page.getByText('Sketch', { exact: true }) }).click();
+  await expect(panel.getByRole('group', { name: 'My style' }).getByRole('radio', { name: /^Sketch/ })).toBeChecked();
   await expect(page.locator(':root')).toHaveAttribute('data-personality', 'sketch');
   await expect(panel.getByText('Open a diagram to give it this style.')).toBeVisible();
   await settings.getByRole('tab', { name: 'Canvas', exact: true }).click();
@@ -1210,19 +1212,17 @@ test('Canvas settings is a page of Settings, however it is asked for', async ({ 
 
   await page.getByRole('button', { name: 'New Quick Draft' }).click();
   await expect(page.locator(CANVAS)).toBeVisible();
+  // With a diagram open the canvas's settings are beside it, in Appearance, never a dialog over it.
   const canvasPage = async () => {
-    settings = page.getByRole('dialog', { name: 'Settings' });
-    await expect(settings.getByRole('tab', { name: 'Canvas', exact: true })).toHaveAttribute('aria-selected', 'true');
-    panel = settings.getByRole('tabpanel', { name: 'Canvas', exact: true });
-    await expect(panel.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeVisible();
-    await expect(page.getByRole('dialog', { name: 'Canvas settings' })).toHaveCount(0);
-    await settings.getByRole('button', { name: 'Close', exact: true }).click();
-    await expect(settings).toBeHidden();
+    const beside = page.getByRole('complementary', { name: 'Appearance', exact: true });
+    await expect(beside.getByRole('tab', { name: 'Canvas', exact: true })).toHaveAttribute('aria-selected', 'true');
+    await expect(beside.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Settings' })).toHaveCount(0);
+    await beside.getByRole('button', { name: 'Close appearance', exact: true }).click();
+    await expect(beside).toBeHidden();
   };
-  // The menu bar's Canvas Settings…, the status bar's button and ⌘K all land on the same page.
+  // The menu bar's Canvas Settings… and ⌘K land on its Canvas page; the status bar's button opens it.
   await page.evaluate(() => window.__shell.emit({ type: 'menu', command: 'canvas-settings' }));
-  await canvasPage();
-  await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
   await canvasPage();
   await page.keyboard.press('ControlOrMeta+k');
   await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
@@ -1230,6 +1230,8 @@ test('Canvas settings is a page of Settings, however it is asked for', async ({ 
   await expect(page.getByRole('option', { selected: true })).toContainText('Canvas settings');
   await page.keyboard.press('Enter');
   await canvasPage();
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+  await expect(page.getByRole('complementary', { name: 'Appearance', exact: true })).toBeVisible();
 });
 
 test('Settings has the update switch, and turning it off tells the shell', async ({ page }) => {

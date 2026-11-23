@@ -145,7 +145,10 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - A person's own styles are a device preference (`store/styleStore.ts`, IndexedDB
   `draft-canvas-styles`), never read by a renderer. A new diagram is stamped with a copy
   (`deviceStyle()`) by whoever creates it. With a diagram open, Appearance is the panel docked beside
-  the canvas (`ui/Editor/StylePanel.tsx`, `uiStore.stylePanelOpen`, transient), never a dialog over it:
+  the canvas (`ui/Editor/StylePanel.tsx`, `uiStore.stylePanelOpen`, transient), never a dialog over it,
+  reached from the status bar, the canvas's right-click and ⌘K, and it holds the canvas's own settings too.
+  While it is open the editor is in its studio state (`.dc-editor[data-studio]`): the tools, Present and
+  Share, the Depth chip and the status bar are hidden, so new chrome must say whether it steps back too:
   the diagram is the preview. The desktop Settings page is the same `AppearanceSettings`, for Home. Appearance takes the open diagram along with a
   change only while it is drawn in the style being changed (one coalesced undo step); a diagram with
   a different style changes only through an explicit "Use my style in this diagram". Settings → Appearance previews with `renderDocumentSvg`, never a drawing of

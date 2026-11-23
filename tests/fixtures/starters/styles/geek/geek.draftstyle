@@ -9,6 +9,7 @@
       "base": "clean"
     },
     "general": {
+      "weight": "bold",
       "corners": "sharp",
       "shadow": false
     },
@@ -174,7 +175,9 @@
       }
     },
     "connectors": {
-      "head": "triangle"
+      "weight": "bold",
+      "head": "triangle",
+      "colour": "source"
     },
     "backdrop": {
       "art": "a0sjh7h60asg2hv"

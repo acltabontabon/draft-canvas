@@ -2,10 +2,9 @@ import { AppearanceSettings } from '../../../ui/settings/AppearanceSettings';
 import { CanvasSettings } from '../../../ui/settings/CanvasSettings';
 import { useDesktopState } from '../../useDesktop';
 
-/** Settings → Canvas. Home has no diagram to give a background. */
+/** Settings → Canvas. */
 export function CanvasSettingsPage() {
-  const { doc } = useDesktopState();
-  return <CanvasSettings documentOpen={doc.kind !== 'none'} />;
+  return <CanvasSettings />;
 }
 
 /** Settings → Appearance. Home has no diagram to give a style. */

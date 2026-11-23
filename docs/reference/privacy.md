@@ -32,7 +32,7 @@ Web diagrams stay in this browser profile and do not sync.
 
 | Location | Contents |
 | --- | --- |
-| IndexedDB `draft-canvas` | Stores `bodies`, `documents` (titles, thumbnails), `projects` (folders), `backgroundImages` |
+| IndexedDB `draft-canvas` | Stores `bodies`, `documents` (titles, thumbnails), `projects` (folders), `backgroundImages` (retired; emptied each time the app opens) |
 | IndexedDB `draft-canvas-keys` | Key for legacy encrypted records, read-only |
 | IndexedDB `draft-canvas-starters` | Downloaded starters gallery and its style packs, when you load it; never your diagrams |
 | IndexedDB `draft-canvas-styles` | The styles you made in Settings → Appearance; never your diagrams |
@@ -47,7 +47,7 @@ Web diagrams stay in this browser profile and do not sync.
 
 ### The desktop app
 
-- Diagrams are `.draftcanvas` files where you save them, with background images beside them.
+- Diagrams are `.draftcanvas` files where you save them.
 - The app's data folder holds recent files, settings and recovery copies, removed once saved or
   discarded.
 - It reads only files and folders you pick, plus folders you allow for agents. **Use in docs**
@@ -83,7 +83,7 @@ the exported file.
 ## Share links
 
 A share link carries the whole diagram after the URL's `#`, including text, code and nested rooms.
-The fragment is not sent to the app host. Background images are excluded. Desktop links point to
+The fragment is not sent to the app host. Desktop links point to
 `app.draftcanvas.dev`, where they open in a browser.
 
 The snapshot is shortened and compressed locally. Your document is not changed, and there is no

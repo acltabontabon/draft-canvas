@@ -94,6 +94,15 @@ export interface SurfaceStyle {
   shadow?: boolean;
 }
 
+/** How far a shape's shadow lifts it. `soft` is the built-in shadow, barely there by design. */
+export const STYLE_DEPTHS = ['soft', 'deep'] as const;
+export type StyleDepth = (typeof STYLE_DEPTHS)[number];
+
+/** What every shape shares. The shadow's depth is said once, here: a diagram has one light. */
+export interface GeneralStyle extends SurfaceStyle {
+  depth?: StyleDepth;
+}
+
 export interface ShapeStyle extends SurfaceStyle {
   /** The id of a drawing in `DocumentStyle.assets` that stands in for the built-in one. */
   art?: string;
@@ -171,7 +180,7 @@ export interface DocumentStyle {
   /** What the person called it. For display only: nothing ever looks a style up by name. */
   name?: string;
   hand: { base: HandPreset; wobble?: StyleWobble; retrace?: boolean };
-  general?: SurfaceStyle;
+  general?: GeneralStyle;
   /**
    * The canvas's colours. With both, the diagram follows the device's light or dark setting; with
    * one, it is always drawn in that one; with neither, it keeps the built-in colours.
@@ -444,7 +453,9 @@ export function normalizeStyle(raw: unknown): NormalizedStyle {
   const name = typeof raw.name === 'string' ? cleanText(raw.name, STYLE_LIMITS.maxNameLength).trim() : '';
   const style: DocumentStyle = { v: 1, ...(name ? { name } : {}), hand };
 
-  const general = isRecord(raw.general) ? surface(raw.general) : {};
+  const general: GeneralStyle = isRecord(raw.general) ? surface(raw.general) : {};
+  // Only what is not the default is said, and a depth means nothing with the shadows off.
+  if (isRecord(raw.general) && raw.general.depth === 'deep' && general.shadow !== false) general.depth = 'deep';
   if (Object.keys(general).length > 0) style.general = general;
 
   if (isRecord(raw.schemes)) {

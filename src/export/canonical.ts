@@ -15,7 +15,6 @@
 import { canonicalStyle } from '../document/style';
 import type {
   Attachment,
-  BackgroundSettings,
   DraftDocument,
   DraftEdge,
   DraftFlow,
@@ -28,7 +27,6 @@ import type {
   DraftViewport,
   EdgeAnchor,
   EdgeDetails,
-  EmbeddedBackgroundImage,
   OpenPoint,
   OpenPointTarget,
   SeqFragment,
@@ -162,9 +160,7 @@ const STEP_KEYS = ['id', 'edgeId', 'extraEdgeIds', 'extraNodeIds', 'viewport', '
 const FLOW_KEYS = ['id', 'title', 'steps', 'accent', 'variantOf'] as const satisfies KeysOf<DraftFlow>;
 const INSIDE_KEYS = ['nodes', 'edges', 'flows', 'ink', 'viewport', 'level'] as const satisfies KeysOf<DraftInside>;
 const INK_KEYS = ['id', 'tool', 'color', 'size', 'x', 'y', 'points', 'pressure'] as const satisfies KeysOf<DraftInk>;
-const EMBEDDED_IMAGE_KEYS = ['dataUri', 'width', 'height'] as const satisfies KeysOf<EmbeddedBackgroundImage>;
-const BACKGROUND_KEYS = ['enabled', 'fit', 'dim', 'blur', 'imageId', 'image'] as const satisfies KeysOf<BackgroundSettings>;
-const SETTINGS_KEYS = ['showSequence', 'grid', 'background'] as const satisfies KeysOf<DraftSettings>;
+const SETTINGS_KEYS = ['showSequence', 'grid'] as const satisfies KeysOf<DraftSettings>;
 const OPEN_POINT_TARGET_KEYS = ['kind', 'id'] as const satisfies KeysOf<OpenPointTarget>;
 const OPEN_POINT_KEYS = ['id', 'kind', 'context', 'targets', 'resolved', 'resolution'] as const satisfies KeysOf<OpenPoint>;
 
@@ -251,8 +247,7 @@ function inside(value: unknown): unknown {
   return orderedIfObject(INSIDE_KEYS, { nodes: list(node), edges, flows, ink, viewport })(value);
 }
 
-const background = orderedIfObject(BACKGROUND_KEYS, { image: orderedIfObject(EMBEDDED_IMAGE_KEYS) });
-const settings = orderedIfObject(SETTINGS_KEYS, { background });
+const settings = orderedIfObject(SETTINGS_KEYS);
 
 /** The body of a document, every level in canonical key order. `format`, `version` and `metadata`
  *  are the serializer's own to write, so this covers the rest. */

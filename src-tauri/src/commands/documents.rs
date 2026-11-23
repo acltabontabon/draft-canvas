@@ -1,17 +1,16 @@
-//! Opening, saving and exporting documents, and the background image that sits beside one.
+//! Opening, saving and exporting documents.
 
 use super::raw::{raw_request, raw_request_up_to, MAX_EXPORT_BYTES};
 use super::{last_dir, recents_changed, remember_dir, remember_file, run_blocking};
 use crate::dialogs::{self, FileFilter};
 use crate::docio::{
     self, ensure_document_size, is_read_only, read_document, rename_atomic, write_atomic,
-    write_unconditional, write_unstamped, StampCheck, WriteOutcome, MAX_SIDECAR_BYTES,
+    write_unconditional, write_unstamped, StampCheck, WriteOutcome,
 };
-use crate::errors::{AppError, ErrorKind, Verb};
-use crate::grants::{FileGrant, Handle};
+use crate::errors::{AppError, ErrorKind};
+use crate::grants::Handle;
 use crate::paths::{display_path, force_doc_ext, sanitize_stem, validate_rename_stem, DOC_EXT};
-use crate::state::{AppState, HostEvent};
-use base64::{engine::general_purpose::STANDARD, Engine as _};
+use crate::state::AppState;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -43,13 +42,6 @@ pub struct SavedAs {
 pub enum SaveResult {
     Saved { stamp: String },
     Conflict,
-}
-
-#[derive(Debug, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SidecarPayload {
-    pub mime: String,
-    pub base64: String,
 }
 
 /// Grants the file, reads it, and puts it at the top of Recent: everything "open" means, whether the
@@ -123,21 +115,14 @@ pub(crate) struct StartLocation {
 #[serde(rename_all = "camelCase")]
 struct SaveAsMeta {
     suggested_name: String,
-    copy_sidecar_from: Option<Handle>,
     /// Where a canvas created inside a project (but never written to disk) remembers it should be saved:
     /// the dialog opens there when the folder still exists, and falls back to the last-used folder
     /// otherwise — a missing destination is never a reason to refuse the dialog itself.
     start_in: Option<StartLocation>,
 }
 
-/// Saves to the path the person chose, grants it, and (if asked) brings the background image along.
-/// The second value is a warning for when the document saved but the image couldn't be copied.
-fn finish_save_as(
-    state: &AppState,
-    chosen: &Path,
-    bytes: &[u8],
-    copy_sidecar_from: Option<&FileGrant>,
-) -> Result<(SavedAs, Option<String>), AppError> {
+/// Saves to the path the person chose and grants it.
+fn finish_save_as(state: &AppState, chosen: &Path, bytes: &[u8]) -> Result<SavedAs, AppError> {
     // The dialog confirmed replacing exactly what was typed. If the extension had to be added, it
     // is a different file the person was never asked about, so an existing one is not overwritten.
     let target = force_doc_ext(chosen.to_path_buf());
@@ -145,7 +130,7 @@ fn finish_save_as(
         return Err(AppError::already_exists(&target));
     }
     let stamp = write_unconditional(&target, bytes)?;
-    complete_save_as(state, &target, stamp, copy_sidecar_from)
+    complete_save_as(state, &target, stamp)
 }
 
 /// The shared post-write path for the native picker and in-app explorer.
@@ -153,35 +138,16 @@ pub(crate) fn complete_save_as(
     state: &AppState,
     target: &Path,
     stamp: String,
-    copy_sidecar_from: Option<&FileGrant>,
-) -> Result<(SavedAs, Option<String>), AppError> {
+) -> Result<SavedAs, AppError> {
     let handle = state.grant_file(target)?;
     let grant = state.file(&handle)?;
-    // Without a source, a file this replaced must not keep its own background: a canvas with none,
-    // saved over `plan.draftcanvas`, reopened with plan's old image behind it. A pending background
-    // is written by the page after this.
-    let warning = match copy_sidecar_from {
-        Some(from) => docio::sidecar_copy(&from.path, &grant.path).err().map(|e| {
-            format!(
-                "Saved {}, but its background image wasn't copied. {}",
-                grant.name, e.message
-            )
-        }),
-        None => docio::sidecar_remove(&grant.path).err().map(|e| {
-            format!(
-                "Saved {}, but the replaced file's background image couldn't be removed. {}",
-                grant.name, e.message
-            )
-        }),
-    };
     remember_file(state, &grant.path, &grant.name);
-    let saved = SavedAs {
+    Ok(SavedAs {
         handle,
         display_path: display_path(&grant.path),
         name: grant.name,
         stamp,
-    };
-    Ok((saved, warning))
+    })
 }
 
 /// Where the Save As dialog should open: the folder a pending canvas remembers, when it can still be
@@ -206,11 +172,6 @@ pub async fn save_as(app: AppHandle, request: Request<'_>) -> Result<Option<Save
     let bytes = bytes.to_vec();
     run_blocking(&app, move |app, state| {
         ensure_document_size(bytes.len())?;
-        let source = meta
-            .copy_sidecar_from
-            .as_deref()
-            .map(|h| state.file(h))
-            .transpose()?;
         let suggestion = format!("{}.{DOC_EXT}", sanitize_stem(&meta.suggested_name));
         let filters = [FileFilter {
             name: "Draft Canvas diagram".to_string(),
@@ -220,10 +181,7 @@ pub async fn save_as(app: AppHandle, request: Request<'_>) -> Result<Option<Save
         let Some(chosen) = dialogs::save_file(app, start_dir, &suggestion, &filters) else {
             return Ok(None);
         };
-        let (saved, warning) = finish_save_as(state, &chosen, &bytes, source.as_ref())?;
-        if let Some(message) = warning {
-            state.events.emit(HostEvent::Notice { message });
-        }
+        let saved = finish_save_as(state, &chosen, &bytes)?;
         recents_changed(app);
         Ok(Some(saved))
     })
@@ -254,9 +212,6 @@ fn rename_file_now(
     // is the one that swaps it in for whatever session was using the old one.
     let new_handle = state.grant_file(&target)?;
     let new_grant = state.file(&new_handle)?;
-    // Best effort, like the rename itself has already happened: a background that could not follow the
-    // file is left where it was rather than failing a rename that succeeded.
-    let _ = docio::sidecar_move(&grant.path, &new_grant.path);
     state
         .recents
         .rename(&grant.path, &new_grant.path, &new_grant.name)?;
@@ -348,59 +303,6 @@ pub async fn open_external(app: AppHandle, url: String) -> Result<(), AppError> 
     run_blocking(&app, move |_, _| {
         tauri_plugin_opener::open_url(url.as_str(), None::<&str>)
             .map_err(|_| AppError::new(ErrorKind::Io, "Draft Canvas couldn't open that link."))
-    })
-    .await
-}
-
-fn read_sidecar(state: &AppState, handle: &str) -> Result<Option<SidecarPayload>, AppError> {
-    let grant = state.file(handle)?;
-    Ok(docio::sidecar_read(&grant.path)?.map(|s| SidecarPayload {
-        mime: s.mime.to_string(),
-        base64: STANDARD.encode(&s.bytes),
-    }))
-}
-
-fn write_sidecar(state: &AppState, handle: &str, mime: &str, base64: &str) -> Result<(), AppError> {
-    let grant = state.file(handle)?;
-    // Base64 is 4 characters per 3 bytes: refuse an absurd payload before spending memory decoding it.
-    if base64.len() > (MAX_SIDECAR_BYTES as usize / 3 + 1) * 4 {
-        return Err(AppError::too_large(
-            &grant.path,
-            Verb::Save,
-            MAX_SIDECAR_BYTES,
-        ));
-    }
-    let bytes = STANDARD
-        .decode(base64.as_bytes())
-        .map_err(|_| AppError::bad_request("the image isn't valid base64"))?;
-    docio::sidecar_write(&grant.path, mime, &bytes)
-}
-
-#[tauri::command]
-pub async fn sidecar_read(
-    app: AppHandle,
-    handle: String,
-) -> Result<Option<SidecarPayload>, AppError> {
-    run_blocking(&app, move |_, state| read_sidecar(state, &handle)).await
-}
-
-#[tauri::command]
-pub async fn sidecar_write(
-    app: AppHandle,
-    handle: String,
-    mime: String,
-    base64: String,
-) -> Result<(), AppError> {
-    run_blocking(&app, move |_, state| {
-        write_sidecar(state, &handle, &mime, &base64)
-    })
-    .await
-}
-
-#[tauri::command]
-pub async fn sidecar_remove(app: AppHandle, handle: String) -> Result<(), AppError> {
-    run_blocking(&app, move |_, state| {
-        docio::sidecar_remove(&state.file(&handle)?.path)
     })
     .await
 }
@@ -594,8 +496,7 @@ mod tests {
     fn save_as_forces_the_extension_grants_and_remembers() {
         let (dir, state) = test_state();
         let chosen = dir.path().join("plan.v2");
-        let (saved, warning) = finish_save_as(&state, &chosen, b"{\"x\":1}", None).unwrap();
-        assert!(warning.is_none());
+        let saved = finish_save_as(&state, &chosen, b"{\"x\":1}").unwrap();
         assert_eq!(saved.name, "plan.v2");
         assert!(saved.display_path.ends_with("plan.v2.draftcanvas"));
         assert_eq!(
@@ -615,7 +516,7 @@ mod tests {
     fn save_as_replaces_the_exact_file_the_dialog_confirmed() {
         let (dir, state) = test_state();
         let existing = doc(&dir, "a.draftcanvas", "old");
-        let (saved, _) = finish_save_as(&state, &existing, b"new", None).unwrap();
+        let saved = finish_save_as(&state, &existing, b"new").unwrap();
         assert_eq!(fs::read_to_string(&existing).unwrap(), "new");
         assert_eq!(saved.name, "a");
     }
@@ -624,34 +525,11 @@ mod tests {
     fn save_as_will_not_overwrite_a_file_the_person_was_never_asked_about() {
         let (dir, state) = test_state();
         let other = doc(&dir, "notes.draftcanvas", "precious");
-        let err = finish_save_as(&state, &dir.path().join("notes"), b"new", None)
+        let err = finish_save_as(&state, &dir.path().join("notes"), b"new")
             .err()
             .unwrap();
         assert_eq!(err.kind, ErrorKind::AlreadyExists);
         assert_eq!(fs::read_to_string(other).unwrap(), "precious");
-    }
-
-    #[test]
-    fn save_as_carries_the_background_image_along() {
-        let (dir, state) = test_state();
-        let from = doc(&dir, "from.draftcanvas", "{}");
-        docio::sidecar_write(&from, "image/webp", b"bg").unwrap();
-        let source = state.file(&state.grant_file(&from).unwrap()).unwrap();
-        let (saved, warning) = finish_save_as(
-            &state,
-            &dir.path().join("to.draftcanvas"),
-            b"{}",
-            Some(&source),
-        )
-        .unwrap();
-        assert!(warning.is_none());
-        let copied = docio::sidecar_read(&state.file(&saved.handle).unwrap().path)
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            (copied.mime, copied.bytes.as_slice()),
-            ("image/webp", &b"bg"[..])
-        );
     }
 
     #[test]
@@ -822,16 +700,8 @@ mod tests {
         assert_eq!(save.expected_stamp.as_deref(), Some("s"));
         let bare: SaveMeta = serde_json::from_value(json!({"handle": "h_1"})).unwrap();
         assert!(bare.expected_stamp.is_none());
-        let save_as: SaveAsMeta =
-            serde_json::from_value(json!({"suggestedName": "Plan", "copySidecarFrom": "h_2"}))
-                .unwrap();
-        assert_eq!(
-            (
-                save_as.suggested_name.as_str(),
-                save_as.copy_sidecar_from.as_deref()
-            ),
-            ("Plan", Some("h_2"))
-        );
+        let save_as: SaveAsMeta = serde_json::from_value(json!({"suggestedName": "Plan"})).unwrap();
+        assert_eq!(save_as.suggested_name, "Plan");
         assert!(save_as.start_in.is_none());
         let with_start: SaveAsMeta = serde_json::from_value(json!({
             "suggestedName": "Plan",
@@ -879,66 +749,5 @@ mod tests {
                 "{bad:?}"
             );
         }
-    }
-
-    #[test]
-    fn backgrounds_travel_as_base64() {
-        let (dir, state) = test_state();
-        let path = doc(&dir, "a.draftcanvas", "{}");
-        let handle = state.grant_file(&path).unwrap();
-        assert_eq!(read_sidecar(&state, &handle).unwrap(), None);
-
-        write_sidecar(
-            &state,
-            &handle,
-            "image/png",
-            &STANDARD.encode(b"\x89PNG-bytes"),
-        )
-        .unwrap();
-        let read = read_sidecar(&state, &handle).unwrap().unwrap();
-        assert_eq!(read.mime, "image/png");
-        assert_eq!(STANDARD.decode(read.base64).unwrap(), b"\x89PNG-bytes");
-
-        docio::sidecar_remove(&path).unwrap();
-        assert_eq!(read_sidecar(&state, &handle).unwrap(), None);
-    }
-
-    #[test]
-    fn bad_background_payloads_are_refused() {
-        let (dir, state) = test_state();
-        let handle = state.grant_file(&doc(&dir, "a.draftcanvas", "{}")).unwrap();
-        assert_eq!(
-            write_sidecar(&state, &handle, "image/png", "***not base64***")
-                .err()
-                .unwrap()
-                .kind,
-            ErrorKind::Io
-        );
-        assert_eq!(
-            write_sidecar(&state, &handle, "image/svg+xml", &STANDARD.encode(b"x"))
-                .err()
-                .unwrap()
-                .kind,
-            ErrorKind::NotADocument
-        );
-        let huge = "A".repeat((MAX_SIDECAR_BYTES as usize / 3 + 2) * 4);
-        assert_eq!(
-            write_sidecar(&state, &handle, "image/png", &huge)
-                .err()
-                .unwrap()
-                .kind,
-            ErrorKind::TooLarge
-        );
-        assert_eq!(
-            write_sidecar(&state, "h_unknown", "image/png", "AAAA")
-                .err()
-                .unwrap()
-                .kind,
-            ErrorKind::InvalidHandle
-        );
-        assert_eq!(
-            read_sidecar(&state, "h_unknown").err().unwrap().kind,
-            ErrorKind::InvalidHandle
-        );
     }
 }

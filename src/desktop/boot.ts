@@ -37,7 +37,8 @@ const ui: DesktopUi = {
   editCommand: dispatchEditCommand,
   canvasCommand: (command) => {
     const ui = useUiStore.getState();
-    if (command === 'canvas-settings') return ui.setSettingsOpen(true);
+    // With a diagram open the canvas's settings are beside it, in Appearance, not in a dialog over it.
+    if (command === 'canvas-settings') return ui.setStylePanelOpen(true, 'canvas');
     if (command === 'find-replace') return ui.setFindReplaceOpen(true);
     if (command === 'commands') return ui.setCommandPaletteOpen(true);
     // Arrange shows its result first, whichever way it is asked for: the same preview the palette opens.
@@ -84,14 +85,6 @@ export async function bootDesktop(): Promise<void> {
     registerDesktopHost({ channel, returnHome: () => void controller.returnHome() });
     setFileSaver(fileSaverFor(api));
     await controller.start();
-    // Canvas settings and Appearance are pages of Settings here, not a dialog of their own: however one is asked for
-    // (⌘K, the canvas's right-click, the status bar, the menu bar), Settings opens at that page.
-    useUiStore.subscribe((state) => {
-      if (!state.settingsOpen) return;
-      const page = state.settingsPage;
-      state.setSettingsOpen(false);
-      desktopStore.update({ settingsOpen: true, settingsCategory: page });
-    });
   } catch (error) {
     logDiagnostic(error, { operation: 'desktop-boot' });
     setDesktopController(null);

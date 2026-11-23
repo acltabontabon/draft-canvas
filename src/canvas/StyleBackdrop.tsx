@@ -13,7 +13,7 @@ const sameTransform = (a: ReactFlowState['transform'], b: ReactFlowState['transf
  *
  * Canvas chrome, never a diagram object: it takes no pointer events and is in no selection, route
  * or layout. It is one element whose background the browser repeats, so a pan repaints nothing but
- * its position. It sits under the diagram's own background image, which covers it when there is one.
+ * its position.
  */
 export const StyleBackdrop = memo(function StyleBackdrop() {
   const style = useDiagramStyle();

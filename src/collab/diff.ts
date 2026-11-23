@@ -10,7 +10,7 @@
  * Operations share unchanged structure, so most comparisons end at identity; the rest compare values,
  * never serialized text — a keystroke in a thousand-shape diagram must not stringify the diagram.
  */
-import type { DraftDocument, DraftNode, DraftSettings } from '../document/types';
+import type { DraftDocument, DraftNode } from '../document/types';
 import { ROOT_ROOM, type Change, type NodeValue, type RoomId } from './changes';
 import { sameExcept, sameValue } from './equal';
 import { elementsOf, indexOf, itemsOf, type ElementKind, type FileIndex, type Located } from './fileIndex';
@@ -20,16 +20,6 @@ export function nodeValue(node: DraftNode): NodeValue {
   if (!node.inside) return node;
   const { inside: _inside, ...own } = node;
   return own;
-}
-
-/**
- * Settings as they travel. An embedded background image is only ever on a file in transit
- * (`BackgroundSettings.image`); it is megabytes of base64 and never part of a shared edit.
- */
-export function wireSettings(settings: DraftSettings): DraftSettings {
-  if (settings.background.image === undefined) return settings;
-  const { image: _image, ...background } = settings.background;
-  return { ...settings, background };
 }
 
 export interface DiffOptions {
@@ -48,10 +38,7 @@ export function diffFile(prev: DraftDocument, next: DraftDocument, options: Diff
   const out: Change[] = [];
 
   if (prev.metadata.title !== next.metadata.title) out.push({ kind: 'title', value: next.metadata.title });
-  if (prev.settings !== next.settings) {
-    const settings = wireSettings(next.settings);
-    if (!sameValue(wireSettings(prev.settings), settings)) out.push({ kind: 'settings', value: settings });
-  }
+  if (prev.settings !== next.settings && !sameValue(prev.settings, next.settings)) out.push({ kind: 'settings', value: next.settings });
   if (prev.style !== next.style && !sameValue(prev.style, next.style)) out.push({ kind: 'style', value: next.style ?? null });
 
   const implied = options.implied === true;

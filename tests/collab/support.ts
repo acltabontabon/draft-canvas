@@ -193,10 +193,9 @@ export function sharedContent(file: DraftDocument): unknown {
     flows: g.flows,
     level: g.level ?? null,
   });
-  const { image: _image, ...background } = file.settings.background;
   return JSON.parse(JSON.stringify({
     title: file.metadata.title,
-    settings: { ...file.settings, background },
+    settings: file.settings,
     openPoints: file.openPoints,
     style: file.style ?? null,
     ...(graph(file) as object),

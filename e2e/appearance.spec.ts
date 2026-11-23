@@ -99,7 +99,9 @@ test('a diagram with a look of its own keeps it until asked', async ({ page }) =
 
   await show(settings, 'Styles');
   await settings.getByRole('button', { name: 'Use my style', exact: true }).click();
-  await expect(settings.getByRole('button', { name: 'Use my style', exact: true })).toBeDisabled();
+  // Drawn in it now: that is said, and there is nothing left to press.
+  await expect(settings.getByRole('button', { name: 'Use my style', exact: true })).toHaveCount(0);
+  await expect(settings.getByText(/following your changes here/)).toBeVisible();
   expect(await documentStyle(page)).toMatchObject({ name: 'My style', general: { weight: 'bold' } });
   await expect.poll(() => outlineWidth(page)).toBeGreaterThan(theirs);
 });

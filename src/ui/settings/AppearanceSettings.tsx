@@ -8,6 +8,7 @@ import {
   shapeKey,
   type ConnectorStyle,
   type DocumentStyle,
+  type GeneralStyle,
   type HandPreset,
   type ShapeStyle,
   type StyleCorners,
@@ -35,15 +36,16 @@ import { MAX_STYLE_FILE_BYTES, readStyleFile, serializeStyleFile, STYLE_FILE_EXT
 import { MAX_PROFILES } from '../../storage/styleProfiles';
 import { useEditorStore } from '../../store/editorStore';
 import { activeStyleOf, builtinProfileStyle, useStyleStore } from '../../store/styleStore';
-import { useUiStore } from '../../store/uiStore';
+import { useUiStore, type StylePanelTab } from '../../store/uiStore';
 import { usePersonality } from '../../theme/usePersonality';
 import { useTheme } from '../../theme/useTheme';
 import { Button } from '../common/Button';
 import { Icon } from '../common/Icon';
 import { SegmentedControl } from '../common/SegmentedControl';
-import { ChoiceRow, SettingRow, SettingsPage, SettingsSection } from './layout';
+import { ChoiceRow, CompactPrefs, SettingRow, SettingsPage, SettingsSection } from './layout';
 import { CanvasLook } from './CanvasLook';
-import { CORNER_ART, EDGE_COLOUR_ART, HAND_ART, HEAD_ART, STEADY_ART, WEIGHT_ART } from './lookArt';
+import { NextShapeSuggestions } from './CanvasSettings';
+import { CORNER_ART, EDGE_COLOUR_ART, HAND_ART, HEAD_ART, SHADOW_ART, STEADY_ART, WEIGHT_ART } from './lookArt';
 import { LookTiles } from './LookTiles';
 import { ShapeArtwork } from './ShapeArtwork';
 import { StylePacks } from './StylePacks';
@@ -87,11 +89,15 @@ const EDGE_COLOURS: { value: StyleEdgeColour; label: string; name: string }[] = 
   { value: 'source', label: 'From its source', name: 'Colour from its source shape' },
   { value: 'plain', label: 'Plain', name: 'Plain colour' },
 ];
+const SHADOW_TILES: { value: 'off' | 'soft' | 'deep'; label: string; art: React.ReactNode }[] = [
+  { value: 'off', label: 'Off', art: SHADOW_ART.off },
+  { value: 'soft', label: 'Soft', art: SHADOW_ART.soft },
+  { value: 'deep', label: 'Deep', art: SHADOW_ART.deep },
+];
 const EDGE_COLOUR_TILES = EDGE_COLOURS.map((option) => ({ ...option, art: EDGE_COLOUR_ART[option.value] }));
 
 /** Beside the canvas the page is three short ones: what to draw in, the paper, and the pen. */
-type PanelTab = 'styles' | 'canvas' | 'drawing';
-const PANEL_TABS: { id: PanelTab; label: string }[] = [
+const PANEL_TABS: { id: StylePanelTab; label: string }[] = [
   { id: 'styles', label: 'Styles' },
   { id: 'canvas', label: 'Canvas' },
   { id: 'drawing', label: 'Drawing' },
@@ -147,7 +153,9 @@ function withOptional<K extends 'general' | 'connectors' | 'schemes' | 'shapes'>
  */
 export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { documentOpen?: boolean; /** `panel`: a column beside the canvas, where the open diagram is the picture. */ layout?: 'page' | 'panel' }) {
   const panel = layout === 'panel';
-  const [tab, setTab] = useState<PanelTab>('styles');
+  // The store's, not this page's: the way in says which tab (the canvas's settings open on Canvas).
+  const tab = useUiStore((state) => state.stylePanelTab);
+  const setTab = useUiStore((state) => state.setStylePanelTab);
   const { preset, setPreset } = usePersonality();
   const { name: theme } = useTheme();
   const profiles = useStyleStore((state) => state.profiles);
@@ -194,6 +202,8 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
   const took = (hand: HandPreset) => {
     setPreset(hand);
     follow(hand);
+    // A different style, not a change to one: the canvas settles into it.
+    useUiStore.getState().beatRestyle();
   };
   const pickBuiltin = (hand: HandPreset) => {
     useStyleStore.getState().select(null);
@@ -208,8 +218,8 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
     <>
       <fieldset className="dc-prefs-section dc-look-gallery" aria-describedby="dc-look-gallery-description">
         <legend className="dc-prefs-section-title">My style</legend>
-        <p id="dc-look-gallery-description" className="dc-prefs-section-description">
-          Pick one to draw with. Change anything below and it becomes a style of your own.
+        <p id="dc-look-gallery-description" className={panel ? 'dc-sr-only' : 'dc-prefs-section-description'}>
+          Pick one to draw with.
         </p>
         <div className="dc-look-cards">
           {HAND_PRESETS.map((hand) => (
@@ -245,10 +255,9 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
     </>
   );
   const general = (
-      <SettingsSection title="General" description="What every shape and connector shares, unless a shape says otherwise.">
+      <SettingsSection title="General" description="Shared by every shape and connector.">
         <SettingRow
           label="Drawing hand"
-          description="How steady the pen is."
           control={
             <LookTiles
               name="style-hand"
@@ -267,7 +276,6 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
           <>
             <SettingRow
               label="Steadiness"
-              description="How much a line wanders."
               control={
                 <LookTiles
                   name="style-wobble"
@@ -287,7 +295,6 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
               type="checkbox"
               toggle
               label="Go over each line twice"
-              description="A second, fainter pass, the way a pencil retraces."
               checked={style.hand.retrace ?? style.hand.base === 'sketch'}
               onChange={(event) => edit((current) => ({ ...current, hand: { ...current.hand, retrace: event.target.checked } }))}
             />
@@ -304,18 +311,20 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
       <ShapesSection style={style} theme={theme} edit={edit} />
   );
   const connectors = (
-      <SettingsSection title="Connectors" description="How a line is drawn. What a line means, such as a dashed asynchronous call, is not a style and stays as it is.">
+      <SettingsSection title="Connectors" description="How a line is drawn, not what it means.">
         <ConnectorRows value={style.connectors} onChange={(connectors) => edit((current) => withOptional(current, 'connectors', connectors))} />
       </SettingsSection>
   );
   const diagram = (
-      <DiagramSection style={style} documentOpen={documentOpen} onAdded={took} />
+      <DiagramSection style={style} documentOpen={documentOpen} onAdded={took} panel={panel} />
   );
 
   if (panel) {
     // What the two working tabs change, said once at their head.
-    const subject = <p className="dc-look-subject">{active ? <>Changing <strong>{active.name}</strong>.</> : <>Change anything here and {HAND_LABELS[preset]} becomes a style of your own, kept beside it.</>}</p>;
+    // The cover already names the style being changed; only a built-in needs a word, once: a change copies it.
+    const subject = active ? null : <p className="dc-look-subject">A change here makes {HAND_LABELS[preset]} a style of your own.</p>;
     return (
+      <CompactPrefs value>
       <div className="dc-prefs-page dc-look-column">
         <div className="dc-look-tabs" role="tablist" aria-label="Appearance">
           {PANEL_TABS.map((entry) => (
@@ -324,7 +333,8 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
             </button>
           ))}
         </div>
-        <div id="dc-look-tabpanel" role="tabpanel" aria-labelledby={`dc-look-tab-${tab}`} className="dc-look-tabpanel">
+        {/* Keyed by the tab, so each page arrives with the same small motion rather than swapping in place. */}
+        <div key={tab} id="dc-look-tabpanel" role="tabpanel" aria-labelledby={`dc-look-tab-${tab}`} className="dc-look-tabpanel">
           {tab === 'styles' && (
             <>
               <DiagramNotice style={style} />
@@ -338,6 +348,10 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
               <div className="dc-look-canvas">
                 <CanvasLook style={style} theme={theme} edit={edit} />
               </div>
+              {/* Not part of any style: how the canvas behaves on this device, whatever is drawn on it. */}
+              <SettingsSection title="On this device" apart>
+                <NextShapeSuggestions />
+              </SettingsSection>
             </>
           )}
           {tab === 'drawing' && (
@@ -350,6 +364,7 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
           )}
         </div>
       </div>
+      </CompactPrefs>
     );
   }
 
@@ -391,7 +406,7 @@ function DiagramNotice({ style }: { style: DocumentStyle }) {
     <div className="dc-look-notice" role="status">
       <Icon name="info" size={15} />
       <p>
-        This diagram is drawn in a look of its own{own.name ? `, “${own.name}”` : ''}, saved with it. What you pick here shows on it once it uses your style.
+        This diagram has a look of its own{own.name ? `, “${own.name}”` : ''}. Your changes here do not touch it.
       </p>
       <Button
         variant="solid"
@@ -400,7 +415,7 @@ function DiagramNotice({ style }: { style: DocumentStyle }) {
           notify('This diagram is now drawn in your style.');
         }}
       >
-        Use my style here
+        Use my style
       </Button>
     </div>
   );
@@ -605,13 +620,23 @@ function SurfaceRows({
           }
         />
       ) : (
-        <ChoiceRow
-          type="checkbox"
-          toggle
+        <SettingRow
           label="Shadows"
-          description="A soft shadow under the shapes that stand for a piece of architecture."
-          checked={value?.shadow !== false}
-          onChange={(event) => set('shadow', event.target.checked ? undefined : false)}
+          description="Deep lifts shapes off the canvas."
+          control={
+            <LookTiles
+              name={`${name}-shadow`}
+              legend={legend('Shadows')}
+              value={value?.shadow === false ? 'off' : ((value as GeneralStyle | undefined)?.depth ?? 'soft')}
+              options={SHADOW_TILES}
+              onChange={(next) => {
+                // One choice, two fields: whether there is a shadow, and how far it lifts.
+                const { shadow: _shadow, depth: _depth, ...rest } = (value ?? {}) as GeneralStyle;
+                const general: GeneralStyle = { ...rest, ...(next === 'off' ? { shadow: false } : {}), ...(next === 'deep' ? { depth: 'deep' as const } : {}) };
+                onChange(Object.keys(general).length > 0 ? general : undefined);
+              }}
+            />
+          }
         />
       )}
     </>
@@ -661,7 +686,7 @@ function ShapesSection({ style, theme, edit }: { style: DocumentStyle; theme: 'l
     });
 
   return (
-    <SettingsSection title="Shapes" description="Choose a shape to give it a look of its own. What you leave alone follows General.">
+    <SettingsSection title="Shapes" description="Give one shape a look of its own.">
       <div className="dc-prefs-shapes" role="radiogroup" aria-label="Shape">
         {NODE_TYPES.map((entry) => (
           <label key={entry} className="dc-prefs-shape" data-styled={Object.keys(style.shapes ?? {}).some((styled) => styled === entry || styled.startsWith(`${entry}:`)) ? '' : undefined}>
@@ -745,7 +770,7 @@ function sameLook(a: DocumentStyle, b: DocumentStyle): boolean {
   return JSON.stringify({ ...a, name: undefined }) === JSON.stringify({ ...b, name: undefined });
 }
 
-function DiagramSection({ style, documentOpen, onAdded }: { style: DocumentStyle; documentOpen: boolean; onAdded: (hand: HandPreset) => void }) {
+function DiagramSection({ style, documentOpen, onAdded, panel }: { style: DocumentStyle; documentOpen: boolean; onAdded: (hand: HandPreset) => void; /** Beside the canvas, where the notice at the head of the panel already offers "Use my style". */ panel?: boolean }) {
   const readOnly = useUiStore((state) => Boolean(state.readOnly));
   const notify = useUiStore((state) => state.notify);
   const own = useEditorStore((state) => state.document.style);
@@ -760,62 +785,62 @@ function DiagramSection({ style, documentOpen, onAdded }: { style: DocumentStyle
   }
   const same = own !== undefined && sameLook(own, style);
   const known = own !== undefined && profiles.some((profile) => JSON.stringify(profile.style) === JSON.stringify(own));
-  return (
-    <SettingsSection
-      title="This diagram"
-      description={
-        same
-          ? 'Drawn in your style, saved with it, and following your changes here. It looks the same for everyone who opens it.'
-          : own
-          ? `Drawn in a style of its own${own.name ? `, “${own.name}”` : ''}, saved with it. Your changes here do not touch it.`
-          : 'Has no style of its own, so everyone sees it in their own. Here that is yours.'
-      }
-      apart
+  const use = (
+    <Button
+      variant="quiet"
+      className="dc-prefs-outline"
+      onClick={() => {
+        useEditorStore.getState().setDocumentStyle(style);
+        notify('This diagram is now drawn in your style.');
+      }}
     >
-      <SettingRow
-        label={own ? 'Use my style in this diagram' : 'Keep my style with this diagram'}
-        description={
-          same
-            ? 'This diagram is already drawn in your style.'
-            : own
-            ? 'Replaces its look with yours, for everyone it is shared with. Undo brings the old look back.'
-            : 'Saves your style into it, so it looks this way for everyone it is shared with.'
-        }
-        control={
-          <Button
-            variant="quiet"
-            className="dc-prefs-outline"
-            disabled={same}
-            onClick={() => {
-              useEditorStore.getState().setDocumentStyle(style);
-              notify('This diagram is now drawn in your style.');
-            }}
-          >
-            Use my style
-          </Button>
-        }
-      />
-      {own && !same && !known && (
-        <SettingRow
-          label="Keep this diagram’s style"
-          description="Adds its look to your styles, to use in other diagrams."
-          control={
-            <Button
-              variant="quiet"
-              className="dc-prefs-outline"
-              icon="plus"
-              onClick={() => {
-                const id = useStyleStore.getState().add(own.name ?? 'From a diagram', own);
-                // It is now the style in use, so this device's drawing hand follows it.
-                if (id) onAdded(own.hand.base);
-                notify(id ? 'Added to your styles.' : `This device keeps up to ${MAX_PROFILES} styles. Delete one to make another.`, id ? 'info' : 'error');
-              }}
-            >
-              Add to my styles
-            </Button>
-          }
-        />
-      )}
+      Use my style
+    </Button>
+  );
+  const keep = own && !same && !known && (
+    <SettingRow
+      label="Keep this diagram’s style"
+      control={
+        <Button
+          variant="quiet"
+          className="dc-prefs-outline"
+          icon="plus"
+          onClick={() => {
+            const id = useStyleStore.getState().add(own.name ?? 'From a diagram', own);
+            // It is now the style in use, so this device's drawing hand follows it.
+            if (id) onAdded(own.hand.base);
+            notify(id ? 'Added to your styles.' : `This device keeps up to ${MAX_PROFILES} styles. Delete one to make another.`, id ? 'info' : 'error');
+          }}
+        >
+          Add to my styles
+        </Button>
+      }
+    />
+  );
+  // Drawn in this style already: that is all there is to say, and nothing to press.
+  if (same) {
+    return (
+      <SettingsSection title="This diagram" apart>
+        <p className="dc-look-status" role="status">
+          <Icon name="check" size={13} />
+          <span>Drawn in your style and following your changes here.</span>
+        </p>
+      </SettingsSection>
+    );
+  }
+  if (own) {
+    // Beside the canvas the head of the panel has said so, with the button: only what is left to offer.
+    if (panel) return keep ? <SettingsSection title="This diagram" apart>{keep}</SettingsSection> : null;
+    return (
+      <SettingsSection title="This diagram" description={`Has a look of its own${own.name ? `, “${own.name}”` : ''}. Your changes here do not touch it.`} apart>
+        <SettingRow label="Use my style in this diagram" control={use} />
+        {keep}
+      </SettingsSection>
+    );
+  }
+  return (
+    <SettingsSection title="This diagram" description="Has no style of its own, so everyone sees it in theirs." apart>
+      <SettingRow label="Keep my style with this diagram" control={use} />
     </SettingsSection>
   );
 }

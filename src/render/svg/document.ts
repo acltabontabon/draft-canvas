@@ -9,7 +9,7 @@ import { findFlow, stepIndexOf } from '../../document/flow';
 import { visibleEdges } from '../../document/compensation';
 import { recoverCappedSequence } from '../../nodes/sequenceFit';
 import { boundsOf } from '../../document/operations';
-import type { BackgroundFit, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../../document/types';
+import type { DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../../document/types';
 import { unresolvedOpenPoints, unresolvedOpenPointsFor } from '../../document/openPoints';
 import { MARKER_SIZE, describeMarker, describeMarkerKey, nodeMarkerOrigin } from '../../openPoints/marker';
 import { describeAttachmentBadge } from '../../edges/attachmentChips';
@@ -20,11 +20,10 @@ import { describeLegend } from '../../edges/legend';
 import { crossingPlan } from '../../edges/crossings';
 import { labelGroupPlan } from '../../edges/labelGroups';
 import { replyLabelPlan } from '../../edges/replyLabels';
-import { blurRadiusFor } from '../backgroundAnchor';
 import { themeFor, type Theme, type ThemeName } from '../theme/tokens';
 import { getMeasurer } from '../text/measure';
 import { el, serialize, n, type SvgEl } from './element';
-import { beginClipScope, emitDisplayList, emitShape, shadowFilter } from './emit';
+import { beginClipScope, emitDisplayList, emitShape, shadowColour, shadowFilter } from './emit';
 import { beginIdScope, endIdScope, scopedId } from './ids';
 import { markerDefs } from './markers';
 import { resolveStyle, type ResolvedStyle } from '../style/resolve';
@@ -34,20 +33,6 @@ import type { PersonalityPreset } from '../../theme/usePersonality';
 import type { Shape } from '../displayList';
 import { inkOf, inkPaintBounds } from '../../document/ink';
 import { inkPaint } from '../ink';
-
-const BACKGROUND_BLUR_FILTER_ID = 'dc-bg-blur';
-
-/** An already-resolved background — the image loaded and base64-encoded, so
- *  every renderer here stays synchronous/pure. See `export/background.ts`. */
-export interface ResolvedBackground {
-  dataUri: string;
-  fit: BackgroundFit;
-  dim: number;
-  blur: number;
-  /** Natural pixel dimensions — only used to size one repeat of a `tile` fit. */
-  naturalWidth: number;
-  naturalHeight: number;
-}
 
 export interface ExportOptions {
   theme?: ThemeName;
@@ -63,9 +48,8 @@ export interface ExportOptions {
   idScope?: string;
   /** The flow currently selected for step-badge overlay, if any — "what you see is what you export". */
   selectedFlowId?: string;
-  /** Whether to draw a configured background — see `ResolvedBackground`. Defaults to `true`. */
+  /** Whether to draw the style's backdrop behind the diagram. Defaults to `true`. */
   includeBackground?: boolean;
-  background?: ResolvedBackground;
   /** How the picture is drawn, in place of the diagram's own style. For a preview of a style the
    *  diagram does not carry (yet). */
   style?: ResolvedStyle;
@@ -122,64 +106,6 @@ export function inkSvgEls(document: Pick<DraftDocument, 'ink'>, theme: ThemeName
     if (paint.blend) attrs.style = `mix-blend-mode:${paint.blend}`;
     return el('path', attrs);
   });
-}
-
-/**
- * Builds the `<image>`/scrim (and, for `blur`, an SVG filter) for a resolved
- * background, sized to fill `frame` — the export's own visible bounds (the
- * whole canvas for `renderDocumentSvg`, or any camera-cropped viewBox a
- * caller passes) — the same "always fills the visible screen" behavior
- * `CanvasBackground.tsx` gives the live canvas, so panning/zooming and
- * exporting never disagree about how much of the image is showing.
- * `preserveAspectRatio` does the cover/contain fitting; `<image>` clips to
- * its own box by default, so no manual geometry is needed for anything but
- * `tile`, which repeats the image at its natural pixel size.
- */
-function backgroundEls(
-  background: ResolvedBackground,
-  canvasColor: string,
-  frame: { x: number; y: number; width: number; height: number },
-  extraDim = 0,
-): { defs: SvgEl[]; els: SvgEl[] } {
-  const { x, y, width, height } = frame;
-  const defs: SvgEl[] = [];
-  let imageEl: SvgEl;
-
-  if (background.fit === 'tile') {
-    const patternId = scopedId('dc-bg-pattern');
-    const tileW = Math.max(1, background.naturalWidth);
-    const tileH = Math.max(1, background.naturalHeight);
-    defs.push(
-      el('pattern', { id: patternId, x, y, width: tileW, height: tileH, patternUnits: 'userSpaceOnUse' }, [
-        // `href` for SVG 2 readers, `xlink:href` for the SVG 1.1 tools that still ignore the former.
-        el('image', { x: 0, y: 0, width: tileW, height: tileH, href: background.dataUri, 'xlink:href': background.dataUri, preserveAspectRatio: 'none' }),
-      ]),
-    );
-    imageEl = el('rect', { x, y, width, height, fill: `url(#${patternId})` });
-  } else {
-    imageEl = el('image', {
-      x,
-      y,
-      width,
-      height,
-      href: background.dataUri,
-      'xlink:href': background.dataUri,
-      preserveAspectRatio: background.fit === 'contain' ? 'xMidYMid meet' : 'xMidYMid slice',
-    });
-  }
-
-  if (background.blur > 0) {
-    defs.push(
-      el('filter', { id: scopedId(BACKGROUND_BLUR_FILTER_ID), x: '-20%', y: '-20%', width: '140%', height: '140%' }, [
-        el('feGaussianBlur', { stdDeviation: n(blurRadiusFor(background.blur)) }),
-      ]),
-    );
-    imageEl = el('g', { filter: `url(#${scopedId(BACKGROUND_BLUR_FILTER_ID)})` }, [imageEl]);
-  }
-
-  const dim = Math.min(1, background.dim + extraDim);
-  const scrim = el('rect', { x, y, width, height, fill: canvasColor, opacity: n(dim) });
-  return { defs, els: [imageEl, scrim] };
 }
 
 export interface RenderedSvg {
@@ -531,25 +457,16 @@ export function renderDocumentSvg(
   const originY = bounds.y - padding;
 
   const defs: SvgEl[] = [
-    shadowFilter(theme.shadow),
+    shadowFilter(shadowColour(theme, style.depth), style.depth),
     ...markerDefs(scene.arrowColors, style.hand.arrowJitter, style.connector.head),
   ];
-
-  const showBackground = options.includeBackground !== false && options.background !== undefined;
-  // Sized to the export's own visible bounds (0,0,width,height) — outside the
-  // content's translated `<g>` below, so it fills the whole exported canvas
-  // like a wallpaper rather than a rectangle pinned to document coordinates.
-  const background = showBackground
-    ? backgroundEls(options.background!, theme.canvas, { x: 0, y: 0, width, height })
-    : undefined;
-  if (background) defs.push(...background.defs);
 
   const children: SvgEl[] = [el('defs', undefined, defs)];
   if (!options.transparent) {
     children.push(el('rect', { x: 0, y: 0, width, height, fill: theme.canvas }));
   }
   // The style's own backdrop: a tile repeated from the canvas's origin, exactly where the canvas
-  // draws it, under any image the diagram has. A transparent export has no canvas to draw it on.
+  // draws it. A transparent export has no canvas to draw it on.
   const tile = options.transparent || options.includeBackground === false ? null : backdropTile(style, options.theme ?? 'dark');
   if (tile) {
     const patternId = scopedId('dc-backdrop');
@@ -560,7 +477,6 @@ export function renderDocumentSvg(
     );
     children.push(el('rect', { x: 0, y: 0, width, height, fill: `url(#${patternId})` }));
   }
-  children.push(...(background?.els ?? []));
   children.push(
     el('g', { transform: `translate(${n(-originX)} ${n(-originY)})` }, [
       ...scene.backdropEls,
@@ -588,9 +504,6 @@ export function renderDocumentSvg(
     'svg',
     {
       xmlns: 'http://www.w3.org/2000/svg',
-      // For the `xlink:href` the background image carries beside `href` — SVG 1.1 tools read only
-      // the former, and a document that uses the prefix has to declare it.
-      'xmlns:xlink': 'http://www.w3.org/1999/xlink',
       // Explicit pixel dimensions matter: without them some browsers rasterize
       // an SVG loaded into an Image at the wrong intrinsic size, or not at all.
       width,

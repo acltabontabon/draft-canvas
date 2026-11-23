@@ -56,7 +56,7 @@ current folder. **Find a diagram** (`⌘F` on Home) searches projects, recent fi
 
 To move a diagram to another project, point at its tile on Home or in **Find a diagram** and choose
 **Move to a project**, or drag the tile onto a project's name above the grid. For the open diagram,
-use **File → Move to Project…**. It lands in the project's top folder with its background image. If
+use **File → Move to Project…**. It lands in the project's top folder. If
 the project already has a diagram with that name, Draft Canvas asks first; **Keep both** numbers the
 moved one, and nothing is replaced.
 

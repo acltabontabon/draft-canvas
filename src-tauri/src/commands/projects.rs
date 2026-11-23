@@ -5,9 +5,7 @@ use super::documents::{opened_doc, OpenedDoc, SavedAs};
 use super::raw::raw_request;
 use super::{last_dir, recents_changed, remember_file, remember_project, run_blocking};
 use crate::dialogs;
-use crate::docio::{
-    create_new_atomic, ensure_document_size, move_atomic, sidecar_move, unique_name,
-};
+use crate::docio::{create_new_atomic, ensure_document_size, move_atomic, unique_name};
 use crate::errors::AppError;
 use crate::grants::Handle;
 use crate::paths::{display_path, sanitize_stem, DOC_EXT};
@@ -203,8 +201,6 @@ fn move_file_now(
     }
     let new_handle = state.grant_file(&target)?;
     let new_grant = state.file(&new_handle)?;
-    // Best effort, as for a rename: the move has already happened.
-    let _ = sidecar_move(&grant.path, &new_grant.path);
     state
         .recents
         .rename(&grant.path, &new_grant.path, &new_grant.name)?;
@@ -350,10 +346,9 @@ mod tests {
     }
 
     #[test]
-    fn moving_a_file_carries_its_background_and_recent_entry_into_the_project() {
+    fn moving_a_file_carries_its_recent_entry_into_the_project() {
         let (dir, state) = test_state();
         let path = doc(&dir, "inbox/checkout.draftcanvas", "{\"x\":1}");
-        crate::docio::sidecar_write(&path, "image/webp", b"bg").unwrap();
         fs::create_dir(dir.path().join("Payments")).unwrap();
         let project = open_project_at(&state, &dir.path().join("Payments")).unwrap();
         let handle = state.grant_file(&path).unwrap();
@@ -367,10 +362,6 @@ mod tests {
         assert_eq!(state.file(&moved.handle).unwrap().path, target);
         assert!(!path.exists());
         assert_eq!(fs::read_to_string(&target).unwrap(), "{\"x\":1}");
-        assert_eq!(
-            crate::docio::sidecar_read(&target).unwrap().unwrap().bytes,
-            b"bg"
-        );
         let recents = state.recents.list().unwrap().items;
         assert_eq!(recents.len(), 1);
         assert_eq!(Path::new(&recents[0].path), target);

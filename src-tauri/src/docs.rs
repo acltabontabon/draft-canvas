@@ -21,7 +21,7 @@ use std::time::UNIX_EPOCH;
 
 /// The docs note's opening tag, exactly as `src/export/docs/marker.ts` writes it.
 pub const MARKER: &str = "<metadata id=\"draftcanvas-docs\">";
-/// A picture with a large background image inside it can be several megabytes; this is well past that.
+/// A picture of a large diagram can be several megabytes; this is well past that.
 pub const MAX_IMAGE_BYTES: u64 = 32 * 1024 * 1024;
 /// Documentation, not a book: a Markdown file larger than this is refused rather than rewritten.
 pub const MAX_MARKDOWN_BYTES: u64 = 4 * 1024 * 1024;

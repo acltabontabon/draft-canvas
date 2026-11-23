@@ -330,7 +330,9 @@ describe('Settings → Appearance', () => {
     await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Use my style' })));
     expect(fileOf(useEditorStore.getState()).style).toMatchObject({ name: 'My style', general: { weight: 'bold' } });
     expect(useEditorStore.getState().history.past).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Use my style' })).toBeDisabled();
+    // Drawn in it now: that is said, and there is nothing left to press.
+    expect(screen.queryByRole('button', { name: 'Use my style' })).toBeNull();
+    expect(screen.getByText(/following your changes here/)).toBeInTheDocument();
     act(() => useEditorStore.getState().undo());
     expect('style' in fileOf(useEditorStore.getState())).toBe(false);
   });
@@ -494,14 +496,15 @@ describe('Settings → Appearance', () => {
     const packs = screen.getByRole('list');
     await vi.waitFor(() => expect(within(packs).getByRole('button', { name: 'Add High seas to my styles' })).toBeEnabled());
     expect(within(packs).getAllByRole('listitem')).toHaveLength(7);
-    expect(within(packs).getByText('By Draft Canvas · Apache-2.0', { selector: 'li:first-child *' })).toBeInTheDocument();
+    // A card is its picture, its name and Add; who drew it and under what is a hover away.
+    expect(within(packs).getAllByRole('listitem')[0]).toHaveAttribute('title', expect.stringContaining('By Draft Canvas · Apache-2.0'));
 
     await act(async () => fireEvent.click(within(packs).getByRole('button', { name: 'Add High seas to my styles' })));
     const [profile] = useStyleStore.getState().profiles;
-    expect(profile).toMatchObject({ name: 'High seas', style: { hand: { base: 'draft' } } });
+    expect(profile).toMatchObject({ name: 'High seas', style: { hand: { base: 'sketch' } } });
     expect(profile!.style.assets).toHaveLength(35);
     expect(mine(/^High seas/)).toBeChecked();
-    expect(preferences.get('personality')).toBe('draft');
+    expect(preferences.get('personality')).toBe('sketch');
     // It is theirs now: the pack says so, and changing the style does not change the pack.
     expect(within(packs).getByRole('button', { name: 'High seas is in your styles' })).toBeDisabled();
     await act(async () => choose('Line weight', 'Bold'));

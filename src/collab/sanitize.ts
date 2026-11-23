@@ -292,11 +292,5 @@ function sanitizeSettings(raw: unknown): DraftSettings | null {
   if (!isRecord(raw)) return null;
   const result = documentOf({ settings: raw });
   if (!result.ok) return null;
-  const settings = result.document.settings;
-  // An embedded image is a file-in-transit field; a shared edit never carries one.
-  if (settings.background.image !== undefined) {
-    const { image: _image, ...background } = settings.background;
-    return { ...settings, background };
-  }
-  return settings;
+  return result.document.settings;
 }

@@ -280,24 +280,6 @@ describe('names at the door', () => {
   });
 });
 
-describe('what the owner sends a collaborator', () => {
-  it('never carries an embedded background image into the collaborator’s copy', () => {
-    const owner = { ...createDocument('Backdrop') };
-    owner.settings = { ...owner.settings, background: { ...owner.settings.background, enabled: true, image: { dataUri: 'data:image/png;base64,iVBORw0KGgo=', width: 1, height: 1 } } };
-    const { a, b, pump } = loopbackPair();
-    let copy: DraftDocument | null = null;
-    const session = new GuestSession(
-      { readFile: () => copy!, applyRemote: (file) => ((copy = file), true), isBusy: () => false, open: (file) => (copy = file), setAccess: () => {}, appVersion: PRODUCT.version, name: 'Gus' },
-      { status: () => {}, joined: () => {}, peers: () => {}, presence: () => {}, presenter: () => {}, rejected: () => {}, unconfirmed: () => {}, tooLarge: () => {} },
-    );
-    session.connect(b);
-    a.send(encode({ t: 'welcome', v: PROTOCOL_VERSION, session: 's_1', peer: 'p_1', key: 'k'.repeat(32), role: 'editor', seq: 0, snapshot: owner, peers: [] }), 'commit');
-    pump();
-    expect(copy).not.toBeNull();
-    expect(copy!.settings.background.image).toBeUndefined();
-    session.leave();
-  });
-});
 
 describe('the local network door', () => {
   it('changes a place’s key with every welcome there, so one read off the network opens nothing later', async () => {

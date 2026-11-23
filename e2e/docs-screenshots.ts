@@ -733,12 +733,9 @@ async function layoutScreenshots(page: Page) {
   await shot(page, 'portal-legend-held');
 }
 
-/** Appearance, as a person reaches it: from the palette. It opens beside the canvas, not over it. */
+/** Appearance, as a person reaches it: the palette button in the status bar. It opens beside the canvas, not over it. */
 async function openAppearance(page: Page) {
-  await page.keyboard.press('Control+k');
-  await expect(page.getByRole('dialog')).toBeVisible();
-  await page.keyboard.type('Appearance');
-  await page.keyboard.press('Enter');
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
   const panel = page.getByRole('complementary', { name: 'Appearance', exact: true });
   await expect(panel).toBeVisible();
   return panel;

@@ -6,7 +6,9 @@
     "v": 1,
     "name": "Cute",
     "hand": {
-      "base": "clean"
+      "base": "draft",
+      "wobble": "calm",
+      "retrace": false
     },
     "general": {
       "weight": "bold",
@@ -175,7 +177,8 @@
       }
     },
     "connectors": {
-      "weight": "bold"
+      "weight": "bold",
+      "colour": "source"
     },
     "backdrop": {
       "art": "a1jjyq5y0nhmqbv"

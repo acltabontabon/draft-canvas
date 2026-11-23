@@ -4,7 +4,7 @@ import { useEditorStore } from '../store/editorStore';
 import { nodeIndex } from '../store/selectors';
 import { resolveEdgeColor } from '../edges/kindStyle';
 import { markerDefs } from '../render/svg/markers';
-import { shadowFilter } from '../render/svg/emit';
+import { shadowColour, shadowFilter } from '../render/svg/emit';
 import { serialize } from '../render/svg/element';
 import type { Theme } from '../render/theme/tokens';
 import { useDiagramStyle } from './useDiagramStyle';
@@ -50,7 +50,7 @@ export const Markers = memo(function Markers() {
       ...Object.values(theme.accents).map((accent) => accent.chip),
       ...(colorKey ? colorKey.split('|') : []),
     ]);
-    const markup = [shadowFilter(theme.shadow), ...markerDefs(colors, diagramStyle.hand.arrowJitter, diagramStyle.connector.head)]
+    const markup = [shadowFilter(shadowColour(theme, diagramStyle.depth), diagramStyle.depth), ...markerDefs(colors, diagramStyle.hand.arrowJitter, diagramStyle.connector.head)]
       .map(serialize)
       .join('');
     return { __html: `<defs>${markup}</defs>` };

@@ -673,7 +673,7 @@
     justify-content: flex-start;
   }
 
-  /* A row's own few options (a background's fit) stay on one line; the two-up grid above is for the
+  /* A row's own few options stay on one line; the two-up grid above is for the
      agent picker's six. */
   .dc-prefs-control .dc-segmented {
     grid-template-columns: none;
@@ -1355,8 +1355,10 @@
   padding: 12px 14px 14px;
 }
 
-.dc-prefs-pack-body .dc-prefs-row-text {
+.dc-prefs-pack-body > .dc-prefs-label {
   flex: 1;
+  align-self: center;
+  min-width: 0;
 }
 
 .dc-prefs-pack-body .dc-prefs-label {
@@ -1374,12 +1376,6 @@
   opacity: 1;
 }
 
-.dc-prefs-pack-actions {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-top: 14px;
-}
 
 .dc-prefs-link {
   font-size: 12.5px;
@@ -1388,6 +1384,105 @@
 
 .dc-prefs-link:hover {
   color: var(--dc-text);
+}
+
+/* A heading with the small things that act on its whole section at the end of its line. */
+.dc-look-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.dc-look-section-head .dc-prefs-section-title {
+  margin: 0;
+}
+
+.dc-look-section-head {
+  gap: 4px;
+}
+
+.dc-look-section-space {
+  flex: 1;
+}
+
+.dc-look-section-head .dc-prefs-link {
+  margin-right: 6px;
+}
+
+/* A section's heading with its hint beside it. */
+.dc-prefs-section-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.dc-prefs-section-head .dc-prefs-section-title {
+  margin: 0;
+}
+
+.dc-prefs-section-head .dc-look-hint,
+.dc-look-section-head .dc-look-hint {
+  margin-left: 2px;
+  vertical-align: 0;
+}
+
+.dc-look-section-action {
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--dc-text-muted);
+}
+
+/* The "i" an explanation waits behind: small, quiet, and beside the name it explains. */
+.dc-look-hint {
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  margin-left: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--dc-text-faint);
+  vertical-align: -3px;
+  cursor: help;
+  transition: color 120ms ease, background-color 120ms ease;
+}
+
+.dc-look-hint:hover,
+.dc-look-hint:focus-visible {
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  outline: none;
+}
+
+.dc-look-hint:focus-visible {
+  box-shadow: 0 0 0 2px var(--dc-prefs-accent);
+}
+
+/* One quiet line that says how things stand: nothing to press, so nothing drawn as a control. */
+.dc-look-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 0;
+  font-size: 13px;
+  color: var(--dc-text-muted);
+}
+
+.dc-look-status svg {
+  flex: none;
+  color: var(--dc-prefs-accent);
+}
+
+.dc-look-status[data-quiet] {
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--dc-surface);
+  justify-content: center;
 }
 
 /* Before the gallery is loaded: three blank cards fanned out, and the one thing to press. */
@@ -1472,8 +1567,8 @@
 
 /* ---- appearance, beside the canvas (`ui/Editor/StylePanel.tsx`) ----------------- */
 
-/* Docked like the Outline, outside the canvas column: the diagram is never covered, so it is the
-   picture every choice here is judged by. */
+/* Beside the canvas, outside its column, so the diagram is never covered. This element only holds
+   the room: what is seen is the sheet inside it, which takes the whole right side of the window. */
 .dc-style-panel {
   --dc-prefs-warn: color-mix(in srgb, #e0a82e 62%, var(--dc-text));
   --dc-prefs-tint: color-mix(in srgb, var(--dc-text) 3%, var(--dc-surface));
@@ -1481,67 +1576,306 @@
   --dc-prefs-focus: color-mix(in srgb, var(--dc-prefs-accent) 16%, transparent);
   /* A switch that is on, which the dialogs take from the Library's own palette. */
   --dc-library-action: var(--dc-selection);
-  display: flex;
+  --dc-style-panel-width: min(404px, 88vw);
   flex: none;
-  flex-direction: column;
-  width: min(396px, 86vw);
+  width: var(--dc-style-panel-width);
   min-height: 0;
-  border-left: 1px solid var(--dc-border);
-  background: var(--dc-surface-raised);
+  /* The canvas gives up the room over the same moment the sheet takes to arrive, and gets it back as it leaves. */
+  animation: dc-style-panel-room 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
   /* Its own words in the editor's colours, which may be a style's and not the app's. */
   color: var(--dc-text);
-  box-shadow: -18px 0 36px -30px color-mix(in srgb, var(--dc-text) 55%, transparent);
-  animation: dc-style-panel-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .dc-style-panel:focus {
   outline: none;
 }
 
-@keyframes dc-style-panel-in {
+/* Top to bottom, over where the header's right side and the status bar were: both have stepped
+   back (the studio state), so the side of the window is one surface. */
+.dc-style-panel-sheet {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  width: var(--dc-style-panel-width);
+  border-left: 1px solid var(--dc-border);
+  background: var(--dc-surface-raised);
+  box-shadow: -24px 0 48px -36px var(--dc-shadow);
+  animation: dc-style-panel-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes dc-style-panel-room {
   from {
-    opacity: 0;
-    transform: translateX(18px);
+    width: 0;
   }
 }
 
+@keyframes dc-style-panel-in {
+  from {
+    opacity: 0.4;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes dc-style-panel-out {
+  to {
+    opacity: 0.4;
+    transform: translateX(100%);
+  }
+}
+
+@keyframes dc-style-panel-room-out {
+  to {
+    width: 0;
+  }
+}
+
+/* Leaving: the same way back, as long as `LEAVE_MS` in `StylePanel.tsx`. */
+.dc-style-panel[data-leaving] {
+  animation: dc-style-panel-room-out 260ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+
+.dc-style-panel[data-leaving] .dc-style-panel-sheet {
+  animation: dc-style-panel-out 260ms cubic-bezier(0.4, 0, 0.6, 1) forwards;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .dc-style-panel {
+  .dc-style-panel,
+  .dc-style-panel-sheet,
+  .dc-style-panel[data-leaving],
+  .dc-style-panel[data-leaving] .dc-style-panel-sheet {
     animation: none;
   }
 }
 
-.dc-style-panel-header {
+/* The cover: the style's own canvas, with its name on it. */
+.dc-style-cover {
+  position: relative;
   display: flex;
   flex: none;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 16px 12px 14px 20px;
+  flex-direction: column;
+  gap: 14px;
+  padding: 14px 16px 16px 22px;
+  overflow: hidden;
   border-bottom: 1px solid var(--dc-border);
+  /* A change of style is seen arriving on the cover, as it is on the canvas. */
+  transition:
+    background-color 320ms ease,
+    color 320ms ease;
 }
 
-.dc-style-panel-title {
+/* The backdrop is at full strength at the far edge and washed out behind the words. */
+.dc-style-cover::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, var(--dc-cover) 0%, color-mix(in srgb, var(--dc-cover) 82%, transparent) 46%, transparent 100%);
+  pointer-events: none;
+}
+
+.dc-style-cover > * {
+  position: relative;
+}
+
+.dc-style-cover-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.dc-style-cover-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.62;
+}
+
+.dc-style-cover-title {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  min-width: 0;
+  margin-top: 10px;
+}
+
+/* In the hand the diagram's own title is written in. */
+.dc-style-cover-name {
+  max-width: 100%;
   margin: 0;
+  overflow: hidden;
   font-family: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Georgia, serif;
-  font-size: 21px;
-  font-weight: 400;
-  letter-spacing: -0.01em;
+  font-size: 34px;
+  font-style: italic;
+  font-weight: 500;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dc-style-panel-lead {
-  margin: 2px 0 0;
+.dc-style-cover-stroke {
+  width: min(168px, 70%);
+  height: 8px;
+}
+
+.dc-style-cover-dots {
+  display: flex;
+  gap: 6px;
+}
+
+.dc-style-cover-dots span {
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid;
+  border-radius: 50%;
+}
+
+.dc-style-cover-dots .dc-style-cover-brand {
+  margin-left: 6px;
+  border-radius: 5px;
+}
+
+.dc-style-panel-done {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in srgb, currentColor 24%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--dc-cover) 70%, transparent);
+  color: inherit;
   font-size: 12.5px;
-  color: var(--dc-text-muted);
+  font-weight: 600;
+}
+
+.dc-style-panel-done:hover {
+  background: color-mix(in srgb, currentColor 10%, var(--dc-cover));
 }
 
 .dc-style-panel-body {
   flex: 1;
   min-height: 0;
-  padding: 18px 20px 36px;
+  padding: 6px 20px 36px 22px;
   overflow-y: auto;
   scrollbar-gutter: stable;
 }
+
+/*
+ * The studio: while Appearance is open the editor's other chrome steps back (the tools, Present and
+ * Share, the Depth chip, the status bar), so nothing on screen competes with the diagram and the
+ * panel that is changing it. The title stays: it is words, not a card. Everything returns when the
+ * panel closes. Hidden, not merely faint, so none of it can be pressed or tabbed to meanwhile.
+ */
+.dc-toolbar > :not(.dc-toolbar-lead),
+.dc-depth {
+  transition:
+    opacity 220ms ease,
+    transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+
+.dc-editor[data-studio] .dc-toolbar > :not(.dc-toolbar-lead),
+.dc-editor[data-studio] .dc-depth {
+  visibility: hidden;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-6px);
+  transition:
+    opacity 180ms ease,
+    transform 220ms ease,
+    visibility 0s 220ms;
+}
+
+/* The status bar sinks away and gives its height to the canvas, and rises back the same way. A
+   ceiling is what moves: the bar has no height of its own to animate from. */
+.dc-status {
+  max-height: 72px;
+  transition:
+    max-height 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    min-height 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    padding 280ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 220ms ease 60ms,
+    border-color 220ms ease,
+    background-color 320ms ease,
+    color 320ms ease,
+    visibility 0s;
+}
+
+.dc-editor[data-studio] .dc-status {
+  max-height: 0;
+  min-height: 0;
+  padding-block: 0;
+  overflow: hidden;
+  border-color: transparent;
+  visibility: hidden;
+  opacity: 0;
+  transition:
+    max-height 260ms cubic-bezier(0.4, 0, 0.6, 1),
+    min-height 260ms cubic-bezier(0.4, 0, 0.6, 1),
+    padding 260ms cubic-bezier(0.4, 0, 0.6, 1),
+    opacity 160ms ease,
+    border-color 160ms ease,
+    visibility 0s 260ms;
+}
+
+/*
+ * A change of style arrives, it does not cut: the paper, the bars and the panel take their new
+ * colours over a moment, and when a different style is chosen the drawing settles in with them.
+ * Two names for one animation, so choosing again starts it again (`uiStore.restyleBeat`).
+ */
+.dc-editor,
+.dc-canvas,
+.dc-style-panel-sheet {
+  transition-property: background-color, border-color, color;
+  transition-duration: 320ms;
+  transition-timing-function: ease;
+}
+
+.dc-editor[data-restyled='a'] .react-flow__viewport,
+.dc-editor[data-restyled='a'] .dc-canvas-backdrop {
+  animation: dc-restyle-a 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.dc-editor[data-restyled='b'] .react-flow__viewport,
+.dc-editor[data-restyled='b'] .dc-canvas-backdrop {
+  animation: dc-restyle-b 420ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes dc-restyle-a {
+  from {
+    opacity: 0.25;
+  }
+}
+
+@keyframes dc-restyle-b {
+  from {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-editor[data-restyled] .react-flow__viewport,
+  .dc-editor[data-restyled] .dc-canvas-backdrop {
+    animation: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-toolbar > :not(.dc-toolbar-lead),
+  .dc-depth,
+  .dc-status,
+  .dc-editor[data-studio] .dc-toolbar > :not(.dc-toolbar-lead),
+  .dc-editor[data-studio] .dc-depth,
+  .dc-editor[data-studio] .dc-status {
+    transition: none;
+    transform: none;
+  }
+}
+
 
 /* A column, not a page: three short tabs, a little closer set. */
 .dc-look-column {
@@ -1549,35 +1883,47 @@
   max-width: none;
 }
 
-/* What to draw in, the paper, the pen: kept in view at the head of the panel as it scrolls. */
+/* What to draw in, the paper, the pen: words on a line, the one in use underlined. Kept in view at
+   the head of the panel as it scrolls, with the panel's own colour behind it. */
 .dc-look-tabs {
   position: sticky;
-  top: -18px;
+  top: -6px;
   z-index: 3;
-  display: grid;
-  grid-auto-columns: 1fr;
-  grid-auto-flow: column;
-  gap: 2px;
-  margin: -6px -4px 18px;
-  padding: 4px;
-  border: 1px solid var(--dc-border);
-  border-radius: 12px;
-  background: var(--dc-surface);
-  /* A margin of the panel's own colour, so nothing shows round the bar as the page scrolls under it. */
-  box-shadow: 0 0 0 8px var(--dc-surface-raised);
+  display: flex;
+  gap: 22px;
+  margin: 0 -22px 20px;
+  padding: 8px 22px 0;
+  border-bottom: 1px solid var(--dc-border);
+  background: var(--dc-surface-raised);
 }
 
 .dc-look-tab {
-  padding: 7px 0;
+  position: relative;
+  padding: 8px 0 11px;
   border: 0;
-  border-radius: 9px;
   background: none;
   color: var(--dc-text-muted);
   font: inherit;
-  font-size: 13px;
+  font-size: 13.5px;
   font-weight: 600;
   cursor: pointer;
-  transition: background-color 140ms ease, color 140ms ease;
+  transition: color 140ms ease;
+}
+
+.dc-look-tab::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--dc-prefs-accent);
+  opacity: 0;
+  transform: scaleX(0.4);
+  transition:
+    opacity 160ms ease,
+    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .dc-look-tab:hover {
@@ -1585,14 +1931,18 @@
 }
 
 .dc-look-tab[aria-selected='true'] {
-  background: var(--dc-surface-raised);
-  box-shadow: 0 1px 2px color-mix(in srgb, var(--dc-text) 14%, transparent), 0 0 0 1px var(--dc-border);
   color: var(--dc-text);
+}
+
+.dc-look-tab[aria-selected='true']::after {
+  opacity: 1;
+  transform: none;
 }
 
 .dc-look-tab:focus-visible {
   outline: 2px solid var(--dc-prefs-accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 .dc-look-tabpanel {
@@ -1600,6 +1950,20 @@
   flex-direction: column;
   gap: 26px;
   min-width: 0;
+  animation: dc-look-page 240ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes dc-look-page {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-look-tabpanel {
+    animation: none;
+  }
 }
 
 /* What the tab changes, said once at its head. */
@@ -1655,34 +2019,26 @@
 }
 
 .dc-look-column .dc-prefs-pack-body {
-  flex-direction: column;
-  align-items: stretch;
-  gap: 10px;
-  padding: 9px 11px 11px;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 11px;
 }
 
 .dc-look-column .dc-prefs-pack-body .dc-prefs-label {
-  font-size: 13.5px;
-}
-
-.dc-look-column .dc-prefs-pack-body .dc-prefs-description {
-  display: -webkit-box;
+  flex: 1;
+  min-width: 0;
   overflow: hidden;
-  font-size: 12px;
-  line-height: 1.4;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
-}
-
-.dc-look-column .dc-prefs-pack-body .dc-prefs-detail {
-  display: none;
+  font-size: 13.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dc-look-column .dc-prefs-pack-add {
   justify-content: center;
-  margin-top: auto;
-  padding-block: 5px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 8px;
 }
 
 /* A choice and its tiles: the label above, the tiles sharing the row beneath it equally. */
@@ -1795,9 +2151,24 @@
   /* No room beside the canvas: the panel sits under it, like the Outline, the diagram above. */
   .dc-style-panel {
     width: auto;
-    height: min(440px, 54%);
+    height: min(480px, 58%);
+  }
+
+  .dc-style-panel,
+  .dc-style-panel[data-leaving] {
+    animation: none;
+  }
+
+  .dc-style-panel-sheet {
+    position: static;
+    width: auto;
+    height: 100%;
     border-top: 1px solid var(--dc-border);
     border-left: 0;
     box-shadow: none;
+  }
+
+  .dc-style-cover-name {
+    font-size: 26px;
   }
 }

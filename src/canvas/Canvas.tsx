@@ -40,7 +40,6 @@ import { edgeIndex, nodeIndex, selectSequenceMessage, sequenceNodes } from '../s
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
 import { DiagramTheme } from './DiagramTheme';
-import { CanvasBackground } from './CanvasBackground';
 import { StyleBackdrop } from './StyleBackdrop';
 import { ATTACH_DWELL_MS, evaluateAttachCandidates, isAttachableType } from './dragTargets';
 import { isLinkable, isPartOfDiagram } from '../document/sequenceLinks';
@@ -194,10 +193,6 @@ function connectFrom(source: string, target: string): void {
 /** See `onSelectionChange`: more reports than this inside the window is a feedback loop, not clicks. */
 const SELECTION_BURST_WINDOW_MS = 300;
 const SELECTION_BURST_LIMIT = 10;
-
-/** How much further Presentation Mode dims a configured background, on top of
- *  the user's own setting — enough to recede further without disappearing. */
-const PRESENTATION_EXTRA_DIM = 0.2;
 
 interface ProjectionState {
   nodes: DraftRfNode[];
@@ -2320,11 +2315,6 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       aria-label="Diagram canvas"
     >
       <StyleBackdrop />
-      <CanvasBackground
-        settings={document.settings.background}
-        documentId={document.metadata.id}
-        extraDim={explainActive ? PRESENTATION_EXTRA_DIM : 0}
-      />
       <Markers />
       {mode === 'present' && <PresentationPointer />}
       <ReactFlow
@@ -2423,8 +2413,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             color={theme.grid}
             // React Flow's own grid layer paints an opaque backdrop by
             // default — without this, it silently covers `.dc-canvas`'s own
-            // background (and a configured background
-            // image) with its own dark fill, coincidentally close enough to
+            // background (and the style's backdrop) with its own dark fill, coincidentally close enough to
             // the app's dark theme that this went unnoticed until now.
             bgColor="transparent"
           />

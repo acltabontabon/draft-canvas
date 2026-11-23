@@ -1,18 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { createDocument } from '../document/factory';
-import { adoptEmbeddedBackground } from '../export/background';
 import { deserializeDocument, serializeDocument } from '../export/project';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isEditableTarget } from '../lib/isEditableTarget';
 import { useUiStore } from '../store/uiStore';
 import type { DocumentSession } from '../store/useDocumentSession';
 import type { HostChannel } from './channel';
-import type { BackgroundMessage, CommandMessage, LoadMessage, ToHostMessage } from './embeddedHost';
-import { base64ToBlob, blobToBase64 } from '../lib/base64';
+import type { CommandMessage, LoadMessage, ToHostMessage } from './embeddedHost';
 import { watchTyping } from '../lib/recentTyping';
 
 const EXTERNAL_PROTOCOLS = new Set(['http:', 'https:', 'mailto:']);
-const BACKGROUND_READ_TIMEOUT_MS = 3000;
 /** How long edits gather before the file is posted. Each post serializes the whole file and compares
  *  it with what the host holds, which on a large diagram is too much to do for every nudge; the host
  *  asks for a flush before anything that reads the text (save, Save As, leaving the file, quitting,
@@ -71,7 +68,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
     // edit made to contents it has since replaced (see `LoadMessage.seq`).
     let shownSeq: number | undefined;
     // The document on screen. A host that opens file after file (the desktop's Home) would otherwise
-    // leave every earlier one, and its background image, in memory for as long as the app runs.
+    // leave every earlier one in memory for as long as the app runs.
     let shownId: string | null = null;
     let opened = false;
     // Set while the file's text isn't a diagram: an edit here would overwrite what the user is typing.
@@ -88,61 +85,6 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
     let loads = Promise.resolve();
 
     const post = (message: ToHostMessage) => host.post(message);
-
-    let backgroundReadId = 0;
-    const backgroundReads = new Map<number, (image: Partial<BackgroundMessage>) => void>();
-    /** The host's stored image, or null when it has none — or doesn't answer, which mustn't hold the file's opening. */
-    const readBackground = () =>
-      new Promise<Blob | null>((resolve) => {
-        const id = ++backgroundReadId;
-        const settle = (reply: Partial<BackgroundMessage>) => {
-          window.clearTimeout(timeout);
-          backgroundReads.delete(id);
-          try {
-            resolve(typeof reply.data === 'string' && typeof reply.mime === 'string' ? base64ToBlob(reply.data, reply.mime) : null);
-          } catch {
-            resolve(null);
-          }
-        };
-        const timeout = window.setTimeout(() => settle({}), BACKGROUND_READ_TIMEOUT_MS);
-        backgroundReads.set(id, settle);
-        post({ type: 'draft-canvas:background-read', id });
-      });
-
-    /** The file turns on a background the app doesn't hold yet (a fresh tab, memory only): fetch it from the host. */
-    const restoreBackground = async (document: { metadata: { id: string }; settings: { background: { enabled: boolean; imageId?: string } } }) => {
-      const { enabled, imageId } = document.settings.background;
-      if (!enabled || !repository) return;
-      const id = document.metadata.id;
-      if (await repository.loadBackgroundImage(id, imageId)) return;
-      const blob = await readBackground();
-      if (!blob) return;
-      try {
-        const bitmap = await createImageBitmap(blob);
-        const { width, height } = bitmap;
-        bitmap.close();
-        await repository.saveBackgroundImage(id, blob, { width, height }, imageId);
-      } catch (error) {
-        // An image that can't be read is the same as none: the canvas shows no background.
-        logDiagnostic(error, { operation: 'host-background-restore' });
-      }
-    };
-
-    // Reports run one after another, so a quick change of mind can't be overtaken by the first.
-    let backgroundReports = Promise.resolve();
-    const reportBackground = (documentId: string, background: { enabled: boolean; imageId?: string }) => {
-      backgroundReports = backgroundReports
-        .then(async () => {
-          if (!repository) return;
-          if (!background.enabled) {
-            post({ type: 'draft-canvas:background-remove' });
-            return;
-          }
-          const image = await repository.loadBackgroundImage(documentId, background.imageId);
-          if (image) post({ type: 'draft-canvas:background-write', mime: image.blob.type || 'image/png', data: await blobToBase64(image.blob) });
-        })
-        .catch((error: unknown) => logDiagnostic(error, { operation: 'host-background-report' }));
-    };
 
     const postChange = async () => {
       pending = 0;
@@ -175,15 +117,7 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
         setState({ error: parsed.error, invalidWhileOpen: opened });
         return;
       }
-      const loaded = parsed ? parsed.document : createDocument(title || undefined);
-      // A file that arrived with its background inline (a web export carries one): the image goes
-      // into the app's own store, where the canvas looks for it, and out of the document. The host
-      // is then told to keep it beside the file like any other background, and the next save
-      // writes the file without it.
-      const document = await adoptEmbeddedBackground(loaded, repository);
-      if (document !== loaded && document.settings.background.enabled) {
-        reportBackground(document.metadata.id, document.settings.background);
-      }
+      const document = parsed ? parsed.document : createDocument(title || undefined);
       const { useEditorStore, fileWithLiveViewport } = await import('../store/editorStore');
       if (disposed) return;
       unsubscribe ??= useEditorStore.subscribe((current, previous) => {
@@ -193,16 +127,8 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
         // Armed once and not pushed back by later edits, so a long drag or a held arrow key still
         // reaches the host every `CHANGE_POST_MS`.
         pending ||= window.setTimeout(() => void sendChange(), CHANGE_POST_MS);
-        // Only the image itself is the host's to keep; how it's drawn (dim, blur) is in the file.
-        const now = current.document.settings.background;
-        const was = previous.document.settings.background;
-        if (now.enabled !== was.enabled || now.imageId !== was.imageId) {
-          reportBackground(current.document.metadata.id, now);
-        }
       });
       await repository.save(document);
-      // Before the canvas is shown, which looks for the image only once.
-      await restoreBackground(document);
       await openDocument(document.metadata.id);
       if (disposed) return;
       const previousId = shownId;
@@ -240,11 +166,6 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
 
     // What the channel hands over has already passed its check of who sent it.
     const onMessage = (message: unknown) => {
-      const reply = message as Partial<BackgroundMessage> | null;
-      if (reply?.type === 'draft-canvas:background') {
-        if (typeof reply.id === 'number') backgroundReads.get(reply.id)?.(reply);
-        return;
-      }
       const command = message as Partial<CommandMessage> | null;
       if (command?.type === 'draft-canvas:command') {
         if (command.command === 'flush' && typeof command.id === 'number') {
@@ -346,7 +267,6 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       window.removeEventListener('auxclick', onLinkClick, true);
       window.clearTimeout(pending);
       unsubscribe?.();
-      for (const settle of [...backgroundReads.values()]) settle({});
     };
   }, [ready, repository, openDocument, host]);
 

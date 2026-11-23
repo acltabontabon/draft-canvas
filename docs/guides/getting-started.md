@@ -69,8 +69,9 @@ Open **Share → Export…** (`⌘⇧E`):
 
 ## Make it yours
 
-The sliders button at the bottom right opens **Settings**, which has next-shape suggestions.
-**Appearance** (`⌘K`, then **Appearance…**) is your style, and opens beside the canvas: start from
+The palette button at the bottom right opens **Appearance**, beside the canvas (a right-click on
+the canvas offers it too). It is your style, and the canvas's own setting, next-shape suggestions,
+is on its **Canvas** tab: start from
 **Clean**, **Draft** or **Sketch**, then change the line weight, corners, shadows, colours, the canvas
 and its backdrop, arrowheads, or how one kind of shape is drawn. The first change makes it a style of
 your own, kept on this device.

@@ -9,8 +9,6 @@ import {
   DocumentConflictError,
   QuotaExceededError,
   StorageUnavailableError,
-  backgroundImageKey,
-  isBackgroundImageKeyOf,
   isQuotaError,
   reconcileMetadata,
   sharedMetadataOf,
@@ -76,30 +74,6 @@ function plainBody(document: DraftDocument): PlainBody {
   return { id: document.metadata.id, storageVersion: PLAIN_STORAGE_VERSION, stamp: createId('b'), document };
 }
 
-/**
- * One row per document id — deliberately not a generic, content-hashed asset
- * table. It only ever needs a single background image per document;
- * building dedup/reference-counting for a future asset system that doesn't
- * exist yet would be speculative.
- */
-interface BackgroundImageRow {
-  id: string;
-  blob: Blob;
-  mimeType: string;
-  width: number;
-  height: number;
-  /** When it was stored — see `pruneBackgroundImages`. Absent on rows from before 1.12. */
-  savedAt?: number;
-}
-
-/**
- * How long a background image nothing on disk points at is kept anyway. Another tab with this canvas
- * open may have just picked it (the image is stored at once, the setting that names it only on its
- * next autosave), or may still hold it in its undo history; pruning it from under that tab left its
- * saved background pointing at nothing.
- */
-const UNREFERENCED_IMAGE_GRACE_MS = 24 * 60 * 60 * 1000;
-
 interface DraftDb extends DBSchema {
   // Preserve the v4 store opened by development builds. Links are dormant; diagrams remain usable.
   fileAssociations: { key: string; value: unknown };
@@ -112,10 +86,9 @@ interface DraftDb extends DBSchema {
     key: string;
     value: BodyRow;
   };
-  backgroundImages: {
-    key: string;
-    value: BackgroundImageRow;
-  };
+  // Where diagrams kept a background image before a canvas became part of its style. Kept, and
+  // kept empty (see `open`), so a build from before that still finds the store it expects.
+  backgroundImages: { key: string; value: unknown };
   projects: {
     key: string;
     value: Project;
@@ -178,6 +151,9 @@ export class IndexedDbRepository implements DraftRepository {
         },
       });
       opened = db;
+      // Background images are gone: bytes stored for one must not linger on the device. The store
+      // itself stays, since removing it takes a version an earlier build could no longer open.
+      await db.clear('backgroundImages').catch(() => {});
       return new IndexedDbRepository(db);
     } catch (error) {
       throw new StorageUnavailableError(error);
@@ -595,16 +571,11 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   async remove(id: string): Promise<void> {
-    const tx = this.db.transaction(['documents', 'bodies', 'backgroundImages', 'fileAssociations'], 'readwrite');
-    const images = tx.objectStore('backgroundImages');
-    // Every image the document ever had under `BackgroundSettings.imageId` (`<id>#<imageId>`).
-    const imageKeys = await ownedImageKeys(images, id);
+    const tx = this.db.transaction(['documents', 'bodies', 'fileAssociations'], 'readwrite');
     await Promise.all([
       tx.objectStore('fileAssociations').delete(id),
       tx.objectStore('documents').delete(id),
       tx.objectStore('bodies').delete(id),
-      images.delete(id),
-      ...imageKeys.map((key) => images.delete(key)),
       tx.done,
     ]);
   }
@@ -665,56 +636,6 @@ export class IndexedDbRepository implements DraftRepository {
       return null;
     }
   }
-
-  async saveBackgroundImage(
-    documentId: string,
-    blob: Blob,
-    dims: { width: number; height: number },
-    imageId?: string,
-  ): Promise<void> {
-    try {
-      await this.db.put('backgroundImages', {
-        id: backgroundImageKey(documentId, imageId),
-        blob,
-        mimeType: blob.type,
-        width: dims.width,
-        height: dims.height,
-        savedAt: Date.now(),
-      });
-    } catch (error) {
-      if (isQuotaError(error)) throw new QuotaExceededError(error);
-      throw error;
-    }
-  }
-
-  async loadBackgroundImage(
-    documentId: string,
-    imageId?: string,
-  ): Promise<{ blob: Blob; width: number; height: number } | null> {
-    const row = await this.db.get('backgroundImages', backgroundImageKey(documentId, imageId));
-    if (!row) return null;
-    // Some IndexedDB implementations don't round-trip a Blob's `type` through
-    // structured clone — `mimeType` is stored alongside for exactly this case.
-    const blob = row.blob.type ? row.blob : new Blob([row.blob], { type: row.mimeType });
-    return { blob, width: row.width, height: row.height };
-  }
-
-  async removeBackgroundImage(documentId: string, imageId?: string): Promise<void> {
-    await this.db.delete('backgroundImages', backgroundImageKey(documentId, imageId));
-  }
-
-  async pruneBackgroundImages(documentId: string, keep: { imageId?: string } | null): Promise<void> {
-    const kept = keep ? backgroundImageKey(documentId, keep.imageId) : null;
-    const tx = this.db.transaction('backgroundImages', 'readwrite');
-    const keys = [documentId, ...(await ownedImageKeys(tx.store, documentId))].filter((key) => key !== kept);
-    const rows = await Promise.all(keys.map((key) => tx.store.get(key)));
-    const cutoff = Date.now() - UNREFERENCED_IMAGE_GRACE_MS;
-    const stale = keys.filter((_, index) => {
-      const row = rows[index];
-      return row !== undefined && (row.savedAt === undefined || row.savedAt < cutoff);
-    });
-    await Promise.all([...stale.map((key) => tx.store.delete(key)), tx.done]);
-  }
 }
 
 function withStamp(summary: DraftSummary, stamp: string | undefined): DraftSummary {
@@ -745,17 +666,4 @@ function sameBody(a: BodyRow, b: BodyRow): boolean {
     return a.iv.length === b.iv.length && a.iv.every((byte, i) => byte === b.iv[i]);
   }
   return isLegacyBody(a) && isLegacyBody(b);
-}
-
-/**
- * The `<documentId>#<imageId>` keys belonging to exactly this document. A key range alone isn't
- * enough: `d_x#1`'s images sort inside `d_x`'s range (see `isBackgroundImageKeyOf`).
- */
-async function ownedImageKeys(
-  store: { getAllKeys(query: IDBKeyRange): Promise<IDBValidKey[]> },
-  documentId: string,
-): Promise<string[]> {
-  const prefix = `${documentId}#`;
-  const keys = await store.getAllKeys(IDBKeyRange.bound(prefix, `${prefix}\uffff`));
-  return keys.filter((key): key is string => typeof key === 'string' && isBackgroundImageKeyOf(key, documentId));
 }

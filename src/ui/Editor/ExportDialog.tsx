@@ -1,6 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
-  backgroundTravels,
   collectLevels,
   copyImage,
   copySource,
@@ -146,28 +145,10 @@ export function ExportDialog() {
   const [paletteName, setPaletteName] = useState<ThemeName>(name);
   const [transparent, setTransparent] = useState(false);
   const [selectionOnly, setSelectionOnly] = useState(false);
-  const [includeBackground, setIncludeBackground] = useState(true);
   const [includeOpenPoints, setIncludeOpenPoints] = useState(true);
   const legendShown = useUiStore((state) => state.legendShown);
   // One image per room, zipped. Per open, like "Selection only": it is a choice about this picture.
   const [everyLevel, setEveryLevel] = useState(false);
-  // Whether the background image rides along in the `.draftcanvas` file (up to 2 MB) — looked up
-  // once per open document, since it needs the stored image's size.
-  const [backgroundState, setBackgroundState] = useState<'embedded' | 'too-large' | 'none'>('none');
-  useEffect(() => {
-    if (!open || !document) return;
-    let cancelled = false;
-    void backgroundTravels(document)
-      .then((state) => {
-        if (!cancelled) setBackgroundState(state);
-      })
-      .catch(() => {
-        if (!cancelled) setBackgroundState('none');
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, document]);
   const [busy, setBusy] = useState(false);
   // Esc, the X and the backdrop do nothing while an export is running (closing then would orphan the
   // download); a press on any of them says so here instead of being a silent no-op.
@@ -308,11 +289,8 @@ export function ExportDialog() {
   // picture. A selection belongs to one room, so the two cannot combine.
   const roomsBelow = hasRooms(document);
   const levelsOn = effectiveMode === 'image' && roomsBelow && everyLevel;
-  const backgroundNote =
-    backgroundState === 'embedded' ? ' · background inside' : backgroundState === 'too-large' ? ' · background over 2 MB, not included' : '';
   const only =
     effectiveSelectionOnly && !levelsOn && selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
-  const hasBackground = document.settings.background.enabled;
   // Only what is in the picture counts: a selection-only export of an unmarked corner has no
   // markers to offer leaving out.
   const hasOpenPoints = hasUnresolvedIn(
@@ -323,7 +301,6 @@ export function ExportDialog() {
     transparent,
     only,
     selectedFlowId: selectedFlowId ?? undefined,
-    includeBackground: hasBackground ? includeBackground : false,
     preset,
     deviceStyle: mine,
     openPoints: hasOpenPoints ? includeOpenPoints : false,
@@ -362,7 +339,7 @@ export function ExportDialog() {
               type: 'file',
               icon: 'pencil',
               badge: 'DRAFTCANVAS',
-              meta: `${count(document.nodes.length, 'shape')} · ${count(document.edges.length, 'connector')}${backgroundNote}`,
+              meta: `${count(document.nodes.length, 'shape')} · ${count(document.edges.length, 'connector')}`,
             },
           }
         : {
@@ -629,9 +606,6 @@ export function ExportDialog() {
               pinnedPalette={document?.style ? resolveStyle(document.style).pinned : undefined}
               transparent={transparent}
               onTransparentChange={setTransparent}
-              hasBackground={hasBackground}
-              includeBackground={includeBackground}
-              onIncludeBackgroundChange={setIncludeBackground}
               selectionCount={levelsOn ? 0 : selection.nodes.length}
               selectionOnly={effectiveSelectionOnly && !levelsOn}
               onSelectionOnlyChange={(checked) => {

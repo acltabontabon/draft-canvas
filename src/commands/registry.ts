@@ -1001,8 +1001,9 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       id: 'settings',
       title: 'Canvas settings…',
       group: 'canvas',
-      keywords: ['background', 'image', 'preferences', 'intent continuation', 'suggestions'],
-      run: (inner) => inner.ui.setSettingsOpen(true),
+      keywords: ['preferences', 'intent continuation', 'suggestions'],
+      // The canvas's settings are a page of Appearance, the panel beside the canvas.
+      run: (inner) => inner.ui.setStylePanelOpen(true, 'canvas'),
     },
     {
       id: 'appearance',
@@ -2446,13 +2447,15 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'copy-svg',
   'copy-source',
   'copy-share-link',
-  // The app's own panels and dialogs (Canvas settings hides the document's Background itself).
+  // The app's own panels and dialogs.
   // Collaborate is how a view-only collaborator sees who is here and leaves; following and leaving
   // change only this copy's own view and session, never the document.
   'collaborate',
   'leave-session',
   'follow-presenter',
   'settings',
+  // A style is the reader's own, on their device: choosing one changes no shared diagram.
+  'appearance',
   'outline',
   'shortcuts',
   'open-docs',

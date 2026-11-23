@@ -7,7 +7,7 @@ import { totals } from '../depth/tree';
 import { LIMITS } from '../document/limits';
 import type { DraftDocument, DraftNode } from '../document/types';
 import type { Change } from './changes';
-import { nodeValue, wireSettings } from './diff';
+import { nodeValue } from './diff';
 import { elementsOf, indexOf } from './fileIndex';
 import { MAX_MESSAGE_BYTES } from './protocol';
 
@@ -106,9 +106,7 @@ export function growthOf(before: DraftDocument, after: DraftDocument, changes: r
         bytes += utf8Bytes(JSON.stringify(change.value)) - utf8Bytes(JSON.stringify(before.metadata.title));
         break;
       case 'settings':
-        // Without an embedded image, which no change carries and applying keeps: counted, each
-        // settings change would take its size off the total again.
-        bytes += written(change.value, 1).bytes - written(wireSettings(before.settings), 1).bytes;
+        bytes += written(change.value, 1).bytes - written(before.settings, 1).bytes;
         break;
       case 'style':
         bytes += (change.value ? written(change.value, 1).bytes : 0) - (before.style ? written(before.style, 1).bytes : 0);

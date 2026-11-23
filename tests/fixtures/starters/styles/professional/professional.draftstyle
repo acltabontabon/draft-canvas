@@ -9,7 +9,7 @@
       "base": "clean"
     },
     "general": {
-      "shadow": false
+      "weight": "fine"
     },
     "schemes": {
       "light": {
@@ -228,6 +228,7 @@
       }
     },
     "connectors": {
+      "weight": "fine",
       "head": "triangle",
       "colour": "plain"
     },

@@ -14,7 +14,7 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
 | `ink` | Optional handwritten strokes over the top-level graph (`DraftInk`). Absent when there are none |
-| `settings` | Canvas settings, including the background |
+| `settings` | Canvas settings: the grid and whether a flow's step badges show |
 | `openPoints` | Unsettled questions attached to elements. Root only |
 | `level` | Optional `ViewLevel` |
 | `style` | Optional: how the diagram is drawn (see [Style](#style)). Root only |
@@ -60,7 +60,7 @@ Rules for a new version:
 | v1 → v2 | `migrateSequenceToFlows` | `edge.sequence` becomes one named Flow |
 | v2 → v3 | `migrateAnchors` | Connector anchor sides and offsets are persisted |
 | v3 → v4 | `migrateFlowAccent` | No-op (per-flow accent) |
-| v4 → v5 | `migrateBackground` | No-op (canvas background) |
+| v4 → v5 | `migrateBackground` | No-op (canvas background image, since retired) |
 | v5 → v6 | `migrateResponse` | No-op (connector response) |
 | v6 → v7 | `migrateCardAndRoundedToNote` | `card` and `rounded` nodes and attachments become `note` |
 | v7 → v8 | `migrateHasResponse` | `hasResponse: true` on edges that already had `response` text |
@@ -87,7 +87,7 @@ Rules for a new version:
 | v28 → v29 | identity | No-op (optional `held` on shapes and `portal` on connectors) |
 | v29 → v30 | `migrateCardKindsToGlyphs` | A Service of kind `worker`, `external`, `scheduler` or `gateway` grows to the height its glyph, name and details need (114, 128 with a technology, 143 with a description), placed so the glyph's middle is where the card's middle was: those kinds are drawn as a glyph with the name underneath. Also the first version with the `artifact` shape and `serviceKind` of `load-balancer` and `proxy` |
 | v30 → v31 | `migrateComponentKindsToGlyphs` | A Component of kind `module`, `adapter` or `port` grows the same way, for the same reason: those kinds are drawn as a glyph with the name underneath |
-| v31 → v32 | identity | No-op (optional root `style`: how the diagram is drawn) |
+| v31 → v32 | identity | No-op (optional root `style`: how the diagram is drawn). Background images are retired: `settings.background`, with any image inside it, is discarded by normalization |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17, v20, v29 and v30. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
@@ -158,7 +158,6 @@ From `LIMITS` in `src/document/limits.ts`:
 | `maxTitleLength` / `maxLabelLength` | 200 / 500 |
 | `maxTextLength` / `maxCodeLength` | 20,000 / 200,000 |
 | `maxDescriptionLength` / `maxTechnologyLength` | 280 / 60 |
-| `maxEmbeddedBackgroundBytes` | 2 MB |
 
 ## Style
 
@@ -170,7 +169,7 @@ is drawn in the style in use on the device that opens it, as every file before v
 | `v` | `1`. Anything else is read as no style. |
 | `name` | For display only. Nothing looks a style up by name. |
 | `hand` | `base` (`clean`, `draft`, `sketch`), optional `wobble` (`calm`, `lively`) and `retrace`. |
-| `general` | `weight` (`fine`, `regular`, `bold`), `corners` (`sharp`, `soft`, `round`), `shadow`. No typeface: it would change how big a shape has to be. |
+| `general` | `weight` (`fine`, `regular`, `bold`), `corners` (`sharp`, `soft`, `round`), `shadow`, and `depth` (`deep`) for a shadow that lifts shapes further. No typeface: it would change how big a shape has to be. |
 | `schemes` | `light` and `dark`, each a set of `#rrggbb` canvas colours and accent colours, and an optional `selection`: the colour that marks what is chosen. With one, the diagram is always drawn in that theme. |
 | `shapes` | Keyed by shape type (`service`) or type and kind (`service:gateway`). Each entry has the `general` fields, plus `art` (an asset id), `fit` and `builtin` where a drawing applies. A kind inherits from its type, a type from `general`. |
 | `connectors` | `weight`, `head` (`nib`, `triangle`), `colour` (`source`, `plain`). |
@@ -203,7 +202,6 @@ like a style in a diagram. A newer `version` is refused by name.
 
 | Field | Notes |
 | --- | --- |
-| `settings.background.image` | Base64 image data URI written only by `.draftcanvas` export, up to `maxEmbeddedBackgroundBytes`. Import moves it to the image store and drops the field. |
 | `textFont`, `textBackground` | Text nodes only. `sans`, `serif`, `mono`, `hand`; `card`, `marker`, `banner`. Absent: the role's face, no background. |
 | `actorFrame` | Actors only. `borderless` or `framed`. New actors are `borderless`; absent renders framed. |
 

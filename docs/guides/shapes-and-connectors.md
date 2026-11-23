@@ -225,10 +225,12 @@ editable return path with a suggested response. Async shows a break mark and has
 The colour wheel means automatic colour; click it to fix a colour. A shape has no automatic colour.
 Hover any icon to see what it does.
 
-**Appearance** sets how shapes and connectors are drawn. Press `⌘K` and choose
-**Appearance…**: it opens beside the canvas, never over it, so every choice is seen on your own
+**Appearance** sets how shapes and connectors are drawn. Press the palette button at the bottom
+right, or right-click the canvas and choose **Appearance…** (it is in `⌘K` too). It opens beside the
+canvas as a sheet of its own, never over it, so every choice is seen on your own
 diagram as you make it. The diagram is fitted to the canvas beside the panel as it opens, and stays
-live while it is open. It has three tabs: **Styles**
+live while it is open. The tools, Present and Share and the status bar step back until you press
+**Done**, so nothing competes with the diagram you are styling. It has three tabs: **Styles**
 to pick what to draw in, **Canvas** for the paper, and **Drawing** for the pen. **My style** is a gallery of the
 styles to draw with, each shown as a small diagram drawn in it: **Clean** is the Sculpted Ink default,
 **Draft** adds a restrained hand-drawn quality, and **Sketch** adds visible graphite drift and
@@ -239,7 +241,8 @@ retraced strokes. Pick one and the open diagram follows. In the desktop app the 
 
 **Drawing** changes the style in use. Each choice is drawn as what it does: a heavier line for
 Bold, a rounder corner for Round.
-Change the drawing hand, line weight, corners and shadows for everything, give one shape or one kind
+Change the drawing hand, line weight, corners and shadows (off, soft, or deep enough to lift shapes
+off the canvas) for everything, give one shape or one kind
 of it a different look, and choose the arrowhead, weight and colour rule for connectors. What a line
 means stays out of it: a dashed asynchronous call is dashed in every style.
 

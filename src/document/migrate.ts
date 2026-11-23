@@ -149,10 +149,10 @@ function migrateFlowAccent(doc: Record<string, unknown>): Record<string, unknown
 }
 
 /**
- * v4 has no concept of a canvas background at all — same structural-no-op
- * shape as `migrateFlowAccent`. `document/validate.ts`'s `normalizeDocument`
- * gives every migrated document a clean, disabled default background block;
- * there is no v4 data to derive one from.
+ * v5 added a canvas background image; v4 had none to carry over — same
+ * structural-no-op shape as `migrateFlowAccent`. Background images are gone
+ * since (a canvas is its style's): `document/validate.ts`'s `normalizeDocument`
+ * does not read `settings.background`, so a file that has one opens without it.
  */
 function migrateBackground(doc: Record<string, unknown>): Record<string, unknown> {
   return doc;

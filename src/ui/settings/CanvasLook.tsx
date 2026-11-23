@@ -8,7 +8,7 @@ import { resolveStyle } from '../../render/style/resolve';
 import { THEMES, type ThemeName } from '../../render/theme/tokens';
 import { Icon } from '../common/Icon';
 import { SegmentedControl } from '../common/SegmentedControl';
-import { SettingRow } from './layout';
+import { PickHead, SettingRow } from './layout';
 
 type Edit = (recipe: (style: DocumentStyle) => DocumentStyle) => void;
 
@@ -53,10 +53,7 @@ export function CanvasLook({ style, theme, edit }: { style: DocumentStyle; theme
   return (
     <>
       <div className="dc-look-block">
-        <div className="dc-look-block-head">
-          <span className="dc-prefs-label">Colours</span>
-          <span className="dc-prefs-description">{palette ? 'A set of colours for the shapes, the lines and the canvas.' : 'This style has colours of its own. Choosing a set replaces them.'}</span>
-        </div>
+        <PickHead label="Colours" description={palette ? 'For the shapes, the lines and the canvas.' : 'This style has its own. A set replaces them.'} />
         <div className="dc-look-palettes" role="radiogroup" aria-label="Colours">
           {STYLE_PALETTES.map((entry) => (
             <PaletteCard key={entry.id} palette={entry} theme={theme} checked={palette?.id === entry.id} onPick={() => edit((current) => withSchemes(current, entry.schemes))} />
@@ -65,10 +62,7 @@ export function CanvasLook({ style, theme, edit }: { style: DocumentStyle; theme
       </div>
 
       <div className="dc-look-block">
-        <div className="dc-look-block-head">
-          <span className="dc-prefs-label">Canvas colour</span>
-          <span className="dc-prefs-description">The paper the diagram is drawn on. Pick any colour, your brand’s included: words and shapes are adjusted to stay readable on it.</span>
-        </div>
+        <PickHead label="Canvas colour" description="Any colour, your brand’s included. Words and shapes stay readable on it." />
         <div className="dc-look-swatches" role="radiogroup" aria-label="Canvas colour">
           {CANVAS_SWATCHES.map((swatch) => (
             <label key={swatch.colour} className="dc-look-swatch" title={swatch.label}>
@@ -127,12 +121,7 @@ function BrandColour({ style, theme, edit }: { style: DocumentStyle; theme: Them
   const set = (colour: string | undefined) => edit((current) => withAllSchemes(current, withBrand(current.schemes, colour)));
   return (
     <div className="dc-look-block">
-      <div className="dc-look-block-head">
-        <span className="dc-prefs-label">Brand colour</span>
-        <span className="dc-prefs-description">
-          {brand && shown !== brand ? 'This colour is too close to the canvas to be seen on it, so the usual one is used.' : 'Marks what is selected and what to press, on the canvas and around it.'}
-        </span>
-      </div>
+      <PickHead label="Brand colour" description={brand && shown !== brand ? 'Too close to the canvas to be seen, so the usual one is used.' : 'Marks what is selected and what to press.'} />
       <div className="dc-look-swatches" role="radiogroup" aria-label="Brand colour">
         <label className="dc-look-swatch dc-look-swatch-auto" title="The usual colour">
           <input type="radio" name="style-brand" className="dc-sr-only" aria-label="The usual colour" checked={brand === undefined} onChange={() => set(undefined)} />
@@ -219,10 +208,7 @@ function BackdropPicker({ style, theme, edit }: { style: DocumentStyle; theme: T
 
   return (
     <div className="dc-look-block">
-      <div className="dc-look-block-head">
-        <span className="dc-prefs-label">Backdrop</span>
-        <span className="dc-prefs-description">A pattern printed on the canvas, behind the diagram. Use your own SVG for a watermark or a brand pattern: it repeats edge to edge.</span>
-      </div>
+      <PickHead label="Backdrop" description="A pattern behind the diagram. Your own SVG repeats edge to edge." />
       <div className="dc-look-backdrops" role="radiogroup" aria-label="Backdrop">
         <label className="dc-look-backdrop">
           <input type="radio" name="style-backdrop" className="dc-sr-only" aria-label="No backdrop" checked={!current} onChange={() => edit((now) => withBackdrop(now, null))} />

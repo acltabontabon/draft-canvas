@@ -935,55 +935,6 @@ describe.each(['window-focused', 'disk-changed'] as const)('disk reconciliation 
   });
 });
 
-describe('the canvas’s background image', () => {
-  it('is kept beside the file, and only once the file is saved', async () => {
-    const handle = await openFile();
-    h.link.onMessage({ type: 'draft-canvas:background-write', mime: 'image/png', data: 'AAAA' });
-    h.edit(edited());
-    expect(h.api.sidecarWrite).not.toHaveBeenCalled();
-
-    await h.controller.save();
-
-    expect(h.api.sidecarWrite).toHaveBeenCalledWith(handle, 'image/png', 'AAAA');
-  });
-
-  it('is removed from beside the file when the canvas drops it', async () => {
-    const handle = await openFile();
-    h.link.onMessage({ type: 'draft-canvas:background-remove' });
-    h.edit(edited());
-    await h.controller.save();
-    expect(h.api.sidecarRemove).toHaveBeenCalledWith(handle);
-  });
-
-  it('is handed to the app when the file has one', async () => {
-    const handle = await openFile();
-    h.sidecars.set(handle, { mime: 'image/webp', base64: 'BBBB' });
-    h.link.onMessage({ type: 'draft-canvas:background-read', id: 7 });
-    await h.settle();
-    expect(h.delivered).toContainEqual({ type: 'draft-canvas:background', id: 7, mime: 'image/webp', data: 'BBBB' });
-  });
-
-  it('is answered with nothing for a draft that has no file', async () => {
-    await h.controller.newQuickDraft();
-    await h.settle();
-    h.link.onMessage({ type: 'draft-canvas:background-read', id: 3 });
-    await h.settle();
-    expect(h.delivered).toContainEqual({ type: 'draft-canvas:background', id: 3 });
-  });
-
-  it('goes to the new file when a draft is saved for the first time', async () => {
-    await h.controller.newQuickDraft();
-    await h.settle();
-    h.link.onMessage({ type: 'draft-canvas:background-write', mime: 'image/jpeg', data: 'CCCC' });
-    h.edit(edited('Quick Draft'));
-    h.saveAsTo({ name: 'pic', displayPath: '~/pic.draftcanvas' });
-
-    await h.controller.save();
-
-    expect(h.api.sidecarWrite).toHaveBeenCalledWith(expect.any(String), 'image/jpeg', 'CCCC');
-  });
-});
-
 describe('from the app', () => {
   it('turns ⌘S into a save, and ⌘⇧S into Save As', async () => {
     await openFile();
