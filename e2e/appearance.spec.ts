@@ -121,13 +121,24 @@ test('the diagram is framed again in the canvas the panel leaves it', async ({ p
     .toBeLessThan(edge);
   expect(Math.min(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().left))))).toBeGreaterThan(0);
 
-  // Done puts the view back where it was before the panel took its room, once that fit has settled.
-  await page.waitForTimeout(1200);
+  // Done puts the view back where it was before the panel took its room.
   await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
   await expect(settings).toBeHidden();
   await expect
     .poll(async () => Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right)))))
     .toBeGreaterThan(edge);
+
+  // Unless the view was moved meanwhile: then it is the person's, and stays where they put it.
+  const panel = await openAppearance(page);
+  await expect
+    .poll(async () => Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right)))))
+    .toBeLessThan(edge);
+  await page.mouse.move(300, 600);
+  await page.mouse.wheel(0, 40);
+  await panel.getByRole('button', { name: 'Close appearance', exact: true }).click();
+  await expect(panel).toBeHidden();
+  await page.waitForTimeout(900);
+  expect(Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right))))).toBeLessThan(edge);
 });
 
 test('a style’s colours dress the whole editor, and leave the app outside it alone', async ({ page }) => {

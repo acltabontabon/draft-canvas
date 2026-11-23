@@ -28,8 +28,10 @@ const COVER_ACCENTS = ['neutral', 'teal', 'blue', 'violet', 'amber', 'rose', 'gr
 const HAND_NAMES = { clean: 'Clean', draft: 'Draft', sketch: 'Sketch' } as const;
 
 interface Camera {
+  /** Where the view was before the sidebar took its room. */
   before: Viewport | null;
-  fitted: Viewport | null;
+  /** The person panned or zoomed while it was open: the view is theirs, and stays. */
+  moved: boolean;
 }
 
 /** How long the sheet takes to leave: `dc-style-panel-out` in `settings.css` runs as long. */
@@ -44,19 +46,17 @@ export function StylePanel() {
   const [leaving, setLeaving] = useState(false);
   const was = useRef(open);
   const { getViewport, setViewport } = useReactFlow();
-  // Where the camera was before the sidebar took its room, and where the sidebar's own fit left it.
-  const camera = useRef<Camera>({ before: null, fitted: null });
+  const camera = useRef<Camera>({ before: null, moved: false });
   useEffect(() => {
     const before = was.current;
     was.current = open;
-    if (open && !before) camera.current = { before: getViewport(), fitted: null };
+    if (open && !before) camera.current = { before: getViewport(), moved: false };
     if (open || !before) return;
-    // The view goes back to where it was, once the canvas has its room again: unless the person has
-    // moved it since, in which case it is theirs and stays.
-    const { before: back, fitted } = camera.current;
-    const now = getViewport();
-    // Within a couple of pixels: a camera that has come to rest is not always where it was sent to the last decimal.
-    const untouched = fitted !== null && Math.abs(now.x - fitted.x) < 2 && Math.abs(now.y - fitted.y) < 2 && Math.abs(now.zoom - fitted.zoom) < 0.005;
+    // The view goes back to where it was, once the canvas has its room again: unless the person
+    // panned or zoomed meanwhile, in which case it is theirs and stays. Asked of what they did, not
+    // of where the camera is: comparing positions after an animation did not hold in every browser.
+    const { before: back, moved } = camera.current;
+    const untouched = !moved;
     const restore = back && untouched ? window.setTimeout(() => void setViewport(back, { duration: motionMs(320) }), motionMs(LEAVE_MS)) : undefined;
     const wait = motionMs(LEAVE_MS);
     if (wait === 0) return () => window.clearTimeout(restore);
@@ -79,7 +79,7 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
     useUiStore.getState().setStylePanelOpen(false);
     document.querySelector<HTMLElement>('.dc-canvas')?.focus();
   };
-  const { fitView, getZoom, getViewport } = useReactFlow();
+  const { fitView, getZoom } = useReactFlow();
   // The colours and backdrop the canvas beside it is drawn in, for the cover.
   const resolved = useDiagramStyle();
   const { name: device } = useTheme();
@@ -107,20 +107,21 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
     // when: a timer alone ran ahead of it in WebKit, which reports a resize a frame or two later.
     const canvas = document.querySelector('.dc-canvas');
     let quiet = 0;
-    let live = true;
     let done = false;
     const fit = () => {
       if (done) return;
       done = true;
       const state = useEditorStore.getState();
       if (!hasSomethingToFit(state)) return;
-      // Where that fit ends, taken when it has ended and not after a guess at how long it takes
-      // (WebKit was still moving when a timer said it was done): closing puts the view back only
-      // if it is still there.
-      void fitView({ padding: 0.2, duration: motionMs(360), maxZoom: getZoom(), nodes: flowFitViewNodes(state) }).then(() => {
-        if (live) camera.current.fitted = getViewport();
-      });
+      void fitView({ padding: 0.2, duration: motionMs(360), maxZoom: getZoom(), nodes: flowFitViewNodes(state) });
     };
+    // A wheel over the canvas, or a drag that starts on its empty pane, is the person moving the
+    // view. A press on a shape is not: selecting something to look at leaves the view where it is.
+    const touched = (event: Event) => {
+      if (event.type === 'wheel' || (event.target instanceof Element && event.target.closest('.react-flow__pane') !== null)) camera.current.moved = true;
+    };
+    canvas?.addEventListener('wheel', touched, { passive: true, capture: true });
+    canvas?.addEventListener('pointerdown', touched, { capture: true });
     // Each change of size puts the fit off a little; it runs when they stop coming.
     const observer =
       canvas && typeof ResizeObserver !== 'undefined'
@@ -135,12 +136,13 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
     // narrow window, where the panel sits under it).
     const last = window.setTimeout(fit, motionMs(ROOM_MS) + 400);
     return () => {
-      live = false;
+      canvas?.removeEventListener('wheel', touched, { capture: true });
+      canvas?.removeEventListener('pointerdown', touched, { capture: true });
       observer?.disconnect();
       window.clearTimeout(quiet);
       window.clearTimeout(last);
     };
-  }, [fitView, getZoom, getViewport, camera]);
+  }, [fitView, getZoom, camera]);
   return (
     <aside
       ref={panel}
