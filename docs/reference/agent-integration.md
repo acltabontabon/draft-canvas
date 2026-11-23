@@ -44,7 +44,11 @@ Discovery advertises one small dispatcher, `diagram_tool({tool, args})`, so a mo
 carry the whole grammar.
 
 - `tool: "help", args: {}` lists this session's operations; `args: {tool: "update_diagram"}` returns
-  that operation's common arguments.
+  that operation's common arguments: for `update_diagram`, every op and the fields `set` takes for
+  each kind of target (generated from the same table the app checks an update against).
+- A malformed dispatcher call is refused by the sidecar with the argument at fault: an operation's
+  arguments sent beside `tool` instead of inside `args`, `args` sent as a string, or an operation
+  name that does not exist (the refusal lists the ones that do).
 - `get_capabilities({tool: "update_diagram"})`, dispatched the same way, returns its complete schema.
 - Every request is still validated against the full contract (`contract: 3`).
 - The dispatcher is annotated as mutating. The broker checks permissions, review-only restrictions and
@@ -402,12 +406,12 @@ ones 30 days.
 | Retry with the same `requestId` | Answer |
 | --- | --- |
 | Same request, resolved | The stored receipt, `replayed: true`. Side effects are not repeated. |
-| Different request | `REQUEST_ID_MISMATCH`. Use a fresh UUID per change. |
-| First still running | Waits for its outcome. |
-| First refused before any change | Runs again. |
-| Create interrupted before its receipt | Runs again, unless a file with this request's minted id exists; then `recovered: true`. |
+| Different payload while the first request is running, unresolved or committed | `REQUEST_ID_MISMATCH`. |
+| Same payload while the first request is running | Waits for its outcome. |
+| First refused before any change | A retry or correction can use the same id. |
+| Create interrupted before its receipt | If the file has the minted id, returns `recovered: true`. If the target is absent, the same request can run again. |
 | Update interrupted before the commit gate | Runs again; nothing was applied. |
-| Update interrupted after the gate, before the receipt | `OUTCOME_UNKNOWN`. Read the diagram and decide. |
+| Update interrupted after the gate or a file write could not be confirmed | `OUTCOME_UNKNOWN`. Read the diagram to check what landed. |
 | Stored receipt said `persisted: false` | The receipt, with `durability: "unverified"`. |
 
 | Deadline | Limit | Past it |
@@ -634,7 +638,16 @@ Text is never truncated. A shape grows to 280 × 320 px; a name that still does 
 ## Errors
 
 Each error has a stable `code` and `message`, and where useful `hint`, `retryable`, a JSON pointer
-`path` and up to 20 problems. Errors never contain stack traces or document content.
+`path` in `details` and up to 20 problems. Errors can identify diagram items and omit stack traces.
+
+An input refusal leaves the diagram unchanged. A missing update target returns `INVALID_REFERENCE`
+at its id, such as `/ops/0/id` or `/ops/1/ids/2`. If the exact id exists in another view, the message
+gives that view. If the input matches one label in the addressed view, it can suggest the id.
+For an existing target, an unsupported field names its kind and accepted fields. Value errors name
+the field and what it accepts. A confirmed refusal allows a correction with the same `requestId`.
+
+`retryable: true` means a transient failure may clear if the same request is sent again.
+`OUTCOME_UNKNOWN` means the change might have landed. Check the diagram before sending another edit.
 
 | Area | Codes |
 | --- | --- |
@@ -646,7 +659,7 @@ Each error has a stable `code` and `message`, and where useful `hint`, `retryabl
 | Proposals | `PROPOSAL_CLOSED`, `PROPOSAL_CHANGED` |
 | Nodi runs | `RUN_LIMIT`, `PROPOSAL_ONLY` |
 | Connection | `APP_UNAVAILABLE` (Draft Canvas is not running), `APP_STARTING`, `APP_UNRESPONSIVE`, `CONNECTION_LOST`, `VERSION_MISMATCH`, `TIMEOUT`, `CANCELLED` |
-| Other | `PERSISTENCE_FAILED`, `INTERNAL` |
+| Other | `INTERNAL` |
 
 ## Security
 

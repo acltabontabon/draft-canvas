@@ -37,6 +37,7 @@ multiple folders make the destination ambiguous. Keep the returned id and revisi
 - For other named edits, use `read_diagram({diagramId, query: "name"})`: compact matches across all
   rooms with ids, view paths and revision. Refine ambiguous/truncated matches before editing.
   Rename with `ops: [{op: "update", id, set: {label: "New name"}}]`; pass the match’s `view`.
+  `id` is the match's id, never its label.
   For an exact label or description replacement, a unique lookup match and its revision suffice;
   skip full schema/room reads, outlines and renders.
 - Locate a room with `read_diagram` and `format: "outline"`; use `view.inside` to read it.
@@ -50,10 +51,10 @@ multiple folders make the destination ambiguous. Keep the returned id and revisi
 - For architectural review or a proposed change, use `submit_proposal` and direct the person to
   review it in Draft Canvas. Only the person accepts a review-only proposal.
 
-Use a fresh UUID `requestId` per mutation. Retry identical requests with the same id. After a
-revision conflict, reread and rebuild. If the outcome is unknown, check saved state before writing
-again. Never create a replacement after an update failure. See the [MCP playbook](mcp-playbook.md)
-for ops and recovery.
+Use a fresh UUID `requestId` for each separate mutation. Keep it for an identical retry or a
+correction after a confirmed input refusal. After a revision conflict, reread and rebuild. If the
+outcome is unknown, check the diagram before writing again. Never create a replacement after an
+update failure. See the [MCP playbook](mcp-playbook.md) for ops and recovery.
 
 ## Finish
 

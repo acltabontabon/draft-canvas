@@ -118,7 +118,16 @@ impl Ledger {
             let complete = line.ends_with(b"\n");
             clean &= complete;
             match serde_json::from_slice::<Entry>(&line) {
-                Ok(entry) => {
+                Ok(mut entry) => {
+                    // Older brokers marked disk errors Failed even when the file had already
+                    // been installed. Keep the commit gate until recovery can prove its outcome.
+                    if entry.stage == Stage::Failed
+                        && entry.receipt.as_ref().and_then(|r| r["error"].as_str())
+                            == Some("PERSISTENCE_FAILED")
+                    {
+                        entry.stage = Stage::Committing;
+                        clean = false;
+                    }
                     self.entries.insert(entry.key.clone(), entry);
                 }
                 // Only an unterminated final record can be a torn append.
@@ -147,9 +156,10 @@ impl Ledger {
     pub fn begin(&self, key: &str, fingerprint: &str) -> Begin {
         match self.entries.get(key) {
             None => Begin::Fresh,
-            Some(entry) if entry.fingerprint != fingerprint => Begin::Mismatch,
             Some(entry) => match entry.stage {
+                // A confirmed refusal left the id available for a corrected request.
                 Stage::Failed => Begin::Fresh,
+                _ if entry.fingerprint != fingerprint => Begin::Mismatch,
                 Stage::Committed => Begin::Replay(entry.clone()),
                 Stage::Pending | Stage::Committing => Begin::Unresolved(entry.clone()),
             },
@@ -360,8 +370,32 @@ mod tests {
         let mut ledger = Ledger::open(dir.path(), 1).unwrap();
         ledger.record(entry("k", Stage::Failed, 1)).unwrap();
         assert_eq!(ledger.begin("k", "fp"), Begin::Fresh);
-        // Refusal permits an identical retry; a different intended change still needs a new id.
-        assert_eq!(ledger.begin("k", "corrected"), Begin::Mismatch);
+        // And so may its correction: nothing was applied under this id.
+        assert_eq!(ledger.begin("k", "corrected"), Begin::Fresh);
+        // Once a request under it is under way or has landed, the id is spent as before.
+        ledger.record(entry("k", Stage::Pending, 2)).unwrap();
+        assert_eq!(ledger.begin("k", "another"), Begin::Mismatch);
+        ledger.advance("k", Stage::Committed, 3, |_| {}).unwrap();
+        assert_eq!(ledger.begin("k", "another"), Begin::Mismatch);
+    }
+
+    #[test]
+    fn a_legacy_disk_error_is_unresolved_after_restart() {
+        let dir = tempdir().unwrap();
+        let mut ledger = Ledger::open(dir.path(), 1).unwrap();
+        let mut failed = entry("disk-write", Stage::Failed, 1);
+        failed.receipt = Some(serde_json::json!({"error": "PERSISTENCE_FAILED"}));
+        ledger.record(failed.clone()).unwrap();
+
+        let reopened = Ledger::open(dir.path(), RESOLVED_RETENTION_MS + 2).unwrap();
+        assert_eq!(reopened.begin("disk-write", "corrected"), Begin::Mismatch);
+        assert_eq!(
+            reopened.begin("disk-write", "fp"),
+            Begin::Unresolved(Entry {
+                stage: Stage::Committing,
+                ..failed
+            }),
+        );
     }
 
     #[test]
