@@ -114,6 +114,9 @@ test('global drawing style controls all arrows without per-arrow appearance cont
     await expect(page.locator('.dc-edge-retrace')).toHaveCount(style === 'Sketch' ? 6 : 0);
     expect(await snapshot()).toEqual(before);
   }
+  // The view glides back as the panel leaves: the connector is pressed where it comes to rest.
+  await expect(page.getByRole('complementary', { name: 'Appearance', exact: true })).toBeHidden();
+  await cameraAtRest(page);
   const point = await page.locator('.react-flow__edge[data-id="authorize"] .dc-edge-hit').first().evaluate(element => {
     const path = element as SVGPathElement;
     const at = path.getPointAtLength(path.getTotalLength() * 0.7).matrixTransform(path.getScreenCTM()!);

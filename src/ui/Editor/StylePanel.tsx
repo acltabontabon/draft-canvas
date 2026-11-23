@@ -44,6 +44,14 @@ export function StylePanel() {
   // It leaves as it arrived, not in one frame: closed in the store at once (so the bars it hid can
   // start back), it stays drawn for as long as it takes to slide away.
   const [leaving, setLeaving] = useState(false);
+  // Decided while rendering, not in an effect after it: a render with the panel neither open nor
+  // leaving takes the sheet down and puts a new one up to slide away, and that new one framed the
+  // diagram again on a slow machine, over the view being put back.
+  const [shown, setShown] = useState(open);
+  if (shown !== open) {
+    setShown(open);
+    setLeaving(!open && motionMs(LEAVE_MS) > 0);
+  }
   const was = useRef(open);
   const { getViewport, setViewport } = useReactFlow();
   const camera = useRef<Camera>({ before: null, moved: false });
@@ -56,17 +64,12 @@ export function StylePanel() {
     // panned or zoomed meanwhile, in which case it is theirs and stays. Asked of what they did, not
     // of where the camera is: comparing positions after an animation did not hold in every browser.
     const { before: back, moved } = camera.current;
-    const untouched = !moved;
-    const restore = back && untouched ? window.setTimeout(() => void setViewport(back, { duration: motionMs(320) }), motionMs(LEAVE_MS)) : undefined;
     const wait = motionMs(LEAVE_MS);
-    if (wait === 0) return () => window.clearTimeout(restore);
-    // oxlint-disable-next-line react/set-state-in-effect -- the leaving state exists only to outlive `open` by one animation.
-    setLeaving(true);
+    const restore = back && !moved ? window.setTimeout(() => void setViewport(back, { duration: motionMs(320) }), wait) : undefined;
     const timer = window.setTimeout(() => setLeaving(false), wait);
     return () => {
       window.clearTimeout(timer);
       window.clearTimeout(restore);
-      setLeaving(false);
     };
   }, [open, getViewport, setViewport]);
   if (!open && !leaving) return null;
@@ -111,6 +114,8 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
     const fit = () => {
       if (done) return;
       done = true;
+      // Closed before the canvas settled: the view is on its way back, and is not framed over.
+      if (!useUiStore.getState().stylePanelOpen) return;
       const state = useEditorStore.getState();
       if (!hasSomethingToFit(state)) return;
       void fitView({ padding: 0.2, duration: motionMs(360), maxZoom: getZoom(), nodes: flowFitViewNodes(state) });
