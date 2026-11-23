@@ -8,14 +8,11 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Shared
 
-#### Added
+#### Changed
 
 - **Replies by dragging back** — Drag from whoever was called back to its caller and the line is
   the reply: dashed, labelled before you let go, and tied to the call it answers. `R` adds the
   reply to a selected call.
-
-#### Changed
-
 - **Sequence frames you can tell apart** — A loop, a condition, an optional part, parallel
   branches, a break and a critical section each have their own colour and mark, later branches
   are labelled `else` or `and`, and a frame closes snugly under its last message.
