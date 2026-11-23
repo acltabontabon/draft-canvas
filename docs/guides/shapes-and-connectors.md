@@ -295,9 +295,9 @@ little house with a face in the sticker book, and still a gateway.
 
 ![The same diagram drawn in Weeb, on an after-school sky with clouds and petals: a shrine gate for the gateway, ramen bowls for the queue, a bento box for the SQL database.](../media/guides/style-pack-weeb.png)
 
-![The same diagram drawn in Hardwood, on a court's floorboards at night: the hoop for the gateway, a shot clock, ball racks and a sneaker mid-step.](../media/guides/style-pack-hardwood.png)
+![The same diagram drawn in Hardwood, a bold poster on a peach canvas: the hoop for the gateway, a clipboard for the SQL database, a ball at the line for the queue.](../media/guides/style-pack-hardwood.png)
 
-![The same diagram drawn in Match Point, on a mown lawn with chalk lines: the court gate for the gateway, a scoreboard for the SQL database, balls waiting on the baseline.](../media/guides/style-pack-match-point.png)
+![The same diagram drawn in Match Point, on a sunlit lemon-lime court with mown stripes: the court gate for the gateway, a scoreboard for the SQL database, balls waiting in a row.](../media/guides/style-pack-match-point.png)
 
 A style of your own can be saved to a file with **Export…** and brought in on another device with
 **Import style…**. A `.draftstyle` file holds the style and nothing about any diagram.
