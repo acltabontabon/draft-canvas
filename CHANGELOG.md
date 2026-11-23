@@ -39,6 +39,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   the prompt.
 - **Rename File** — Pressing Enter twice renames once, and the dialog stays until the rename has
   answered.
+- **Agents that could not update a diagram** — An agent that named a shape by its label, or a shape
+  in another view, was told its fields were unsupported and kept retrying. It is now told which id
+  or view to use, what each kind of shape accepts, and that nothing was changed.
 
 ## [1.21.0] - 2026-11-22
 

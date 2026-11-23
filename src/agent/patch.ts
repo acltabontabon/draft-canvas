@@ -58,7 +58,7 @@ import { linked, readSequenceSource, sequenceNode, unsupportedAdvice } from './s
 import { DEFAULTS, LIMITS } from '../document/limits';
 import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode, DraftSequence } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
-import { embed, totals, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
+import { embed, pathKey, roomsOf, totals, viewOf, walkGraphs, type DepthPath, type Room } from '../depth/tree';
 import { effectiveLevel, inheritedLevel } from '../depth/level';
 import { assignAnchors } from '../layout/anchors';
 import { naturalCodeSize, naturalTextSize } from '../nodes/describe';
@@ -88,7 +88,7 @@ import { checkQuality, isBetterReport, isClean, type QualityReport } from './qua
 import { moveInside, moveOutside } from './restructure';
 import { newFindings, REVIEW_LIMIT, reviewView } from './review';
 import { technologyAdvice } from './advice';
-import { OP_FIELDS, SET_FIELDS } from './fields';
+import { OP_FIELDS, SET_FIELDS, unknownFieldHint } from './fields';
 import { GROUP_KINDS, LINE_STYLE_NAMES, LINE_STYLES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
 import { applyRoutes, readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
 import { applyPlaces } from './placeExplicit';
@@ -438,7 +438,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
           counts.removed += 1;
           continue;
         }
-        problems.add('INVALID_REFERENCE', `${at}/ids`, `nothing with id "${id}" in this view`);
+        problems.add('INVALID_REFERENCE', `${at}/ids`, `nothing with id "${id}" in this view${elsewhere(base, path, view, id)}`);
       }
       if (!problems.empty) return;
       const before = view.nodes.length + view.edges.length;
@@ -481,16 +481,33 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const point = findOpenPoint(view, id);
     const targetNode = view.nodes.find((n) => n.id === id);
     const isEdge = view.edges.some((e) => e.id === id);
-    const fields = point
-      ? SET_FIELDS.openPoint
+    const target: keyof typeof SET_FIELDS | undefined = point
+      ? 'openPoint'
       : targetNode
-        ? SET_FIELDS[NODE_FIELDS[targetNode.type] ?? 'element']
+        ? NODE_FIELDS[targetNode.type] ?? 'element'
         : isEdge
-          ? SET_FIELDS.relationship
+          ? 'relationship'
           : view.flows.some((f) => f.id === id)
-            ? SET_FIELDS.flow
-            : SET_FIELDS.attachment;
-    r.fields(set, `${at}/set`, fields);
+            ? 'flow'
+            : findAttachment(view, id)
+              ? 'attachment'
+              : undefined;
+    // The id first, the fields after. An id this view doesn't have used to be checked as an
+    // attachment's: an agent that sent a label for an id, or the id of a shape in another view, was
+    // told `technology` and `description` were unsupported fields, and went on rewriting the fields
+    // of a request whose only mistake was the id (a Junie run, to its action limit).
+    if (!target) {
+      problems.add('INVALID_REFERENCE', `${at}/id`, `nothing with id "${id}" in this view${elsewhere(base, path, view, id)}`);
+      return;
+    }
+    const fields: readonly string[] = SET_FIELDS[target];
+    for (const key of Object.keys(set)) {
+      if (fields.includes(key)) continue;
+      // Every kind's fields are few enough to list, and naming the kind says why a field that is
+      // real elsewhere (an element's technology) is refused here (on a relationship).
+      const meant = /^; use \w+/.exec(unknownFieldHint(key, fields))?.[0] ?? '';
+      problems.add('INVALID_INPUT', `${at}/set/${key}`, `not a field of ${SET_TARGET_NAMES[target]} ("${id}")${meant}; it takes ${fields.join(', ')}`);
+    }
     for (const field of ['kind', 'language', 'lineStyle', 'code', 'attach', 'place']) if (set[field] === null && !(isEdge && field === 'kind')) problems.add('INVALID_INPUT', `${at}/set/${field}`, 'this required field cannot be cleared');
     if (Object.keys(set).length === 0) problems.add('INVALID_INPUT', `${at}/set`, 'name at least one field to change');
     if (!problems.empty) return;
@@ -799,6 +816,29 @@ function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Js
   const kept = new Set(sequence.participants.map((participant) => participant.id));
   const removed = new Set(current.participants.filter((participant) => !kept.has(participant.id)).map((participant) => participant.id));
   return removeParticipantEdges({ ...view, nodes: view.nodes.map((n) => (n.id === node.id ? changed : n)) }, node.id, removed);
+}
+
+/** What an update's target is called in a refusal, by the `SET_FIELDS` it takes. */
+const SET_TARGET_NAMES: Record<keyof typeof SET_FIELDS, string> = {
+  element: 'an element', group: 'a group', note: 'a note', code: 'a code note', label: 'a label', relationship: 'a relationship',
+  flow: 'a flow', sequence: 'a sequence', attachment: 'an attachment', openPoint: 'an open point',
+};
+
+/**
+ * Where an id this view doesn't have most likely is, as the end of a refusal: the id of the one
+ * thing in this view that carries those words as its label, or the view that does hold the id (ids
+ * are file-wide, a request addresses one view). Empty when neither: the id is not in the file.
+ */
+function elsewhere(file: DraftDocument, path: DepthPath, view: DraftDocument, id: string): string {
+  const words = id.trim().toLowerCase();
+  const named = [...view.nodes.map((n) => ({ id: n.id, label: n.text })), ...view.edges.map((e) => ({ id: e.id, label: e.label })), ...view.flows.map((f) => ({ id: f.id, label: f.title }))]
+    .filter((item) => typeof item.label === 'string' && item.label.trim().toLowerCase() === words);
+  if (named.length === 1) return `; that is the label of id "${named[0]!.id}", and an op takes the id`;
+  const here = pathKey(path);
+  const holds = (graph: Room['graph']) => graph.nodes.some((n) => n.id === id || n.attachments?.some((a) => a.id === id)) || graph.edges.some((e) => e.id === id || e.attachments?.some((a) => a.id === id)) || graph.flows.some((f) => f.id === id);
+  const room = roomsOf(file).find((candidate) => pathKey(candidate.path) !== here && holds(candidate.graph));
+  if (!room) return '';
+  return room.path.length ? `; it is in another view: send this op with view: {inside: ${JSON.stringify(room.path)}}` : '; it is in the top view: send this op without view';
 }
 
 /** Which `SET_FIELDS` a node of each type takes: a card's own fields, or an element's. */

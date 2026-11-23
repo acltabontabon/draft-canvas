@@ -112,7 +112,11 @@ after ten minutes and is never saved.
 { "op": "setLevel", "level": "container" }
 ```
 
-`null` in `set` clears a field. Ops run in order as one change — one undo step for the person.
+`null` in `set` clears a field. Ops run in order as one change — one undo step for the person —
+and a refusal of any op changes nothing.
+An op takes ids, never labels, and only ids of the view the request addresses (`view.inside`): take
+them from a read. `set` takes different fields for each kind of target (a relationship has no
+`technology`, a flow has a `title`, not a `label`); `help` for `update_diagram` lists them by target.
 A route end is a side (pinned at its middle), `{side, offset}` (pinned exactly, 0–1 along the side) or
 `"auto"` (unpinned: it faces the other shape and follows it). A pin is kept even when the shapes later
 face away; `set.route: null` makes both ends automatic and drops the bends. `read_diagram` with
@@ -128,7 +132,8 @@ Every refusal carries a `hint` saying what to do; this is the short version.
 
 | Code | Meaning | Do |
 | --- | --- | --- |
-| `INVALID_INPUT`, `INVALID_REFERENCE` | A field or an id is wrong; the message names the path | Fix that field and resend with a new `requestId` |
+| `INVALID_INPUT` | A field is wrong. The message names it by path (`/ops/1/set/color`) and says what is accepted there; `details.problems` lists every one found | Fix those fields and resend. Nothing changed; the same request fails the same way |
+| `INVALID_REFERENCE` | An id is not in the view the request addresses. The message says when it is a label (and whose), or which view holds it | Use the id, or pass that `view`, and resend. Don't change the fields: they were not the problem |
 | `DUPLICATE_ID` | An id is taken (ids are file-wide) | Rename it |
 | `UNSUPPORTED_TYPE` | Unknown element type | Use a listed type, or set `fallbackType` |
 | `DUPLICATE_TITLE` | A diagram with that title exists | Update that one, or ask the person; `allowDuplicateTitle` only on their say-so |

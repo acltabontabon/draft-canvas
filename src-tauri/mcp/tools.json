@@ -595,7 +595,7 @@
   {
     "name": "update_diagram",
     "title": "Update a diagram",
-    "description": "Apply ops as one change, preserving positions unless moved/arranged. Set label or description: ops:[{op:\"update\",id:\"element-id\",set:{description:\"New description\"}}]. A unique lookup suffices; no room read needed. Use latest expectedRevision and a fresh UUID requestId. Nested match: pass its view. On REVISION_CONFLICT reread/rebuild. Receipt verifies routine edits. previewId applies an exact preview instead of ops.",
+    "description": "Apply ops as one change, preserving positions unless moved/arranged. E.g. ops:[{op:\"update\",id:\"element-id\",set:{description:\"New description\"}}]. Take ids and expectedRevision from read_diagram (a query lookup suffices) and send a fresh UUID requestId. Nested target: pass its view. On REVISION_CONFLICT reread/rebuild. Receipt verifies routine edits. previewId applies an exact preview instead of ops.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -652,9 +652,25 @@
         "ops": {
           "type": "array",
           "items": {
-            "type": "object"
+            "type": "object",
+            "properties": {
+              "op": {
+                "enum": [
+                  "add",
+                  "update",
+                  "remove",
+                  "setLevel",
+                  "arrange",
+                  "moveInside",
+                  "moveOutside"
+                ]
+              }
+            },
+            "required": [
+              "op"
+            ]
           },
-          "description": "Ops: {op:\"update\",id,set:{label:\"Name\"}} (description/technology too; null clears); {op:\"add\",nodes:[{id,type,label}],relationships:[{id,from,to}],flows:[{id,title,steps:[edgeId]}]}; {op:\"remove\",ids}; {op:\"arrange\",scope?,direction?,spacing?}; {op:\"setLevel\",level}; {op:\"moveInside\",owner,ids}; {op:\"moveOutside\",ids}. More fields: get_capabilities({tool:\"update_diagram\"})."
+          "description": "Changes, applied in order as one: any refusal changes nothing. {op:\"update\",id,set:{field:value}} changes one thing by its id from read_diagram (an id, never a label; ids belong to one view); null clears an optional field. set fields by target — element: label,type,description,technology,replicas,color,group,evidence,place; group: label,kind,group,color,place; note: label,text,kind,about,near,group,color,attach,place; code: code,language,kind,about,near,group,color,attach,place; label: label,text,kind,style,about,near,group,color,attach,place; relationship: label,semantic,kind,directed,async,condition,color,lineStyle,response,deliveryAttempts,from,to,compensationFor,compensationVisible,compensationName,compensationProtocol,compensationDescription,evidence,route; flow: title,color,steps,variantOf; sequence: title,mermaid,links,place; attachment: label,text,kind,code,language,about,attach; openPoint: kind,context,resolved,resolution,about. {op:\"add\",nodes:[{id,type,label,description?,technology?,group?}],relationships:[{id,from,to,label?}],groups:[{id,label}],flows:[{id,title,steps:[relationshipId]}],notes:[{id,text,about?}]} with new ids; {op:\"remove\",ids:[id],cascade?}; {op:\"arrange\",scope?,direction?,spacing?}; {op:\"setLevel\",level}; {op:\"moveInside\",owner,ids}; {op:\"moveOutside\",ids}. Value types and further fields: get_capabilities({tool:\"update_diagram\"})."
         },
         "rename": {
           "type": "object",
@@ -869,7 +885,7 @@
           "items": {
             "type": "object"
           },
-          "description": "Ops: {op:\"update\",id,set:{label:\"Name\"}} (description/technology too; null clears); {op:\"add\",nodes:[{id,type,label}],relationships:[{id,from,to}],flows:[{id,title,steps:[edgeId]}]}; {op:\"remove\",ids}; {op:\"arrange\",scope?,direction?,spacing?}; {op:\"setLevel\",level}; {op:\"moveInside\",owner,ids}; {op:\"moveOutside\",ids}. More fields: get_capabilities({tool:\"update_diagram\"})."
+          "description": "Same ops as update_diagram: help {tool:\"update_diagram\"}."
         },
         "layout": {
           "type": "object",
@@ -979,7 +995,7 @@
           "items": {
             "type": "object"
           },
-          "description": "Ops: {op:\"update\",id,set:{label:\"Name\"}} (description/technology too; null clears); {op:\"add\",nodes:[{id,type,label}],relationships:[{id,from,to}],flows:[{id,title,steps:[edgeId]}]}; {op:\"remove\",ids}; {op:\"arrange\",scope?,direction?,spacing?}; {op:\"setLevel\",level}; {op:\"moveInside\",owner,ids}; {op:\"moveOutside\",ids}. More fields: get_capabilities({tool:\"update_diagram\"})."
+          "description": "Same ops as update_diagram: help {tool:\"update_diagram\"}."
         },
         "layout": {
           "type": "object",

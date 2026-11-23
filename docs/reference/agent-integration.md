@@ -44,7 +44,11 @@ Discovery advertises one small dispatcher, `diagram_tool({tool, args})`, so a mo
 carry the whole grammar.
 
 - `tool: "help", args: {}` lists this session's operations; `args: {tool: "update_diagram"}` returns
-  that operation's common arguments.
+  that operation's common arguments: for `update_diagram`, every op and the fields `set` takes for
+  each kind of target (generated from the same table the app checks an update against).
+- A malformed dispatcher call is refused by the sidecar with the argument at fault: an operation's
+  arguments sent beside `tool` instead of inside `args`, `args` sent as a string, or an operation
+  name that does not exist (the refusal lists the ones that do).
 - `get_capabilities({tool: "update_diagram"})`, dispatched the same way, returns its complete schema.
 - Every request is still validated against the full contract (`contract: 3`).
 - The dispatcher is annotated as mutating. The broker checks permissions, review-only restrictions and
@@ -404,7 +408,7 @@ ones 30 days.
 | Same request, resolved | The stored receipt, `replayed: true`. Side effects are not repeated. |
 | Different request | `REQUEST_ID_MISMATCH`. Use a fresh UUID per change. |
 | First still running | Waits for its outcome. |
-| First refused before any change | Runs again. |
+| First refused before any change | Runs again, and so does a corrected request under the same id: a refusal spends nothing. |
 | Create interrupted before its receipt | Runs again, unless a file with this request's minted id exists; then `recovered: true`. |
 | Update interrupted before the commit gate | Runs again; nothing was applied. |
 | Update interrupted after the gate, before the receipt | `OUTCOME_UNKNOWN`. Read the diagram and decide. |
@@ -635,6 +639,15 @@ Text is never truncated. A shape grows to 280 × 320 px; a name that still does 
 
 Each error has a stable `code` and `message`, and where useful `hint`, `retryable`, a JSON pointer
 `path` and up to 20 problems. Errors never contain stack traces or document content.
+
+A refused request changed nothing: ops apply as one change or not at all. `retryable: true` marks the
+only failures worth sending again unchanged (the app was busy, starting or slow); every other error
+needs the request corrected first, and its `hint` begins "Nothing was changed." An input error names
+what to correct: `/ops/1/set/color: must be one of neutral, teal, …` for a value,
+`not a field of a relationship ("r1"); it takes label, semantic, …` for a field the target does not
+have, and for an id the addressed view does not hold, `INVALID_REFERENCE` at `/ops/0/id`, saying when
+that id is really a label (and of which id) or which `view` holds it. A refused request's `requestId`
+may be reused for its correction.
 
 | Area | Codes |
 | --- | --- |

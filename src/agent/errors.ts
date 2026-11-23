@@ -73,6 +73,19 @@ export function toAgentError(error: unknown): AgentErrorJson {
   return { code: 'INTERNAL', message: 'Draft Canvas hit an unexpected problem handling this request.' };
 }
 
+/**
+ * What to do about a refused request, by the code of its first problem. Each of these was refused
+ * before anything changed, and would be refused again unchanged: an agent told only what was wrong
+ * (a Junie run) sent variations of the same mistake until its action limit.
+ */
+const REFUSED = 'Nothing was changed. ';
+export const REFUSAL_HINTS: Partial<Record<AgentErrorCode, string>> = {
+  INVALID_INPUT: `${REFUSED}Correct each field named in details.problems and send the request again; unchanged, it fails the same way. get_capabilities({tool}) has every field.`,
+  INVALID_REFERENCE: `${REFUSED}An op takes ids, and only those of the view it addresses: read_diagram returns them (query finds a name in any view, with its view path). Correct the id or the view and send again.`,
+  UNSUPPORTED_TYPE: `${REFUSED}Use a listed type (get_capabilities topics: ["types"]) and send again.`,
+  DUPLICATE_ID: `${REFUSED}Ids are unique across the file: choose another id for what is new, or update the existing one, and send again.`,
+};
+
 /** Collects problems found while checking a request, so one reply lists them all (up to a bound). */
 export class Problems {
   private readonly list: { code: AgentErrorCode; path: string; message: string; details?: Record<string, unknown> }[] = [];
@@ -110,6 +123,7 @@ export class Problems {
       : undefined;
     throw new AgentError(first.code, this.list.length === 1 ? `${first.path}: ${first.message}` : `${this.list.length} problems; first — ${first.path}: ${first.message}`, {
       path: first.path,
+      hint: REFUSAL_HINTS[first.code],
       details: { problems: this.list, ...(conflictingIds?.length ? { conflictingIds } : {}) },
     });
   }

@@ -147,9 +147,13 @@ impl Ledger {
     pub fn begin(&self, key: &str, fingerprint: &str) -> Begin {
         match self.entries.get(key) {
             None => Begin::Fresh,
-            Some(entry) if entry.fingerprint != fingerprint => Begin::Mismatch,
             Some(entry) => match entry.stage {
+                // Refused before anything changed, so the id was never spent: the corrected request
+                // may carry it. An agent fixes the field a refusal names and keeps the rest of its
+                // call, requestId included; answering that with REQUEST_ID_MISMATCH was a second
+                // refusal for a request that was now right.
                 Stage::Failed => Begin::Fresh,
+                _ if entry.fingerprint != fingerprint => Begin::Mismatch,
                 Stage::Committed => Begin::Replay(entry.clone()),
                 Stage::Pending | Stage::Committing => Begin::Unresolved(entry.clone()),
             },
@@ -360,8 +364,13 @@ mod tests {
         let mut ledger = Ledger::open(dir.path(), 1).unwrap();
         ledger.record(entry("k", Stage::Failed, 1)).unwrap();
         assert_eq!(ledger.begin("k", "fp"), Begin::Fresh);
-        // Refusal permits an identical retry; a different intended change still needs a new id.
-        assert_eq!(ledger.begin("k", "corrected"), Begin::Mismatch);
+        // And so may its correction: nothing was applied under this id.
+        assert_eq!(ledger.begin("k", "corrected"), Begin::Fresh);
+        // Once a request under it is under way or has landed, the id is spent as before.
+        ledger.record(entry("k", Stage::Pending, 2)).unwrap();
+        assert_eq!(ledger.begin("k", "another"), Begin::Mismatch);
+        ledger.advance("k", Stage::Committed, 3, |_| {}).unwrap();
+        assert_eq!(ledger.begin("k", "another"), Begin::Mismatch);
     }
 
     #[test]

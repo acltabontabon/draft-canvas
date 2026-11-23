@@ -101,17 +101,30 @@ enum Dispatch {
     Call(String, Value),
 }
 
+/// A call the sidecar refuses before the app sees it. Each says which argument is wrong and what to
+/// send: "Invalid entry-point arguments" left an agent that had put an operation's arguments beside
+/// `tool`, or sent `args` as a JSON string, with nothing to correct.
+fn malformed(message: impl AsRef<str>) -> Value {
+    bridge::error(
+        "INVALID_INPUT",
+        message.as_ref(),
+        "Nothing was changed. Correct the call and send it again; unchanged, it fails the same way.",
+        false,
+    )
+}
+
+fn names(allowed: &[Tool]) -> String {
+    allowed
+        .iter()
+        .map(|tool| tool.name.as_ref())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 /// Resolve the wrapper before the bridge: the native broker sees the REAL operation and original
 /// rename payload, so its permission policy, idempotency ledger and review gate cannot be bypassed.
 fn dispatch(name: &str, mut args: Value, allowed: &[Tool]) -> Result<Dispatch, Value> {
-    let invalid = || {
-        bridge::error(
-            "INVALID_INPUT",
-            "Invalid entry-point arguments.",
-            "Use the tool's schema.",
-            false,
-        )
-    };
+    let invalid = || malformed(format!("{name}: arguments missing or of the wrong type."));
     let target = match name {
         "read_edit" => {
             let map = args.as_object_mut().ok_or_else(invalid)?;
@@ -143,19 +156,27 @@ fn dispatch(name: &str, mut args: Value, allowed: &[Tool]) -> Result<Dispatch, V
             "update_diagram".to_string()
         }
         "diagram_tool" => {
-            let map = args.as_object().ok_or_else(invalid)?;
-            if map.keys().any(|key| key != "tool" && key != "args") {
-                return Err(invalid());
+            let map = args.as_object().ok_or_else(|| {
+                malformed("diagram_tool takes {tool, args}: an operation name and its arguments.")
+            })?;
+            if let Some(key) = map.keys().find(|key| *key != "tool" && *key != "args") {
+                return Err(malformed(format!(
+                    "/{key}: unknown argument. diagram_tool takes only tool and args; an operation's own arguments go inside args."
+                )));
             }
             let target = map
                 .get("tool")
                 .and_then(Value::as_str)
-                .ok_or_else(invalid)?
+                .ok_or_else(|| {
+                    malformed("/tool: is required, an operation name or \"help\" (a string).")
+                })?
                 .to_string();
             let inner = map
                 .get("args")
                 .filter(|value| value.is_object())
-                .ok_or_else(invalid)?
+                .ok_or_else(|| {
+                    malformed("/args: is required and must be a JSON object, not a string: the operation's arguments, {} when it takes none.")
+                })?
                 .clone();
             if target == "rename_element" {
                 return dispatch("rename_element", inner, allowed);
@@ -164,16 +185,21 @@ fn dispatch(name: &str, mut args: Value, allowed: &[Tool]) -> Result<Dispatch, V
                 if inner.as_object().unwrap().keys().any(|key| key != "tool")
                     || inner.get("tool").is_some_and(|value| !value.is_string())
                 {
-                    return Err(invalid());
+                    return Err(malformed("/args: help takes {} to list operations, or {tool: \"NAME\"} for one operation's arguments."));
                 }
                 let value = if let Some(name) = inner.get("tool").and_then(Value::as_str) {
                     let tool = allowed
                         .iter()
                         .find(|tool| tool.name == name)
-                        .ok_or_else(invalid)?;
+                        .ok_or_else(|| {
+                            malformed(format!(
+                                "/args/tool: no operation named {name:?}. Operations: {}.",
+                                names(allowed)
+                            ))
+                        })?;
                     serde_json::to_value(tool).expect("a tool serializes")
                 } else {
-                    serde_json::json!({ "usage": "Call tool=help,args={tool:NAME} for common arguments. Full get_capabilities schemas are only for advanced fields.", "tools": allowed.iter().map(|tool| serde_json::json!({"name": tool.name, "description": tool.description})).collect::<Vec<_>>() })
+                    serde_json::json!({ "usage": "tool=help,args={tool:NAME} gives NAME's arguments; then call tool=NAME,args={...}. To change a diagram: list_diagrams (diagramId), read_diagram (ids, revision), update_diagram. get_capabilities({tool:NAME}) has value types and advanced fields.", "tools": allowed.iter().map(|tool| serde_json::json!({"name": tool.name, "description": tool.description})).collect::<Vec<_>>() })
                 };
                 return Ok(Dispatch::Help(value));
             }
@@ -187,8 +213,11 @@ fn dispatch(name: &str, mut args: Value, allowed: &[Tool]) -> Result<Dispatch, V
     if !allowed.iter().any(|tool| tool.name == target) {
         return Err(bridge::error(
             "UNKNOWN_TOOL",
-            "That operation isn't available in this session.",
-            "Use diagram_tool with tool=help.",
+            &format!(
+                "No operation named {target:?} in this session. Operations: {}.",
+                names(allowed)
+            ),
+            "Nothing was changed. diagram_tool with tool=help, args={tool:NAME} gives an operation's arguments.",
             false,
         ));
     }
@@ -474,7 +503,7 @@ mod tests {
 
     #[test]
     fn entry_points_are_tiny_and_rename_dispatch_preserves_the_original_request() {
-        assert!(serde_json::to_vec(&entry_tools()).unwrap().len() <= 450);
+        assert!(serde_json::to_vec(&entry_tools()).unwrap().len() <= 700);
         let original = serde_json::json!({"diagramId":"d", "requestId":"same-retry", "from":"Before", "to":"After", "view":{"inside":["owner"]}, "scope":{"nodes":["target"]}});
         let Dispatch::Call(name, args) =
             dispatch("rename_element", original.clone(), &tools()).unwrap()
@@ -572,6 +601,81 @@ mod tests {
             &tools()
         )
         .is_err());
+    }
+
+    /// A Junie run got "Invalid entry-point arguments. Use the tool's schema." for calls like these
+    /// and had nothing to correct. Each refusal names the argument and what to send instead.
+    #[test]
+    fn a_malformed_wrapper_call_says_which_argument_is_wrong_and_what_to_send() {
+        let refused = |args: Value| match dispatch("diagram_tool", args, &tools()) {
+            Err(error) => error,
+            Ok(_) => panic!("refused"),
+        };
+        for (args, says) in [
+            (
+                serde_json::json!({"tool":"update_diagram","args":{},"diagramId":"d"}),
+                "/diagramId: unknown argument",
+            ),
+            (
+                serde_json::json!({"tool":"update_diagram","args":"{\"diagramId\":\"d\"}"}),
+                "/args: is required and must be a JSON object, not a string",
+            ),
+            (
+                serde_json::json!({"tool":"update_diagram"}),
+                "/args: is required",
+            ),
+            (serde_json::json!({"args":{}}), "/tool: is required"),
+            (
+                serde_json::json!({"tool":"help","args":{"name":"update_diagram"}}),
+                "/args: help takes {}",
+            ),
+            (
+                serde_json::json!({"tool":"help","args":{"tool":"update"}}),
+                "no operation named \"update\". Operations: get_capabilities, list_diagrams, read_diagram",
+            ),
+            (
+                serde_json::json!({"tool":"edit_diagram","args":{}}),
+                "No operation named \"edit_diagram\" in this session. Operations: get_capabilities",
+            ),
+        ] {
+            let error = refused(args);
+            let message = error["message"].as_str().unwrap();
+            assert!(message.contains(says), "{message}");
+            assert!(error["hint"]
+                .as_str()
+                .unwrap()
+                .starts_with("Nothing was changed."));
+            assert!(
+                error.get("retryable").is_none(),
+                "a malformed call is not retryable"
+            );
+        }
+    }
+
+    /// What help hands an agent for update_diagram is where it learns the op grammar: every op, and
+    /// what `set` takes for each kind of target.
+    #[test]
+    fn help_for_update_diagram_carries_the_op_grammar() {
+        let Dispatch::Help(schema) = dispatch(
+            "diagram_tool",
+            serde_json::json!({"tool":"help","args":{"tool":"update_diagram"}}),
+            &tools(),
+        )
+        .unwrap() else {
+            panic!("schema");
+        };
+        let ops = &schema["inputSchema"]["properties"]["ops"];
+        let grammar = ops["description"].as_str().unwrap();
+        for op in ops["items"]["properties"]["op"]["enum"].as_array().unwrap() {
+            assert!(grammar.contains(&format!("op:\"{}\"", op.as_str().unwrap())));
+        }
+        for target in [
+            "element: label,type",
+            "relationship: label,semantic",
+            "flow: title",
+        ] {
+            assert!(grammar.contains(target), "{target}");
+        }
     }
 
     #[test]

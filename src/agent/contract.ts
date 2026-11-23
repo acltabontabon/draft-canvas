@@ -1,5 +1,5 @@
 import { FULL_TOOLS } from './schema';
-import { AgentError } from './errors';
+import { AgentError, REFUSAL_HINTS } from './errors';
 import { unknownFieldHint } from './fields';
 
 interface Schema {
@@ -178,5 +178,5 @@ export function validateToolInput(name: string, args: unknown): void {
   const tool = FULL_TOOLS.find((tool) => tool.name === name);
   if (!tool) return; // Internal active_context/open_created are not MCP tools.
   const problems = schemaProblems(tool.inputSchema, args);
-  if (problems.length) throw new AgentError('INVALID_INPUT', problems.length === 1 ? problems[0]! : `${problems.length} problems; first — ${problems[0]}`, { path: problems[0]!.split(':')[0], details: { problems } });
+  if (problems.length) throw new AgentError('INVALID_INPUT', problems.length === 1 ? problems[0]! : `${problems.length} problems; first — ${problems[0]}`, { path: problems[0]!.split(':')[0], hint: REFUSAL_HINTS.INVALID_INPUT, details: { problems } });
 }

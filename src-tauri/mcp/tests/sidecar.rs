@@ -180,7 +180,7 @@ async fn a_real_client_lists_the_tools_and_round_trips_a_call() {
     let tools = client.list_all_tools().await.unwrap();
     let names: Vec<_> = tools.iter().map(|t| t.name.to_string()).collect();
     assert_eq!(names, ["diagram_tool"]);
-    assert!(serde_json::to_vec(&tools).unwrap().len() <= 450);
+    assert!(serde_json::to_vec(&tools).unwrap().len() <= 700);
     assert_eq!(
         tools[0].annotations.as_ref().and_then(|a| a.read_only_hint),
         Some(false)
@@ -526,4 +526,100 @@ async fn an_unknown_tool_is_a_tool_error_even_without_a_running_app() {
         "UNKNOWN_TOOL"
     );
     client.cancel().await.unwrap();
+}
+
+/// The path a Junie run took to its action limit: the one dispatcher tool, help for update_diagram,
+/// an update the app refuses, then the corrected one. What the client is handed at each step has to
+/// be enough for the next: the op grammar, then the app's refusal whole (which op, which field, what
+/// to send, and that nothing changed), as structured content and as text for clients that read only text.
+#[tokio::test]
+async fn a_refused_update_reaches_the_client_whole_and_its_correction_goes_through() {
+    let dir = tempfile::tempdir().unwrap();
+    let app = fake_app(dir.path(), |tool, args| {
+        assert_eq!(tool, "update_diagram");
+        if args["ops"][0]["id"] == "api" {
+            return json!({"diagramId": "d_1", "revision": "f:2", "applied": true, "persisted": true, "updated": 1});
+        }
+        json!({"error": {
+            "code": "INVALID_REFERENCE",
+            "message": "/ops/0/id: nothing with id \"Orders API\" in this view; that is the label of id \"api\", and an op takes the id",
+            "hint": "Nothing was changed. An op takes ids, and only those of the view it addresses.",
+            "details": {"path": "/ops/0/id", "problems": [{"code": "INVALID_REFERENCE", "path": "/ops/0/id", "message": "nothing with id \"Orders API\" in this view"}]}
+        }})
+    });
+    let agent_dir = dir.path().to_path_buf();
+    let client = ()
+        .serve(
+            TokioChildProcess::new(Command::new(sidecar()).configure(|c| {
+                c.env("DRAFT_CANVAS_AGENT_DIR", &agent_dir);
+            }))
+            .unwrap(),
+        )
+        .await
+        .unwrap();
+    let call = |arguments: Value| {
+        client.call_tool(
+            CallToolRequestParams::new("diagram_tool")
+                .with_arguments(arguments.as_object().unwrap().clone()),
+        )
+    };
+    let help = call(json!({"tool": "help", "args": {"tool": "update_diagram"}}))
+        .await
+        .unwrap();
+    let ops = &help.structured_content.as_ref().unwrap()["inputSchema"]["properties"]["ops"];
+    assert!(ops["description"]
+        .as_str()
+        .unwrap()
+        .contains("element: label,type,description,technology"));
+
+    // Answered by the sidecar: the app is never asked about a call it could not read.
+    let misplaced = call(json!({"tool": "update_diagram", "args": {}, "diagramId": "d_1"}))
+        .await
+        .unwrap();
+    assert_eq!(misplaced.is_error, Some(true));
+    assert_eq!(
+        misplaced.structured_content.as_ref().unwrap()["error"]["code"],
+        "INVALID_INPUT"
+    );
+
+    let update = |id: &str, request: &str| {
+        json!({"tool": "update_diagram", "args": {"requestId": request, "diagramId": "d_1", "expectedRevision": "f:1",
+            "ops": [{"op": "update", "id": id, "set": {"technology": "Kotlin"}}]}})
+    };
+    let refused = call(update("Orders API", "first")).await.unwrap();
+    assert_eq!(refused.is_error, Some(true));
+    let error = &refused.structured_content.as_ref().unwrap()["error"];
+    assert_eq!(error["code"], "INVALID_REFERENCE");
+    assert_eq!(error["details"]["path"], "/ops/0/id");
+    assert!(error["hint"]
+        .as_str()
+        .unwrap()
+        .starts_with("Nothing was changed."));
+    assert!(
+        error.get("retryable").is_none(),
+        "a mistake in the request is not a transient failure"
+    );
+    let text = serde_json::to_string(&refused.content).unwrap();
+    assert!(
+        text.contains("label of id") && text.contains("Nothing was changed."),
+        "a client that reads only text content gets the same refusal: {text}"
+    );
+
+    let corrected = call(update("api", "second")).await.unwrap();
+    assert_eq!(corrected.is_error, Some(false));
+    assert_eq!(corrected.structured_content.unwrap()["revision"], "f:2");
+
+    client.cancel().await.unwrap();
+    let calls: Vec<Value> = app
+        .await
+        .unwrap()
+        .into_iter()
+        .filter(|frame| frame["type"] == "call")
+        .collect();
+    assert_eq!(
+        calls.len(),
+        2,
+        "help and the malformed call never reach the app"
+    );
+    assert!(calls.iter().all(|frame| frame["tool"] == "update_diagram"));
 }
