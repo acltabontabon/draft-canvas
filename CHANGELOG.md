@@ -6,20 +6,18 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-11-23
+
+Clearer sequences, and fixes for opening files, keyboard handling and agents.
+
 ### Shared
 
 #### Changed
 
+- **Sequences that read better** — Each kind of frame has its own colour and mark, long messages,
+  conditions and notes wrap instead of being cut short, and a new message is seen to arrive. <!-- highlight -->
 - **Replies by dragging back** — Drag from whoever was called back to its caller and the line is
-  the reply: dashed, labelled before you let go, and tied to the call it answers. `R` adds the
-  reply to a selected call.
-- **Sequence frames you can tell apart** — A loop, a condition, an optional part, parallel
-  branches, a break and a critical section each have their own colour and mark, later branches
-  are labelled `else` or `and`, and a frame closes snugly under its last message.
-- **Nothing in a sequence is cut short** — Long messages, conditions, notes and titles wrap onto
-  more lines instead of ending in an ellipsis, and their fields wrap as you type.
-- **Sequence motion** — A new message or frame is seen to arrive. While presenting, the message
-  travels from sender to receiver and the frame it is in lights with it.
+  the reply: dashed, and tied to the call it answers. <!-- highlight -->
 
 #### Fixed
 
@@ -33,7 +31,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   Delete remove the shape being dragged.
 - **Tidy up and Arrange previews** — Enter and Escape in a dialog opened over a preview now answer
   the dialog, not the preview behind it.
-- **Going home** — A diagram still loading when you go home no longer opens afterwards.
+- **Going home** — A diagram still loading when you go home no longer opens afterwards, and a
+  reload at home no longer brings back a diagram opened earlier.
 - **A panel that fails to load** — An invite that cannot be fetched says so instead of blanking
   the app.
 - **Diagrams dated in the future** — A file with a date years ahead no longer stays first in the
@@ -46,13 +45,17 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Fixed
 
+- **Agents told what went wrong** — An agent that named a shape by its label, or a shape in
+  another view, is now told which id or view to use and that nothing was changed, instead of
+  retrying an update that could not work.
 - **Typing to Nodi with an input method** — The Enter that confirms a conversion no longer sends
   the prompt.
 - **Rename File** — Pressing Enter twice renames once, and the dialog stays until the rename has
   answered.
-- **Agents that could not update a diagram** — An agent that named a shape by its label, or a shape
-  in another view, was told its fields were unsupported and kept retrying. It is now told which id
-  or view to use, what each kind of shape accepts, and that nothing was changed.
+
+#### Security
+
+- Web address handling is updated past a stack overflow advisory.
 
 ## [1.21.0] - 2026-11-22
 
@@ -2860,7 +2863,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.1...main
+[1.21.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.0...v1.21.1
 [1.21.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.20.0...v1.21.0
 [1.20.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.19.0...v1.20.0
 [1.19.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.1...v1.19.0
