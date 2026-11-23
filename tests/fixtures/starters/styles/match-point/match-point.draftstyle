@@ -178,7 +178,7 @@
       "colour": "plain"
     },
     "backdrop": {
-      "art": "a0fcqsw91axyzdh"
+      "art": "a1qe1pew0y4n8kq"
     },
     "assets": [
       {
@@ -656,17 +656,17 @@
         ]
       },
       {
-        "id": "a0fcqsw91axyzdh",
+        "id": "a1qe1pew0y4n8kq",
         "w": 520,
         "h": 400,
         "paths": [
           {
             "d": "M40 0L190 0L190 400L40 400Z",
-            "fill": "#eff3cb"
+            "fill": "#f2f5d1"
           },
           {
             "d": "M300 0L430 0L430 400L300 400Z",
-            "fill": "#f8fae2"
+            "fill": "#f6f9dc"
           },
           {
             "d": "M70 30C203.33 123.33 223.33 233.33 130 360",
