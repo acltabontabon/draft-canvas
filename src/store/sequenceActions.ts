@@ -456,6 +456,16 @@ export const sequenceActions = {
     return message.id;
   },
 
+  /** Adds the reply to a call where it was drawn: a line dragged back to whoever is waiting. */
+  addReplyAt(nodeId: string, callId: string, slot: SeqSlot): string | null {
+    const sequence = sequenceIn(nodeId);
+    const call = sequence ? findItem(sequence, callId)?.item : null;
+    if (!sequence || !call || call.t !== 'message') return null;
+    const reply = createReply(call);
+    const made = makeThenName(nodeId, 'Add reply', (current) => insertItem(current, reply, slot), { kind: 'message', id: reply.id }, () => selectMade(nodeId, 'item', reply.id));
+    return made ? reply.id : null;
+  },
+
   /** Adds the reply to a call, below whatever the call set going. */
   addReply(nodeId: string, callId: string): string | null {
     const sequence = sequenceIn(nodeId);

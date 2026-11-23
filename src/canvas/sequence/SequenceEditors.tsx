@@ -23,6 +23,12 @@ interface FieldProps {
   ariaLabel: string;
   placeholder?: string;
   multiline?: boolean;
+  /**
+   * One run of words that wraps the way it will be drawn: the field grows a line at a time as it is
+   * typed into, and Enter still finishes it. A message or a condition used to be typed into a single
+   * line that scrolled sideways, so a long one could not be read back while it was being written.
+   */
+  wrap?: boolean;
   align?: 'left' | 'center';
   onCommit: (value: string, how: 'enter' | 'blur') => void;
   onCancel: () => void;
@@ -31,18 +37,28 @@ interface FieldProps {
   onChange?: (value: string) => void;
 }
 
-function Field({ style, font, value, ariaLabel, placeholder, multiline, align = 'center', onCommit, onCancel, onKey, onChange }: FieldProps) {
+function Field({ style, font, value, ariaLabel, placeholder, multiline, wrap, align = 'center', onCommit, onCancel, onKey, onChange }: FieldProps) {
   const ref = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
   const done = useRef(false);
+  const floor = typeof style.height === 'number' ? style.height : 0;
+  /** As tall as its words, and never shorter than the place it was opened over. */
+  const fit = () => {
+    const field = ref.current;
+    if (!wrap || !field) return;
+    field.style.height = 'auto';
+    field.style.height = `${Math.max(floor, field.scrollHeight)}px`;
+  };
   useLayoutEffect(() => {
     ref.current?.focus({ preventScroll: true });
     ref.current?.select();
+    fit();
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- once, as it opens: after that it follows what is typed.
   }, []);
   const finish = (how: 'enter' | 'blur' | 'escape') => {
     if (done.current) return;
     done.current = true;
     if (how === 'escape') onCancel();
-    else onCommit(ref.current?.value ?? '', how);
+    else onCommit(wrap ? (ref.current?.value ?? '').replace(/\s*\n\s*/g, ' ') : ref.current?.value ?? '', how);
   };
   const shared = {
     ref,
@@ -54,7 +70,10 @@ function Field({ style, font, value, ariaLabel, placeholder, multiline, align = 
     dir: 'auto' as const,
     style: { ...style, font: cssFont(font), lineHeight: `${font.size * LINE_HEIGHTS.label}px`, textAlign: align },
     onBlur: () => finish('blur'),
-    onChange: onChange ? (event: { currentTarget: { value: string } }) => onChange(event.currentTarget.value) : undefined,
+    onChange: (event: { currentTarget: { value: string } }) => {
+      fit();
+      onChange?.(event.currentTarget.value);
+    },
     onPointerDown: (event: { stopPropagation: () => void }) => event.stopPropagation(),
     onClick: (event: { stopPropagation: () => void }) => event.stopPropagation(),
     onDoubleClick: (event: { stopPropagation: () => void }) => event.stopPropagation(),
@@ -72,6 +91,7 @@ function Field({ style, font, value, ariaLabel, placeholder, multiline, align = 
       }
     },
   };
+  if (wrap) return <textarea {...shared} rows={1} data-wrap="true" />;
   return multiline ? <textarea {...shared} rows={2} /> : <input {...shared} />;
 }
 
@@ -99,6 +119,7 @@ function MessageLabel({
   return (
     <div className="dc-seq-new nodrag nopan nowheel" style={{ left, top, width }} onPointerDown={(event) => event.stopPropagation()} onClick={(event) => event.stopPropagation()}>
       <Field
+        wrap
         style={{ width, height }}
         font={FONTS.sequenceMessage}
         align={align}
@@ -253,7 +274,9 @@ export function SequenceEditors({ node, layout, target }: { node: DraftNode; lay
     const top = branch.guard?.y ?? (first ? frame.box.y + 2 : (branch.separatorY ?? frame.box.y) + 3);
     return (
       <Field
-        style={{ left, top: top - 2, width: Math.max(150, Math.min(240, frame.box.x + frame.box.w - left - 8)), height: 19 }}
+        wrap
+        // As wide as the condition is drawn, so it wraps here where it will wrap there.
+        style={{ left: left - 4, top: top - 3, width: Math.max(150, frame.box.x + frame.box.w - left - 4), height: Math.max(20, (branch.guard?.layout.height ?? 0) + 6) }}
         font={FONTS.sequenceGuard}
         align="left"
         value={found.operand.guard ?? ''}
@@ -275,7 +298,8 @@ export function SequenceEditors({ node, layout, target }: { node: DraftNode; lay
     const width = Math.max(140, frame.box.w - 40);
     return (
       <Field
-        style={{ left: frame.box.x + frame.box.w / 2 - width / 2, top: frame.box.y + frame.box.h / 2 - 8, width, height: 20 }}
+        wrap
+        style={{ left: frame.box.x + frame.box.w / 2 - width / 2, top: (frame.label?.y ?? frame.box.y + frame.box.h / 2 - 6) - 3, width, height: Math.max(20, (frame.label?.layout.height ?? 0) + 6) }}
         font={FONTS.sequenceMessage}
         value={found.item.label ?? ''}
         ariaLabel="Referenced interaction"

@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo } from 'react';
+import { memo, useEffect, useMemo, type CSSProperties } from 'react';
 import { sequenceFlow } from '../../document/sequenceFlow';
 import type { DraftNode } from '../../document/types';
 import { describeContext, describeSequenceMessages, sequenceLayoutFor } from '../../nodes/describe';
@@ -42,8 +42,8 @@ export const SequenceStepLayer = memo(function SequenceStepLayer({
   const message = useEditorStore((state) => messageId ? selectSequenceMessage(state.document, node.id, messageId) : undefined);
   const count = message?.attachments?.length ?? 0;
   const layout = sequenceLayoutFor(node, describeContext(theme, preset));
-  const row = count ? layout.messages.find((entry) => entry.id === messageId) : undefined;
-  const chips = row && message?.attachments ? sequenceAttachmentChips(row, message.attachments, layout.width, getMeasurer()) : [];
+  const row = layout.messages.find((entry) => entry.id === messageId);
+  const chips = count && row && message?.attachments ? sequenceAttachmentChips(row, message.attachments, layout.width, getMeasurer()) : [];
   useEffect(() => () => {
     const ui = useUiStore.getState();
     const open = ui.openAttachmentDetail;
@@ -93,6 +93,15 @@ export const SequenceStepLayer = memo(function SequenceStepLayer({
         <SvgSurface key={step} className="dc-seq-now" width={node.width} height={node.height}>
           {layers.now}
         </SvgSurface>
+      )}
+      {row && !row.self && (
+        // The message itself, crossing from who says it to who hears it: once, then gone.
+        <span
+          key={`signal-${step}`}
+          className="dc-seq-signal"
+          style={{ left: row.x1, top: row.y, '--dc-seq-travel': `${row.x2 - row.x1}px` } as CSSProperties}
+          aria-hidden="true"
+        />
       )}
     </>
   );

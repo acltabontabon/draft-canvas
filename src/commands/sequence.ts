@@ -112,7 +112,7 @@ export function sequenceCommands(ctx: CommandContext, node: DraftNode): Command[
     }
     if (item.attachments?.length) add({ id: 'seq-attachments', title: 'View message attachments', run: () => sequenceActions.showAttachments(node.id, id) });
     add({ id: 'seq-edit', title: 'Edit message', shortcut: 'Enter', run: () => sequenceActions.edit(node.id, { kind: 'message', id }) });
-    if (item.kind !== 'reply' && item.from !== item.to) add({ id: 'seq-add-reply', title: 'Add reply', keywords: ['return', 'response', 'answer'], run: () => void sequenceActions.addReply(node.id, id) });
+    if (item.kind !== 'reply' && item.from !== item.to) add({ id: 'seq-add-reply', title: 'Add reply', shortcut: 'R', keywords: ['return', 'response', 'answer'], run: () => void sequenceActions.addReply(node.id, id) });
     if (item.from !== item.to) add({ id: 'seq-reverse', title: 'Reverse message', keywords: ['flip', 'swap', 'direction'], run: () => sequenceActions.reverse(node.id, id) });
   } else if (item?.t === 'note') {
     add({ id: 'seq-edit', title: 'Edit note', shortcut: 'Enter', run: () => sequenceActions.edit(node.id, { kind: 'note', id }) });
