@@ -55,7 +55,8 @@ export function StylePanel() {
     // moved it since, in which case it is theirs and stays.
     const { before: back, fitted } = camera.current;
     const now = getViewport();
-    const untouched = fitted !== null && Math.abs(now.x - fitted.x) < 1 && Math.abs(now.y - fitted.y) < 1 && Math.abs(now.zoom - fitted.zoom) < 0.001;
+    // Within a couple of pixels: a camera that has come to rest is not always where it was sent to the last decimal.
+    const untouched = fitted !== null && Math.abs(now.x - fitted.x) < 2 && Math.abs(now.y - fitted.y) < 2 && Math.abs(now.zoom - fitted.zoom) < 0.005;
     const restore = back && untouched ? window.setTimeout(() => void setViewport(back, { duration: motionMs(320) }), motionMs(LEAVE_MS)) : undefined;
     const wait = motionMs(LEAVE_MS);
     if (wait === 0) return () => window.clearTimeout(restore);
@@ -106,18 +107,19 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
     // when: a timer alone ran ahead of it in WebKit, which reports a resize a frame or two later.
     const canvas = document.querySelector('.dc-canvas');
     let quiet = 0;
-    let settled = 0;
+    let live = true;
     let done = false;
     const fit = () => {
       if (done) return;
       done = true;
       const state = useEditorStore.getState();
       if (!hasSomethingToFit(state)) return;
-      void fitView({ padding: 0.2, duration: motionMs(360), maxZoom: getZoom(), nodes: flowFitViewNodes(state) });
-      // Where that fit ends: closing puts the view back only if it is still there.
-      settled = window.setTimeout(() => {
-        camera.current.fitted = getViewport();
-      }, motionMs(360) + 60);
+      // Where that fit ends, taken when it has ended and not after a guess at how long it takes
+      // (WebKit was still moving when a timer said it was done): closing puts the view back only
+      // if it is still there.
+      void fitView({ padding: 0.2, duration: motionMs(360), maxZoom: getZoom(), nodes: flowFitViewNodes(state) }).then(() => {
+        if (live) camera.current.fitted = getViewport();
+      });
     };
     // Each change of size puts the fit off a little; it runs when they stop coming.
     const observer =
@@ -133,10 +135,10 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
     // narrow window, where the panel sits under it).
     const last = window.setTimeout(fit, motionMs(ROOM_MS) + 400);
     return () => {
+      live = false;
       observer?.disconnect();
       window.clearTimeout(quiet);
       window.clearTimeout(last);
-      window.clearTimeout(settled);
     };
   }, [fitView, getZoom, getViewport, camera]);
   return (
