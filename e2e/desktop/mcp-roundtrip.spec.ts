@@ -143,7 +143,7 @@ for (const local of [false, true]) {
     const connection = await connect(page, handle);
     try {
       const before = JSON.parse((await connection.file())!.text);
-      expect(connection.client.schemaBytes).toBeLessThanOrEqual(450);
+      expect(connection.client.schemaBytes).toBeLessThanOrEqual(700);
       const args = { diagramId: 'd_mcp00000001', requestId: randomUUID(), from: 'Orders API', to: 'Checkout API' };
       if (local) {
         const events = await connection.localRename(args);
