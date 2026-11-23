@@ -8,8 +8,26 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Shared
 
+#### Added
+
+- **Replies by dragging back** — Drag from whoever was called back to its caller and the line is
+  the reply: dashed, labelled before you let go, and tied to the call it answers. `R` adds the
+  reply to a selected call.
+
+#### Changed
+
+- **Sequence frames you can tell apart** — A loop, a condition, an optional part, parallel
+  branches, a break and a critical section each have their own colour and mark, later branches
+  are labelled `else` or `and`, and a frame closes snugly under its last message.
+- **Nothing in a sequence is cut short** — Long messages, conditions, notes and titles wrap onto
+  more lines instead of ending in an ellipsis, and their fields wrap as you type.
+- **Sequence motion** — A new message or frame is seen to arrive. While presenting, the message
+  travels from sender to receiver and the frame it is in lights with it.
+
 #### Fixed
 
+- **Participants with a technology** — A lifeline no longer runs through the kind written under a
+  data store, queue or external service.
 - **Files that would not open** — A diagram with sequence fragments nested extremely deep, or a
   shape name of hundreds of thousands of lines, now opens instead of being refused.
 - **Shared links keep sequences linked** — A lifeline in a shared copy still points at the shape

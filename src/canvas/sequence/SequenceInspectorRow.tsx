@@ -14,7 +14,7 @@ import {
 import { displayNameFor } from '../../document/factory';
 import { hasDrifted, isLinkable } from '../../document/sequenceLinks';
 import { technologyKindPatch } from '../../document/technologyKind';
-import { headNode } from '../../nodes/sequence';
+import { headNode, OPERATOR_GLYPHS } from '../../nodes/sequence';
 import { findingsFor } from '../../sequence/check';
 import type { SequenceFocus } from '../../sequence/focus';
 import { suggestedKind } from '../../sequence/suggest';
@@ -88,11 +88,21 @@ interface RowProps {
   getMenuAvoidRect: () => { top: number; bottom: number } | null;
 }
 
-function Action({ label, description, onClick, shortcut }: { label: string; description?: string; shortcut?: string; onClick: () => void }) {
+/** A frame's own mark, in its own colour: the one its tab is drawn with, so the choice looks like what it makes. */
+function OperatorGlyph({ operator }: { operator: SeqOperator }) {
+  return (
+    <svg className="dc-seq-operator-glyph" data-operator={operator} width="11" height="11" viewBox="0 0 11 11" aria-hidden="true">
+      <path d={OPERATOR_GLYPHS[operator]} />
+    </svg>
+  );
+}
+
+function Action({ label, description, onClick, shortcut, operator }: { label: string; description?: string; shortcut?: string; operator?: SeqOperator; onClick: () => void }) {
   return (
     <Tooltip content={{ title: label, ...(description ? { description } : {}), ...(shortcut ? { shortcut } : {}) }}>
       {(tip) => (
         <Button variant="quiet" className="dc-popover-action dc-element-action-tile" {...tip} onClick={onClick}>
+          {operator && <OperatorGlyph operator={operator} />}
           {label}
         </Button>
       )}
@@ -323,7 +333,7 @@ function ItemRow({ node, sequence, focus, menuDirection, getMenuAvoidRect }: Row
     <div className="dc-element-action-row">
       <TooltipGroup>
         {WRAPS.map((wrap) => (
-          <Action key={wrap.operator} label={wrap.label} description={wrap.description} onClick={() => sequenceActions.wrap(node.id, focus.ids, wrap.operator)} />
+          <Action key={wrap.operator} operator={wrap.operator} label={wrap.label} description={wrap.description} onClick={() => sequenceActions.wrap(node.id, focus.ids, wrap.operator)} />
         ))}
       </TooltipGroup>
     </div>

@@ -114,7 +114,9 @@ describe('rows', () => {
   it('a long label wraps and its row grows to hold it', () => {
     const short = lay({ participants: [who('a'), who('b')], items: [call('m', 'a', 'b', 'ok'), call('next', 'a', 'b', 'next')] });
     const long = lay({ participants: [who('a'), who('b')], items: [call('m', 'a', 'b', 'check every line of the order against the stock we hold in every warehouse we have'), call('next', 'a', 'b', 'next')] });
-    expect(long.messages[0]!.label!.layout.lines.length).toBe(2);
+    // As many lines as it takes: what was said is never cut short to save a row's height.
+    expect(long.messages[0]!.label!.layout.lines.length).toBeGreaterThanOrEqual(2);
+    expect(long.messages[0]!.label!.layout.truncated).toBe(false);
     expect(long.messages[0]!.y).toBeGreaterThan(short.messages[0]!.y);
   });
 
@@ -148,6 +150,39 @@ describe('fragments', () => {
     expect(alt.operands[0]!.separatorY).toBeNull();
     expect(alt.operands[1]!.separatorY).toBeGreaterThan(alt.operands[0]!.box.y);
     expect(alt.operands[1]!.box.y).toBeGreaterThanOrEqual(alt.operands[0]!.box.y + alt.operands[0]!.box.h - 0.5);
+  });
+
+  it('write a long condition in full, on as many lines as it takes, and make room for them', () => {
+    const guard = 'the payment has not settled and fewer than three attempts have been made without any success so far';
+    const pay = call('pay', 'api', 'bank', 'authorize');
+    const base: DraftSequence = { participants: [who('api'), who('bank')], items: [pay, reply('paid', pay)] };
+    const short = lay(wrapItems(base, ['pay', 'paid'], { id: 'loop', operator: 'loop', guard: 'retry' }));
+    const long = lay(wrapItems(base, ['pay', 'paid'], { id: 'loop', operator: 'loop', guard }));
+    const words = long.fragments[0]!.operands[0]!.guard!;
+    expect(words.layout.truncated).toBe(false);
+    expect(words.layout.lines.length).toBeGreaterThan(1);
+    expect(words.layout.lines.map((line) => line.text).join(' ')).toBe(`[${guard}]`);
+    // The rows under it start below its last line, and it stays inside its frame.
+    const first = long.messages[0]!;
+    expect(first.label!.y).toBeGreaterThanOrEqual(words.y + words.layout.height);
+    expect(first.y - long.fragments[0]!.box.y).toBeGreaterThan(short.messages[0]!.y - short.fragments[0]!.box.y);
+    expect(words.x + words.layout.width).toBeLessThanOrEqual(long.fragments[0]!.box.x + long.fragments[0]!.box.w);
+    // Asked again at the size it gave, it gives the same answer.
+    expect(lay(wrapItems(base, ['pay', 'paid'], { id: 'loop', operator: 'loop', guard }), { width: long.width, height: long.height }).height).toBe(long.height);
+  });
+
+  it('say what each later branch is to the one above it, and close snugly under the last row', () => {
+    const layout = lay(checkout());
+    const frame = (id: string) => layout.fragments.find((entry) => entry.id === id)!;
+    expect(frame('alt').operands.map((branch) => branch.tag?.text.layout.lines[0]?.text ?? null)).toEqual([null, 'else']);
+    const tag = frame('alt').operands[1]!.tag!;
+    expect(tag.box.y).toBe(frame('alt').operands[1]!.separatorY);
+    expect(hitSequence(layout, tag.box.x + 3, tag.box.y + 3)).toEqual({ kind: 'operand', id: 'declined', fragmentId: 'alt' });
+    // No band of empty frame under the last message: about as much as its header leaves above the first.
+    const par = frame('par');
+    const last = layout.messages.find((message) => message.id === 'saved')!;
+    expect(par.box.y + par.box.h - last.y).toBeLessThanOrEqual(24);
+    expect(within(frame('alt').glyph, frame('alt').tab)).toBe(true);
   });
 
   it('keep a tab clear of the lifeline beside it', () => {
@@ -321,7 +356,8 @@ describe('as a node', () => {
     const node = { ...createNode({ type: 'sequence', x: 0, y: 0, text: 'Checkout' }), sequence: checkout() };
     const sized = { ...node, ...naturalSequenceSizeFor(node, ctx) };
     const drawn = describeNode(sized, ctx);
-    expect(drawn.shapes.filter((shape) => shape.t === 'group')).toHaveLength(5);
+    // A group for each head, and one for the mark in each frame's tab.
+    expect(drawn.shapes.filter((shape) => shape.t === 'group')).toHaveLength(5 + sequenceLayoutFor(sized, ctx).fragments.length);
     expect(describeNode(sized, ctx)).toEqual(drawn);
     expect(sequenceLayoutFor(sized, ctx)).toBe(sequenceLayoutFor(sized, ctx));
   });
