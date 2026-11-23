@@ -227,7 +227,8 @@ Hover any icon to see what it does.
 
 **Appearance** sets how shapes and connectors are drawn. Press `⌘K` and choose
 **Appearance…**: it opens beside the canvas, never over it, so every choice is seen on your own
-diagram as you make it, and the diagram stays live while it is open. It has three tabs: **Styles**
+diagram as you make it. The diagram is fitted to the canvas beside the panel as it opens, and stays
+live while it is open. It has three tabs: **Styles**
 to pick what to draw in, **Canvas** for the paper, and **Drawing** for the pen. **My style** is a gallery of the
 styles to draw with, each shown as a small diagram drawn in it: **Clean** is the Sculpted Ink default,
 **Draft** adds a restrained hand-drawn quality, and **Sketch** adds visible graphite drift and

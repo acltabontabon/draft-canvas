@@ -104,6 +104,20 @@ test('a diagram with a look of its own keeps it until asked', async ({ page }) =
   await expect.poll(() => outlineWidth(page)).toBeGreaterThan(theirs);
 });
 
+test('the diagram is framed again in the canvas the panel leaves it', async ({ page }) => {
+  await newCanvas(page, 'Framing');
+  await create(page, 'Service', { x: 160, y: 320 });
+  await create(page, 'Data Store', { x: 1150, y: 320 });
+  await page.keyboard.press('Escape');
+  const settings = await openAppearance(page);
+  // Both ends of the diagram are on the canvas, clear of the panel beside it.
+  const edge = (await settings.boundingBox())!.x;
+  await expect
+    .poll(async () => Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right)))))
+    .toBeLessThan(edge);
+  expect(Math.min(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().left))))).toBeGreaterThan(0);
+});
+
 test('a style’s colours dress the whole editor, and leave the app outside it alone', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
   await newCanvas(page, 'Colours');

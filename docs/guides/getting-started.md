@@ -69,10 +69,11 @@ Open **Share → Export…** (`⌘⇧E`):
 
 ## Make it yours
 
-The sliders button at the bottom right opens **Settings**. **Canvas** has next-shape suggestions and
-a background image for the open diagram. **Appearance** is your style: start from **Clean**, **Draft**
-or **Sketch**, then change the line weight, corners, shadows, colours, arrowheads, or how one kind of
-shape is drawn. The first change makes it a style of your own, kept on this device.
+The sliders button at the bottom right opens **Settings**, which has next-shape suggestions.
+**Appearance** (`⌘K`, then **Appearance…**) is your style, and opens beside the canvas: start from
+**Clean**, **Draft** or **Sketch**, then change the line weight, corners, shadows, colours, the canvas
+and its backdrop, arrowheads, or how one kind of shape is drawn. The first change makes it a style of
+your own, kept on this device.
 
 What you change shows on the open diagram as you change it. A new diagram starts with a copy of your
 style and keeps it, so it looks the same for everyone you share it with. A diagram that arrives with

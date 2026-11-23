@@ -88,15 +88,14 @@ test('the status bar opens Settings at Canvas, which tabs through every visible 
   await newCanvas(page, 'Settings focus');
   await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
   const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-  // Two pages, Canvas and Appearance: it opens on the one that was asked for, focus on its tab.
-  await expect(settings.getByRole('tab')).toHaveCount(2);
-  await expect(settings.getByRole('tab', { name: 'Canvas', exact: true })).toBeFocused();
-  await expect(settings.getByRole('tab', { name: 'Canvas', exact: true })).toHaveAttribute('aria-selected', 'true');
-  // The suggestions switch, then the image chooser — never the hidden file input behind it.
+  // One page, Canvas: no rail to choose from, and focus on the page itself. Appearance is not a
+  // page here: with a diagram open it is the panel beside the canvas.
+  await expect(settings.getByRole('tab')).toHaveCount(0);
+  await expect(settings.getByRole('region', { name: 'Canvas', exact: true })).toBeFocused();
   await page.keyboard.press('Tab');
   await expect(settings.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeFocused();
-  await page.keyboard.press('Tab');
-  await expect(settings.getByRole('button', { name: 'Choose image…', exact: true })).toBeFocused();
+  // A new diagram has no background image, so it is offered none: its canvas is its style's.
+  await expect(settings.getByRole('button', { name: 'Choose image…', exact: true })).toHaveCount(0);
 });
 
 test('Escape during an IME conversion keeps the flow trace in progress', async ({ page }) => {

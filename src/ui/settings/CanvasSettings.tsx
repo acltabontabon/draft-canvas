@@ -21,9 +21,14 @@ const FITS = BACKGROUND_FITS.map((fit) => ({ value: fit, label: FIT_LABELS[fit] 
 const ACCEPTED_TYPES = 'image/png,image/jpeg,image/webp,image/gif';
 
 /**
- * Settings → Canvas, on the web and the desktop: how the canvas looks and behaves. This device's preferences come first — they hold for
- * every diagram — and the open diagram's own Background last, set apart, because it is saved with the
- * file. Desktop Settings can open on Home, with no diagram: `documentOpen` says whether there is one.
+ * Settings → Canvas, on the web and the desktop: how the canvas behaves. This device's preferences
+ * hold for every diagram.
+ *
+ * A diagram's background image is no longer offered here: the canvas is a style's now (its colour
+ * and backdrop, in Appearance), and two ways to say what is behind a diagram is one too many. A
+ * diagram that already has an image keeps it, and keeps this section, so it can still be changed
+ * or taken off; once it is off, the section is gone for that diagram too. Desktop Settings can
+ * open on Home, with no diagram: `documentOpen` says whether there is one.
  */
 export function CanvasSettings({ documentOpen = true }: { documentOpen?: boolean }) {
   // A shared diagram keeps the device preferences but not the Background, which is part of the
@@ -32,9 +37,11 @@ export function CanvasSettings({ documentOpen = true }: { documentOpen?: boolean
   const readOnly = useUiStore((state) => Boolean(state.readOnly));
   const continuationsEnabled = useUiStore((state) => state.continuationsEnabled);
   const setContinuationsEnabled = useUiStore((state) => state.setContinuationsEnabled);
+  // A boolean, so a drag behind the dialog re-renders nothing here.
+  const hasBackground = useEditorStore((state) => state.document.settings.background.enabled || Boolean(state.document.settings.background.imageId));
 
   return (
-    <SettingsPage title="Canvas" lead="Suggestions are yours, on this device. The background is part of the open diagram.">
+    <SettingsPage title="Canvas" lead="Suggestions are yours, on this device.">
       <SettingsSection
         title="Next-shape suggestions"
         description="Select a shape with an obvious follow-on — a queue after a topic, a worker after a queue — and Draft Canvas sketches it in place. The shape picker a dropped connector opens still lists these first."
@@ -53,14 +60,7 @@ export function CanvasSettings({ documentOpen = true }: { documentOpen?: boolean
         />
       </SettingsSection>
 
-      {!readOnly &&
-        (documentOpen ? (
-          <BackgroundSection />
-        ) : (
-          <SettingsSection title="Background" description="An image behind a diagram, saved with it." apart>
-            <p className="dc-prefs-empty">Open a diagram to give it a background.</p>
-          </SettingsSection>
-        ))}
+      {!readOnly && documentOpen && hasBackground && <BackgroundSection />}
     </SettingsPage>
   );
 }

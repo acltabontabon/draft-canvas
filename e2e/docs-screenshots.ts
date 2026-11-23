@@ -753,13 +753,13 @@ async function appearanceScreenshots(page: Page) {
   await expect(page.locator('.dc-node.selected, .react-flow__node.selected')).toHaveCount(0);
 
   let panel = await openAppearance(page);
-  // The canvas is narrower with the panel beside it: the diagram is framed again in what is left.
+  // Opening the panel frames the diagram in the canvas it leaves; closing it does not, so the
+  // pictures of the whole canvas ask for that themselves.
   const frame = async () => {
     await palette(page, 'Fit to view');
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     await page.waitForTimeout(500);
   };
-  await frame();
   await shot(page, 'appearance');
 
   // A canvas of one's own: a colour and a backdrop, seen on the diagram as they are chosen.

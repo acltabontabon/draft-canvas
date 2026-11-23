@@ -1204,7 +1204,8 @@ test('Canvas settings is a page of Settings, however it is asked for', async ({ 
   await settings.getByRole('tab', { name: 'Canvas', exact: true }).click();
   panel = settings.getByRole('tabpanel', { name: 'Canvas', exact: true });
   await expect(panel.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeChecked();
-  await expect(panel.getByText('Open a diagram to give it a background.')).toBeVisible();
+  // No background image is offered: a diagram's canvas is its style's, in Appearance.
+  await expect(panel.getByRole('button', { name: 'Choose image…', exact: true })).toHaveCount(0);
   await settings.getByRole('button', { name: 'Close', exact: true }).click();
 
   await page.getByRole('button', { name: 'New Quick Draft' }).click();
@@ -1213,7 +1214,7 @@ test('Canvas settings is a page of Settings, however it is asked for', async ({ 
     settings = page.getByRole('dialog', { name: 'Settings' });
     await expect(settings.getByRole('tab', { name: 'Canvas', exact: true })).toHaveAttribute('aria-selected', 'true');
     panel = settings.getByRole('tabpanel', { name: 'Canvas', exact: true });
-    await expect(panel.getByRole('button', { name: 'Choose image…', exact: true })).toBeVisible();
+    await expect(panel.getByRole('switch', { name: 'Suggest the next shape while drawing' })).toBeVisible();
     await expect(page.getByRole('dialog', { name: 'Canvas settings' })).toHaveCount(0);
     await settings.getByRole('button', { name: 'Close', exact: true }).click();
     await expect(settings).toBeHidden();
