@@ -29,7 +29,7 @@ the contract: tools, receipts, limits, errors and security.
   The editor's Arrange and Tidy up use the same worker (`layoutPlan.ts`) and a deterministic work
   budget, never the clock; an agent request keeps its time limit.
 - **One writer.** Edits to the open document go through the editor store and undo history. A new
-  diagram is written by the shell with `create_new`, which never overwrites.
+  diagram is written by the shell with a create-only write, which never overwrites.
 - **No agent data in files.** An agent-made diagram is an ordinary diagram, on the web and the desktop.
 - **Versions.** The MCP version is what `rmcp` negotiates. A sidecar and app on different bridge
   versions answer `VERSION_MISMATCH`.

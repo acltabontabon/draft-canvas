@@ -901,6 +901,9 @@ export function useDocumentSession(): DocumentSession {
       if (takeOwnStepBack()) {
         const showing = openIdRef.current;
         if (showing && !sharedRef.current) pushDocUrl(showing);
+        // The step back landed on another diagram's entry (one opened before the one just closed).
+        // Home is showing, so the address must not go on naming it: a reload would reopen it.
+        else if (!showing && docIdFromLocation() !== null) replaceDocUrl(null);
         return;
       }
       // A share link pasted into the address bar of a tab already on the app is a same-document

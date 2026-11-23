@@ -1,0 +1,12 @@
+[
+  {
+    "file": "sequences-that-read-better.png",
+    "alt": "A checkout sequence with a loop, an alternative with an else branch, an optional part and parallel branches, each frame in its own colour with its own mark, and a long condition wrapped onto two lines.",
+    "platform": "shared"
+  },
+  {
+    "file": "replies-by-dragging-back.png",
+    "alt": "Dragging back from Orders to Checkout API: the line is already dashed and labelled Reply to Checkout API before it is let go.",
+    "platform": "shared"
+  }
+]

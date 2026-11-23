@@ -138,10 +138,10 @@ describe('a refused update names the real mistake', () => {
 
   it('says which view holds an id that is not in the one addressed', () => {
     const nested = refusal(() => update(shop(), [{ op: 'update', id: 'ctl', set: { label: 'Controller', color: 'blue' } }]));
-    expect(nested.message).toBe('/ops/0/id: nothing with id "ctl" in this view; it is in another view: send this op with view: {inside: ["api"]}');
+    expect(nested.message).toBe('/ops/0/id: nothing with id "ctl" in this view; it is in another view: send this op in a request with view: {inside: ["api"]}');
     expect(update(shop(), [{ op: 'update', id: 'ctl', set: { label: 'Controller', color: 'blue' } }], ['api']).nodes.find((n) => n.id === 'api')?.inside?.nodes[0]?.text).toBe('Controller');
     const outer = refusal(() => update(shop(), [{ op: 'remove', ids: ['db'] }], ['api']));
-    expect(outer.message).toBe('/ops/0/ids/0: nothing with id "db" in this view; it is in the top view: send this op without view');
+    expect(outer.message).toBe('/ops/0/ids/0: nothing with id "db" in this view; it is in the top view: send this op in a request without view');
     expect(refusal(() => update(shop(), [{ op: 'update', id: 'ghost', set: { technology: 'Go' } }])).message).toBe('/ops/0/id: nothing with id "ghost" in this view');
   });
 

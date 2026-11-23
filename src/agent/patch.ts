@@ -229,8 +229,8 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const inside = otherViews.get(id);
     const hint = inside
       ? inside.length
-        ? `; it is in another view: send this op with view: {inside: ${JSON.stringify(inside)}}`
-        : '; it is in the top view: send this op without view'
+        ? `; it is in another view: send this op in a request with view: {inside: ${JSON.stringify(inside)}}`
+        : '; it is in the top view: send this op in a request without view'
       : explainOrder({ path: at, message }) ?? (taken.has(id) ? '' : labelHint(current, id));
     problems.add('INVALID_REFERENCE', at, message + hint);
   };
