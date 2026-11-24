@@ -11,7 +11,7 @@
 import type { DraftDocument } from '../document/types';
 import { applyChanges } from './apply';
 import { keyOf, ROOT_ROOM, type Change, type Collection, type RoomId } from './changes';
-import { diffFile, nodeValue, wireSettings } from './diff';
+import { diffFile, nodeValue } from './diff';
 import { sameExcept, sameValue } from './equal';
 import { COLLECTION_OF, elementsOf, indexOf, itemsOf } from './fileIndex';
 import { repairReferences } from './repair';
@@ -200,7 +200,9 @@ export function sameAt(current: DraftDocument, left: DraftDocument, key: string)
     case 'title':
       return current.metadata.title === left.metadata.title;
     case 'settings':
-      return sameValue(wireSettings(current.settings), wireSettings(left.settings));
+      return sameValue(current.settings, left.settings);
+    case 'style':
+      return sameValue(current.style, left.style);
     case 'level':
       return (a.rooms.get(rest)?.graph.level ?? null) === (b.rooms.get(rest)?.graph.level ?? null);
     case 'order': {

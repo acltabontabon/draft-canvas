@@ -10,6 +10,8 @@ use crate::docio::read_document;
 use crate::project::{scan, Limits};
 use crate::state::AppState;
 use crate::util::lock;
+#[cfg(test)]
+use crate::util::sha256_hex;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -93,8 +95,7 @@ pub fn file_revision_of_stamp(stamp: &str) -> Option<String> {
 /// revisions come from stamps, which hash the bytes on disk, BOM included.
 #[cfg(test)]
 fn file_revision(text: &str) -> String {
-    use sha2::{Digest, Sha256};
-    file_revision_of_sha(&format!("{:x}", Sha256::digest(text.as_bytes())))
+    file_revision_of_sha(&sha256_hex(text.as_bytes()))
 }
 
 /// The id and title inside a document's text, without validating the rest of it.
@@ -322,7 +323,6 @@ pub enum Lookup {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sha2::{Digest, Sha256};
     use std::fs;
     use tempfile::tempdir;
 
@@ -476,7 +476,7 @@ mod tests {
     #[test]
     fn the_file_revision_is_the_same_from_text_and_from_a_stamp() {
         let text = diagram("d", "t");
-        let sha = format!("{:x}", Sha256::digest(text.as_bytes()));
+        let sha = sha256_hex(text.as_bytes());
         assert_eq!(
             file_revision(&text),
             file_revision_of_stamp(&format!("v1:1:2:{sha}")).unwrap()

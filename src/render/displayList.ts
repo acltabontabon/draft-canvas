@@ -65,6 +65,9 @@ export interface PathShape {
   opacity?: number;
   markerEnd?: string;
   markerStart?: string;
+  /** How overlapping parts of one path fill. Absent is the usual rule; a drawing with a hole cut
+   *  through it (a style's own artwork) says `evenodd`. */
+  fillRule?: 'evenodd';
 }
 
 export interface TextShape {

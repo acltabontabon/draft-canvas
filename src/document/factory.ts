@@ -1,3 +1,4 @@
+import { familyKindOf, isGlyphKind } from './dataStoreGeometry';
 import { createId } from './ids';
 import { plainTextOfMarkdown } from './markdownText';
 import { DEFAULTS } from './limits';
@@ -8,6 +9,7 @@ import {
   DRAFT_FORMAT,
   type Accent,
   type ActorKind,
+  type ArtifactKind,
   type ActorFrame,
   type AttachableType,
   type Attachment,
@@ -33,7 +35,9 @@ import {
   type TextRole,
 } from './types';
 
-export function defaultSizeFor(type: DraftNodeType): { width: number; height: number } {
+export function defaultSizeFor(type: DraftNodeType, kind?: string): { width: number; height: number } {
+  // A Service or Component drawn as a glyph (a Load Balancer, a Port) is laid out like a Data Store.
+  if (isGlyphKind(type, kind)) return { width: DEFAULTS.dataStoreWidth, height: DEFAULTS.dataStoreHeight };
   switch (type) {
     case 'code':
       return { width: DEFAULTS.codeWidth, height: DEFAULTS.codeHeight };
@@ -55,6 +59,8 @@ export function defaultSizeFor(type: DraftNodeType): { width: number; height: nu
       return { width: DEFAULTS.componentWidth, height: DEFAULTS.componentHeight };
     case 'sequence':
       return { width: DEFAULTS.sequenceWidth, height: DEFAULTS.sequenceHeight };
+    case 'artifact':
+      return { width: DEFAULTS.artifactWidth, height: DEFAULTS.artifactHeight };
     default:
       return { width: DEFAULTS.nodeWidth, height: DEFAULTS.nodeHeight };
   }
@@ -67,7 +73,8 @@ export function defaultSizeFor(type: DraftNodeType): { width: number; height: nu
  * database cylinder or an actor's head-and-shoulders never resizes into a shape
  * that stops reading as its type.
  */
-export function minSizeFor(type: DraftNodeType): { width: number; height: number } {
+export function minSizeFor(type: DraftNodeType, kind?: string): { width: number; height: number } {
+  if (isGlyphKind(type, kind)) return { width: 120, height: 76 };
   switch (type) {
     case 'text':
       return { width: 80, height: 28 };
@@ -79,6 +86,8 @@ export function minSizeFor(type: DraftNodeType): { width: number; height: number
       return { width: 120, height: 40 };
     case 'database':
       return { width: 120, height: 76 };
+    case 'artifact':
+      return { width: 96, height: 76 };
     case 'note':
       return { width: 120, height: 40 };
     case 'code':
@@ -119,6 +128,7 @@ export function defaultTextFor(
   serviceKind?: ServiceKind,
   componentKind?: ComponentKind,
   actorKind?: ActorKind,
+  artifactKind?: ArtifactKind,
 ): string {
   switch (type) {
     case 'service':
@@ -131,6 +141,8 @@ export function defaultTextFor(
       return '';
     case 'actor':
       return ACTOR_KIND_NAMES[actorKind ?? 'human'];
+    case 'artifact':
+      return ARTIFACT_KIND_NAMES[artifactKind ?? 'file'];
     case 'group':
       return 'Boundary';
     case 'sequence':
@@ -158,6 +170,8 @@ const SERVICE_KIND_NAMES: Record<ServiceKind, string> = {
   external: 'External System',
   scheduler: 'Scheduler',
   gateway: 'Gateway',
+  'load-balancer': 'Load Balancer',
+  proxy: 'Proxy',
 };
 const DATABASE_KIND_NAMES: Partial<Record<DatabaseKind, string>> = {
   sql: 'SQL data store',
@@ -178,6 +192,13 @@ const ACTOR_KIND_NAMES: Record<ActorKind, string> = {
   group: 'User Group',
   thirdParty: 'Third Party',
   agent: 'AI Agent',
+};
+/** Doubles as the fallback display name and the label a fresh Artifact starts with. */
+const ARTIFACT_KIND_NAMES: Record<ArtifactKind, string> = {
+  file: 'File',
+  config: 'Config',
+  secret: 'Secret',
+  certificate: 'Certificate',
 };
 /** Doubles as the fallback display name and the auto-generated label a fresh Component starts
  *  with — same one-table discipline as `SERVICE_KIND_NAMES`. */
@@ -200,7 +221,7 @@ const COMPONENT_KIND_NAMES: Record<ComponentKind, string> = {
 export function displayNameFor(
   node: Pick<
     DraftNode,
-    'type' | 'text' | 'queueKind' | 'serviceKind' | 'databaseKind' | 'actorKind' | 'componentKind'
+    'type' | 'text' | 'queueKind' | 'serviceKind' | 'databaseKind' | 'actorKind' | 'componentKind' | 'artifactKind'
   >,
 ): string {
   // A Text element's words are Markdown; its name is what they say, not how they're formatted.
@@ -216,6 +237,8 @@ export function displayNameFor(
       return (node.databaseKind && DATABASE_KIND_NAMES[node.databaseKind]) || 'Data Store';
     case 'actor':
       return (node.actorKind && ACTOR_KIND_NAMES[node.actorKind]) || 'Actor';
+    case 'artifact':
+      return (node.artifactKind && ARTIFACT_KIND_NAMES[node.artifactKind]) || 'File';
     case 'group':
       return 'Boundary';
     case 'sequence':
@@ -252,6 +275,7 @@ export interface CreateNodeInput {
   actorKind?: ActorKind;
   actorFrame?: ActorFrame;
   componentKind?: ComponentKind;
+  artifactKind?: ArtifactKind;
   parentId?: string;
   id?: string;
   deliveryRole?: DeliveryRole;
@@ -270,7 +294,7 @@ export interface CreateNodeInput {
 }
 
 export function createNode(input: CreateNodeInput): DraftNode {
-  const size = defaultSizeFor(input.type);
+  const size = defaultSizeFor(input.type, familyKindOf(input));
   const node: DraftNode = {
     id: input.id ?? createId('n'),
     type: input.type,
@@ -282,7 +306,7 @@ export function createNode(input: CreateNodeInput): DraftNode {
     height:
       input.height ?? (input.type === 'queue' && input.text?.trim() ? DEFAULTS.queueNamedHeight : size.height),
     z: input.z ?? 0,
-    text: input.text ?? defaultTextFor(input.type, input.serviceKind, input.componentKind, input.actorKind),
+    text: input.text ?? defaultTextFor(input.type, input.serviceKind, input.componentKind, input.actorKind, input.artifactKind),
     // A caller-supplied `text` is a deliberate name, kept forever. An omitted one is a
     // system-managed placeholder — `updateNodeById`'s Service auto-relabeling (`editorStore.ts`)
     // is the one place that later reads this to decide whether it may still follow the node's
@@ -308,6 +332,7 @@ export function createNode(input: CreateNodeInput): DraftNode {
     node.actorFrame = input.actorFrame ?? 'borderless';
   }
   if (input.type === 'component') node.componentKind = input.componentKind ?? 'generic';
+  if (input.type === 'artifact') node.artifactKind = input.artifactKind ?? 'file';
   if (input.type === 'sequence') node.sequence = { participants: [], items: [] };
   if (input.deliveryRole) node.deliveryRole = input.deliveryRole;
   if ((C4_TEXT_TYPES as readonly DraftNodeType[]).includes(input.type)) {
@@ -430,7 +455,6 @@ export function createDocument(title = DEFAULT_TITLE): DraftDocument {
     settings: {
       showSequence: true,
       grid: 'dots',
-      background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 },
     },
     flows: [],
     openPoints: [],
@@ -452,9 +476,28 @@ export function cloneDocumentAsNew(doc: DraftDocument, title: string): DraftDocu
       createdAt: now,
       updatedAt: now,
       ...(doc.metadata.origin ? { origin: structuredClone(doc.metadata.origin) } : {}),
-      // Duplicate stays in the same project, same principle as carrying over
-      // the background image — see `useDocumentSession.ts`'s `duplicateDocument`.
+      // Duplicate stays in the same project — see `useDocumentSession.ts`'s `duplicateDocument`.
       ...(doc.metadata.projectId ? { projectId: doc.metadata.projectId } : {}),
     },
+  };
+}
+
+/**
+ * The box a Service or Component takes when its kind moves between a card and a glyph (Generic →
+ * Load Balancer, Port → Generic): the new drawing's default size around the same centre, as turning one shape into
+ * another does (`convert.ts`). `null` when the kind stayed in its family and the box is fine.
+ */
+export function boxForKind(
+  node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'>,
+  from: ServiceKind | ComponentKind | undefined,
+  to: ServiceKind | ComponentKind | undefined,
+): Pick<DraftNode, 'x' | 'y' | 'width' | 'height'> | null {
+  if (isGlyphKind(node.type, from) === isGlyphKind(node.type, to)) return null;
+  const size = defaultSizeFor(node.type, to);
+  return {
+    x: Math.round(node.x + node.width / 2 - size.width / 2),
+    y: Math.round(node.y + node.height / 2 - size.height / 2),
+    width: size.width,
+    height: size.height,
   };
 }

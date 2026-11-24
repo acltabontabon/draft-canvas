@@ -1,17 +1,10 @@
-<div align="center">
+<h1 align="center"><img src="www/public/favicon.svg" width="40" height="40" alt="" align="absmiddle">&nbsp;Draft Canvas</h1>
 
-<img src="www/public/favicon.svg" width="64" height="64" alt="">
-
-# Draft Canvas
-
-Draft Canvas is a local-first architecture canvas for developers. Spend more time explaining how
-software works and less time making diagrams accurate and tidy. Map systems, trace request flows,
-and decide what to build next—with your team.
-
-**Your architecture. Your decisions.** Your diagrams stay on your device, and every proposed change
-is yours to review.
-
-</div>
+<p align="center">
+A simple diagramming tool built for developers to explain how a system works.<br>
+Tech-aware shapes, C4 views, sequence diagrams, flows you can present, live collaboration and AI agents.<br>
+Free, open source, and your diagrams stay on your device.
+</p>
 
 <img width="100%" alt="Draft Canvas in action: sketch an architecture, present a request flow, explore inside a service, and share the diagram." src="docs/media/demo.gif">
 
@@ -25,6 +18,45 @@ is yours to review.
 - **Live collaboration.** Share, manage access, and follow presentations.
 - **Context for decisions.** Notes, code, sources, and open questions.
 - **Import and export.** Import Mermaid and editable files; export images, editable files, Mermaid, PlantUML, Structurizr, and draw.io.
+
+## Examples
+
+Whole systems from the [starters gallery](https://github.com/acltabontabon/draft-canvas-starters), open in Draft Canvas. Load any of them from
+**Starters** in the app, present their flows, step inside their services, and make them yours.
+
+<table>
+<tr>
+<td colspan="2">
+<a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/food-delivery">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-food-delivery-dark.png">
+  <img width="100%" alt="Forkful, a food delivery marketplace, open in Draft Canvas: customer, kitchen and courier apps meet at a junction before the API gateway; ordering, payments, kitchen, logistics, data and notification domains sit inside the system boundary." src="docs/media/starter-food-delivery-light.png">
+</picture>
+</a>
+<p align="center"><b>Food delivery</b><br><sub>Customers, restaurants and couriers: an order saga with refunds, an outbox, a dead-letter queue and eight flows to present.</sub></p>
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+<a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/video-streaming">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-video-streaming-dark.png">
+  <img width="100%" alt="Reelwave, a video streaming platform, open in Draft Canvas." src="docs/media/starter-video-streaming-light.png">
+</picture>
+</a>
+<p align="center"><b>Video streaming</b><br><sub>An edge inside ISPs, DRM, and a Press play sequence diagram.</sub></p>
+</td>
+<td width="50%" valign="top">
+<a href="https://github.com/acltabontabon/draft-canvas-starters/tree/main/starters/examples/ride-hailing">
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/starter-ride-hailing-dark.png">
+  <img width="100%" alt="Swiftride, a ride-hailing platform, open in Draft Canvas." src="docs/media/starter-ride-hailing-light.png">
+</picture>
+</a>
+<p align="center"><b>Ride-hailing</b><br><sub>Live driver locations, dispatch, surge pricing and payouts.</sub></p>
+</td>
+</tr>
+</table>
 
 ## Get started
 

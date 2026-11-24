@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { requestPersistentStorage } from '../lib/storagePersistence';
-import { parseDocument } from '../document/validate';
+import { isPlausibleDate, parseDocument } from '../document/validate';
 import { decryptDocument } from '../crypto/documentCipher';
 import { getMasterKey } from '../crypto/keyStore';
 import { isEncryptedBody, isLegacyBody, isPlainBody, type LegacyBody } from '../crypto/bodyShapes';
@@ -9,8 +9,6 @@ import {
   DocumentConflictError,
   QuotaExceededError,
   StorageUnavailableError,
-  backgroundImageKey,
-  isBackgroundImageKeyOf,
   isQuotaError,
   reconcileMetadata,
   sharedMetadataOf,
@@ -76,30 +74,6 @@ function plainBody(document: DraftDocument): PlainBody {
   return { id: document.metadata.id, storageVersion: PLAIN_STORAGE_VERSION, stamp: createId('b'), document };
 }
 
-/**
- * One row per document id — deliberately not a generic, content-hashed asset
- * table. It only ever needs a single background image per document;
- * building dedup/reference-counting for a future asset system that doesn't
- * exist yet would be speculative.
- */
-interface BackgroundImageRow {
-  id: string;
-  blob: Blob;
-  mimeType: string;
-  width: number;
-  height: number;
-  /** When it was stored — see `pruneBackgroundImages`. Absent on rows from before 1.12. */
-  savedAt?: number;
-}
-
-/**
- * How long a background image nothing on disk points at is kept anyway. Another tab with this canvas
- * open may have just picked it (the image is stored at once, the setting that names it only on its
- * next autosave), or may still hold it in its undo history; pruning it from under that tab left its
- * saved background pointing at nothing.
- */
-const UNREFERENCED_IMAGE_GRACE_MS = 24 * 60 * 60 * 1000;
-
 interface DraftDb extends DBSchema {
   // Preserve the v4 store opened by development builds. Links are dormant; diagrams remain usable.
   fileAssociations: { key: string; value: unknown };
@@ -112,10 +86,9 @@ interface DraftDb extends DBSchema {
     key: string;
     value: BodyRow;
   };
-  backgroundImages: {
-    key: string;
-    value: BackgroundImageRow;
-  };
+  // Where diagrams kept a background image before a canvas became part of its style. Kept, and
+  // kept empty (see `open`), so a build from before that still finds the store it expects.
+  backgroundImages: { key: string; value: unknown };
   projects: {
     key: string;
     value: Project;
@@ -178,6 +151,9 @@ export class IndexedDbRepository implements DraftRepository {
         },
       });
       opened = db;
+      // Background images are gone: bytes stored for one must not linger on the device. The store
+      // itself stays, since removing it takes a version an earlier build could no longer open.
+      await db.clear('backgroundImages').catch(() => {});
       return new IndexedDbRepository(db);
     } catch (error) {
       throw new StorageUnavailableError(error);
@@ -267,8 +243,41 @@ export class IndexedDbRepository implements DraftRepository {
           error,
         );
       }
+    } else if (read.misdated && summary) {
+      // The stored diagram is dated years ahead, so the load above dated it "now". The summary is
+      // what the library sorts by and what the person has been shown, so it holds the dates:
+      if (isPlausibleDate(summary.updatedAt) && isPlausibleDate(summary.createdAt)) {
+        // put right on an earlier open. This read keeps them. Dated afresh on every open instead,
+        // a diagram only looked at and panned was saved with that fresh date and went to the top
+        // of Recent as though it had been edited.
+        return { ...document, metadata: { ...document.metadata, createdAt: summary.createdAt, updatedAt: summary.updatedAt } };
+      }
+      await this.redateSummary(id, document.metadata.createdAt, document.metadata.updatedAt);
     }
     return document;
+  }
+
+  /**
+   * Puts right the dates on a stored summary that is dated years ahead: such a row sorts first in
+   * the library for good, and the listing reads the summary, never the copy a load corrects.
+   *
+   * The summary's two dates and nothing else. The stored diagram is not touched: whatever else the
+   * load repaired in memory (a dangling connector dropped) is still "kept on your next edit", as
+   * the person is told, and not written because a date happened to be wrong too. Best-effort, like
+   * the migration write-back: the next real save writes the dates in any case.
+   */
+  private async redateSummary(id: string, createdAt: number, updatedAt: number): Promise<void> {
+    try {
+      const tx = this.db.transaction('documents', 'readwrite');
+      const current = await tx.store.get(id);
+      // Only a row still dated ahead: another tab may have saved it properly in the meantime.
+      if (current && !(isPlausibleDate(current.updatedAt) && isPlausibleDate(current.createdAt))) {
+        await tx.store.put({ ...current, createdAt, updatedAt });
+      }
+      await tx.done;
+    } catch (error) {
+      console.warn(`[draft-canvas] Could not correct the stored dates of record ${id}:`, error);
+    }
   }
 
   /**
@@ -305,6 +314,8 @@ export class IndexedDbRepository implements DraftRepository {
     document: DraftDocument;
     priorVersion: unknown;
     row: BodyRow;
+    /** The stored diagram carries a date no diagram can have; `document`'s are the time of this read. */
+    misdated: boolean;
   } | null> {
     let rawDocument: unknown;
     this.loadFailures.set(id, 'unreadable');
@@ -342,7 +353,7 @@ export class IndexedDbRepository implements DraftRepository {
     const changed = result.repairs.filter((line) => !line.startsWith('Upgraded document format'));
     if (changed.length > 0) this.repairs.set(id, changed);
     else this.repairs.delete(id);
-    return { document: result.document, priorVersion, row };
+    return { document: result.document, priorVersion, row, misdated: isMisdated(rawDocument) };
   }
 
   /**
@@ -560,16 +571,11 @@ export class IndexedDbRepository implements DraftRepository {
   }
 
   async remove(id: string): Promise<void> {
-    const tx = this.db.transaction(['documents', 'bodies', 'backgroundImages', 'fileAssociations'], 'readwrite');
-    const images = tx.objectStore('backgroundImages');
-    // Every image the document ever had under `BackgroundSettings.imageId` (`<id>#<imageId>`).
-    const imageKeys = await ownedImageKeys(images, id);
+    const tx = this.db.transaction(['documents', 'bodies', 'fileAssociations'], 'readwrite');
     await Promise.all([
       tx.objectStore('fileAssociations').delete(id),
       tx.objectStore('documents').delete(id),
       tx.objectStore('bodies').delete(id),
-      images.delete(id),
-      ...imageKeys.map((key) => images.delete(key)),
       tx.done,
     ]);
   }
@@ -630,56 +636,6 @@ export class IndexedDbRepository implements DraftRepository {
       return null;
     }
   }
-
-  async saveBackgroundImage(
-    documentId: string,
-    blob: Blob,
-    dims: { width: number; height: number },
-    imageId?: string,
-  ): Promise<void> {
-    try {
-      await this.db.put('backgroundImages', {
-        id: backgroundImageKey(documentId, imageId),
-        blob,
-        mimeType: blob.type,
-        width: dims.width,
-        height: dims.height,
-        savedAt: Date.now(),
-      });
-    } catch (error) {
-      if (isQuotaError(error)) throw new QuotaExceededError(error);
-      throw error;
-    }
-  }
-
-  async loadBackgroundImage(
-    documentId: string,
-    imageId?: string,
-  ): Promise<{ blob: Blob; width: number; height: number } | null> {
-    const row = await this.db.get('backgroundImages', backgroundImageKey(documentId, imageId));
-    if (!row) return null;
-    // Some IndexedDB implementations don't round-trip a Blob's `type` through
-    // structured clone — `mimeType` is stored alongside for exactly this case.
-    const blob = row.blob.type ? row.blob : new Blob([row.blob], { type: row.mimeType });
-    return { blob, width: row.width, height: row.height };
-  }
-
-  async removeBackgroundImage(documentId: string, imageId?: string): Promise<void> {
-    await this.db.delete('backgroundImages', backgroundImageKey(documentId, imageId));
-  }
-
-  async pruneBackgroundImages(documentId: string, keep: { imageId?: string } | null): Promise<void> {
-    const kept = keep ? backgroundImageKey(documentId, keep.imageId) : null;
-    const tx = this.db.transaction('backgroundImages', 'readwrite');
-    const keys = [documentId, ...(await ownedImageKeys(tx.store, documentId))].filter((key) => key !== kept);
-    const rows = await Promise.all(keys.map((key) => tx.store.get(key)));
-    const cutoff = Date.now() - UNREFERENCED_IMAGE_GRACE_MS;
-    const stale = keys.filter((_, index) => {
-      const row = rows[index];
-      return row !== undefined && (row.savedAt === undefined || row.savedAt < cutoff);
-    });
-    await Promise.all([...stale.map((key) => tx.store.delete(key)), tx.done]);
-  }
 }
 
 function withStamp(summary: DraftSummary, stamp: string | undefined): DraftSummary {
@@ -692,6 +648,14 @@ function requestPersistenceOnce(): void {
   requestPersistentStorage();
 }
 
+/** Whether a stored diagram, as written, carries a creation or edit date no diagram can have. */
+function isMisdated(rawDocument: unknown): boolean {
+  const metadata = isRecord(rawDocument) && isRecord(rawDocument.metadata) ? rawDocument.metadata : null;
+  if (!metadata) return false;
+  const ahead = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && !isPlausibleDate(value);
+  return ahead(metadata.createdAt) || ahead(metadata.updatedAt);
+}
+
 /** Whether two reads of a `bodies` row are the same write. A plain row carries a fresh stamp per
  *  write and an encrypted one a fresh IV, so an unchanged stamp or IV means an unchanged row. A
  *  legacy row has neither and can only ever be replaced by a stamped or encrypted row, so two legacy
@@ -702,17 +666,4 @@ function sameBody(a: BodyRow, b: BodyRow): boolean {
     return a.iv.length === b.iv.length && a.iv.every((byte, i) => byte === b.iv[i]);
   }
   return isLegacyBody(a) && isLegacyBody(b);
-}
-
-/**
- * The `<documentId>#<imageId>` keys belonging to exactly this document. A key range alone isn't
- * enough: `d_x#1`'s images sort inside `d_x`'s range (see `isBackgroundImageKeyOf`).
- */
-async function ownedImageKeys(
-  store: { getAllKeys(query: IDBKeyRange): Promise<IDBValidKey[]> },
-  documentId: string,
-): Promise<string[]> {
-  const prefix = `${documentId}#`;
-  const keys = await store.getAllKeys(IDBKeyRange.bound(prefix, `${prefix}\uffff`));
-  return keys.filter((key): key is string => typeof key === 'string' && isBackgroundImageKeyOf(key, documentId));
 }

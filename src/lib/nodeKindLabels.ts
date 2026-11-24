@@ -1,5 +1,6 @@
 import type {
   ActorKind,
+  ArtifactKind,
   BoundaryPreset,
   ComponentKind,
   DatabaseKind,
@@ -7,6 +8,7 @@ import type {
   QueueKind,
   ServiceKind,
   TextRole,
+  DraftNodeType,
 } from '../document/types';
 
 /**
@@ -50,6 +52,8 @@ export const SERVICE_KIND_OPTION_LABELS: Record<ServiceKind, string> = {
   external: 'External',
   scheduler: 'Scheduler',
   gateway: 'Gateway',
+  'load-balancer': 'Load Balancer',
+  proxy: 'Proxy',
 };
 
 export const DATABASE_KIND_OPTION_LABELS: Record<DatabaseKind, string> = {
@@ -78,6 +82,13 @@ export const ACTOR_KIND_OPTION_LABELS: Record<ActorKind, string> = {
   agent: 'AI Agent',
 };
 
+export const ARTIFACT_KIND_OPTION_LABELS: Record<ArtifactKind, string> = {
+  file: 'File',
+  config: 'Config',
+  secret: 'Secret',
+  certificate: 'Certificate',
+};
+
 export const COMPONENT_KIND_OPTION_LABELS: Record<ComponentKind, string> = {
   generic: 'Generic',
   module: 'Module',
@@ -87,6 +98,22 @@ export const COMPONENT_KIND_OPTION_LABELS: Record<ComponentKind, string> = {
 
 /** Also reused by `commands/registry.ts`'s staged "Text role…" command, so the popover's dropdown
  *  and ⌘K/right-click never show two different names for the same role. */
+/** What each shape type is called, wherever one is named on its own. */
+export const NODE_TYPE_LABELS: Record<DraftNodeType, string> = {
+  ellipse: 'Junction',
+  text: 'Text',
+  note: 'Note',
+  code: 'Code',
+  group: 'Boundary',
+  service: 'Service',
+  database: 'Data store',
+  queue: 'Queue',
+  actor: 'Actor',
+  component: 'Component',
+  sequence: 'Sequence',
+  artifact: 'Artifact',
+};
+
 export const TEXT_ROLE_OPTION_LABELS: Record<TextRole, string> = {
   body: 'Body',
   label: 'Label',

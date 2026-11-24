@@ -131,6 +131,28 @@ describe('placeCallout for a connector', () => {
     expect(placeCallout(edgeInput({ soft: crowd, current: 'below' })).placement).toBe('below');
   });
 
+  it('slides a docked callout to the nearest clear spot only when it is told the whole canvas', () => {
+    // Too narrow to float beside anything, so it docks: centred, on the shape in the middle.
+    const canvas: Box = { x: 0, y: 0, width: 540, height: 400 };
+    const card = { width: 200, height: 180 };
+    const middle: Box = { x: 200, y: 100, width: 120, height: 160 };
+    const input = edgeInput({ bounds: canvas, size: card, dockTo: null, soft: [middle], exclusions: [] });
+    const centred = placeCallout(input);
+    expect(centred.placement).toBe('docked');
+    expect(overlapArea({ x: centred.x, y: centred.y, ...card }, middle)).toBeGreaterThan(0);
+
+    const clear = placeCallout({ ...input, softIsWhole: true });
+    expect(clear.placement).toBe('docked');
+    expect(clear.y).toBe(centred.y);
+    // Only the right of the shape has room on the canvas: a gap past its side.
+    expect(clear.x).toBe(middle.x + middle.width + CALLOUT_GAP);
+    expect(overlapArea({ x: clear.x, y: clear.y, ...card }, middle)).toBe(0);
+
+    // Nowhere clear along the line: it stays centred rather than leave for a corner.
+    const wall: Box = { x: 0, y: 100, width: 540, height: 160 };
+    expect(placeCallout({ ...input, soft: [wall], softIsWhole: true }).x).toBe(centred.x);
+  });
+
   it('docks above the flow bar on a narrow canvas', () => {
     const narrow: Box = { x: 16, y: 16, width: 400, height: 700 };
     const result = placeCallout(edgeInput({ bounds: narrow, size: { width: 380, height: 90 } }));

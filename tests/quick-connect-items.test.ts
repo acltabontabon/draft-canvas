@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { offerFor, quickConnectItems } from '../src/canvas/quickConnectItems';
 import { inferRelationship } from '../src/document/connectorSemantics';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
-import { addEdges, addNodes } from '../src/document/operations';
+import { addEdges, addNodes, DROP_CLEARANCE } from '../src/document/operations';
 import type { QuickConnectState } from '../src/store/uiStore';
 
 function topicDoc() {
@@ -132,8 +132,70 @@ describe('offerFor', () => {
     expect(offer.edges[0]!.source).toBe('t');
   });
 
+  it('leaves a dragged-out connector’s ends automatic, so it follows the shapes like one drawn by hand', () => {
+    const doc = topicDoc();
+    for (const row of quickConnectItems(doc, drop('t'))) {
+      for (const edge of offerFor(doc, drop('t'), row)!.edges) {
+        expect(edge.sourceAnchor, row.label).toBeUndefined();
+        expect(edge.targetAnchor, row.label).toBeUndefined();
+      }
+    }
+    // Asked for with `]`, the shape is placed beside its source like a suggestion, and pinned like one.
+    const asked: QuickConnectState = { ...drop('t'), asked: true };
+    const beside = offerFor(doc, asked, quickConnectItems(doc, asked)[0]!)!;
+    expect(beside.edges[0]!.sourceAnchor).toBeDefined();
+  });
+
+  it('moves a shape whose box would cover a neighbour to the closest clear spot, preview and commit alike', () => {
+    // Two Services on a row; the connector is let go on empty canvas 48 left of the second one, where
+    // a Service centred on that point reaches 38 across it (#178).
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
+    const b = createNode({ id: 'b', type: 'service', x: 600, y: 0 });
+    const doc = addNodes(createDocument('Row'), [a, b]);
+    const state: QuickConnectState = { source: 'a', flowPosition: { x: 552, y: 33 }, screenPosition: { x: 552, y: 33 }, center: { x: 552, y: 33 } };
+    const row = quickConnectItems(doc, state).find((r) => r.label === 'Service')!;
+    const offer = offerFor(doc, state, row)!;
+    const node = offer.nodes[0]!;
+    const overlaps = (m: typeof node, n: typeof node) => m.x < n.x + n.width && m.x + m.width > n.x && m.y < n.y + n.height && m.y + m.height > n.y;
+    expect(overlaps(node, a) || overlaps(node, b)).toBe(false);
+    // Slid left along the row, just clear of the neighbour, at the height it was dropped at.
+    expect(node.x + node.width).toBe(b.x - DROP_CLEARANCE);
+    expect(node.y).toBe(33 - node.height / 2);
+    // The same answer every time it is asked: what the ghost shows is what Enter adds.
+    expect(offerFor(doc, state, row)!.nodes[0]).toMatchObject({ x: node.x, y: node.y });
+    // Its connector still comes from the dragged shape.
+    expect(offer.edges[0]).toMatchObject({ source: 'a', target: node.id });
+  });
+
+  it('leaves a drop that covers nothing exactly where it was made, however close a neighbour is', () => {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
+    const b = createNode({ id: 'b', type: 'service', x: 600, y: 0 });
+    const doc = addNodes(createDocument('Row'), [a, b]);
+    const size = { width: a.width, height: a.height };
+    const centre = { x: b.x - 4 - size.width / 2, y: 33 };
+    const state: QuickConnectState = { source: 'a', flowPosition: centre, screenPosition: centre, center: centre };
+    const row = quickConnectItems(doc, state).find((r) => r.label === 'Service')!;
+    expect(offerFor(doc, state, row)!.nodes[0]).toMatchObject({ x: centre.x - size.width / 2, y: 33 - size.height / 2 });
+  });
+
   it('is nothing for a picker with no source', () => {
     const doc = topicDoc();
     expect(offerFor(doc, drop(), quickConnectItems(doc, drop())[0]!)).toBeUndefined();
+  });
+
+  // #177: a drag from one of several selected shapes drew a line from each, then connected only one.
+  it('connects every shape the drag carried to the row that is chosen', () => {
+    const a = createNode({ id: 'a', type: 'service', x: 0, y: 0 });
+    const b = createNode({ id: 'b', type: 'service', x: 0, y: 200 });
+    const doc = addNodes(createDocument('Fan'), [a, b]);
+    const state: QuickConnectState = { ...drop('a'), fanIn: ['b', 'a', 'gone'] };
+    const store = quickConnectItems(doc, state).find((row) => row.label === 'Data Store')!;
+    const offer = offerFor(doc, state, store)!;
+    expect(offer.nodes).toHaveLength(1);
+    const made = offer.nodes[0]!;
+    expect(offer.edges.map((edge) => [edge.source, edge.target])).toEqual([['a', made.id], ['b', made.id]]);
+    const [first, second] = offer.edges;
+    expect([second!.kind, second!.semantic]).toEqual([first!.kind, first!.semantic]);
+    expect(offerFor(doc, drop('a'), store)!.edges).toHaveLength(1);
   });
 });

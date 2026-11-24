@@ -60,7 +60,7 @@ pub struct Agent {
     /// ledger's per-call replay guarantee. See `proposals.rs`.
     proposals: Mutex<Option<Proposals>>,
     /// Requests being worked on right now, by ledger key: a duplicate waits for the first to finish.
-    inflight: Mutex<HashMap<String, watch::Receiver<bool>>>,
+    inflight: Mutex<HashMap<String, InflightRequest>>,
     pub(crate) index: scope::DiagramIndex,
     active: Mutex<Option<ActiveDoc>>,
     /// Page request id → ledger key, for updates: the gate records itself in the ledger.
@@ -245,21 +245,44 @@ impl Agent {
         lock(&self.active).clone()
     }
 
-    /// Claims `key` for this request. `Err` hands back a receiver that fires when whoever holds it
-    /// now is done, so a duplicate can wait and then look at the ledger again.
-    pub(crate) fn claim(&self, key: &str) -> Result<InflightGuard<'_>, watch::Receiver<bool>> {
+    /// Only an identical call waits for the current key holder to finish.
+    pub(crate) fn claim(
+        &self,
+        key: &str,
+        fingerprint: &str,
+    ) -> Result<InflightGuard<'_>, ClaimError> {
         let mut inflight = lock(&self.inflight);
-        if let Some(rx) = inflight.get(key) {
-            return Err(rx.clone());
+        if let Some(request) = inflight.get(key) {
+            return Err(if request.fingerprint == fingerprint {
+                ClaimError::Busy(request.done.clone())
+            } else {
+                ClaimError::Mismatch
+            });
         }
         let (tx, rx) = watch::channel(false);
-        inflight.insert(key.to_string(), rx);
+        inflight.insert(
+            key.to_string(),
+            InflightRequest {
+                fingerprint: fingerprint.to_string(),
+                done: rx,
+            },
+        );
         Ok(InflightGuard {
             agent: self,
             key: key.to_string(),
             done: tx,
         })
     }
+}
+
+struct InflightRequest {
+    fingerprint: String,
+    done: watch::Receiver<bool>,
+}
+
+pub(crate) enum ClaimError {
+    Busy(watch::Receiver<bool>),
+    Mismatch,
 }
 
 /// Releases a claimed request key, and wakes any duplicate waiting on it, however the work ended.

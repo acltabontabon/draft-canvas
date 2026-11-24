@@ -233,6 +233,7 @@ describe('following the presenter', () => {
     const state = { path: ['a'], viewport: { x: 1, y: 2, zoom: 1 }, presenting: true, flowId: 'f', step: 0 };
     expect(sameFollow(state, { ...state, path: ['a'] })).toBe(true);
     expect(sameFollow(state, { ...state, step: 1 })).toBe(false);
+    expect(sameFollow(state, { ...state, stage: 'opening' })).toBe(false);
     expect(sameFollow(state, null)).toBe(false);
   });
 });

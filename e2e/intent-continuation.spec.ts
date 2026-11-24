@@ -227,6 +227,72 @@ test.describe('Intent Continuation', () => {
     await expect(captions(page)).toContainText(['publishes to', 'fans out to']);
   });
 
+  test('a connector dragged out to a new shape has automatic ends: it stays direct when the shapes swap sides', async ({ page }) => {
+    await newCanvas(page, 'Automatic ends');
+    await create(page, 'Service', { x: 560, y: 300 });
+    await page.keyboard.press('Escape');
+    const first = (await page.locator('.dc-node').first().boundingBox())!;
+    await dragHandleTo(page, 0, { x: first.x + first.width + 260, y: first.y + first.height / 2 });
+
+    const menu = page.locator('.dc-quick-connect');
+    await expect(menu.locator('[data-highlighted="true"]')).toHaveText('Service');
+    const lengthOf = (selector: string) => page.locator(selector).first().evaluate((path) => (path as SVGPathElement).getTotalLength());
+    const previewed = await lengthOf('.dc-ghost-edges path');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.dc-node')).toHaveCount(2);
+    // Accept the default name, then let go of the selection.
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await nextFrames(page);
+    // The line added is the line previewed.
+    expect(Math.abs((await lengthOf('.dc-edge-line')) - previewed)).toBeLessThan(2);
+
+    // The new Service, dragged past the first to its left on the same row.
+    const made = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    await page.mouse.move(made.x + made.width / 2, made.y + made.height - 10);
+    await page.mouse.down();
+    await page.mouse.move(first.x - 180, made.y + made.height - 10, { steps: 16 });
+    // Before letting go, as every other drag here does (`nextFrames`). Released in the same frame
+    // as the last moves, WebKit and Firefox dropped it two steps short: 15 pixels from the first
+    // shape, where there is no room for a straight line and the connector goes round.
+    await nextFrames(page);
+    await page.mouse.up();
+    await page.keyboard.press('Escape');
+    await nextFrames(page);
+    const moved = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    expect(moved.x + moved.width).toBeLessThan(first.x);
+
+    // Straight across the gap between them, not out of the far side and round both boxes.
+    const gap = first.x - (moved.x + moved.width);
+    expect(await lengthOf('.dc-edge-line')).toBeLessThan(gap + 40);
+  });
+
+  test('a connector dropped beside a shape sets the new one down clear of it, as the preview showed', async ({ page }) => {
+    await newCanvas(page, 'Clear drop');
+    await create(page, 'Service', { x: 200, y: 300 });
+    await create(page, 'Service', { x: 760, y: 300 });
+    await page.keyboard.press('Escape');
+    const neighbour = (await page.locator('.dc-node').nth(1).boundingBox())!;
+    // Empty canvas, 48px left of the second Service: a Service centred there would reach across it.
+    await dragHandleTo(page, 0, { x: neighbour.x - 48, y: neighbour.y + neighbour.height / 2 });
+
+    const menu = page.locator('.dc-quick-connect');
+    await expect(menu).toBeVisible();
+    await expect(menu.locator('[data-highlighted="true"]')).toHaveText('Service');
+    const apart = (a: { x: number; width: number }, b: { x: number }) => b.x - (a.x + a.width);
+    const ghost = (await page.locator('.dc-ghost-node').boundingBox())!;
+    expect(apart(ghost, neighbour)).toBeGreaterThanOrEqual(15);
+
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.dc-node')).toHaveCount(3);
+    await page.keyboard.press('Escape');
+    const made = (await page.locator('.dc-node').nth(2).boundingBox())!;
+    expect(apart(made, neighbour)).toBeGreaterThanOrEqual(15);
+    // What Enter added is where the ghost was.
+    expect(Math.abs(made.x - ghost.x)).toBeLessThan(2);
+    expect(Math.abs(made.y - ghost.y)).toBeLessThan(2);
+  });
+
   test('the ghost scales with the diagram at a different zoom level and stays functional', async ({ page }) => {
     await newCanvas(page, 'Continuation zoom');
     await publisherAndTopic(page);

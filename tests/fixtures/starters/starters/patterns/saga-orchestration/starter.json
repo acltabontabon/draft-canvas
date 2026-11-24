@@ -1,8 +1,8 @@
 {
   "id": "saga-orchestration",
-  "name": "Saga \u2013 Orchestration",
+  "name": "Saga – Orchestration",
   "category": "pattern",
-  "summary": "Local transactions and compensation, one coordinator",
+  "summary": "One orchestrator books a trip step by step, and cancels the done steps in reverse when the card is declined",
   "aliases": [
     "saga",
     "saga orchestration",
@@ -10,21 +10,28 @@
     "orchestrator",
     "distributed transaction",
     "compensating transaction",
-    "compensation"
+    "compensation",
+    "workflow engine",
+    "temporal",
+    "travel booking"
   ],
   "tags": [
     "saga",
     "orchestrator",
     "compensation",
-    "distributed transaction"
+    "distributed transaction",
+    "workflow"
   ],
   "useWhen": [
     "A workflow spans several services and must undo completed steps on failure.",
-    "You want one place that knows the workflow's state."
+    "You want one place that knows the workflow's state and can answer \"where is my booking?\".",
+    "Steps have a fixed order and the riskiest one can go last."
   ],
   "watchOutFor": [
-    "The orchestrator can become a bottleneck or a god service.",
-    "Every step needs a compensation that really undoes it."
+    "The orchestrator can grow into a god service that owns other teams' business rules.",
+    "Every step needs a compensation that really undoes it, and is idempotent when retried.",
+    "A compensation is a new transaction, not a rollback: the seat was held for a while.",
+    "Without durable workflow state, a crash mid-saga leaves steps nobody will undo."
   ],
   "featured": false,
   "order": 110

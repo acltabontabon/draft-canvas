@@ -1,4 +1,5 @@
-import { useEffect, useId, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useId, useRef, useState, type CSSProperties, type InputHTMLAttributes, type ReactNode } from 'react';
+import { Tooltip } from '../common/Tooltip';
 import { Icon } from '../common/Icon';
 import { useEditorStore } from '../../store/editorStore';
 
@@ -6,6 +7,50 @@ import { useEditorStore } from '../../store/editorStore';
  * The few pieces every Settings page is built from, on the desktop and the web, so a new setting is a row in an existing section and a new page is one entry in
  * `SettingsDialog`'s list, never new layout. Presentation only: each page reads its own store.
  */
+
+/**
+ * Where there is little room and a diagram to look at (the Appearance panel beside the canvas), an
+ * explanation is one press away, not on the page: every piece here that takes a `description` shows
+ * it as a small "i" beside its name instead. A screen reader is still told it, as before.
+ */
+export const CompactPrefs = createContext(false);
+
+/** The "i" an explanation waits behind: shown on hover, focus or a press, and read out as the thing's description. */
+export function Hint({ about, children }: { about: string; children: ReactNode }) {
+  return (
+    <Tooltip content={{ title: about }} body={children} showOnClick>
+      {(tip) => (
+        <button
+          type="button"
+          className="dc-look-hint"
+          aria-label={`About ${about}`}
+          {...tip}
+          onClick={(event) => {
+            // Inside a row that is itself a label: the press is for the hint, not the switch.
+            event.preventDefault();
+            tip.onClick?.(event);
+          }}
+        >
+          <Icon name="info" size={13} />
+        </button>
+      )}
+    </Tooltip>
+  );
+}
+
+/** A name and its explanation, above a row of things to pick from: the explanation behind a hint where room is short. */
+export function PickHead({ label, description }: { label: string; description?: ReactNode }) {
+  const compact = useContext(CompactPrefs);
+  return (
+    <div className="dc-look-block-head">
+      <span className="dc-prefs-label">
+        {label}
+        {compact && description && <Hint about={label}>{description}</Hint>}
+      </span>
+      {!compact && description && <span className="dc-prefs-description">{description}</span>}
+    </div>
+  );
+}
 
 export function SettingsPage({ title, lead, children }: { title: string; lead?: ReactNode; children: ReactNode }) {
   return (
@@ -36,12 +81,14 @@ interface SectionProps {
 
 export function SettingsSection({ title, description, group, disabled, apart, list, busy, children }: SectionProps) {
   const id = useId();
+  const compact = useContext(CompactPrefs);
   const descriptionId = description ? `${id}-description` : undefined;
   const head = description && (
-    <p id={descriptionId} className="dc-prefs-section-description">
+    <p id={descriptionId} className={compact ? 'dc-sr-only' : 'dc-prefs-section-description'}>
       {description}
     </p>
   );
+  const hint = compact && description ? <Hint about={title}>{description}</Hint> : null;
   if (group) {
     return (
       <fieldset
@@ -67,9 +114,13 @@ export function SettingsSection({ title, description, group, disabled, apart, li
       aria-describedby={descriptionId}
       aria-busy={busy || undefined}
     >
-      <h4 id={`${id}-title`} className="dc-prefs-section-title">
-        {title}
-      </h4>
+      {/* Beside the heading, not in it: the heading's name is the section's, and stays just that. */}
+      <div className="dc-prefs-section-head">
+        <h4 id={`${id}-title`} className="dc-prefs-section-title">
+          {title}
+        </h4>
+        {hint}
+      </div>
       {head}
       <div className="dc-prefs-rows" data-list={list ? '' : undefined}>
           {children}
@@ -95,6 +146,7 @@ interface ChoiceRowProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'ty
 /** A checkbox, radio or switch with its label, the whole row a click target. */
 export function ChoiceRow({ type, label, detail, description, toggle, depth, aside, ...input }: ChoiceRowProps) {
   const id = useId();
+  const compact = useContext(CompactPrefs);
   const labelledBy = detail ? `${id}-label ${id}-detail` : `${id}-label`;
   return (
     <label
@@ -113,6 +165,7 @@ export function ChoiceRow({ type, label, detail, description, toggle, depth, asi
       <span className="dc-prefs-row-text">
         <span id={`${id}-label`} className="dc-prefs-label">
           {label}
+          {compact && description && typeof label === 'string' && <Hint about={label}>{description}</Hint>}
         </span>
         {detail && (
           <span id={`${id}-detail`} className="dc-prefs-detail">
@@ -120,7 +173,7 @@ export function ChoiceRow({ type, label, detail, description, toggle, depth, asi
           </span>
         )}
         {description && (
-          <span id={`${id}-description`} className="dc-prefs-description">
+          <span id={`${id}-description`} className={compact && typeof label === 'string' ? 'dc-sr-only' : 'dc-prefs-description'}>
             {description}
           </span>
         )}
@@ -132,11 +185,15 @@ export function ChoiceRow({ type, label, detail, description, toggle, depth, asi
 
 /** A label and its explanation, with an action at the end of the row (under it, when space runs out). */
 export function SettingRow({ label, description, control }: { label: ReactNode; description?: ReactNode; control: ReactNode }) {
+  const compact = useContext(CompactPrefs) && typeof label === 'string';
   return (
     <div className="dc-prefs-row dc-prefs-action">
       <div className="dc-prefs-row-text">
-        <span className="dc-prefs-label">{label}</span>
-        {description && <span className="dc-prefs-description">{description}</span>}
+        <span className="dc-prefs-label">
+          {label}
+          {compact && description && <Hint about={label as string}>{description}</Hint>}
+        </span>
+        {!compact && description && <span className="dc-prefs-description">{description}</span>}
       </div>
       <div className="dc-prefs-control">{control}</div>
     </div>

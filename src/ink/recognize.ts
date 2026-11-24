@@ -13,12 +13,20 @@
  * how comfortably a drawing cleared its worst test rather than as a probability. The thresholds were
  * set against the generated corpus in `tests/ink/`, which holds clean, uneven, open, shaky and
  * multi-stroke versions of every shape alongside scribbles that must stay ink.
+ *
+ * Two things a real hand does that a generated one did not, and that used to leave every such box as
+ * ink. It overshoots: a closed outline starts with a flick in and ends with one out, and those tails
+ * stretched the drawing's extent until no side sat on it — so a one-stroke outline is read as the loop
+ * inside it (`loopOf`). And it leans: a box drawn fast is a parallelogram or sits a few degrees off
+ * level, so a four-sided outline is also measured against its own four corners (`quadReading`), not
+ * only against the upright box around it.
  */
 import {
   angleBetween,
   boxOf,
   dist,
   distToLine,
+  distToSegment,
   heading,
   pathLength,
   ramp,
@@ -28,7 +36,16 @@ import {
   type Box,
   type Pt,
 } from './geometry';
-import { CONVERT_CONFIDENCE, MIN_DIAGONAL_PX, OFFER_CONFIDENCE, RESAMPLE_STEP_PX } from './thresholds';
+import {
+  CONVERT_CONFIDENCE,
+  LOOP_CLOSE_FRACTION,
+  LOOP_CLOSE_PX,
+  LOOP_TAIL_FRACTION,
+  MIN_DIAGONAL_PX,
+  OFFER_CONFIDENCE,
+  RESAMPLE_STEP_PX,
+  TRACE_EPSILON_PX,
+} from './thresholds';
 
 export type InkGeometry = 'rectangle' | 'ellipse' | 'cylinder' | 'tube' | 'person' | 'line' | 'arrow';
 
@@ -40,12 +57,21 @@ export interface Recognition {
   geometry: InkGeometry | null;
   /** How comfortably the best reading cleared its tests, discounted when a rival came close. 0–1. */
   confidence: number;
-  /** The drawing's extent, in room coordinates. */
+  /**
+   * Where the shape read from the drawing sits, in room coordinates: its extent, less any overshoot
+   * tails, and for a leaning box the upright box of the same size on the same centre.
+   */
   box: Box;
   /** For a line or arrow: where it starts and ends (room coordinates), and its heads. */
   line?: { from: Pt; to: Pt; heads: InkHeads };
   /** Every candidate's own score, for tests and for the alternatives offered. */
   scores: Partial<Record<InkGeometry, number>>;
+  /**
+   * A drawing of one stroke, as the path the hand took: its corners in room coordinates, start to
+   * end, with the wobble taken out. Geometry only, whatever the best reading is — whether a path
+   * between two shapes is a route for a connector is `interpret.ts`'s question.
+   */
+  trace?: Pt[];
 }
 
 // Every threshold, with its unit, is in `thresholds.ts`; the two a caller reads are re-exported.
@@ -66,27 +92,32 @@ export function recognize(strokes: readonly (readonly Pt[])[], options: { scale:
   const empty: Recognition = { geometry: null, confidence: 0, box: roomBox, scores: {} };
   if (prepared.all.length < 2 || Math.hypot(prepared.box.width, prepared.box.height) < MIN_DIAGONAL_PX) return empty;
 
+  const trace = prepared.strokes.length === 1 ? simplify(prepared.strokes[0]!, TRACE_EPSILON_PX).map((p) => toRoomPt(p, scale)) : undefined;
   const scores: Partial<Record<InkGeometry, number>> = {};
   const line = lineReading(prepared);
   if (line) scores.line = line.score;
   const arrow = arrowReading(prepared);
   if (arrow) scores.arrow = arrow.score;
-  scores.rectangle = rectangleScore(prepared);
-  scores.ellipse = ellipseScore(prepared.all, prepared.box);
+  // A closed outline is judged without the flicks it started and ended with.
+  const outline = outlineOf(prepared);
+  const rectangle = rectangleReading(outline.points, outline.box);
+  scores.rectangle = rectangle.score;
+  scores.ellipse = ellipseScore(outline.points, outline.box);
   scores.cylinder = cylinderScore(prepared, 'vertical');
   scores.tube = cylinderScore(prepared, 'horizontal');
   scores.person = personScore(prepared);
 
   const ranked = (Object.entries(scores) as Array<[InkGeometry, number]>).filter(([, score]) => score > 0).sort((a, b) => b[1] - a[1]);
   const best = ranked[0];
-  if (!best) return { ...empty, scores };
+  if (!best) return { ...empty, scores, ...(trace ? { trace } : {}) };
   const [geometry, score] = best;
   // A rival that nearly matched makes the reading less certain. A cylinder is also, partly, an
   // ellipse and a rectangle, and an arrow partly a line: those overlaps are expected, not rivals.
   const rival = ranked.slice(1).find(([other]) => !nested(geometry, other))?.[1] ?? 0;
   const confidence = score * (0.7 + 0.3 * ramp(score - rival, 0, 0.35));
 
-  const result: Recognition = { geometry, confidence, box: roomBox, scores };
+  const box = geometry === 'rectangle' ? toRoom(rectangle.box, scale) : geometry === 'ellipse' ? toRoom(outline.box, scale) : roomBox;
+  const result: Recognition = { geometry, confidence, box, scores, ...(trace ? { trace } : {}) };
   if (geometry === 'line' && line) result.line = { from: toRoomPt(line.from, scale), to: toRoomPt(line.to, scale), heads: 'none' };
   if (geometry === 'arrow' && arrow) result.line = { from: toRoomPt(arrow.from, scale), to: toRoomPt(arrow.to, scale), heads: arrow.heads };
   return result;
@@ -106,6 +137,41 @@ function prepare(strokes: readonly (readonly Pt[])[], scale: number): Prepared {
     .map((stroke) => resample(stroke.map((p) => ({ x: p.x * scale, y: p.y * scale })), RESAMPLE_STEP_PX));
   const all = resampled.flat();
   return { strokes: resampled, all, box: boxOf(all), inkLength: resampled.reduce((sum, s) => sum + pathLength(s), 0) };
+}
+
+/**
+ * The closed loop inside one stroke, or `null` when the stroke is not one loop with tails. Somewhere
+ * in its first stretch and somewhere in its last the pen passes (nearly) the same spot: that is where
+ * the outline closes, and what lies before and after is overshoot. Tails are short by definition — a
+ * loop with a long line out of it (a "9", a box with its connector) is not a box with a flick.
+ */
+function loopOf(stroke: readonly Pt[], box: Box): Pt[] | null {
+  const n = stroke.length;
+  if (n < 12) return null;
+  const search = Math.floor(n * LOOP_TAIL_FRACTION);
+  let best = Infinity;
+  let from = 0;
+  let to = n - 1;
+  for (let i = 0; i <= search; i += 1) {
+    for (let j = n - 1; j >= n - 1 - search; j -= 1) {
+      const d = dist(stroke[i]!, stroke[j]!);
+      if (d < best) {
+        best = d;
+        from = i;
+        to = j;
+      }
+    }
+  }
+  const trimmed = from + (n - 1 - to);
+  if (trimmed === 0 || trimmed > n * LOOP_TAIL_FRACTION) return null;
+  if (best > Math.max(LOOP_CLOSE_PX, Math.hypot(box.width, box.height) * LOOP_CLOSE_FRACTION)) return null;
+  return stroke.slice(from, to + 1);
+}
+
+/** What a closed outline is measured on: the loop of a one-stroke drawing, else all of the ink. */
+function outlineOf(prepared: Prepared): { points: readonly Pt[]; box: Box } {
+  const loop = prepared.strokes.length === 1 ? loopOf(prepared.strokes[0]!, prepared.box) : null;
+  return loop ? { points: loop, box: boxOf(loop) } : { points: prepared.all, box: prepared.box };
 }
 
 function toRoom(box: Box, scale: number): Box {
@@ -239,8 +305,7 @@ function cornersHit(points: readonly Pt[], box: Box, tolerance: number): number 
  * drawn, and (unlike an ellipse, which cuts them) its corners reached. Measured on all strokes at
  * once, so one continuous box and four separate lines read the same.
  */
-function rectangleScore(prepared: Prepared): number {
-  const { all, box } = prepared;
+function uprightScore(all: readonly Pt[], box: Box): number {
   const short = Math.min(box.width, box.height);
   const long = Math.max(box.width, box.height);
   if (short < 14 || short / long < 0.08) return 0;
@@ -267,6 +332,119 @@ function rectangleScore(prepared: Prepared): number {
     ramp(coverage.reduce((a, b) => a + b, 0) / 4, 0.6, 0.88),
     ramp(corners, 2.2, 3.6),
   );
+}
+
+const DEG = Math.PI / 180;
+
+/**
+ * A four-sided outline measured against its own corners rather than the box around it, so one that
+ * leans (a parallelogram, a box a few degrees off level, a side that runs in) still reads as a box.
+ * The corners are the points furthest out along the box's two diagonals. Everything else then has to
+ * hold: the ink lies along the four sides between them and covers each one, the corners are roughly
+ * square, opposite sides are a pair, and it leans no further than a hurried box does — a diamond is
+ * not a box. An oval's "corners" sit on its curve and its sides bulge past the lines between them,
+ * which the mean distance catches.
+ *
+ * The box it answers with is upright, as every shape on the canvas is: the same centre, as wide and
+ * as tall as its sides are long.
+ */
+function quadReading(points: readonly Pt[], box: Box): { score: number; box: Box } | null {
+  const short = Math.min(box.width, box.height);
+  const long = Math.max(box.width, box.height);
+  if (short < 14 || short / long < 0.08) return null;
+  // Top-left, top-right, bottom-right, bottom-left: the extremes along the diagonals, in the box's
+  // own proportions so a wide flat box finds its corners as surely as a square one.
+  const corners: Pt[] = [points[0]!, points[0]!, points[0]!, points[0]!];
+  const reach = [Infinity, -Infinity, -Infinity, Infinity];
+  for (const p of points) {
+    const u = (p.x - box.x) / box.width;
+    const v = (p.y - box.y) / box.height;
+    if (u + v < reach[0]!) {
+      reach[0] = u + v;
+      corners[0] = p;
+    }
+    if (u - v > reach[1]!) {
+      reach[1] = u - v;
+      corners[1] = p;
+    }
+    if (u + v > reach[2]!) {
+      reach[2] = u + v;
+      corners[2] = p;
+    }
+    if (u - v < reach[3]!) {
+      reach[3] = u - v;
+      corners[3] = p;
+    }
+  }
+  const lengths = corners.map((corner, i) => dist(corner, corners[(i + 1) % 4]!));
+  const [top, right, bottom, left] = lengths as [number, number, number, number];
+  if (Math.min(top, right, bottom, left) < 8) return null;
+
+  const tolerance = Math.min(18, Math.max(5, short * 0.09 + 3));
+  const BINS = 10;
+  const sides = [new Uint8Array(BINS), new Uint8Array(BINS), new Uint8Array(BINS), new Uint8Array(BINS)];
+  let near = 0;
+  let total = 0;
+  for (const p of points) {
+    let side = 0;
+    let nearest = Infinity;
+    for (let i = 0; i < 4; i += 1) {
+      const d = distToSegment(p, corners[i]!, corners[(i + 1) % 4]!);
+      if (d < nearest) {
+        nearest = d;
+        side = i;
+      }
+    }
+    total += nearest;
+    if (nearest > tolerance) continue;
+    near += 1;
+    const a = corners[side]!;
+    const b = corners[(side + 1) % 4]!;
+    const along = ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / (lengths[side]! * lengths[side]!);
+    sides[side]![Math.min(BINS - 1, Math.max(0, Math.floor(along * BINS)))] = 1;
+  }
+  const coverage = sides.map((bins) => bins.reduce((sum, bin) => sum + bin, 0) / BINS);
+  // How far each corner is from square, and each side from level or plumb.
+  let skew = 0;
+  let lean = 0;
+  for (let i = 0; i < 4; i += 1) {
+    const here = corners[i]!;
+    const next = corners[(i + 1) % 4]!;
+    const prev = corners[(i + 3) % 4]!;
+    skew = Math.max(skew, Math.abs(angleBetween(heading(here, next), heading(here, prev)) - Math.PI / 2));
+    const off = angleBetween(heading(here, next), i % 2 === 0 ? 0 : Math.PI / 2);
+    lean += Math.min(off, Math.PI - off) / 4;
+  }
+  const score = Math.min(
+    ramp(near / points.length, 0.8, 0.95),
+    ramp(total / points.length / short, 0.075, 0.04),
+    ramp(Math.min(...coverage), 0.4, 0.75),
+    ramp(coverage.reduce((a, b) => a + b, 0) / 4, 0.6, 0.88),
+    // Ink several times the length of the outline is scribbled along it, not drawn round it. (Twice
+    // is a box gone over again; evenly resampled, the number of points is the length of the ink.)
+    ramp((points.length * RESAMPLE_STEP_PX) / (top + right + bottom + left), 3, 2.2),
+    ramp(skew, 48 * DEG, 30 * DEG),
+    ramp(lean, 30 * DEG, 20 * DEG),
+    ramp(Math.min(top, bottom) / Math.max(top, bottom), 0.45, 0.65),
+    ramp(Math.min(left, right) / Math.max(left, right), 0.45, 0.65),
+  );
+  const cx = (corners[0]!.x + corners[1]!.x + corners[2]!.x + corners[3]!.x) / 4;
+  const cy = (corners[0]!.y + corners[1]!.y + corners[2]!.y + corners[3]!.y) / 4;
+  const width = (top + bottom) / 2;
+  const height = (left + right) / 2;
+  return { score, box: { x: cx - width / 2, y: cy - height / 2, width, height } };
+}
+
+/**
+ * The better of the two ways a box is read: upright against its extent, or against its own corners.
+ * Wherever the corners are sure of themselves the box is theirs — a box turned a few degrees still
+ * passes as upright, but its extent is larger than the box that was drawn.
+ */
+function rectangleReading(points: readonly Pt[], box: Box): { score: number; box: Box } {
+  const upright = uprightScore(points, box);
+  const quad = quadReading(points, box);
+  if (!quad) return { score: upright, box };
+  return { score: Math.max(upright, quad.score), box: quad.score > upright || quad.score >= CONVERT_CONFIDENCE ? quad.box : box };
 }
 
 /**

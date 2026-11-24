@@ -75,10 +75,12 @@ describe('MCP tool definitions', () => {
   });
 
   it('keeps the connected tool catalog within its compact JSON size budget', () => {
-    expect(Buffer.byteLength(JSON.stringify(ENTRY_TOOLS))).toBeLessThanOrEqual(450);
+    // The one tool most agents are shown: enough to say how help, a read and an update are called.
+    expect(Buffer.byteLength(JSON.stringify(ENTRY_TOOLS))).toBeLessThanOrEqual(700);
     expect(Buffer.byteLength(JSON.stringify(PLANNING_ENTRY_TOOLS))).toBeLessThanOrEqual(1_200);
     // The checked-in file is indented; tools/list serializes compact JSON for clients.
-    expect(Buffer.byteLength(JSON.stringify(TOOLS))).toBeLessThanOrEqual(16_000);
+    // Includes what `set` takes for each kind of target, once, on update_diagram.
+    expect(Buffer.byteLength(JSON.stringify(TOOLS))).toBeLessThanOrEqual(16_500);
   });
 
   it('keep the companion’s own tools apart from the published ones', () => {
@@ -159,11 +161,14 @@ describe('MCP tool definitions', () => {
       expect(refsIn(t.inputSchema)).toEqual([]);
       expect('outputSchema' in t).toBe(false);
     }
-    for (const name of ['update_diagram', 'preview_diagram', 'submit_proposal']) {
+    // The grammar is stated once, on update_diagram; the other two point at it.
+    expect(tool('update_diagram').inputSchema.properties.ops.items.type).toBe('object');
+    expect(tool('update_diagram').inputSchema.properties.ops.description).toContain('op:"update"');
+    for (const name of ['preview_diagram', 'submit_proposal']) {
       expect(tool(name).inputSchema.properties.ops.items).toEqual({ type: 'object' });
-      expect(tool(name).inputSchema.properties.ops.description).toContain('op:"update"');
-      expect(fullTool(name).inputSchema.$defs).toBeDefined();
+      expect(tool(name).inputSchema.properties.ops.description).toContain('update_diagram');
     }
+    for (const name of ['update_diagram', 'preview_diagram', 'submit_proposal']) expect(fullTool(name).inputSchema.$defs).toBeDefined();
   });
 
   it('refuses, in every op, a field that belongs to another op or to no op', () => {

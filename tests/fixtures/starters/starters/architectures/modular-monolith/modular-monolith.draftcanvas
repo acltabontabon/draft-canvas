@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 25,
+  "version": 31,
   "metadata": {
     "id": "starter-modular-monolith",
     "title": "Modular Monolith",
@@ -9,300 +9,559 @@
   },
   "nodes": [
     {
-      "id": "client",
-      "type": "actor",
-      "x": -60,
-      "y": -389,
-      "width": 120,
-      "height": 92,
-      "z": 0,
-      "text": "Client",
-      "textOrigin": "explicit",
-      "actorKind": "system",
-      "actorFrame": "borderless"
-    },
-    {
       "id": "app",
       "type": "group",
-      "x": -468,
-      "y": -193,
-      "width": 936,
-      "height": 328,
+      "x": -112,
+      "y": -123,
+      "width": 1024,
+      "height": 706,
       "z": -1,
-      "text": "Application",
+      "text": "Course Platform",
       "textOrigin": "explicit",
-      "boundaryPreset": "deployment",
-      "attachments": [
-        {
-          "id": "a_9n06gnlpudn8",
-          "type": "note",
-          "text": "One artifact, one deploy — the same unit as the Monolith. Module boundaries are enforced at build time (packages, visibility, dependency rules), not by the network.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
-        }
-      ]
+      "boundaryPreset": "deployment"
+    },
+    {
+      "id": "learner",
+      "type": "actor",
+      "x": 340,
+      "y": -329,
+      "width": 120,
+      "height": 118,
+      "z": 0,
+      "text": "Learner",
+      "description": "Browses courses and enrols in them.",
+      "textOrigin": "explicit",
+      "actorKind": "human",
+      "actorFrame": "borderless"
     },
     {
       "id": "api",
       "type": "component",
-      "x": -76,
-      "y": -137,
-      "width": 152,
-      "height": 56,
+      "x": 320,
+      "y": -71,
+      "width": 160,
+      "height": 142,
       "z": 0,
       "parentId": "app",
-      "text": "Application API",
+      "text": "Web API",
+      "description": "Maps HTTP onto each module's public interface.",
+      "technology": "Spring Boot 3",
       "textOrigin": "explicit",
-      "componentKind": "adapter"
-    },
-    {
-      "id": "module-a",
-      "type": "component",
-      "x": -432,
-      "y": 23,
-      "width": 176,
-      "height": 76,
-      "z": 0,
-      "parentId": "app",
-      "text": "Capability A",
-      "textOrigin": "explicit",
-      "componentKind": "module"
-    },
-    {
-      "id": "module-b",
-      "type": "component",
-      "x": -88,
-      "y": 23,
-      "width": 176,
-      "height": 76,
-      "z": 0,
-      "parentId": "app",
-      "text": "Capability B",
-      "textOrigin": "explicit",
-      "componentKind": "module"
-    },
-    {
-      "id": "module-c",
-      "type": "component",
-      "x": 256,
-      "y": 23,
-      "width": 176,
-      "height": 76,
-      "z": 0,
-      "parentId": "app",
-      "text": "Capability C",
-      "textOrigin": "explicit",
-      "componentKind": "module"
-    },
-    {
-      "id": "database",
-      "type": "group",
-      "x": -494,
-      "y": 207,
-      "width": 988,
-      "height": 182,
-      "z": -1,
-      "text": "Shared Database",
-      "textOrigin": "explicit",
-      "boundaryPreset": "boundary",
+      "componentKind": "adapter",
       "attachments": [
         {
-          "id": "a_ae3jpuojsnxa",
+          "id": "n.verify",
+          "type": "code",
+          "language": "java",
+          "code": "@Test\nvoid modulesKeepTheirBoundaries() {\n  ApplicationModules.of(PlatformApplication.class)\n      .verify();\n}",
+          "width": 407,
+          "height": 138.875
+        }
+      ]
+    },
+    {
+      "id": "catalog",
+      "type": "component",
+      "x": -80,
+      "y": 409,
+      "width": 160,
+      "height": 142,
+      "z": 0,
+      "parentId": "app",
+      "text": "Catalog",
+      "description": "Owns courses, cohorts and seat limits.",
+      "technology": "Spring",
+      "textOrigin": "explicit",
+      "componentKind": "module"
+    },
+    {
+      "id": "enrollment",
+      "type": "component",
+      "x": 320,
+      "y": 162,
+      "width": 160,
+      "height": 156,
+      "z": 0,
+      "parentId": "app",
+      "text": "Enrollment",
+      "description": "Holds a seat, takes payment and confirms the place.",
+      "technology": "Spring",
+      "textOrigin": "explicit",
+      "componentKind": "module",
+      "attachments": [
+        {
+          "id": "n.one",
           "type": "note",
-          "text": "One physical database, one schema per module. A module reads and writes only its own tables; anything it needs from another module goes through that module’s interface. Separate servers are not required.",
-          "noteKind": "note",
+          "text": "One jar, one deploy. Modules are packages; only their API package is public, and a build-time test fails on any other reach-in.",
+          "noteKind": "decision",
+          "width": 200,
+          "height": 56
+        }
+      ],
+      "inside": {
+        "nodes": [
+          {
+            "id": "e.web",
+            "type": "component",
+            "x": 254,
+            "y": 0,
+            "width": 120,
+            "height": 114,
+            "z": 0,
+            "text": "Web API",
+            "technology": "Spring Boot 3",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "e.port",
+            "type": "component",
+            "x": 234,
+            "y": 186,
+            "width": 160,
+            "height": 142,
+            "z": 0,
+            "text": "EnrollmentApi",
+            "description": "The module's only public entry point.",
+            "technology": "Java",
+            "textOrigin": "explicit",
+            "componentKind": "port"
+          },
+          {
+            "id": "e.service",
+            "type": "component",
+            "x": 238,
+            "y": 400,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Enrollment Service",
+            "description": "Runs the enrol use case in one transaction.",
+            "technology": "Java",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "e.repo",
+            "type": "component",
+            "x": 0,
+            "y": 618,
+            "width": 180,
+            "height": 142,
+            "z": 0,
+            "text": "Enrollment Repository",
+            "description": "Reads and writes enrollment tables only.",
+            "technology": "Hibernate",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "e.tables",
+            "type": "database",
+            "x": 105,
+            "y": 832,
+            "width": 120,
+            "height": 114,
+            "z": 0,
+            "text": "enrollment.*",
+            "technology": "PostgreSQL 16",
+            "textOrigin": "explicit",
+            "databaseKind": "table"
+          },
+          {
+            "id": "e.billing",
+            "type": "component",
+            "x": 234,
+            "y": 626,
+            "width": 160,
+            "height": 126,
+            "z": 0,
+            "text": "BillingApi",
+            "description": "Billing's public interface.",
+            "technology": "Java",
+            "textOrigin": "explicit",
+            "componentKind": "port"
+          },
+          {
+            "id": "e.events",
+            "type": "component",
+            "x": 448,
+            "y": 649,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Event Publisher",
+            "description": "Publishes module events after commit.",
+            "technology": "Spring",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          }
+        ],
+        "edges": [
+          {
+            "id": "e.call",
+            "source": "e.web",
+            "target": "e.port",
+            "label": "enrol(courseId, learnerId)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "e.impl",
+            "source": "e.port",
+            "target": "e.service",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "implementedBy",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "e.save",
+            "source": "e.service",
+            "target": "e.repo",
+            "label": "holdSeat()",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "e.sql",
+            "source": "e.repo",
+            "target": "e.tables",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "readsWrites",
+            "sourceAnchor": {
+              "side": "bottom",
+              "offset": 0.75
+            },
+            "targetAnchor": {
+              "side": "top",
+              "offset": 0.25
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "e.charge",
+            "source": "e.service",
+            "target": "e.billing",
+            "label": "charge(learner, price)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "e.publish",
+            "source": "e.service",
+            "target": "e.events",
+            "label": "EnrollmentCompleted",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "e.flow",
+            "title": "Enrol, inside the module",
+            "steps": [
+              {
+                "id": "e.flow.s1",
+                "edgeId": "e.call",
+                "caption": "Callers only ever see EnrollmentApi; everything else is package-private."
+              },
+              {
+                "id": "e.flow.s2",
+                "edgeId": "e.impl",
+                "caption": "The service behind the interface runs the use case."
+              },
+              {
+                "id": "e.flow.s3",
+                "edgeId": "e.save",
+                "caption": "A seat is held for the learner."
+              },
+              {
+                "id": "e.flow.s4",
+                "edgeId": "e.sql",
+                "caption": "Only the enrollment schema is touched."
+              },
+              {
+                "id": "e.flow.s5",
+                "edgeId": "e.charge",
+                "caption": "Payment goes through Billing's own public interface."
+              },
+              {
+                "id": "e.flow.s6",
+                "edgeId": "e.publish",
+                "caption": "Once committed, EnrollmentCompleted is published in process."
+              }
+            ],
+            "accent": "blue"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      }
+    },
+    {
+      "id": "billing",
+      "type": "component",
+      "x": 720,
+      "y": 409,
+      "width": 160,
+      "height": 142,
+      "z": 0,
+      "parentId": "app",
+      "text": "Billing",
+      "description": "Charges learners and keeps invoices.",
+      "technology": "Spring",
+      "textOrigin": "explicit",
+      "componentKind": "module",
+      "attachments": [
+        {
+          "id": "n.extract",
+          "type": "note",
+          "text": "Billing is the likeliest first module to extract: it alone is in PCI scope. Worth it yet?",
+          "noteKind": "question",
           "width": 200,
           "height": 56
         }
       ]
     },
     {
-      "id": "tables-a",
-      "type": "database",
-      "x": -430,
-      "y": 251,
-      "width": 172,
-      "height": 102,
+      "id": "notify",
+      "type": "component",
+      "x": 320,
+      "y": 409,
+      "width": 160,
+      "height": 142,
       "z": 0,
-      "parentId": "database",
-      "text": "Capability A Tables",
+      "parentId": "app",
+      "text": "Notifications",
+      "description": "Sends welcome and receipt emails.",
+      "technology": "Spring",
       "textOrigin": "explicit",
-      "accent": "blue",
+      "componentKind": "module"
+    },
+    {
+      "id": "t.catalog",
+      "type": "database",
+      "x": -60,
+      "y": 669,
+      "width": 120,
+      "height": 143,
+      "z": 0,
+      "text": "catalog.*",
+      "description": "Courses, cohorts and seats.",
+      "technology": "PostgreSQL 16",
+      "textOrigin": "explicit",
       "databaseKind": "table"
     },
     {
-      "id": "tables-b",
+      "id": "t.enrollment",
       "type": "database",
-      "x": -86,
-      "y": 251,
-      "width": 172,
-      "height": 102,
+      "x": 1140,
+      "y": 161,
+      "width": 120,
+      "height": 143,
       "z": 0,
-      "parentId": "database",
-      "text": "Capability B Tables",
+      "text": "enrollment.*",
+      "description": "Held and confirmed places.",
+      "technology": "PostgreSQL 16",
       "textOrigin": "explicit",
-      "accent": "blue",
+      "databaseKind": "table",
+      "attachments": [
+        {
+          "id": "n.schema",
+          "type": "note",
+          "text": "One server, one schema per module. Each module's database role is granted only its own schema, or a join will creep in.",
+          "noteKind": "warning",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "t.billing",
+      "type": "database",
+      "x": 730,
+      "y": 669,
+      "width": 140,
+      "height": 143,
+      "z": 0,
+      "text": "billing.*",
+      "description": "Charges and invoices.",
+      "technology": "PostgreSQL 16",
+      "textOrigin": "explicit",
       "databaseKind": "table"
     },
     {
-      "id": "tables-c",
-      "type": "database",
-      "x": 258,
-      "y": 251,
-      "width": 172,
-      "height": 102,
+      "id": "stripe",
+      "type": "service",
+      "x": 1110,
+      "y": 417,
+      "width": 180,
+      "height": 126,
       "z": 0,
-      "parentId": "database",
-      "text": "Capability C Tables",
+      "text": "Stripe",
+      "description": "Takes card payments.",
+      "technology": "Stripe",
       "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "table"
+      "serviceKind": "external"
+    },
+    {
+      "id": "mail",
+      "type": "service",
+      "x": 310,
+      "y": 677,
+      "width": 180,
+      "height": 126,
+      "z": 0,
+      "text": "Mailgun",
+      "description": "Delivers transactional email.",
+      "technology": "Mailgun",
+      "textOrigin": "explicit",
+      "serviceKind": "external"
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "x": -112,
+      "y": -487,
+      "width": 900,
+      "height": 110,
+      "z": 0,
+      "text": "# Online course platform\nA modular monolith: four modules with their own tables, one deployable.",
+      "textOrigin": "explicit",
+      "textRole": "title"
     }
   ],
   "edges": [
     {
-      "id": "call",
-      "source": "client",
+      "id": "request",
+      "source": "learner",
       "target": "api",
+      "label": "POST /enrollments",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "calls",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semantic": "http",
+      "response": "201 Enrolled",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "dispatch-a",
+      "id": "dispatch",
       "source": "api",
-      "target": "module-a",
+      "target": "enrollment",
+      "label": "EnrollmentApi.enrol()",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "uses",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "dispatch-b",
-      "source": "api",
-      "target": "module-b",
+      "id": "seats",
+      "source": "enrollment",
+      "target": "catalog",
+      "label": "seatsLeft(cohort)",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "uses",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "dispatch-c",
-      "source": "api",
-      "target": "module-c",
+      "id": "charge",
+      "source": "enrollment",
+      "target": "billing",
+      "label": "BillingApi.charge()",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "uses",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "collaborate",
-      "source": "module-b",
-      "target": "module-c",
-      "label": "in-process public interface",
+      "id": "completed",
+      "source": "enrollment",
+      "target": "notify",
+      "label": "EnrollmentCompleted",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "uses",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "kind": "event",
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.listener",
+          "type": "code",
+          "language": "java",
+          "code": "@ApplicationModuleListener\nvoid on(EnrollmentCompleted event) {\n  mailer.sendWelcome(event.learnerId(),\n      event.courseId());\n}",
+          "width": 324.5,
+          "height": 138.875
+        }
+      ]
     },
     {
-      "id": "persist-a",
-      "source": "module-a",
-      "target": "tables-a",
+      "id": "persist-catalog",
+      "source": "catalog",
+      "target": "t.catalog",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "readsWrites",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "persist-b",
-      "source": "module-b",
-      "target": "tables-b",
+      "id": "persist-enrollment",
+      "source": "enrollment",
+      "target": "t.enrollment",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "readsWrites",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "persist-c",
-      "source": "module-c",
-      "target": "tables-c",
+      "id": "persist-billing",
+      "source": "billing",
+      "target": "t.billing",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "readsWrites",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "pay",
+      "source": "billing",
+      "target": "stripe",
+      "label": "Charges card",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "response": "succeeded",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "email",
+      "source": "notify",
+      "target": "mail",
+      "label": "Sends welcome email",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "semanticsOrigin": "explicit"
     }
   ],
   "viewport": {
-    "x": 720,
-    "y": 450,
-    "zoom": 0.9254498714652957
+    "x": 0,
+    "y": 0,
+    "zoom": 1
   },
   "settings": {
     "showSequence": true,
@@ -316,49 +575,80 @@
   },
   "flows": [
     {
-      "id": "flow1",
-      "title": "Handle a request",
+      "id": "enrol",
+      "title": "Enrol in a course",
       "steps": [
         {
-          "id": "fs_tv0tn8rqg81g",
-          "edgeId": "call"
+          "id": "enrol.s1",
+          "edgeId": "request",
+          "caption": "A learner enrols in the March cohort."
         },
         {
-          "id": "fs_8dak1nk4naej",
-          "edgeId": "dispatch-a"
+          "id": "enrol.s2",
+          "edgeId": "dispatch",
+          "caption": "The Web API calls Enrollment's public interface, nothing deeper."
         },
         {
-          "id": "fs_fwofrwfwvvz2",
-          "edgeId": "persist-a",
-          "caption": "Its own tables, nobody else’s"
+          "id": "enrol.s3",
+          "edgeId": "seats",
+          "caption": "Enrollment asks Catalog for seats left, through Catalog's interface."
+        },
+        {
+          "id": "enrol.s4",
+          "edgeId": "persist-enrollment",
+          "caption": "A seat is held in Enrollment's own tables."
+        },
+        {
+          "id": "enrol.s5",
+          "edgeId": "charge",
+          "caption": "Billing is asked to charge the course price."
+        },
+        {
+          "id": "enrol.s6",
+          "edgeId": "pay",
+          "caption": "Billing charges the card with Stripe."
+        },
+        {
+          "id": "enrol.s7",
+          "edgeId": "persist-billing",
+          "caption": "The charge and invoice land in Billing's own tables."
+        },
+        {
+          "id": "enrol.s8",
+          "edgeId": "completed",
+          "caption": "After commit, EnrollmentCompleted goes to listening modules."
+        },
+        {
+          "id": "enrol.s9",
+          "edgeId": "email",
+          "caption": "Notifications sends the welcome email."
         }
       ],
-      "accent": "green"
+      "accent": "teal"
     },
     {
-      "id": "flow2",
-      "title": "Collaborate across modules",
+      "id": "declined",
+      "title": "Card declined",
       "steps": [
         {
-          "id": "fs_4evcasb5csym",
-          "edgeId": "call"
+          "id": "declined.s1",
+          "edgeId": "pay",
+          "caption": "Stripe declines the card; Billing records the failed charge."
         },
         {
-          "id": "fs_wvbmef8xe3pf",
-          "edgeId": "dispatch-b"
+          "id": "declined.s2",
+          "edgeId": "charge",
+          "caption": "Billing answers Declined to Enrollment, a plain return value."
         },
         {
-          "id": "fs_hhfnw1n03fm2",
-          "edgeId": "collaborate",
-          "caption": "Through C’s public interface — never its internals or tables"
-        },
-        {
-          "id": "fs_6dewsevqazvo",
-          "edgeId": "persist-c",
-          "caption": "C writes its own tables on B’s behalf"
+          "id": "declined.s3",
+          "edgeId": "persist-enrollment",
+          "caption": "Enrollment releases the held seat. No event is published."
         }
       ],
-      "accent": "amber"
+      "accent": "rose",
+      "variantOf": "enrol"
     }
-  ]
+  ],
+  "level": "component"
 }

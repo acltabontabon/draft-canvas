@@ -1,7 +1,7 @@
 name: Homebrew
 
 # Explicitly called after desktop publication: release events made by GITHUB_TOKEN do not start
-# another workflow. This channel is independent of Pages and signed in-app updater publication.
+# another workflow. This channel is independent of the web deploy and signed in-app updater publication.
 on:
   workflow_call:
     inputs:

@@ -5,7 +5,7 @@
 | Workflow | What it gates |
 | --- | --- |
 | [CI](../../.github/workflows/ci.yml) | Resolves the ref to one commit. Lint, tooling typecheck and coverage once ([Shared checks](../../.github/workflows/shared-checks.yml)); build and `licenses:check`; editor journeys in Chromium, Firefox and WebKit; offline and assembled-site journeys against the built artifact; [Desktop checks](../../.github/workflows/desktop-ci.yml); [Dependency security](../../.github/workflows/security.yml); [Performance](../../.github/workflows/performance.yml) on tag pushes only |
-| [Release](../../.github/workflows/release.yml) | Runs CI, then creates a **draft** release, then Desktop Release, Pages and Homebrew |
+| [Release](../../.github/workflows/release.yml) | Runs CI, then creates a **draft** release, then Desktop Release, the web deploy and Homebrew |
 | [Desktop Release](../../.github/workflows/desktop-release.yml) | Checks version and updater signatures, starts the arm64 macOS app, installs and starts the Windows app. Only then publishes and moves the update channels |
 | [Deploy the web](../../.github/workflows/pages.yml) | Publishes the verified artifact from the same run and checks its recorded commit |
 | [Deploy site changes](../../.github/workflows/pages-site.yml) | Site-only changes: keeps the released editor, builds once, tests in all three browsers. Never releases a new editor |

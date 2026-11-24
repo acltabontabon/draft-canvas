@@ -203,7 +203,7 @@ describe('MCP fidelity regressions', () => {
   });
 
   it('rejects unknown patch fields and fields belonging to another op at runtime', () => {
-    expect(() => applyUpdate(base(), [], [{ op: 'update', id: 'api', set: { technlogy: 'Rust' } }], undefined)).toThrow(/unsupported field/);
+    expect(() => applyUpdate(base(), [], [{ op: 'update', id: 'api', set: { technlogy: 'Rust' } }], undefined)).toThrow(/not a field of an element .*; use technology/);
     expect(() => applyUpdate(base(), [], [{ op: 'update', id: 'api', set: { label: 'A' }, ids: ['db'] }], undefined)).toThrow(/unsupported field/);
     expect(() => applyUpdate(base(), [], [{ op: 'update', id: 'api', set: {} }], undefined)).toThrow(/at least one/);
   });
@@ -350,6 +350,24 @@ describe('MCP fidelity regressions', () => {
     file.edges.push(createEdge({ id: 'rw', source: 'db', target: 'worker' }));
     expect([...renderFocus(file, { nodes: ['api'], neighbors: true })!]).toEqual(['api', 'db']);
     expect(() => renderFocus(file, { nodes: ['missing'] })).toThrow();
+  });
+
+  it('holds a typed list of shapes to its limit, but never the person’s own selection', () => {
+    const file = base();
+    const ids = Array.from({ length: 201 }, (_, i) => `n${i}`);
+    for (const [i, id] of ids.entries()) file.nodes.push(node(id, 2000 + i * 200));
+    // 201 selected shapes render; the selection is resolved by the host, not listed by the caller.
+    expect(renderFocus(file, {}, ids)!.size).toBe(201);
+    expect([...renderFocus(file, { neighbors: true }, ['api'])!]).toEqual(['api', 'db']);
+    // Shapes selected in another view are left out rather than refused.
+    expect([...renderFocus(file, {}, ['api', 'elsewhere'])!]).toEqual(['api']);
+    expect(() => renderFocus(file, {}, ['elsewhere'])).toThrow(/no shapes in this focus/);
+    expect(() => renderFocus(file, { nodes: ['api'] }, ['db'])).toThrow(/exactly one focus/);
+    // A typed list past the limit is told the limit, not that its ids are wrong.
+    expect(() => renderFocus(file, { nodes: ids.slice(0, 200) })).not.toThrow();
+    let error: unknown;
+    try { renderFocus(file, { nodes: ids }); } catch (caught) { error = caught; }
+    expect(error).toMatchObject({ code: 'LIMIT_EXCEEDED', message: expect.stringContaining('200') });
   });
 
   it('honours an explicit fallback type while refusing unsupported types without one', () => {

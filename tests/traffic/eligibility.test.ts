@@ -123,14 +123,11 @@ describe('connector classification', () => {
     const result = analyzeTraffic({ nodes: [service, otherService], edges: [edge('undirected', service.id, otherService.id, { directed: false, semantic: 'calls' })] });
     expect(result.interactions).toEqual(expect.arrayContaining([expect.objectContaining({ class: 'association' })]));
     expect(result.status).toBe('nothing-to-analyze');
-    expect(result.insights.some((value) => value.kind === 'undirected')).toBe(true);
   });
 
   it('keeps a conditional semantic class but makes its traffic possible', () => {
     const conditional = classifyConnector(edge('conditional', service.id, otherService.id, { semantic: 'calls', kind: 'conditional', condition: 'approved' }), service, otherService);
     expect(conditional).toMatchObject({ class: 'request', certainty: 'possible', uncertainty: 'conditional', sync: false });
-    const result = analyzeTraffic({ nodes: [service, otherService], edges: [edge('condition-chip', service.id, otherService.id, { semantic: 'calls', condition: 'approved' })] });
-    expect(result.insights.find((value) => value.kind === 'conditional')?.text).toMatch(/approved/);
   });
 
   it('only lets retry, failure, fallback and callback override a baseline class', () => {
@@ -138,8 +135,6 @@ describe('connector classification', () => {
       const classified = classifyConnector(edge(`nonbaseline-${kind}`, service.id, otherService.id, { semantic: 'dependsOn', kind }), service, otherService);
       expect(classified.class, kind).toBe('structural');
     }
-    const result = analyzeTraffic({ nodes: [service, otherService], edges: [edge('structural-retry', service.id, otherService.id, { semantic: 'dependsOn', kind: 'retry' })] });
-    expect(result.insights.some((value) => value.kind === 'retry-amplification')).toBe(false);
   });
 
   it('treats async as the only reason a request route is not synchronous', () => {

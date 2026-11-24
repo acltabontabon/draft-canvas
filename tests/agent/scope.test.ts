@@ -147,3 +147,31 @@ describe('update_diagram scope enforcement', () => {
     expect(next.flows.find((f) => f.id === 'f')?.title).toBe('Renamed');
   });
 });
+
+describe('update_diagram and what the person set', () => {
+  const held = (file: DraftDocument, id: string): DraftDocument => ({ ...file, nodes: file.nodes.map((n) => (n.id === id ? { ...n, held: true } : n)) });
+  const at = (file: DraftDocument, id: string) => {
+    const node = file.nodes.find((n) => n.id === id)!;
+    return { x: node.x, y: node.y, width: node.width, height: node.height };
+  };
+
+  it('arranges around a shape held in place', () => {
+    const start = base({ flow: false });
+    // Somewhere no arrangement would put it, so staying there is the hold and not a coincidence.
+    const file = held({ ...start, nodes: start.nodes.map((n) => (n.id === 'user' ? { ...n, x: n.x + 900, y: n.y + 700 } : n)) }, 'user');
+    const { file: next } = applyUpdate(file, [], [{ op: 'arrange' }], undefined);
+    expect(at(next, 'user')).toEqual(at(file, 'user'));
+    const free = applyUpdate({ ...file, nodes: file.nodes.map((n) => ({ ...n, held: undefined })) }, [], [{ op: 'arrange' }], undefined).file;
+    expect(at(free, 'user')).not.toEqual(at(file, 'user'));
+  });
+
+  it('keeps a kind the agent names when the technology changes afterwards', () => {
+    const file = build({ nodes: [{ id: 'edge', type: 'service', label: 'Edge', technology: 'NGINX' }] });
+    expect(file.nodes[0]).toMatchObject({ serviceKind: 'proxy', kindOrigin: 'technology' });
+    const named = applyUpdate(file, [], [{ op: 'update', id: 'edge', set: { type: 'gateway' } }], undefined).file;
+    expect(named.nodes[0]).toMatchObject({ serviceKind: 'gateway' });
+    expect(named.nodes[0]!.kindOrigin).toBeUndefined();
+    const later = applyUpdate(named, [], [{ op: 'update', id: 'edge', set: { technology: 'NGINX 1.27' } }], undefined).file;
+    expect(later.nodes[0]).toMatchObject({ serviceKind: 'gateway' });
+  });
+});

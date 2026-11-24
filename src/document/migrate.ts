@@ -149,10 +149,10 @@ function migrateFlowAccent(doc: Record<string, unknown>): Record<string, unknown
 }
 
 /**
- * v4 has no concept of a canvas background at all — same structural-no-op
- * shape as `migrateFlowAccent`. `document/validate.ts`'s `normalizeDocument`
- * gives every migrated document a clean, disabled default background block;
- * there is no v4 data to derive one from.
+ * v5 added a canvas background image; v4 had none to carry over — same
+ * structural-no-op shape as `migrateFlowAccent`. Background images are gone
+ * since (a canvas is its style's): `document/validate.ts`'s `normalizeDocument`
+ * does not read `settings.background`, so a file that has one opens without it.
  */
 function migrateBackground(doc: Record<string, unknown>): Record<string, unknown> {
   return doc;
@@ -601,6 +601,95 @@ function migrateTextToMarkdown(doc: Record<string, unknown>): Record<string, unk
 }
 
 /**
+ * The heights a glyph kind needs, by what is written under its glyph: a name and a kind; those and a
+ * technology; those and a description. The Data Store family's own boxes for the same three cases,
+ * as they stood at v30.
+ */
+const GLYPH_KIND_HEIGHT = { plain: 114, technology: 128, described: 143 } as const;
+/** The narrowest a glyph kind's box is (the Data Store's default), and roughly what one letter of a
+ *  name is wide at the size a name is set in. An estimate: a migration has no font to measure with. */
+const GLYPH_KIND_WIDTH = 120;
+const NAME_ADVANCE = 8.6;
+// A loop, not `Math.max(...lines)`: a migration reads text no validator has cut yet, and a name of a
+// few hundred thousand lines is more arguments than a call can take. The file was refused.
+const longestLine = (text: unknown): number => {
+  if (typeof text !== 'string') return 0;
+  let longest = 0;
+  for (const line of text.split(/\r\n|\r|\n/)) longest = Math.max(longest, line.trim().length);
+  return longest;
+};
+const FORMER_CARD_KINDS: ReadonlySet<unknown> = new Set(['worker', 'external', 'scheduler', 'gateway']);
+
+/**
+ * How far below a glyph box's top its glyph's middle sits. `dataStoreGeometry.ts`'s numbers as they
+ * stood at v30, frozen here the way every migration freezes what it read: 9 down to a glyph 42
+ * high, both grown by the box's scale over its 90 by 88 unit, which for a Service stops at the
+ * scale of a 114-high box.
+ */
+function glyphMiddle(width: number, height: number): number {
+  const scale = Math.min(114 / 88, Math.max(1, Math.min(width / 90, height / 88)));
+  return (9 + 42 / 2) * scale;
+}
+
+/**
+ * v30 draws a Worker, an External system, a Scheduler and a Gateway as a glyph with the name
+ * underneath, where they were cards with the name inside. A card's box is too short for that, so
+ * each one grows to the height the new drawing needs for what it carries. It is placed so the
+ * glyph's middle is where the card's middle was: that is where a connector into its side met it,
+ * so a line that ran straight still does, and what stood level with it is still level. The name,
+ * kind and description now hang below that line instead of sitting on it. The width is left
+ * alone: the words were fitted to it.
+ */
+function migrateCardKindsToGlyphs(doc: Record<string, unknown>): Record<string, unknown> {
+  return cardsToGlyphs(doc, (node) => node.type === 'service' && FORMER_CARD_KINDS.has(node.serviceKind));
+}
+
+/**
+ * v31 does the same for a Module, an Adapter and a Port, which were a Component's box with a mark
+ * on its edge. The same move for the same reason, so the same code: the glyph's middle goes where
+ * the box's middle was.
+ */
+const FORMER_CARD_COMPONENTS: ReadonlySet<unknown> = new Set(['module', 'adapter', 'port']);
+function migrateComponentKindsToGlyphs(doc: Record<string, unknown>): Record<string, unknown> {
+  return cardsToGlyphs(doc, (node) => node.type === 'component' && FORMER_CARD_COMPONENTS.has(node.componentKind));
+}
+
+function cardsToGlyphs(doc: Record<string, unknown>, formerCard: (node: Record<string, unknown>) => boolean): Record<string, unknown> {
+  if (!Array.isArray(doc.nodes)) return doc;
+  const written = (value: unknown) => typeof value === 'string' && value.trim() !== '';
+  return {
+    ...doc,
+    nodes: doc.nodes.map((raw) => {
+      if (!raw || typeof raw !== 'object') return raw;
+      const node = raw as Record<string, unknown>;
+      if (!formerCard(node)) return raw;
+      const { y, width, height } = node;
+      if (typeof y !== 'number' || typeof width !== 'number' || typeof height !== 'number') return raw;
+      if (!Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height)) return raw;
+      const needed = written(node.description)
+        ? GLYPH_KIND_HEIGHT.described
+        : written(node.technology)
+          ? GLYPH_KIND_HEIGHT.technology
+          : GLYPH_KIND_HEIGHT.plain;
+      const tall = Math.max(height, needed);
+      // With nothing but a name under it, the box only needs to be as wide as the name: a card's
+      // width left the glyph in the middle of an empty box, its connectors crossing the margins.
+      const { x, text } = node;
+      const narrow =
+        !written(node.description) && typeof x === 'number' && Number.isFinite(x)
+          ? Math.min(width, Math.max(GLYPH_KIND_WIDTH, Math.ceil(longestLine(text) * NAME_ADVANCE) + 24))
+          : width;
+      return {
+        ...node,
+        ...(narrow !== width && typeof x === 'number' ? { x: Math.round(x + (width - narrow) / 2), width: narrow } : {}),
+        y: Math.round(y + height / 2 - glyphMiddle(narrow, tall)),
+        height: tall,
+      };
+    }),
+  };
+}
+
+/**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
 const MIGRATIONS: Record<number, Migration> = {
@@ -643,6 +732,18 @@ const MIGRATIONS: Record<number, Migration> = {
   // version still moves so an older build refuses a file with sketches by name rather than opening
   // it and silently dropping them on the next save.
   27: (document) => document,
+  // Optional `held` on shapes and `portal` on connectors; a diagram without them means the same.
+  // The version moves so an older build refuses the file rather than dropping both on its next save.
+  28: (document) => document,
+  // The `artifact` shape and two Service kinds (`load-balancer`, `proxy`), which nothing older
+  // holds, and four kinds that stop being cards (`migrateCardKindsToGlyphs`).
+  29: everyRoom(migrateCardKindsToGlyphs),
+  // Three Component kinds stop being cards too (`migrateComponentKindsToGlyphs`).
+  30: everyRoom(migrateComponentKindsToGlyphs),
+  // Optional root `style`: how the diagram is drawn. A diagram without one means what it always
+  // did, the opening device's own drawing hand. Root-only, so not wrapped in `everyRoom`. The
+  // version moves so an older build refuses a styled file rather than dropping its look on save.
+  31: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

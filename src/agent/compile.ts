@@ -17,7 +17,7 @@ import { captionSizer, measureContext, placeRoom, type PlacedRoom } from './plac
 import { silent, type Report } from './progress';
 import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
 import { pastDeadline, relaxLayoutAnchors, repairAnchors, withDeadline, type KeptPin } from './route';
-import { buildFromStarter, type AgentStarter } from './starter';
+import { buildFromStarter, starterKeptIds, type AgentStarter } from './starter';
 import { legibilityCost, legibilityOf, type Legibility } from './legibility';
 import { proportionAdvice, proportionFindings, proportionReceipt, type ProportionFinding } from './proportion';
 import type { DescribeContext } from '../nodes/describe';
@@ -70,7 +70,10 @@ function composeWithin(raw: unknown, diagramId: string, report: Report, starter?
   const found = qualityOfEveryRoom(placed, ctx, explicitIds(spec));
   const legibility = legibilityOf(placed.nodes, placed.edges, aboutOf(spec));
   const fit = used.viewport ? checkFit(renderedBoundsOf(placed.nodes, placed.edges, ctx), smallestFontPresent(placed.nodes, placed.edges), used.viewport) : undefined;
-  const issues = found.errors;
+  // A starter's own drawing was laid out by hand and passed the gallery's check: this one, written for
+  // what an agent arranges, is held only to what the request added or changed.
+  const kept = spec.starter && starter ? starterKeptIds(starter, spec.starter.prefix, placed.nodes) : undefined;
+  const issues = kept ? found.errors.filter((issue) => !issue.ids.every((id) => kept.has(id))) : found.errors;
   report('finishing', { nodes: placed.nodes, edges: placed.edges, flows: placed.flows });
   if (issues.length > 0 && !spec.layout.allowDegraded) {
     const why = outOfTime || pastDeadline() ? ' (it ran out of time before every repair could be tried)' : '';

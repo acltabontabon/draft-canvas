@@ -5,7 +5,7 @@
  * places whatever this returns, and `FlowBar` reads the same answer for its screen-reader status.
  */
 import type { Attachment, DraftEdge, DraftNode } from '../document/types';
-import type { FlowPlaybackStep } from './useFlowPlayback';
+import type { FlowPlaybackStep } from './steps';
 
 export type PresentationHostKind = 'node' | 'edge';
 
@@ -83,6 +83,18 @@ export function revealedSubject(
 ): PresentationSubject | null {
   const host = reveal.hostKind === 'edge' ? edgesById.get(reveal.hostId) : nodesById.get(reveal.hostId);
   return host ? subjectFor(scope, reveal.hostKind, reveal.hostId, host.attachments) : null;
+}
+
+/**
+ * What a shape or connector tells when the pointer rests on it while editing (`canvas/presentation/
+ * AttachmentPeekLayer.tsx`) — the same subject a presenter's click would give, outside any
+ * presentation. Null when it carries nothing with content.
+ */
+export function peekSubject(
+  hostKind: PresentationHostKind,
+  host: { id: string; attachments?: readonly Attachment[] },
+): PresentationSubject | null {
+  return subjectFor('peek', hostKind, host.id, host.attachments);
 }
 
 export interface ResolveSubjectInput {

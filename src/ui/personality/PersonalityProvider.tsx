@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { PERSONALITY_PRESETS, PersonalityContext, type PersonalityPreset } from '../../theme/usePersonality';
+import { useStyleStore } from '../../store/styleStore';
 
 const STORAGE_KEY = 'personality';
 
@@ -12,9 +13,9 @@ function initialPreset(): PersonalityPreset {
 }
 
 /**
- * A global device preference, like `ThemeProvider` — not part of the document
- * model. A diagram's "sketchiness" is how this device likes to look at
- * canvases, not a property of the file itself.
+ * A device preference, like `ThemeProvider`: the drawing hand this device likes to look at
+ * canvases in. A diagram with no style of its own is drawn in it; one that carries a style
+ * (`DraftDocument.style`) is drawn in that, here and everywhere else.
  */
 export function PersonalityProvider({ children }: { children: ReactNode }) {
   const [preset, setPresetState] = useState<PersonalityPreset>(initialPreset);
@@ -27,6 +28,12 @@ export function PersonalityProvider({ children }: { children: ReactNode }) {
     // in. `ThemeProvider` already publishes the theme the same way.
     globalThis.document?.documentElement.setAttribute('data-personality', preset);
   }, [preset]);
+
+  // The person's own styles are read once, as the app starts: a diagram made before Settings was
+  // ever opened must still start with the style in use, not with a built-in one.
+  useEffect(() => {
+    void useStyleStore.getState().load();
+  }, []);
 
   const setPreset = useCallback((next: PersonalityPreset) => setPresetState(next), []);
   const value = useMemo(() => ({ preset, setPreset }), [preset, setPreset]);

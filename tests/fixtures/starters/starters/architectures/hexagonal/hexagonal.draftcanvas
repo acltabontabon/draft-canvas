@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 25,
+  "version": 29,
   "metadata": {
     "id": "starter-hexagonal",
     "title": "Hexagonal",
@@ -9,219 +9,508 @@
   },
   "nodes": [
     {
-      "id": "http-adapter",
-      "type": "component",
-      "x": -706,
-      "y": -108,
-      "width": 172,
-      "height": 56,
-      "z": 0,
-      "text": "HTTP Adapter",
-      "textOrigin": "explicit",
-      "componentKind": "adapter"
-    },
-    {
-      "id": "message-consumer",
-      "type": "component",
-      "x": -706,
-      "y": 52,
-      "width": 172,
-      "height": 56,
-      "z": 0,
-      "text": "Message Consumer",
-      "textOrigin": "explicit",
-      "componentKind": "adapter"
-    },
-    {
       "id": "core",
       "type": "group",
-      "x": -462,
-      "y": -146,
-      "width": 660,
-      "height": 292,
+      "x": 612,
+      "y": -109,
+      "width": 1016,
+      "height": 499,
       "z": -1,
-      "text": "Application Core",
+      "text": "Transfers Core",
       "textOrigin": "explicit",
-      "boundaryPreset": "boundary",
+      "boundaryPreset": "domain",
       "attachments": [
         {
-          "id": "a_hrpbarm5zv9f",
+          "id": "n.inward",
           "type": "note",
-          "text": "Owns its ports, depends on nothing outside itself. Solid arrows are runtime calls; hollow-headed “implements” arrows are source dependencies, and every one of them points in. Fits inside a monolith or a single microservice.",
-          "noteKind": "note",
+          "text": "The core owns every port. Adapters depend on the core; the core imports no Spring, no JPA, no Kafka.",
+          "noteKind": "decision",
           "width": 200,
           "height": 56
         }
-      ]
+      ],
+      "held": true
     },
     {
-      "id": "core-subtitle",
-      "type": "text",
-      "x": -450,
-      "y": -116,
-      "width": 200,
-      "height": 24,
+      "id": "customer",
+      "type": "actor",
+      "x": -60,
+      "y": -59,
+      "width": 120,
+      "height": 118,
       "z": 0,
-      "parentId": "core",
-      "text": "Dependencies point inward",
+      "text": "Customer",
+      "description": "Sends money from the banking app.",
       "textOrigin": "explicit",
-      "annotation": true
+      "actorKind": "human",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "http-adapter",
+      "type": "component",
+      "x": 284,
+      "y": -57,
+      "width": 152,
+      "height": 115,
+      "z": 0,
+      "text": "REST Controller",
+      "description": "Maps JSON to a SendMoney command.",
+      "technology": "Spring Boot 3",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "job-adapter",
+      "type": "component",
+      "x": 284,
+      "y": 181,
+      "width": 152,
+      "height": 119,
+      "z": 0,
+      "text": "Standing Orders Job",
+      "description": "Sends each standing order due today.",
+      "technology": "Spring",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
     },
     {
       "id": "inbound-port",
       "type": "component",
-      "x": -426,
-      "y": -22,
-      "width": 120,
-      "height": 44,
+      "x": 644,
+      "y": -57,
+      "width": 152,
+      "height": 115,
       "z": 0,
       "parentId": "core",
-      "text": "Inbound",
+      "text": "SendMoney",
+      "description": "What the core offers: send an amount between accounts.",
+      "technology": "Kotlin",
       "textOrigin": "explicit",
       "componentKind": "port"
     },
     {
       "id": "use-cases",
       "type": "component",
-      "x": -218,
-      "y": -32,
-      "width": 172,
-      "height": 64,
+      "x": 1044,
+      "y": -57,
+      "width": 152,
+      "height": 115,
       "z": 0,
       "parentId": "core",
-      "text": "Use Cases",
+      "text": "Send Money Service",
+      "description": "Checks limits, screens, moves money, announces it.",
+      "technology": "Kotlin",
       "textOrigin": "explicit",
-      "componentKind": "generic"
+      "componentKind": "generic",
+      "attachments": [
+        {
+          "id": "n.test",
+          "type": "code",
+          "language": "plaintext",
+          "code": "val service = SendMoneyService(\n    accounts = InMemoryAccountStore(),\n    fraud = FraudCheck { Verdict.ALLOW },\n    events = RecordingEvents(),\n)",
+          "width": 339.5,
+          "height": 138.875
+        }
+      ]
     },
     {
       "id": "domain",
       "type": "component",
-      "x": -202,
-      "y": 60,
-      "width": 140,
-      "height": 50,
+      "x": 1444,
+      "y": -47,
+      "width": 152,
+      "height": 95,
       "z": 0,
       "parentId": "core",
-      "text": "Domain Model",
+      "text": "Account Model",
+      "description": "Accounts, balances and transfer rules. No framework imports.",
+      "technology": "Kotlin",
       "textOrigin": "explicit",
-      "componentKind": "generic"
+      "componentKind": "generic",
+      "inside": {
+        "nodes": [
+          {
+            "id": "d.service",
+            "type": "component",
+            "x": 0,
+            "y": 168.5,
+            "width": 152,
+            "height": 56,
+            "z": 0,
+            "text": "Send Money Service",
+            "technology": "Kotlin",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "d.account",
+            "type": "component",
+            "x": 295,
+            "y": 149,
+            "width": 152,
+            "height": 95,
+            "z": 0,
+            "text": "Account",
+            "description": "Aggregate: owns the balance and its invariants.",
+            "technology": "Kotlin",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "d.policy",
+            "type": "component",
+            "x": 766,
+            "y": 0,
+            "width": 152,
+            "height": 95,
+            "z": 0,
+            "text": "Transfer Policy",
+            "description": "Daily limit and overdraft rules.",
+            "technology": "Kotlin",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "d.money",
+            "type": "component",
+            "x": 766,
+            "y": 149,
+            "width": 152,
+            "height": 95,
+            "z": 0,
+            "text": "Money",
+            "description": "Value object: amount and currency, never a Double.",
+            "technology": "Kotlin",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "d.event",
+            "type": "component",
+            "x": 766,
+            "y": 298,
+            "width": 152,
+            "height": 95,
+            "z": 0,
+            "text": "MoneySent",
+            "description": "Domain event raised by a successful withdrawal.",
+            "technology": "Kotlin",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          }
+        ],
+        "edges": [
+          {
+            "id": "d.withdraw",
+            "source": "d.service",
+            "target": "d.account",
+            "label": "withdraw(amount)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.check",
+            "source": "d.account",
+            "target": "d.policy",
+            "label": "allows(amount)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.subtract",
+            "source": "d.account",
+            "target": "d.money",
+            "label": "debit(amount)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.raise",
+            "source": "d.account",
+            "target": "d.event",
+            "label": "raises",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "d.flow",
+            "title": "Withdraw, inside the model",
+            "steps": [
+              {
+                "id": "d.flow.s1",
+                "edgeId": "d.withdraw",
+                "caption": "The use case asks the Account to withdraw; it never sets the balance."
+              },
+              {
+                "id": "d.flow.s2",
+                "edgeId": "d.check",
+                "caption": "The Account checks the daily limit and overdraft rules."
+              },
+              {
+                "id": "d.flow.s3",
+                "edgeId": "d.subtract",
+                "caption": "Money does the arithmetic in the account's currency."
+              },
+              {
+                "id": "d.flow.s4",
+                "edgeId": "d.raise",
+                "caption": "A MoneySent event is recorded for the use case to publish."
+              }
+            ],
+            "accent": "blue"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        }
+      }
     },
     {
-      "id": "persistence-port",
+      "id": "accounts-port",
       "type": "component",
-      "x": 42,
-      "y": -102,
-      "width": 120,
-      "height": 44,
+      "x": 1044,
+      "y": 243,
+      "width": 152,
+      "height": 115,
       "z": 0,
       "parentId": "core",
-      "text": "Persistence",
+      "text": "AccountStore",
+      "description": "Loads and saves accounts, in the core's words.",
+      "technology": "Kotlin",
       "textOrigin": "explicit",
-      "componentKind": "port"
+      "componentKind": "port",
+      "attachments": [
+        {
+          "id": "n.port",
+          "type": "code",
+          "language": "plaintext",
+          "code": "interface AccountStore {\n    fun load(id: AccountId): Account\n    fun save(account: Account)\n}",
+          "width": 302,
+          "height": 119.5
+        }
+      ]
     },
     {
-      "id": "integration-port",
+      "id": "fraud-port",
       "type": "component",
-      "x": 42,
-      "y": 58,
-      "width": 120,
-      "height": 44,
+      "x": 684,
+      "y": 243,
+      "width": 152,
+      "height": 115,
       "z": 0,
       "parentId": "core",
-      "text": "Integration",
+      "text": "FraudCheck",
+      "description": "Scores a transfer before money moves.",
+      "technology": "Kotlin",
+      "textOrigin": "explicit",
+      "componentKind": "port",
+      "attachments": [
+        {
+          "id": "n.leak",
+          "type": "note",
+          "text": "A port that mirrors one vendor's API (FraudShieldRequest) drags the adapter into the core. Name ports in the core's words.",
+          "noteKind": "warning",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "events-port",
+      "type": "component",
+      "x": 1404,
+      "y": 243,
+      "width": 152,
+      "height": 115,
+      "z": 0,
+      "parentId": "core",
+      "text": "TransferEvents",
+      "description": "Announces transfers that happened.",
+      "technology": "Kotlin",
       "textOrigin": "explicit",
       "componentKind": "port"
     },
     {
       "id": "persistence-adapter",
       "type": "component",
-      "x": 286,
-      "y": -108,
-      "width": 172,
-      "height": 56,
+      "x": 1044,
+      "y": 533,
+      "width": 152,
+      "height": 134,
       "z": 0,
-      "text": "Persistence Adapter",
+      "text": "JPA Account Store",
+      "description": "Maps accounts to rows, with optimistic locking.",
+      "technology": "Hibernate",
       "textOrigin": "explicit",
       "componentKind": "adapter"
     },
     {
-      "id": "integration-adapter",
+      "id": "fraud-adapter",
       "type": "component",
-      "x": 286,
-      "y": 52,
-      "width": 172,
-      "height": 56,
+      "x": 684,
+      "y": 533,
+      "width": 152,
+      "height": 134,
       "z": 0,
-      "text": "Integration Adapter",
+      "text": "Fraud API Client",
+      "description": "Calls the fraud vendor and maps its score.",
+      "technology": "Spring",
+      "textOrigin": "explicit",
+      "componentKind": "adapter"
+    },
+    {
+      "id": "events-adapter",
+      "type": "component",
+      "x": 1404,
+      "y": 533,
+      "width": 152,
+      "height": 134,
+      "z": 0,
+      "text": "Kafka Publisher",
+      "description": "Publishes MoneySent to the transfers topic.",
+      "technology": "Kafka",
       "textOrigin": "explicit",
       "componentKind": "adapter"
     },
     {
       "id": "database",
       "type": "database",
-      "x": 530,
-      "y": -115,
-      "width": 172,
-      "height": 102,
+      "x": 1010,
+      "y": 829,
+      "width": 220,
+      "height": 143,
       "z": 0,
-      "text": "Database",
+      "text": "Accounts DB",
+      "description": "Accounts, balances and the ledger.",
+      "technology": "PostgreSQL 16",
       "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic"
+      "databaseKind": "sql"
     },
     {
-      "id": "external",
+      "id": "fraud",
       "type": "service",
-      "x": 530,
-      "y": 46,
+      "x": 672,
+      "y": 843,
       "width": 176,
-      "height": 68,
+      "height": 115,
       "z": 0,
-      "text": "External System",
+      "text": "Fraud Screening",
+      "description": "Scores payments for fraud risk.",
       "textOrigin": "explicit",
-      "accent": "teal",
       "serviceKind": "external"
+    },
+    {
+      "id": "topic",
+      "type": "queue",
+      "x": 1410,
+      "y": 848,
+      "width": 140,
+      "height": 104,
+      "z": 0,
+      "text": "transfers",
+      "description": "Transfers other teams react to.",
+      "technology": "Kafka",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "x": -60,
+      "y": -267,
+      "width": 900,
+      "height": 110,
+      "z": 0,
+      "text": "# Bank transfers\nHexagonal: adapters on both sides of a core that owns its ports.",
+      "textOrigin": "explicit",
+      "textRole": "title"
     }
   ],
   "edges": [
     {
-      "id": "http-call",
-      "source": "http-adapter",
-      "target": "inbound-port",
+      "id": "send",
+      "source": "customer",
+      "target": "http-adapter",
+      "label": "Sends €250",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "calls",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
+      "semantic": "http",
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "consumer-call",
-      "source": "message-consumer",
+      "id": "http-call",
+      "source": "http-adapter",
       "target": "inbound-port",
+      "label": "send(cmd)",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "calls",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
+      "semantic": "uses",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "job-call",
+      "source": "job-adapter",
+      "target": "inbound-port",
+      "label": "send(cmd)",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "inbound-impl",
+      "source": "inbound-port",
+      "target": "use-cases",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "implementedBy",
       "semanticsOrigin": "explicit"
     },
     {
       "id": "use-domain",
       "source": "use-cases",
       "target": "domain",
+      "label": "withdraw / deposit",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "use-fraud-port",
+      "source": "use-cases",
+      "target": "fraud-port",
+      "label": "screen()",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "uses",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.2
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "use-accounts-port",
+      "source": "use-cases",
+      "target": "accounts-port",
+      "label": "load / save",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "uses",
@@ -233,41 +522,64 @@
         "side": "top",
         "offset": 0.5
       },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "use-persistence-port",
+      "id": "use-events-port",
       "source": "use-cases",
-      "target": "persistence-port",
+      "target": "events-port",
+      "label": "moneySent()",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "uses",
       "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
+        "side": "bottom",
+        "offset": 0.8
       },
       "targetAnchor": {
-        "side": "left",
+        "side": "top",
         "offset": 0.5
       },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "use-integration-port",
-      "source": "use-cases",
-      "target": "integration-port",
+      "id": "fraud-impl",
+      "source": "fraud-port",
+      "target": "fraud-adapter",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "uses",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semantic": "implementedBy",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "accounts-impl",
+      "source": "accounts-port",
+      "target": "persistence-adapter",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "implementedBy",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "events-impl",
+      "source": "events-port",
+      "target": "events-adapter",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "implementedBy",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "call-fraud",
+      "source": "fraud-adapter",
+      "target": "fraud",
+      "label": "POST /score",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "response": "score",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
     },
     {
       "id": "write-database",
@@ -276,89 +588,34 @@
       "directed": true,
       "routing": "smoothstep",
       "semantic": "readsWrites",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "call-external",
-      "source": "integration-adapter",
-      "target": "external",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "calls",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
-    },
-    {
-      "id": "implement-inbound",
-      "source": "use-cases",
-      "target": "inbound-port",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "implements",
-      "sourceAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "implement-persistence",
-      "source": "persistence-adapter",
-      "target": "persistence-port",
+      "id": "publish",
+      "source": "events-adapter",
+      "target": "topic",
+      "label": "MoneySent",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "implements",
-      "sourceAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "implement-integration",
-      "source": "integration-adapter",
-      "target": "integration-port",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "implements",
-      "sourceAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
+      "semantic": "publishes",
+      "kind": "event",
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.outbox",
+          "type": "note",
+          "text": "MoneySent is published after commit, so a crash in between loses it. Worth an outbox here?",
+          "noteKind": "question",
+          "width": 200,
+          "height": 56
+        }
+      ]
     }
   ],
   "viewport": {
-    "x": 720,
-    "y": 450,
-    "zoom": 0.8158640226628895
+    "x": 0,
+    "y": 0,
+    "zoom": 1
   },
   "settings": {
     "showSequence": true,
@@ -372,55 +629,127 @@
   },
   "flows": [
     {
-      "id": "flow1",
-      "title": "Handle an HTTP request",
+      "id": "send-flow",
+      "title": "Send money over HTTP",
       "steps": [
         {
-          "id": "fs_f18ln4f0vmlj",
+          "id": "send-flow.s1",
+          "edgeId": "send",
+          "caption": "A customer sends €250 to a friend."
+        },
+        {
+          "id": "send-flow.s2",
           "edgeId": "http-call",
-          "caption": "The adapter translates HTTP into a call on the port"
+          "caption": "The controller turns JSON into a SendMoney command on the port."
         },
         {
-          "id": "fs_jtdrge0e1mba",
+          "id": "send-flow.s3",
+          "edgeId": "inbound-impl",
+          "caption": "The use case behind the port takes over; HTTP stops here."
+        },
+        {
+          "id": "send-flow.s4",
+          "edgeId": "use-fraud-port",
+          "caption": "The core asks its own FraudCheck port, not a vendor."
+        },
+        {
+          "id": "send-flow.s5",
+          "edgeId": "fraud-impl",
+          "caption": "The adapter behind the port knows the vendor."
+        },
+        {
+          "id": "send-flow.s6",
+          "edgeId": "call-fraud",
+          "caption": "The vendor scores the transfer as low risk."
+        },
+        {
+          "id": "send-flow.s7",
+          "edgeId": "use-accounts-port",
+          "caption": "Both accounts are loaded through AccountStore."
+        },
+        {
+          "id": "send-flow.s8",
           "edgeId": "use-domain",
-          "caption": "The use case behind the port runs the domain model"
+          "caption": "The Account model withdraws and deposits by its own rules."
         },
         {
-          "id": "fs_j96l0uwoiy7q",
-          "edgeId": "use-persistence-port",
-          "caption": "The core asks its own port — not a database"
+          "id": "send-flow.s9",
+          "edgeId": "accounts-impl",
+          "caption": "The JPA adapter saves both accounts."
         },
         {
-          "id": "fs_zptdhkefn141",
+          "id": "send-flow.s10",
           "edgeId": "write-database",
-          "caption": "The adapter behind the port does the technology"
+          "caption": "One transaction, guarded by a version column."
+        },
+        {
+          "id": "send-flow.s11",
+          "edgeId": "use-events-port",
+          "caption": "The use case announces MoneySent through its port."
+        },
+        {
+          "id": "send-flow.s12",
+          "edgeId": "events-impl",
+          "caption": "The Kafka adapter does the publishing."
+        },
+        {
+          "id": "send-flow.s13",
+          "edgeId": "publish",
+          "caption": "MoneySent lands on the transfers topic."
         }
       ],
-      "accent": "green"
+      "accent": "teal"
     },
     {
-      "id": "flow2",
-      "title": "Consume a message",
+      "id": "rejected",
+      "title": "Fraud check rejects",
       "steps": [
         {
-          "id": "fs_ynb5aah54229",
-          "edgeId": "consumer-call",
-          "caption": "A different technology, the same port"
+          "id": "rejected.s1",
+          "edgeId": "use-fraud-port",
+          "caption": "The use case asks FraudCheck to screen the transfer."
         },
         {
-          "id": "fs_4rk5knmh1jqr",
-          "edgeId": "use-domain"
+          "id": "rejected.s2",
+          "edgeId": "fraud-impl",
+          "caption": "The adapter behind the port calls the vendor."
         },
         {
-          "id": "fs_y4k5iy3zllgy",
-          "edgeId": "use-integration-port"
-        },
-        {
-          "id": "fs_t7smel070pfo",
-          "edgeId": "call-external"
+          "id": "rejected.s3",
+          "edgeId": "call-fraud",
+          "caption": "The vendor scores 0.93; the adapter maps it to Verdict.REJECT, and nothing moves."
         }
       ],
-      "accent": "amber"
+      "accent": "rose",
+      "variantOf": "send-flow"
+    },
+    {
+      "id": "standing",
+      "title": "Run standing orders",
+      "steps": [
+        {
+          "id": "standing.s1",
+          "edgeId": "job-call",
+          "caption": "At 06:00 the job sends each standing order due today."
+        },
+        {
+          "id": "standing.s2",
+          "edgeId": "inbound-impl",
+          "caption": "A different technology, the same port and the same use case."
+        },
+        {
+          "id": "standing.s3",
+          "edgeId": "use-accounts-port",
+          "caption": "Accounts are loaded exactly as for an HTTP transfer."
+        },
+        {
+          "id": "standing.s4",
+          "edgeId": "use-domain",
+          "caption": "The same rules apply: limits, overdraft, currency."
+        }
+      ],
+      "accent": "blue"
     }
-  ]
+  ],
+  "level": "component"
 }

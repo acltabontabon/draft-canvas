@@ -1,4 +1,4 @@
-import { ACTOR_CATEGORIES } from '../document/connectorSemantics';
+import { ACTOR_CATEGORIES, baseCategory } from '../document/connectorSemantics';
 import type { EdgeSemantic } from '../document/types';
 import { DELIVERY_SEMANTICS, defineChain, defineFanOut, hasInboundEvidence, hasInboundWrite, hasOutboundSemantic, isExplicit } from './families';
 import type { ContinuationRule, Neighborhood } from './types';
@@ -167,7 +167,7 @@ const GATEWAY_ROUTE: ContinuationRule = {
   label: 'API',
   reason: "This gateway doesn’t route to anything yet.",
   silentAt: NOT_IN_AN_OVERVIEW,
-  when: (nb, trigger) => nb.category === 'gateway' && (isExplicit(trigger) || (nb.in.length > 0 && nb.out.length === 0)),
+  when: (nb, trigger) => baseCategory(nb.category) === 'gateway' && (isExplicit(trigger) || (nb.in.length > 0 && nb.out.length === 0)),
   fragment: () => ({
     nodes: [{ key: 'service', type: 'service', serviceKind: 'api' }],
     edges: [{ from: 'anchor', to: 'service' }],

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { analyzeTraffic } from '../../src/traffic';
-import { edge, insight, node } from './helpers';
+import { edge, node } from './helpers';
 
 describe('traffic cycles', () => {
   it('marks a two-node loop and gives it no repeated paths', () => {
@@ -12,7 +12,6 @@ describe('traffic cycles', () => {
     expect(result.nodes.get(b.id)?.inLoop).toBe(true);
     expect(result.interactions.filter((value) => value.loop)).toHaveLength(2);
     expect(result.interactions.every((value) => value.paths.definite === 0 && value.paths.possible === 0)).toBe(true);
-    expect(insight(result, 'loop').text).toMatch(/counted once/i);
   });
 
   it('treats a self-loop as a loop and not an entry', () => {
@@ -58,6 +57,5 @@ describe('traffic cycles', () => {
     const result = analyzeTraffic({ nodes: [a, b, c], edges: [edge('a-b', a.id, b.id, { semantic: 'calls' }), edge('b-c', b.id, c.id, { semantic: 'calls' }), edge('c-a', c.id, a.id, { semantic: 'calls' })] });
     expect(result.status).toBe('no-entry');
     expect(result.entries).toEqual([]);
-    expect(result.insights.filter((value) => value.kind === 'loop')).toHaveLength(1);
   });
 });

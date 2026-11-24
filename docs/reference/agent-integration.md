@@ -29,7 +29,7 @@ the contract: tools, receipts, limits, errors and security.
   The editor's Arrange and Tidy up use the same worker (`layoutPlan.ts`) and a deterministic work
   budget, never the clock; an agent request keeps its time limit.
 - **One writer.** Edits to the open document go through the editor store and undo history. A new
-  diagram is written by the shell with `create_new`, which never overwrites.
+  diagram is written by the shell with a create-only write, which never overwrites.
 - **No agent data in files.** An agent-made diagram is an ordinary diagram, on the web and the desktop.
 - **Versions.** The MCP version is what `rmcp` negotiates. A sidecar and app on different bridge
   versions answer `VERSION_MISMATCH`.
@@ -44,7 +44,11 @@ Discovery advertises one small dispatcher, `diagram_tool({tool, args})`, so a mo
 carry the whole grammar.
 
 - `tool: "help", args: {}` lists this session's operations; `args: {tool: "update_diagram"}` returns
-  that operation's common arguments.
+  that operation's common arguments: for `update_diagram`, every op and the fields `set` takes for
+  each kind of target (generated from the same table the app checks an update against).
+- A malformed dispatcher call is refused by the sidecar with the argument at fault: an operation's
+  arguments sent beside `tool` instead of inside `args`, `args` sent as a string, or an operation
+  name that does not exist (the refusal lists the ones that do).
 - `get_capabilities({tool: "update_diagram"})`, dispatched the same way, returns its complete schema.
 - Every request is still validated against the full contract (`contract: 3`).
 - The dispatcher is annotated as mutating. The broker checks permissions, review-only restrictions and
@@ -58,7 +62,7 @@ The operations below are passed as `tool`, with their arguments in `args`.
 | --- | --- | --- |
 | `get_capabilities({tool?, topics?, starter?})` | read | `tool` alone returns that tool's complete input schema. Otherwise vocabulary and rules: an index of topics and common word lists, each topic in full on request (`types`, `relationships`, `c4`, `flows`, `notes`, `sequences`, `starters`, `limits`, `layout`, `readability`). `starters` lists only what the person downloaded from the [starters gallery](../guides/examples.md). |
 | `list_diagrams({query?, project?, cursor?, limit?})` | read | Diagrams in allowed folders, plus `active` (the open one) and `thisSession` (ones this session changed). |
-| `read_diagram({diagramId, query?, view?, focus?, include?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
+| `read_diagram({diagramId, query?, view?, focus?, include?, outage?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read | Full note or code text in 8,192-character chunks. |
 | `read_selection({diagramId})` | read | The current selection. See [Selection-aware editing](#selection-aware-editing). |
 | `get_implementation_context({diagramId, view?, focus?})` | read | Flow steps as stored, sequences (at most 8), notes, decisions, code and boundaries: what to implement, in order. |
@@ -109,6 +113,9 @@ attachments and flows with their ids. Elements, boundaries, notes, relationships
 | `include: ["attachments"]` / `["fullText"]` | Attachment previews, or complete text. |
 | `include: ["suggestions"]` | Up to 5 next-step suggestions per element. Never applied. |
 | `include: ["views"]` | An outline of every inside view. |
+| `outage: {element, allInstances?}` | What the drawing says follows if that element or group goes down: `headline`, `affected` (id and state), `unaffected`, `notes` (an open question carrying `open`, a quoted product behaviour its `sources`) and `flows` (each flow's `state`, and the `step` it breaks at). First page only. |
+| `outage: {connector}` | The same for a relationship taken down while both of its ends stay up. |
+| `outage: {}` | Every element, group and relationship whose loss changes something drawn: `review` and `connectors` (each with `reaches`, `flows`, `affected`, `open` and a sentence), `oneInstanceOfSeveral` and `nothingElseChanges`. An order, not a severity. |
 | `format: "outline"` | File title and revision, plus paths, owners, levels and counts for up to 100 inside views (`viewsTruncated` marks a longer outline). |
 | `format: "mermaid"` / `"plantuml"` / `"c4"` | Flows as sequence-diagram source, or the architecture as C4-PlantUML, as Export writes them. |
 
@@ -379,7 +386,9 @@ advisories (10 on create).
 
 - **Closed diagrams** are changed in their file, only if it is unchanged since read
   (`REVISION_CONFLICT` otherwise). A pending recovery copy is `DOCUMENT_BUSY`. The person gets a
-  notice with **Show**. `activate: true` opens the diagram first when that loses nothing.
+  notice with **Show**. `activate: true` opens the diagram once the change is written. It is refused
+  (`DOCUMENT_BUSY`, nothing changed) when what is open has unsaved changes or is in a live session,
+  and a rejected or cancelled request never switches what is on screen.
 - **Undo.** One update is one undo step. For a closed file, the previous content is kept in memory
   (8 changes, 16 M characters) and becomes undoable if the file is opened unchanged this session.
   `create_diagram` has no undo step.
@@ -399,12 +408,12 @@ ones 30 days.
 | Retry with the same `requestId` | Answer |
 | --- | --- |
 | Same request, resolved | The stored receipt, `replayed: true`. Side effects are not repeated. |
-| Different request | `REQUEST_ID_MISMATCH`. Use a fresh UUID per change. |
-| First still running | Waits for its outcome. |
-| First refused before any change | Runs again. |
-| Create interrupted before its receipt | Runs again, unless a file with this request's minted id exists; then `recovered: true`. |
+| Different payload while the first request is running, unresolved or committed | `REQUEST_ID_MISMATCH`. |
+| Same payload while the first request is running | Waits for its outcome. |
+| First refused before any change | A retry or correction can use the same id. |
+| Create interrupted before its receipt | If the file has the minted id, returns `recovered: true`. If the target is absent, the same request can run again. |
 | Update interrupted before the commit gate | Runs again; nothing was applied. |
-| Update interrupted after the gate, before the receipt | `OUTCOME_UNKNOWN`. Read the diagram and decide. |
+| Update interrupted after the gate or a file write could not be confirmed | `OUTCOME_UNKNOWN`. Read the diagram to check what landed. |
 | Stored receipt said `persisted: false` | The receipt, with `durability: "unverified"`. |
 
 | Deadline | Limit | Past it |
@@ -631,7 +640,16 @@ Text is never truncated. A shape grows to 280 × 320 px; a name that still does 
 ## Errors
 
 Each error has a stable `code` and `message`, and where useful `hint`, `retryable`, a JSON pointer
-`path` and up to 20 problems. Errors never contain stack traces or document content.
+`path` in `details` and up to 20 problems. Errors can identify diagram items and omit stack traces.
+
+An input refusal leaves the diagram unchanged. A missing update target returns `INVALID_REFERENCE`
+at its id, such as `/ops/0/id` or `/ops/1/ids/2`. If the exact id exists in another view, the message
+gives that view. If the input matches one label in the addressed view, it can suggest the id.
+For an existing target, an unsupported field names its kind and accepted fields. Value errors name
+the field and what it accepts. A confirmed refusal allows a correction with the same `requestId`.
+
+`retryable: true` means a transient failure may clear if the same request is sent again.
+`OUTCOME_UNKNOWN` means the change might have landed. Check the diagram before sending another edit.
 
 | Area | Codes |
 | --- | --- |
@@ -643,7 +661,7 @@ Each error has a stable `code` and `message`, and where useful `hint`, `retryabl
 | Proposals | `PROPOSAL_CLOSED`, `PROPOSAL_CHANGED` |
 | Nodi runs | `RUN_LIMIT`, `PROPOSAL_ONLY` |
 | Connection | `APP_UNAVAILABLE` (Draft Canvas is not running), `APP_STARTING`, `APP_UNRESPONSIVE`, `CONNECTION_LOST`, `VERSION_MISMATCH`, `TIMEOUT`, `CANCELLED` |
-| Other | `PERSISTENCE_FAILED`, `INTERNAL` |
+| Other | `INTERNAL` |
 
 ## Security
 

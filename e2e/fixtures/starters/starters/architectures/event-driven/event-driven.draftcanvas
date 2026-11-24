@@ -1,0 +1,396 @@
+{
+  "format": "draft-canvas",
+  "version": 25,
+  "metadata": {
+    "id": "starter-event-driven",
+    "title": "Event-Driven",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "producer",
+      "type": "service",
+      "x": -240,
+      "y": -367,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Producer Service",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "topic",
+      "type": "queue",
+      "x": -222,
+      "y": -195,
+      "width": 140,
+      "height": 72,
+      "z": 0,
+      "text": "Domain Events",
+      "textOrigin": "explicit",
+      "queueKind": "topic",
+      "attachments": [
+        {
+          "id": "a_5u8do6a07ppk",
+          "type": "note",
+          "text": "Fan-out, not competition: every subscription gets its own copy of every event. Workers sharing one queue would instead compete for each message.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "projection-queue",
+      "type": "queue",
+      "x": -352,
+      "y": -19,
+      "width": 152,
+      "height": 72,
+      "z": 0,
+      "text": "Projection Queue",
+      "textOrigin": "explicit",
+      "queueKind": "queue"
+    },
+    {
+      "id": "integration-queue",
+      "type": "queue",
+      "x": -104,
+      "y": -19,
+      "width": 152,
+      "height": 72,
+      "z": 0,
+      "text": "Integration Queue",
+      "textOrigin": "explicit",
+      "queueKind": "queue"
+    },
+    {
+      "id": "projection-worker",
+      "type": "service",
+      "x": -364,
+      "y": 125,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Projection Worker",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "integration-worker",
+      "type": "service",
+      "x": -116,
+      "y": 125,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Integration Worker",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "read-store",
+      "type": "database",
+      "x": -362,
+      "y": 265,
+      "width": 172,
+      "height": 102,
+      "z": 0,
+      "text": "Read Store",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "databaseKind": "generic"
+    },
+    {
+      "id": "external",
+      "type": "service",
+      "x": -116,
+      "y": 265,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "External System",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "serviceKind": "external"
+    },
+    {
+      "id": "integration-dlq",
+      "type": "queue",
+      "x": 224,
+      "y": -15,
+      "width": 140,
+      "height": 48,
+      "z": 0,
+      "text": "",
+      "textOrigin": "auto",
+      "queueKind": "queue",
+      "deliveryRole": "dead-letter"
+    }
+  ],
+  "edges": [
+    {
+      "id": "publish",
+      "source": "producer",
+      "target": "topic",
+      "label": "publishes state-change event",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "a_yqwwgafvspf4",
+          "type": "code",
+          "text": "Event envelope",
+          "language": "json",
+          "code": "{\n  \"id\": \"evt_8f3a1c2d\",\n  \"type\": \"StateChanged\",\n  \"time\": \"2026-09-10T08:15Z\",\n  \"data\": {\n    \"entityId\": \"ent_4821\"\n  }\n}",
+          "width": 380,
+          "height": 180
+        },
+        {
+          "id": "a_2t16uj9fc139",
+          "type": "note",
+          "text": "Typically at-least-once and unordered across partitions: consumers dedupe on the event id and tolerate reordering. Publishing is not atomic with the state change that caused it — see Transactional Outbox.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "fan-out-projection",
+      "source": "topic",
+      "target": "projection-queue",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "fansOut",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "fan-out-integration",
+      "source": "topic",
+      "target": "integration-queue",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "fansOut",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "consume-projection",
+      "source": "projection-queue",
+      "target": "projection-worker",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "async",
+      "async": true,
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "consume-integration",
+      "source": "integration-queue",
+      "target": "integration-worker",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "async",
+      "async": true,
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "project",
+      "source": "projection-worker",
+      "target": "read-store",
+      "label": "updates projection",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "call-external",
+      "source": "integration-worker",
+      "target": "external",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "dead-letter",
+      "source": "integration-queue",
+      "target": "integration-dlq",
+      "label": "after configured retry limit",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "deadLetters",
+      "kind": "failure",
+      "async": true,
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "a_d7vdoaomdr74",
+          "type": "note",
+          "text": "An illustrative failure path — any subscription can have one. Poison messages park here for inspection and redrive; alert on depth.",
+          "noteKind": "note",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    }
+  ],
+  "viewport": {
+    "x": 720,
+    "y": 450,
+    "zoom": 0.9809264305177112
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "flow1",
+      "title": "Update a projection",
+      "steps": [
+        {
+          "id": "fs_bof19sg93aia",
+          "edgeId": "publish"
+        },
+        {
+          "id": "fs_5yt4rfdnzigi",
+          "edgeId": "fan-out-projection",
+          "caption": "This subscription’s own copy"
+        },
+        {
+          "id": "fs_opqibx1ejpgm",
+          "edgeId": "consume-projection"
+        },
+        {
+          "id": "fs_4tvqqvl0syhx",
+          "edgeId": "project"
+        }
+      ],
+      "accent": "green"
+    },
+    {
+      "id": "flow2",
+      "title": "Reach an external system",
+      "steps": [
+        {
+          "id": "fs_y6dyrfyvyh0w",
+          "edgeId": "publish"
+        },
+        {
+          "id": "fs_kxzqixgakk5o",
+          "edgeId": "fan-out-integration",
+          "caption": "The same event, delivered again — independently"
+        },
+        {
+          "id": "fs_3gwirdt7pttz",
+          "edgeId": "consume-integration"
+        },
+        {
+          "id": "fs_j3lfaznep7s4",
+          "edgeId": "call-external"
+        }
+      ],
+      "accent": "amber"
+    },
+    {
+      "id": "flow3",
+      "title": "Handle a failed delivery",
+      "steps": [
+        {
+          "id": "fs_dy4rtouf4a4x",
+          "edgeId": "fan-out-integration"
+        },
+        {
+          "id": "fs_05duaa1l1gkr",
+          "edgeId": "dead-letter",
+          "caption": "Parked after the configured retries, without blocking the lane"
+        }
+      ],
+      "accent": "rose"
+    }
+  ]
+}

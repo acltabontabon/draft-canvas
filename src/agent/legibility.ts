@@ -79,6 +79,8 @@ export function legibilityOf(nodes: readonly DraftNode[], edges: readonly DraftE
   const byId = new Map(nodes.map((n) => [n.id, n]));
   const drawn: { edge: DraftEdge; route: Drawn }[] = [];
   for (const edge of edges) {
+    // A portal is two stubs: it crosses nothing and detours round nothing.
+    if (edge.portal) continue;
     const route = drawnRoute(edge, nodes, edges, undefined, byId);
     if (route && route.points.length > 1) drawn.push({ edge, route });
   }

@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 25,
+  "version": 28,
   "metadata": {
     "id": "starter-medallion",
     "title": "Medallion",
@@ -11,328 +11,386 @@
     {
       "id": "sources",
       "type": "group",
-      "x": -900,
-      "y": -227,
-      "width": 244,
-      "height": 454,
-      "z": -1,
+      "x": -52,
+      "y": 97,
+      "width": 304,
+      "height": 615,
+      "z": -2,
       "text": "Sources",
       "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
-    },
-    {
-      "id": "db",
-      "type": "database",
-      "x": -864,
-      "y": -183,
-      "width": 172,
-      "height": 102,
-      "z": 0,
-      "parentId": "sources",
-      "text": "Operational Database",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic"
-    },
-    {
-      "id": "files",
-      "type": "database",
-      "x": -864,
-      "y": -41,
-      "width": 172,
-      "height": 102,
-      "z": 0,
-      "parentId": "sources",
-      "text": "Files",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "file-system"
-    },
-    {
-      "id": "stream",
-      "type": "queue",
-      "x": -848,
-      "y": 119,
-      "width": 140,
-      "height": 72,
-      "z": 0,
-      "parentId": "sources",
-      "text": "Event Stream",
-      "textOrigin": "explicit",
-      "queueKind": "stream"
-    },
-    {
-      "id": "ingestion",
-      "type": "service",
-      "x": -560,
-      "y": -40,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Ingestion",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "worker"
+      "boundaryPreset": "group"
     },
     {
       "id": "lake",
       "type": "group",
-      "x": -312,
-      "y": -103,
-      "width": 892,
-      "height": 232,
-      "z": -1,
-      "text": "Lakehouse",
+      "x": 420,
+      "y": 225,
+      "width": 1364,
+      "height": 511,
+      "z": -2,
+      "text": "Ride Lakehouse",
       "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
+      "boundaryPreset": "system"
     },
     {
-      "id": "lake-subtitle",
-      "type": "text",
-      "x": -300,
-      "y": -73,
-      "width": 200,
-      "height": 24,
+      "id": "l-bronze",
+      "type": "group",
+      "x": 688,
+      "y": 277,
+      "width": 304,
+      "height": 427,
+      "z": -1,
+      "parentId": "lake",
+      "text": "Bronze · raw",
+      "textOrigin": "explicit",
+      "accent": "rose",
+      "boundaryPreset": "group"
+    },
+    {
+      "id": "l-silver",
+      "type": "group",
+      "x": 1068,
+      "y": 277,
+      "width": 304,
+      "height": 427,
+      "z": -1,
+      "parentId": "lake",
+      "text": "Silver · clean",
+      "textOrigin": "explicit",
+      "boundaryPreset": "group"
+    },
+    {
+      "id": "l-gold",
+      "type": "group",
+      "x": 1448,
+      "y": 277,
+      "width": 304,
+      "height": 427,
+      "z": -1,
+      "parentId": "lake",
+      "text": "Gold · curated",
+      "textOrigin": "explicit",
+      "accent": "amber",
+      "boundaryPreset": "group"
+    },
+    {
+      "id": "consumers",
+      "type": "group",
+      "x": 1940,
+      "y": 207,
+      "width": 240,
+      "height": 367,
+      "z": -2,
+      "text": "Consumers",
+      "textOrigin": "explicit",
+      "boundaryPreset": "group"
+    },
+    {
+      "id": "rides",
+      "type": "database",
+      "x": -20,
+      "y": 149,
+      "width": 240,
+      "height": 143,
+      "z": 0,
+      "parentId": "sources",
+      "text": "Rides DB",
+      "description": "Stores every trip, fare and rating.",
+      "technology": "PostgreSQL 16",
+      "textOrigin": "explicit",
+      "databaseKind": "sql"
+    },
+    {
+      "id": "events",
+      "type": "queue",
+      "x": -20,
+      "y": 348,
+      "width": 240,
+      "height": 104,
+      "z": 0,
+      "parentId": "sources",
+      "text": "trip-events",
+      "description": "Streams trip state changes.",
+      "technology": "Kafka",
+      "textOrigin": "explicit",
+      "queueKind": "stream"
+    },
+    {
+      "id": "payouts",
+      "type": "database",
+      "x": -20,
+      "y": 537,
+      "width": 240,
+      "height": 143,
+      "z": 0,
+      "parentId": "sources",
+      "text": "Partner Exports",
+      "description": "Daily payout CSVs from card partners.",
+      "technology": "Amazon S3",
+      "textOrigin": "explicit",
+      "databaseKind": "object-storage",
+      "attachments": [
+        {
+          "id": "n.resend",
+          "type": "note",
+          "text": "Do partners ever re-send a corrected CSV for the same day? Then Bronze needs a key per file to avoid counting it twice.",
+          "noteKind": "question",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "ingest",
+      "type": "service",
+      "x": 452,
+      "y": 339,
+      "width": 176,
+      "height": 123,
       "z": 0,
       "parentId": "lake",
-      "text": "One lake, three levels of trust",
+      "text": "Ingestion Jobs",
+      "description": "Lands each source as received, with load time and file.",
+      "technology": "Databricks",
       "textOrigin": "explicit",
-      "annotation": true
+      "serviceKind": "worker"
     },
     {
       "id": "bronze",
       "type": "database",
-      "x": -276,
-      "y": -41,
-      "width": 172,
-      "height": 102,
+      "x": 720,
+      "y": 329,
+      "width": 240,
+      "height": 143,
       "z": 0,
-      "parentId": "lake",
-      "text": "Bronze",
+      "parentId": "l-bronze",
+      "text": "bronze.trips_raw",
+      "description": "Keeps every row exactly as it arrived.",
+      "technology": "Delta",
       "textOrigin": "explicit",
-      "accent": "blue",
       "databaseKind": "table",
       "attachments": [
         {
-          "id": "a_flbrbucce39w",
+          "id": "n.bronze",
           "type": "note",
-          "text": "Append-only landing, kept exactly as received — so everything downstream can be rebuilt from here.",
-          "noteKind": "note",
+          "text": "Bronze is append-only and never cleaned. A bug in Silver is fixed by replaying from Bronze, not by asking the sources again.",
+          "noteKind": "decision",
           "width": 200,
           "height": 56
         }
       ]
-    },
-    {
-      "id": "bronze-descriptor",
-      "type": "text",
-      "x": -248,
-      "y": 69,
-      "width": 116,
-      "height": 24,
-      "z": 0,
-      "parentId": "lake",
-      "text": "Raw, source-aligned",
-      "textOrigin": "explicit",
-      "annotation": true
     },
     {
       "id": "silver",
       "type": "database",
-      "x": 48,
-      "y": -41,
-      "width": 172,
-      "height": 102,
+      "x": 1100,
+      "y": 329,
+      "width": 240,
+      "height": 143,
       "z": 0,
-      "parentId": "lake",
-      "text": "Silver",
+      "parentId": "l-silver",
+      "text": "silver.trips",
+      "description": "Holds clean, unique trips.",
+      "technology": "Delta",
       "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "table",
-      "attachments": [
-        {
-          "id": "a_josipozn9op0",
-          "type": "note",
-          "text": "Deduplicated, typed, schema-enforced — business entities start to emerge here.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
-        }
-      ]
+      "databaseKind": "table"
     },
     {
-      "id": "silver-descriptor",
-      "type": "text",
-      "x": 74,
-      "y": 69,
-      "width": 120,
-      "height": 24,
+      "id": "quarantine",
+      "type": "database",
+      "x": 1100,
+      "y": 529,
+      "width": 240,
+      "height": 143,
       "z": 0,
-      "parentId": "lake",
-      "text": "Validated, conformed",
+      "parentId": "l-silver",
+      "text": "silver.quarantine",
+      "description": "Failed rows, with the reason.",
+      "technology": "Delta",
       "textOrigin": "explicit",
-      "annotation": true
+      "databaseKind": "table"
     },
     {
       "id": "gold",
       "type": "database",
-      "x": 372,
-      "y": -41,
-      "width": 172,
-      "height": 102,
+      "x": 1480,
+      "y": 329,
+      "width": 240,
+      "height": 143,
       "z": 0,
-      "parentId": "lake",
-      "text": "Gold",
+      "parentId": "l-gold",
+      "text": "gold.city_kpis",
+      "description": "Trips, revenue and waits per city.",
+      "technology": "Delta",
       "textOrigin": "explicit",
-      "accent": "blue",
       "databaseKind": "table",
       "attachments": [
         {
-          "id": "a_exb381qg0t6x",
+          "id": "n.copies",
           "type": "note",
-          "text": "Modelled and aggregated for the questions asked of it — optimised for reads, not for landing.",
-          "noteKind": "note",
+          "text": "Gold is a copy of a copy: a fix in Silver reaches the dashboards only after the next nightly run.",
+          "noteKind": "warning",
           "width": 200,
           "height": 56
         }
       ]
     },
     {
-      "id": "gold-descriptor",
-      "type": "text",
-      "x": 389,
-      "y": 69,
-      "width": 138,
-      "height": 24,
-      "z": 0,
-      "parentId": "lake",
-      "text": "Curated, business-ready",
-      "textOrigin": "explicit",
-      "annotation": true
-    },
-    {
-      "id": "serving",
-      "type": "group",
-      "x": 652,
-      "y": -138,
-      "width": 248,
-      "height": 256,
-      "z": -1,
-      "text": "Serving",
-      "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
-    },
-    {
-      "id": "analytics",
+      "id": "looker",
       "type": "service",
-      "x": 688,
-      "y": -94,
+      "x": 1972,
+      "y": 259,
       "width": 176,
-      "height": 68,
+      "height": 83,
       "z": 0,
-      "parentId": "serving",
-      "text": "Analytics / BI",
+      "parentId": "consumers",
+      "text": "Ops Dashboards",
+      "description": "Shows city managers yesterday's numbers.",
+      "technology": "Looker",
       "textOrigin": "explicit",
-      "accent": "teal",
       "serviceKind": "generic"
     },
     {
-      "id": "data-api",
+      "id": "pricing",
       "type": "service",
-      "x": 688,
-      "y": 14,
+      "x": 1972,
+      "y": 459,
       "width": 176,
-      "height": 68,
+      "height": 83,
       "z": 0,
-      "parentId": "serving",
-      "text": "Data API",
+      "parentId": "consumers",
+      "text": "Surge Pricing Model",
+      "description": "Trains surge multipliers on demand per city.",
+      "technology": "MLflow",
       "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api"
+      "serviceKind": "generic"
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "x": -52,
+      "y": -69,
+      "width": 1100,
+      "height": 110,
+      "z": 0,
+      "text": "# Medallion lakehouse\nRide data refined in layers: raw bronze, clean silver, curated gold.",
+      "textOrigin": "explicit",
+      "textRole": "title"
     }
   ],
   "edges": [
     {
-      "id": "db-ingest",
-      "source": "db",
-      "target": "ingestion",
+      "id": "load-rides",
+      "source": "rides",
+      "target": "ingest",
+      "label": "Copies new rides",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "reads",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "files-ingest",
-      "source": "files",
-      "target": "ingestion",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "reads",
+      "cadence": "Every 15 min",
       "sourceAnchor": {
         "side": "right",
         "offset": 0.5
       },
       "targetAnchor": {
         "side": "left",
-        "offset": 0.5
+        "offset": 0.2
       },
+      "waypoints": [
+        {
+          "x": 404,
+          "y": 220
+        },
+        {
+          "x": 404,
+          "y": 364
+        }
+      ],
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "stream-ingest",
-      "source": "stream",
-      "target": "ingestion",
+      "id": "load-events",
+      "source": "events",
+      "target": "ingest",
+      "label": "Reads trip events",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "consumes",
+      "cadence": "Streaming",
       "kind": "event",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "load-payouts",
+      "source": "payouts",
+      "target": "ingest",
+      "label": "Picks up CSVs",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "cadence": "Daily 02:00",
       "sourceAnchor": {
         "side": "right",
         "offset": 0.5
       },
       "targetAnchor": {
-        "side": "bottom",
-        "offset": 0.5
+        "side": "left",
+        "offset": 0.8
       },
+      "waypoints": [
+        {
+          "x": 404,
+          "y": 580
+        },
+        {
+          "x": 404,
+          "y": 437
+        }
+      ],
       "semanticsOrigin": "explicit"
     },
     {
       "id": "land",
-      "source": "ingestion",
+      "source": "ingest",
       "target": "bronze",
-      "label": "lands raw",
+      "label": "Appends raw rows",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "writes",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
       "semanticsOrigin": "explicit"
     },
     {
       "id": "refine",
       "source": "bronze",
       "target": "silver",
-      "label": "validate + conform",
+      "label": "Types + dedupes",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "transforms",
-      "cadence": "streaming",
+      "cadence": "Hourly",
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.expect",
+          "type": "code",
+          "language": "sql",
+          "code": "CREATE OR REFRESH STREAMING TABLE silver.trips (\n  CONSTRAINT valid_fare EXPECT (fare_cents >= 0) ON VIOLATION DROP ROW,\n  CONSTRAINT known_city EXPECT (city_id IS NOT NULL) ON VIOLATION DROP ROW\n)\nAS SELECT DISTINCT trip_id, city_id, driver_id,\n       CAST(fare * 100 AS INT) AS fare_cents, ended_at\nFROM STREAM(bronze.trips_raw);",
+          "width": 587,
+          "height": 177.625
+        }
+      ]
+    },
+    {
+      "id": "reject",
+      "source": "bronze",
+      "target": "quarantine",
+      "label": "Fails checks",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "transforms",
+      "kind": "failure",
       "sourceAnchor": {
-        "side": "right",
+        "side": "bottom",
         "offset": 0.5
       },
       "targetAnchor": {
@@ -345,60 +403,36 @@
       "id": "curate",
       "source": "silver",
       "target": "gold",
-      "label": "model + aggregate",
+      "label": "Aggregates per city",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "transforms",
-      "cadence": "hourly",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
+      "cadence": "Daily 04:00",
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "to-analytics",
+      "id": "dashboards",
       "source": "gold",
-      "target": "analytics",
+      "target": "looker",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "reads",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "to-api",
+      "id": "train",
       "source": "gold",
-      "target": "data-api",
+      "target": "pricing",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "reads",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
       "semanticsOrigin": "explicit"
     }
   ],
   "viewport": {
-    "x": 720,
-    "y": 450,
-    "zoom": 0.64
+    "x": 0,
+    "y": 0,
+    "zoom": 1
   },
   "settings": {
     "showSequence": true,
@@ -412,36 +446,86 @@
   },
   "flows": [
     {
-      "id": "flow1",
+      "id": "raw-to-insight",
       "title": "Raw to insight",
       "steps": [
         {
-          "id": "fs_ytyl1pyixr5y",
-          "edgeId": "db-ingest",
-          "caption": "Ingestion reads the source"
+          "id": "raw-to-insight.s1",
+          "edgeId": "load-rides",
+          "caption": "Every 15 minutes, new and changed rides are copied out of PostgreSQL."
         },
         {
-          "id": "fs_q4v01erxtxky",
+          "id": "raw-to-insight.s2",
           "edgeId": "land",
-          "caption": "Landed in Bronze exactly as received"
+          "caption": "Bronze appends them untouched, stamped with load time and source."
         },
         {
-          "id": "fs_qqicrgtxzue9",
+          "id": "raw-to-insight.s3",
           "edgeId": "refine",
-          "caption": "Validated, deduplicated, and conformed into Silver"
+          "caption": "Silver casts types, drops duplicate trip ids and checks every row."
         },
         {
-          "id": "fs_cgaizqojqxmo",
+          "id": "raw-to-insight.s4",
           "edgeId": "curate",
-          "caption": "Modelled and aggregated into Gold"
+          "caption": "Each night Gold sums trips, revenue and wait time per city and day."
         },
         {
-          "id": "fs_epb9ncu9c4f6",
-          "edgeId": "to-analytics",
-          "caption": "Analytics reads business-ready data"
+          "id": "raw-to-insight.s5",
+          "edgeId": "dashboards",
+          "extraEdgeIds": [
+            "train"
+          ],
+          "extraNodeIds": [
+            "pricing"
+          ],
+          "caption": "City managers open yesterday's numbers in Looker."
         }
       ],
       "accent": "teal"
+    },
+    {
+      "id": "bad-rows",
+      "title": "A bad row is quarantined",
+      "steps": [
+        {
+          "id": "bad-rows.s1",
+          "edgeId": "load-payouts",
+          "caption": "A partner CSV arrives with a negative fare on one line."
+        },
+        {
+          "id": "bad-rows.s2",
+          "edgeId": "land",
+          "caption": "Bronze still keeps it: raw means raw."
+        },
+        {
+          "id": "bad-rows.s3",
+          "edgeId": "reject",
+          "caption": "The fare check fails; the row goes to quarantine with the rule it broke."
+        },
+        {
+          "id": "bad-rows.s4",
+          "edgeId": "curate",
+          "extraNodeIds": [
+            "quarantine"
+          ],
+          "caption": "Gold is built from the good rows only, so dashboards never see it."
+        }
+      ],
+      "accent": "amber",
+      "variantOf": "raw-to-insight"
+    }
+  ],
+  "openPoints": [
+    {
+      "id": "op.triage",
+      "kind": "tentative",
+      "context": "Assumed: the data team triages quarantine weekly. Should the source team own it instead?",
+      "targets": [
+        {
+          "kind": "node",
+          "id": "quarantine"
+        }
+      ]
     }
   ]
 }

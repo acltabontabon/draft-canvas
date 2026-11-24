@@ -13,9 +13,11 @@ import {
   createEdge,
   createNode,
   defaultSizeFor,
+  boxForKind,
   defaultTextFor,
   type CreateNodeInput,
 } from '../document/factory';
+import { familyKindOf } from '../document/dataStoreGeometry';
 import { gapForCaption, horizontalAnchorsFor, RULES, type MaterializedContinuation } from '../continuation';
 import { effectiveLevel } from '../depth/level';
 import {
@@ -33,14 +35,14 @@ import {
   type DepthPath,
 } from '../depth/tree';
 import { getMeasurer } from '../render/text/measure';
-import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight } from '../nodes/describe';
+import { naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight, sizingContext } from '../nodes/describe';
 import { fitSequences, recoverCappedSequence } from '../nodes/sequenceFit';
 import { liveSequenceFocus, sequenceEditStillThere } from '../sequence/focus';
 import { syncLinks } from '../document/sequenceLinks';
-import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
   addNodes,
+  anchorOffsetY,
   alignNodes,
   attachToEdge as attachToEdgeOp,
   attachToNode as attachToNodeOp,
@@ -76,6 +78,7 @@ import {
   sendToBack,
   setParent,
   setSettings,
+  setStyle,
   setTitle,
   setViewport,
   touch,
@@ -138,11 +141,14 @@ import {
   categoryOf,
   isServiceInteraction,
   inferRelationship,
+  baseCategory,
 } from '../document/connectorSemantics';
 import { inferRelationshipThroughJunctions, reinferIfEligible } from '../document/reinfer';
 import { plainShortcut } from '../lib/platform';
 import { technologyKindPatch } from '../document/technologyKind';
 import { lineageOf } from '../document/dataFlow';
+import { makeRoom as makeRoomOp, type RoomPush } from '../document/makeRoom';
+import { fixedIds } from '../document/held';
 import { replicasField, splitReplicaCount } from '../document/replicas';
 import { CONVERTIBLE_TYPE_NAMES, convertNodeType, isConvertibleType, type ConvertibleType } from '../document/convert';
 import { bridgeProblems, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
@@ -172,9 +178,11 @@ import type {
   Side,
   ViewLevel,
 } from '../document/types';
+import type { DocumentStyle } from '../document/style';
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
 import { addInk, INK_ID_PREFIX, inkOf, inkUnionBounds, removeInk, translateInk } from '../document/ink';
 import { createId } from '../document/ids';
+import { flowFromWalk, tellNext } from '../presentation/walk';
 import { boxForChoice, INK_CHOICE_LABEL, INK_CHOICE_TYPE, type InkShapeChoice } from '../ink/choices';
 import type { Box } from '../ink/geometry';
 import { routingPlan } from '../edges/bundles';
@@ -215,6 +223,12 @@ export interface FlowPlaybackState {
   active: boolean;
   flowId: string | null;
   sequenceNodeId?: string;
+  /**
+   * The walk being presented, when `flowId` names one (`presentation/walk.ts`): the diagram's own
+   * arrows followed because nobody has made a flow of them. The file does not hold it — it lives
+   * here, with the rest of playback, until the presenter keeps it (`keepWalk`) or stops.
+   */
+  walk?: DraftFlow;
   step: number;
   /**
    * Which half of the current step's exchange is animating — irrelevant (and never read) unless
@@ -251,18 +265,23 @@ export interface FocusState {
 }
 
 /**
- * Whether the canvas is showing traffic (`src/traffic/`), and over which connectors: every one in
- * the room, or only a flow's (`flowId`). The analysis itself is never stored — `store/traffic.ts`
- * derives it from the room on demand — so it can't describe a graph that has since changed. Like
- * Focus: transient, never saved, never in history, never shared with collaborators, and dropped by
- * `resetViewSession` along with everything else about the room being left.
+ * An outage walk (`src/traffic/outage.ts`): `active` while the canvas is asking "what if this goes
+ * down?", `down` the shape or Boundary taken down (none yet while one is still to be picked), and
+ * `whole` whether every instance of a Service drawn with several is down rather than one. `cut` is
+ * a connector taken down instead of a shape: both its ends stay up and nothing travels it. What the
+ * outage does is never stored — `store/outage.ts` derives it from the room on demand — so it can't
+ * describe a graph that has since changed. Like Focus: transient, never saved, never in history,
+ * never shared with collaborators, and dropped by `resetViewSession` along with everything else
+ * about the room being left.
  */
-export interface TrafficView {
+export interface OutageView {
   active: boolean;
-  flowId: string | null;
+  down: string | null;
+  whole: boolean;
+  cut: string | null;
 }
 
-export const TRAFFIC_OFF: TrafficView = { active: false, flowId: null };
+export const OUTAGE_OFF: OutageView = { active: false, down: null, whole: false, cut: null };
 
 /**
  * An edge counts as focused if it was explicitly added, or if both of its
@@ -360,7 +379,7 @@ export interface EditorStore {
    */
   editReturn: { selection: Selection; viewport: DraftViewport | null } | null;
   focus: FocusState;
-  traffic: TrafficView;
+  outage: OutageView;
   /** The active flow: which flow's step badges show on the canvas, which the Flows panel
    *  highlights, and which a connector's "Add to …" chip appends to. Independent of playback;
    *  never mutates anything by itself. See `lensFlow` for when it also dims the canvas. */
@@ -437,7 +456,7 @@ export interface EditorStore {
   /** The shape a drawing became, back to the drawing. */
   revertInkShape: (nodeId: string, strokes: readonly DraftInk[]) => void;
   /** Turns strokes into a connector between two shapes, as one undo step. Returns its id, or null. */
-  inkToConnector: (strokeIds: readonly string[], source: string, target: string, directed: boolean) => string | null;
+  inkToConnector: (strokeIds: readonly string[], source: string, target: string, directed: boolean, via?: readonly DraftPoint[]) => string | null;
   /** One undoable bulk add. `flows` (a starter's predefined walkthroughs) join the same entry, so
    *  a single ⌘Z takes the whole composition back out — nodes, edges and flows together. False
    *  (and nothing added) when the result would pass the document limits. */
@@ -511,6 +530,9 @@ export interface EditorStore {
   /** "Add DLQ" — creates a compact, connected Dead Letter Queue companion for a plain Queue. A
    *  no-op if the node isn't a plain queue, is itself a generated DLQ, or already has one. */
   addDeadLetterQueue: (queueId: string) => void;
+  /** Draws the way back out of a dead-letter queue: a "replays" connector to the queue it serves.
+   *  One undo step; the existing connector's id when the two are already joined that way. */
+  addReplayRoute: (deadLetterId: string, queueId: string) => string | null;
   /** Adds a folded business action linked to this interaction; a canvas gesture may choose its target. */
   addCompensation: (edgeId: string, targetId?: string) => string | null;
   setCompensationVisible: (id: string, visible: boolean) => void;
@@ -554,6 +576,9 @@ export interface EditorStore {
   /** Free-text condition chip, e.g. "approved" — display only, never evaluated. */
   /** How often a connector moves its data ("hourly"); empty clears it. */
   setEdgeCadence: (id: string, cadence: string | undefined) => void;
+  /** Draws connectors as portals (a labelled stub at each end, `DraftEdge.portal`) or as lines
+   *  again. One undo step; `false` when nothing changed. */
+  setEdgesPortal: (ids: readonly string[], portal: boolean) => boolean;
   /** Spotlights everything `nodeId`'s data comes from and everything it feeds (`lineageOf`). */
   showLineage: (nodeId: string) => void;
   setEdgeCondition: (id: string, condition: string) => void;
@@ -708,6 +733,12 @@ export interface EditorStore {
    *  what is visibly inside. One write, because every write re-derives the whole diagram's routing
    *  and crossings, and doing that twice per drop was the largest part of its cost. */
   commitMove: (positions: Map<string, { x: number; y: number }>, movedIds: Iterable<string>) => void;
+  /** Holds the selected shapes in place (`DraftNode.held`), or lets them go: Arrange and Tidy up
+   *  leave a held shape where it is. One undo step; `false` when nothing changed. */
+  holdSelection: (held: boolean) => boolean;
+  /** One frame of the Make room drag: `base` (the room as the drag found it) with everything past
+   *  the line moved by `push.delta`. Inside the drag's interaction, so the whole drag is one step. */
+  pushRoom: (base: DraftDocument, push: RoomPush) => void;
   /** A resize handle let go: the new box, with membership following (see `reconcileAfterResize`). */
   resizeNode: (id: string, box: { x?: number; y?: number; width: number; height: number }) => void;
   /** Explicitly expand saved or manually resized architecture labels, as one undoable change. */
@@ -719,6 +750,12 @@ export interface EditorStore {
   traceEdge: (edgeId: string) => void;
   finishFlowTrace: () => boolean;
   createFlow: (title?: string) => string | null;
+  /** Saves the walk being presented as a flow of the file, in one undo step, and carries on
+   *  presenting it from the same moment. The new flow's id, or `null` when nothing was kept. */
+  keepWalk: () => string | null;
+  /** Tells a connector next in the walk being presented (`presentation/walk.ts`'s `tellNext`):
+   *  the walk is reshaped to the order the presenter takes. Never touches the document. */
+  tellWalkNext: (edgeId: string) => boolean;
   renameFlow: (flowId: string, title: string) => void;
   /** Sets, or clears (`accent: null`), a flow's lens accent — see `DraftFlow.accent`. */
   setFlowAccent: (flowId: string, accent: Accent | null) => void;
@@ -761,6 +798,8 @@ export interface EditorStore {
   rename: (title: string) => void;
   /** `coalesceKey` folds a continuous control (a slider drag) into one undo step. */
   updateSettings: (patch: Partial<DraftSettings>, options?: { coalesceKey?: string }) => void;
+  /** Gives the open diagram its own look, or with `undefined` lets it follow this device again. One undo step. */
+  setDocumentStyle: (style: DocumentStyle | undefined, options?: { coalesceKey?: string }) => void;
   persistViewport: (viewport: DraftViewport) => void;
 
   /* History */
@@ -783,11 +822,16 @@ export interface EditorStore {
   enterFocus: (nodeIds: string[], edgeIds: string[]) => void;
   exitFocus: () => void;
 
-  /* Traffic */
-  /** Shows traffic over the whole room, or over one flow's connectors. Ends Focus: one dimming
-   *  system at a time. Refused while presenting. */
-  showTraffic: (flowId?: string | null) => void;
-  hideTraffic: () => void;
+  /* Outage walk */
+  /** Starts an outage walk with nothing down yet: the next shape chosen is taken down. Ends Focus:
+   *  one dimming system at a time. */
+  startOutage: () => void;
+  /** Takes a shape (or a Boundary and what is in it) down and shows what follows across the room.
+   *  `whole` takes every instance of a Service drawn with several, rather than one of them. */
+  takeDown: (nodeId: string, whole?: boolean) => void;
+  /** Takes a connector down: its two ends stay up, and nothing travels between them. */
+  cutConnector: (edgeId: string) => void;
+  endOutage: () => void;
 
   /* Depth */
   /** Step into a shape's inside. Pure navigation: nothing is written, and an inside that does not
@@ -816,7 +860,7 @@ export interface ApplyOptions {
  *  `document/connectorSemantics.ts`) — a change to any of these can make an incident edge's
  *  inferred relationship stale, so `updateNodeById` re-runs `reinferIfEligible` on every edge
  *  touching the node whenever a patch touches one of these. */
-const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'actorKind', 'componentKind'] as const;
+const KIND_FIELDS = ['serviceKind', 'databaseKind', 'queueKind', 'actorKind', 'componentKind', 'artifactKind'] as const;
 
 /**
  * Re-evaluates every edge incident to a node after a patch changes one of `KIND_FIELDS` — the same
@@ -858,6 +902,14 @@ function applyComponentAutoLabel(doc: DraftDocument, nodeId: string, before: Dra
   const node = doc.nodes.find((n) => n.id === nodeId);
   if (!node) return doc;
   return updateNode(doc, nodeId, { text: defaultTextFor('component', undefined, node.componentKind) });
+}
+
+/** And for an Artifact: "File" becomes "Certificate" while nobody has named it. */
+function applyArtifactAutoLabel(doc: DraftDocument, nodeId: string, before: DraftNode, patch: Partial<DraftNode>): DraftDocument {
+  if (before.type !== 'artifact' || before.textOrigin !== 'auto' || patch.text !== undefined) return doc;
+  const node = doc.nodes.find((n) => n.id === nodeId);
+  if (!node) return doc;
+  return updateNode(doc, nodeId, { text: defaultTextFor('artifact', undefined, undefined, undefined, node.artifactKind) });
 }
 
 /**
@@ -1137,7 +1189,7 @@ export function viewLevel(state: FileState): ViewLevel | undefined {
  * and node ids survive both a reload of the same file and a step into another room. Deliberately
  * leaves `mode` alone — presenting is a way of looking at any room, not a property of one.
  */
-function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'editReturn' | 'focus' | 'traffic' | 'selectedFlowId'> {
+function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'editReturn' | 'focus' | 'outage' | 'selectedFlowId'> {
   const ui = useUiStore.getState();
   if (ui.flowTrace) { ui.setFlowTrace(null); ui.notify('Tracing cancelled because the diagram or level changed.'); }
   ui.resetContinuation();
@@ -1177,7 +1229,7 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     editReturn: null,
     focus: { active: false, nodeIds: [], edgeIds: [] },
     // An analysis of the room being left says nothing about the one arriving.
-    traffic: TRAFFIC_OFF,
+    outage: OUTAGE_OFF,
     selectedFlowId: null,
   };
 }
@@ -1193,11 +1245,10 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
  * are moot for an empty flow anyway.
  */
 export function lensFlow(
-  state: Pick<EditorStore, 'document' | 'selectedFlowId' | 'flowPlayback' | 'focus' | 'traffic'>,
+  state: Pick<EditorStore, 'document' | 'selectedFlowId' | 'flowPlayback' | 'focus' | 'outage'>,
 ): DraftFlow | undefined {
-  // Traffic owns the dimming while it shows, the way Focus and playback do — a flow it is scoped
-  // to is named in the traffic panel rather than lit a second way.
-  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active || state.traffic.active) return undefined;
+  // An outage walk owns the dimming while it shows, the way Focus and playback do.
+  if (!state.selectedFlowId || state.flowPlayback.active || state.focus.active || state.outage.active) return undefined;
   const flow = findFlow(state.document, state.selectedFlowId);
   return flow && flowHasMembers(state.document, flow) ? flow : undefined;
 }
@@ -1226,7 +1277,7 @@ export function flowFitViewNodes(state: EditorStore): { id: string }[] | undefin
   const flow =
     lensFlow(state) ??
     (state.flowPlayback.active && state.flowPlayback.flowId
-      ? playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)
+      ? playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId, state.flowPlayback.walk)
       : undefined);
   if (!flow) return undefined;
   const ids = flowMemberNodeIds(state.document, flow);
@@ -1326,9 +1377,42 @@ export function roomFor(nodeCount: number, edgeCount: number, flowCount = 0): bo
   return false;
 }
 
-/** The history fields for an entry, while edits are shared: what it touched, for selective undo. */
-function sharedKeys(before: DraftDocument, after: DraftDocument): Pick<HistoryEntry, 'keys'> {
-  return isSharedEditing() ? { keys: changeKeys(before, after) } : {};
+/**
+ * The history entry for one change to the file: every place that records a step builds it here.
+ *
+ * While edits are shared it also carries what the step touched (`keys`), which selective undo
+ * depends on. That was four hand-written entries each having to remember it; an entry made here
+ * cannot leave it out.
+ */
+function recorded(
+  label: string,
+  before: DraftDocument,
+  after: DraftDocument,
+  path: readonly string[],
+  selectionBefore: Selection,
+  selectionAfter: Selection,
+  extra?: Pick<HistoryEntry, 'coalesceKey' | 'amendKey' | 'flowSessionBefore' | 'flowSessionAfter'>,
+): HistoryEntry {
+  return {
+    label,
+    before,
+    after,
+    path,
+    selectionBefore,
+    selectionAfter,
+    at: Date.now(),
+    ...extra,
+    ...(isSharedEditing() ? { keys: changeKeys(before, after) } : {}),
+  };
+}
+
+/**
+ * Whether the diagram takes no edits just now: opened read-only from a share link, or showing a
+ * flow being traced. What `apply` and the actions that write the file themselves all ask.
+ */
+function editingLocked(): boolean {
+  const ui = useUiStore.getState();
+  return Boolean(ui.readOnly || ui.flowTrace);
 }
 
 /** The selection without anything `document` no longer holds — checked by id, not by count: a remote
@@ -1447,7 +1531,7 @@ function restoreSnapshot(
   const inside = target !== touched;
   const moved = pathKey(inside ? path : ROOT_PATH) !== pathKey(state.path);
   const file = touched;
-  const view = !inside ? file : file === touched ? target : (viewOf(file, path) ?? file);
+  const view = inside ? target : file;
   const cleared = moved ? resetViewSession() : undefined;
   set((s) => ({
     history: restored.history,
@@ -1511,13 +1595,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   flowPlayback: { active: false, flowId: null, step: 0 },
   editReturn: null,
   focus: { active: false, nodeIds: [], edgeIds: [] },
-  traffic: TRAFFIC_OFF,
+  outage: OUTAGE_OFF,
   selectedFlowId: null,
   revision: 0,
   liveViewport: null,
 
   setDocument(document, options) {
-    const context = describeContext(LIGHT);
+    const context = sizingContext();
     document = mapRooms(document, (graph) => {
       const nodes = graph.nodes.map((node) => recoverCappedSequence(node, context));
       return nodes.some((node, index) => node !== graph.nodes[index]) ? { ...graph, nodes } : graph;
@@ -1556,14 +1640,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A diagram opened from a share link is read-only (`uiStore.readOnly`): every operation funnels
     // through here or `applyToFile`, so refusing at this one gate is what keeps a shared diagram
     // exactly as it arrived, whichever key or menu asked. Camera moves don't come this way.
-    if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return;
+    if (editingLocked()) return;
     const state = get();
     const before = state.document;
     // A sequence is sized by what it holds, whichever edit changed that — typing a message, a paste,
     // a renamed title — so it is done here, once, rather than remembered by every action.
     // And a participant that stands for a shape is that shape: renaming either renames both, here,
     // in the same step (`sequenceLinks.ts`).
-    const next = touch(fitSequences(before, linksInStep(before, recipe(before)), () => describeContext(LIGHT)));
+    const next = touch(fitSequences(before, linksInStep(before, recipe(before)), () => sizingContext()));
     // Structural sharing means an operation that changed nothing returns the
     // same object, so no-op commands never create a dead undo step.
     if (next === before || shallowEqualDocument(next, before)) return;
@@ -1583,26 +1667,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // back a shape you deleted two rooms ago, and it carries the path so it can take you there.
     const fileBefore = fileOf(state);
     const fileAfter = fileOf({ ...state, document: next });
-    const keys = sharedKeys(fileBefore, fileAfter);
+    const entry = recorded(label, fileBefore, fileAfter, state.path, state.selection, selectionAfter, {
+      coalesceKey: options?.coalesceKey,
+      amendKey: options?.amendKey,
+      flowSessionBefore: options?.flowSessionBefore,
+      flowSessionAfter: options?.flowSessionAfter,
+    });
     set((s) => ({
       document: next,
       selection: selectionAfter,
       revision: s.revision + 1,
       ...focusThatSurvives(next, s),
-      history: pushEntry(s.history, {
-        label,
-        before: fileBefore,
-        after: fileAfter,
-        path: state.path,
-        selectionBefore: state.selection,
-        selectionAfter,
-        at: Date.now(),
-        coalesceKey: options?.coalesceKey,
-        amendKey: options?.amendKey,
-        flowSessionBefore: options?.flowSessionBefore,
-        flowSessionAfter: options?.flowSessionAfter,
-        ...keys,
-      }),
+      history: pushEntry(s.history, entry),
     }));
     closeStaleAttachmentDetail(next);
   },
@@ -1611,7 +1687,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A gesture in flight would otherwise absorb this change into its own undo entry — or record
     // its baseline over it. The caller refuses while `isInteracting()`; this is the last guard.
     if (interaction) return false;
-    // Same gate as `apply`: a shared, read-only diagram takes no changes.
+    // A shared, read-only diagram takes no changes. Narrower than `editingLocked()`, which `apply`
+    // asks, and on purpose: a write to the file from outside (the file changing on disk) lands
+    // during a flow trace and cancels the trace, so nothing provisional is saved over it
+    // (`e2e/explanation-journey.spec.ts`, "an external edit cancels a trace"). An agent's commit does
+    // not get this far while someone is tracing: `host/agentBridge.ts`'s `busyReason` makes it wait.
     if (useUiStore.getState().readOnly) return false;
     const state = get();
     if (expectedRevision !== undefined && state.revision !== expectedRevision) return false;
@@ -1629,7 +1709,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A file recipe can remove and add elements in one step, so equal or growing counts do not
     // mean every selected id survived (unlike the room actions selectionIn optimizes for).
     const selectionAfter = cleared ? EMPTY_SELECTION : selectionThatExists(document, state.selection);
-    const keys = sharedKeys(file, nextFile);
     set((s) => ({
       ...(cleared ?? {}),
       document,
@@ -1639,16 +1718,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: selectionAfter,
       revision: s.revision + 1,
       ...focusThatSurvives(document, s),
-      history: pushEntry(s.history, {
-        label,
-        before: file,
-        after: nextFile,
-        path: inside ? path : ROOT_PATH,
-        selectionBefore: s.selection,
-        selectionAfter,
-        at: Date.now(),
-        ...keys,
-      }),
+      history: pushEntry(s.history, recorded(label, file, nextFile, inside ? path : ROOT_PATH, s.selection, selectionAfter)),
     }));
     closeStaleAttachmentDetail(document);
     return true;
@@ -1683,6 +1753,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       history: markCrossed(s.history),
     }));
     closeStaleAttachmentDetail(document);
+    // A stroke someone else erased is no longer chosen here: left named, Delete took the "erase the
+    // chosen strokes" path for a stroke that was gone, and did nothing.
+    pruneInkSelection(document);
     return true;
   },
 
@@ -1715,18 +1788,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // standing in now would write the old room's shapes at the new room's address.
     if (!samePath(active.path, state.path)) return;
     const after = fileOf(state);
-    const keys = sharedKeys(active.file, after);
     set((s) => ({
-      history: pushEntry(s.history, {
-        label: label ?? active.label,
-        before: active.file,
-        after,
-        path: active.path,
-        selectionBefore: active.selection,
-        selectionAfter: s.selection,
-        at: Date.now(),
-        ...keys,
-      }),
+      history: pushEntry(s.history, recorded(label ?? active.label, active.file, after, active.path, active.selection, s.selection)),
     }));
   },
 
@@ -1835,7 +1898,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Back to sketch', (doc) => addInk(removeElements(doc, [nodeId], []), strokes), { selection: EMPTY_SELECTION });
   },
 
-  inkToConnector(strokeIds, source, target, directed) {
+  inkToConnector(strokeIds, source, target, directed, via) {
     const state = get();
     const sourceNode = state.document.nodes.find((n) => n.id === source);
     const targetNode = state.document.nodes.find((n) => n.id === target);
@@ -1858,7 +1921,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       async: relationship?.async,
       semanticsOrigin: relationship ? 'inferred' : undefined,
     });
-    state.apply(directed ? 'Draw connector' : 'Draw line', (doc) => addEdges(removeInk(doc, strokeIds), [edge]), { selection: EMPTY_SELECTION });
+    // A path drawn by hand between the two is the route the person asked for: its corners are kept
+    // as the connector's bends, exactly as if they had been dragged there.
+    state.apply(
+      directed ? 'Draw connector' : 'Draw line',
+      (doc) => {
+        const drawn = addEdges(removeInk(doc, strokeIds), [edge]);
+        return via?.length ? setEdgeWaypointsOp(drawn, edge.id, via) : drawn;
+      },
+      { selection: EMPTY_SELECTION },
+    );
     return get().document.edges.some((e) => e.id === edge.id) ? edge.id : null;
   },
 
@@ -2058,9 +2130,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply(label, (doc) => {
       const before = doc.nodes.find((n) => n.id === id);
       let next = updateNode(doc, id, picked && before?.kindOrigin ? { ...patch, kindOrigin: undefined } : patch);
-      if (before && 'serviceKind' in patch) next = applyServiceAutoLabel(next, id, before, patch);
-      if (before && 'componentKind' in patch) next = applyComponentAutoLabel(next, id, before, patch);
+      if (before && 'serviceKind' in patch) {
+        next = applyServiceAutoLabel(next, id, before, patch);
+        // A card becoming a glyph (or back) takes the box that drawing needs.
+        const box = boxForKind(before, before.serviceKind, patch.serviceKind);
+        if (box && !('width' in patch) && !('height' in patch)) next = updateNode(next, id, box);
+      }
+      if (before && 'componentKind' in patch) {
+        next = applyComponentAutoLabel(next, id, before, patch);
+        const box = boxForKind(before, before.componentKind, patch.componentKind);
+        if (box && !('width' in patch) && !('height' in patch)) next = updateNode(next, id, box);
+      }
       if (before && 'actorKind' in patch) next = applyActorAutoLabel(next, id, before, patch);
+      if (before && 'artifactKind' in patch) next = applyArtifactAutoLabel(next, id, before, patch);
       if (before?.type === 'note' && 'noteKind' in patch) next = growNoteToFit(next, id);
       if (before?.type === 'text' && TEXT_STYLE_FIELDS.some((field) => field in patch)) {
         next = growTextToFit(next, id);
@@ -2088,6 +2170,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
           // The same follow-ups as a kind picked in the inspector: an automatic name follows the
           // kind, and connectors whose meaning was inferred are inferred again.
           next = applyServiceAutoLabel(next, id, before, kind);
+          const box = boxForKind(before, before.serviceKind, (kind as Partial<DraftNode>).serviceKind ?? before.serviceKind);
+          if (box) next = updateNode(next, id, box);
+          next = reinferIncidentEdges(next, id, doc);
+        } else if ('technology' in fields) {
+          // A technology can change what a connector means without moving the kind: a Worker
+          // named as Debezium tails the database drawn into it (`refinementBetween`).
           next = reinferIncidentEdges(next, id, doc);
         }
         return growArchitectureToFit(next, id);
@@ -2217,11 +2305,17 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!roomFor(1, 1)) return;
 
     // Same midpoint-of-both-centers placement `detachFromEdge` already uses for a connector's
-    // own detached attachment — no independent placement heuristic invented for this.
-    const size = defaultSizeFor('service');
+    // own detached attachment — no independent placement heuristic invented for this. Vertically it
+    // is the anchors that meet in the middle, not the boxes: a Worker's connectors leave its glyph,
+    // which sits above its box's middle, so centring the box drew both legs with a jog, and a jog is
+    // where a caption loses its room ("consumed by" was cut to "consum…").
+    const size = defaultSizeFor('service', 'worker');
+    const anchorY = (node: DraftNode) => node.y + anchorOffsetY(node);
     const at = {
       x: Math.round((source.x + source.width / 2 + target.x + target.width / 2) / 2 - size.width / 2),
-      y: Math.round((source.y + source.height / 2 + target.y + target.height / 2) / 2 - size.height / 2),
+      y: Math.round(
+        (anchorY(source) + anchorY(target)) / 2 - anchorOffsetY({ type: 'service', serviceKind: 'worker', ...size }),
+      ),
     };
     const worker = createNode({
       type: 'service',
@@ -2297,6 +2391,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Add DLQ', (doc) => addEdges(addNodes(doc, [dlq]), [edge]), {
       selection: { nodes: [dlq.id], edges: [] },
     });
+  },
+
+  addReplayRoute(deadLetterId, queueId) {
+    const state = get();
+    const dlq = state.document.nodes.find((n) => n.id === deadLetterId);
+    const queue = state.document.nodes.find((n) => n.id === queueId);
+    if (!dlq || !queue || dlq.id === queue.id || dlq.type !== 'queue' || queue.type !== 'queue' || dlq.deliveryRole !== 'dead-letter') return null;
+    const existing = state.document.edges.find((e) => e.source === dlq.id && e.target === queue.id);
+    if (existing) return existing.id;
+    if (!roomFor(0, 1)) return null;
+    // Said outright rather than inferred: the matrix has no reading of its own for a connector
+    // that leaves a dead-letter queue, and "replays" is the whole point of drawing this one.
+    const edge = createEdge({
+      source: dlq.id,
+      target: queue.id,
+      semantic: 'deliversTo',
+      semanticsOrigin: 'explicit',
+      label: 'replays',
+      async: true,
+    });
+    state.apply('Draw replay route', (doc) => addEdges(doc, [edge]));
+    return edge.id;
   },
 
   addCompensation(edgeId, targetId) {
@@ -2376,7 +2492,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!source) return;
     if (!roomFor(1, 1)) return;
 
-    const size = defaultSizeFor(companion.type);
+    const size = defaultSizeFor(companion.type, familyKindOf(companion));
     // Same capability matrix every other connection reads — it correctly differentiates a queue's
     // competing-consumer `consumes` from a topic's fan-out `deliversTo`, a service's `writes` from
     // a gateway's `routes`, with no special-casing here. Resolved ahead of placement (category only
@@ -2427,7 +2543,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   addRoutedService(gatewayId) {
     const source = get().document.nodes.find((n) => n.id === gatewayId);
-    if (!source || categoryOf(source) !== 'gateway') return;
+    if (!source || baseCategory(categoryOf(source)) !== 'gateway') return;
     get().addCompanion(gatewayId, { type: 'service', serviceKind: 'api' }, 'Add Service');
   },
 
@@ -2464,6 +2580,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   setEdgeCadence(id, cadence) {
     const value = cadence?.slice(0, LIMITS.maxCadenceLength).trim() || undefined;
     get().apply('Set cadence', (doc) => updateEdge(doc, id, { cadence: value }), { coalesceKey: `edge-cadence:${id}` });
+  },
+
+  setEdgesPortal(ids, portal) {
+    const wanted = new Set(ids);
+    let changed = false;
+    get().apply(portal ? 'Draw as portal' : 'Draw as line', (doc) => {
+      const edges = doc.edges.map((edge) => {
+        if (!wanted.has(edge.id) || Boolean(edge.portal) === portal) return edge;
+        changed = true;
+        if (portal) return { ...edge, portal: true };
+        const { portal: _portal, ...line } = edge;
+        return line;
+      });
+      return changed ? { ...doc, edges } : doc;
+    });
+    return changed;
   },
 
   showLineage(nodeId) {
@@ -2556,7 +2688,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   async planTidy(options = {}) {
     const before = get();
-    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    if (interaction || editingLocked()) return null;
     const [{ runOffThread, cancelled }, { reuseOf }] = await Promise.all([import('../agent/offThread'), import('../agent/layoutPlan')]);
     const current = get();
     // The room, or what is selected in it, changed while the engine loaded: what was asked for is
@@ -2579,18 +2711,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       scoped: Boolean(scope),
       partial: result.plan.partial,
       sketches: inkOf(current.document).length,
+      ...(result.plan.held ? { held: result.plan.held } : {}),
     };
   },
 
   async planArrange(selection = false, options = {}) {
     const before = get();
     if (selection && before.selection.nodes.length === 0) return null;
-    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    if (interaction || editingLocked()) return null;
     const [{ runOffThread, cancelled }, { reuseOf }] = await Promise.all([import('../agent/offThread'), import('../agent/layoutPlan')]);
     const current = get();
     // As `planTidy`: what was asked about is no longer what is on screen.
     if (current.document !== before.document || current.path !== before.path || current.selection !== before.selection || interaction) return null;
-    if (useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return null;
+    if (editingLocked()) return null;
     const done = await runLayoutJob(
       { kind: 'arrange', doc: current.document, ...(selection ? { selection: [...current.selection.nodes] } : {}), ...(options.preset ? { preset: options.preset } : {}) },
       options.signal,
@@ -2620,6 +2753,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       partial: plan.partial,
       alternativeSkipped: plan.alternativeSkipped,
       sketches: inkOf(current.document).length,
+      crossings: plan.crossings,
+      ...(plan.held ? { held: plan.held } : {}),
+      ...(plan.followed ? { followed: plan.followed } : {}),
     };
   },
 
@@ -2799,6 +2935,28 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Move', (doc) => moveNodes(doc, positions));
   },
 
+  holdSelection(held) {
+    const { selection, apply } = get();
+    const ids = new Set(selection.nodes);
+    if (ids.size === 0) return false;
+    let changed = false;
+    apply(held ? 'Hold in place' : 'Let go', (doc) => {
+      const nodes = doc.nodes.map((node) => {
+        if (!ids.has(node.id) || Boolean(node.held) === held) return node;
+        changed = true;
+        if (held) return { ...node, held: true };
+        const { held: _held, ...free } = node;
+        return free;
+      });
+      return changed ? { ...doc, nodes } : doc;
+    });
+    return changed;
+  },
+
+  pushRoom(base, push) {
+    get().apply('Make room', () => makeRoomOp(base, push));
+  },
+
   commitMove(positions, movedIds) {
     get().apply('Move', (doc) => reconcileMembershipOp(moveNodes(doc, positions), movedIds));
   },
@@ -2807,7 +2965,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Resize', (doc) => {
       // A sequence can be given room, never less than it needs: its text does not shrink to fit.
       const node = doc.nodes.find((candidate) => candidate.id === id);
-      const floor = node?.type === 'sequence' ? naturalSequenceSizeFor(node, describeContext(LIGHT)) : null;
+      const floor = node?.type === 'sequence' ? naturalSequenceSizeFor(node, sizingContext()) : null;
       const held = floor ? { ...box, width: Math.max(box.width, floor.width), height: Math.max(box.height, floor.height) } : box;
       return reconcileAfterResize(updateNode(doc, id, held), id);
     });
@@ -3081,9 +3239,12 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   straighten() {
     if (interaction) return false;
     const { selection, apply } = get();
-    const movable = selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
+    const chosen = selection.nodes.length > 0 ? new Set(selection.nodes) : undefined;
     let moved = false;
     apply('Straighten', (doc) => {
+      // A held shape is never nudged, selected or not.
+      const fixed = fixedIds(doc.nodes);
+      const movable = fixed.size > 0 ? new Set([...(chosen ?? doc.nodes.map((node) => node.id))].filter((id) => !fixed.has(id))) : chosen;
       const next = straightenConnectors(doc, movable);
       moved = next !== doc;
       return next;
@@ -3394,6 +3555,37 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     return get().document.flows.some((f) => f.id === flow.id) ? flow.id : null;
   },
 
+  tellWalkNext(edgeId) {
+    const state = get();
+    const { active, walk, flowId, step, stage } = state.flowPlayback;
+    if (state.mode !== 'present' || !active || !walk || walk.id !== flowId) return false;
+    const next = tellNext(walk, edgeId, stage === 'opening' ? 0 : step, new Set(state.document.edges.map((edge) => edge.id)));
+    if (!next) return false;
+    set((s) => ({ flowPlayback: { ...s.flowPlayback, walk: next.flow, step: next.step, stage: undefined } }));
+    return true;
+  },
+
+  keepWalk() {
+    const { walk, flowId } = get().flowPlayback;
+    if (!walk || walk.id !== flowId || useUiStore.getState().readOnly) return null;
+    const full = () => {
+      useUiStore.getState().notify(`A diagram holds up to ${LIMITS.maxFlows} flows. Delete one to keep this.`, 'error');
+      return null;
+    };
+    if (totals(fileOf(get())).flows >= LIMITS.maxFlows) return full();
+    const taken = new Set(get().document.flows.map((flow) => flow.title));
+    let title = walk.title;
+    for (let n = 2; taken.has(title); n += 1) title = `${walk.title} ${n}`;
+    const flow = flowFromWalk(walk, createId('f'), () => createId('fs'), title);
+    get().apply('Keep as a flow', (doc) => addFlow(doc, flow));
+    if (!get().document.flows.some((f) => f.id === flow.id)) return full();
+    // The same telling, now the file's: the step and stage stay where the presenter is.
+    set((s) => ({ selectedFlowId: flow.id, flowPlayback: { ...s.flowPlayback, flowId: flow.id, walk: undefined } }));
+    // Says where it went: the Flows panel is out of sight for as long as the presentation lasts.
+    useUiStore.getState().notify('Kept as a flow. Rename or reorder it in Flows.');
+    return flow.id;
+  },
+
   renameFlow(flowId, title) {
     get().apply('Rename flow', (doc) => renameFlow(doc, flowId, title), {
       coalesceKey: `flow-title:${flowId}`,
@@ -3528,6 +3720,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Change settings', (doc) => setSettings(doc, patch), { coalesceKey: options?.coalesceKey });
   },
 
+  setDocumentStyle(style, options) {
+    get().apply(style === undefined ? 'Remove style' : 'Change style', (doc) => setStyle(doc, style), { coalesceKey: options?.coalesceKey });
+  },
+
   persistViewport(viewport) {
     // Saved, but not an edit: no undo step (nobody wants ⌘Z to undo a scroll), no new document,
     // no `updatedAt`. See `liveViewport`.
@@ -3542,7 +3738,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   undo() {
     // Read-only takes undo too: a collaborator the owner made view-only undoing here would change a
     // copy the owner never hears about, and the next edit once they may edit again sends it all.
-    if (useUiStore.getState().flowTrace || useUiStore.getState().readOnly) return;
+    if (editingLocked()) return;
     const state = get();
     // Mid-gesture (a drag or resize still held), swapping the document out from under it would
     // fold the restored state into the gesture's own entry and clear the redo stack.
@@ -3564,7 +3760,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   redo() {
-    if (useUiStore.getState().flowTrace || useUiStore.getState().readOnly) return;
+    if (editingLocked()) return;
     const state = get();
     if (interaction) return;
     if (isSharedEditing() || state.history.future[0]?.crossed) return selectiveStep(set, get, 'redo');
@@ -3660,6 +3856,8 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // A card left open from editing carries edit actions (Delete, Detach) that presentation must
     // never offer — while presenting, attachments speak through the callout instead.
     if (mode === 'present') useUiStore.getState().setOpenAttachmentDetail(null);
+    // Make room is an edit in hand: left armed, a drag while presenting would move shapes.
+    if (mode === 'present' && useUiStore.getState().makeRoom) useUiStore.getState().setMakeRoom(null);
     // The pointer, a manual camera, a receded strip: all of it was about the walkthrough that is
     // ending, and none of it may greet the next one.
     if (mode === 'edit') useUiStore.getState().resetPresentation();
@@ -3669,7 +3867,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       return {
         mode,
         // Presenting tells the story; it doesn't carry an analysis along with it.
-        traffic: entering ? TRAFFIC_OFF : s.traffic,
+        outage: entering ? OUTAGE_OFF : s.outage,
         flowPlayback: mode === 'edit' ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
         // A selection ring left over from editing has no meaning in a
         // read-only presentation — nothing there can show why it is
@@ -3693,14 +3891,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // Mutually exclusive with Focus — starting playback exits it, rather
       // than the two dimming systems ever needing to combine.
       const exitsFocus = playback.active === true && s.focus.active;
-      const exitsTraffic = playback.active === true && s.traffic.active;
+      const exitsOutage = playback.active === true && s.outage.active;
       // Playback re-asserts its phase on every step (and on mount, while editing): a write that changes
       // nothing would still hand every subscriber new objects and re-render them all.
-      if (unchanged && !exitsFocus && !exitsTraffic) return s;
+      if (unchanged && !exitsFocus && !exitsOutage) return s;
       return {
         flowPlayback: unchanged ? s.flowPlayback : { ...s.flowPlayback, ...playback },
         focus: exitsFocus ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
-        traffic: exitsTraffic ? TRAFFIC_OFF : s.traffic,
+        outage: exitsOutage ? OUTAGE_OFF : s.outage,
       };
     });
   },
@@ -3709,7 +3907,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((s) => ({
       focus: { active: true, nodeIds, edgeIds },
       flowPlayback: s.flowPlayback.active ? { active: false, flowId: null, step: 0 } : s.flowPlayback,
-      traffic: s.traffic.active ? TRAFFIC_OFF : s.traffic,
+      outage: s.outage.active ? OUTAGE_OFF : s.outage,
     }));
   },
 
@@ -3717,20 +3915,41 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set({ focus: { active: false, nodeIds: [], edgeIds: [] } });
   },
 
-  showTraffic(flowId = null) {
+  startOutage() {
     set((s) => {
-      if (s.mode === 'present') return s;
-      const scoped = flowId && findFlow(s.document, flowId) ? flowId : null;
-      if (s.traffic.active && s.traffic.flowId === scoped) return s;
+      if (s.mode === 'present' || s.outage.active) return s;
       return {
-        traffic: { active: true, flowId: scoped },
+        outage: { active: true, down: null, whole: false, cut: null },
         focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
       };
     });
   },
 
-  hideTraffic() {
-    set((s) => (s.traffic.active ? { traffic: TRAFFIC_OFF } : s));
+  takeDown(nodeId, whole = false) {
+    set((s) => {
+      if (s.mode === 'present') return s;
+      if (s.outage.down === nodeId && s.outage.whole === whole) return s;
+      if (!s.document.nodes.some((node) => node.id === nodeId)) return s;
+      return {
+        outage: { active: true, down: nodeId, whole, cut: null },
+        focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+      };
+    });
+  },
+
+  cutConnector(edgeId) {
+    set((s) => {
+      if (s.mode === 'present' || s.outage.cut === edgeId) return s;
+      if (!s.document.edges.some((edge) => edge.id === edgeId)) return s;
+      return {
+        outage: { active: true, down: null, whole: false, cut: edgeId },
+        focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+      };
+    });
+  },
+
+  endOutage() {
+    set((s) => (s.outage.active ? { outage: OUTAGE_OFF } : s));
   },
 
   enterInside(nodeId) {
@@ -3785,9 +4004,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
    * recorded against the room it changed, so undo takes it back where it happened.
    */
   setOuterViewLevel(depth, level) {
-    // The gates `applyToFile` keeps, since this writes the file and history itself: a gesture in
-    // flight would record its baseline over the change, and a shared or traced diagram takes none.
-    if (interaction || useUiStore.getState().readOnly || useUiStore.getState().flowTrace) return;
+    // Its own gates, since this writes the file and history itself: a gesture in flight would record
+    // its baseline over the change, and a shared or traced diagram takes none (as `apply` refuses).
+    if (interaction || editingLocked()) return;
     const state = get();
     if (depth < 0 || depth >= state.path.length) return;
     const file = fileOf(state);
@@ -3798,21 +4017,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const nextFile = at.length === 0 ? after : embed(file, at, after);
     const room = viewOf(nextFile, state.path);
     if (!room) return;
-    const keys = sharedKeys(file, nextFile);
     set((s) => ({
       document: room,
       outer: nextFile,
       revision: s.revision + 1,
-      history: pushEntry(s.history, {
-        label: labelForLevel(level),
-        before: file,
-        after: nextFile,
-        path: at,
-        selectionBefore: s.selection,
-        selectionAfter: s.selection,
-        at: Date.now(),
-        ...keys,
-      }),
+      history: pushEntry(s.history, recorded(labelForLevel(level), file, nextFile, at, s.selection, s.selection)),
     }));
   },
 }));
@@ -3895,6 +4104,8 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
     // Raising, editing or resolving an open point touches nothing on the canvas, so leaving this out
     // would discard every one of those edits as a write that changed nothing.
     a.openPoints === b.openPoints &&
+    // The diagram's own look changes nothing else in the file either.
+    a.style === b.style &&
     // Saying what a view shows changes nothing else about it, so without this the one edit that
     // only ever changes `level` would be thrown away as a no-op.
     a.level === b.level &&
@@ -3909,11 +4120,6 @@ export function documentLoadCount(kind: 'all' | 'openings'): number {
 
 /** Whether a drag or resize is in progress — an outside edit waits rather than joining it. */
 export function isInteracting(): boolean {
-  return interaction !== null;
-}
-
-/** Whether a gesture (a drag, a resize) is holding the document: nothing may be applied until it ends. */
-export function gestureInProgress(): boolean {
   return interaction !== null;
 }
 
@@ -3975,12 +4181,12 @@ function growArchitectureToFit(doc: DraftDocument, id: string): DraftDocument {
   const node = doc.nodes.find((n) => n.id === id);
   if (!node) return doc;
   if (node.type === 'group') {
-    const width = Math.min(LIMITS.maxNodeSize, Math.max(node.width, naturalBoundaryWidth(node, describeContext(LIGHT))));
+    const width = Math.min(LIMITS.maxNodeSize, Math.max(node.width, naturalBoundaryWidth(node, sizingContext())));
     return width > node.width ? updateNode(doc, id, { width }) : doc;
   }
   if (!(C4_TEXT_TYPES as readonly string[]).includes(node.type)) return doc;
   if (!node.text?.trim() && !node.technology && !node.description) return doc;
-  const needed = naturalArchitectureSize(node, describeContext(LIGHT), {
+  const needed = naturalArchitectureSize(node, sizingContext(), {
     maxWidth: Math.max(node.width, 640),
     maxHeight: LIMITS.maxNodeSize,
     maxNameLines: Number.POSITIVE_INFINITY,

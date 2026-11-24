@@ -1,0 +1,29 @@
+{
+  "id": "modular-monolith",
+  "name": "Modular Monolith",
+  "category": "architecture",
+  "summary": "One deployable, explicitly encapsulated modules inside",
+  "aliases": [
+    "modular monolith",
+    "modular architecture",
+    "modules",
+    "module boundaries",
+    "majestic monolith",
+    "monolith modules"
+  ],
+  "tags": [
+    "modules",
+    "single deployable",
+    "bounded contexts"
+  ],
+  "useWhen": [
+    "You want clear ownership without the cost of distributed services.",
+    "Preparing a monolith to split later, one module at a time."
+  ],
+  "watchOutFor": [
+    "Module boundaries only hold if calls go through the public interface.",
+    "A shared database makes it easy to reach into another module's tables."
+  ],
+  "featured": false,
+  "order": 20
+}

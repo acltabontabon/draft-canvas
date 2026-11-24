@@ -12,9 +12,11 @@
 
 import type { DraftDocument } from '../document/types';
 import { visibleEdges } from '../document/compensation';
+import { fixedIds, heldCount } from '../document/held';
 import type { ArrangeFix } from '../lib/arrangeFixes';
 import { arrangeView, readingDirectionOf } from './arrange';
 import { Problems } from './errors';
+import { legibilityOf } from './legibility';
 import { measureContext } from './place';
 import { proportionFindings, resolvedBy } from './proportion';
 import { pastDeadline, withBudget } from './route';
@@ -67,6 +69,13 @@ export interface ArrangePlan {
   alternativeSkipped: boolean;
   /** Units of work spent (`route.ts`'s `charge`): what a test or a benchmark holds to a bound. */
   used: number;
+  /** Places two connectors cross: as the room stands, and in each arrangement offered. Counted after
+   *  the budget is settled, so the count never costs a repair and `used` stays what the layout spent. */
+  crossings: { before: number; after: Partial<Record<PlanDirection, number>> };
+  /** Shapes held in place (`DraftNode.held`) that this arrangement was worked out around. */
+  held?: number;
+  /** The flow laid out in one line (`ArrangePreset.primaryFlow`), when one was asked for and still exists. */
+  followed?: string;
 }
 
 export type ArrangePlanResult =
@@ -86,6 +95,8 @@ export interface TidyPlan {
   partial: boolean;
   /** Units of work spent. */
   used: number;
+  /** Shapes held in place that the cleanup left alone. */
+  held?: number;
 }
 
 export type TidyPlanResult =
@@ -130,6 +141,12 @@ export function reuseOf(base: DraftDocument, view: DraftDocument): DraftDocument
 export function planArrange(doc: DraftDocument, ask: { selection?: readonly string[]; preset?: ArrangePreset } = {}): ArrangePlanResult {
   const scoped = ask.selection !== undefined;
   const preset = ask.preset ?? {};
+  // Held shapes stay exactly where they are: the rest is arranged as a selection is, set back down
+  // clear of what did not move. With nothing held this is the whole-room arrangement it always was.
+  const fixed = fixedIds(doc.nodes);
+  const around = fixed.size > 0;
+  const moving = around ? (ask.selection ?? doc.nodes.map((node) => node.id)).filter((id) => !fixed.has(id)) : ask.selection;
+  if (around && moving!.length === 0) return { kind: 'unchanged' };
   const reads = readingDirectionOf(doc);
   const ctx = measureContext();
   const bounded = withBudget({ work: ARRANGE_WORK_UNITS, backstopMs: LAYOUT_BACKSTOP_MS }, (): ArrangePlanResult => {
@@ -150,8 +167,10 @@ export function planArrange(doc: DraftDocument, ask: { selection?: readonly stri
     const arranged = arrangeView(
       doc,
       scoped
-        ? { scope: { nodes: [...ask.selection!] }, keepOutsideFixed: true, connectors: 'tidy', move: true, layout: { ...layout, direction: reads, directionChosen: true } }
-        : { connectors: 'tidy', move: true, ...(preset.direction ? {} : { bothDirections: true }), layout },
+        ? { scope: { nodes: [...moving!] }, keepOutsideFixed: true, connectors: 'tidy', move: true, layout: { ...layout, direction: reads, directionChosen: true } }
+        : around
+          ? { scope: { nodes: [...moving!] }, keepOutsideFixed: true, connectors: 'tidy', move: true, layout: { ...layout, directionChosen: true } }
+          : { connectors: 'tidy', move: true, ...(preset.direction ? {} : { bothDirections: true }), layout },
       ctx,
       new Problems(),
       '/arrange',
@@ -169,7 +188,7 @@ export function planArrange(doc: DraftDocument, ask: { selection?: readonly stri
       // Comfortable spacing that leaves the whole room too small to read on a screen: the same
       // arrangement set tighter, kept when that draws it clearly larger. Within the one budget, and
       // never over a spacing the skill asked for.
-      if (!scoped && !preset.spacing && after.some((finding) => finding.kind === 'sparse') && !pastDeadline()) {
+      if (!scoped && !around && !preset.spacing && after.some((finding) => finding.kind === 'sparse') && !pastDeadline()) {
         const tighter = arrangeView(
           doc,
           { connectors: 'tidy', move: true, layout: { ...layout, direction, directionChosen: true, spacing: 'compact' } },
@@ -197,11 +216,23 @@ export function planArrange(doc: DraftDocument, ask: { selection?: readonly stri
     if (!options[suggested]) return { kind: 'unchanged' };
     return {
       kind: 'plan',
-      plan: { options, direction: suggested, suggested, current: reads, scoped, fixes, partial: false, alternativeSkipped: Boolean(arranged.alternativeSkipped), used: 0 },
+      plan: {
+        options, direction: suggested, suggested, current: reads, scoped, fixes, partial: false,
+        alternativeSkipped: Boolean(arranged.alternativeSkipped), used: 0, crossings: { before: 0, after: {} },
+        ...(layout.primaryFlow ? { followed: layout.primaryFlow } : {}),
+        ...(around ? { held: heldCount(doc.nodes) } : {}),
+      },
     };
   });
   const result = bounded.value;
-  return result.kind === 'plan' ? { kind: 'plan', plan: { ...result.plan, partial: bounded.partial, used: bounded.used } } : result;
+  if (result.kind !== 'plan') return result;
+  const after: ArrangePlan['crossings']['after'] = {};
+  for (const direction of ['right', 'down'] as const) {
+    const view = result.plan.options[direction];
+    if (view) after[direction] = legibilityOf(view.nodes, view.edges).crossings;
+  }
+  const crossings = { before: legibilityOf(doc.nodes, doc.edges).crossings, after };
+  return { kind: 'plan', plan: { ...result.plan, partial: bounded.partial, used: bounded.used, crossings } };
 }
 
 /**
@@ -210,8 +241,12 @@ export function planArrange(doc: DraftDocument, ask: { selection?: readonly stri
  */
 export function planTidy(doc: DraftDocument, scope?: readonly string[]): TidyPlanResult {
   const edges = visibleEdges(doc.edges).length;
+  // Held shapes are never nudged: the cleanup is scoped to everything else.
+  const fixed = fixedIds(doc.nodes);
+  const movable = fixed.size > 0 ? new Set((scope ?? doc.nodes.map((node) => node.id)).filter((id) => !fixed.has(id))) : scope ? new Set(scope) : undefined;
+  const held = fixed.size > 0 ? { held: heldCount(doc.nodes) } : {};
   const bounded = withBudget({ work: TIDY_WORK_UNITS + TIDY_WORK_PER_CONNECTOR * edges, backstopMs: LAYOUT_BACKSTOP_MS }, () =>
-    tidyView(doc, scope ? new Set(scope) : undefined, measureContext()),
+    tidyView(doc, movable, measureContext()),
   );
   const tidied = bounded.value;
   if (tidied.view === doc) {
@@ -220,7 +255,7 @@ export function planTidy(doc: DraftDocument, scope?: readonly string[]): TidyPla
   }
   return {
     kind: 'plan',
-    plan: { view: tidied.view, moved: tidied.moved.length, reattached: tidied.reattached.length, scoped: Boolean(scope), partial: bounded.partial, used: bounded.used },
+    plan: { view: tidied.view, moved: tidied.moved.length, reattached: tidied.reattached.length, scoped: Boolean(scope), partial: bounded.partial, used: bounded.used, ...held },
   };
 }
 

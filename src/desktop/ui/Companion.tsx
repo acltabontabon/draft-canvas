@@ -1,9 +1,10 @@
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
-import { useReactFlow, useStoreApi, useStore as useReactFlowStore } from '@xyflow/react';
+import { useReactFlow, useReactFlowStoreApi, useViewportStore as useReactFlowStore } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import { Icon } from '../../ui/common/Icon';
 import { SegmentedControl } from '../../ui/common/SegmentedControl';
 import { Tooltip } from '../../ui/common/Tooltip';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { MOD_SYMBOL } from '../../lib/platform';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { walkGraphs } from '../../depth/tree';
@@ -482,7 +483,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   const [hot, setHot] = useState<number | null>(null);
   const setPointedIds = useUiStore((s) => s.setPointedIds);
   const { setViewport } = useReactFlow();
-  const flowStore = useStoreApi();
+  const flowStore = useReactFlowStoreApi().viewportStore;
   const pointAt = useCallback(
     (point: number | null, parts: readonly string[]) => {
       setHot(point);
@@ -702,7 +703,9 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   };
 
   const onKey = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.nativeEvent.isComposing) return;
+    // `isImeKeyEvent`, not `isComposing` alone: WebKit (the macOS window) reports the Enter that
+    // confirms a conversion with `isComposing` already false, and that Enter sent a half-written prompt.
+    if (isImeKeyEvent(event)) return;
     if (query !== null) {
       const picked = skills[skillShown];
       if ((event.key === 'ArrowDown' || event.key === 'ArrowUp') && skills.length) {
@@ -1094,7 +1097,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
       // Its own keys (see the resting one), and Escape closes it from anywhere inside, not only the composer.
       data-dc-keyboard-region=""
       onKeyDown={(event) => {
-        if (event.key !== 'Escape' || event.defaultPrevented || event.nativeEvent.isComposing) return;
+        if (event.key !== 'Escape' || event.defaultPrevented || isImeKeyEvent(event)) return;
         event.preventDefault();
         setOpen(false);
       }}

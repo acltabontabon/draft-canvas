@@ -160,6 +160,11 @@ Follow-ups change the same diagram:
 - "Add a billing dead-letter queue and explain the retry policy in a note."
 - "Show the components inside Orders API."
 - "Refresh this diagram from the changed code; keep my notes and arrangement."
+- "What happens if Payments goes down? Check the open questions against the code."
+
+The last one reads the same [outage](outage.md#with-your-agent) the canvas shows: what fails, what
+absorbs it and what the drawing leaves open. A shape the agent draws takes its kind from its
+technology, as it does when you type it: a database with `Redis` arrives as a Cache.
 
 To limit a change, select shapes first and say so: "Add a retry path around this selection." The
 agent changes only what was selected when it read the selection.

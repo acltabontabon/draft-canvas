@@ -26,6 +26,7 @@ const KIND_WORDS: Record<DraftNodeType, string> = {
   group: 'boundary',
   ellipse: 'junction',
   sequence: 'sequence',
+  artifact: 'file',
 };
 
 /** The kind of a shape, in a word or two: "service", "topic", "SQL data store", "system boundary". */
@@ -49,6 +50,10 @@ export function kindReading(node: DraftNode): string {
           return 'external service';
         case 'gateway':
           return 'gateway';
+        case 'load-balancer':
+          return 'load balancer';
+        case 'proxy':
+          return 'proxy';
         case 'scheduler':
           return 'scheduler';
         default:
@@ -73,6 +78,8 @@ export function kindReading(node: DraftNode): string {
         default:
           return 'data store';
       }
+    case 'artifact':
+      return node.artifactKind && node.artifactKind !== 'file' ? node.artifactKind : 'file';
     default:
       return KIND_WORDS[node.type];
   }

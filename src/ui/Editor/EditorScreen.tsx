@@ -12,12 +12,14 @@ import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { PresentationCalloutLayer } from '../../canvas/presentation/PresentationCalloutLayer';
+import { AttachmentPeekLayer } from '../../canvas/presentation/AttachmentPeekLayer';
 import { Canvas, type CanvasProps } from '../../canvas/Canvas';
 import { ContextMenu } from '../../canvas/ContextMenu';
 import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { canvasBounds, canvasCenter } from '../../canvas/canvasFrame';
 import type { DraftNode, DraftViewport } from '../../document/types';
+import { fitPadding } from '../../lib/fitPadding';
 import { loadFailureNotice } from '../../lib/staleChunk';
 import { presetForShortcut, type Preset } from '../../lib/presets';
 import { isConvertibleType, type ConvertibleType } from '../../document/convert';
@@ -45,17 +47,21 @@ import { centerOf, overlapArea } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, hasSomethingToFit, lensFlow, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
 import { pointer, pointerFlow, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
+import { shapeStartFields } from '../../store/styleStore';
 import { useCollabStore } from '../../store/collabStore';
 import { END_MESSAGES } from '../collab/collabCopy';
 import { PresenceDock } from '../collab/PresenceDock';
 import { SessionEnded } from '../collab/SessionEnded';
 import type { DocumentSession } from '../../store/useDocumentSession';
+import { isWalkId, WALK_OF_DIAGRAM, WALK_OF_SELECTION, walkOfDiagram, walkOfSelection, walkToPresent } from '../../presentation/walk';
 import { useFlowPlayback } from '../../presentation/useFlowPlayback';
 import { presentationScope, revealIn } from '../../presentation/presentationAttachments';
 import { useThemeValue } from '../../theme/useTheme';
 import { backOut, lookInside } from '../../commands/depthNavigation';
 import { OpenPointsPanel } from './OpenPointsPanel';
 import { OutlinePanel } from './OutlinePanel';
+import { StylePanel } from './StylePanel';
+import { useEditorDress } from '../../canvas/useEditorDress';
 import { createNudgeCoalescer } from './nudgeCoalescer';
 import { useSelectionAnnouncements } from './useSelectionAnnouncements';
 import { OpenPointPopover } from '../../canvas/OpenPointPopover';
@@ -71,11 +77,9 @@ import { ArrangeBar } from './ArrangeBar';
 import { LayoutBusyBar } from './LayoutBusyBar';
 import { FlowLensIndicator } from './FlowLensIndicator';
 import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
-import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { CommandPalette } from './CommandPalette';
 import { ContinuationAnnouncer } from './ContinuationAnnouncer';
 import { Inspector } from './Inspector';
-import { ShortcutSheet } from './ShortcutSheet';
 import { StatusBar } from './StatusBar';
 import { Toolbar } from './Toolbar';
 import { Button } from '../common/Button';
@@ -155,7 +159,7 @@ export function EditorRoute({ session }: { session: DocumentSession }) {
 }
 
 function EditorScreen({ session }: { session: DocumentSession }) {
-  const readingTraffic = useEditorStore((state) => state.traffic.active);
+  const walkingOutage = useEditorStore((state) => state.outage.active);
   const tracing = useUiStore((state) => state.flowTrace !== null);
   const title = useEditorStore((state) => state.document.metadata.title);
   const mode = useEditorStore((state) => state.mode);
@@ -179,6 +183,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   const collabOpen = useUiStore((state) => state.collabOpen);
   const collabStatus = useCollabStore((state) => state.status);
   const collabGuest = useCollabStore((state) => state.role === 'guest');
+  // While they follow a presenter, the playback on this canvas is the presenter's (`useFollowPresenter`).
+  const collabFollowing = useCollabStore((state) => state.role === 'guest' && state.following);
   const collabEnd = useCollabStore((state) => state.endReason);
   // The session ended on this collaborator (not left on purpose): the copy on screen is nobody's
   // file now, so the canvas closes behind a card rather than staying there to fiddle with.
@@ -256,7 +262,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         const seat = sequenceSeatAt({ x: position.x + 88, y: position.y + 34 });
         if (seat) {
           const started = preset.technology ? technologyStart(preset.type, preset.technology) : {};
-          const is = { type: preset.type, ...started } as Omit<SeqParticipant, 'id' | 'name'>;
+          const is = { type: preset.type, ...preset.start, ...started } as Omit<SeqParticipant, 'id' | 'name'>;
           const name = preset.technology ?? preset.text ?? nameOfShape({ ...is, text: undefined });
           sequenceActions.addParticipant(seat.nodeId, { ...is, name }, seat.index);
           arm(null);
@@ -268,7 +274,15 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // Every caller hands the top-left a default 176×68 shape centred on the point would have
       // (`point - 88,34`); centred by its own size instead, a Junction lands under the cursor rather
       // than beside it, and a Boundary or code card doesn't hang off below and to the right.
-      const { width, height } = size ?? defaultSizeFor(preset.type);
+      // How this person's shapes of this type start ("Save as my default Service"), unless the
+      // shape was picked by a name of its own, which already says what it is.
+      const mine = preset.start || preset.technology ? {} : shapeStartFields(preset.type);
+      const { width, height } =
+        size ??
+        defaultSizeFor(
+          preset.type,
+          preset.technology ? technologyStart(preset.type, preset.technology).serviceKind : (preset.start?.serviceKind ?? mine.serviceKind ?? mine.componentKind),
+        );
       // Placed onto a connector: made and put into its middle as one undo step.
       const editor = useEditorStore.getState();
       const startSequence = autoEdit && preset.type === 'sequence';
@@ -281,10 +295,14 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         width: size?.width,
         height: size?.height,
         text: preset.text,
-        accent: preset.accent,
-        noteKind: preset.noteKind,
+        ...mine,
+        // A preset that names its own colour or kind keeps it.
+        ...(preset.accent ? { accent: preset.accent } : {}),
+        ...(preset.noteKind ? { noteKind: preset.noteKind } : {}),
         language: preset.language,
         code,
+        // Picked by one of its names ("load balancer" in the shape picker): it arrives as that kind.
+        ...preset.start,
         // Picked as a technology ("kafka" in the shape picker): it arrives as that technology, with
         // the kind it implies.
         ...(preset.technology ? technologyStart(preset.type, preset.technology) : {}),
@@ -352,8 +370,18 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     }
     if (!quickConnect?.center) return undefined;
     const { center } = quickConnect;
-    const topLeft = flowToScreenPosition({ x: center.x - DEFAULTS.nodeWidth / 2, y: center.y - DEFAULTS.nodeHeight / 2 });
-    const bottomRight = flowToScreenPosition({ x: center.x + DEFAULTS.nodeWidth / 2, y: center.y + DEFAULTS.nodeHeight / 2 });
+    // The first row's shape too, where it was moved off a neighbour the drop would have covered: the
+    // menu stands clear of where the ghost really is, not only of where it was aimed.
+    const first = quickConnect.source ? quickConnectRows[0] : undefined;
+    const moved = first ? offerFor(useEditorStore.getState().document, quickConnect, first)?.nodes[0] : undefined;
+    const box = { x: center.x - DEFAULTS.nodeWidth / 2, y: center.y - DEFAULTS.nodeHeight / 2, width: DEFAULTS.nodeWidth, height: DEFAULTS.nodeHeight };
+    const left = Math.min(box.x, moved?.x ?? box.x);
+    const top = Math.min(box.y, moved?.y ?? box.y);
+    const topLeft = flowToScreenPosition({ x: left, y: top });
+    const bottomRight = flowToScreenPosition({
+      x: Math.max(box.x + box.width, moved ? moved.x + moved.width : -Infinity),
+      y: Math.max(box.y + box.height, moved ? moved.y + moved.height : -Infinity),
+    });
     return { x: topLeft.x, y: topLeft.y, width: bottomRight.x - topLeft.x, height: bottomRight.y - topLeft.y };
     // Measured once per menu: `quickConnect` identity is the open/close signal.
     // oxlint-disable-next-line react-hooks/exhaustive-deps
@@ -445,8 +473,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   // and the Flows panel all come through here, so "Present" means the same thing wherever it is
   // pressed: start the flow, frame it, and remember where the editing was left.
   //
-  // With a `flowId`, that flow; without one, whatever `start()` decides (the active flow, the one
-  // playable flow, else the picker).
+  // With a `flowId`, that flow. Without one, a selection that makes a story is walked
+  // (`presentation/walk.ts`); else whatever `start()` decides (the active flow, the one playable
+  // flow, else the picker); and a diagram with no flows at all is walked in arrow order, so the
+  // first Present anyone presses has something to step through.
   const onPresent = useCallback(
     (requested?: string, sequenceNodeId?: string) => {
       // Every consumer types this as `() => void`, so nothing stops a `onClick={onPresent}` from
@@ -455,8 +485,23 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       const flowId = typeof requested === 'string' ? requested : undefined;
       // The camera has to be read before the fit below moves it. React Flow owns it, not the
       // store, which is why it is handed over rather than picked up there.
+      // Read before `setMode`, which puts the selection away for the length of the presentation.
+      const editing = useEditorStore.getState();
+      // A walk can be asked for by name too (the toolbar's menu, the palette), whatever flows exist.
+      const named = isWalkId(flowId);
+      const walk =
+        editing.mode !== 'edit'
+          ? null
+          : flowId === WALK_OF_DIAGRAM
+            ? walkOfDiagram(editing.document)
+            : flowId === WALK_OF_SELECTION
+              ? walkOfSelection(editing.document, editing.selection)
+              : flowId
+                ? null
+                : walkToPresent(editing.document, editing.selection, playback.canStart);
       setMode('present', getViewport());
-      if (flowId) playback.pickFlow(flowId, sequenceNodeId);
+      if (flowId && !named) playback.pickFlow(flowId, sequenceNodeId);
+      else if (walk) playback.startWalk(walk.flow);
       else if (playback.canStart) playback.start();
       // A flow that started has framed its own opening (`useFlowPlayback`'s directed camera). Only
       // with none chosen — the picker, or nothing to present — is the whole diagram fitted, with
@@ -592,13 +637,19 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     [armed, createAt],
   );
   const onQuickConnectMenu = useCallback<NonNullable<CanvasProps['onQuickConnectMenu']>>(
-    (source, flowPosition, screenPosition, center) => setQuickConnect({ source, flowPosition, screenPosition, center }),
+    (source, flowPosition, screenPosition, center, fanIn) => setQuickConnect({ source, flowPosition, screenPosition, center, ...(fanIn?.length ? { fanIn } : {}) }),
     [setQuickConnect],
   );
   const onEmptyCanvasMenu = useCallback<NonNullable<CanvasProps['onEmptyCanvasMenu']>>(
     (flowPosition, screenPosition) => setQuickConnect({ flowPosition, screenPosition }),
     [setQuickConnect],
   );
+
+  const studio = useUiStore((state) => state.stylePanelOpen) && mode !== 'present';
+  const restyleBeat = useUiStore((state) => state.restyleBeat);
+  // The whole editor wears the open diagram's colours, not the canvas alone.
+  const editorRoot = useRef<HTMLDivElement>(null);
+  useEditorDress(editorRoot);
 
   if (readOnly && !readOnly.collaborative) return (
     <SharedReader session={session} playback={playback}>
@@ -612,9 +663,14 @@ function EditorScreen({ session }: { session: DocumentSession }) {
 
   return (
     <div
+      ref={editorRoot}
       className="dc-editor"
       data-mode={mode}
+      // Appearance is open: the rest of the editor steps back, so the diagram and the panel are all there is.
+      data-studio={studio ? '' : undefined}
+      data-restyled={restyleBeat ?? undefined}
       data-tracing={tracing || undefined}
+      data-walk={(presenting && playback.derived) || undefined}
       data-armed={armed ? 'true' : undefined}
       data-reconnecting={reconnecting ? 'true' : undefined}
       data-session-ended={sessionOver ? 'true' : undefined}
@@ -721,8 +777,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               right under the menu; an open point's popover sits beside the same element — one
               floating surface at a time. */}
           {/* A view-only collaborator gets no editing surface: the store refuses every change they make. */}
-          {!presenting && !tracing && !readingTraffic && !contextMenu && !openPointPopoverOpen && !readOnly && <EdgeInspectorPopover />}
-          {!presenting && !tracing && !readingTraffic && !contextMenu && !openPointPopoverOpen && !readOnly && (
+          {!presenting && !tracing && !walkingOutage && !contextMenu && !openPointPopoverOpen && !readOnly && <EdgeInspectorPopover />}
+          {!presenting && !tracing && !walkingOutage && !contextMenu && !openPointPopoverOpen && !readOnly && (
             <ElementInspectorPopover buildCommandContext={buildCommandContext} />
           )}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
@@ -731,9 +787,11 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           <StartersDialog onAdd={addStarter} />
           <FlowTraceBar />
           <PresentationCalloutLayer />
+          {/* Resting on a shape tells its notes and code; the editing popover stays a click away. */}
+          {!presenting && !tracing && !walkingOutage && <AttachmentPeekLayer />}
           <EmptyState onAddStarter={addStarter} />
           {!presenting && <ContinuationAnnouncer />}
-          {!presenting && !tracing && !readingTraffic && !readOnly && <Inspector />}
+          {!presenting && !tracing && !walkingOutage && !readOnly && <Inspector />}
           {!presenting && !tracing && <FlowPanel onPresent={onPresent} />}
           {!presenting && ProposalPanelChunk && (
             <Suspense fallback={null}>
@@ -746,7 +804,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               <CompanionChunk.Component buildCommandContext={buildCommandContext} />
             </Suspense>
           )}
-          <FlowBar playback={playback} />
+          <FlowBar playback={playback} follower={collabFollowing && mode !== 'present'} />
           <FocusIndicator />
           <LayoutBusyBar />
           <TidyBar />
@@ -772,6 +830,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         {/* Docked to the right of the canvas, outside it: `canvasFrame.ts` measures the canvas column, so
             every "is it on screen" and "stay clear of the edge" check already accounts for the panel. */}
         {!presenting && <OutlinePanel buildCommandContext={buildCommandContext} />}
+        {!presenting && <StylePanel />}
       </div>
 
       <div style={{ display: 'contents' }} inert={sessionOver}>
@@ -795,7 +854,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         />
       )}
 
-      <ShortcutSheet />
       {exportMounted && (
         <PanelBoundary onError={onExportFailed}>
           <Suspense fallback={null}>
@@ -810,7 +868,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           </Suspense>
         </PanelBoundary>
       )}
-      <CanvasSettingsDialog />
       <ClipboardPermissionDialog />
       <CommandPalette createAt={createAt} createAtPointer={createAtPointer} playback={playback} onPresent={onPresent} />
 
@@ -849,7 +906,7 @@ export function useKeyboard({
   playback,
 }: {
   createAtPointer: (preset: Preset) => void;
-  onPresent: () => void;
+  onPresent: (flowId?: string) => void;
   playback: ReturnType<typeof useFlowPlayback>;
 }) {
   const setExportOpen = useUiStore((state) => state.setExportOpen);
@@ -1310,7 +1367,7 @@ export function useKeyboard({
         // walkthrough's own O (overview) and R (re-centre) are the camera keys there.
         if (presenting) return;
         event.preventDefault();
-        if (hasSomethingToFit(state)) void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
+        if (hasSomethingToFit(state)) void fitView({ padding: fitPadding(0.2), duration: motionMs(320), nodes: flowFitViewNodes(state) });
         return;
       }
 
@@ -1370,16 +1427,15 @@ export function useKeyboard({
             playback.stop();
             if (state.mode === 'present') state.setMode('edit');
           } else if (state.mode === 'present') state.setMode('edit');
-          // Traffic is a view you asked for, like a flow's lens: with nothing selected, Escape puts
-          // it away — and while something is, it deselects first, so the panel can go back to the
-          // summary before the view itself goes.
+          // An outage walk is a view you asked for, like a flow's lens: Escape deselects first, and
+          // with nothing selected puts the walk away.
           else if (
-            state.traffic.active &&
+            state.outage.active &&
             state.selection.nodes.length === 0 &&
             state.selection.edges.length === 0 &&
             !(event.target instanceof Element && event.target.closest('.react-flow__node, .react-flow__edge'))
           ) {
-            state.hideTraffic();
+            state.endOutage();
           }
           // A chosen flow dimming the canvas is a view you stepped into, so with nothing selected
           // Escape steps back out to the whole diagram — before leaving the shape it lives in. Only

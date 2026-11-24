@@ -40,6 +40,7 @@ drop a connector on empty canvas still lists them first.
 | `⌥⇧→` / `⌥⇧←` | Follow an outgoing / incoming connector |
 | Arrow / `Shift` + arrow | Nudge the selection 1 / 10 units |
 | Hold `⌥` while dragging or resizing | Turn off [snapping](shapes-and-connectors.md#line-things-up) |
+| Hold `Shift` and rest on a shape | Light up everything its data comes from and feeds |
 | `Shift+1` | Fit the diagram in view |
 | `⌘+` / `⌘−` / `⌘0` | Zoom in / out / to 100% |
 | `Space` + drag | Pan (scrolling also pans) |
@@ -113,6 +114,7 @@ selected it also aligns, distributes and matches sizes.
 | `Home` / `End` / `1`–`9` | First / last / that step |
 | `Shift+→` / `Shift+←` / `Shift+F` | Next / previous / any flow |
 | `O` / `R` / `P` | Overview / re-centre / pointer |
+| `K` | Keep a walk as a flow |
 | `Esc` | Close a reveal, then stop presenting |
 
 Tracing keys are in [flows and presenting](flows-and-presentation.md); desktop file keys in the

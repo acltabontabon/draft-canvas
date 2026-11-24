@@ -117,6 +117,27 @@ describe('update_diagram operations', () => {
     expect(cleared.nodes.find((n) => n.id === 'db')!.technology).toBeUndefined();
   });
 
+  it('a known product sets a kind nobody picked, as it does in the editor, and connectors follow', () => {
+    const file = build({
+      nodes: [
+        { id: 'store', type: 'database', label: 'Sessions', technology: 'Redis 7' },
+        { id: 'orders', type: 'sql-database', label: 'Orders', technology: 'Redis' },
+        { id: 'tail', type: 'worker', label: 'Change capture' },
+      ],
+      relationships: [{ id: 'r', from: 'orders', to: 'tail' }],
+    });
+    expect(file.nodes.find((n) => n.id === 'store')).toMatchObject({ databaseKind: 'cache', kindOrigin: 'technology' });
+    // A kind the request named stays, whatever the technology says.
+    expect(file.nodes.find((n) => n.id === 'orders')).toMatchObject({ databaseKind: 'sql' });
+    expect(file.edges.find((e) => e.id === 'r')!.semantic).toBe('reads');
+    const { file: next } = applyUpdate(file, [], [
+      { op: 'update', id: 'store', set: { technology: 'PostgreSQL' } },
+      { op: 'update', id: 'tail', set: { technology: 'Debezium' } },
+    ], undefined);
+    expect(next.nodes.find((n) => n.id === 'store')).toMatchObject({ databaseKind: 'sql', kindOrigin: 'technology' });
+    expect(next.edges.find((e) => e.id === 'r')!.semantic).toBe('cdc');
+  });
+
   it('removes an element with its connectors and flow steps; a boundary with members needs cascade', () => {
     const file = base();
     const { file: next } = applyUpdate(file, [], [{ op: 'remove', ids: ['db'] }], undefined);
@@ -259,7 +280,7 @@ describe('read_diagram', () => {
   it('is semantic and compact by default, with derived C4 detail', () => {
     const out = readDiagram(base(), {}, 'o:x.1', 'd_patchtest00');
     // Role and scope only; why is said only where the role is ambiguous.
-    expect(out.elements).toContainEqual(expect.objectContaining({ id: 'db', type: 'database', technology: 'PostgreSQL', group: 'sys', c4: { role: 'unspecified', scope: 'internal', basis: 'no level set' } }));
+    expect(out.elements).toContainEqual(expect.objectContaining({ id: 'db', type: 'sql-database', technology: 'PostgreSQL', group: 'sys', c4: { role: 'unspecified', scope: 'internal', basis: 'no level set' } }));
     expect(JSON.stringify(out)).not.toContain('"x":');
     expect(out.actions).toBeUndefined();
     expect(out.partial).toBeUndefined();

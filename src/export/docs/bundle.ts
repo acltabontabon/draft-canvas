@@ -6,7 +6,6 @@
  */
 
 import type { DraftDocument } from '../../document/types';
-import { withEmbeddedBackground } from '../background';
 import { downloadBlob } from '../download';
 import { fileNameFor, serializeDocument } from '../project';
 import { zipFiles } from '../zip';
@@ -32,7 +31,7 @@ export async function docsBundle(file: DraftDocument, settings: DocsSettings): P
   const names = bundleNames(file, settings.view);
   const rendered = await renderDocsImage(file, names.source, { ...settings, sync: false });
   if (!rendered.ok) throw new Error('The level this image shows no longer exists.');
-  const source = serializeDocument(await withEmbeddedBackground(file));
+  const source = serializeDocument(file);
   return zipFiles([
     { name: `${BUNDLE_FOLDER}/${names.image}`, data: rendered.svg },
     { name: `${BUNDLE_FOLDER}/${names.source}`, data: source },

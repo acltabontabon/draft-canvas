@@ -111,7 +111,7 @@ function sagaDocument() {
     nodes,
     edges,
     viewport: { x: 0, y: 0, zoom: 1 },
-    settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
+    settings: { showSequence: true, grid: 'dots' },
     flows,
   };
 }

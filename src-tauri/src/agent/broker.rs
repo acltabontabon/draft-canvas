@@ -12,16 +12,15 @@ use super::page::{Budgets, Failure};
 use super::proposals::{Proposal, ProposalStatus};
 use super::runs;
 use super::scope::{self, enabled_projects, in_scope, Diagram, Lookup, Project};
-use super::{Agent, InflightGuard};
+use super::{Agent, ClaimError, InflightGuard};
 use crate::docio::{
     create_new_atomic, ensure_document_size, read_document, unique_name, write_atomic, WriteOutcome,
 };
 use crate::paths::{display_path, sanitize_stem, DOC_EXT};
 use crate::state::{AppState, HostEvent};
-use crate::util::now_ms;
+use crate::util::{now_ms, sha256_hex};
 use serde::Serialize;
 use serde_json::{json, Map, Value};
-use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
@@ -135,7 +134,7 @@ pub fn fingerprint(tool: &str, args: &Value) -> String {
     let mut text = String::from(tool);
     text.push('\n');
     canonical(&stripped, &mut text);
-    format!("{:x}", Sha256::digest(text.as_bytes()))
+    sha256_hex(text.as_bytes())
 }
 
 /// Runs one tool call. `calls` is how the connection finds this call's page request to cancel it.
@@ -290,6 +289,7 @@ fn request_id(args: &Value) -> Result<String, ToolError> {
             "INVALID_INPUT",
             "requestId is required: 1–128 printable characters, unique per intended change.",
         )
+        .hint("Nothing was changed. Provide a requestId such as a new UUID and send the request again.")
         .details(json!({"path": "/requestId"})));
     }
     Ok(id.to_string())
@@ -301,7 +301,8 @@ fn diagram_id(args: &Value) -> Result<String, ToolError> {
         .filter(|s| !s.is_empty() && s.len() <= 128)
         .map(str::to_string)
         .ok_or_else(|| {
-            ToolError::new("INVALID_INPUT", "diagramId is required.")
+            ToolError::new("INVALID_INPUT", "diagramId must be a nonempty string of at most 128 bytes.")
+                .hint("Nothing was changed. Use the diagramId returned by list_diagrams or an earlier receipt.")
                 .details(json!({"path": "/diagramId"}))
         })
 }
@@ -695,12 +696,32 @@ fn failure_error(failure: Failure) -> ToolError {
     }
 }
 
+const CHECK_OUTCOME: &str = "Check with list_diagrams or read_diagram before sending anything again. Keep the same requestId when recovering the original request.";
+
 fn outcome_unknown() -> ToolError {
     ToolError::new(
         "OUTCOME_UNKNOWN",
-        "The change was being applied when Draft Canvas stopped answering, so whether it took effect is unknown.",
+        "The change reached the commit gate and Draft Canvas couldn't confirm whether it took effect.",
     )
-    .hint("Call read_diagram and compare with what you asked for before deciding to send anything again. Retrying the same requestId returns this answer again rather than applying twice.")
+    .hint(CHECK_OUTCOME)
+}
+
+fn disk_outcome_unknown(error: crate::errors::AppError) -> ToolError {
+    // A write can return an error after installing the file, for example while reading its stamp.
+    // Keep the journal at Committing so another payload cannot claim this id.
+    ToolError::new(
+        "OUTCOME_UNKNOWN",
+        format!("{} The write could not be confirmed.", error.message),
+    )
+    .hint(CHECK_OUTCOME)
+}
+
+fn request_id_mismatch() -> ToolError {
+    ToolError::new(
+        "REQUEST_ID_MISMATCH",
+        "This requestId belongs to a different request.",
+    )
+    .hint("Use a fresh UUID for a separate change. Keep the original payload when checking its outcome.")
 }
 
 /// A page-reported failure. Its code is kept only when it is one this bridge knows; anything else
@@ -910,9 +931,10 @@ async fn admit<'a>(
         if calls.is_cancelled() {
             return Err(failure_error(Failure::Cancelled));
         }
-        let guard = match agent.claim(&key) {
+        let guard = match agent.claim(&key, &fp) {
             Ok(guard) => guard,
-            Err(mut done) => {
+            Err(ClaimError::Mismatch) => return Err(request_id_mismatch()),
+            Err(ClaimError::Busy(mut done)) => {
                 // An identical request is running: its outcome is this one's.
                 tokio::select! {
                     _ = done.wait_for(|finished| *finished) => {}
@@ -926,17 +948,15 @@ async fn admit<'a>(
             .ok_or_else(ledger_unavailable)?;
         return match begun {
             Begin::Fresh => Ok(Admission::Go { key, fp, guard }),
-            Begin::Mismatch => Err(ToolError::new(
-                "REQUEST_ID_MISMATCH",
-                "This requestId was already used for a different request.",
-            )
-            .hint("Use a fresh unique requestId (a UUID) for every new change. Reuse an id only to retry exactly the same request.")),
+            Begin::Mismatch => Err(request_id_mismatch()),
             Begin::Replay(entry) => Ok(Admission::Replay(replay_receipt(&entry, projects)?)),
             Begin::Unresolved(entry) => match recover(&entry) {
                 Some(receipt) => {
                     let now = now_ms();
                     let _ = agent.with_ledger(|l| {
-                        l.advance(&key, Stage::Committed, now, |e| e.receipt = Some(receipt.clone()))
+                        l.advance(&key, Stage::Committed, now, |e| {
+                            e.receipt = Some(receipt.clone())
+                        })
                     });
                     Ok(Admission::Replay(replay_receipt(
                         &Entry {
@@ -1156,16 +1176,7 @@ async fn create(
         })
         .ok_or_else(ledger_unavailable)?
         .map_err(|_| ledger_unavailable())?;
-    let stamp = match create_new_atomic(&target, text.as_bytes()) {
-        Ok(stamp) => stamp,
-        Err(e) => {
-            let e = ToolError::new("PERSISTENCE_FAILED", e.message)
-                .hint("Nothing was created. Retry with the same requestId.")
-                .retryable();
-            fail(agent, &key, &e);
-            return Err(e);
-        }
-    };
+    let stamp = create_new_atomic(&target, text.as_bytes()).map_err(disk_outcome_unknown)?;
     let rel = target
         .strip_prefix(&project.root)
         .map(|p| p.to_string_lossy().replace('\\', "/"))
@@ -1324,7 +1335,8 @@ async fn update(
     )?;
     // A diagram that isn't open is changed on disk (the page works the change out from this text, and
     // this module writes it under the stamp read here); an open one through the editor.
-    let mut context = diagram_context(agent, &diagram, true)?;
+    let mut context =
+        diagram_context(agent, &diagram, true).inspect_err(|error| fail(agent, &key, error))?;
     calls.stamp(&mut context);
     let stamp_read = context
         .get("stamp")
@@ -1501,11 +1513,7 @@ fn write_in_background(
         Err(e) if e.kind == crate::errors::ErrorKind::ReadOnly => {
             Err(refuse(ToolError::new("READ_ONLY", e.message)))
         }
-        Err(e) => Err(refuse(
-            ToolError::new("PERSISTENCE_FAILED", e.message)
-                .hint("Nothing was changed. Retry with the same requestId.")
-                .retryable(),
-        )),
+        Err(e) => Err(disk_outcome_unknown(e)),
     }
 }
 
@@ -2014,15 +2022,64 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_correction_can_reuse_an_id_once_the_original_is_refused() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent.ensure_ledger().unwrap();
+        let calls = CallRegistry::new("external".into());
+        let tool = "update_diagram";
+        let args = json!({"requestId": "same", "ops": [{"op": "update", "id": "API"}]});
+        let corrected = json!({"requestId": "same", "ops": [{"op": "update", "id": "api"}]});
+        let Admission::Go { key, fp, guard } = admit(&agent, tool, &args, &[], &calls, |_| None)
+            .await
+            .unwrap_or_else(|e| panic!("{e:?}"))
+        else {
+            panic!("fresh request");
+        };
+        record(
+            &agent,
+            Entry {
+                key: key.clone(),
+                tool: tool.into(),
+                fingerprint: fp,
+                stage: Stage::Pending,
+                at: now_ms(),
+                diagram_id: None,
+                path: None,
+                receipt: None,
+            },
+        )
+        .unwrap();
+
+        let concurrent = tokio::time::timeout(
+            std::time::Duration::from_secs(1),
+            admit(&agent, tool, &corrected, &[], &calls, |_| None),
+        )
+        .await
+        .expect("a conflicting request must not wait");
+        assert!(matches!(concurrent, Err(error) if error.code == "REQUEST_ID_MISMATCH"));
+        fail(
+            &agent,
+            &key,
+            &ToolError::new("INVALID_REFERENCE", "Unknown id"),
+        );
+        drop(guard);
+        assert!(matches!(
+            admit(&agent, tool, &corrected, &[], &calls, |_| None).await,
+            Ok(Admission::Go { .. })
+        ));
+    }
+
+    #[tokio::test]
     async fn a_cancelled_duplicate_does_not_wait_for_the_first_request_to_finish() {
         let dir = tempfile::tempdir().unwrap();
         let agent = Agent::new(dir.path());
         agent.ensure_ledger().unwrap();
+        let args = json!({"requestId": "same"});
         let _first = agent
-            .claim("update_diagram:same")
+            .claim("update_diagram:same", &fingerprint("update_diagram", &args))
             .unwrap_or_else(|_| panic!("fresh"));
         let calls = CallRegistry::new("external".into());
-        let args = json!({"requestId": "same"});
         let waiting = async {
             match admit(&agent, "update_diagram", &args, &[], &calls, |_| None).await {
                 Err(error) => error.code,

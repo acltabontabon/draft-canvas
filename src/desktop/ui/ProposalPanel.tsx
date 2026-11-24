@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { useReactFlow, useStoreApi, useStore as useReactFlowStore } from '@xyflow/react';
+import { useReactFlow, useReactFlowStoreApi, useViewportStore as useReactFlowStore } from '@xyflow/react';
 import { focusBoundsInView } from '../../commands/search';
 import { ownerAt, pathKey, type DepthPath } from '../../depth/tree';
 import { displayNameFor } from '../../document/factory';
@@ -239,7 +239,7 @@ export function ProposalPanel() {
 
 function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged: ProposalChanged }) {
   const { setViewport } = useReactFlow();
-  const useReactFlowStoreApi = useStoreApi();
+  const flowStore = useReactFlowStoreApi().viewportStore;
   const viewWidth = useReactFlowStore((state) => state.width);
   const viewHeight = useReactFlowStore((state) => state.height);
   const previewVisible = useUiStore((state) => (state.proposalPreview?.proposalId === proposal.proposalId ? state.proposalPreview.visible : true));
@@ -280,10 +280,10 @@ function ProposalDetail({ proposal, onChanged }: { proposal: Proposal; onChanged
   useEffect(() => {
     if (!diffBounds || framed.current || !previewVisible) return;
     framed.current = true;
-    const { transform } = useReactFlowStoreApi.getState();
+    const { transform } = flowStore.getState();
     const viewport = revealViewport(diffBounds, transform, { width: Math.max(200, viewWidth - PANEL_RESERVED_WIDTH), height: viewHeight });
     if (viewport) void setViewportRef.current(viewport, { duration: 320 });
-  }, [diffBounds, previewVisible, viewWidth, viewHeight, useReactFlowStoreApi]);
+  }, [diffBounds, previewVisible, viewWidth, viewHeight, flowStore]);
 
   return (
     <div className="dc-proposal-detail">

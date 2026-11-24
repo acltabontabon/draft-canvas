@@ -19,7 +19,7 @@ pub use assets::{AssetSource, Bundled};
 
 use crate::errors::{AppError, ErrorKind};
 use crate::state::{AppState, HostEvent};
-use crate::util::lock;
+use crate::util::{hex, lock};
 use std::collections::{HashMap, VecDeque};
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -433,10 +433,6 @@ pub(crate) fn proof_for(token: &[u8], nonce: &str) -> [u8; 32] {
     outer.update(block.map(|b| b ^ 0x5c));
     outer.update(inner.finalize());
     outer.finalize().into()
-}
-
-pub(crate) fn hex(bytes: &[u8]) -> String {
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 /// A place among the `MAX_CONNECTIONS`, given back when the connection ends or its upgrade fails.

@@ -34,6 +34,10 @@ const EditorChunk = retryableLazy(() => loadEditor().then((module) => ({ default
 // About (and every release's notes with it) is opened now and then, from Home or the editor — fetched
 // the first time, so neither screen's first chunk carries it.
 const AboutChunk = retryableLazy(() => import('./ui/common/AboutDialog').then((module) => ({ default: module.AboutDialog })));
+// The shortcuts sheet lists the editor's commands, so it comes with their code. It is mounted here,
+// not in the editor: the desktop Help menu can ask for it on Home, and a sheet that only the editor
+// drew stayed queued there and opened over the next canvas instead.
+const ShortcutsChunk = retryableLazy(() => import('./ui/Editor/ShortcutSheet').then((module) => ({ default: module.ShortcutSheet })));
 // The desktop app's Home takes the Library's place. `__DESKTOP__` is false in the web build, which
 // drops this — and everything under src/desktop/ — from it.
 const DesktopHomeChunk = __DESKTOP__
@@ -52,20 +56,47 @@ function LazyAboutDialog() {
   if (!open) return null;
   return (
     <PanelBoundary
-      onError={(error, componentStack) => {
-        logDiagnostic(error, { operation: 'about-panel' }, componentStack);
-        AboutChunk.reset();
-        const ui = useUiStore.getState();
-        ui.setAboutOpen(false);
-        const notice = loadFailureNotice(error, 'About couldn’t open. Check your connection and try again.');
-        ui.notify(notice.message, 'error', notice.action);
-      }}
+      onError={panelFailed('about-panel', AboutChunk, 'About couldn’t open. Check your connection and try again.', () =>
+        useUiStore.getState().setAboutOpen(false),
+      )}
     >
       <Suspense fallback={null}>
         <AboutChunk.Component />
       </Suspense>
     </PanelBoundary>
   );
+}
+
+function LazyShortcutSheet() {
+  const open = useUiStore((state) => state.shortcutsOpen);
+  if (!open) return null;
+  return (
+    <PanelBoundary
+      onError={panelFailed('shortcuts-panel', ShortcutsChunk, 'Keyboard shortcuts couldn’t open. Check your connection and try again.', () =>
+        useUiStore.getState().setShortcutsOpen(false),
+      )}
+    >
+      <Suspense fallback={null}>
+        <ShortcutsChunk.Component />
+      </Suspense>
+    </PanelBoundary>
+  );
+}
+
+/**
+ * What a panel mounted beside the screens does when its chunk, or its own render, fails: says so,
+ * closes, and stays out of the way. The invite, Settings and agent-activity panels once sat outside
+ * every boundary, so one that could not be fetched (an invite link opened in a tab a deploy had left
+ * behind) took the whole app down to a blank page.
+ */
+function panelFailed(operation: string, chunk: { reset: () => void }, message: string, close?: () => void) {
+  return (error: Error, componentStack: string) => {
+    logDiagnostic(error, { operation }, componentStack);
+    chunk.reset();
+    close?.();
+    const notice = loadFailureNotice(error, message);
+    useUiStore.getState().notify(notice.message, 'error', notice.action);
+  };
 }
 
 /**
@@ -90,7 +121,7 @@ function Shell() {
     if (__DESKTOP__ && hostKind() === 'desktop') {
       void import('./desktop/useDesktop').then(({ getDesktopController }) => getDesktopController().newQuickDraft(starter));
     } else {
-      void session.closeDocument().then((closed) => { if (closed) return session.newDocument(undefined, starter); });
+      void session.replaceWithNew(starter);
     }
   }, [newCanvasRequest, session]);
 
@@ -162,25 +193,38 @@ function Shell() {
         </p>
       )}
       {joinInvite !== null && (
-        <Suspense fallback={null}>
-          {/* Keyed by the invite: a second link opened over the dialog starts a dialog of its own, and the
-              first one's attempt is cancelled as it unmounts — not finished under the second's name. */}
-          <JoinChunk.Component key={joinInvite} session={session} invite={joinInvite} />
-        </Suspense>
+        // Keyed by the invite: a second link opened over the dialog starts a dialog of its own, and the
+        // first one's attempt is cancelled as it unmounts — not finished under the second's name. The
+        // boundary is keyed with it, so a link that failed once is tried afresh when opened again.
+        <PanelBoundary
+          key={joinInvite}
+          onError={panelFailed('join-panel', JoinChunk, 'The invitation couldn’t open. Check your connection and open the link again.', () =>
+            useUiStore.getState().setJoinInvite(null),
+          )}
+        >
+          <Suspense fallback={null}>
+            <JoinChunk.Component session={session} invite={joinInvite} />
+          </Suspense>
+        </PanelBoundary>
       )}
       <Toasts />
       <LiveAnnouncer />
       <LazyAboutDialog />
+      <LazyShortcutSheet />
       {!__DESKTOP__ && <DiagnosticsDialog />}
       {DesktopSettingsChunk && hostKind() === 'desktop' && (
-        <Suspense fallback={null}>
-          <DesktopSettingsChunk.Component />
-        </Suspense>
+        <PanelBoundary onError={panelFailed('desktop-settings-panel', DesktopSettingsChunk, 'Settings couldn’t open. Restart Draft Canvas and try again.')}>
+          <Suspense fallback={null}>
+            <DesktopSettingsChunk.Component />
+          </Suspense>
+        </PanelBoundary>
       )}
       {AgentActivityChunk && hostKind() === 'desktop' && (
-        <Suspense fallback={null}>
-          <AgentActivityChunk.Component />
-        </Suspense>
+        <PanelBoundary onError={panelFailed('agent-activity-panel', AgentActivityChunk, 'Agent activity can’t be shown. Restart Draft Canvas to see it again.')}>
+          <Suspense fallback={null}>
+            <AgentActivityChunk.Component />
+          </Suspense>
+        </PanelBoundary>
       )}
     </>
   );

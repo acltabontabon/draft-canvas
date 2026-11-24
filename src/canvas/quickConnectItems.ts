@@ -1,6 +1,8 @@
-import { continuationsFor, materialize, type Continuation, type FragmentNodeSpec } from '../continuation';
-import { defaultSizeFor } from '../document/factory';
-import { placeNear } from '../document/operations';
+import { familyKindOf } from '../document/dataStoreGeometry';
+import { continuationsFor, materialize, type Continuation, type FragmentNodeSpec, type MaterializedContinuation } from '../continuation';
+import { createEdge, defaultSizeFor } from '../document/factory';
+import { addNodes, clearSpotNear, placeNear } from '../document/operations';
+import { inferRelationshipThroughJunctions } from '../document/reinfer';
 import type { DraftDocument, ViewLevel } from '../document/types';
 import type { ContinuationOffer, QuickConnectState } from '../store/uiStore';
 import { quickConnectPresets, type Preset } from '../lib/presets';
@@ -75,14 +77,14 @@ function representsPreset(item: QuickConnectItem, preset: Preset): boolean {
 
 /**
  * The elements choosing this row would add, positioned at the drop point (centred on where the
- * user let go). A preset row is wrapped as a one-node continuation so it flows through the same
+ * user let go, or the closest spot to it clear of other shapes). A preset row is wrapped as a one-node continuation so it flows through the same
  * `materialize` — and therefore the same matrix inference — as a suggested one. `undefined` only
  * when the source node has vanished under the open menu.
  */
 export function offerFor(doc: DraftDocument, state: QuickConnectState, item: QuickConnectItem): ContinuationOffer | undefined {
   if (!state.source) return undefined;
-  const size = defaultSizeFor(item.node.type);
-  const at = state.center
+  const size = defaultSizeFor(item.node.type, familyKindOf(item.node));
+  const dropped = state.center
     ? { x: state.center.x - size.width / 2, y: state.center.y - size.height / 2 }
     : state.flowPosition;
   const continuation: Continuation =
@@ -105,6 +107,41 @@ export function offerFor(doc: DraftDocument, state: QuickConnectState, item: Qui
   const source = state.asked ? doc.nodes.find((node) => node.id === state.source) : undefined;
   const offer = source
     ? (materialize(doc, continuation) ?? materialize(doc, continuation, { at: placeNear(doc, source, size) }))
-    : materialize(doc, continuation, { at });
-  return offer ? { ...offer, trigger: 'drop' } : undefined;
+    : // Dragged out by hand. The point let go at was empty, but the box centred on it may still reach
+      // a neighbour: it goes to the closest clear spot, in the preview and the commit alike (#178).
+      // Its ends are automatic, like those of a connector dropped on a shape, so the line the ghost
+      // shows is the line that is added and it keeps facing the shapes as they move (#180).
+      materialize(doc, continuation, { at: clearSpotNear(doc, { ...dropped, ...size }), ends: 'automatic' });
+  return offer ? { ...withFanIn(doc, state, offer), trigger: 'drop' } : undefined;
+}
+
+/**
+ * The offer with a connector from every other shape the drag carried, to the same new shape the
+ * dragged one reaches — what dropping on an existing shape does (`connectMany`), so the picker's
+ * ghost shows every line the drag did and choosing a row adds them all in its one undo step (#177).
+ * Each connector means what a single drag between that pair would have meant.
+ */
+function withFanIn(doc: DraftDocument, state: QuickConnectState, offer: MaterializedContinuation): MaterializedContinuation {
+  if (!state.fanIn?.length) return offer;
+  const targetId = offer.edges.find((edge) => edge.source === offer.anchorId)?.target;
+  const target = offer.nodes.find((node) => node.id === targetId);
+  if (!target) return offer;
+  // Inference looks the new shape up by id, so it reads the document as it will be.
+  const after = addNodes(doc, offer.nodes);
+  const extra = [...new Set(state.fanIn)].flatMap((id) => {
+    const source = id === offer.anchorId ? undefined : doc.nodes.find((node) => node.id === id);
+    if (!source) return [];
+    const relationship = inferRelationshipThroughJunctions(after, source, target);
+    return [
+      createEdge({
+        source: source.id,
+        target: target.id,
+        kind: relationship?.kind,
+        semantic: relationship?.semantic,
+        async: relationship?.async,
+        semanticsOrigin: relationship ? 'inferred' : undefined,
+      }),
+    ];
+  });
+  return extra.length > 0 ? { ...offer, edges: [...offer.edges, ...extra] } : offer;
 }

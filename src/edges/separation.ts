@@ -135,6 +135,8 @@ function compute(nodes: readonly DraftNode[], edges: readonly DraftEdge[], scope
   const spines = routingPlan(nodes, edges, scope);
   const lines: Line[] = [];
   for (const edge of edges) {
+    // A portal draws only two stubs: it has no inner run to move, or to move others off.
+    if (edge.portal) continue;
     const inputs = rawRouteInputs(edge, { nodes, edges }, scope, byId);
     if (!inputs) continue;
     const routes = edgeRoutes(inputs, scope);

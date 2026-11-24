@@ -8,11 +8,11 @@
  */
 import { convertedNode, isConvertibleType } from './convert';
 import { displayNameFor } from './factory';
-import { C4_TEXT_TYPES, type DraftDocument, type DraftNode, type SeqParticipant, type SeqParticipantType } from './types';
+import { SEQ_PARTICIPANT_TYPES, type DraftDocument, type DraftNode, type SeqParticipant, type SeqParticipantType } from './types';
 
 /** Whether a shape is one a participant can stand for: a piece of architecture. */
 export function isLinkable(node: Pick<DraftNode, 'type'>): node is DraftNode & { type: SeqParticipantType } {
-  return (C4_TEXT_TYPES as readonly string[]).includes(node.type);
+  return (SEQ_PARTICIPANT_TYPES as readonly string[]).includes(node.type);
 }
 
 /** What a shape is, as a participant carries it. */

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useReactFlow, useStoreApi } from '@xyflow/react';
+import { useReactFlow, useReactFlowStoreApi } from '@xyflow/react';
 import type { Point } from '../../../collab/protocol';
 import { publishPresence } from '../../../store/collabBridge';
 import { useCollabStore } from '../../../store/collabStore';
@@ -30,7 +30,7 @@ function editorShapeOf(target: EventTarget | null): string | null {
  * because a shape's label editor is the node view's own state, not the store's.
  */
 export function usePresencePublisher(): void {
-  const storeApi = useStoreApi();
+  const { optionsStore, viewportStore } = useReactFlowStoreApi();
   const { screenToFlowPosition } = useReactFlow();
   const live = useCollabStore((state) => state.role !== 'off' && state.status === 'live');
 
@@ -97,10 +97,10 @@ export function usePresencePublisher(): void {
       }
     };
 
-    let transform = storeApi.getState().transform;
-    attach(storeApi.getState().domNode);
-    const offFlow = storeApi.subscribe((state) => {
-      attach(state.domNode);
+    let transform = viewportStore.getState().transform;
+    attach(optionsStore.getState().domNode);
+    const offDom = optionsStore.subscribe((state) => attach(state.domNode));
+    const offFlow = viewportStore.subscribe((state) => {
       if (state.transform === transform) return;
       transform = state.transform;
       if (client) publish();
@@ -116,6 +116,7 @@ export function usePresencePublisher(): void {
     publish();
 
     return () => {
+      offDom();
       offFlow();
       offEditor();
       offUi();
@@ -123,5 +124,5 @@ export function usePresencePublisher(): void {
       attach(null);
       throttle.cancel();
     };
-  }, [live, storeApi, screenToFlowPosition]);
+  }, [live, optionsStore, viewportStore, screenToFlowPosition]);
 }

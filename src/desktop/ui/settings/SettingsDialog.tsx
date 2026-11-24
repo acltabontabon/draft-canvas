@@ -8,7 +8,7 @@ import { RenameFileDialog } from '../RenameFileDialog';
 import { UpdatePanel } from '../Updates';
 import { DesktopExplorer } from '../DesktopExplorer';
 import { AgentSettings } from './AgentSettings';
-import { CanvasSettingsPage } from './CanvasSettingsPage';
+import { AppearanceSettingsPage, CanvasSettingsPage } from './CanvasSettingsPage';
 import { GeneralSettings } from './GeneralSettings';
 import { SupportSettings } from './SupportSettings';
 import { UpdateSettings } from './UpdateSettings';
@@ -82,6 +82,7 @@ function MoveTargetDialog() {
 /** Every page of Settings, in rail order. */
 const CATEGORIES: readonly [SettingsCategoryEntry<SettingsCategory>, ...SettingsCategoryEntry<SettingsCategory>[]] = [
   { id: 'general', label: 'General', icon: 'sliders', Page: GeneralSettings },
+  { id: 'appearance', label: 'Appearance', icon: 'palette', Page: AppearanceSettingsPage },
   { id: 'canvas', label: 'Canvas', icon: 'pencil', Page: CanvasSettingsPage },
   { id: 'agents', label: 'AI agents', icon: 'agent', Page: AgentSettings },
   { id: 'updates', label: 'Updates', icon: 'refresh', Page: UpdateSettings },

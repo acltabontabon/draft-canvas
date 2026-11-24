@@ -16,7 +16,6 @@ import { deserializeDocument } from '../export/project';
 import { renderDocsImage } from '../export/docs/image';
 import type { DocsSettings } from '../export/docs/marker';
 import { picturesOf } from '../export/docs/names';
-import { resolveExportBackground } from '../export/background';
 import { logDiagnostic } from '../lib/diagnostics';
 import type { DesktopApi, DocsPublished, Handle } from './api';
 
@@ -25,8 +24,6 @@ type Notify = (message: string) => void;
 interface Request {
   name: string;
   text: string;
-  /** False for a file that isn't open: its background image isn't loaded, so its picture waits. */
-  open: boolean;
 }
 
 /**
@@ -58,9 +55,9 @@ export class DocsPublisher {
    * `text` was just saved to `handle` (named `name` without its extension). Redraws that file's
    * picture if it follows saves, after anything already queued for it, the latest text winning.
    */
-  refresh(handle: Handle, name: string, text: string, open = true): Promise<void> {
+  refresh(handle: Handle, name: string, text: string): Promise<void> {
     const alreadyWaiting = this.waiting.has(handle);
-    this.waiting.set(handle, { name, text, open });
+    this.waiting.set(handle, { name, text });
     if (alreadyWaiting) return this.chains.get(handle) ?? Promise.resolve();
     return this.enqueue(handle, async () => {
       const request = this.waiting.get(handle);
@@ -128,18 +125,12 @@ export class DocsPublisher {
     if (pictures.length === 0) return;
     const parsed = deserializeDocument(request.text);
     if (!parsed.ok) return;
-    if (!request.open && parsed.document.settings.background.enabled) {
-      const what = pictures.length === 1 ? `${pictures[0]!.name} will update` : `Its ${pictures.length} docs pictures will update`;
-      this.once(`deferred:${handle}`, `${what} the next time ${request.name}.draftcanvas is opened and saved: its background image is only loaded then.`);
-      return;
-    }
     // One at a time, each on its own: a level that's gone, or a write that fails, leaves the others
-    // to be drawn. The background image is read once for them all, not once per picture.
-    const background = await resolveExportBackground(parsed.document, true).catch(() => undefined);
+    // to be drawn.
     let wrote = false;
     for (const picture of pictures) {
       try {
-        const rendered = await renderDocsImage(parsed.document, `${request.name}.draftcanvas`, picture.marker.settings, background);
+        const rendered = await renderDocsImage(parsed.document, `${request.name}.draftcanvas`, picture.marker.settings);
         if (!rendered.ok) {
           this.once(`level:${handle}:${picture.name}`, `${picture.name} wasn’t updated: the level it shows is gone. It stays as it was.`);
           continue;

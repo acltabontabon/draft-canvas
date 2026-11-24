@@ -1,10 +1,10 @@
-import { messageOfStep, playbackFlowOf } from '../document/sequenceFlow';
+import { playbackFlowOf } from '../document/sequenceFlow';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useReactFlow, useStore, useStoreApi } from '@xyflow/react';
+import { useReactFlow, useReactFlowStoreApi, useViewportStore } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import { flowIsPlayable } from '../document/flow';
 import { boundsOf, type Bounds } from '../document/operations';
-import type { DraftEdge, DraftFlowStep, DraftFlow, DraftNode, DraftViewport, SeqMessage } from '../document/types';
+import type { DraftEdge, DraftFlow, DraftNode, DraftViewport } from '../document/types';
 import { flattenPath } from '../edges/routing';
 import { clamp } from '../lib/math';
 import { nodeIndex } from '../store/selectors';
@@ -15,82 +15,10 @@ import { captionCornerFor, composeStep, frameManualStep, frameOverview, frameSte
 import { RESPONSE_PHASE_DELAY_MS } from './responsePhase';
 import { motionMs } from '../lib/motion';
 
-export interface FlowPlaybackStep {
-  /** The step's primary connector, when it has one — absent for a "frame" step. */
-  edge?: DraftEdge;
-  /** Every connector this step highlights: the primary one (if any) followed by `extraEdgeIds`. */
-  edges: DraftEdge[];
-  /** Nodes this step spotlights beyond its edges' own endpoints. */
-  extraNodes: DraftNode[];
-  index: number;
-  step: number;
-  caption?: string;
-  /** An explicit viewport this step shows verbatim — `focusOn` skips auto-fit when present. */
-  viewport?: DraftViewport;
-  /**
-   * The message this step is about, when the flow is a sequence telling itself
-   * (`document/sequenceFlow.ts`): the step lights that one message inside the sequence, not the
-   * sequence as a whole.
-   */
-  part?: { nodeId: string; message: SeqMessage };
-}
+import { resolveFlowStep, resolveFlowSteps, type FlowPlaybackStep } from './steps';
 
-/**
- * Resolves one flow step's dangling-safe references into the concrete
- * edges/nodes it lights up. Shared by the `steps` memo and `pickFlow`, which
- * needs to resolve a step before the memo (driven by store state one render
- * behind) has caught up. Exported for unit testing — pure, no React Flow
- * dependency.
- */
-export function resolveFlowStep(
-  stepEntry: DraftFlowStep,
-  index: number,
-  step: number,
-  edgesById: Map<string, DraftEdge>,
-  nodesById: Map<string, DraftNode>,
-): FlowPlaybackStep | null {
-  const edge = stepEntry.edgeId ? edgesById.get(stepEntry.edgeId) : undefined;
-  const extraEdges = (stepEntry.extraEdgeIds ?? [])
-    .map((id) => edgesById.get(id))
-    .filter((e): e is DraftEdge => Boolean(e));
-  const edges = edge ? [edge, ...extraEdges] : extraEdges;
-  const extraNodes = (stepEntry.extraNodeIds ?? [])
-    .map((id) => nodesById.get(id))
-    .filter((n): n is DraftNode => Boolean(n));
-  if (edges.length === 0 && extraNodes.length === 0 && !stepEntry.viewport) return null;
-  // A sequence's own step is named after its message, and shows nothing but that sequence.
-  const host = edges.length === 0 && extraNodes.length === 1 ? extraNodes[0] : undefined;
-  const message = messageOfStep(host, stepEntry.id);
-  return {
-    edge,
-    edges,
-    extraNodes,
-    index,
-    step,
-    caption: stepEntry.caption,
-    viewport: stepEntry.viewport,
-    ...(host && message ? { part: { nodeId: host.id, message } } : {}),
-  };
-}
-
-/**
- * A flow's playable steps, numbered 1..n after dangling steps drop out — what `flowPlayback.step`
- * indexes into. Shared by the hook and Presentation Mode's callout layer, which must agree on it.
- */
-export function resolveFlowSteps(
-  flow: DraftFlow,
-  edges: readonly DraftEdge[],
-  nodes: readonly DraftNode[],
-): FlowPlaybackStep[] {
-  const edgesById = new Map(edges.map((e) => [e.id, e]));
-  const nodesById = new Map(nodes.map((n) => [n.id, n]));
-  const result: FlowPlaybackStep[] = [];
-  flow.steps.forEach((stepEntry, index) => {
-    const resolved = resolveFlowStep(stepEntry, index, result.length + 1, edgesById, nodesById);
-    if (resolved) result.push(resolved);
-  });
-  return result;
-}
+// Re-exported for the editor's own callers: the resolver itself lives in `steps.ts`, free of React.
+export { resolveFlowStep, resolveFlowSteps, type FlowPlaybackStep };
 
 /** Where the presentation is in its telling of a flow — see `FlowPlaybackState.stage`. */
 export type PlaybackStage = 'opening' | 'step' | 'closing';
@@ -109,6 +37,8 @@ export interface FlowPlaybackController {
   /** The step being shown — `null` in the opening and closing overviews, where no single step is. */
   current: FlowPlaybackStep | null;
   active: boolean;
+  /** The flow being told is a walk — worked out from the diagram, not one the file holds. */
+  derived: boolean;
   /** Playback is active but no flow has been chosen yet — show the picker. */
   picking: boolean;
   /** The opening (title and overview, before step 1), a step, or the closing overview after the last. */
@@ -118,6 +48,8 @@ export interface FlowPlaybackController {
   canStart: boolean;
   start: () => void;
   pickFlow: (flowId: string, sequenceNodeId?: string) => void;
+  /** Present a walk (`presentation/walk.ts`): a flow the file does not hold, from its opening. */
+  startWalk: (walk: DraftFlow) => void;
   stop: () => void;
   /** Forward through the story: opening → step 1 … last step → closing → the next flow's opening. */
   next: () => void;
@@ -195,6 +127,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       active: state.flowPlayback.active,
       flowId: state.flowPlayback.flowId,
       sequenceNodeId: state.flowPlayback.sequenceNodeId,
+      walk: state.flowPlayback.walk,
       step: state.flowPlayback.step,
       stage: state.flowPlayback.stage,
     })),
@@ -204,7 +137,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
   // whole-document subscription re-rendered the entire editor on every commit. Edges and nodes are
   // only watched while a flow is actually being presented; everything else reads `getState()`.
   const flow = useEditorStore((state) =>
-    flowPlayback.flowId ? (playbackFlowOf(state.document, flowPlayback.flowId, flowPlayback.sequenceNodeId) ?? null) : null,
+    flowPlayback.flowId ? (playbackFlowOf(state.document, flowPlayback.flowId, flowPlayback.sequenceNodeId, flowPlayback.walk) ?? null) : null,
   );
   const edges = useEditorStore((state) => (flow ? state.document.edges : NO_EDGES));
   const nodes = useEditorStore((state) => (flow ? state.document.nodes : NO_NODES));
@@ -216,11 +149,11 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
     useShallow((state) => state.document.flows.filter((candidate) => flowIsPlayable(state.document, candidate))),
   );
   const { setViewport, getViewport } = useReactFlow();
-  const storeApi = useStoreApi();
+  const storeApi = useReactFlowStoreApi().optionsStore;
   // Selected separately: returning an object literal from a store selector
   // creates a new identity on every store change and re-renders forever.
-  const viewWidth = useStore((state) => state.width);
-  const viewHeight = useStore((state) => state.height);
+  const viewWidth = useViewportStore((state) => state.width);
+  const viewHeight = useViewportStore((state) => state.height);
 
   const steps = useMemo(() => (flow ? resolveFlowSteps(flow, edges, nodes) : []), [edges, nodes, flow]);
 
@@ -366,7 +299,7 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       // a sequence telling itself is not one of them, and the lens has nothing to show for it.
       if (sequenceNodeId === undefined) useEditorStore.getState().setSelectedFlowId(flowId);
       if (matchedIndex < 0) {
-        setFlowPlayback({ active: true, flowId, sequenceNodeId, step: 0, stage: 'opening' });
+        setFlowPlayback({ active: true, flowId, sequenceNodeId, walk: undefined, step: 0, stage: 'opening' });
         frameFlow(chosen, 'guided');
         return;
       }
@@ -386,11 +319,11 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
         }
       }
       if (!landed) {
-        setFlowPlayback({ active: true, flowId, sequenceNodeId, step: 0, stage: 'opening' });
+        setFlowPlayback({ active: true, flowId, sequenceNodeId, walk: undefined, step: 0, stage: 'opening' });
         frameFlow(chosen, 'guided');
         return;
       }
-      setFlowPlayback({ active: true, flowId, sequenceNodeId, step: landed.step, stage: undefined });
+      setFlowPlayback({ active: true, flowId, sequenceNodeId, walk: undefined, step: landed.step, stage: undefined });
       frameStepFor(landed);
     },
     [current, flow, flowPlayback.sequenceNodeId, frameFlow, frameStepFor, setFlowPlayback],
@@ -406,13 +339,22 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       pickFlow(preferred.id);
       return;
     }
-    setFlowPlayback({ active: true, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined });
+    setFlowPlayback({ active: true, flowId: null, sequenceNodeId: undefined, walk: undefined, step: 0, stage: undefined });
   }, [playableFlows, pickFlow, setFlowPlayback]);
+
+  const startWalk = useCallback(
+    (walk: DraftFlow) => {
+      // Not the lens: step badges belong to flows the file holds, and a walk is not one yet.
+      setFlowPlayback({ active: true, flowId: walk.id, sequenceNodeId: undefined, walk, step: 0, stage: 'opening' });
+      frameFlow(walk, 'guided');
+    },
+    [frameFlow, setFlowPlayback],
+  );
 
   const stop = useCallback(() => {
     intended.current = null;
     useUiStore.getState().resetPresentation();
-    setFlowPlayback({ active: false, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined });
+    setFlowPlayback({ active: false, flowId: null, sequenceNodeId: undefined, walk: undefined, step: 0, stage: undefined });
   }, [setFlowPlayback]);
 
   const flowIndex = flow && flowPlayback.sequenceNodeId === undefined ? playableFlows.findIndex((candidate) => candidate.id === flow.id) : -1;
@@ -491,8 +433,8 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       // own first line steps over, so there is no second pass.)
       setFlowPlayback(
         playableFlows.length > 0
-          ? { active: true, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined }
-          : { active: false, flowId: null, sequenceNodeId: undefined, step: 0, stage: undefined },
+          ? { active: true, flowId: null, sequenceNodeId: undefined, walk: undefined, step: 0, stage: undefined }
+          : { active: false, flowId: null, sequenceNodeId: undefined, walk: undefined, step: 0, stage: undefined },
       );
       return;
     }
@@ -530,6 +472,15 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
     else moment.frameFlow(moment.flow, 'guided', RESIZE_MS);
   }, [viewWidth, viewHeight]);
 
+  // A walk reshaped under the presenter (`editorStore.tellWalkNext`: a connector clicked to be
+  // told next) lands on a step nobody framed, since the store has no camera. Keyed on the walk
+  // alone: starting one frames its own opening, where there is no step to frame here.
+  useEffect(() => {
+    const moment = momentRef.current;
+    if (!moment.active || !flowPlayback.walk || !moment.current) return;
+    moment.frameStepFor(moment.current);
+  }, [flowPlayback.walk]);
+
   // One stable object per actual change, so consumers keyed on it (`useKeyboard`'s window listener,
   // `useCommandContext`, `FlowBar`) don't tear down and rebuild on unrelated renders.
   return useMemo(
@@ -541,12 +492,14 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       step: flowPlayback.step,
       current,
       active: flowPlayback.active,
+      derived: flow !== null && flow === flowPlayback.walk,
       picking: flowPlayback.active && flowPlayback.flowId === null,
       stage,
       atEnd: stage === 'closing' && !upcoming,
       canStart: playableFlows.length > 0,
       start,
       pickFlow,
+      startWalk,
       stop,
       next,
       previous,
@@ -567,11 +520,13 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
       flowPlayback.step,
       flowPlayback.active,
       flowPlayback.flowId,
+      flowPlayback.walk,
       current,
       stage,
       upcoming,
       start,
       pickFlow,
+      startWalk,
       stop,
       next,
       previous,

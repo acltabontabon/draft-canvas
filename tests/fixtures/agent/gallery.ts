@@ -370,7 +370,7 @@ export const GALLERY: GalleryCase[] = [
     kind: 'create',
     request: {
       title: 'Order events (from the Event-Driven starter)',
-      starter: { id: 'event-driven', prefix: '', overrides: { producer: { label: 'Order Service', technology: 'Spring Boot' }, topic: { label: 'order-events', technology: 'Kafka' } } },
+      starter: { id: 'event-driven', prefix: '', overrides: { orders: { label: 'Order Service', technology: 'Spring Boot' }, topic: { label: 'order-events', technology: 'Kafka' } } },
       nodes: [n('audit', 'worker', 'Audit Trail Writer')],
       relationships: [r('audit-sub', 'topic', 'audit', 'Consumes every event')],
     },

@@ -38,13 +38,12 @@ import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../st
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
-import { usePersonality } from '../theme/usePersonality';
+import { useDiagramStyle } from './useDiagramStyle';
 import { useThemeValue } from '../theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 import { layerBehind } from './insideMark';
 import { emphasisColorOf, emphasisOf } from './emphasis';
-import { pathsLabel } from './trafficLabels';
-import { trafficNodeOf, trafficNodeReading, trafficScenarioOf } from '../store/traffic';
+import { outageNodeReading } from '../store/outage';
 import { OpenPointMarker } from './OpenPointMarker';
 import { unresolvedOpenPointsFor } from '../document/openPoints';
 import { attachmentTabWidth, markerRail, RAIL_SIZE } from '../document/markerRail';
@@ -86,23 +85,16 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     const role = explainRoleFor(state, id);
     if (role === 'target' || role === 'both') return stepContextOf(state)?.transitionKey ?? null;
     if (role === 'source') return 'source';
-    // Where traffic concentrates is lit along the same contour a presented step's shapes are —
-    // never a box around it. Presentation and traffic never show together (`setMode`).
-    const traffic = trafficNodeReading(state, id);
-    return traffic === 'top' || traffic === 'raised' ? `traffic-${traffic}` : null;
+    return null;
   });
-  const trafficReading = useEditorStore((state) => trafficNodeReading(state, id));
-  // The analysis's own object for this node, identity-stable until the room changes — read only
-  // while the traffic reading is visible.
-  const trafficNode = useEditorStore((state) =>
-    state.traffic.active ? trafficNodeOf(state, id) : undefined,
-  );
-  const scenarioLabel = useEditorStore((state) => trafficScenarioOf(state)?.get(id));
+  // During an outage walk: what the outage does to this shape — a string out of the room's one
+  // memoized reading (`store/outage.ts`), so only the shapes whose state changes re-render.
+  const outageReading = useEditorStore((state) => outageNodeReading(state, id));
   const focused = useEditorStore((state) => isNodeFocused(state.focus, id));
   const lensMember = useEditorStore((state) => lensMemberFor(state, id));
   const theme = useThemeValue();
   const lensAccent = useEditorStore((state) => lensAccentFor(state, theme, id));
-  const { preset } = usePersonality();
+  const diagramStyle = useDiagramStyle();
   const updateNodeInternals = useUpdateNodeInternals();
   // A boolean, not the id itself: every node's selector runs on every drag
   // frame, so only the two nodes whose armed state actually flips re-render.
@@ -116,6 +108,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const isReconnectTarget = useUiStore((state) => state.reconnectHoverTarget === id);
   const jumpFlash = useUiStore((state) => state.jumpFlashId === id);
   const pointed = useUiStore((state) => state.pointedIds?.has(id) ?? false);
+  const traced = useUiStore((state) => state.traceIds?.has(id) ?? false);
   const settling = useSettle(id);
   // Just placed, pasted, undone back or added by someone else: settles in once. Changed in place by
   // an undo or redo: a brief pulse says what the step touched. See `useChangeFeedback.ts`.
@@ -270,7 +263,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       : { ...node, width: effectiveWidth, height: effectiveHeight };
   // Relative to the node box (x, y: 0) — the handles are positioned inside it.
   const handleBand = liveNode
-    ? anchorBandOf({ type: liveNode.type, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
+    ? anchorBandOf({ type: liveNode.type, serviceKind: liveNode.serviceKind, componentKind: liveNode.componentKind, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
     : undefined;
   // `DraftHandle` is memoized, so each keeps its style object until the band itself moves —
   // twelve fresh objects per node render would re-render every handle every time.
@@ -330,9 +323,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     // A Text element keeps its background (a zero-width space is "something", so no empty-state
     // outline) while its source is edited over it.
     const described = editingNote ? { ...liveNode, text: isText ? '\u200b' : '' } : liveNode;
-    return emitDisplayList(describeNode(described, describeContext(theme, preset)));
+    return emitDisplayList(describeNode(described, describeContext(theme, diagramStyle)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
-  }, [liveNode, theme, preset, editingNote, technologyIcon, participantIcons]);
+  }, [liveNode, theme, diagramStyle, editingNote, technologyIcon, participantIcons]);
 
   /**
    * The font a plain shape label (Service/Component/Database/Queue/Actor/Group — everything but
@@ -344,12 +337,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const editingLabel = useMemo<Extract<Shape, { t: 'text' }> | null>(() => {
     if (!editing || !node || isCode || isNote || isText) return null;
     const described = node.text?.trim() ? node : { ...node, text: displayNameFor(node) };
-    const drawn = describeNode(described, describeContext(theme, preset));
+    const drawn = describeNode(described, describeContext(theme, diagramStyle));
     const label = drawn.shapes.find(
       (s): s is Extract<Shape, { t: 'text' }> => s.t === 'text' && s.role === 'label',
     );
     return label ?? null;
-  }, [editing, node, theme, preset, isCode, isNote, isText]);
+  }, [editing, node, theme, diagramStyle, isCode, isNote, isText]);
 
   /**
    * The step's emphasis: this shape's silhouette, to be lit behind it (`canvas/emphasis.ts`). Built
@@ -361,12 +354,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     if (emphasisKey === null || !liveNode) return null;
     beginClipScope(`emphasis-${liveNode.id}`);
     // A sequence is lit along its frame, not along every head, bar and note inside it.
-    const ctx = describeContext(theme, preset);
+    const ctx = describeContext(theme, diagramStyle);
     const shapes = emphasisOf(liveNode.type === 'sequence' ? describeSequenceFrame(liveNode, ctx) : describeNode(liveNode, ctx).shapes);
     if (shapes.length === 0) return null;
     return { markup: emitDisplayList({ width: liveNode.width, height: liveNode.height, shapes }), color: emphasisColorOf(shapes) };
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- same clip-scope reason as `shapes`.
-  }, [liveNode, theme, preset, emphasisKey !== null]);
+  }, [liveNode, theme, diagramStyle, emphasisKey !== null]);
 
   /**
    * The plane behind a shape that has an inside — its own outline, from the same `describeNode`, so
@@ -377,10 +370,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const layer = useMemo(() => {
     if (!liveNode?.inside?.nodes.length) return null;
     beginClipScope(`layer-${liveNode.id}`);
-    const drawn = describeNode(liveNode, describeContext(theme, preset));
+    const drawn = describeNode(liveNode, describeContext(theme, diagramStyle));
     return emitDisplayList({ ...drawn, shapes: layerBehind(drawn.shapes) });
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- same clip-scope reason as `shapes`.
-  }, [liveNode, theme, preset]);
+  }, [liveNode, theme, diagramStyle]);
 
   // Doesn't depend on `node`, so — like `shapes` above — this is computed and its effect run
   // unconditionally, ahead of the `!node` early return below.
@@ -391,9 +384,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // The same geometry the display list above was drawn from (it is kept by the sequence's identity),
   // so every target sits exactly on what it is for.
   const sequenceLayout = useMemo(
-    () => (isSequence && liveNode && mode !== 'present' && (hovered || selected || sequenceBusy) ? sequenceLayoutFor(liveNode, describeContext(theme, preset)) : null),
+    () => (isSequence && liveNode && mode !== 'present' && (hovered || selected || sequenceBusy) ? sequenceLayoutFor(liveNode, describeContext(theme, diagramStyle)) : null),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- `participantIcons` is the redraw signal for loaded logos.
-    [isSequence, liveNode, mode, hovered, selected, sequenceBusy, theme, preset, participantIcons],
+    [isSequence, liveNode, mode, hovered, selected, sequenceBusy, theme, diagramStyle, participantIcons],
   );
 
   // `NodeResizer` below is only rendered while `!readOnly`, so switching to Presentation Mode
@@ -503,13 +496,15 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-explain-crossed={explainRole === 'crossed' ? 'true' : undefined}
       data-focused={focused ? 'true' : undefined}
       data-lens-member={lensMember ? 'true' : undefined}
-      data-traffic={trafficReading ?? undefined}
+      data-outage={outageReading ?? undefined}
       data-editing={editing ? 'true' : undefined}
       data-attach-target={isAttachTarget ? 'true' : undefined}
       data-drag-capsule={capsule ? 'true' : undefined}
       data-reconnect-target={isReconnectTarget ? 'true' : undefined}
       data-jump-flash={jumpFlash ? 'true' : undefined}
       data-pointed={pointed ? 'true' : undefined}
+      data-traced={traced ? 'true' : undefined}
+      data-held={node.held ? 'true' : undefined}
       data-settle={settling ? 'true' : undefined}
       data-arriving={arriving && !settling ? 'true' : undefined}
       data-changed={changed ? 'true' : undefined}
@@ -673,7 +668,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         <SvgSurface
           key={emphasisKey ?? undefined}
           className="dc-emphasis"
-          data-role={explainRole ?? (emphasisKey?.startsWith('traffic-') ? emphasisKey : undefined)}
+          data-role={explainRole ?? undefined}
           width={effectiveWidth}
           height={effectiveHeight}
           bleed={EMPHASIS_BLEED}
@@ -687,19 +682,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         {shapes}
       </SvgSurface>
 
-      {isSequence && liveNode && sequenceStep ? <SequenceStepLayer node={liveNode} step={sequenceStep} theme={theme} preset={preset} /> : null}
+      {isSequence && liveNode && sequenceStep ? <SequenceStepLayer node={liveNode} step={sequenceStep} theme={theme} diagramStyle={diagramStyle} /> : null}
 
       {sequenceLayout && liveNode && !capsule && (
-        <SequenceOverlay node={liveNode} layout={sequenceLayout} readOnly={readOnly} selected={Boolean(selected)} preset={preset} />
-      )}
-
-      {/* Illustrative work per minute, in words as well as the halo — never a colour alone.
-          Chrome, like the halo: it never reaches an export. */}
-      {trafficNode && scenarioLabel && !capsule && (
-        <span className="dc-traffic-badge" data-tier={trafficNode.tier}>
-          <span className="dc-sr-only">Traffic: </span>
-          {scenarioLabel ?? pathsLabel(trafficNode.paths)}
-        </span>
+        <SequenceOverlay node={liveNode} layout={sequenceLayout} readOnly={readOnly} selected={Boolean(selected)} diagramStyle={diagramStyle} />
       )}
 
       {!editing && !capsule && liveNode && nodeTechnologyIcon(liveNode) && (
@@ -991,7 +977,7 @@ function explainTierFor(state: EditorStore, id: string): ExplainTier {
   // not by walking the parent chain in every node selector.
   if (stepContextOf(state)?.containing.has(id)) return 'active';
   if (!state.flowPlayback.active || !state.flowPlayback.flowId) return 'hidden';
-  const flow = playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId);
+  const flow = playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId, state.flowPlayback.walk);
   return nodeTierInPlayback(flow, state.document.edges, id, state.flowPlayback);
 }
 

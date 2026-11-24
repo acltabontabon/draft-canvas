@@ -1,4 +1,16 @@
-import type { Accent, CodeLanguage, DraftNodeType, NoteKind, ViewLevel } from '../document/types';
+import type { Accent, ActorKind, ArtifactKind, BoundaryPreset, CodeLanguage, ComponentKind, DatabaseKind, DraftNodeType, NoteKind, QueueKind, ServiceKind, ViewLevel } from '../document/types';
+
+/** The kind a shape offered by name starts as (`conceptPresets.ts`): "load balancer" is a Service
+ *  already set to Load Balancer. Only the field of the preset's own type is read. */
+export interface PresetStart {
+  serviceKind?: ServiceKind;
+  databaseKind?: DatabaseKind;
+  queueKind?: QueueKind;
+  actorKind?: ActorKind;
+  componentKind?: ComponentKind;
+  artifactKind?: ArtifactKind;
+  boundaryPreset?: BoundaryPreset;
+}
 
 export interface Preset {
   id: string;
@@ -22,6 +34,10 @@ export interface Preset {
    * never carry one.
    */
   technology?: string;
+  /** A shape offered by one of its names ("load balancer", "certificate"): the kind it starts as. */
+  start?: PresetStart;
+  /** The `ToolGlyph` this preset shows, when it is not the one its `id` names. */
+  glyph?: string;
 }
 
 /** The toolbar tooltip's content shape — also covers Select, which isn't a `Preset` (it's
@@ -170,6 +186,18 @@ export const DEV_PRESETS: Preset[] = [
     accent: 'neutral',
   },
   {
+    // Not on the rail and without a key: a diagram reaches for one far less often than for the
+    // shapes above, and by a more specific name ("config", "certificate") when it does. Those
+    // names are `conceptPresets.ts`; this is the family they belong to, listed with the others.
+    id: 'artifact',
+    label: 'Artifact',
+    type: 'artifact',
+    shortcut: '',
+    hint: 'A file, config, secret or certificate',
+    description: 'Something a system reads, mounts or presents rather than runs.',
+    usageHint: 'Use for config files, secrets and keys, certificates, images, or any file that matters to the story.',
+  },
+  {
     id: 'sequence',
     label: 'Sequence',
     type: 'sequence',
@@ -184,6 +212,7 @@ export const ALL_PRESETS = [...PRESETS, ...DEV_PRESETS];
 
 /** The built-in preset a preset draws as: itself, or the shape a technology preset is made of. */
 export function basePresetFor(preset: Preset): Preset {
+  // Boundary is the one built-in whose id is not its type (`group`).
   return ALL_PRESETS.find((entry) => entry.type === preset.type) ?? preset;
 }
 
@@ -209,6 +238,7 @@ export const PRESET_KEYWORDS: Record<string, string[]> = {
   // node type. A user reaches Module/Adapter by adding a Component, then picking its kind in the
   // inspector, same as every other kind-bearing shape.
   component: ['building block', 'internal', 'logical component'],
+  artifact: ['file', 'document', 'config', 'secret', 'key', 'certificate'],
   sequence: ['sequence diagram', 'lifeline', 'participant', 'message', 'interaction', 'uml', 'call flow', 'timeline'],
 };
 

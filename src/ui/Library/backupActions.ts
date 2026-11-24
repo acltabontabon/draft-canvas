@@ -49,3 +49,17 @@ export async function restoreLibrary(repository: DraftRepository, file: File, no
     return null;
   }
 }
+
+/**
+ * Whether a file handed to Import is a backup ZIP rather than a diagram: by its name or type, or by
+ * the ZIP signature for one renamed on the way. No diagram format Draft Canvas reads is a ZIP.
+ */
+export async function looksLikeBackup(file: File): Promise<boolean> {
+  if (/\.zip$/i.test(file.name) || file.type === 'application/zip' || file.type === 'application/x-zip-compressed') return true;
+  try {
+    const head = new Uint8Array(await file.slice(0, 4).arrayBuffer());
+    return head[0] === 0x50 && head[1] === 0x4b && head[2] === 0x03 && head[3] === 0x04;
+  } catch {
+    return false;
+  }
+}

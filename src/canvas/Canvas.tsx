@@ -1,19 +1,19 @@
+import { mayTakeDown } from '../traffic';
 import { playbackFlowOf } from '../document/sequenceFlow';
-import { TrafficReplayProvider } from './TrafficReplayContext';
-import { TrafficScenario } from './TrafficScenario';
 import { FlowTraceBadges } from './FlowTraceBadges';
-import { TrafficSketches } from './TrafficSketches';
+import { OutageDock, OutageLayer } from './OutageLayer';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Background,
   BackgroundVariant,
   ConnectionMode,
   ReactFlow,
-  applyEdgeChanges,
-  applyNodeChanges,
+  EdgeChangeset,
+  NodeChangeset,
+  useOptionsStore,
   useReactFlow,
-  useStore,
-  useStoreApi,
+  useReactFlowStoreApi,
+  useViewportStore,
   type Connection,
   type FinalConnectionState,
   type EdgeChange,
@@ -40,12 +40,12 @@ import { PresentationPointer } from './presentation/PresentationPointer';
 import { edgeIndex, nodeIndex, selectSequenceMessage, sequenceNodes } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
-import { CanvasBackground } from './CanvasBackground';
+import { DiagramTheme } from './DiagramTheme';
+import { StyleBackdrop } from './StyleBackdrop';
 import { ATTACH_DWELL_MS, evaluateAttachCandidates, isAttachableType } from './dragTargets';
 import { isLinkable, isPartOfDiagram } from '../document/sequenceLinks';
 import { LIMITS } from '../document/limits';
-import { describeContext, sequenceLayoutFor } from '../nodes/describe';
-import { LIGHT } from '../render/theme/tokens';
+import { sequenceLayoutFor, sizingContext } from '../nodes/describe';
 import { hitSequence, participantIndexAt } from '../sequence/layout';
 import { sequenceActions } from '../store/sequenceActions';
 import {
@@ -81,6 +81,10 @@ import {
 } from './projection';
 import { sameGuides, type Guide } from './snapping';
 import { NO_DRAG_SNAP, NO_GUIDES, snapChanges, snapResizeChanges, type DragLink, type DragSnapContext, type NodeLookup } from './dragSnap';
+import { CanvasLegend } from './CanvasLegend';
+import { useMakeRoom } from './useMakeRoom';
+import { useHoverTrace } from './useHoverTrace';
+import { zoomBand } from './zoomBand';
 import { snapBypassed, trackSnapBypass } from './snapBypass';
 import { useIdSet } from './useIdSet';
 import { DRAG_THRESHOLD_PX, LONG_PRESS_DRIFT_PX, LONG_PRESS_MS } from './gestureThresholds';
@@ -156,8 +160,8 @@ function landingPointFor(
   const target = internalNode(edge.target);
   if (!source || !target) return null;
   const byId = nodeIndex(document.nodes);
-  const sourceRect = rectOfInternal(source, byId.get(edge.source)?.type);
-  const targetRect = rectOfInternal(target, byId.get(edge.target)?.type);
+  const sourceRect = rectOfInternal(source, byId.get(edge.source));
+  const targetRect = rectOfInternal(target, byId.get(edge.target));
   if (!sourceRect || !targetRect) return null;
   // A drag is in flight: routed the way the canvas draws the connector right now, which is as at
   // rest unless the dragged shape is one it detours around.
@@ -190,10 +194,6 @@ function connectFrom(source: string, target: string): void {
 /** See `onSelectionChange`: more reports than this inside the window is a feedback loop, not clicks. */
 const SELECTION_BURST_WINDOW_MS = 300;
 const SELECTION_BURST_LIMIT = 10;
-
-/** How much further Presentation Mode dims a configured background, on top of
- *  the user's own setting — enough to recede further without disappearing. */
-const PRESENTATION_EXTRA_DIM = 0.2;
 
 interface ProjectionState {
   nodes: DraftRfNode[];
@@ -298,8 +298,20 @@ const ZOOM_VARIABLE_SETTLE_MS = 140;
  * layer is dropped for a zoom and comes back once it holds still. An attribute only restyles the one
  * element its selector names, unlike the inherited `--dc-zoom`.
  */
+/** How far past the diagram the Make room line runs: beyond any view, without a size no browser draws. */
+const ROOM_LINE_REACH = 200_000;
+
+const MakeRoomLine = memo(function MakeRoomLine({ line }: { line: { axis: 'x' | 'y'; at: number; delta: number } }) {
+  const from = Math.min(line.at, line.at + line.delta);
+  const span = Math.abs(line.delta);
+  const style: CSSProperties = line.axis === 'x'
+    ? { left: from, top: -ROOM_LINE_REACH, width: span, height: ROOM_LINE_REACH * 2 }
+    : { top: from, left: -ROOM_LINE_REACH, height: span, width: ROOM_LINE_REACH * 2 };
+  return <div className="dc-make-room-band" data-axis={line.axis} data-closing={line.delta < 0 ? 'true' : undefined} style={style} />;
+});
+
 function useZoomVariable() {
-  const storeApi = useStoreApi();
+  const { optionsStore, viewportStore } = useReactFlowStoreApi();
   useEffect(() => {
     let written: { node: HTMLElement; zoom: number } | null = null;
     let timer: number | undefined;
@@ -325,7 +337,8 @@ function useZoomVariable() {
     const quantized = (transform: [number, number, number]) => Math.round(transform[2] * 20) / 20;
     const write = () => {
       timer = undefined;
-      const { domNode, transform } = storeApi.getState();
+      const { domNode } = optionsStore.getState();
+      const { transform } = viewportStore.getState();
       // A room transition lands the camera once, then flies its layer. Publishing the inherited
       // hit-area scale during that flight restyled every shape halfway through the animation.
       if (domNode?.hasAttribute('data-depth-moving')) {
@@ -335,10 +348,18 @@ function useZoomVariable() {
       const zoom = quantized(transform);
       if (!domNode || (written?.node === domNode && written.zoom === zoom)) return;
       domNode.style.setProperty('--dc-zoom', String(zoom));
+      // Semantic zoom (`zoomBand.ts`): one attribute on the root, restyled by `canvas.css`, so no
+      // shape or connector subscribes to the camera to know how far out it is.
+      const band = zoomBand(zoom);
+      if (band) domNode.setAttribute('data-zoom-band', band);
+      else domNode.removeAttribute('data-zoom-band');
       written = { node: domNode, zoom };
     };
     write();
-    const unsubscribe = storeApi.subscribe(({ domNode, transform }) => {
+    // The canvas element and the camera live in two of React Flow's stores; either changing is read alike.
+    const follow = () => {
+      const { domNode } = optionsStore.getState();
+      const { transform } = viewportStore.getState();
       followZoom(domNode, transform[2]);
       if (written === null) {
         write();
@@ -347,14 +368,21 @@ function useZoomVariable() {
       if (timer !== undefined) window.clearTimeout(timer);
       // Back to the value already published: nothing to follow, so nothing is scheduled.
       timer = written.node === domNode && written.zoom === quantized(transform) ? undefined : window.setTimeout(write, ZOOM_VARIABLE_SETTLE_MS);
+    };
+    const offCamera = viewportStore.subscribe((state, previous) => {
+      if (state.transform !== previous.transform) follow();
+    });
+    const offRoot = optionsStore.subscribe((state, previous) => {
+      if (state.domNode !== previous.domNode) follow();
     });
     return () => {
-      unsubscribe();
+      offCamera();
+      offRoot();
       if (timer !== undefined) window.clearTimeout(timer);
       if (zooming) window.clearTimeout(zooming.timer);
       settleZoom();
     };
-  }, [storeApi]);
+  }, [optionsStore, viewportStore]);
 }
 
 /** A host's name in the one-line "Attach to …" pill — a note can hold pages of text, and the pill
@@ -381,6 +409,8 @@ export interface CanvasProps {
     flowPosition: { x: number; y: number },
     screenPosition: { x: number; y: number },
     center: { x: number; y: number },
+    /** The other selected shapes the drag carried, to be connected to whatever is chosen. */
+    fanIn?: readonly string[],
   ) => void;
   /**
    * Called instead of `onCreateAt` when the canvas is double-clicked with no
@@ -417,14 +447,15 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // colour — handed to every arrival ring, boundary outline and caption through a single variable.
   const explainAccent = useEditorStore((state) => {
     if (!state.flowPlayback.active || !state.flowPlayback.flowId) return undefined;
-    return playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId)?.accent;
+    return playbackFlowOf(state.document, state.flowPlayback.flowId, state.flowPlayback.sequenceNodeId, state.flowPlayback.walk)?.accent;
   });
   const focusActive = useEditorStore((state) => state.focus.active);
+  const traceActive = useUiStore((state) => state.traceIds !== null);
   // A flow merely selected (not presented) acts as a gentler lens — see
   // `docs/reference/architecture.md`'s "Flows and presentation". `lensFlow` owns the rule for when that
   // lens is on (never during Presentation/Focus, never for an empty flow).
   const lensActive = useEditorStore((state) => lensFlow(state) !== undefined);
-  const trafficActive = useEditorStore((state) => state.traffic.active);
+  const outageActive = useEditorStore((state) => state.outage.active);
   const theme = useThemeValue();
   // A fresh object here would defeat React Flow's own memoized renderer on every drag frame.
   const connectionLineStyle = useMemo(() => ({ stroke: theme.selection, strokeWidth: 1.8 }), [theme.selection]);
@@ -475,8 +506,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // The same `state.width`/`state.height` `useCommandContext.ts`'s `viewWidth`/`viewHeight` read —
   // zero until the pane's own `ResizeObserver` has measured it, which is exactly the "layout is
   // ready" signal `openFitDocumentId` below needs, with no observer of our own to set up or tear down.
-  const openFitWidth = useStore((state) => state.width);
-  const openFitHeight = useStore((state) => state.height);
+  const openFitWidth = useViewportStore((state) => state.width);
+  const openFitHeight = useViewportStore((state) => state.height);
   const openFitDocumentId = useUiStore((state) => state.openFitDocumentId);
   // The two fields the effect below reads of the document — it depends on those, not on the whole
   // document, which is a new object on every keystroke.
@@ -541,6 +572,12 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       event.stopPropagation();
       finishRecoveryConnect(node.id);
     } else if (sharedReadOnly) selectSharedNode(event, node);
+    // During an outage walk a plain click on something that runs takes it down: the walk is for
+    // trying one shape after another. A modified click still only selects.
+    else if (editable && useEditorStore.getState().outage.active && !useUiStore.getState().armed && !event.shiftKey && !event.metaKey && !event.ctrlKey) {
+      const editor = useEditorStore.getState();
+      if (editor.outage.down !== node.id && mayTakeDown(editor.document.nodes, node.id)) editor.takeDown(node.id);
+    }
     else if (
       editable &&
       useUiStore.getState().armed &&
@@ -558,10 +595,14 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // The Pencil: drawing claims the pointer only while it is in hand on an editable canvas.
   const pencil = useUiStore((state) => state.pencil);
   const armedShape = useUiStore((state) => state.armed !== null);
-  const drawing = editable && pencil !== null && !trafficActive;
+  const drawing = editable && pencil !== null && !outageActive;
   useInkInput(paneRef, drawing);
 
   useZoomVariable();
+  useHoverTrace(mode === 'edit');
+  useMakeRoom(paneRef);
+  const makeRoomLine = useUiStore((state) => state.makeRoom?.line ?? null);
+  const makingRoom = useUiStore((state) => state.makeRoom !== null);
   useChangeFeedback();
 
   const [guides, setGuides] = useState<Guide[]>([]);
@@ -657,7 +698,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const connectCancelled = useRef(false);
   const stopWatchingConnect = useRef<(() => void) | null>(null);
   const [connectionCancelled, setConnectionCancelled] = useState(false);
-  const rfStore = useStoreApi();
+  const rfStore = useReactFlowStoreApi().optionsStore;
   const clearDwell = useCallback(() => {
     if (dwellTimer.current !== null) {
       window.clearTimeout(dwellTimer.current);
@@ -689,7 +730,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
   // React Flow's own marquee (rubber-band) selection state — see `onEdgesChange`
   // for why this is read here.
-  const userSelectionActive = useStore((state) => state.userSelectionActive);
+  const userSelectionActive = useOptionsStore((state) => state.userSelectionActive);
 
   /**
    * The rendered arrays are derived from the document during render rather than
@@ -783,7 +824,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       if (!host || !sequence || sequence.participants.length >= LIMITS.maxSequenceParticipants || sequence.participants.some((participant) => participant.ref === dragged.id)) {
         return clearSequenceDrop();
       }
-      const index = participantIndexAt(sequenceLayoutFor(host, describeContext(LIGHT)), centre.x - host.x);
+      const index = participantIndexAt(sequenceLayoutFor(host, sizingContext()), centre.x - host.x);
       // A shape that is part of a diagram stays in it and is stood in for. One with nothing attached
       // to it is simply being put into the sequence: leaving a copy behind would be a duplicate.
       const stays = isPartOfDiagram(useEditorStore.getState().document, dragged);
@@ -819,7 +860,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
    * drag one undo entry and stops autosave firing sixty times a second.
    */
   const onNodesChange = useCallback(
-    (changes: NodeChange<DraftRfNode>[]) => {
+    (changeset: NodeChangeset<DraftRfNode>) => {
+      let changes = changeset.toArray();
       // A cancelled drag (Escape) still receives frames until the pointer is released — React
       // Flow has no cancel of its own. Dropping their position changes is what pins the card
       // where `onDragCancel` put it back; everything else (a dimensions change, a selection
@@ -963,7 +1005,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             }, undefined)
             : undefined;
           const hit = host?.type === 'sequence'
-            ? hitSequence(sequenceLayoutFor(host, describeContext(LIGHT)), aim.x - host.x, aim.y - host.y)
+            ? hitSequence(sequenceLayoutFor(host, sizingContext()), aim.x - host.x, aim.y - host.y)
             : null;
           const message = hit?.kind === 'message' && host?.sequence
             ? selectSequenceMessage(state.document, host.id, hit.id)
@@ -1105,7 +1147,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       }
 
       setNodes((current) => {
-        const next = applyNodeChanges(snapped.changes, current);
+        const next = new NodeChangeset(snapped.changes).applyTo(current);
         return sweepDescendants(next, sweptDescendants.current, useEditorStore.getState().document);
       });
 
@@ -1177,19 +1219,20 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
    * about to do anyway — skip it exactly then, and only then.
    *
    * `userSelectionActive` is React Flow's own store flag for "a marquee is
-   * in progress" (read via `useStore` above), not a ref this file maintains
+   * in progress" (read via `useOptionsStore` above), not a ref this file maintains
    * itself — React Flow resets it unconditionally on every qualifying
    * pointer-up via native pointer capture, so it can't desync from what's
    * actually happening the way a hand-rolled ref tracking the same thing
    * could (e.g. if an interrupted gesture ever left a local ref stuck).
    */
   const onEdgesChange = useCallback(
-    (changes: EdgeChange<DraftRfEdge>[]) => {
+    (changeset: EdgeChangeset<DraftRfEdge>) => {
+      const changes: EdgeChange<DraftRfEdge>[] = changeset.toArray();
       const rest = userSelectionActive
         ? changes.filter((change) => change.type !== 'select')
         : changes;
       if (rest.length === 0) return;
-      setEdges((current) => applyEdgeChanges(rest, current));
+      setEdges((current) => new EdgeChangeset(rest).applyTo(current));
     },
     [setEdges, userSelectionActive],
   );
@@ -1672,6 +1715,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         { x: Math.round(position.x - 88), y: Math.round(position.y - 34) },
         { x: point.clientX, y: point.clientY },
         position,
+        // Carried into the picker: dropped here, the other sources the drag drew were lost (#177).
+        fanIn ?? undefined,
       );
     },
     [onQuickConnectMenu, screenToFlowPosition],
@@ -2130,6 +2175,39 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         else useEditorStore.getState().setSelection({ nodes: [], edges: [] });
         return;
       }
+      // Presenting a walk: a connector clicked is the one told next, so an order nobody chose
+      // becomes the one the presenter takes (`editorStore.tellWalkNext`). A flow the file holds
+      // stays as written, and a click on a shape or a chip is still that shape's or chip's.
+      const presented = useEditorStore.getState();
+      if (presented.mode === 'present' && presented.flowPlayback.walk && event.button === 0) {
+        if (event.target instanceof Element && event.target.closest('.react-flow__node, button, [role="button"], [data-callout-scroll]')) return;
+        const pick = edgeAtEvent(event);
+        if (pick && pick.part !== 'control' && presented.tellWalkNext(pick.id)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+      // During an outage walk a plain click on a connector takes it down, the way one on a shape
+      // does. A modified click still only selects, and the walk's own notes and list keep theirs.
+      if (
+        editable &&
+        presented.outage.active &&
+        event.button === 0 &&
+        !event.shiftKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !useUiStore.getState().armed &&
+        !(event.target instanceof Element && event.target.closest('button, [role="button"], .react-flow__panel'))
+      ) {
+        const pick = edgeAtEvent(event);
+        if (pick && pick.part !== 'control') {
+          event.preventDefault();
+          event.stopPropagation();
+          presented.cutConnector(pick.id);
+          return;
+        }
+      }
       const trace = useUiStore.getState().flowTrace;
       if (trace && event.button === 0) {
         const pick = edgeAtEvent(event);
@@ -2238,8 +2316,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       data-explain={explainActive ? 'on' : undefined}
       data-explain-stage={explainOverview ? 'overview' : undefined}
       data-focus={focusActive ? 'on' : undefined}
+      data-trace={traceActive ? 'on' : undefined}
+      data-make-room={makingRoom ? (makeRoomLine?.axis ?? 'armed') : undefined}
       data-lens={lensActive ? 'on' : undefined}
-      data-traffic={trafficActive ? 'on' : undefined}
+      data-outage={outageActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}
       data-pencil={drawing ? pencil : undefined}
       data-recovery-connecting={recoveryConnect ? 'true' : undefined}
@@ -2268,11 +2348,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       aria-roledescription="diagram canvas"
       aria-label="Diagram canvas"
     >
-      <CanvasBackground
-        settings={document.settings.background}
-        documentId={document.metadata.id}
-        extraDim={explainActive ? PRESENTATION_EXTRA_DIM : 0}
-      />
+      <StyleBackdrop />
       <Markers />
       {mode === 'present' && <PresentationPointer />}
       <ReactFlow
@@ -2360,7 +2436,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         // *on* a connector or shape into the start of a marquee, which swallowed Shift-click.
         selectionKeyCode={null}
         proOptions={PRO_OPTIONS}
-        colorMode={theme.name}
+        forceColorMode={theme.name}
         connectionLineStyle={connectionLineStyle}
       >
         {grid !== 'none' && (
@@ -2371,14 +2447,12 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             color={theme.grid}
             // React Flow's own grid layer paints an opaque backdrop by
             // default — without this, it silently covers `.dc-canvas`'s own
-            // background (and a configured background
-            // image) with its own dark fill, coincidentally close enough to
+            // background (and the style's backdrop) with its own dark fill, coincidentally close enough to
             // the app's dark theme that this went unnoticed until now.
             bgColor="transparent"
           />
         )}
 
-        <TrafficReplayProvider active={trafficActive}>
         <ViewportLayer>
           {tracing && <FlowTraceBadges />}
           {interactive && <FanInPreview />}
@@ -2391,6 +2465,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             including across a mode switch mid-gesture.
           */}
           {interactive && <GuideLines guides={guides} />}
+          {/* Make room: the line everything past is pushed from, and the band of room made (or closed). */}
+          {makeRoomLine && <MakeRoomLine line={makeRoomLine} />}
 
           {/* Where deleted shapes and connectors fade (`changeMotion.ts` fills it, imperatively and
               briefly). React renders it empty and never touches what is put inside. */}
@@ -2418,10 +2494,10 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
           <PresenceLayer />
 
           {/* Handwritten sketches sit over everything else drawn in the room, as on a whiteboard. */}
-          <InkLayer theme={theme.name} selectable={editable && !drawing && !armedShape && !trafficActive} />
+          <InkLayer theme={theme.name} selectable={editable && !drawing && !armedShape && !outageActive} />
 
-          {/* Traffic's findings, written over the diagram like a whiteboard review. Never exported. */}
-          {trafficActive && <TrafficSketches />}
+          {/* What an outage does, written over the diagram like a whiteboard review. Never exported. */}
+          {outageActive && <OutageLayer />}
 
           {editable && attachTarget && (
             <div
@@ -2432,8 +2508,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             </div>
           )}
         </ViewportLayer>
-        {trafficActive && <TrafficScenario />}
-        </TrafficReplayProvider>
+        {outageActive && <OutageDock />}
       </ReactFlow>
     </div>
   );
@@ -2446,13 +2521,14 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
  */
 export const Canvas = memo(function Canvas(props: CanvasProps) {
   return (
-    <>
+    <DiagramTheme>
       <EdgeLabelRoot>
         <CanvasBody {...props} />
       </EdgeLabelRoot>
       {/* Beside the canvas, not in it: the canvas's own press handlers (a touch long-press opens its
           context menu, a tap deselects) must never see a press on this offer's buttons. */}
       <FollowPrompt />
-    </>
+      <CanvasLegend />
+    </DiagramTheme>
   );
 });

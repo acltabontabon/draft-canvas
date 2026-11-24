@@ -1,6 +1,6 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
-import { cloneDocumentAsNew, createDocument, createNode } from '../src/document/factory';
+import { cloneDocumentAsNew, createDocument, createEdge, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
 import { IndexedDbRepository } from '../src/storage/IndexedDbRepository';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
@@ -31,6 +31,19 @@ function writeRawRow<T extends { id: string }>(row: T): Promise<void> {
       tx.objectStore('bodies').put(row);
       tx.oncomplete = () => resolve();
       tx.onerror = () => reject(tx.error);
+    };
+  });
+}
+
+/** A `bodies` row exactly as stored, read past the repository. */
+function readRawBody(id: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('draft-canvas');
+    req.onerror = () => reject(req.error);
+    req.onsuccess = () => {
+      const get = req.result.transaction('bodies', 'readonly').objectStore('bodies').get(id);
+      get.onsuccess = () => resolve(get.result);
+      get.onerror = () => reject(get.error);
     };
   });
 }
@@ -136,6 +149,98 @@ describe('local persistence', () => {
     expect(list[0]!.nodeCount).toBe(2);
     // The listing is metadata only — no canvas contents come back with it.
     expect(list[0]).not.toHaveProperty('nodes');
+  });
+
+  it('a diagram already stored with a date years ahead stops being first once it has been opened', async () => {
+    const repository = await IndexedDbRepository.open();
+    const future = { ...documentWith('From the future'), metadata: { ...documentWith('From the future').metadata, createdAt: 1e15, updatedAt: 1e15 } };
+    await repository.save(future);
+    expect((await repository.list())[0]!.updatedAt).toBe(1e15);
+
+    // Opened and nothing edited: the stored dates are put right all the same, because the library
+    // sorts by what is stored.
+    const before = Date.now();
+    const opened = await repository.load(future.metadata.id);
+    expect(opened!.metadata.updatedAt).toBeLessThanOrEqual(Date.now());
+    const stored = (await repository.list())[0]!;
+    expect(stored.updatedAt).toBeGreaterThanOrEqual(before);
+    expect(stored.updatedAt).toBeLessThanOrEqual(Date.now());
+    expect(stored.createdAt).toBeLessThanOrEqual(Date.now());
+
+    // Anything edited later now sorts above it, today and on every later day.
+    const later = { ...documentWith('Edited after'), metadata: { ...documentWith('Edited after').metadata, updatedAt: Date.now() + 1000 } };
+    await repository.save(later);
+    expect((await repository.list()).map((entry) => entry.title)).toEqual(['Edited after', 'From the future']);
+    // And a second open leaves it where it is.
+    await repository.load(future.metadata.id);
+    expect((await repository.list()).map((entry) => entry.title)).toEqual(['Edited after', 'From the future']);
+  });
+
+  it('a diagram whose date was put right keeps that date when it is opened again and only panned', async () => {
+    const repository = await IndexedDbRepository.open();
+    const future = { ...documentWith('From the future'), metadata: { ...documentWith('From the future').metadata, createdAt: 1e15, updatedAt: 1e15 } };
+    await repository.save(future);
+    await repository.load(future.metadata.id);
+    const repaired = (await repository.list())[0]!;
+
+    // Something else is edited afterwards, so it is the most recent.
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    const later = { ...documentWith('Edited after'), metadata: { ...documentWith('Edited after').metadata, updatedAt: Date.now() } };
+    await repository.save(later);
+    await new Promise((resolve) => setTimeout(resolve, 15));
+
+    // Opened again: the dates it was given the first time, not this moment's.
+    const reopened = (await repository.load(future.metadata.id))!;
+    expect(reopened.metadata.updatedAt).toBe(repaired.updatedAt);
+    expect(reopened.metadata.createdAt).toBe(repaired.createdAt);
+
+    // Looked at and panned: a write of the camera alone, which carries the diagram's dates as they are.
+    await repository.save({ ...reopened, viewport: { x: 40, y: 20, zoom: 1 } });
+    const list = await repository.list();
+    expect(list.map((entry) => entry.title)).toEqual(['Edited after', 'From the future']);
+    expect(list[1]!.updatedAt).toBe(repaired.updatedAt);
+    // And that write put the stored diagram's own dates right, so later opens need no special care.
+    expect((await repository.load(future.metadata.id))!.metadata.updatedAt).toBe(repaired.updatedAt);
+  });
+
+  it('putting a stored date right writes the summary’s dates and leaves the stored diagram as it was', async () => {
+    const repository = await IndexedDbRepository.open();
+    // A date years ahead, and something else a load repairs: a connector to a shape that is gone.
+    const base = documentWith('From the future');
+    const dangling = createEdge({ source: base.nodes[0]!.id, target: 'gone' });
+    const future: DraftDocument = { ...base, edges: [dangling], metadata: { ...base.metadata, createdAt: 1e15, updatedAt: 1e15 } };
+    await repository.save(future);
+    const bodyBefore = JSON.stringify(await readRawBody(future.metadata.id));
+    expect(bodyBefore).toContain(dangling.id);
+    const summaryBefore = (await repository.list())[0]!;
+
+    const written: string[] = [];
+    const put = IDBObjectStore.prototype.put;
+    const spy = vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (this: IDBObjectStore, ...args: Parameters<typeof put>) {
+      written.push(this.name);
+      return put.apply(this, args);
+    });
+    const opened = await repository.load(future.metadata.id);
+    spy.mockRestore();
+
+    // In memory the connector is repaired away, to be kept on the next edit, as the person is told.
+    expect(opened!.edges).toHaveLength(0);
+    // In storage only the summary was written, and only its dates changed.
+    expect(written).toEqual(['documents']);
+    expect(JSON.stringify(await readRawBody(future.metadata.id))).toBe(bodyBefore);
+    const summaryAfter = (await repository.list())[0]!;
+    expect(summaryAfter.updatedAt).toBeLessThanOrEqual(Date.now());
+    expect({ ...summaryAfter, createdAt: 0, updatedAt: 0 }).toEqual({ ...summaryBefore, createdAt: 0, updatedAt: 0 });
+  });
+
+  it('opening a diagram with ordinary dates writes nothing', async () => {
+    const repository = await IndexedDbRepository.open();
+    const doc = { ...documentWith('Ordinary'), metadata: { ...documentWith('Ordinary').metadata, createdAt: 1000, updatedAt: 2000 } };
+    await repository.save(doc);
+    const put = vi.spyOn(IDBObjectStore.prototype, 'put');
+    await repository.load(doc.metadata.id);
+    expect(put).not.toHaveBeenCalled();
+    put.mockRestore();
   });
 
   it('deletes a document and its contents together', async () => {
@@ -529,113 +634,32 @@ describe('local persistence', () => {
   });
 });
 
-/** Phase 5.1 — one background image blob per document, in its own store. */
-describe.each([
-  ['IndexedDbRepository', () => IndexedDbRepository.open()],
-  ['MemoryRepository', () => Promise.resolve(new MemoryRepository())],
-])('background image storage (%s)', (_name, open) => {
-  /** Pruning spares an image stored in the last day (another tab may be about to name it); these
-   *  tests prune as if that day had passed. */
-  const aDayLater = () => vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 25 * 60 * 60 * 1000);
-  afterEach(() => vi.restoreAllMocks());
-
-  it('spares an image another tab stored moments ago, even though nothing on disk names it yet', async () => {
-    const repository = await open();
-    if (!(repository instanceof IndexedDbRepository)) return; // one tab only: nothing else can be about to name it
-    await repository.saveBackgroundImage('d_fresh', new Blob(['x'], { type: 'image/png' }), { width: 1, height: 1 }, 'bg_new');
-    await repository.pruneBackgroundImages('d_fresh', null);
-    expect(await repository.loadBackgroundImage('d_fresh', 'bg_new')).not.toBeNull();
-    aDayLater();
-    await repository.pruneBackgroundImages('d_fresh', null);
-    expect(await repository.loadBackgroundImage('d_fresh', 'bg_new')).toBeNull();
+/** Background images are gone. The store they were kept in stays, for a build from before that. */
+it('empties the retired background image store on open, and leaves every diagram as it was', async () => {
+  const repository = await IndexedDbRepository.open();
+  const doc = documentWith('Had a backdrop', 2);
+  await repository.save(doc);
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('draft-canvas');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('backgroundImages', 'readwrite');
+    tx.objectStore('backgroundImages').put({ id: doc.metadata.id, blob: new Blob(['x']), mimeType: 'image/png', width: 1, height: 1 });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 
-  it("removing or pruning a document never touches another document's images whose id extends it with #", async () => {
-    const repository = await open();
-    const dims = { width: 10, height: 10 };
-    const image = () => new Blob(['x'], { type: 'image/png' });
-    await repository.saveBackgroundImage('d_x', image(), dims, 'bg_a');
-    await repository.saveBackgroundImage('d_x#1', image(), dims, 'bg_b');
-
-    aDayLater();
-    await repository.pruneBackgroundImages('d_x', null);
-    expect(await repository.loadBackgroundImage('d_x', 'bg_a')).toBeNull();
-    expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
-
-    await repository.saveBackgroundImage('d_x', image(), dims, 'bg_c');
-    await repository.remove('d_x');
-    expect(await repository.loadBackgroundImage('d_x', 'bg_c')).toBeNull();
-    expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
+  const reopened = await IndexedDbRepository.open();
+  const left = await new Promise<unknown[]>((resolve, reject) => {
+    const request = db.transaction('backgroundImages').objectStore('backgroundImages').getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
-
-  it('round-trips a saved image', async () => {
-    const repository = await open();
-    const doc = documentWith('With background');
-    await repository.save(doc);
-    const blob = new Blob(['fake-image-bytes'], { type: 'image/png' });
-
-    await repository.saveBackgroundImage(doc.metadata.id, blob, { width: 200, height: 100 });
-    const loaded = await repository.loadBackgroundImage(doc.metadata.id);
-
-    expect(loaded).not.toBeNull();
-    expect(loaded!.width).toBe(200);
-    expect(loaded!.height).toBe(100);
-    expect(loaded!.blob.type).toBe('image/png');
-  });
-
-  it('keeps each chosen image under its own id, and prunes all but the one showing', async () => {
-    const repository = await open();
-    const doc = documentWith('Replaced background');
-    await repository.save(doc);
-    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['legacy']), { width: 1, height: 1 });
-    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['first']), { width: 2, height: 2 }, 'bg_a');
-    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['second']), { width: 3, height: 3 }, 'bg_b');
-    const other = documentWith('Untouched');
-    await repository.saveBackgroundImage(other.metadata.id, new Blob(['other']), { width: 4, height: 4 });
-
-    // Undo of a replace reads the previous id — its bytes are still there.
-    expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_a'))!.width).toBe(2);
-    expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_b'))!.width).toBe(3);
-
-    aDayLater();
-    await repository.pruneBackgroundImages(doc.metadata.id, { imageId: 'bg_b' });
-    expect(await repository.loadBackgroundImage(doc.metadata.id)).toBeNull();
-    expect(await repository.loadBackgroundImage(doc.metadata.id, 'bg_a')).toBeNull();
-    expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_b'))!.width).toBe(3);
-    expect((await repository.loadBackgroundImage(other.metadata.id))!.width).toBe(4);
-
-    await repository.remove(doc.metadata.id);
-    expect(await repository.loadBackgroundImage(doc.metadata.id, 'bg_b')).toBeNull();
-    expect((await repository.loadBackgroundImage(other.metadata.id))!.width).toBe(4);
-  });
-
-  it('returns null when no background image is stored', async () => {
-    const repository = await open();
-    expect(await repository.loadBackgroundImage('no-such-document')).toBeNull();
-  });
-
-  it('removing a background image clears it independently of the document', async () => {
-    const repository = await open();
-    const doc = documentWith('Removable background');
-    await repository.save(doc);
-    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['x']), { width: 10, height: 10 });
-
-    await repository.removeBackgroundImage(doc.metadata.id);
-
-    expect(await repository.loadBackgroundImage(doc.metadata.id)).toBeNull();
-    expect(await repository.load(doc.metadata.id)).not.toBeNull();
-  });
-
-  it('deleting the document also clears its background image', async () => {
-    const repository = await open();
-    const doc = documentWith('Deleted with background');
-    await repository.save(doc);
-    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['x']), { width: 10, height: 10 });
-
-    await repository.remove(doc.metadata.id);
-
-    expect(await repository.loadBackgroundImage(doc.metadata.id)).toBeNull();
-  });
+  db.close();
+  expect(left).toEqual([]);
+  expect((await reopened.load(doc.metadata.id))!.nodes).toHaveLength(2);
 });
 
 /** Projects — a flat, optional grouping of canvases. See `document/types.ts`'s `Project`. */

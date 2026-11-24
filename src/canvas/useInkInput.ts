@@ -1,5 +1,5 @@
 import { useEffect, type RefObject } from 'react';
-import { useStoreApi } from '@xyflow/react';
+import { useReactFlowStoreApi } from '@xyflow/react';
 import { inkOf, inkPaintBounds } from '../document/ink';
 import type { DraftInk } from '../document/types';
 import { buildStroke, type InkSample } from '../ink/capture';
@@ -46,7 +46,7 @@ interface Active {
  * once per frame into one live path — a stroke in progress never renders a component.
  */
 export function useInkInput(paneRef: RefObject<HTMLDivElement | null>, enabled: boolean): void {
-  const storeApi = useStoreApi();
+  const { optionsStore, viewportStore } = useReactFlowStoreApi();
   const theme = useThemeValue();
   const themeName = theme.name;
 
@@ -57,7 +57,7 @@ export function useInkInput(paneRef: RefObject<HTMLDivElement | null>, enabled: 
     if (useUiStore.getState().inkPrefs.smart) warmSmartInk();
 
     const flowPoint = (event: PointerEvent, state: Active): InkSample => {
-      const [tx, ty, zoom] = storeApi.getState().transform;
+      const [tx, ty, zoom] = viewportStore.getState().transform;
       return {
         x: (event.clientX - state.rect.left - tx) / zoom,
         y: (event.clientY - state.rect.top - ty) / zoom,
@@ -200,8 +200,8 @@ export function useInkInput(paneRef: RefObject<HTMLDivElement | null>, enabled: 
       // `preventDefault`, focus stayed on the toolbar button that picked the Pencil up, and the next
       // key (E for the eraser, Escape) went to that button instead of the canvas.
       if (document.activeElement !== pane) pane.focus({ preventScroll: true });
-      const [, , zoom] = storeApi.getState().transform;
-      const rect = (storeApi.getState().domNode ?? pane).getBoundingClientRect();
+      const [, , zoom] = viewportStore.getState().transform;
+      const rect = (optionsStore.getState().domNode ?? pane).getBoundingClientRect();
       active = {
         pointerId: event.pointerId,
         tool: eraserEnd ? 'eraser' : tool,
@@ -282,5 +282,5 @@ export function useInkInput(paneRef: RefObject<HTMLDivElement | null>, enabled: 
       finish(active !== null && active.tool !== 'eraser' && active.samples.length > 1);
       flushSmartInk();
     };
-  }, [enabled, paneRef, storeApi, themeName]);
+  }, [enabled, paneRef, optionsStore, viewportStore, themeName]);
 }

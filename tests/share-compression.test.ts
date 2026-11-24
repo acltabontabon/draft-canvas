@@ -70,6 +70,51 @@ describe('compact sharing', () => {
     expect(serializeDocument(file)).toBe(before);
   });
 
+  it('keeps each lifeline pointing at the shape it stands for, in the room it is in', () => {
+    const sequenceFor = (shapeId: string) => ({
+      ...createNode({ type: 'sequence', x: 0, y: 300, text: 'Checkout' }),
+      sequence: { participants: [{ id: 'p1', name: 'API', type: 'service' as const, serviceKind: 'generic' as const, ref: shapeId }, { id: 'p2', name: 'Gone', type: 'service' as const, serviceKind: 'generic' as const, ref: 'deleted-long-ago' }], items: [] },
+    });
+    const file = createDocument('Shop');
+    const api = createNode({ type: 'service', x: 0, y: 0, text: 'API' });
+    const handler = createNode({ type: 'service', x: 0, y: 0, text: 'Handler' });
+    api.inside = { nodes: [handler, sequenceFor(handler.id)], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+    file.nodes = [api, sequenceFor(api.id)];
+    const compact = compactShareSnapshot(JSON.stringify({ document: file })).document;
+    const [nextApi, nextSequence] = compact.nodes;
+    const [nextHandler, innerSequence] = nextApi!.inside!.nodes;
+    expect(nextApi!.id).not.toBe(api.id);
+    expect(nextSequence!.sequence!.participants[0]!.ref).toBe(nextApi!.id);
+    expect(innerSequence!.sequence!.participants[0]!.ref).toBe(nextHandler!.id);
+    // A link that already led nowhere is kept as it is, never pointed at something else.
+    expect(nextSequence!.sequence!.participants[1]!.ref).toBe('deleted-long-ago');
+  });
+
+  it('sharing an editable copy again never hands a deleted shape’s id to another shape', () => {
+    // An editable copy of a shared diagram keeps the short ids. Its first shape (`n_0`) was deleted
+    // since; the lifeline that stood for it still names it, and must go on naming nothing.
+    const file = createDocument('Shop');
+    const billing = { ...createNode({ type: 'service', x: 0, y: 0, text: 'Billing' }), id: 'n_1' };
+    const sequence = {
+      ...createNode({ type: 'sequence', x: 0, y: 300, text: 'Checkout' }),
+      id: 'n_2',
+      sequence: {
+        participants: [
+          { id: 'p1', name: 'Deleted API', type: 'service' as const, serviceKind: 'generic' as const, ref: 'n_0' },
+          { id: 'p2', name: 'Billing', type: 'service' as const, serviceKind: 'generic' as const, ref: 'n_1' },
+        ],
+        items: [],
+      },
+    };
+    file.nodes = [billing, sequence];
+    const compact = compactShareSnapshot(JSON.stringify({ document: file })).document;
+    const [nextBilling, nextSequence] = compact.nodes;
+    const [orphan, linked] = nextSequence!.sequence!.participants;
+    expect(linked!.ref).toBe(nextBilling!.id);
+    expect(orphan!.ref).toBe('n_0');
+    expect(compact.nodes.map((node) => node.id)).not.toContain('n_0');
+  });
+
   it('makes a substantial reduction on a large diagram and still opens every shape and connection', async () => {
     const file = createDocument('System overview');
     file.nodes = Array.from({ length: 150 }, (_, i) => createNode({ type: i % 3 ? 'service' : 'database', x: i % 10 * 240, y: Math.floor(i / 10) * 160, text: `Component ${i}` }));

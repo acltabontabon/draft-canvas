@@ -223,6 +223,8 @@ function linesOf(
   const nextMemo = memoize ? new Map<string, { key: string; lines: Line[] }>() : null;
 
   for (const edge of edges) {
+    // A portal draws no line across the diagram: nothing crosses it, and it bridges nothing.
+    if (edge.portal) continue;
     // The same inputs, and so the same routes, the canvas draws (`edgeRoutes.ts`).
     const inputs = connectorRouteInputs(edge, { nodes, edges }, scope, nodeById, {}, obstacleNodes);
     if (!inputs) continue;

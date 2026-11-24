@@ -1,0 +1,56 @@
+WEBVTT
+
+00:00:00.500 --> 00:00:03.310
+Someone in the meeting just asked a question.
+
+00:00:03.400 --> 00:00:06.210
+What happens when someone places an order?
+
+00:00:06.500 --> 00:00:13.150
+Silence. So you draw it. A request hits a service. The service writes it down. Easy!
+
+00:00:13.300 --> 00:00:19.435
+This is Draft Canvas. A diagramming tool for people who build software, and then have to explain it.
+
+00:00:20.600 --> 00:00:24.359
+Call it a topic, and boom! The arrow becomes an event.
+
+00:00:26.000 --> 00:00:32.010
+Add a queue, and it is already suggesting the worker. It knows. It always knows.
+
+00:00:32.200 --> 00:00:38.210
+Tell it Postgres, Stripe, Kafka. It knows exactly what each one is, logo and all.
+
+00:00:41.300 --> 00:00:43.630
+Now stop drawing, and follow it.
+
+00:00:46.500 --> 00:00:49.470
+One order, from the very first request,
+
+00:00:51.800 --> 00:00:54.290
+all the way to the last notification.
+
+00:00:55.100 --> 00:00:59.190
+Want that as a sequence diagram? One command. Done.
+
+00:01:01.900 --> 00:01:06.950
+Crack open a service, and look inside. C4 levels, all the way down.
+
+00:01:08.400 --> 00:01:14.570
+Take the email provider down. Go on! See what breaks, and what shrugs it off.
+
+00:01:14.300 --> 00:01:19.510
+And where your drawing has no answer, it asks. Rude! But fair.
+
+00:01:19.700 --> 00:01:26.003
+Or hand it to your own AI agent, right from the terminal. It reads the diagram, and fixes it.
+
+00:01:26.700 --> 00:01:30.772
+And bring the whole meeting in. One link. No accounts.
+
+00:01:35.400 --> 00:01:42.050
+And just like that, the system that lived in five different heads is one picture everyone can read.
+
+00:01:43.300 --> 00:01:47.382
+Draft Canvas. For meetings that suddenly need a diagram.
+

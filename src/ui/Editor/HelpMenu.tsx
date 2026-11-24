@@ -38,21 +38,22 @@ export function HistoryControls() {
 }
 
 /**
- * Canvas settings — drawing style, next-shape suggestions and the diagram's background — one click from
- * the corner where the app's other controls are; on the desktop, Settings opens at its Canvas page.
- * A right-click on the canvas and ⌘K reach it too, but neither is where anyone looks for settings.
+ * Appearance, one click from the corner where the app's other controls are: your style, the canvas
+ * and its settings, in the panel beside the diagram. Pressed while that panel is open, and pressing
+ * it again closes it. A right-click on the canvas and ⌘K reach it too, but neither is where anyone
+ * looks first.
  */
 export function CanvasSettingsButton() {
-  const open = useUiStore((state) => state.settingsOpen);
+  const open = useUiStore((state) => state.stylePanelOpen);
   return (
     <Tooltip content={toolbarTooltip('settings')}>
       {(tip) => (
         <Button
-          icon="sliders"
+          icon="palette"
           variant="quiet"
           active={open}
-          aria-haspopup="dialog"
-          onClick={() => useUiStore.getState().setSettingsOpen(true)}
+          aria-pressed={open}
+          onClick={() => useUiStore.getState().setStylePanelOpen(!open)}
           aria-label={toolbarLabel('settings')}
           {...tip}
         />
@@ -66,7 +67,7 @@ export function CanvasSettingsButton() {
  * and About — which carries the dot when an update is ready or there is something new, so the "?"
  * carries it too. These used to sit behind a ⋯ in the header, beside things that act on the
  * diagram; the canvas's own actions (Arrange, Find and replace) are now a right-click on the canvas
- * away, and in ⌘K, and Canvas settings has its own button beside this one.
+ * away, and in ⌘K, and Appearance has its own button beside this one.
  */
 export function HelpMenu() {
   const ref = useRef<HTMLButtonElement>(null);

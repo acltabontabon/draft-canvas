@@ -6,7 +6,8 @@
       "type": "object",
       "properties": {
         "tool": {
-          "type": "string"
+          "type": "string",
+          "description": "Operation name, or \"help\"."
         },
         "args": {
           "type": "object"

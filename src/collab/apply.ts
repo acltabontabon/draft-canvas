@@ -24,6 +24,7 @@ import { LIMITS } from '../document/limits';
 import { insideHeight } from '../document/operations';
 import { withInk } from '../document/ink';
 import type { DraftDocument, DraftEdge, DraftFlow, DraftInk, DraftNode, DraftSettings, OpenPoint, ViewLevel } from '../document/types';
+import type { DocumentStyle } from '../document/style';
 import { CAN_HOLD_INSIDE } from '../document/validate';
 import type { Change, Collection, NodeValue, RoomId } from './changes';
 import { COLLECTION_OF, elementsOf, indexOf, itemsOf, pathOf, type FileIndex } from './fileIndex';
@@ -279,6 +280,7 @@ export function reorder<T extends { id: string }>(items: T[], ids: readonly stri
 function applyFileFields(file: DraftDocument, changes: readonly Change[]): DraftDocument {
   let title: string | undefined;
   let settings: DraftSettings | undefined;
+  let style: DocumentStyle | null | undefined;
   const points: ElementPlan<OpenPoint> = { set: new Map(), added: [] };
   let pointOrder: string[] | undefined;
   const known = new Set(file.openPoints.map((point) => point.id));
@@ -286,6 +288,7 @@ function applyFileFields(file: DraftDocument, changes: readonly Change[]): Draft
   for (const change of changes) {
     if (change.kind === 'title') title = change.value;
     else if (change.kind === 'settings') settings = change.value;
+    else if (change.kind === 'style') style = change.value;
     else if (change.kind === 'order' && change.collection === 'points') pointOrder = change.ids;
     else if (change.kind === 'point') {
       if (!known.has(change.id) && change.value === null) continue;
@@ -296,11 +299,11 @@ function applyFileFields(file: DraftDocument, changes: readonly Change[]): Draft
 
   let next = file;
   if (title !== undefined && title !== file.metadata.title) next = { ...next, metadata: { ...next.metadata, title } };
-  if (settings !== undefined) {
-    // An embedded image never travels (`wireSettings`); a copy that has one keeps it.
-    const image = file.settings.background.image;
-    next = { ...next, settings: image === undefined ? settings : { ...settings, background: { ...settings.background, image } } };
-  }
+  if (settings !== undefined) next = { ...next, settings };
+  if (style === null && next.style !== undefined) {
+    const { style: _style, ...rest } = next;
+    next = rest;
+  } else if (style) next = { ...next, style };
   const openPoints = reorder(
     applyElements(file.openPoints, points, new Map([...known].map((id) => [id, true])), (_current, value) => value),
     pointOrder,

@@ -1903,6 +1903,13 @@ kbd {
   font-weight: 500;
 }
 
+/* Present will walk the selection: the button takes the selection's own colour, the one the
+   chosen shapes are ringed in, so the two read as one thing. It has to hold at the widths where
+   the words are folded away and only the glyph is left to say so. */
+.dc-story-play[data-presents='selection'] {
+  color: var(--dc-selection);
+}
+
 .dc-flow-toggle-sep {
   color: var(--dc-text-faint);
 }
@@ -2138,6 +2145,34 @@ kbd {
   flex: none;
   align-items: center;
   gap: 10px;
+}
+
+/* Which flow the arrangement follows: a quiet native menu, so a long flow name never widens the bar
+   past what its own text needs. */
+.dc-arrange-bar-follow {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}
+
+.dc-arrange-bar-follow select {
+  max-width: 14em;
+  height: 26px;
+  padding: 0 6px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface);
+  color: var(--dc-text);
+  font: inherit;
+  text-overflow: ellipsis;
+}
+
+.dc-arrange-bar-follow select:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
 }
 
 /* What a preview did not do or leaves alone (stopped early, one direction, sketches that stay): one
@@ -2796,27 +2831,27 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
  * way into near-white is no longer a plane. Distance still fades, from a higher floor, and the
  * lines the planes rest on are drawn at full strength.
  */
-:where(:root[data-theme='light']) .dc-depth {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth {
   --dc-depth-line: var(--dc-border-strong);
 }
 
-:where(:root[data-theme='light']) .dc-depth-plate .dc-fingerprint {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth-plate .dc-fingerprint {
   border-color: color-mix(in srgb, var(--dc-plate-line) calc(var(--fade) * 100%), var(--dc-text-muted));
 }
 
-:where(:root[data-theme='light']) .dc-depth-layer .dc-fingerprint {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth-layer .dc-fingerprint {
   --fade: calc(0.95 - var(--dist, 1) * 0.1);
 }
 
-:where(:root[data-theme='light']) .dc-depth-plate-name {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth-plate-name {
   opacity: calc(1.08 - var(--dist, 1) * 0.08);
 }
 
-:where(:root[data-theme='light']) .dc-depth-room[data-kind='beside'] .dc-fingerprint {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth-room[data-kind='beside'] .dc-fingerprint {
   --fade: 0.75;
 }
 
-:where(:root[data-theme='light']) .dc-depth-room[data-kind='beside'] .dc-depth-room-name {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth-room[data-kind='beside'] .dc-depth-room-name {
   color: var(--dc-text-muted);
 }
 
@@ -3313,6 +3348,14 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
 .dc-explain-flow-pick[aria-expanded='true'] {
   border-color: var(--dc-border);
   background: var(--dc-surface-hover);
+}
+
+/* A walk with no saved flow to switch to: the same seat, as a name instead of a menu. */
+.dc-explain-flow-name,
+.dc-explain-flow-name:hover {
+  border-color: transparent;
+  background: none;
+  cursor: default;
 }
 
 .dc-explain-flow-pick > svg {
@@ -6391,13 +6434,13 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   margin-left: auto;
   }
 
-  /* The cluster already fills a phone's bar; the Traffic chip pushed it over "Saved locally", and the
+  /* The cluster already fills a phone's bar; the Outage chip pushed it over "Saved locally", and the
      open-points and level chips would do the same. All three stay reachable from the canvas menu and
-     ⌘K (Traffic, Open points, View level…). */
+     ⌘K (Outage, Open points, View level…). */
   .dc-status-hint,
   .dc-status-right > .dc-muted,
   .dc-status-right > .dc-inspector-divider,
-  .dc-status-right > button.dc-status-traffic,
+  .dc-status-right > button.dc-status-outage,
   .dc-status-right > button.dc-status-open-points,
   .dc-status-right > button.dc-status-level {
   display: none;
@@ -6805,11 +6848,11 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   font-size: 10.5px;
 }
 
-/* --------------------------------------------------------------- traffic -- */
+/* ---------------------------------------------------------------- outage -- */
 
-/* The status bar's way into traffic — the open-points chip's treatment, with a glyph of three lines
-   meeting at a point: where paths converge. Pressed while traffic shows. */
-button.dc-status-traffic {
+/* The status bar's way into an outage walk — the open-points chip's treatment, with a glyph of a
+   line broken in the middle. Pressed while the walk is open. */
+button.dc-status-outage {
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -6823,24 +6866,25 @@ button.dc-status-traffic {
   cursor: pointer;
 }
 
-button.dc-status-traffic:hover,
-button.dc-status-traffic:focus-visible,
-button.dc-status-traffic[aria-pressed='true'] {
+button.dc-status-outage:hover,
+button.dc-status-outage:focus-visible,
+button.dc-status-outage[aria-pressed='true'] {
   color: var(--dc-text);
 }
 
-.dc-status-traffic-glyph {
+.dc-status-outage-glyph {
   position: relative;
   display: inline-block;
-  width: 10px;
+  width: 11px;
   height: 9px;
   background:
-    linear-gradient(to bottom right, transparent calc(50% - 0.7px), currentColor calc(50% - 0.7px), currentColor calc(50% + 0.7px), transparent calc(50% + 0.7px)) left top / 50% 50% no-repeat,
-    linear-gradient(to top right, transparent calc(50% - 0.7px), currentColor calc(50% - 0.7px), currentColor calc(50% + 0.7px), transparent calc(50% + 0.7px)) left bottom / 50% 50% no-repeat,
-    linear-gradient(currentColor, currentColor) left center / 100% 1.4px no-repeat;
+    linear-gradient(currentColor, currentColor) left center / 3.5px 1.4px no-repeat,
+    linear-gradient(currentColor, currentColor) right center / 3.5px 1.4px no-repeat,
+    linear-gradient(to bottom right, transparent calc(50% - 0.7px), currentColor calc(50% - 0.7px), currentColor calc(50% + 0.7px), transparent calc(50% + 0.7px)) center / 5px 5px no-repeat,
+    linear-gradient(to top right, transparent calc(50% - 0.7px), currentColor calc(50% - 0.7px), currentColor calc(50% + 0.7px), transparent calc(50% + 0.7px)) center / 5px 5px no-repeat;
 }
 
-button.dc-status-traffic[aria-pressed='true'] .dc-status-traffic-glyph {
+button.dc-status-outage[aria-pressed='true'] .dc-status-outage-glyph {
   color: var(--dc-selection);
 }
 
@@ -7427,7 +7471,7 @@ button.dc-open-points-main:focus-visible .dc-open-points-kind {
 
   .dc-status .dc-button,
   .dc-status button.dc-zoom-value,
-  .dc-status button.dc-status-traffic,
+  .dc-status button.dc-status-outage,
   .dc-status button.dc-status-open-points,
   .dc-status button.dc-status-level {
     min-height: 40px;

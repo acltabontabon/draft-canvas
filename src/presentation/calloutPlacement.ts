@@ -44,6 +44,12 @@ export interface CalloutPlacementInput {
   current?: CalloutPlacementName;
   /** The flow bar, for the docked fallback. */
   dockTo?: Box | null;
+  /**
+   * `soft` is every element on the canvas, not just those within `calloutReach`: a docked callout
+   * may then slide along its line to the nearest spot that covers none of them. Off by default,
+   * since a caller that trims `soft` to the reach knows nothing about what lies under the dock.
+   */
+  softIsWhole?: boolean;
 }
 
 export interface CalloutLeader {
@@ -256,6 +262,28 @@ function evaluate(name: CalloutPlacementName, input: CalloutPlacementInput): Eva
   return { name, rect, leader, hard, soft, length: leaderLength(leader) };
 }
 
+/**
+ * Where along its line a docked callout covers nothing, nearest to `centred`; `centred` itself when
+ * no such spot exists. The dock is the fallback for a canvas with no room beside the marker, and at
+ * the centre it sat on whatever shape reached down that far: a taller shape in the middle of a row
+ * had its captions covered while the space beside it stood empty. Only a step just past a covered
+ * shape's own side can be the nearest clear spot, so those are the only ones tried.
+ */
+function clearAlongDock(centred: number, y: number, height: number, minX: number, maxX: number, input: CalloutPlacementInput): number {
+  const { size, soft, exclusions } = input;
+  const inRow = [...soft, ...exclusions].filter((box) => box.y < y + height && box.y + box.height > y);
+  const covered = (x: number) => inRow.some((box) => box.x < x + size.width && box.x + box.width > x);
+  if (!covered(centred)) return centred;
+  let best: number | undefined;
+  for (const box of inRow) {
+    for (const x of [box.x - CALLOUT_GAP - size.width, box.x + box.width + CALLOUT_GAP]) {
+      if (x < minX || x > maxX || covered(x)) continue;
+      if (best === undefined || Math.abs(x - centred) < Math.abs(best - centred)) best = x;
+    }
+  }
+  return best ?? centred;
+}
+
 function docked(input: CalloutPlacementInput): CalloutPlacement {
   const { bounds, size, dockTo } = input;
   const centerX = dockTo ? dockTo.x + dockTo.width / 2 : bounds.x + bounds.width / 2;
@@ -264,10 +292,14 @@ function docked(input: CalloutPlacementInput): CalloutPlacement {
   const floor = dockTo ? dockTo.y - DOCK_GAP : bounds.y + bounds.height;
   const room = Math.max(0, floor - bounds.y);
   const height = Math.min(size.height, room);
+  const minX = bounds.x;
+  const maxX = Math.max(bounds.x, bounds.x + bounds.width - size.width);
+  const y = floor - height;
+  const centred = clamp(centerX - size.width / 2, minX, maxX);
   return {
     placement: 'docked',
-    x: clamp(centerX - size.width / 2, bounds.x, Math.max(bounds.x, bounds.x + bounds.width - size.width)),
-    y: floor - height,
+    x: input.softIsWhole ? clearAlongDock(centred, y, height, minX, maxX, input) : centred,
+    y,
     leader: null,
     ...(size.height > room ? { maxHeight: room } : {}),
   };

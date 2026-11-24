@@ -25,14 +25,14 @@ test.describe('narrow windows', () => {
       // The chips that earn no room on a phone: stand-ins carry exactly the classes the real ones do,
       // so the rule is exercised without drawing a runtime connector, an open point and a C4 level.
       await page.locator('.dc-status-right').evaluate((right) => {
-        for (const name of ['dc-status-traffic', 'dc-status-open-points', 'dc-status-level']) {
+        for (const name of ['dc-status-outage', 'dc-status-open-points', 'dc-status-level']) {
           const chip = document.createElement('button');
           chip.className = name;
           chip.textContent = name;
           right.prepend(chip);
         }
       });
-      for (const name of ['dc-status-traffic', 'dc-status-open-points', 'dc-status-level']) {
+      for (const name of ['dc-status-outage', 'dc-status-open-points', 'dc-status-level']) {
         await expect(page.locator(`.dc-status-right > button.${name}`)).toBeHidden();
       }
       const bar = await page.locator('.dc-status').evaluate((element) => {
@@ -64,28 +64,22 @@ test.describe('narrow windows', () => {
 });
 
 test.describe('keyboard and assistive technology', () => {
-  test('Tab onto the canvas shows where focus is, as an inset ring that moves nothing', async ({ page }) => {
+  test('Tab onto the canvas draws no border round it, and moves nothing', async ({ page }) => {
     await newCanvas(page, 'Canvas focus ring');
     const canvas = page.locator('.dc-canvas');
     // From the title field, so the last input was the keyboard and `:focus-visible` applies.
     await page.getByLabel('Diagram title').focus();
     await page.keyboard.press('Shift+Tab');
-    // Measured here, with the title field settled and just before the canvas takes focus: the ring is
-    // what must move nothing. Taken any earlier it caught the toolbar still settling by 0.015px on
-    // Firefox, which is not the ring's doing.
+    // Measured here, with the title field settled and just before the canvas takes focus. Taken any
+    // earlier it caught the toolbar still settling by 0.015px on Firefox, which is not focus's doing.
     const before = await canvas.boundingBox();
     await canvas.focus();
     await expect(canvas).toBeFocused();
-    // The ring keys on `:focus-visible`, and whether an engine treats scripted focus after a key press
-    // as keyboard focus is its own call; where it does not there is no ring to measure.
-    if (await canvas.evaluate((element) => element.matches(':focus-visible'))) {
-      await expect(canvas).toHaveCSS('outline-style', 'solid');
-      await expect(canvas).toHaveCSS('outline-width', '2px');
-      await expect(canvas).toHaveCSS('outline-offset', '-2px');
-    } else {
-      test.info().annotations.push({ type: 'note', description: 'This engine did not mark the script-focused canvas :focus-visible.' });
-    }
-    // Within half a pixel, not exactly: a ring that took room would move the box by its own width (2px).
+    // Keyboard focus used to draw an inset ring here. It held for as long as the last input was a
+    // key — and tools are keys — so it read as a border round the canvas, and is gone: neither that
+    // ring nor the browser's own.
+    await expect(canvas).toHaveCSS('outline-style', 'none');
+    // Within half a pixel, not exactly.
     const after = (await canvas.boundingBox())!;
     for (const key of ['x', 'y', 'width', 'height'] as const) expect(Math.abs(after[key] - before![key]), key).toBeLessThan(0.5);
   });
@@ -146,7 +140,7 @@ test.describe('a coarse pointer', () => {
       page.locator(selector).evaluateAll((elements) =>
         elements.filter((element) => getComputedStyle(element).display !== 'none').map((element) => Math.round(element.getBoundingClientRect().height)),
       );
-    // The status bar: Undo, Redo, zoom out / in and the percentage, Canvas settings, Help.
+    // The status bar: Undo, Redo, zoom out / in and the percentage, Appearance, Help.
     const status = await heights('.dc-status .dc-status-right button');
     expect(status.length).toBeGreaterThanOrEqual(6);
     for (const height of status) expect(height).toBeGreaterThanOrEqual(40);
@@ -176,4 +170,38 @@ test('a mouse keeps the compact chrome at any width', async ({ page }) => {
   await page.locator('.dc-node').first().click();
   const undo = page.getByRole('button', { name: 'Undo' });
   expect((await undo.boundingBox())!.height).toBeLessThan(36);
+});
+
+test('the Add to canvas picker scrolls in a short window, and the keyboard’s row is always in view', async ({ page }) => {
+  // Four rows need about 195px; this window leaves the picker 160.
+  await page.setViewportSize({ width: 820, height: 260 });
+  await newCanvas(page, 'Short picker');
+  await page.locator('.react-flow__pane').dblclick({ position: { x: 300, y: 130 } });
+  const menu = page.locator('.dc-quick-connect');
+  await expect(menu).toBeVisible();
+  const rows = menu.locator('.dc-quick-connect-item');
+  // Wholly in view, give or take the fraction of a pixel the menu's own position is rounded by.
+  const SEEN = 0.97;
+  // Taller than the window allows: it stays inside the window and scrolls instead.
+  const box = (await menu.boundingBox())!;
+  expect(box.y).toBeGreaterThanOrEqual(0);
+  expect(box.y + box.height).toBeLessThanOrEqual(260);
+  expect(await menu.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+
+  // End highlights the last row; it was below the fold, and is now wholly visible with its label.
+  await expect(rows.last()).not.toBeInViewport({ ratio: SEEN });
+  await page.keyboard.press('End');
+  await expect(rows.last()).toHaveAttribute('data-highlighted', 'true');
+  await expect(rows.last()).toBeInViewport({ ratio: SEEN });
+  const last = (await rows.last().boundingBox())!;
+  expect(last.y + last.height).toBeLessThanOrEqual(box.y + box.height + 0.5);
+
+  await page.keyboard.press('Home');
+  await expect(rows.first()).toBeInViewport({ ratio: SEEN });
+  // One row at a time keeps up too, wrapping from the first row to the last.
+  await page.keyboard.press('ArrowUp');
+  await expect(rows.last()).toBeInViewport({ ratio: SEEN });
+  await page.keyboard.press('Enter');
+  await expect(menu).toBeHidden();
+  await expect(page.locator('.dc-node')).toHaveCount(1);
 });

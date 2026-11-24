@@ -20,7 +20,7 @@ import {
   ACCENTS,
   ACTOR_KINDS,
   ACTOR_FRAMES,
-  BACKGROUND_FITS,
+  ARTIFACT_KINDS,
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
   COMPONENT_KINDS,
@@ -46,7 +46,7 @@ import {
   type Accent,
   type ActorKind,
   type ActorFrame,
-  type BackgroundFit,
+  type ArtifactKind,
   type BoundaryPreset,
   type CodeLanguage,
   type ComponentKind,
@@ -63,7 +63,6 @@ import {
   type EdgeAnchor,
   type EdgeRouting,
   type EdgeSemantic,
-  type EmbeddedBackgroundImage,
   type GridMode,
   type QueueKind,
   type RouteMode,
@@ -84,6 +83,7 @@ import { isRecord } from '../lib/isRecord';
 import { normalizeOpenPointText, normalizeTargets, OPEN_POINT_ID_PREFIX } from './openPoints';
 import { normalizeSequence } from './validateSequence';
 import { INK_ID_PREFIX, parseInkStroke } from './ink';
+import { normalizeStyle } from './style';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
@@ -146,27 +146,6 @@ function parseWaypoints(value: unknown): DraftPoint[] | undefined {
     });
   }
   return points.length > 0 ? points : undefined;
-}
-
-/**
- * `settings.background.image`, when a file carries its backdrop inline (see
- * `EmbeddedBackgroundImage`). Anything but a base64 image data URI of an allowed size, with a
- * sensible natural size beside it, is dropped — "no image travelled" is the same state the file
- * would be in had the export left it out, and the canvas shows no background rather than failing.
- */
-function parseEmbeddedBackground(value: unknown): EmbeddedBackgroundImage | undefined {
-  if (!isRecord(value) || typeof value.dataUri !== 'string') return undefined;
-  // Strict base64 (whole four-character groups, padding only at the end): `atob` throws on
-  // anything looser such as "AAAAA" or "QQ=", and a damaged image must be dropped here rather than
-  // crash whoever decodes it later (a backup restore aborted on one).
-  const match = /^data:image\/[a-z0-9.+-]+;base64,((?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)$/i.exec(value.dataUri);
-  if (!match) return undefined;
-  // Decoded size, from the payload's length: three bytes for every four characters.
-  if (Math.floor((match[1]!.length * 3) / 4) > LIMITS.maxEmbeddedBackgroundBytes) return undefined;
-  const width = positiveIntOptional(value.width, 1, LIMITS.maxNodeSize);
-  const height = positiveIntOptional(value.height, 1, LIMITS.maxNodeSize);
-  if (width === undefined || height === undefined) return undefined;
-  return { dataUri: value.dataUri, width, height };
 }
 
 /** A starter id and a SHA-256, or nothing: anything else in `metadata.origin` is dropped. */
@@ -346,6 +325,11 @@ export function parseDocument(input: unknown): NormalizeResult {
   return normalizeDocument(migrated, repairs);
 }
 
+/** Whether `at` can be when something was made or edited: not later than a day from `now`. */
+export function isPlausibleDate(at: number, now = Date.now()): boolean {
+  return at <= now + 24 * 60 * 60 * 1000;
+}
+
 /**
  * Repairs and reshapes a raw value into a valid `DraftDocument` — does NOT
  * run schema migrations (see `migrateToCurrent` / `parseDocument`). Calling
@@ -370,7 +354,17 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
   const meta = isRecord(raw.metadata) ? raw.metadata : {};
   const now = Date.now();
-  const createdAt = finite(meta.createdAt, now);
+  // A date later than tomorrow is not one: a file dated years ahead (a wrong clock, or a hand-written
+  // number) stayed first in the library for good, because every edit's fresh `updatedAt` was raised
+  // back to it below on the next load. Such a date becomes now, not "tomorrow": a limit that moves
+  // with the clock would keep the file first on every load just the same. A day's grace covers a
+  // clock that is merely a time zone out. `storage/IndexedDbRepository.ts` writes the corrected
+  // dates back when it opens a row stored with one (`hasImplausibleDate`).
+  const dated = (value: unknown): number => {
+    const at = finite(value, now);
+    return isPlausibleDate(at, now) ? Math.max(0, at) : now;
+  };
+  const createdAt = dated(meta.createdAt);
 
   const rawNodes = Array.isArray(raw.nodes) ? raw.nodes : [];
   const rawEdges = Array.isArray(raw.edges) ? raw.edges : [];
@@ -504,9 +498,13 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     if (type === 'component') {
       node.componentKind = oneOf<ComponentKind>(candidate.componentKind, COMPONENT_KINDS, 'generic');
     }
+    if (type === 'artifact') {
+      node.artifactKind = oneOf<ArtifactKind>(candidate.artifactKind, ARTIFACT_KINDS, 'file');
+    }
     if (type === 'text' && candidate.annotation === true) {
       node.annotation = true;
     }
+    if (candidate.held === true) node.held = true;
     if (type === 'text') {
       const textRole = oneOfOptional<TextRole>(candidate.textRole, TEXT_ROLES);
       if (textRole !== undefined) node.textRole = textRole;
@@ -658,6 +656,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     if (condition) edge.condition = condition;
     const cadence = text(candidate.cadence, LIMITS.maxCadenceLength)?.trim();
     if (cadence) edge.cadence = cadence;
+    if (candidate.portal === true) edge.portal = true;
 
     const response = text(candidate.response, LIMITS.maxResponseLength)?.trim();
     if (response) edge.response = response;
@@ -810,7 +809,9 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       renamedFlows += 1;
     }
     seenFlowIds.add(id);
-    if (rawId) flowIdRemap.set(rawId, id);
+    // First claimant keeps the name, as for shapes and connectors: of two flows with one id the
+    // first keeps it, so that is the one another flow's `variantOf` means.
+    if (rawId && !flowIdRemap.has(rawId)) flowIdRemap.set(rawId, id);
     if (typeof candidateFlow.variantOf === 'string') pendingVariantOf.set(id, candidateFlow.variantOf);
     const title = text(candidateFlow.title, LIMITS.maxFlowTitleLength)?.trim() || 'Untitled flow';
     // Same discipline as a node/edge's own accent: absent or unrecognised
@@ -985,7 +986,8 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       if (seenPointIds.has(id)) id = createId(OPEN_POINT_ID_PREFIX);
       seenPointIds.add(id);
 
-      const point: OpenPoint = { id, kind, targets: normalizeTargets(targets) };
+      // Every readable target for now: the cap waits until the ones that lead nowhere are gone (below).
+      const point: OpenPoint = { id, kind, targets };
       const context = text(candidate.context, LIMITS.maxOpenPointContextLength);
       const normalizedContext = context === undefined ? '' : normalizeOpenPointText(context);
       if (normalizedContext) point.context = normalizedContext;
@@ -1004,7 +1006,6 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
   const viewportRaw = isRecord(raw.viewport) ? raw.viewport : {};
   const settingsRaw = isRecord(raw.settings) ? raw.settings : {};
-  const backgroundRaw = isRecord(settingsRaw.background) ? settingsRaw.background : {};
 
   const document: DraftDocument = {
     format: DRAFT_FORMAT,
@@ -1013,7 +1014,7 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       id: safeId(meta.id) ?? createId('d'),
       title: typeof meta.title === 'string' ? cleanTitle(meta.title) : DEFAULT_TITLE,
       createdAt,
-      updatedAt: Math.max(createdAt, finite(meta.updatedAt, now)),
+      updatedAt: Math.max(createdAt, dated(meta.updatedAt)),
       ...(safeId(meta.projectId) ? { projectId: safeId(meta.projectId)! } : {}),
       ...(originOf(meta.origin) ? { origin: originOf(meta.origin)! } : {}),
     },
@@ -1027,17 +1028,6 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     settings: {
       showSequence: settingsRaw.showSequence !== false,
       grid: oneOf<GridMode>(settingsRaw.grid, GRID_MODES, 'dots'),
-      background: {
-        enabled: backgroundRaw.enabled === true,
-        fit: oneOf<BackgroundFit>(backgroundRaw.fit, BACKGROUND_FITS, 'cover'),
-        dim: clamp(finite(backgroundRaw.dim, 0.55), 0, 1),
-        blur: clamp(finite(backgroundRaw.blur, 0), 0, 1),
-        ...(safeId(backgroundRaw.imageId) ? { imageId: safeId(backgroundRaw.imageId)! } : {}),
-        ...(() => {
-          const image = parseEmbeddedBackground(backgroundRaw.image);
-          return image === undefined ? {} : { image };
-        })(),
-      },
     },
     flows,
     ...(ink.length > 0 ? { ink } : {}),
@@ -1047,6 +1037,14 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     ...(() => {
       const level = oneOfOptional<ViewLevel>(raw.level, VIEW_LEVELS);
       return level === undefined ? {} : { level };
+    })(),
+    // The file's own look, read at the root only: a room is drawn the way its file is. Absent stays
+    // absent, which is what keeps an unstyled diagram following the device that opens it.
+    ...(() => {
+      if (!isRoot) return {};
+      const { style, repairs: styleRepairs } = normalizeStyle(raw.style);
+      repairs.push(...styleRepairs);
+      return style === undefined ? {} : { style };
     })(),
   };
 
@@ -1066,13 +1064,15 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     let orphanedPoints = 0;
     const survivingPoints: OpenPoint[] = [];
     for (const point of document.openPoints) {
-      const kept = point.targets.filter((target) => (target.kind === 'node' ? ctx.nodeIds : ctx.edgeIds).has(target.id));
-      strandedTargets += point.targets.length - kept.length;
-      if (kept.length === 0) {
+      const live = point.targets.filter((target) => (target.kind === 'node' ? ctx.nodeIds : ctx.edgeIds).has(target.id));
+      strandedTargets += point.targets.length - live.length;
+      if (live.length === 0) {
         orphanedPoints += 1;
         continue;
       }
-      if (kept.length !== point.targets.length) point.targets = kept;
+      // Capped after the dangling ones are out, not before: a point whose first forty attachments had
+      // all gone lost the one that was still there, and the point with it.
+      point.targets = normalizeTargets(live);
       survivingPoints.push(point);
     }
     if (survivingPoints.length !== document.openPoints.length) document.openPoints = survivingPoints;

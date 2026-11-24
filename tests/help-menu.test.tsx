@@ -19,7 +19,7 @@ beforeEach(() => {
   useEditorStore.setState({ history: { past: [], future: [] } });
   useUiStore.setState({
     armed: null,
-    settingsOpen: false,
+    stylePanelOpen: false,
     shortcutsOpen: false,
     aboutOpen: false,
     commandPaletteOpen: false,

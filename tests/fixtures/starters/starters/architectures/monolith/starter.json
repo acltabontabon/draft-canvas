@@ -2,26 +2,32 @@
   "id": "monolith",
   "name": "Monolith",
   "category": "architecture",
-  "summary": "One application, built and deployed as a unit",
+  "summary": "A clinic's booking site, staff screens and API in one Django app, deployed as one unit behind NGINX",
   "aliases": [
     "monolith",
     "monolithic",
     "single deployment",
     "one application",
-    "layered"
+    "layered",
+    "majestic monolith",
+    "django app",
+    "rails app"
   ],
   "tags": [
     "layered",
     "web app",
-    "single deployable"
+    "single deployable",
+    "stateless replicas"
   ],
   "useWhen": [
     "A new product or a small team, where one deployable keeps change cheap.",
-    "Explaining where a request goes before any of it is split out."
+    "Explaining where a request goes before any of it is split out.",
+    "Scaling by running more identical copies behind a load balancer."
   ],
   "watchOutFor": [
-    "Every change ships the whole application.",
-    "Layers blur over time unless their boundaries are kept on purpose."
+    "Every change ships the whole application, and one bad release takes everything down.",
+    "Slow calls inside a request, like sending a text, slow every user; move them to a job.",
+    "Module lines inside the codebase blur unless they are kept on purpose."
   ],
   "featured": true,
   "order": 10

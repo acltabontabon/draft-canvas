@@ -1,5 +1,6 @@
 import { getViewportForBounds, type Viewport } from '@xyflow/react';
 import type { Bounds } from '../../document/geometry';
+import { fitPadding } from '../../lib/fitPadding';
 
 /** The chip's size, for placing it beside the change before it has drawn (`desktop.css`). */
 export const CHIP_WIDTH = 300;
@@ -68,7 +69,7 @@ export function revealViewport(bounds: Bounds | null, transform: [number, number
   const [tx, ty, zoom] = transform;
   const m = REVEAL_MARGIN;
   if (bounds.width * zoom + 2 * m > free.width || bounds.height * zoom + 2 * m > free.height) {
-    return getViewportForBounds(bounds, free.width, free.height, 0.1, zoom, 0.2);
+    return getViewportForBounds(bounds, free.width, free.height, 0.1, zoom, fitPadding(0.2));
   }
   const left = bounds.x * zoom + tx;
   const right = (bounds.x + bounds.width) * zoom + tx;

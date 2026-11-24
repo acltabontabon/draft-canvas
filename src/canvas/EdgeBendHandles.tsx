@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useReactFlow, useStore } from '@xyflow/react';
+import { useReactFlow, useViewportStore } from '@xyflow/react';
 import type { DraftPoint, EdgeRouting } from '../document/types';
 import { flattenPath, type RoutedEdge } from '../edges/routing';
 import { LIMITS } from '../document/limits';
@@ -79,7 +79,7 @@ export function EdgeBendHandles({
   // Zoom decides only which runs are long enough on screen to carry a handle, so it's followed in
   // steps (a sixteenth of an octave — finer than anyone can see a run cross the threshold) rather
   // than every frame of a wheel or pinch zoom, which re-rendered this and re-walked the line each one.
-  const zoom = useStore((state) => quantizedZoom(state.transform[2]));
+  const zoom = useViewportStore((state) => quantizedZoom(state.transform[2]));
   const polyline = useMemo(
     () => route.points ?? (stepped ? stepPolyline(route.d) : [route.source, route.target]),
     [route, stepped],

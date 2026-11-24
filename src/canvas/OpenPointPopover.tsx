@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { useInternalNode, useStore } from '@xyflow/react';
+import { useInternalNode, useNodesStore } from '@xyflow/react';
 import { displayNameFor } from '../document/factory';
 import { OPEN_POINT_HINTS, OPEN_POINT_LABELS, normalizeOpenPointText, openPointsFor } from '../document/openPoints';
 import { OPEN_POINT_KINDS, type DraftDocument, type OpenPoint, type OpenPointKind, type OpenPointTarget } from '../document/types';
@@ -59,7 +59,7 @@ export function OpenPointPopover() {
       ? selectNode(state.document, popover.anchor.id) !== undefined
       : selectEdge(state.document, popover.anchor.id) !== undefined;
   });
-  const measured = useStore((state) => {
+  const measured = useNodesStore((state) => {
     if (!popover) return false;
     if (popover.anchor.kind === 'node') return state.nodeLookup.has(popover.anchor.id);
     // A connector's position comes from its endpoints, which must both be measured.
@@ -165,9 +165,9 @@ function OpenPointPopoverBody({ state, closing, listening }: { state: OpenPointP
   const rect: PlacementRect | null = (() => {
     if (node && nodeInternal) return rectOfInternal(nodeInternal);
     if (edge && sourceInternal && targetInternal) {
-      const types = new Map(document.nodes.map((n) => [n.id, n.type]));
-      const source = rectOfInternal(sourceInternal, types.get(edge.source));
-      const target = rectOfInternal(targetInternal, types.get(edge.target));
+      const kinds = new Map(document.nodes.map((n) => [n.id, n]));
+      const source = rectOfInternal(sourceInternal, kinds.get(edge.source));
+      const target = rectOfInternal(targetInternal, kinds.get(edge.target));
       if (!source || !target) return null;
       // Beside the marker, which sits at the connector's own label point (shared label or not).
       const point = edgeLabelPoint(document, edge, source, target, { interactionActive, moving: movingNodeIds, own: true });

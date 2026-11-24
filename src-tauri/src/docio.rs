@@ -3,9 +3,8 @@
 
 use crate::errors::{AppError, Subject, Verb};
 use crate::paths::file_name;
-use crate::util::lock;
+use crate::util::{lock, sha256_hex};
 use serde::Serialize;
-use sha2::{Digest, Sha256};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -13,17 +12,6 @@ use std::sync::Mutex;
 use std::time::UNIX_EPOCH;
 
 pub const MAX_DOC_BYTES: u64 = 24 * 1024 * 1024;
-pub const MAX_SIDECAR_BYTES: u64 = 16 * 1024 * 1024;
-
-/// A background image lives next to its document as `<file>.draftcanvas.background.<ext>`, the same
-/// convention the web editor's Import and Export use.
-const SIDECAR_TYPES: [(&str, &str); 4] = [
-    ("image/png", "png"),
-    ("image/jpeg", "jpg"),
-    ("image/webp", "webp"),
-    ("image/gif", "gif"),
-];
-
 // --- stamps ------------------------------------------------------------------------------------
 
 /// Identifies "the file as I last read or wrote it": `v1:<mtime_ns>:<size>:<sha256 of the content>`.
@@ -75,10 +63,6 @@ fn mtime_ns(meta: &fs::Metadata) -> u128 {
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| d.as_nanos())
         .unwrap_or(0)
-}
-
-fn sha256_hex(bytes: &[u8]) -> String {
-    format!("{:x}", Sha256::digest(bytes))
 }
 
 /// Whether the file on disk is still the one `expected` describes. The content is hashed and only the
@@ -200,8 +184,8 @@ pub fn write_atomic(
     Ok(WriteOutcome::Saved { stamp })
 }
 
-/// `write_unconditional` for a file whose stamp nobody keeps (an export, a background image): the stamp
-/// hashes every byte written, which for a 500 MB export was a second pass over it for nothing.
+/// `write_unconditional` for a file whose stamp nobody keeps (an export): the stamp hashes every
+/// byte written, which for a 500 MB export was a second pass over it for nothing.
 pub fn write_unstamped(target: &Path, bytes: &[u8]) -> Result<(), AppError> {
     let file_lock = writing_lock(target);
     let _writing = lock(&file_lock);
@@ -751,107 +735,6 @@ pub fn unique_name(dir: &Path, base: &str, ext: &str) -> String {
         .expect("an unbounded counter always finds a free name")
 }
 
-// --- background image sidecars -----------------------------------------------------------------
-
-pub struct Sidecar {
-    pub mime: &'static str,
-    pub bytes: Vec<u8>,
-}
-
-fn sidecar_path(doc: &Path, ext: &str) -> PathBuf {
-    let mut name = doc.file_name().unwrap_or_default().to_os_string();
-    name.push(format!(".background.{ext}"));
-    doc.with_file_name(name)
-}
-
-/// The first background image that exists next to `doc`, whatever its type.
-pub fn sidecar_read(doc: &Path) -> Result<Option<Sidecar>, AppError> {
-    for (mime, ext) in SIDECAR_TYPES {
-        let path = sidecar_path(doc, ext);
-        let io_err = |e: io::Error| AppError::from_io(&e, Verb::Open, Subject::Path(&path));
-        let file = match File::open(&path) {
-            Ok(file) => file,
-            Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
-            Err(e) => return Err(io_err(e)),
-        };
-        let mut bytes = Vec::new();
-        (&file)
-            .take(MAX_SIDECAR_BYTES + 1)
-            .read_to_end(&mut bytes)
-            .map_err(io_err)?;
-        if bytes.len() as u64 > MAX_SIDECAR_BYTES {
-            return Err(AppError::too_large(&path, Verb::Open, MAX_SIDECAR_BYTES));
-        }
-        return Ok(Some(Sidecar { mime, bytes }));
-    }
-    Ok(None)
-}
-
-pub fn sidecar_write(doc: &Path, mime: &str, bytes: &[u8]) -> Result<(), AppError> {
-    let Some((_, ext)) = SIDECAR_TYPES.iter().find(|(m, _)| *m == mime) else {
-        return Err(AppError::new(
-            crate::errors::ErrorKind::NotADocument,
-            "That image type isn't supported. Use a PNG, JPEG, WebP or GIF.",
-        ));
-    };
-    let path = sidecar_path(doc, ext);
-    if bytes.len() as u64 > MAX_SIDECAR_BYTES {
-        return Err(AppError::too_large(&path, Verb::Save, MAX_SIDECAR_BYTES));
-    }
-    write_unstamped(&path, bytes)?;
-    // A stale `.png` beside a fresh `.jpg` would win on the next read, so the others must go.
-    for (_, other) in SIDECAR_TYPES.iter().filter(|(_, e)| e != ext) {
-        remove_if_present(&sidecar_path(doc, other))?;
-    }
-    Ok(())
-}
-
-pub fn sidecar_remove(doc: &Path) -> Result<(), AppError> {
-    for (_, ext) in SIDECAR_TYPES {
-        remove_if_present(&sidecar_path(doc, ext))?;
-    }
-    Ok(())
-}
-
-/// Rename keeps the background: the image (if any) moves beside the renamed document. The old image
-/// is removed only once the new one is written, and never when it is the very file just written — on
-/// a case-insensitive disk (the macOS and Windows defaults) renaming `plan` to `Plan` names the same
-/// sidecar, and deleting "the old one" deleted the only copy.
-pub fn sidecar_move(from: &Path, to: &Path) -> Result<(), AppError> {
-    let Some(sidecar) = sidecar_read(from)? else {
-        return Ok(());
-    };
-    sidecar_write(to, sidecar.mime, &sidecar.bytes)?;
-    for (_, ext) in SIDECAR_TYPES {
-        let old = sidecar_path(from, ext);
-        let new = sidecar_path(to, ext);
-        let same = match (fs::canonicalize(&old), fs::canonicalize(&new)) {
-            (Ok(a), Ok(b)) => a == b,
-            _ => old == new,
-        };
-        if !same {
-            remove_if_present(&old)?;
-        }
-    }
-    Ok(())
-}
-
-/// Save As keeps the background: the image (if any) is copied beside the new document.
-pub fn sidecar_copy(from: &Path, to: &Path) -> Result<(), AppError> {
-    match sidecar_read(from)? {
-        Some(s) => sidecar_write(to, s.mime, &s.bytes),
-        None => sidecar_remove(to),
-    }
-}
-
-fn remove_if_present(path: &Path) -> Result<(), AppError> {
-    match fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
-        Err(e) => Err(AppError::from_io(&e, Verb::Save, Subject::Path(path))),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1335,102 +1218,6 @@ mod tests {
             unique_name(dir.path(), "Untitled canvas", ext),
             "Untitled canvas 3.draftcanvas"
         );
-    }
-
-    #[test]
-    fn sidecars_round_trip_and_the_newest_type_replaces_the_others() {
-        let dir = tempdir().unwrap();
-        let doc = dir.path().join("a.draftcanvas");
-        fs::write(&doc, "{}").unwrap();
-        assert!(sidecar_read(&doc).unwrap().is_none());
-
-        sidecar_write(&doc, "image/png", b"png-bytes").unwrap();
-        assert!(dir.path().join("a.draftcanvas.background.png").exists());
-        let read = sidecar_read(&doc).unwrap().unwrap();
-        assert_eq!(
-            (read.mime, read.bytes.as_slice()),
-            ("image/png", &b"png-bytes"[..])
-        );
-
-        sidecar_write(&doc, "image/jpeg", b"jpg-bytes").unwrap();
-        assert!(!dir.path().join("a.draftcanvas.background.png").exists());
-        let read = sidecar_read(&doc).unwrap().unwrap();
-        assert_eq!(
-            (read.mime, read.bytes.as_slice()),
-            ("image/jpeg", &b"jpg-bytes"[..])
-        );
-
-        sidecar_remove(&doc).unwrap();
-        assert!(sidecar_read(&doc).unwrap().is_none());
-        sidecar_remove(&doc).unwrap();
-    }
-
-    #[test]
-    fn a_background_follows_a_renamed_document_and_survives_a_rename_to_the_same_name() {
-        let dir = tempdir().unwrap();
-        let old = dir.path().join("plan.draftcanvas");
-        let new = dir.path().join("Plan2.draftcanvas");
-        sidecar_write(&old, "image/png", b"png-bytes").unwrap();
-
-        sidecar_move(&old, &new).unwrap();
-        assert!(!dir.path().join("plan.draftcanvas.background.png").exists());
-        assert_eq!(sidecar_read(&new).unwrap().unwrap().bytes, b"png-bytes");
-
-        // The same entry under two spellings (a case-only rename on macOS or Windows): never deleted.
-        sidecar_move(&new, &new).unwrap();
-        assert_eq!(sidecar_read(&new).unwrap().unwrap().bytes, b"png-bytes");
-    }
-
-    #[test]
-    fn sidecars_only_accept_the_four_image_types() {
-        let dir = tempdir().unwrap();
-        let doc = dir.path().join("a.draftcanvas");
-        for mime in ["image/svg+xml", "text/html", "application/pdf", ""] {
-            let err = sidecar_write(&doc, mime, b"x").err().unwrap();
-            assert_eq!(err.kind, ErrorKind::NotADocument, "{mime}");
-        }
-        for mime in ["image/png", "image/jpeg", "image/webp", "image/gif"] {
-            sidecar_write(&doc, mime, b"x").unwrap();
-        }
-    }
-
-    #[test]
-    fn sidecars_are_capped_at_sixteen_megabytes() {
-        let dir = tempdir().unwrap();
-        let doc = dir.path().join("a.draftcanvas");
-        let too_big = vec![0u8; MAX_SIDECAR_BYTES as usize + 1];
-        let err = sidecar_write(&doc, "image/png", &too_big).err().unwrap();
-        assert_eq!(err.kind, ErrorKind::TooLarge);
-        assert!(!dir.path().join("a.draftcanvas.background.png").exists());
-
-        let big = dir.path().join("b.draftcanvas.background.png");
-        File::create(&big)
-            .unwrap()
-            .set_len(MAX_SIDECAR_BYTES + 1)
-            .unwrap();
-        let err = sidecar_read(&dir.path().join("b.draftcanvas"))
-            .err()
-            .unwrap();
-        assert_eq!(err.kind, ErrorKind::TooLarge);
-    }
-
-    #[test]
-    fn save_as_copies_the_background_and_clears_a_stale_one() {
-        let dir = tempdir().unwrap();
-        let from = dir.path().join("from.draftcanvas");
-        let to = dir.path().join("to.draftcanvas");
-        sidecar_write(&from, "image/webp", b"bg").unwrap();
-        sidecar_write(&to, "image/png", b"stale").unwrap();
-        sidecar_copy(&from, &to).unwrap();
-        let read = sidecar_read(&to).unwrap().unwrap();
-        assert_eq!(
-            (read.mime, read.bytes.as_slice()),
-            ("image/webp", &b"bg"[..])
-        );
-
-        sidecar_remove(&from).unwrap();
-        sidecar_copy(&from, &to).unwrap();
-        assert!(sidecar_read(&to).unwrap().is_none());
     }
 }
 

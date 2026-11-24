@@ -8,6 +8,7 @@
 
 import { capabilityFor, categoryOf, inferRelationship } from '../../../src/document/connectorSemantics';
 import { createAttachment, createEdge, createNode, defaultSizeFor } from '../../../src/document/factory';
+import { migrateToCurrent } from '../../../src/document/migrate';
 import { createFlow } from '../../../src/document/flow';
 import { createId } from '../../../src/document/ids';
 import { LIMITS } from '../../../src/document/limits';
@@ -49,18 +50,30 @@ export function sizeOfSpec(spec: StarterNodeSpec): { width: number; height: numb
   return { width: spec.width ?? fallback.width, height: spec.height ?? fallback.height };
 }
 
-/** The starter's own bounding box, in starter-local coordinates. */
+/** The starter's own bounding box, in starter-local coordinates, as its shapes open today. */
 export function starterSize(starter: ArchitectureStarter): { width: number; height: number } {
   let minX = Infinity;
   let minY = Infinity;
   let maxX = -Infinity;
   let maxY = -Infinity;
-  for (const spec of starter.nodes) {
-    const size = sizeOfSpec(spec);
-    minX = Math.min(minX, spec.x);
-    minY = Math.min(minY, spec.y);
-    maxX = Math.max(maxX, spec.x + size.width);
-    maxY = Math.max(maxY, spec.y + size.height);
+  // The same migration `buildStarter` puts its shapes through, so the two agree.
+  const drawn = starter.nodes.map((spec) => ({
+    type: spec.type,
+    serviceKind: spec.serviceKind,
+    componentKind: spec.componentKind,
+    text: spec.text,
+    description: spec.description,
+    technology: spec.technology,
+    x: spec.x,
+    y: spec.y,
+    ...sizeOfSpec(spec),
+  }));
+  const opened = migrateToCurrent({ version: 29, nodes: drawn }).doc.nodes as Array<{ x: number; y: number; width: number; height: number }>;
+  for (const box of opened) {
+    minX = Math.min(minX, box.x);
+    minY = Math.min(minY, box.y);
+    maxX = Math.max(maxX, box.x + box.width);
+    maxY = Math.max(maxY, box.y + box.height);
   }
   if (minX === Infinity) return { width: 0, height: 0 };
   return { width: maxX - minX, height: maxY - minY };
@@ -99,7 +112,7 @@ export function buildStarter(
   );
 
   const ids = new Map<string, string>();
-  const nodes: DraftNode[] = starter.nodes.map((spec) => {
+  const drawn: DraftNode[] = starter.nodes.map((spec) => {
     const size = sizeOfSpec(spec);
     const node = createNode({
       ...(named?.node ? { id: named.node(spec.key) } : {}),
@@ -128,6 +141,10 @@ export function buildStarter(
     ids.set(spec.key, node.id);
     return node;
   });
+  // This catalog was drawn when a Worker, an External, a Scheduler and a Gateway were cards. It is
+  // kept as it was and opened the way such a file opens today: through the migration that gives
+  // those kinds the room their glyph needs.
+  const nodes = migrateToCurrent({ version: 29, nodes: drawn }).doc.nodes as DraftNode[];
 
   // Parenting is a second pass: a spec may name a parent declared after it.
   const byId = new Map(nodes.map((node) => [node.id, node]));

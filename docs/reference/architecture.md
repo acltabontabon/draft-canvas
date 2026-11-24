@@ -55,7 +55,10 @@ Library and editor are two states of `src/App.tsx` with no router, so the build 
 
 Shapes and text are pure display lists (`nodes/describe.ts`, `render/text/layout.ts`) shared by canvas
 and export. Selection, handles and other chrome are React and CSS only, so they never reach an export.
-Drawing styles are parameters of that renderer and a device preference, not document data.
+How a diagram is drawn is one resolved style (`render/style/resolve.ts`) that both read, and nothing
+else about style reaches a renderer. A diagram that carries a `style` is drawn in it on every device;
+one that carries none is drawn in the style in use on this device. A style changes how a shape
+looks, never its size, where a connector meets it, or what it means.
 
 ## The two seams
 
@@ -108,7 +111,7 @@ pairing stays free; an unusual one gets guidance, not rejection.
   sides follow the final drawn rails, including corridor separation. A small glyph that cannot
   align its automatic end may instead align the other, unpinned end. Two differently labelled
   operations keep independent exits rather than forming a two-member fork.
-- Hover traces are transient SVG paths: once per hover, absent during gestures, Traffic and
+- Hover traces are transient SVG paths: once per hover, absent during gestures, an outage walk and
   presentation, disabled by reduced-motion CSS, and never exported or persisted.
 - Spine geometry is relative to the hub, so it follows a drag without writing the document.
 - The connection target shows where a release will land before the pointer is released.
@@ -168,6 +171,8 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
 - **Smart Ink** separates geometry from meaning. `ink/recognize.ts` scores a drawing as a
   rectangle, ellipse, cylinder, tube, stick figure, line or arrow in screen pixels; `ink/interpret.ts`
   reads that against the canvas (containment, endpoints) and offers only existing shape kinds.
+  A one-stroke outline is read as the loop inside it, without overshoot tails, and a box against
+  its own four corners as well as its extent, so a leaning one still reads.
   Strokes are kept as ink first, so a conversion is one undo step that undo reverses to them; a
   later choice amends that step (`HistoryEntry.amendKey`). Recognition loads on first use.
 - **View levels** change how rooms are shown, not the tree.

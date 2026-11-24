@@ -229,8 +229,8 @@ describe('createNode — a Service\'s default label follows its subtype', () => 
     expect(node.textOrigin).toBe('explicit');
   });
 
-  it('exposes exactly six Service kinds — Backend for Frontend is a labeled API Service, not its own kind', () => {
-    expect(SERVICE_KINDS).toEqual(['generic', 'api', 'worker', 'external', 'scheduler', 'gateway']);
+  it('exposes exactly eight Service kinds — Backend for Frontend is a labeled API Service, not its own kind', () => {
+    expect(SERVICE_KINDS).toEqual(['generic', 'api', 'worker', 'external', 'scheduler', 'gateway', 'load-balancer', 'proxy']);
   });
 });
 

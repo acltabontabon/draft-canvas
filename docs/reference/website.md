@@ -1,7 +1,6 @@
 # The website
 
-One verified build serves every address. Cloudflare hosts `draftcanvas.dev`; GitHub Pages hosts the
-old address.
+One verified build serves every address, all hosted on Cloudflare.
 
 | URL | What it is | Source |
 | --- | --- | --- |
@@ -10,8 +9,6 @@ old address.
 | `app.draftcanvas.dev/` | The editor | `dist/`, unchanged |
 | `www.draftcanvas.dev/` | Redirect to the apex | `www/cloudflare/www.js` |
 | `relay.draftcanvas.dev` | Live-collaboration relay ([below](#the-collaboration-relay)) | `www/cloudflare/relay.js` |
-| `acltabontabon.com/draft-canvas/` | Change-of-address page; other old paths forward | `www/legacy/` |
-| `acltabontabon.com/draft-canvas/editor/` | The editor, kept so old diagrams can move | `dist/`, unchanged |
 
 ## The source
 
@@ -21,7 +18,7 @@ dependency with the app.
 ```bash
 npm run site:dev        # site only, :5280, hot reload
 npm run build:web       # editor + site, assembled into dist-web/
-npm run site:preview    # build:web, then serve each host as deployed (:4174 site, :4175 editor, :4176 old address)
+npm run site:preview    # build:web, then serve each host as deployed (:4174 site, :4175 editor)
 npm run e2e:web         # checks against the assembled artifact
 ```
 
@@ -30,31 +27,31 @@ redirects and 404 pages.
 
 ## The landing page
 
-`www/index.html` is a static page with a feature overview, an **Architecture examples** index, six
-exhibits, a download dialog and a closing connector. Behavior worth knowing before you edit it:
+`www/index.html` is a static page in two rooms, plus a download dialog: one screen of words (the
+statement, two ways in, and a line naming what the film shows), then the film. Behavior worth knowing before you edit it:
 
-- **Exhibits are drawn from editable files.** Each of the six (Shopify inventory reservations, Slack
-  real-time messaging, Netflix Live Origin, Uber IngestionNext, Stripe Ledger, Discord message search)
-  is a `.draftcanvas` file in `www/examples/`, rendered by the editor's own SVG renderer. Each links
-  to the engineering write-up it models, and models only what that source describes.
-- **The pencil.** It draws the headline underline, connects the feature icons and plays each
-  exhibit's drawing sequence the first time that exhibit opens on a page load; after that the
-  finished diagram shows at once. Escape skips it, and reduced motion shows the finished diagram
-  immediately. A handwritten draft holds briefly before the finished diagram fades in.
-- **Exhibit interactions.** Pencil marks flag featured elements; hovering or focusing an element, or a
-  phrase under the caption, shows its note. Attachments (the paperclip) preview on hover or focus and
-  stay open on click. The Stripe Ledger exhibit nests C4 levels: breadcrumb, Escape and browser
-  Back/Forward move through the same level history.
-- Direct links open their exhibit or section; narrow windows scroll the diagram horizontally.
+- **What the page names, the film shows.** Each name under the headline (`data-film-jump`, in
+  seconds) scrolls to the film and starts it at that moment. **Watch it happen** does the same from
+  the start.
+- **The film** (`#film`, files in `www/public/film/`) fills the window. It starts by itself when it is
+  most of what the visitor can see, pauses when scrolled away, and resumes on return unless the visitor
+  paused it. A browser only starts a video with sound after the visitor has pressed something, so it is
+  tried with sound and, if refused, started silent with captions and a **Sound on** button. Reduced
+  motion never starts it: the poster and a play mark wait. Nothing of it is fetched before it is wanted.
+- **Its parts.** The labelled dashes under the film are its parts, as the editor's presentation bar
+  shows a flow's steps: they fill as it plays and a press jumps there. Their times are
+  `data-film-step` attributes; a re-cut film needs them, the jump links and the captions file updated
+  together.
+- **The end.** When the film ends the room says so, with **Back to top** (where the ways in are) and
+  **Watch again**.
+- **The pencil.** It draws the headline underline once, on load.
 
 ## The build
 
-- `www/vite.config.js` fills in the root `package.json` version for desktop installer links and
-  inserts the generated diagram scenes.
+- `www/vite.config.js` fills in the root `package.json` version for desktop installer links.
 - It generates the CSP with `connect-src 'none'`.
-- `scripts/assemble-web.mjs` builds `dist-web/` from `site/` (`www/dist/`), `app/` (`dist/`),
-  `legacy/` (`www/legacy/` plus `dist/` under `editor/`) and `cloudflare/` (Wrangler configs), then
-  checks each part. `dist/` is left unchanged.
+- `scripts/assemble-web.mjs` builds `dist-web/` from `site/` (`www/dist/`), `app/` (`dist/`) and
+  `cloudflare/` (Wrangler configs), then checks each part. `dist/` is left unchanged.
 
 ## The documentation
 
@@ -84,17 +81,15 @@ headline stays legible at small preview sizes.
 
 ## Deploying
 
-`pages.yml` is the only deploy workflow.
-
-1. Cloudflare first, with Wrangler: relay, `app/`, `site/`, then the `www.` redirect. The relay and
-   `app/` only for a release or a withdrawal; otherwise just `site/` and the redirect.
-2. Then `legacy/` to GitHub Pages, only if Cloudflare succeeded.
+`pages.yml` is the only deploy workflow. It deploys to Cloudflare with Wrangler: relay, `app/`,
+`site/`, then the `www.` redirect. The relay and `app/` only for a release or a withdrawal; otherwise
+just `site/` and the redirect.
 
 Triggers (all share the `pages` concurrency group):
 
 - **Release:** `release.yml` passes the verified artifact after CI and desktop acceptance.
 - **Site change:** `pages-site.yml` calls it on a push to `main` touching `www/`,
-  `scripts/assemble-web.mjs` or either Pages workflow. It waits (skips) while `package.json` names a
+  `scripts/assemble-web.mjs` or either deploy workflow. It waits (skips) while `package.json` names a
   version that is not the latest published release; that release's deploy publishes it instead.
 - **On demand:** run it from `main` (site only, unless `release-tag` is set).
 
@@ -171,19 +166,15 @@ Builds read `VITE_COLLAB_RELAY` (default `wss://relay.draftcanvas.dev`; `ws://lo
 
 ### The old address
 
-`acltabontabon.com` belongs to `acltabontabon.github.io`; GitHub serves this project under it at
-`/draft-canvas/`. Never give this repository a custom domain: GitHub would redirect the old address,
-and its editor, away.
+Draft Canvas first lived at `acltabontabon.com/draft-canvas/`, on GitHub Pages. That address is
+retired: nothing is published there, and old links to it no longer forward.
 
 IndexedDB is per origin, so diagrams saved at the old address are invisible to
 `app.draftcanvas.dev`.
 
-- **Change-of-address page:** `www/legacy/` has no build step. Its `404.html` forwards other old
-  paths to the same path on `draftcanvas.dev` (`/editor/…` to the app).
-- **Handoff:** the old editor's **Bring my diagrams** opens `app.draftcanvas.dev/#handoff` and sends a
-  Library backup with `postMessage`; both sides check the exact origin and window. Protocol:
+- **Handoff:** a browser that still has the old editor cached offline can run it. Its **Bring my
+  diagrams** opens `app.draftcanvas.dev/#handoff` and sends a Library backup with `postMessage`; both
+  sides check the exact origin and window. The app still receives it. Protocol:
   `src/storage/handoff.ts`.
 - **Path-independent storage:** database names and the `draft-canvas.` preference prefix never derive
   from the path; `tests/privacy.test.ts` enforces it.
-- **Old service worker:** `www/legacy/sw.js` replaces the one that served the editor at
-  `/draft-canvas/`, deletes only its own caches and unregisters.

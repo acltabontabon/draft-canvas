@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type AnimationEvent, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { useInternalNode, useStoreApi } from '@xyflow/react';
+import { useInternalNode, useReactFlowStoreApi } from '@xyflow/react';
 import { displayNameFor } from '../../document/factory';
 import type { Attachment, DraftNode } from '../../document/types';
 import {
@@ -40,6 +40,8 @@ const EXIT_MS = 140;
 /** The presentation chrome a callout never covers: the flow bar, the exit button, and the step's
  *  caption or the opening/closing card, in whichever corner it took. */
 const CHROME = ['.dc-explain', '.dc-present-exit', '.dc-present-caption, .dc-present-card'] as const;
+/** While editing (a peek) nothing docks; the callout keeps off the toolbar and the status bar. */
+const EDIT_CHROME = ['.dc-toolbar', '.dc-status'] as const;
 const NO_BOXES = new Float64Array(0);
 
 function packBoxes(boxes: readonly Box[]): Float64Array {
@@ -88,13 +90,16 @@ export function PresentationCallout({
   subject,
   leaving,
   onSettled,
+  variant = 'present',
 }: {
   subject: PresentationSubject;
   leaving: boolean;
   onSettled: (key: string) => void;
+  /** `peek`: told while editing, for the shape the pointer rests on (`AttachmentPeekLayer`). */
+  variant?: 'present' | 'peek';
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const storeApi = useStoreApi();
+  const { optionsStore, viewportStore, nodesStore } = useReactFlowStoreApi();
   const theme = useThemeValue();
   const document = useEditorStore((state) => state.document);
   const edge = subject.hostKind === 'edge' ? edgeIndex(document.edges).get(subject.hostId) : undefined;
@@ -145,7 +150,9 @@ export function PresentationCallout({
   // mounted yet (its row renders in another component's commit) is looked for again next frame.
   const markerRef = useRef<{ box: Box; measured: boolean; below?: boolean } | null>(null);
   useLayoutEffect(() => {
-    const { domNode: root, transform, nodeLookup } = storeApi.getState();
+    const { domNode: root } = optionsStore.getState();
+    const { transform } = viewportStore.getState();
+    const { nodeLookup } = nodesStore.getState();
     markerRef.current = null;
     chromeRef.current = null;
     if (!root) return;
@@ -180,7 +187,7 @@ export function PresentationCallout({
         }),
       ),
     };
-  }, [document, storeApi, source, target, hostInternal, anchor]);
+  }, [document, optionsStore, viewportStore, nodesStore, source, target, hostInternal, anchor]);
 
   // The tallest a docked callout may be and still clear the flow bar. Only ever tightens while this
   // callout lives: capping shrinks its measured size, and a cap that lifted again as a result would
@@ -195,7 +202,8 @@ export function PresentationCallout({
     const { root, size } = frame;
     if (root.height > rootHeightRef.current + 1) roomRef.current = Number.POSITIVE_INFINITY;
     rootHeightRef.current = root.height;
-    const { transform, domNode } = storeApi.getState();
+    const { transform } = viewportStore.getState();
+    const { domNode } = optionsStore.getState();
     const [tx, ty, zoom] = transform;
     // Flow → screen is one affine map; `flowToScreenPosition` per corner, per box, per frame adds up.
     const toScreen = (box: Box): Box => ({
@@ -209,7 +217,8 @@ export function PresentationCallout({
 
     if (chromeRef.current?.root !== root) chromeRef.current = { root, boxes: [] };
     const chrome = chromeRef.current.boxes;
-    CHROME.forEach((selector, index) => {
+    const peek = variant === 'peek';
+    (peek ? EDIT_CHROME : CHROME).forEach((selector, index) => {
       if (!chrome[index]) chrome[index] = chromeBox(selector);
     });
     const [flowBar = null, exitButton = null, card = null] = chrome;
@@ -231,7 +240,7 @@ export function PresentationCallout({
       bounds,
       size,
       current,
-      dockTo: flowBar,
+      dockTo: peek ? null : flowBar,
     };
 
     // Every other element on the canvas is a soft obstacle — covered only when nothing clean exists.
@@ -338,7 +347,8 @@ export function PresentationCallout({
       ref={panelRef}
       className="dc-callout"
       role="note"
-      aria-label={`Presented ${what} for ${ownerName}`}
+      aria-label={variant === 'peek' ? `${what.charAt(0).toUpperCase()}${what.slice(1)} on ${ownerName}` : `Presented ${what} for ${ownerName}`}
+      data-variant={variant === 'peek' ? 'peek' : undefined}
       data-kind={first.type === 'code' ? 'code' : 'note'}
       data-leaving={leaving ? 'true' : undefined}
       data-wide={hasCode ? 'true' : undefined}

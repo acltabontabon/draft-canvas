@@ -1,0 +1,37 @@
+{
+  "id": "video-streaming",
+  "name": "Video streaming platform",
+  "category": "example",
+  "summary": "A whole streaming service: devices, edge, playback, discovery, data and an ISP-hosted video edge",
+  "aliases": [
+    "video streaming",
+    "streaming service",
+    "video on demand",
+    "vod",
+    "netflix-style architecture",
+    "ott platform",
+    "cdn",
+    "drm",
+    "encoding pipeline"
+  ],
+  "tags": [
+    "example",
+    "system design",
+    "streaming",
+    "cdn",
+    "recommendations",
+    "kafka"
+  ],
+  "useWhen": [
+    "Seeing every Draft Canvas feature at work in one realistic system before drawing your own.",
+    "Explaining how video reaches screens: playback decisions in the cloud, bytes from the edge.",
+    "Starting a system-design discussion about a large consumer platform."
+  ],
+  "watchOutFor": [
+    "It is a big picture on purpose: present it flow by flow rather than all at once.",
+    "Scale numbers are illustrative; replace them with your own before you reason from them.",
+    "Three connectors are portals and the file is format 29, so it needs a current Draft Canvas."
+  ],
+  "featured": true,
+  "order": 100
+}

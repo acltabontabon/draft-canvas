@@ -43,6 +43,31 @@ export function starterIds(starter: AgentStarter, prefix: string) {
   return { nodes, edges, flows };
 }
 
+/**
+ * The starter's elements and connectors a create left as they were drawn, in every view: what its
+ * readability check has no say over. A shape the request renamed or resized is not among them, and
+ * nothing the request added is.
+ */
+export function starterKeptIds(starter: AgentStarter, prefix: string, placed: readonly DraftNode[]): Set<string> {
+  const kept = new Set<string>();
+  const now = new Map(placed.map((node) => [node.id, node]));
+  for (const node of starter.file.nodes) {
+    const drawn = now.get(`${prefix}${node.id}`);
+    if (drawn && drawn.text === node.text && drawn.width === node.width && drawn.height === node.height) kept.add(drawn.id);
+  }
+  for (const edge of starter.file.edges) kept.add(`${prefix}${edge.id}`);
+  const inside = (nodes: readonly DraftNode[]) => {
+    for (const node of nodes) {
+      if (!node.inside) continue;
+      for (const inner of node.inside.nodes) kept.add(inner.id);
+      for (const edge of node.inside.edges) kept.add(edge.id);
+      inside(node.inside.nodes);
+    }
+  };
+  inside(starter.file.nodes);
+  return kept;
+}
+
 /** The starter's diagram with every id under `prefix`, its top-left corner at the origin. */
 function prefixed(file: DraftDocument, prefix: string): { nodes: DraftNode[]; edges: DraftEdge[]; flows: DraftFlow[] } {
   const bounds = boundsOf(file.nodes);

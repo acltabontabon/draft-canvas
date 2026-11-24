@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 25,
+  "version": 28,
   "metadata": {
     "id": "starter-cqrs",
     "title": "CQRS",
@@ -9,301 +9,488 @@
   },
   "nodes": [
     {
-      "id": "client",
-      "type": "actor",
-      "x": -60,
-      "y": -332,
-      "width": 120,
-      "height": 92,
-      "z": 0,
-      "text": "Client",
-      "textOrigin": "explicit",
-      "actorKind": "system",
-      "actorFrame": "borderless"
-    },
-    {
-      "id": "command-box",
+      "id": "command-side",
       "type": "group",
-      "x": -702,
-      "y": -136,
-      "width": 512,
-      "height": 468,
+      "x": 600,
+      "y": 77,
+      "width": 920,
+      "height": 227,
       "z": -1,
       "text": "Command side",
       "textOrigin": "explicit",
-      "boundaryPreset": "boundary",
-      "attachments": [
-        {
-          "id": "a_2h3q1zgbotbc",
-          "type": "note",
-          "text": "A logical side, not a deployment: the two sides can be one process and one database. CQRS requires neither messaging, event sourcing nor separate services — this starter adds an asynchronous projection as one common variant. Its topic carries facts about what changed and is not an event store: nothing replays it. A direct in-process update or a database change feed would feed the projection just as well.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
-        }
-      ]
+      "accent": "blue",
+      "boundaryPreset": "domain"
     },
     {
-      "id": "command-subtitle",
-      "type": "text",
-      "x": -690,
-      "y": -106,
-      "width": 200,
-      "height": 24,
-      "z": 0,
-      "parentId": "command-box",
-      "text": "Validates intent, changes state",
+      "id": "query-side",
+      "type": "group",
+      "x": 600,
+      "y": 358,
+      "width": 920,
+      "height": 546,
+      "z": -1,
+      "text": "Query side",
       "textOrigin": "explicit",
-      "annotation": true
+      "accent": "teal",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "customer",
+      "type": "actor",
+      "x": 0,
+      "y": 351,
+      "width": 140,
+      "height": 118,
+      "z": 0,
+      "text": "Customer",
+      "description": "Sends money and checks their accounts.",
+      "textOrigin": "explicit",
+      "actorKind": "human",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "app",
+      "type": "service",
+      "x": 292,
+      "y": 376,
+      "width": 176,
+      "height": 68,
+      "z": 0,
+      "text": "Banking App",
+      "description": "The bank's mobile app.",
+      "technology": "React Native",
+      "textOrigin": "explicit",
+      "serviceKind": "generic"
     },
     {
       "id": "command-api",
       "type": "service",
-      "x": -666,
-      "y": -74,
+      "x": 632,
+      "y": 146,
       "width": 176,
-      "height": 68,
+      "height": 109,
       "z": 0,
-      "parentId": "command-box",
-      "text": "Command API",
+      "parentId": "command-side",
+      "text": "Payments API",
+      "description": "Validates commands and records what happened.",
+      "technology": "Spring Boot 3",
       "textOrigin": "explicit",
-      "accent": "teal",
       "serviceKind": "api",
+      "replicas": 2,
+      "inside": {
+        "nodes": [
+          {
+            "id": "c.app",
+            "type": "service",
+            "x": 0,
+            "y": 89.5,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Banking App",
+            "technology": "React Native",
+            "textOrigin": "explicit",
+            "serviceKind": "generic"
+          },
+          {
+            "id": "c.controller",
+            "type": "component",
+            "x": 303,
+            "y": 74,
+            "width": 152,
+            "height": 99,
+            "z": 0,
+            "text": "Transfers Controller",
+            "description": "Checks the request and its idempotency key.",
+            "technology": "Spring",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "c.handler",
+            "type": "component",
+            "x": 603,
+            "y": 74,
+            "width": 152,
+            "height": 99,
+            "z": 0,
+            "text": "Send Money Handler",
+            "description": "Loads the account and applies the command.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "c.aggregate",
+            "type": "component",
+            "x": 890,
+            "y": 27.5,
+            "width": 152,
+            "height": 95,
+            "z": 0,
+            "text": "Account Aggregate",
+            "description": "Enforces balance and limits; decides the events.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "c.repo",
+            "type": "component",
+            "x": 890,
+            "y": 149,
+            "width": 152,
+            "height": 134,
+            "z": 0,
+            "text": "Event Store Repository",
+            "description": "Replays an account's events; appends new ones.",
+            "technology": "PostgreSQL",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "c.store",
+            "type": "database",
+            "x": 1183,
+            "y": 177.13636363636363,
+            "width": 160,
+            "height": 114,
+            "z": 0,
+            "text": "Ledger Event Store",
+            "technology": "PostgreSQL 16",
+            "textOrigin": "explicit",
+            "databaseKind": "sql"
+          }
+        ],
+        "edges": [
+          {
+            "id": "c.post",
+            "source": "c.app",
+            "target": "c.controller",
+            "label": "POST /transfers",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "response": "202 Accepted",
+            "hasResponse": true,
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "c.dispatch",
+            "source": "c.controller",
+            "target": "c.handler",
+            "label": "handle(SendMoney)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "c.decide",
+            "source": "c.handler",
+            "target": "c.aggregate",
+            "label": "send(amount, to)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.25
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.75
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "c.persist",
+            "source": "c.handler",
+            "target": "c.repo",
+            "label": "load / append",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "sourceAnchor": {
+              "side": "bottom",
+              "offset": 0.75
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.25
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "c.sql",
+            "source": "c.repo",
+            "target": "c.store",
+            "label": "Events by account",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "readsWrites",
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "c.flow",
+            "title": "Send money, inside the Payments API",
+            "steps": [
+              {
+                "id": "c.flow.s1",
+                "edgeId": "c.post",
+                "caption": "The controller checks the request; a repeated idempotency key stops here."
+              },
+              {
+                "id": "c.flow.s2",
+                "edgeId": "c.dispatch",
+                "caption": "The SendMoney command goes to its one handler."
+              },
+              {
+                "id": "c.flow.s3",
+                "edgeId": "c.persist",
+                "caption": "The handler loads the account by replaying its events."
+              },
+              {
+                "id": "c.flow.s4",
+                "edgeId": "c.sql",
+                "extraNodeIds": [
+                  "c.store"
+                ],
+                "caption": "Events come back in version order."
+              },
+              {
+                "id": "c.flow.s5",
+                "edgeId": "c.decide",
+                "caption": "The aggregate checks balance and limits, then decides MoneySent."
+              }
+            ],
+            "accent": "teal"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "level": "component"
+      }
+    },
+    {
+      "id": "event-store",
+      "type": "database",
+      "x": 950,
+      "y": 129,
+      "width": 220,
+      "height": 143,
+      "z": 0,
+      "parentId": "command-side",
+      "text": "Ledger Event Store",
+      "description": "Every account change, append-only.",
+      "technology": "PostgreSQL 16",
+      "textOrigin": "explicit",
+      "databaseKind": "sql",
       "attachments": [
         {
-          "id": "a_drngg579jhqr",
+          "id": "n.schema",
           "type": "code",
-          "text": "Example command",
-          "language": "json",
-          "code": "{\n  \"type\": \"ChangeStatus\",\n  \"entityId\": \"ent_4821\",\n  \"status\": \"active\"\n}",
-          "width": 380,
-          "height": 180
+          "language": "sql",
+          "code": "CREATE TABLE ledger_events (\n  account_id  text   NOT NULL,\n  version     bigint NOT NULL,\n  type        text   NOT NULL,\n  payload     jsonb  NOT NULL,\n  recorded_at timestamptz DEFAULT now(),\n  PRIMARY KEY (account_id, version)  -- two writers can't both take v1043\n);",
+          "width": 579.5,
+          "height": 197
         }
       ]
     },
     {
-      "id": "command-handler",
-      "type": "component",
-      "x": -654,
-      "y": 66,
-      "width": 152,
-      "height": 56,
-      "z": 0,
-      "parentId": "command-box",
-      "text": "Command Handler",
-      "textOrigin": "explicit",
-      "componentKind": "generic"
-    },
-    {
-      "id": "write-store",
-      "type": "database",
-      "x": -664,
-      "y": 194,
-      "width": 172,
-      "height": 102,
-      "z": 0,
-      "parentId": "command-box",
-      "text": "Write Store",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic"
-    },
-    {
       "id": "relay",
       "type": "service",
-      "x": -402,
-      "y": 195,
+      "x": 1312,
+      "y": 146,
       "width": 176,
-      "height": 68,
+      "height": 109,
       "z": 0,
-      "parentId": "command-box",
-      "text": "Outbox Relay",
+      "parentId": "command-side",
+      "text": "Change Relay",
+      "description": "Streams committed events out of the store.",
+      "technology": "Debezium",
       "textOrigin": "explicit",
-      "accent": "teal",
       "serviceKind": "worker"
     },
     {
       "id": "events",
       "type": "queue",
-      "x": -70,
-      "y": 212,
+      "x": 1670,
+      "y": 148,
       "width": 140,
-      "height": 72,
+      "height": 104,
       "z": 0,
-      "text": "Domain Events",
+      "text": "ledger-events",
+      "description": "The ledger's events, in order per account.",
+      "technology": "Kafka",
       "textOrigin": "explicit",
-      "queueKind": "topic"
-    },
-    {
-      "id": "consistency",
-      "type": "text",
-      "x": -110,
-      "y": 304,
-      "width": 220,
-      "height": 24,
-      "z": 0,
-      "text": "Eventually consistent read projection",
-      "textOrigin": "explicit",
-      "annotation": true
-    },
-    {
-      "id": "query-box",
-      "type": "group",
-      "x": 190,
-      "y": -136,
-      "width": 512,
-      "height": 468,
-      "z": -1,
-      "text": "Query side",
-      "textOrigin": "explicit",
-      "boundaryPreset": "boundary",
-      "attachments": [
-        {
-          "id": "a_jv5iiiiadk8w",
-          "type": "note",
-          "text": "Reads are answered from a model shaped for the questions asked. Only the projection writes here; the Query API never does.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
-        }
-      ]
-    },
-    {
-      "id": "query-subtitle",
-      "type": "text",
-      "x": 202,
-      "y": -106,
-      "width": 200,
-      "height": 24,
-      "z": 0,
-      "parentId": "query-box",
-      "text": "Answers questions, changes nothing",
-      "textOrigin": "explicit",
-      "annotation": true
-    },
-    {
-      "id": "query-api",
-      "type": "service",
-      "x": 490,
-      "y": -74,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "parentId": "query-box",
-      "text": "Query API",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "api"
+      "queueKind": "stream"
     },
     {
       "id": "projector",
       "type": "service",
-      "x": 226,
-      "y": 195,
+      "x": 1312,
+      "y": 559,
       "width": 176,
-      "height": 68,
+      "height": 123,
       "z": 0,
-      "parentId": "query-box",
+      "parentId": "query-side",
       "text": "Projection Worker",
+      "description": "Folds events into read models shaped for questions.",
+      "technology": "Go",
       "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "worker"
+      "serviceKind": "worker",
+      "replicas": 3
     },
     {
-      "id": "read-store",
-      "type": "database",
-      "x": 492,
-      "y": 194,
-      "width": 172,
-      "height": 102,
+      "id": "dlq",
+      "type": "queue",
+      "x": 1330,
+      "y": 768,
+      "width": 140,
+      "height": 104,
       "z": 0,
-      "parentId": "query-box",
-      "text": "Read Store",
+      "parentId": "query-side",
+      "text": "ledger-dlq",
+      "description": "Events a projection couldn't apply.",
+      "technology": "Kafka",
       "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic",
+      "queueKind": "queue",
+      "deliveryRole": "dead-letter"
+    },
+    {
+      "id": "balances",
+      "type": "database",
+      "x": 990,
+      "y": 410,
+      "width": 140,
+      "height": 140,
+      "z": 0,
+      "parentId": "query-side",
+      "text": "Balances",
+      "description": "Balance per account.",
+      "technology": "Redis 7",
+      "textOrigin": "explicit",
+      "databaseKind": "nosql"
+    },
+    {
+      "id": "statements",
+      "type": "database",
+      "x": 960,
+      "y": 689,
+      "width": 200,
+      "height": 143,
+      "z": 0,
+      "parentId": "query-side",
+      "text": "Statements",
+      "description": "Searchable transaction history.",
+      "technology": "OpenSearch",
+      "textOrigin": "explicit",
+      "databaseKind": "search-index",
       "attachments": [
         {
-          "id": "a_gbompiwdw9yr",
+          "id": "n.rebuild",
           "type": "note",
-          "text": "Shaped for the questions asked of it — a projection, not the write model. It may be a second schema in the same database: CQRS separates models, not necessarily databases.",
-          "noteKind": "note",
+          "text": "Rebuilding Statements from offset 0 takes about six hours. Do we need a second index to swap in?",
+          "noteKind": "question",
           "width": 200,
           "height": 56
         }
       ]
+    },
+    {
+      "id": "query-api",
+      "type": "service",
+      "x": 632,
+      "y": 566,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "query-side",
+      "text": "Accounts API",
+      "description": "Answers questions; never changes anything.",
+      "technology": "NestJS",
+      "textOrigin": "explicit",
+      "serviceKind": "api",
+      "replicas": 4
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "x": 0,
+      "y": -89,
+      "width": 1100,
+      "height": 110,
+      "z": 0,
+      "text": "# CQRS\nCommands append to a ledger; projections answer every question from views built for it.",
+      "textOrigin": "explicit",
+      "textRole": "title"
     }
   ],
   "edges": [
     {
-      "id": "submit",
-      "source": "client",
+      "id": "use",
+      "source": "customer",
+      "target": "app",
+      "label": "Sends money",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "transfer",
+      "source": "app",
       "target": "command-api",
+      "label": "POST /transfers",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "command",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
+      "semantic": "http",
+      "response": "202 Accepted",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.ack",
+          "type": "note",
+          "text": "Commands answer 202 and an id, never the new balance: the query side may still be catching up.",
+          "noteKind": "decision",
+          "width": 200,
+          "height": 56
+        }
+      ]
     },
     {
-      "id": "handle",
+      "id": "append",
       "source": "command-api",
-      "target": "command-handler",
-      "label": "executes",
+      "target": "event-store",
+      "label": "Appends MoneySent",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "command",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
+      "semantic": "readsWrites",
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.event",
+          "type": "code",
+          "language": "json",
+          "code": "{\n  \"type\": \"MoneySent\",\n  \"accountId\": \"acc_51f2\",\n  \"version\": 1043,\n  \"amount\": { \"value\": \"40.00\", \"currency\": \"EUR\" },\n  \"to\": \"acc_9b07\",\n  \"transferId\": \"tr_8813\"\n}",
+          "width": 422,
+          "height": 197
+        }
+      ]
     },
     {
-      "id": "persist",
-      "source": "command-handler",
-      "target": "write-store",
-      "label": "writes state + outbox record",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "writes",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "relay-read",
-      "source": "relay",
-      "target": "write-store",
-      "label": "reads outbox",
+      "id": "capture",
+      "source": "event-store",
+      "target": "relay",
+      "label": "Tails the WAL",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "reads",
-      "sourceAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
       "semanticsOrigin": "explicit"
     },
     {
@@ -314,25 +501,7 @@
       "routing": "smoothstep",
       "semantic": "publishes",
       "kind": "event",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred",
-      "attachments": [
-        {
-          "id": "a_1he5wh4i8i2s",
-          "type": "note",
-          "text": "Published only after the commit: the new state and its outbox record were written in one transaction, or not at all, and nothing left it from inside. Delivery is at-least-once, so the projection dedupes on the record id.",
-          "noteKind": "note",
-          "width": 200,
-          "height": 56
-        }
-      ]
+      "semanticsOrigin": "explicit"
     },
     {
       "id": "deliver",
@@ -340,75 +509,87 @@
       "target": "projector",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "deliversTo",
+      "semantic": "consumes",
       "kind": "event",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "inferred"
+      "semanticsOrigin": "explicit"
     },
     {
-      "id": "materialize",
+      "id": "project-balance",
       "source": "projector",
-      "target": "read-store",
-      "label": "updates projection",
+      "target": "balances",
+      "label": "Updates balance",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "writes",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "query",
-      "source": "client",
-      "target": "query-api",
+      "id": "project-statement",
+      "source": "projector",
+      "target": "statements",
+      "label": "Indexes transaction",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "query",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
+      "semantic": "indexes",
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "read",
-      "source": "query-api",
-      "target": "read-store",
+      "id": "park",
+      "source": "projector",
+      "target": "dlq",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "deadLetters",
+      "kind": "failure",
+      "async": true,
+      "semanticsOrigin": "explicit",
+      "deliveryAttempts": 3
+    },
+    {
+      "id": "view",
+      "source": "app",
+      "target": "query-api",
+      "label": "GET /accounts/:id",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "response": "200 Balance",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "read-balance",
+      "source": "balances",
+      "target": "query-api",
+      "label": "Balance lookup",
       "directed": true,
       "routing": "smoothstep",
       "semantic": "reads",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.lag",
+          "type": "note",
+          "text": "Reads lag writes by the projection delay (p99 ≈ 400 ms). The app shows its own pending transfer until the balance catches up.",
+          "noteKind": "warning",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "search",
+      "source": "statements",
+      "target": "query-api",
+      "label": "Transaction search",
+      "directed": true,
+      "routing": "smoothstep"
     }
   ],
   "viewport": {
-    "x": 720,
-    "y": 450,
-    "zoom": 0.8205128205128205
+    "x": 0,
+    "y": 0,
+    "zoom": 1
   },
   "settings": {
     "showSequence": true,
@@ -422,62 +603,126 @@
   },
   "flows": [
     {
-      "id": "flow1",
-      "title": "Submit command",
+      "id": "send",
+      "title": "Send money",
       "steps": [
         {
-          "id": "fs_2ardwr8aps6i",
-          "edgeId": "submit",
-          "caption": "The client states what it wants"
+          "id": "send.s1",
+          "edgeId": "use",
+          "caption": "A customer sends €40 to a friend."
         },
         {
-          "id": "fs_8s3wi9afnwp0",
-          "edgeId": "handle",
-          "caption": "Validated against the rules — it may be rejected"
+          "id": "send.s2",
+          "edgeId": "transfer",
+          "caption": "The app posts a SendMoney command; the API answers 202 with an id."
         },
         {
-          "id": "fs_impcfrvwkxmz",
-          "edgeId": "persist",
-          "caption": "State and outbox record, one transaction"
+          "id": "send.s3",
+          "edgeId": "append",
+          "caption": "MoneySent is appended at the account's next version."
         },
         {
-          "id": "fs_59vn283fgahg",
-          "edgeId": "relay-read",
-          "caption": "After the commit, the relay picks up the record"
+          "id": "send.s4",
+          "edgeId": "capture",
+          "caption": "Once committed, the relay reads the event from the write-ahead log."
         },
         {
-          "id": "fs_brbvjf07qib2",
+          "id": "send.s5",
           "edgeId": "publish",
-          "caption": "A fact leaves the command side"
+          "caption": "It publishes the event, keyed by account so order is kept."
         },
         {
-          "id": "fs_rhagjuxbbcvl",
-          "edgeId": "deliver"
+          "id": "send.s6",
+          "edgeId": "deliver",
+          "caption": "A projection worker picks it up."
         },
         {
-          "id": "fs_tsyosjjpix27",
-          "edgeId": "materialize",
-          "caption": "The read model catches up — eventually"
+          "id": "send.s7",
+          "edgeId": "project-balance",
+          "caption": "The balance read model drops by €40…"
+        },
+        {
+          "id": "send.s8",
+          "edgeId": "project-statement",
+          "caption": "…and the transaction becomes searchable."
         }
       ],
-      "accent": "amber"
+      "accent": "teal"
     },
     {
-      "id": "flow2",
-      "title": "Read projection",
+      "id": "read",
+      "title": "Check the balance",
       "steps": [
         {
-          "id": "fs_praj8do13y9j",
-          "edgeId": "query",
-          "caption": "The client asks a question"
+          "id": "read.s1",
+          "edgeId": "view",
+          "caption": "The customer opens their account."
         },
         {
-          "id": "fs_rlrk5ua1inqr",
-          "edgeId": "read",
-          "caption": "Answered from the read model — nothing changes"
+          "id": "read.s2",
+          "edgeId": "read-balance",
+          "caption": "The balance is one key lookup; nothing is computed on read."
+        },
+        {
+          "id": "read.s3",
+          "edgeId": "search",
+          "caption": "Recent transactions come from the search index."
         }
       ],
-      "accent": "green"
+      "accent": "blue"
+    },
+    {
+      "id": "stale",
+      "title": "Read before the projection catches up",
+      "steps": [
+        {
+          "id": "stale.s1",
+          "edgeId": "view",
+          "caption": "The customer checks the balance a moment after sending."
+        },
+        {
+          "id": "stale.s2",
+          "edgeId": "read-balance",
+          "extraNodeIds": [
+            "projector"
+          ],
+          "caption": "The read model may still show the old balance for a few hundred ms."
+        }
+      ],
+      "accent": "amber",
+      "variantOf": "read"
+    },
+    {
+      "id": "poison",
+      "title": "A projection can't apply an event",
+      "steps": [
+        {
+          "id": "poison.s1",
+          "edgeId": "deliver",
+          "caption": "The worker receives an event it can't apply (say, an unknown currency)."
+        },
+        {
+          "id": "poison.s2",
+          "edgeId": "park",
+          "caption": "After three tries it parks the event and moves on; the account's reads go stale."
+        }
+      ],
+      "accent": "rose",
+      "variantOf": "send"
     }
-  ]
+  ],
+  "openPoints": [
+    {
+      "id": "op.retention",
+      "kind": "parked",
+      "context": "How long ledger-events keeps history: forever (replay any projection) or 30 days plus snapshots.",
+      "targets": [
+        {
+          "kind": "node",
+          "id": "events"
+        }
+      ]
+    }
+  ],
+  "level": "container"
 }

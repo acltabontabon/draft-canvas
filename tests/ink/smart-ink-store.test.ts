@@ -91,6 +91,16 @@ describe('drawing and erasing', () => {
     store.getState().setSelection({ nodes: ['n_api'], edges: [] });
     expect(useUiStore.getState().inkSelection).toEqual([]);
   });
+
+  it('a stroke a collaborator erased is no longer chosen, and one they left still is', () => {
+    const a = draw(c.line({ x: 0, y: 200 }, { x: 300, y: 200 }, c.hand(1))[0]!);
+    const b = draw(c.line({ x: 0, y: 260 }, { x: 300, y: 260 }, c.hand(2))[0]!);
+    useUiStore.getState().setInkSelection([a.id, b.id]);
+    const file = fileOf(store.getState());
+    expect(store.getState().applyRemote({ ...file, ink: inkOf(file).filter((stroke) => stroke.id !== a.id) })).toBe(true);
+    expect(strokes()).toBe(1);
+    expect(useUiStore.getState().inkSelection).toEqual([b.id]);
+  });
 });
 
 describe('copying sketches', () => {
@@ -206,6 +216,17 @@ describe('Smart Ink conversion', () => {
     const id = store.getState().inkToConnector([stroke.id], 'n_api', 'n_db', true);
     const edge = store.getState().document.edges.find((e) => e.id === id)!;
     expect(edge).toMatchObject({ source: 'n_api', target: 'n_db', directed: true, semanticsOrigin: 'inferred' });
+    expect(strokes()).toBe(0);
+    store.getState().undo();
+    expect(store.getState().document.edges).toHaveLength(0);
+    expect(strokes()).toBe(1);
+  });
+
+  it('a path drawn between two shapes becomes a connector bent through its corners, as one undo step', () => {
+    const stroke = draw(c.line({ x: 90, y: 60 }, { x: 490, y: 60 }, c.hand(21))[0]!);
+    const id = store.getState().inkToConnector([stroke.id], 'n_api', 'n_db', false, [{ x: 90, y: 200 }, { x: 490, y: 200 }]);
+    const edge = store.getState().document.edges.find((e) => e.id === id)!;
+    expect(edge.waypoints).toEqual([{ x: 90, y: 200 }, { x: 490, y: 200 }]);
     expect(strokes()).toBe(0);
     store.getState().undo();
     expect(store.getState().document.edges).toHaveLength(0);

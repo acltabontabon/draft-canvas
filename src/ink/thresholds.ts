@@ -34,6 +34,13 @@ export const MIN_DIAGONAL_PX = 18;
 export const END_REACH_PX = 14;
 /** How far a drawn box may miss the edge of a shape it goes round and still enclose it. */
 export const ENCLOSE_TOLERANCE_PX = 6;
+/** How closely a traced route follows the hand: bends smaller than this are wobble, not intent. */
+export const TRACE_EPSILON_PX = 12;
+/** A stroke between two shapes with more bends than this is a scribble across them, not a route. */
+export const TRACE_MAX_BENDS = 6;
+/** Where a one-stroke outline closes, the pen passes within this of where it began (or, on a large
+ *  drawing, within `LOOP_CLOSE_FRACTION` of its diagonal — whichever is further). */
+export const LOOP_CLOSE_PX = 12;
 /** A stroke that starts this close to the drawing in progress continues it (or, at least,
  *  `CONTINUES_FRACTION` of its larger side — whichever is further). */
 export const CONTINUES_WITHIN_PX = 28;
@@ -49,6 +56,12 @@ export const SMALL_CIRCLE = 52;
 
 /** A stroke within this fraction of the drawing's larger side also continues it (see `CONTINUES_WITHIN_PX`). */
 export const CONTINUES_FRACTION = 0.25;
+
+/** See `LOOP_CLOSE_PX`. */
+export const LOOP_CLOSE_FRACTION = 0.06;
+/** The most of a closed outline's stroke that may be overshoot, before and after the loop together:
+ *  more than this is a line out of the shape, not a flick of the pen. */
+export const LOOP_TAIL_FRACTION = 0.22;
 
 // ---- Milliseconds ----------------------------------------------------------------------------
 

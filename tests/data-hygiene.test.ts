@@ -6,7 +6,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode, cloneDocumentAsNew } from '../src/document/factory';
 import { LIMITS } from '../src/document/limits';
-import { addEdges, addNodes, setSettings, setTitle, setViewport, updateNode } from '../src/document/operations';
+import { addEdges, addNodes, setTitle, setViewport, updateNode } from '../src/document/operations';
 import { cleanTitle, titleWithSuffix } from '../src/document/sanitize';
 import { parseDocument } from '../src/document/validate';
 import { serializeDocument } from '../src/export/project';
@@ -43,7 +43,6 @@ describe('canvas settings', () => {
     const before = store.getState().document;
     store.getState().updateSettings({ grid: 'dots' });
     store.getState().updateSettings({ showSequence: true });
-    store.getState().updateSettings({ background: { ...before.settings.background } });
     expect(store.getState().document).toBe(before);
     expect(store.getState().history.past).toHaveLength(0);
     // A real change still is one, and undoes.
@@ -53,25 +52,13 @@ describe('canvas settings', () => {
     expect(store.getState().document.settings.grid).toBe('dots');
   });
 
-  it('is held to what a load keeps, silently: a scrim and a blur between 0 and 1, a grid that exists', () => {
-    const { background } = store.getState().document.settings;
-    store.getState().updateSettings({ background: { ...background, dim: 5, blur: -2 } });
-    expect(store.getState().document.settings.background).toMatchObject({ dim: 1, blur: 0 });
+  it('is held to what a load keeps, silently: a grid that exists', () => {
     store.getState().updateSettings({ grid: 'weird' as never });
     expect(store.getState().document.settings.grid).toBe('dots');
-    store.getState().updateSettings({ background: { ...background, dim: Number.NaN, fit: 'sideways' as never } });
-    expect(store.getState().document.settings.background).toMatchObject({ dim: 1, fit: 'cover' });
     // What is stored is what opens: no repair, nothing changed.
     const result = reloaded();
     expect(result.repairs).toEqual([]);
     expect(result.document.settings).toEqual(store.getState().document.settings);
-  });
-
-  it('keeps an image id and drops one that is not one', () => {
-    const { background } = store.getState().document.settings;
-    const doc = createDocument('x');
-    expect(setSettings(doc, { background: { ...background, enabled: true, imageId: 'bg_1' } }).settings.background.imageId).toBe('bg_1');
-    expect(setSettings(doc, { background: { ...background, imageId: ' '.repeat(3) } }).settings.background.imageId).toBeUndefined();
   });
 });
 

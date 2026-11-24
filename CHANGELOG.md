@@ -6,6 +6,221 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+### Shared
+
+#### Added
+
+- **A style of your own** — **Appearance** (the palette button at the bottom right, a right-click
+  on the canvas, or `⌘K`) opens beside the canvas and fits the diagram
+  to what is left, so every choice is seen on your diagram as you make it. Pick a style from the
+  gallery, then change the drawing hand, line weight, corners, colours, connectors and the look of
+  any shape, with a picture of your own for a shape if you like. The style is saved in the diagram,
+  so it looks the same for everyone. <!-- highlight -->
+- **Your canvas, your brand** — Pick any canvas colour and a brand colour, and print a backdrop on
+  the canvas: a built-in pattern or your own SVG, repeated edge to edge. The whole editor wears
+  the style, its bars and panels included.
+- **Style packs** — Ten illustrated styles from the starters gallery, each with a drawing for
+  every shape, its own colours, its own line and its own backdrop: Professional, Geek, Arena, High
+  seas, High fantasy, Cyberpunk, Cute, Weeb, Hardwood and Match Point.
+- **Styles as files** — Export a style as a `.draftstyle` file and import it on another device.
+
+#### Changed
+
+- **A calm place to style** — While Appearance is open the tools, Present and Share and the status
+  bar step back, leaving the diagram and the panel. **Done** brings them back.
+- **Shadows** — Off, Soft or Deep: Deep lifts shapes off the canvas, on dark canvases too.
+- **Canvas settings** — Next-shape suggestions moved to the **Canvas** tab of Appearance; the web's
+  separate Settings dialog is gone.
+- **Help menu** — **Watch the film** is no longer in it.
+- **Background images are gone** — A diagram's canvas is now part of its style: choose a canvas colour and a backdrop in **Appearance**. A diagram that had a background image opens without it.
+
+#### Fixed
+
+- **Load starters** — Loading the gallery no longer says it couldn’t reach GitHub for a moment
+  before the starters arrive.
+
+## [1.21.1] - 2026-11-23
+
+Clearer sequences, and fixes for opening files, keyboard handling and agents.
+
+### Shared
+
+#### Added
+
+- **Outage: every outage at once** — opening an outage with nothing selected lists what losing each
+  shape, boundary and connector would do: whom it reaches, which flows break and what it leaves
+  open. Point at a row to circle it on the canvas, click it to take it down.
+- **Outage: a connection down** — click a connector during an outage, or choose **Take this
+  connection down** from its menu, to see what happens when two shapes stay up but can't reach
+  each other.
+- **Outage: which flows break** — an outage says what it does to each flow: the first step that can
+  no longer happen, a failure path that comes into use, or that it carries on.
+- **Outage: work caught half-done** — an outage asks what undoes a write that happened before the
+  step that failed, whether a consumer is safe to run twice when its queue redelivers, and what
+  keeps a store and a message in step when the publish fails. A recovery action drawn for the
+  earlier step answers it.
+- **Outage: sources** — a note that quotes a product's documented behaviour (Amazon SQS, Kafka,
+  Redis and the rest) links to the vendor's page it was read from. Unfold the note to see it.
+- **Outage: one card** — the strip along the bottom of an outage is now a card: what the outage
+  does to each flow, what the colours mean, and the way out.
+- **Outage for agents** — `read_diagram`'s `outage` returns each flow's reading, takes a
+  `connector`, and with `{}` returns the whole list.
+
+#### Changed
+
+- **Sequences that read better** — Each kind of frame has its own colour and mark, long messages,
+  conditions and notes wrap instead of being cut short, and a new message is seen to arrive. <!-- highlight -->
+- **Replies by dragging back** — Drag from whoever was called back to its caller and the line is
+  the reply: dashed, and tied to the call it answers. <!-- highlight -->
+
+#### Fixed
+
+- **Outage: a queue's limit** — a queue with no product named no longer reads as holding messages
+  "until it's back". It says the drawing doesn't show how long or how much it keeps.
+- **Outage: calls nobody waits on** — an asynchronous call to something that is down no longer
+  passes without comment: the outage asks what becomes of the calls.
+- **Outage: a store that is only read** — a data store nothing reaches any more says "is no longer
+  read", and "stops being updated" only when something wrote to it.
+- **Outage: Redis, Valkey and Memcached** — a cache taken down no longer says Redis or Valkey come
+  back empty: by default they reload their last snapshot. Memcached's note now allows for a warm
+  restart.
+- **Outage: unfolded notes** — a note's full sentence no longer covers a neighbouring shape or its
+  own answers.
+- **Participants with a technology** — A lifeline no longer runs through the kind written under a
+  data store, queue or external service.
+- **Files that would not open** — A diagram with sequence fragments nested extremely deep, or a
+  shape name of hundreds of thousands of lines, now opens instead of being refused.
+- **Shared links keep sequences linked** — A lifeline in a shared copy still points at the shape
+  it stands for.
+- **Deleting mid-drag** — Starting to drag a shape while a connector is selected no longer lets
+  Delete remove the shape being dragged.
+- **Tidy up and Arrange previews** — Enter and Escape in a dialog opened over a preview now answer
+  the dialog, not the preview behind it.
+- **Going home** — A diagram still loading when you go home no longer opens afterwards, and a
+  reload at home no longer brings back a diagram opened earlier.
+- **A panel that fails to load** — An invite that cannot be fetched says so instead of blanking
+  the app.
+- **Diagrams dated in the future** — A file with a date years ahead no longer stays first in the
+  library.
+- **Flow variants and open points** — A variant of a flow whose id is used twice attaches to the
+  right flow, and an open point keeps the attachment that is still there.
+- **Sketches while sharing** — A stroke a collaborator erases is no longer left selected.
+
+### Desktop
+
+#### Fixed
+
+- **Agents told what went wrong** — An agent that named a shape by its label, or a shape in
+  another view, is now told which id or view to use and that nothing was changed, instead of
+  retrying an update that could not work.
+- **Typing to Nodi with an input method** — The Enter that confirms a conversion no longer sends
+  the prompt.
+- **Rename File** — Pressing Enter twice renames once, and the dialog stays until the rename has
+  answered.
+
+#### Security
+
+- Web address handling is updated past a stack overflow advisory.
+
+## [1.21.0] - 2026-11-22
+
+Take a shape down. Present any diagram.
+
+Outage replaces Traffic: take a shape down and read what fails, what absorbs it and what carries
+on. Present walks a diagram that has no flows, more shapes are drawn as what they do, and Arrange
+works around the shapes you hold in place.
+
+### Shared
+
+#### Added
+
+- **Outage** — Take a shape down and see what the drawing says happens next: what fails with it,
+  what absorbs the failure and what carries on. Each open question offers the edit that settles
+  it. It reads the drawing alone and invents no numbers. <!-- highlight -->
+- **Present without a flow** — **Present** walks any diagram by following its arrows, or only the
+  shapes you select. Click a connector to tell it next, then keep the walk as a flow. One button
+  lists everything it can walk. <!-- highlight -->
+- **Shapes drawn as what they do** — Gateway, Worker, Scheduler, External, Module, Adapter and Port
+  have their own drawings, joined by two new Service kinds: Load Balancer and Proxy. In a diagram
+  you already have they grow taller; check the spacing around them. <!-- highlight -->
+- **Hover to read** — Rest the pointer on a shape or connector to see its notes and code beside
+  it. Hold `Shift` to light everything a shape's data comes from and everything it feeds.
+  <!-- highlight -->
+- **Arrange your way** — Hold shapes in place and Arrange and Tidy up lay the rest out around
+  them. Arrange can follow one flow in a straight line, and its preview counts connector crossings
+  before and after. <!-- highlight -->
+- **Artifact** — A new shape for what a system reads, mounts or presents: a File, a Config, a
+  Secret or a Certificate.
+- **Add by name** — Type what a thing is called in **Shapes** or `⌘K`, such as `load balancer`,
+  `cdn` or `api key`, and it arrives already set to that kind.
+- **Make room** — Drag across or down and everything past the pointer moves away, or back, in one
+  undo step. A boundary the line passes through stretches.
+- **Portals** — Draw a long connector as a short labelled stub at each end. Click a stub's words
+  to go to the other end.
+- **Legend** — Show a legend that names the kinds of line a diagram uses, on the canvas and in
+  exported images.
+
+#### Changed
+
+- **Technology sets more** — About 150 more product names set a shape's kind. Kafka makes a Queue
+  a Stream, a database *streams changes to* a change-data-capture tool, and a CDN *serves from*
+  the storage behind it.
+- **Finer connectors** — Lines are lighter, arrowheads slimmer, and a rerouted connector eases to
+  its new line instead of jumping. Zoomed far out, the small print beside connectors steps back.
+- **Smart Ink reads more** — A box drawn in one hurried stroke becomes a box, and a stroke drawn
+  from one shape round to another becomes a connector that keeps the path you drew.
+- **No border round the canvas** — The coloured frame that appeared round the canvas after a
+  keyboard shortcut is gone. Selected shapes still show which ones the arrow keys will move.
+- **File format 29** — Held shapes and portals are new in the file. Older versions say they cannot
+  open a file saved by this one rather than drop them.
+
+#### Removed
+
+- **Traffic** — Traffic, its example rates and its field notes are gone. What it found worth
+  knowing, such as a missing fallback or a queue with no replay route, now shows in an outage.
+
+#### Fixed
+
+- **Longer names on a Data Store** — A name that wraps to a second line now grows the shape down
+  under its glyph instead of stretching it across its neighbours.
+- **Shared-link attachment cards** — A card with no room beside its shape now settles where it
+  covers nothing, when there is such a place along the bottom of the diagram.
+- **Dragging a connector out to a new shape** — The new shape lands clear of its neighbours, every
+  selected shape is connected to it in one undo step, and the connector's ends stay automatic.
+- **The Add to canvas picker scrolls in a short window** — It no longer runs past the bottom edge,
+  and the highlighted choice is always brought into view.
+- **Presenting to collaborators** — A follower sees the presenter's own step, a late arrival can
+  be let in to view or to edit, and someone who joined to view is no longer told their edits are
+  shared.
+
+### Desktop
+
+#### Added
+
+- **Agents read outages** — An agent can ask what an outage affects and which questions it leaves
+  open. A shape an agent draws takes its kind from its technology, as it does when you type it.
+
+#### Fixed
+
+- **New File asks about unsaved changes once** — It used to ask again after the new file was
+  already created. It now asks once, before the Save dialog.
+- **Rendering a large selection** — An agent rendering the current selection failed above
+  200 shapes. The limit now applies only to shapes an agent lists itself.
+- **Agents can begin from a starter again** — An agent asked to start from most gallery starters
+  was refused, because its readability check judged the starter's own hand-made layout. It now
+  checks only what the agent adds or changes.
+- **A failed agent change no longer ends a live session** — A diagram an agent asks to show now
+  opens only after its change is made, and never over a canvas you are sharing.
+- **Keyboard Shortcuts opens on Home** — **Help → Keyboard Shortcuts** did nothing on Home, then
+  opened over the next diagram you started.
+
+### Web
+
+#### Fixed
+
+- **Restore a backup into an empty browser** — A browser with no diagrams had no way to restore a
+  backup ZIP. **Import a file** and a drop now restore one, on Home and in the Library.
+
 ## [1.20.0] - 2026-11-16
 
 Draw sequences. Sketch over any diagram.
@@ -2713,7 +2928,9 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.20.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.1...main
+[1.21.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.0...v1.21.1
+[1.21.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.20.0...v1.21.0
 [1.20.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.19.0...v1.20.0
 [1.19.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.1...v1.19.0
 [1.18.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.0...v1.18.1

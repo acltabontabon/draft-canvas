@@ -1,0 +1,2076 @@
+{
+  "format": "draft-canvas",
+  "version": 31,
+  "metadata": {
+    "id": "starter-ride-hailing",
+    "title": "Ride-hailing platform",
+    "createdAt": 1794441600000,
+    "updatedAt": 1794441600000
+  },
+  "nodes": [
+    {
+      "id": "apps",
+      "type": "group",
+      "x": 210,
+      "y": 319,
+      "width": 240,
+      "height": 755,
+      "z": -2,
+      "text": "Apps",
+      "textOrigin": "explicit",
+      "boundaryPreset": "group"
+    },
+    {
+      "id": "cloud",
+      "type": "group",
+      "x": 616,
+      "y": -137,
+      "width": 1676,
+      "height": 1523,
+      "z": -2,
+      "text": "Swiftride cloud",
+      "textOrigin": "explicit",
+      "boundaryPreset": "system"
+    },
+    {
+      "id": "edge-d",
+      "type": "group",
+      "x": 648,
+      "y": 7,
+      "width": 304,
+      "height": 808,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Edge",
+      "textOrigin": "explicit",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "locs",
+      "type": "group",
+      "x": 1018,
+      "y": -57,
+      "width": 584,
+      "height": 318,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Driver locations",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "trips-d",
+      "type": "group",
+      "x": 968,
+      "y": 289,
+      "width": 304,
+      "height": 795,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Trips",
+      "textOrigin": "explicit",
+      "accent": "teal",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "market",
+      "type": "group",
+      "x": 1680,
+      "y": -1,
+      "width": 580,
+      "height": 808,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Marketplace",
+      "textOrigin": "explicit",
+      "accent": "violet",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "pay-d",
+      "type": "group",
+      "x": 1318,
+      "y": 869,
+      "width": 574,
+      "height": 485,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Payments",
+      "textOrigin": "explicit",
+      "accent": "amber",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "notify-d",
+      "type": "group",
+      "x": 648,
+      "y": 1099,
+      "width": 304,
+      "height": 255,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Notifications",
+      "textOrigin": "explicit",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "data-d",
+      "type": "group",
+      "x": 968,
+      "y": 1099,
+      "width": 304,
+      "height": 255,
+      "z": -1,
+      "parentId": "cloud",
+      "text": "Data",
+      "textOrigin": "explicit",
+      "boundaryPreset": "domain"
+    },
+    {
+      "id": "drivers",
+      "type": "actor",
+      "x": 10,
+      "y": 381,
+      "width": 120,
+      "height": 118,
+      "z": 0,
+      "text": "Drivers",
+      "description": "Accept trips near them.",
+      "textOrigin": "explicit",
+      "actorKind": "group",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "driver-app",
+      "type": "service",
+      "x": 242,
+      "y": 399,
+      "width": 176,
+      "height": 83,
+      "z": 0,
+      "parentId": "apps",
+      "text": "Driver App",
+      "description": "Sends location and takes ride offers.",
+      "technology": "Kotlin",
+      "textOrigin": "explicit",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "rider",
+      "type": "actor",
+      "x": 10,
+      "y": 948,
+      "width": 120,
+      "height": 104,
+      "z": 0,
+      "text": "Rider",
+      "description": "Needs a car, now.",
+      "textOrigin": "explicit",
+      "actorKind": "human",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "rider-app",
+      "type": "service",
+      "x": 242,
+      "y": 959,
+      "width": 176,
+      "height": 83,
+      "z": 0,
+      "parentId": "apps",
+      "text": "Rider App",
+      "description": "Books rides and tracks the car.",
+      "technology": "Swift",
+      "textOrigin": "explicit",
+      "serviceKind": "generic"
+    },
+    {
+      "id": "j-api",
+      "type": "ellipse",
+      "x": 542,
+      "y": 678,
+      "width": 36,
+      "height": 36,
+      "z": 0
+    },
+    {
+      "id": "loc-gw",
+      "type": "service",
+      "x": 680,
+      "y": 87,
+      "width": 240,
+      "height": 126,
+      "z": 0,
+      "parentId": "edge-d",
+      "text": "Location Gateway",
+      "description": "Holds a live MQTT connection per driver.",
+      "technology": "EMQX",
+      "textOrigin": "explicit",
+      "serviceKind": "gateway",
+      "replicas": 8
+    },
+    {
+      "id": "gateway",
+      "type": "service",
+      "x": 680,
+      "y": 657,
+      "width": 240,
+      "height": 126,
+      "z": 0,
+      "parentId": "edge-d",
+      "text": "API Gateway",
+      "description": "Authenticates and routes every API call.",
+      "technology": "Envoy",
+      "textOrigin": "explicit",
+      "serviceKind": "gateway",
+      "replicas": 6
+    },
+    {
+      "id": "locations",
+      "type": "queue",
+      "x": 1050,
+      "y": 109,
+      "width": 140,
+      "height": 120,
+      "z": 0,
+      "parentId": "locs",
+      "text": "driver-locations",
+      "description": "Every driver's position, every 4 seconds.",
+      "technology": "Kafka",
+      "textOrigin": "explicit",
+      "queueKind": "stream"
+    },
+    {
+      "id": "indexer",
+      "type": "service",
+      "x": 1350,
+      "y": 87,
+      "width": 220,
+      "height": 126,
+      "z": 0,
+      "parentId": "locs",
+      "text": "Geo Indexer",
+      "description": "Files each driver under their H3 cell.",
+      "technology": "Go",
+      "textOrigin": "explicit",
+      "serviceKind": "worker",
+      "replicas": 12
+    },
+    {
+      "id": "trips-db",
+      "type": "database",
+      "x": 1060,
+      "y": 369,
+      "width": 120,
+      "height": 143,
+      "z": 0,
+      "parentId": "trips-d",
+      "text": "Trips DB",
+      "description": "Every trip and its state history.",
+      "technology": "PostgreSQL",
+      "textOrigin": "explicit",
+      "databaseKind": "sql"
+    },
+    {
+      "id": "trips",
+      "type": "service",
+      "x": 1032,
+      "y": 659,
+      "width": 176,
+      "height": 123,
+      "z": 0,
+      "parentId": "trips-d",
+      "text": "Trips",
+      "description": "Runs each trip's state machine, request to drop-off.",
+      "technology": "Spring Boot",
+      "textOrigin": "explicit",
+      "serviceKind": "api",
+      "replicas": 6,
+      "attachments": [
+        {
+          "id": "n.states",
+          "type": "code",
+          "language": "yaml",
+          "code": "states: [REQUESTED, OFFERED, ACCEPTED,\n         ARRIVED, ON_TRIP, COMPLETED, CANCELLED]\ntransitions:\n  REQUESTED: [OFFERED, CANCELLED]\n  OFFERED:   [ACCEPTED, REQUESTED, CANCELLED]\n  ACCEPTED:  [ARRIVED, CANCELLED]\n  ARRIVED:   [ON_TRIP, CANCELLED]\n  ON_TRIP:   [COMPLETED]",
+          "width": 392,
+          "height": 197
+        }
+      ],
+      "inside": {
+        "nodes": [
+          {
+            "id": "t.app",
+            "type": "service",
+            "x": 0,
+            "y": 66,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Rider App",
+            "technology": "Swift",
+            "textOrigin": "explicit",
+            "serviceKind": "generic"
+          },
+          {
+            "id": "t.api",
+            "type": "component",
+            "x": 283,
+            "y": 60,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Trip Controller",
+            "description": "Takes requests, accepts and cancels.",
+            "technology": "Spring",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "t.machine",
+            "type": "component",
+            "x": 547,
+            "y": 60,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Trip State Machine",
+            "description": "Allows only legal moves between states.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "t.fare",
+            "type": "component",
+            "x": 835,
+            "y": 20,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Fare Quote",
+            "description": "Prices distance, time and surge up front.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "t.repo",
+            "type": "component",
+            "x": 831,
+            "y": 134,
+            "width": 160,
+            "height": 142,
+            "z": 0,
+            "text": "Trip Repository",
+            "description": "Saves the trip and its outbox row together.",
+            "technology": "Hibernate",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "t.db",
+            "type": "database",
+            "x": 1118,
+            "y": 134,
+            "width": 120,
+            "height": 114,
+            "z": 0,
+            "text": "Trips DB",
+            "technology": "PostgreSQL",
+            "textOrigin": "explicit",
+            "databaseKind": "sql"
+          },
+          {
+            "id": "t.relay",
+            "type": "service",
+            "x": 1351,
+            "y": 134,
+            "width": 220,
+            "height": 126,
+            "z": 0,
+            "text": "Outbox Relay",
+            "description": "Publishes committed state changes.",
+            "technology": "Debezium",
+            "textOrigin": "explicit",
+            "serviceKind": "worker"
+          },
+          {
+            "id": "t.events",
+            "type": "queue",
+            "x": 1707,
+            "y": 156.11363636363637,
+            "width": 140,
+            "height": 72,
+            "z": 0,
+            "text": "trip-events",
+            "technology": "Kafka",
+            "textOrigin": "explicit",
+            "queueKind": "topic"
+          }
+        ],
+        "edges": [
+          {
+            "id": "t.post",
+            "source": "t.app",
+            "target": "t.api",
+            "label": "POST /trips",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "response": "201 Trip",
+            "hasResponse": true,
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "t.move",
+            "source": "t.api",
+            "target": "t.machine",
+            "label": "request(trip)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "t.price",
+            "source": "t.machine",
+            "target": "t.fare",
+            "label": "quote(route)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.25
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.75
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "t.save",
+            "source": "t.machine",
+            "target": "t.repo",
+            "label": "save(trip, event)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "sourceAnchor": {
+              "side": "bottom",
+              "offset": 0.75
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.25
+            },
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "t.sql",
+            "source": "t.repo",
+            "target": "t.db",
+            "label": "One transaction",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "writes",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "t.tail",
+            "source": "t.db",
+            "target": "t.relay",
+            "label": "Outbox rows",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "reads",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "t.pub",
+            "source": "t.relay",
+            "target": "t.events",
+            "label": "TripStateChanged",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "publishes",
+            "kind": "event",
+            "sourceAnchor": {
+              "side": "bottom",
+              "offset": 0.75
+            },
+            "targetAnchor": {
+              "side": "bottom",
+              "offset": 0.25
+            },
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "t.flow",
+            "title": "Request a ride, inside Trips",
+            "steps": [
+              {
+                "id": "t.flow.s1",
+                "edgeId": "t.post",
+                "caption": "The rider app posts pickup, drop-off and payment method."
+              },
+              {
+                "id": "t.flow.s2",
+                "edgeId": "t.move",
+                "caption": "A new trip starts in REQUESTED."
+              },
+              {
+                "id": "t.flow.s3",
+                "edgeId": "t.price",
+                "caption": "The fare is fixed up front, surge included."
+              },
+              {
+                "id": "t.flow.s4",
+                "edgeId": "t.save",
+                "caption": "The trip and its event are saved together."
+              },
+              {
+                "id": "t.flow.s5",
+                "edgeId": "t.sql",
+                "caption": "State and outbox row commit in one transaction."
+              },
+              {
+                "id": "t.flow.s6",
+                "edgeId": "t.tail",
+                "caption": "Debezium reads the committed outbox row."
+              },
+              {
+                "id": "t.flow.s7",
+                "edgeId": "t.pub",
+                "caption": "TripStateChanged reaches everyone who listens."
+              }
+            ],
+            "accent": "teal"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "level": "component"
+      }
+    },
+    {
+      "id": "trip-events",
+      "type": "queue",
+      "x": 1050,
+      "y": 948,
+      "width": 140,
+      "height": 104,
+      "z": 0,
+      "parentId": "trips-d",
+      "text": "trip-events",
+      "description": "Every change of every trip's state.",
+      "technology": "Kafka",
+      "textOrigin": "explicit",
+      "queueKind": "topic"
+    },
+    {
+      "id": "geo",
+      "type": "database",
+      "x": 1740,
+      "y": 79,
+      "width": 120,
+      "height": 143,
+      "z": 0,
+      "parentId": "market",
+      "text": "Geo Index",
+      "description": "Drivers and surge per H3 cell.",
+      "technology": "Redis",
+      "textOrigin": "explicit",
+      "databaseKind": "cache",
+      "attachments": [
+        {
+          "id": "n.h3",
+          "type": "code",
+          "language": "plaintext",
+          "code": "cell  = h3.latlng_to_cell(lat, lng, 9)\nring  = h3.grid_disk(cell, 2)      # ~2 km\nfree  = redis.sunion(\n          *[f\"free:{c}\" for c in ring])\nsurge = redis.get(f\"surge:{cell}\")",
+          "width": 347,
+          "height": 138.875
+        }
+      ]
+    },
+    {
+      "id": "surge",
+      "type": "service",
+      "x": 2060,
+      "y": 79,
+      "width": 160,
+      "height": 142,
+      "z": 0,
+      "parentId": "market",
+      "text": "Surge Pricing",
+      "description": "Compares open requests with free drivers per cell.",
+      "technology": "Apache Flink",
+      "textOrigin": "explicit",
+      "serviceKind": "worker",
+      "attachments": [
+        {
+          "id": "n.sched",
+          "type": "note",
+          "text": "Should surge apply to rides booked a day ahead?",
+          "noteKind": "question",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "dispatch",
+      "type": "service",
+      "x": 1712,
+      "y": 666,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "market",
+      "text": "Dispatch",
+      "description": "Matches each trip with the best nearby driver.",
+      "technology": "Go",
+      "textOrigin": "explicit",
+      "serviceKind": "api",
+      "replicas": 10,
+      "attachments": [
+        {
+          "id": "n.dispatch",
+          "type": "note",
+          "text": "One offer, one driver, 15 seconds. Offering a trip to several drivers at once makes them race, and most of them lose.",
+          "noteKind": "decision",
+          "width": 200,
+          "height": 56
+        }
+      ],
+      "inside": {
+        "nodes": [
+          {
+            "id": "d.trips",
+            "type": "service",
+            "x": 0,
+            "y": 173,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Trips",
+            "technology": "Spring Boot",
+            "textOrigin": "explicit",
+            "serviceKind": "api"
+          },
+          {
+            "id": "d.handler",
+            "type": "component",
+            "x": 277,
+            "y": 167,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "Match Handler",
+            "description": "Takes one trip and returns one driver.",
+            "technology": "gRPC",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "d.search",
+            "type": "component",
+            "x": 788,
+            "y": 0,
+            "width": 152,
+            "height": 95,
+            "z": 0,
+            "text": "Candidate Search",
+            "description": "Widens the H3 ring until drivers turn up.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "d.geo",
+            "type": "database",
+            "x": 1098,
+            "y": 8.63636363636364,
+            "width": 120,
+            "height": 114,
+            "z": 0,
+            "text": "Geo Index",
+            "technology": "Redis",
+            "textOrigin": "explicit",
+            "databaseKind": "cache"
+          },
+          {
+            "id": "d.scorer",
+            "type": "component",
+            "x": 788,
+            "y": 159.5,
+            "width": 152,
+            "height": 95,
+            "z": 0,
+            "text": "ETA Scorer",
+            "description": "Ranks candidates by pickup time, not distance.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "d.eta",
+            "type": "service",
+            "x": 1070,
+            "y": 173,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "ETA Model",
+            "technology": "PyTorch",
+            "textOrigin": "explicit",
+            "serviceKind": "api"
+          },
+          {
+            "id": "d.sequencer",
+            "type": "component",
+            "x": 788,
+            "y": 309,
+            "width": 152,
+            "height": 95,
+            "z": 0,
+            "text": "Offer Sequencer",
+            "description": "Offers the trip to one driver at a time.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "d.timer",
+            "type": "component",
+            "x": 1082,
+            "y": 309,
+            "width": 152,
+            "height": 95,
+            "z": 0,
+            "text": "Acceptance Timer",
+            "description": "Moves on after 15 seconds without an answer.",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          }
+        ],
+        "edges": [
+          {
+            "id": "d.find",
+            "source": "d.trips",
+            "target": "d.handler",
+            "label": "FindDriver",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "grpc",
+            "response": "driver",
+            "hasResponse": true,
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.cand",
+            "source": "d.handler",
+            "target": "d.search",
+            "label": "candidates(pickup)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.ring",
+            "source": "d.search",
+            "target": "d.geo",
+            "label": "Drivers in k-ring",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "reads",
+            "condition": "k = 2, then 4",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.rank",
+            "source": "d.handler",
+            "target": "d.scorer",
+            "label": "rank(candidates)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.etas",
+            "source": "d.scorer",
+            "target": "d.eta",
+            "label": "ETA batch",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "hasResponse": true,
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.offer",
+            "source": "d.handler",
+            "target": "d.sequencer",
+            "label": "offer(ranked)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "d.wait",
+            "source": "d.sequencer",
+            "target": "d.timer",
+            "label": "start(15 s)",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "d.flow",
+            "title": "Match a driver, inside Dispatch",
+            "steps": [
+              {
+                "id": "d.flow.s1",
+                "edgeId": "d.find",
+                "caption": "Trips asks for one driver for this pickup."
+              },
+              {
+                "id": "d.flow.s2",
+                "edgeId": "d.cand",
+                "caption": "The search starts two H3 rings out, about 2 km."
+              },
+              {
+                "id": "d.flow.s3",
+                "edgeId": "d.ring",
+                "caption": "No drivers? It widens to four rings before giving up."
+              },
+              {
+                "id": "d.flow.s4",
+                "edgeId": "d.rank",
+                "caption": "Candidates are ranked by time to pickup."
+              },
+              {
+                "id": "d.flow.s5",
+                "edgeId": "d.etas",
+                "caption": "The ETA model scores all of them in one call."
+              },
+              {
+                "id": "d.flow.s6",
+                "edgeId": "d.offer",
+                "caption": "The best driver gets the offer first."
+              },
+              {
+                "id": "d.flow.s7",
+                "edgeId": "d.wait",
+                "caption": "Fifteen seconds to accept, then the next driver."
+              }
+            ],
+            "accent": "teal"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "level": "component"
+      },
+      "held": true
+    },
+    {
+      "id": "eta",
+      "type": "service",
+      "x": 2052,
+      "y": 666,
+      "width": 176,
+      "height": 109,
+      "z": 0,
+      "parentId": "market",
+      "text": "ETA Model",
+      "description": "Predicts pickup and trip times from live traffic.",
+      "technology": "PyTorch",
+      "textOrigin": "explicit",
+      "serviceKind": "api",
+      "replicas": 4
+    },
+    {
+      "id": "maps",
+      "type": "service",
+      "x": 2370,
+      "y": 657,
+      "width": 220,
+      "height": 126,
+      "z": 0,
+      "text": "Maps & Routing",
+      "description": "Roads, routes and traffic.",
+      "technology": "Mapbox",
+      "textOrigin": "explicit",
+      "serviceKind": "external"
+    },
+    {
+      "id": "payments",
+      "type": "service",
+      "x": 1372,
+      "y": 949,
+      "width": 176,
+      "height": 103,
+      "z": 0,
+      "parentId": "pay-d",
+      "text": "Payments",
+      "description": "Holds fares, charges riders and pays drivers.",
+      "technology": "Spring Boot",
+      "textOrigin": "explicit",
+      "serviceKind": "api"
+    },
+    {
+      "id": "payouts",
+      "type": "service",
+      "x": 1350,
+      "y": 1187,
+      "width": 220,
+      "height": 126,
+      "z": 0,
+      "parentId": "pay-d",
+      "text": "Driver Payouts",
+      "description": "Pays each driver's week of earnings.",
+      "technology": "Apache Airflow",
+      "textOrigin": "explicit",
+      "serviceKind": "scheduler",
+      "attachments": [
+        {
+          "id": "n.ledger",
+          "type": "note",
+          "text": "Drivers are paid from the ledger, not from provider events: the ledger is the one source of truth for money.",
+          "noteKind": "decision",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "ledger",
+      "type": "database",
+      "x": 1740,
+      "y": 1179,
+      "width": 120,
+      "height": 143,
+      "z": 0,
+      "parentId": "pay-d",
+      "text": "Ledger",
+      "description": "Every cent, double-entry.",
+      "technology": "CockroachDB",
+      "textOrigin": "explicit",
+      "databaseKind": "sql"
+    },
+    {
+      "id": "adyen",
+      "type": "service",
+      "x": 2350,
+      "y": 937,
+      "width": 260,
+      "height": 126,
+      "z": 0,
+      "text": "Card & Payout Provider",
+      "description": "Holds and charges cards, sends bank payouts.",
+      "technology": "Adyen",
+      "textOrigin": "explicit",
+      "serviceKind": "external"
+    },
+    {
+      "id": "notify",
+      "type": "service",
+      "x": 680,
+      "y": 1187,
+      "width": 240,
+      "height": 126,
+      "z": 0,
+      "parentId": "notify-d",
+      "text": "Notifier",
+      "description": "Turns trip events into pushes and texts.",
+      "technology": "Node.js",
+      "textOrigin": "explicit",
+      "serviceKind": "worker"
+    },
+    {
+      "id": "fcm",
+      "type": "service",
+      "x": 450,
+      "y": 1187,
+      "width": 220,
+      "height": 126,
+      "z": 0,
+      "text": "Push Service",
+      "description": "Delivers push notifications to phones.",
+      "technology": "Firebase",
+      "textOrigin": "explicit",
+      "serviceKind": "external"
+    },
+    {
+      "id": "warehouse",
+      "type": "database",
+      "x": 1000,
+      "y": 1179,
+      "width": 240,
+      "height": 143,
+      "z": 0,
+      "parentId": "data-d",
+      "text": "Trips Warehouse",
+      "description": "Every trip, fare and payout, for finance.",
+      "technology": "Snowflake",
+      "textOrigin": "explicit",
+      "databaseKind": "table"
+    },
+    {
+      "id": "surge-card",
+      "type": "text",
+      "x": 1835,
+      "y": 282,
+      "width": 290,
+      "height": 292,
+      "z": 0,
+      "text": "### Surge per H3 cell\n| Requests ÷ drivers | Surge |\n| --- | ---: |\n| under 1.0 | 1.0× |\n| 1.0 – 1.5 | 1.3× |\n| 1.5 – 2.5 | 1.8× |\n| over 2.5 | 2.5× |\n\n> [!WARNING]\n> Capped at 1.0× during declared emergencies.",
+      "textOrigin": "explicit",
+      "accent": "violet",
+      "textBackground": "card"
+    },
+    {
+      "id": "hand",
+      "type": "text",
+      "x": 1374,
+      "y": 23,
+      "width": 173,
+      "height": 36,
+      "z": 0,
+      "parentId": "locs",
+      "text": "250k positions a second",
+      "textOrigin": "explicit",
+      "accent": "blue",
+      "textFont": "hand"
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "x": 10,
+      "y": -295,
+      "width": 1200,
+      "height": 110,
+      "z": 0,
+      "text": "# Swiftride\nA ride-hailing platform: **1M** drivers online, **30M** trips a day, a car in **4 minutes**.",
+      "textOrigin": "explicit",
+      "textRole": "title"
+    },
+    {
+      "id": "seq-request",
+      "type": "sequence",
+      "x": 1096,
+      "y": 1486,
+      "width": 717,
+      "height": 818,
+      "z": 0,
+      "text": "Request a ride, message by message",
+      "textOrigin": "explicit",
+      "sequence": {
+        "participants": [
+          {
+            "id": "sp_j2t1ah2u1cyw",
+            "name": "Rider App",
+            "type": "service",
+            "serviceKind": "generic",
+            "technology": "Swift",
+            "ref": "rider-app"
+          },
+          {
+            "id": "sp_x4g9fngq7d0e",
+            "name": "Trips",
+            "type": "service",
+            "serviceKind": "api",
+            "technology": "Spring Boot",
+            "ref": "trips"
+          },
+          {
+            "id": "sp_ds8wwzfkc1by",
+            "name": "Payments",
+            "type": "service",
+            "serviceKind": "api",
+            "technology": "Spring Boot",
+            "ref": "payments"
+          },
+          {
+            "id": "sp_e963d0y2fdy4",
+            "name": "Dispatch",
+            "type": "service",
+            "serviceKind": "api",
+            "technology": "Go",
+            "ref": "dispatch"
+          },
+          {
+            "id": "sp_zwdjs90srhlc",
+            "name": "Driver App",
+            "type": "service",
+            "serviceKind": "generic",
+            "technology": "Kotlin",
+            "ref": "driver-app"
+          }
+        ],
+        "items": [
+          {
+            "id": "sm_g74kjmim9kmz",
+            "t": "message",
+            "from": "sp_j2t1ah2u1cyw",
+            "to": "sp_x4g9fngq7d0e",
+            "kind": "sync",
+            "label": "POST /trips",
+            "activate": true
+          },
+          {
+            "id": "sm_u6z3mozazvdj",
+            "t": "message",
+            "from": "sp_x4g9fngq7d0e",
+            "to": "sp_ds8wwzfkc1by",
+            "kind": "sync",
+            "label": "HoldFare",
+            "activate": true
+          },
+          {
+            "id": "sm_unrs6b7yehkm",
+            "t": "message",
+            "from": "sp_ds8wwzfkc1by",
+            "to": "sp_x4g9fngq7d0e",
+            "kind": "reply",
+            "label": "held",
+            "replyTo": "sm_u6z3mozazvdj",
+            "deactivate": true
+          },
+          {
+            "id": "sm_tknh3aemnbxc",
+            "t": "message",
+            "from": "sp_x4g9fngq7d0e",
+            "to": "sp_e963d0y2fdy4",
+            "kind": "sync",
+            "label": "FindDriver",
+            "activate": true
+          },
+          {
+            "id": "sf_wtb7dntr5vkb",
+            "t": "fragment",
+            "operator": "loop",
+            "operands": [
+              {
+                "id": "so_1q33q9n4dsea",
+                "guard": "until a driver accepts",
+                "items": [
+                  {
+                    "id": "sm_gtjvp992tg6m",
+                    "t": "message",
+                    "from": "sp_e963d0y2fdy4",
+                    "to": "sp_zwdjs90srhlc",
+                    "kind": "sync",
+                    "label": "Ride offer, 15 s"
+                  },
+                  {
+                    "id": "sf_chi3few1asv1",
+                    "t": "fragment",
+                    "operator": "alt",
+                    "operands": [
+                      {
+                        "id": "so_nkdp2nzv6q6n",
+                        "guard": "accepts",
+                        "items": [
+                          {
+                            "id": "sm_tx2bczi8cr1e",
+                            "t": "message",
+                            "from": "sp_zwdjs90srhlc",
+                            "to": "sp_e963d0y2fdy4",
+                            "kind": "reply",
+                            "label": "Accept",
+                            "replyTo": "sm_gtjvp992tg6m"
+                          }
+                        ]
+                      },
+                      {
+                        "id": "so_0gek57mdsui0",
+                        "guard": "declines or times out",
+                        "items": [
+                          {
+                            "id": "sm_b2bnhg9on00w",
+                            "t": "message",
+                            "from": "sp_zwdjs90srhlc",
+                            "to": "sp_e963d0y2fdy4",
+                            "kind": "reply",
+                            "label": "Decline",
+                            "replyTo": "sm_gtjvp992tg6m"
+                          },
+                          {
+                            "id": "sn_zj0drixnqdi6",
+                            "t": "note",
+                            "text": "offer the next nearest driver",
+                            "over": [
+                              "sp_e963d0y2fdy4"
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "id": "sm_9tn7itnlwe3o",
+            "t": "message",
+            "from": "sp_e963d0y2fdy4",
+            "to": "sp_x4g9fngq7d0e",
+            "kind": "reply",
+            "label": "matched",
+            "replyTo": "sm_tknh3aemnbxc",
+            "deactivate": true
+          },
+          {
+            "id": "sm_5pshqnefvmyo",
+            "t": "message",
+            "from": "sp_x4g9fngq7d0e",
+            "to": "sp_j2t1ah2u1cyw",
+            "kind": "reply",
+            "label": "201 Driver on the way",
+            "replyTo": "sm_g74kjmim9kmz",
+            "deactivate": true
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "online",
+      "source": "drivers",
+      "target": "driver-app",
+      "label": "Go online",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "ping",
+      "source": "driver-app",
+      "target": "loc-gw",
+      "label": "Location (MQTT)",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "cadence": "Every 4 s",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.25
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "inferred",
+      "attachments": [
+        {
+          "id": "n.lossy",
+          "type": "note",
+          "text": "Locations are lossy on purpose: a dropped position is replaced 4 seconds later. Never retry one, and never block a driver on it.",
+          "noteKind": "warning",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "driver-api",
+      "source": "driver-app",
+      "target": "j-api",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.75
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "request",
+      "source": "rider",
+      "target": "rider-app",
+      "label": "Requests a ride",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "rider-api",
+      "source": "rider-app",
+      "target": "j-api",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "api",
+      "source": "j-api",
+      "target": "gateway",
+      "label": "HTTPS",
+      "directed": true,
+      "routing": "smoothstep"
+    },
+    {
+      "id": "publish-loc",
+      "source": "loc-gw",
+      "target": "locations",
+      "label": "DriverLocation",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.loc",
+          "type": "code",
+          "language": "json",
+          "code": "{\n  \"driver\": \"d_51c0\",\n  \"lat\": -23.5614,\n  \"lng\": -46.6559,\n  \"heading\": 270,\n  \"speedKmh\": 34,\n  \"status\": \"FREE\",\n  \"at\": \"2026-11-21T08:14:03Z\"\n}",
+          "width": 260,
+          "height": 216.375
+        }
+      ]
+    },
+    {
+      "id": "index",
+      "source": "locations",
+      "target": "indexer",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "consumes",
+      "kind": "event",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "cell",
+      "source": "indexer",
+      "target": "geo",
+      "label": "Driver per cell",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "r-trips",
+      "source": "gateway",
+      "target": "trips",
+      "label": "/trips",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "routes",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "store",
+      "source": "trips",
+      "target": "trips-db",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "match",
+      "source": "trips",
+      "target": "dispatch",
+      "label": "FindDriver",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "grpc",
+      "response": "matched",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "nearby",
+      "source": "dispatch",
+      "target": "geo",
+      "label": "Drivers near pickup",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "supply",
+      "source": "surge",
+      "target": "geo",
+      "label": "Supply in, surge out",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "readsWrites",
+      "cadence": "Every 60 s",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "eta-call",
+      "source": "dispatch",
+      "target": "eta",
+      "label": "ETA per driver",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "hasResponse": true,
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "routes",
+      "source": "eta",
+      "target": "maps",
+      "label": "Routes and traffic",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "hold",
+      "source": "trips",
+      "target": "payments",
+      "label": "HoldFare",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "grpc",
+      "response": "held",
+      "hasResponse": true,
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.8
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.62
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "release",
+      "source": "trips",
+      "target": "payments",
+      "label": "ReleaseHold",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "compensates",
+      "compensationFor": "hold",
+      "compensationVisible": true,
+      "compensationName": "Release card hold",
+      "compensationProtocol": "grpc",
+      "compensationDescription": "When the rider cancels before pickup, the fare hold is released.",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.97
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.85
+      },
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.release",
+          "type": "note",
+          "text": "A missed release leaves a pending charge on the rider's card for days. Releases retry until the provider confirms.",
+          "noteKind": "warning",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "card",
+      "source": "payments",
+      "target": "adyen",
+      "label": "Holds, charges, payouts",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "book",
+      "source": "payments",
+      "target": "ledger",
+      "label": "Double entries",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "writes",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "state",
+      "source": "trips",
+      "target": "trip-events",
+      "label": "TripStateChanged",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "publishes",
+      "kind": "event",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "push",
+      "source": "trip-events",
+      "target": "notify",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "deliversTo",
+      "kind": "event",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "send",
+      "source": "notify",
+      "target": "fcm",
+      "label": "Push",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "offer",
+      "source": "fcm",
+      "target": "driver-app",
+      "label": "Ride offer",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "portal": true,
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "land",
+      "source": "trip-events",
+      "target": "warehouse",
+      "label": "Every trip",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "ingests",
+      "cadence": "Streaming",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "earnings",
+      "source": "warehouse",
+      "target": "payouts",
+      "label": "Week of earnings",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "reads",
+      "cadence": "Weekly, Monday",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "pay",
+      "source": "payouts",
+      "target": "payments",
+      "label": "Pay drivers",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "triggers",
+      "semanticsOrigin": "explicit"
+    }
+  ],
+  "viewport": {
+    "x": 0,
+    "y": 0,
+    "zoom": 1
+  },
+  "settings": {
+    "showSequence": true,
+    "grid": "dots",
+    "background": {
+      "enabled": false,
+      "fit": "cover",
+      "dim": 0.55,
+      "blur": 0
+    }
+  },
+  "flows": [
+    {
+      "id": "f.request",
+      "title": "Request a ride",
+      "steps": [
+        {
+          "id": "f.request.s1",
+          "edgeId": "request",
+          "caption": "A rider sets a pickup and taps Request."
+        },
+        {
+          "id": "f.request.s2",
+          "edgeId": "rider-api",
+          "caption": "The app posts the trip."
+        },
+        {
+          "id": "f.request.s3",
+          "edgeId": "api",
+          "caption": "The gateway checks the rider's session."
+        },
+        {
+          "id": "f.request.s4",
+          "edgeId": "r-trips",
+          "caption": "Trips creates the trip in REQUESTED, with a fixed fare."
+        },
+        {
+          "id": "f.request.s5",
+          "edgeId": "hold",
+          "caption": "The fare is held on the rider's card first."
+        },
+        {
+          "id": "f.request.s6",
+          "edgeId": "match",
+          "caption": "Trips asks Dispatch for a driver."
+        },
+        {
+          "id": "f.request.s7",
+          "edgeId": "nearby",
+          "caption": "Dispatch finds free drivers within 2 km of the pickup."
+        },
+        {
+          "id": "f.request.s8",
+          "edgeId": "eta-call",
+          "caption": "They are ranked by how soon each can reach the rider."
+        },
+        {
+          "id": "f.request.s9",
+          "edgeId": "routes",
+          "caption": "ETAs use live traffic on real roads."
+        },
+        {
+          "id": "f.request.s10",
+          "edgeId": "state",
+          "caption": "The trip moves to OFFERED."
+        },
+        {
+          "id": "f.request.s11",
+          "edgeId": "push",
+          "caption": "The notifier picks up the change."
+        },
+        {
+          "id": "f.request.s12",
+          "edgeId": "send",
+          "caption": "A push goes to the best driver's phone."
+        },
+        {
+          "id": "f.request.s13",
+          "edgeId": "offer",
+          "caption": "The driver has 15 seconds to accept."
+        }
+      ],
+      "accent": "teal"
+    },
+    {
+      "id": "f.none",
+      "title": "No driver nearby",
+      "steps": [
+        {
+          "id": "f.none.s1",
+          "edgeId": "match",
+          "caption": "Rush hour: every driver near the pickup is busy."
+        },
+        {
+          "id": "f.none.s2",
+          "edgeId": "nearby",
+          "extraNodeIds": [
+            "geo"
+          ],
+          "caption": "Nobody within 2 km, so the search widens to 5 km."
+        },
+        {
+          "id": "f.none.s3",
+          "edgeId": "supply",
+          "caption": "Requests outnumber drivers here, so surge rises and draws drivers in."
+        }
+      ],
+      "accent": "amber",
+      "variantOf": "f.request"
+    },
+    {
+      "id": "f.cancel",
+      "title": "Rider cancels",
+      "steps": [
+        {
+          "id": "f.cancel.s1",
+          "edgeId": "r-trips",
+          "caption": "The rider cancels before the driver arrives."
+        },
+        {
+          "id": "f.cancel.s2",
+          "edgeId": "release",
+          "caption": "Trips releases the card hold: nothing is charged."
+        },
+        {
+          "id": "f.cancel.s3",
+          "edgeId": "state",
+          "caption": "The trip moves to CANCELLED."
+        },
+        {
+          "id": "f.cancel.s4",
+          "edgeId": "push",
+          "caption": "The driver is told and goes back to being free."
+        }
+      ],
+      "accent": "rose",
+      "variantOf": "f.request"
+    },
+    {
+      "id": "f.locate",
+      "title": "Drivers report location",
+      "steps": [
+        {
+          "id": "f.locate.s1",
+          "edgeId": "online",
+          "caption": "A driver goes online."
+        },
+        {
+          "id": "f.locate.s2",
+          "edgeId": "ping",
+          "caption": "Every 4 seconds the app sends a position over MQTT."
+        },
+        {
+          "id": "f.locate.s3",
+          "edgeId": "publish-loc",
+          "caption": "The gateway publishes it, keyed by driver."
+        },
+        {
+          "id": "f.locate.s4",
+          "edgeId": "index",
+          "caption": "Twelve indexers share the partitions."
+        },
+        {
+          "id": "f.locate.s5",
+          "edgeId": "cell",
+          "caption": "The driver moves to their new H3 cell."
+        }
+      ],
+      "accent": "blue"
+    },
+    {
+      "id": "f.surge",
+      "title": "Surge recalculates",
+      "steps": [
+        {
+          "id": "f.surge.s1",
+          "edgeId": "supply",
+          "caption": "Every minute, Flink counts requests and free drivers per cell."
+        },
+        {
+          "id": "f.surge.s2",
+          "edgeId": "nearby",
+          "caption": "The next quote in that cell reads the new multiplier."
+        }
+      ],
+      "accent": "violet"
+    },
+    {
+      "id": "f.payout",
+      "title": "Pay the drivers",
+      "steps": [
+        {
+          "id": "f.payout.s1",
+          "edgeId": "land",
+          "caption": "Every completed trip lands in the warehouse."
+        },
+        {
+          "id": "f.payout.s2",
+          "edgeId": "earnings",
+          "caption": "Each Monday, a week of earnings is summed per driver."
+        },
+        {
+          "id": "f.payout.s3",
+          "edgeId": "pay",
+          "caption": "Payments is asked to pay each driver."
+        },
+        {
+          "id": "f.payout.s4",
+          "edgeId": "book",
+          "caption": "The ledger records each payout before money moves."
+        },
+        {
+          "id": "f.payout.s5",
+          "edgeId": "card",
+          "caption": "The provider sends the bank transfers."
+        }
+      ],
+      "accent": "green"
+    }
+  ],
+  "ink": [
+    {
+      "id": "ink_1",
+      "tool": "pen",
+      "color": "red",
+      "size": 3,
+      "x": 1740,
+      "y": 665.1,
+      "points": [
+        0,
+        0,
+        7.8,
+        -3.7,
+        16.1,
+        -6.9,
+        24.9,
+        -9.5,
+        34,
+        -11.6,
+        43.4,
+        -13.1,
+        53,
+        -13.9,
+        62.7,
+        -14.1,
+        72.3,
+        -13.7,
+        81.9,
+        -12.7,
+        91.2,
+        -11,
+        100.3,
+        -8.7,
+        109,
+        -5.8,
+        117.2,
+        -2.4,
+        124.9,
+        1.5,
+        131.9,
+        5.9,
+        138.3,
+        10.7,
+        144.1,
+        15.9,
+        149,
+        21.4,
+        153.2,
+        27.2,
+        156.6,
+        33.2,
+        159.2,
+        39.4,
+        160.9,
+        45.7,
+        161.8,
+        52,
+        161.9,
+        58.4,
+        161.1,
+        64.8,
+        159.5,
+        71.1,
+        157.1,
+        77.3,
+        153.8,
+        83.4,
+        149.7,
+        89.2,
+        144.8,
+        94.8,
+        139.2,
+        100.1,
+        132.9,
+        105,
+        125.8,
+        109.5,
+        118.2,
+        113.5,
+        109.9,
+        117.1,
+        101.2,
+        120.1,
+        92.1,
+        122.5,
+        82.7,
+        124.3,
+        73,
+        125.5,
+        63.2,
+        126,
+        53.4,
+        125.9,
+        43.6,
+        125.1,
+        34,
+        123.7,
+        24.7,
+        121.7,
+        15.7,
+        119.1,
+        7.1,
+        115.9,
+        -1,
+        112.2,
+        -8.5,
+        108.1,
+        -15.4,
+        103.5,
+        -21.6,
+        98.4,
+        -27.1,
+        93.1,
+        -31.9,
+        87.4,
+        -35.9,
+        81.5,
+        -39.1,
+        75.4,
+        -41.4,
+        69.1,
+        -43,
+        62.6,
+        -43.7,
+        56.2,
+        -43.5,
+        49.6,
+        -42.4,
+        43.2,
+        -40.5,
+        36.7,
+        -37.7,
+        30.4,
+        -34.1,
+        24.3,
+        -29.6,
+        18.5,
+        -24.3,
+        12.9,
+        -18.3,
+        7.7,
+        -11.5,
+        2.8,
+        -4,
+        -1.5,
+        4.1,
+        -5.4,
+        12.7,
+        -8.8,
+        21.8,
+        -11.5,
+        31.3,
+        -13.7,
+        41,
+        -15.2
+      ]
+    },
+    {
+      "id": "ink_2",
+      "tool": "highlighter",
+      "color": "yellow",
+      "size": 14,
+      "x": 1370,
+      "y": 45,
+      "points": [
+        0,
+        0,
+        7.5,
+        0.6,
+        15.1,
+        1.2,
+        22.6,
+        1.6,
+        30.2,
+        2,
+        37.7,
+        2.1,
+        45.3,
+        2.1,
+        52.8,
+        2,
+        60.3,
+        1.7,
+        67.9,
+        1.3,
+        75.4,
+        1,
+        83,
+        0.6,
+        90.5,
+        0.4,
+        98,
+        0.2,
+        105.6,
+        0.3,
+        113.1,
+        0.4,
+        120.7,
+        0.8,
+        128.2,
+        1.3,
+        135.8,
+        1.8,
+        143.3,
+        2.5,
+        150.8,
+        3.1,
+        158.4,
+        3.6,
+        165.9,
+        4.1,
+        173.5,
+        4.3,
+        181,
+        4.5
+      ]
+    }
+  ],
+  "openPoints": [
+    {
+      "id": "op.window",
+      "kind": "tentative",
+      "context": "15 seconds to accept is a guess. Driver research suggests 20 in busy city centres.",
+      "targets": [
+        {
+          "kind": "node",
+          "id": "dispatch"
+        }
+      ]
+    },
+    {
+      "id": "op.tips",
+      "kind": "awaiting",
+      "context": "Tips after the trip: hold a larger amount, or charge the tip separately? Finance to decide.",
+      "targets": [
+        {
+          "kind": "edge",
+          "id": "hold"
+        }
+      ]
+    }
+  ],
+  "level": "container"
+}

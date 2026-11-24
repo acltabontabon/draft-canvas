@@ -1,6 +1,10 @@
 import { openGallery, openStarter } from './library';
 import { createReaderExample } from './reader-example';
-import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fixtures/traffic';
+import { clickEdge } from './canvas';
+import { storeWithFlows } from './fixtures/outage';
+
+// The guides picture the starters people get today, not the set pinned for the test journeys (`gallery.ts`).
+process.env.STARTERS_SNAPSHOT ??= 'current';
 /**
  * Regenerates the screenshots the user guides in `docs/guides/` embed (`docs/media/guides/*.png`).
  *
@@ -30,8 +34,11 @@ import { boundaryDocument, node, recoveryDocument, trafficDocument } from './fix
  *   npx tsx e2e/docs-screenshots.ts --empty-canvas-only
  *   npx tsx e2e/docs-screenshots.ts --reader-only
  *   npx tsx e2e/docs-screenshots.ts --reader-only --theme dark   (the guide's `share-*-dark.png` pair)
- *   npx tsx e2e/docs-screenshots.ts --traffic-only
+ *   npx tsx e2e/docs-screenshots.ts --outage-only
  *   npx tsx e2e/docs-screenshots.ts --sequence-only
+ *   npx tsx e2e/docs-screenshots.ts --walk-only
+ *   npx tsx e2e/docs-screenshots.ts --layout-only
+ *   npx tsx e2e/docs-screenshots.ts --appearance-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -64,10 +71,13 @@ const CANVAS = '.react-flow__pane';
 const log = (line: string) => process.stdout.write(`${line}\n`);
 
 async function startServer(): Promise<() => Promise<void>> {
+  // On Windows npm is a script, which only a shell can start, and there is no process group to signal.
+  const windows = process.platform === 'win32';
   const child: ChildProcess = spawn('npm', ['run', 'dev', '--', '--port', String(PORT), '--strictPort'], {
     cwd: REPO_ROOT,
     stdio: 'pipe',
-    detached: true,
+    detached: !windows,
+    shell: windows,
     env: { ...process.env, VITE_COLLAB_RELAY: `ws://localhost:${RELAY_PORT}` },
   });
   let exited = false;
@@ -77,7 +87,8 @@ async function startServer(): Promise<() => Promise<void>> {
   const stop = async () => {
     if (child.pid === undefined || exited) return;
     try {
-      process.kill(-child.pid, 'SIGTERM'); // the process group: `npm run dev` wraps vite
+      if (windows) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      else process.kill(-child.pid, 'SIGTERM'); // the process group: `npm run dev` wraps vite
     } catch {
       // already gone
     }
@@ -164,7 +175,7 @@ async function clickConnector(page: Page, from: number, to: number) {
 }
 
 /** Drags from one shape's right-hand handle onto another shape. */
-async function connectNodes(page: Page, from: number, to: number) {
+async function connectNodes(page: Page, from: number, to: number, level = true) {
   const source = page.locator('.dc-node').nth(from);
   await page.mouse.move(1, 1); // WebKit refreshes hover only on real movement (see e2e/canvas.ts)
   await source.hover();
@@ -175,7 +186,7 @@ async function connectNodes(page: Page, from: number, to: number) {
   await page.mouse.move(target.x, target.y, { steps: 12 });
   await page.mouse.up();
   await page.keyboard.press('Escape');
-  await levelWith(page, from, to);
+  if (level) await levelWith(page, from, to);
 }
 
 /** Runs one palette command by name, the way a reader following the docs would. */
@@ -258,7 +269,7 @@ async function collabScreenshots(browser: Browser, page: Page) {
     await guest.locator(CANVAS).click({ position: { x: 8, y: 8 } });
     await palette(guest, 'Fit to view');
     await guest.waitForTimeout(600);
-    const held = await box(guest.locator('.dc-node', { hasText: 'Capability B Service' }));
+    const held = await box(guest.locator('.dc-node', { hasText: 'Restaurants Service' }));
     await guest.mouse.click(held.x + held.width / 2, held.y + 10);
     await guest.mouse.move(held.x + held.width + 30, held.y + held.height + 24, { steps: 4 });
     await expect(page.locator('.dc-presence-cursor').filter({ hasText: 'Grace' })).toBeVisible({ timeout: 10_000 });
@@ -362,74 +373,51 @@ async function richTextScreenshots(page: Page) {
   await page.keyboard.press('Escape');
 }
 
-async function trafficScreenshots(page: Page) {
+async function outageScreenshots(page: Page) {
   await page.setViewportSize({ width: 1440, height: 860 });
-  const document = trafficDocument('Online store');
-  document.nodes = [
-    node('gateway', 'service', 'Web Storefront', 0, 0, { serviceKind: 'api' }),
-    node('mobile', 'service', 'Mobile BFF', 0, 240, { serviceKind: 'api' }),
-    node('checkout', 'service', 'Checkout', 360, 160),
-    node('billing', 'service', 'Catalog', 360, -100),
-    node('postgres', 'database', 'PostgreSQL', 760, 40, { databaseKind: 'sql' }),
-    node('stripe', 'service', 'Stripe', 760, 300, { serviceKind: 'external' }),
-    node('paypal', 'service', 'PayPal', 760, 440, { serviceKind: 'external' }),
-  ];
-  document.edges.push(
-    { id: 'checkout-stripe', source: 'checkout', target: 'stripe', directed: true, routing: 'smoothstep', semantic: 'calls' },
-    { id: 'checkout-paypal', source: 'checkout', target: 'paypal', directed: true, routing: 'smoothstep', semantic: 'calls' },
-  );
   await page.locator('input[type="file"]').setInputFiles({
-    name: 'traffic-guide.draftcanvas',
+    name: 'outage-guide.draftcanvas',
     mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(document)),
+    buffer: Buffer.from(JSON.stringify(storeWithFlows())),
   });
   await expect(page.locator('.dc-editor')).toBeVisible();
-  await page.locator('.dc-status-traffic').click();
-  await expect(page.locator('button.dc-traffic-note').last()).toHaveCSS('opacity', '1', { timeout: 10000 });
-  await shot(page, 'traffic-overview');
-  const fallback = page.getByRole('button', { name: /^no fallback drawn/ }).first();
-  await fallback.click();
-  await shot(page, 'traffic-note');
-  await fallback.press('Escape');
-  await page.locator('.react-flow__node[data-id="checkout"] .dc-node').click();
-  await expect(page.locator('.dc-traffic-callout')).toBeVisible();
-  await shot(page, 'traffic-detail');
-  await page.locator('.dc-traffic-work summary').click();
-  await page.getByRole('list', { name: 'Work per arrival' }).scrollIntoViewIfNeeded();
-  await shot(page, 'traffic-work');
-  await page.getByRole('button', { name: 'How to read this' }).click();
-  await shot(page, 'traffic-reading-guide');
-  await page.goto(URL);
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'recovery-guide.draftcanvas', mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(recoveryDocument())),
-  });
-  await page.locator('.dc-status-traffic').click();
-  await page.locator('.react-flow__node[data-id="dlq"] .dc-node').click();
-  await page.locator('.dc-traffic-recovery summary').click();
-  await page.getByRole('textbox', { name: 'Messages to replay' }).fill('500');
-  await shot(page, 'traffic-recovery');
-  await page.locator('.react-flow__node[data-id="db"] .dc-node').click();
-  await page.locator('.dc-traffic-database summary').click();
-  await shot(page, 'traffic-database');
-  await page.locator('.dc-status-traffic').click();
-  await page.getByRole('button', { name: 'Details', exact: true }).click();
-  const assigned = page.getByRole('combobox', { name: 'Technology', exact: true });
-  await assigned.fill('PostgreSQL');
-  await assigned.press('Enter');
-  await page.keyboard.press('Escape');
-  await page.locator('.dc-status-traffic').click();
-  await expect(page.getByRole('region', { name: 'Technology note' })).toContainText('PostgreSQL');
-  await shot(page, 'traffic-technology');
-
-  await page.goto(URL);
-  await page.locator('input[type="file"]').setInputFiles({
-    name: 'boundary-guide.draftcanvas', mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(boundaryDocument())),
-  });
-  await page.locator('.dc-status-traffic').click();
-  await page.locator('.react-flow__node[data-id="deployment"] .dc-node').click({ position: { x: 20, y: 15 } });
-  await shot(page, 'traffic-boundaries');
+  const settled = () => expect(page.locator('.dc-outage-note, .dc-outage-actions').last()).toHaveCSS('opacity', '1', { timeout: 10000 });
+  const takeDown = async (id: string) => {
+    await page.locator(`.react-flow__node[data-id="${id}"] .dc-node`).click();
+    await settled();
+  };
+  await page.locator('.dc-status-outage').click();
+  await expect(page.locator('.dc-outage-card[data-listing]')).toBeVisible();
+  // Dismissed here, not by `shot`: its click would take the pointer off the row.
+  for (const dismiss of await page.locator('.dc-toast-dismiss').all()) await dismiss.click();
+  await page.locator('.dc-outage-card summary').click();
+  await page.locator('.dc-outage-card ul:not(details ul) button', { hasText: 'Order events' }).hover();
+  await expect(page.locator('.dc-outage-point .dc-sketch-loop')).toHaveCSS('opacity', /0\.9/, { timeout: 10000 });
+  await shot(page, 'outage-review');
+  await page.mouse.move(720, 120);
+  await takeDown('payments');
+  await shot(page, 'outage-overview');
+  const calls = page.locator('button.dc-outage-note', { hasText: 'calls fail' });
+  await calls.click();
+  await shot(page, 'outage-note');
+  await calls.press('Escape');
+  await page.getByRole('button', { name: 'Draw the replay route' }).click();
+  await expect(page.locator('button.dc-outage-note', { hasText: 'replay from here once' })).toBeVisible();
+  await settled();
+  await shot(page, 'outage-fix');
+  await takeDown('checkout');
+  await shot(page, 'outage-instances');
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="orders-fulfilment"] .dc-edge-line').first());
+  await settled();
+  await page.mouse.move(720, 120);
+  await shot(page, 'outage-connector');
+  await takeDown('cache');
+  await page.locator('button.dc-outage-note', { hasText: 'every read falls to' }).click();
+  await shot(page, 'outage-cache');
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="checkout-orders"] .dc-edge-line').first());
+  await settled();
+  await page.locator('button.dc-outage-note', { hasText: "can't publish" }).click();
+  await shot(page, 'outage-half-done');
 }
 
 /** Import a real example and follow the same share-link route as a recipient. */
@@ -487,7 +475,7 @@ async function sequenceScreenshots(page: Page) {
     await expect(hint).toContainText(offered);
     if (label === 'POST /orders') await shot(page, 'sequence-next');
     await page.keyboard.press('Tab');
-    await expect(page.locator('input.dc-seq-editor[aria-label="Message"]')).toBeFocused();
+    await expect(page.locator('textarea.dc-seq-editor[aria-label="Message"]')).toBeFocused();
     await page.keyboard.type(label);
     await page.keyboard.press('Enter');
   }
@@ -576,6 +564,266 @@ async function sequenceScreenshots(page: Page) {
   await page.keyboard.press('Shift+Digit1');
   await page.mouse.move(20, 85);
   await shot(page, 'sequence-cross-frame');
+
+  /** A sequence from Mermaid text, pasted: the frames and the reply are then whatever the editor draws. */
+  const pasted = async (name: string, source: string) => {
+    await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+    await page.getByRole('button', { name: START_BUTTON }).first().click();
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    await title.fill(name);
+    await title.blur();
+    await page.evaluate((text) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', text);
+      document.querySelector('.dc-canvas')!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    }, source);
+    await expect(frames).toHaveCount(1);
+    await page.keyboard.press('F2');
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type(name);
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Shift+Digit1');
+    await page.mouse.move(20, 85);
+  };
+
+  // Every kind of frame a checkout meets, each in its own colour, with a condition long enough to wrap.
+  await page.setViewportSize({ width: VIEWPORT.width, height: 900 });
+  await pasted('Pay for an order', `sequenceDiagram
+  participant Web as Storefront
+  participant API as Checkout API
+  participant Pay as Payment provider
+  participant DB as Orders
+  Web->>API: POST /orders
+  loop until the payment settles, or three attempts have been made without success
+    API->>Pay: authorize
+    Pay-->>API: result
+  end
+  alt approved
+    API->>DB: INSERT order
+    DB-->>API: order id
+    opt the shopper asked for a receipt
+      API->>API: queue the receipt
+    end
+    API-->>Web: 201 Created
+  else declined
+    API-->>Web: 402 Payment required
+  end
+  par
+    API->>DB: reserve stock
+  and
+    API->>Pay: capture
+  end
+`);
+  await shot(page, 'sequence-frames');
+  await page.setViewportSize(VIEWPORT);
+
+  // A reply, drawn back to whoever is waiting: photographed with the line still in hand.
+  await pasted('Save an order', `sequenceDiagram
+  participant Web as Storefront
+  participant API as Checkout API
+  participant DB as Orders
+  Web->>API: POST /orders
+  API->>DB: INSERT order
+`);
+  await frames.first().hover({ position: { x: 30, y: 12 } });
+  const lifelines = frames.first().locator('.dc-seq-lifeline');
+  const asked = await box(lifelines.nth(2));
+  const asker = await box(lifelines.nth(1));
+  const at = asked.y + asked.height - 34;
+  await page.mouse.move(asked.x + asked.width / 2, at);
+  await page.mouse.down();
+  await page.mouse.move(asked.x - 40, at + 2, { steps: 6 });
+  await page.mouse.move(asker.x + asker.width / 2 + 30, at + 2, { steps: 10 });
+  await expect(page.locator('.dc-seq-add-target[data-reply="true"]')).toContainText('Reply to Checkout API');
+  await shot(page, 'sequence-reply');
+  await page.mouse.up();
+  await page.keyboard.press('Escape');
+}
+
+/**
+ * Present without a flow: a selection that makes a story is what Present walks, and the walk it
+ * makes is offered to keep.
+ */
+async function walkScreenshots(page: Page) {
+  await page.getByRole('button', { name: START_BUTTON }).first().click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  const title = page.getByLabel('Diagram title');
+  await title.fill('Order processing');
+  await title.blur();
+  const shapes: [string, { x: number; y: number }, string][] = [
+    ['s', { x: 190, y: 230 }, 'Orders API'],
+    ['q', { x: 520, y: 230 }, 'orders'],
+    ['s', { x: 860, y: 230 }, 'Fulfilment worker'],
+    ['d', { x: 520, y: 430 }, 'Orders DB'],
+  ];
+  for (const [key, at, name] of shapes) {
+    await drop(page, key, at, name);
+    await page.keyboard.press('Escape');
+  }
+  await expect(page.locator('.dc-node')).toHaveCount(4);
+  await connectNodes(page, 0, 1);
+  await connectNodes(page, 1, 2);
+  await connectNodes(page, 0, 3, false);
+  await page.mouse.click(1000, 520);
+
+  // Two shapes chosen: the button says what it will walk, the way from one to the other.
+  await page.locator('.dc-node').nth(0).click();
+  await page.locator('.dc-node').nth(2).click({ modifiers: ['Shift'] });
+  const present = page.getByRole('button', { name: 'Present selection', exact: true });
+  await expect(present).toBeVisible();
+  // Wide enough for the toolbar to spell the button out; narrower, it is the glyph in the
+  // selection's colour.
+  await page.setViewportSize({ width: 1340, height: VIEWPORT.height });
+  await shot(page, 'present-selection');
+
+  // The menu beside Present: everything it could walk, and the way to the Flows panel.
+  await page.getByRole('button', { name: 'What to present', exact: true }).click();
+  await expect(page.getByRole('menu', { name: 'What to present' })).toBeVisible();
+  await shot(page, 'present-menu', { x: 700, y: 0, width: 640, height: 330 });
+  await page.keyboard.press('Escape');
+
+  await present.click();
+  await expect(page.locator('.dc-present-card')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Keep as a flow' })).toBeVisible();
+  // The strip recedes while nothing moves; a picture of it wants it there.
+  await page.waitForTimeout(900);
+  await page.mouse.move(640, 300);
+  await shot(page, 'present-walk');
+  await page.keyboard.press('Escape');
+}
+
+/** A palette command that asks for one more choice before it runs. */
+async function paletteChoice(page: Page, query: string, choice: string) {
+  await page.keyboard.press('Control+k');
+  await expect(page.getByRole('dialog')).toBeVisible();
+  const dialog = page.getByRole('dialog');
+  await page.keyboard.type(query);
+  // Enter takes the first row, so wait for the rows the words narrowed it to.
+  await expect(dialog.getByRole('option').first()).toContainText(query);
+  await page.keyboard.press('Enter');
+  // The second list replaces the first in the same field, under its own prompt.
+  await expect(page.getByRole('combobox', { name: 'Search commands' })).toHaveCount(0);
+  await page.keyboard.type(choice);
+  await expect(dialog.getByRole('option').first()).toContainText(choice);
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('dialog')).toBeHidden();
+}
+
+/**
+ * The layout tools on a starter with flows in it: Arrange following one of them, then a portal, a
+ * held shape and the legend together.
+ */
+async function layoutScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1200, height: 700 });
+  await openStarter(page, 'Microservices');
+  const shape = (name: string) => page.locator('.dc-node', { hasText: name }).last();
+  // A starter arrives selected; the commands below are offered by what is selected.
+  await page.keyboard.press('Escape');
+
+  await paletteChoice(page, 'Arrange around', 'Order dinner');
+  await expect(page.getByRole('region', { name: 'Arrange preview' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Arrange preview' }).getByRole('button', { name: 'Apply' })).toBeEnabled();
+  await shot(page, 'arrange-follow-flow');
+  await page.getByRole('region', { name: 'Arrange preview' }).getByRole('button', { name: 'Cancel' }).click();
+
+  await expect(page.getByRole('region', { name: 'Arrange preview' })).toBeHidden();
+  // Arrange leaves the shapes it would have moved selected; a click on one of many keeps them all.
+  await page.mouse.click(60, 300);
+  await expect(page.locator('.react-flow__node.selected')).toHaveCount(0);
+
+  // A connector right across the diagram, drawn as a portal instead.
+  await shape('Courier Locations').click();
+  await expect(page.locator('.react-flow__node.selected')).toHaveCount(1);
+  await paletteChoice(page, 'Connect to', 'API Gateway');
+  await palette(page, 'Draw as portal');
+  await page.keyboard.press('Escape');
+  await shape('Orders Service').click();
+  await palette(page, 'Hold in place');
+  await page.keyboard.press('Escape');
+  await palette(page, 'Show legend');
+  await palette(page, 'Fit to view');
+  // Empty canvas: nothing selected, so the pin and the stubs are what the picture shows.
+  await page.mouse.click(1080, 180);
+  // The palette hands keyboard focus back to the canvas, which rings it; the picture is of the
+  // diagram at rest.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await shot(page, 'portal-legend-held');
+}
+
+/** Appearance, as a person reaches it: the palette button in the status bar. It opens beside the canvas, not over it. */
+async function openAppearance(page: Page) {
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+  const panel = page.getByRole('complementary', { name: 'Appearance', exact: true });
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+/** A style of one's own, the canvas it is drawn on, the gallery's packs, and a diagram drawn in seven of them. */
+async function appearanceScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1360, height: 860 });
+  await openStarter(page, 'Microservices');
+  // A starter arrives selected; the pictures are of the diagram at rest.
+  await page.locator(CANVAS).click({ position: { x: 40, y: 420 } });
+  await expect(page.locator('.dc-node.selected, .react-flow__node.selected')).toHaveCount(0);
+
+  let panel = await openAppearance(page);
+  // Opening the panel frames the diagram in the canvas it leaves; closing it does not, so the
+  // pictures of the whole canvas ask for that themselves.
+  const frame = async () => {
+    // After the sidebar has gone and the view has gone back to where it was.
+    await page.waitForTimeout(900);
+    await palette(page, 'Fit to view');
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.waitForTimeout(500);
+  };
+  await shot(page, 'appearance');
+
+  // A canvas of one's own: a colour and a backdrop, seen on the diagram as they are chosen.
+  // Chosen through the control itself, wherever the panel is scrolled to.
+  const pick = (input: HTMLElement) => input.click();
+  const styles = panel.getByRole('group', { name: 'My style' });
+  await panel.getByRole('tab', { name: 'Canvas', exact: true }).click();
+  await panel.getByRole('radiogroup', { name: 'Canvas colour' }).getByRole('radio', { name: 'Midnight', exact: true }).evaluate(pick);
+  await panel.getByRole('radiogroup', { name: 'Brand colour' }).getByRole('radio', { name: 'Amber', exact: true }).evaluate(pick);
+  await panel.getByRole('radiogroup', { name: 'Backdrop' }).getByRole('radio', { name: /^Stars/ }).evaluate(pick);
+  await expect(page.locator('.dc-canvas-backdrop')).toBeVisible();
+  await shot(page, 'appearance-canvas');
+  // The pen: each choice drawn as what it does.
+  await panel.getByRole('tab', { name: 'Drawing', exact: true }).click();
+  await shot(page, 'appearance-drawing');
+  // That made a style of one's own; the pictures after it start from Clean again.
+  await panel.getByRole('tab', { name: 'Styles', exact: true }).click();
+  await panel.getByRole('button', { name: 'Delete style', exact: true }).click();
+  await styles.getByRole('radio', { name: /^Clean/ }).evaluate(pick);
+
+  // The gallery is already loaded (the starter came from it), so its packs are listed.
+  const pack = (name: string) => panel.locator('.dc-prefs-pack', { hasText: name });
+  await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
+
+  for (const [name, file] of [
+    ['High seas', 'style-pack-high-seas'],
+    ['Cyberpunk', 'style-pack-cyberpunk'],
+    ['Arena', 'style-pack-arena'],
+    ['Cute', 'style-pack-cute'],
+    ['Weeb', 'style-pack-weeb'],
+    ['Hardwood', 'style-pack-hardwood'],
+    ['Match Point', 'style-pack-match-point'],
+  ] as const) {
+    await pack(name).getByRole('button', { name: `Add ${name} to my styles`, exact: true }).click();
+    await expect(styles.getByRole('radio', { name: new RegExp(`^${name}`) })).toBeChecked();
+    if (name === 'High seas') {
+      // The pack just added, on the diagram, with the packs it came from still beside it.
+      await panel.getByRole('heading', { name: 'Style packs', exact: true }).evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
+      await shot(page, 'style-packs');
+    }
+    await panel.getByRole('button', { name: 'Close appearance', exact: true }).click();
+    await expect(panel).toBeHidden();
+    await frame();
+    await shot(page, file);
+    panel = await openAppearance(page);
+    await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
+  }
 }
 
 async function readerScreenshots(page: Page) {
@@ -632,13 +880,28 @@ async function main() {
       return;
     }
 
-    if (process.argv.includes('--traffic-only')) {
-      await trafficScreenshots(page);
+    if (process.argv.includes('--outage-only')) {
+      await outageScreenshots(page);
       return;
     }
 
     if (process.argv.includes('--sequence-only')) {
       await sequenceScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--walk-only')) {
+      await walkScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--layout-only')) {
+      await layoutScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--appearance-only')) {
+      await appearanceScreenshots(page);
       return;
     }
 

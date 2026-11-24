@@ -5,7 +5,7 @@
  * kind, its default size, an automatic name) is swapped for the new type's own.
  */
 
-import { createNode } from './factory';
+import { boxForKind, createNode } from './factory';
 import { technologyKindPatch } from './technologyKind';
 import type { DraftDocument, DraftNode, DraftNodeType } from './types';
 
@@ -56,7 +56,10 @@ export function convertedNode(node: DraftNode, type: ConvertibleType): DraftNode
   // A technology it carries can fix the new shape's kind too: a Service built "with Kafka" turned
   // into a Queue is a topic.
   const kind = technologyKindPatch(next, next.technology);
-  return kind ? stripUndefined({ ...next, ...kind }) : next;
+  if (!kind) return next;
+  // A technology that makes it a glyph kind (HAProxy: a Load Balancer) changes the box it needs.
+  const box = boxForKind(next, next.serviceKind, (kind as Partial<DraftNode>).serviceKind ?? next.serviceKind);
+  return stripUndefined({ ...next, ...kind, ...box });
 }
 
 /** `convertedNode` applied in a document. Unchanged when the node is missing, already `type`, or

@@ -143,9 +143,9 @@ function paneMenu(ctx: CommandContext, flowPosition: { x: number; y: number }): 
   return grouped(null, [
     [pasteAtCommand(flowPosition), ...pick(canvas, ['undo'])],
     { type: 'grid', label: 'Add here', items: shapes },
-    [...pick(canvas, ['select-all']), ...pick(viewCommands(ctx), ['fit', 'traffic-show', 'traffic-hide']), ...pick(canvas, ['tidy', 'arrange'])],
+    [...pick(canvas, ['select-all']), ...pick(viewCommands(ctx), ['fit', 'outage-start', 'outage-end']), ...pick(canvas, ['tidy', 'arrange'])],
     // What acts on the whole diagram lives with the diagram, now that the header has no ⋯ for it.
-    pick(canvas, ['find-replace', 'settings']),
+    pick(canvas, ['find-replace', 'appearance']),
   ]);
 }
 
@@ -161,6 +161,7 @@ const KIND_CAPTIONS: Record<DraftNode['type'], string> = {
   actor: 'Actor',
   component: 'Component',
   sequence: 'Sequence',
+  artifact: 'Artifact',
 };
 
 function nodeHeader(node: DraftNode): Extract<ContextMenuEntry, { type: 'header' }> {
@@ -221,13 +222,14 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
   // `flow-start-here` resolves directly only with exactly one outgoing edge — with more, its
   // `run()` returns a `CommandStage` (a picker), which the stage-command rule excludes.
   const outgoing = ctx.editor.document.edges.filter((edge) => edge.source === node.id);
-  const lastGroup = outgoing.length === 1 ? ['spotlight', 'show-lineage', 'flow-start-here'] : ['spotlight', 'show-lineage'];
+  const lastGroup = outgoing.length === 1 ? ['spotlight', 'show-lineage', 'take-down', 'take-down-all', 'flow-start-here'] : ['spotlight', 'show-lineage', 'take-down', 'take-down-all'];
   return grouped(nodeHeader(node), [
     pick(commands, ['edit-text', 'look-inside']),
     pick(commands, ['add-consumer', 'add-dead-letter-queue', 'remove-dead-letter-queue', 'add-subscriber']),
     pick(commands, ATTACH),
     pick(commands, COPY_AND_ORDER),
     pick(commands, lastGroup),
+    pick(commands, ['save-shape-default', 'reset-shape-default']),
     pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
@@ -242,7 +244,7 @@ function boundaryMenu(node: DraftNode, commands: Command[]): ContextMenuEntry[] 
     pick(commands, ['edit-text', 'select-contents', 'arrange-selection']),
     pick(commands, ATTACH),
     pick(commands, COPY_AND_ORDER),
-    pick(commands, ['spotlight']),
+    pick(commands, ['spotlight', 'take-down']),
     pick(commands, ['ungroup', 'delete']),
   ]);
 }
@@ -282,7 +284,7 @@ function edgeMenu(ctx: CommandContext, edge: DraftEdge, commands: Command[]): Co
       'edge-pin-ends',
     ]),
     pick(commands, ATTACH),
-    pick(commands, ['spotlight']),
+    pick(commands, ['spotlight', 'cut-connector']),
     pick(commands, ['delete']),
   ]);
 }

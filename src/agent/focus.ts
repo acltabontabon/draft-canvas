@@ -2,16 +2,31 @@ import type { DraftDocument } from '../document/types';
 import { descendantsOf } from '../document/operations';
 import { AgentError } from './errors';
 
-export function renderFocus(view: DraftDocument, raw: unknown): ReadonlySet<string> | undefined {
+/** The most shapes a caller may name in `focus.nodes`; the schema says the same. */
+export const FOCUS_NODES_MAX = 200;
+
+/**
+ * The shapes a render is narrowed to. `selected` is the person's own selection, already resolved by
+ * the host: it stands in for `focus.nodes`, and `FOCUS_NODES_MAX` does not apply to it. That limit
+ * bounds what a caller types out, and a selection it never listed was once refused as a bad
+ * reference at 201 shapes.
+ */
+export function renderFocus(view: DraftDocument, raw: unknown, selected?: readonly string[]): ReadonlySet<string> | undefined {
   if (raw === undefined) return undefined;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new AgentError('INVALID_INPUT', 'focus must be an object.');
   const focus = raw as { nodes?: unknown; group?: unknown; flow?: unknown; neighbors?: unknown };
   if (Object.keys(focus).some((key) => !['nodes', 'group', 'flow', 'neighbors'].includes(key))) throw new AgentError('INVALID_INPUT', 'Unknown render focus field.');
-  const modes = [focus.nodes, focus.group, focus.flow].filter((value) => value !== undefined);
+  const modes = [selected, focus.nodes, focus.group, focus.flow].filter((value) => value !== undefined);
   if (modes.length !== 1) throw new AgentError('INVALID_INPUT', 'Choose exactly one focus: nodes, group or flow.');
   const ids = new Set<string>();
+  if (selected !== undefined) {
+    const inView = new Set(view.nodes.map((n) => n.id));
+    for (const id of selected) if (inView.has(id)) ids.add(id);
+  }
   if (focus.nodes !== undefined) {
-    if (!Array.isArray(focus.nodes) || !focus.nodes.length || focus.nodes.length > 200 || focus.nodes.some((id) => typeof id !== 'string' || !view.nodes.some((n) => n.id === id))) throw new AgentError('INVALID_REFERENCE', 'focus.nodes must name shapes in this view.');
+    if (Array.isArray(focus.nodes) && focus.nodes.length > FOCUS_NODES_MAX) throw new AgentError('LIMIT_EXCEEDED', `focus.nodes takes at most ${FOCUS_NODES_MAX} shapes. Use group, flow or selection for more.`);
+    const inView = new Set(view.nodes.map((n) => n.id));
+    if (!Array.isArray(focus.nodes) || !focus.nodes.length || focus.nodes.some((id) => typeof id !== 'string' || !inView.has(id))) throw new AgentError('INVALID_REFERENCE', 'focus.nodes must name shapes in this view.');
     for (const id of focus.nodes) ids.add(id);
   }
   if (focus.group !== undefined) {

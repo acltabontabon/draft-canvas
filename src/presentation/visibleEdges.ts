@@ -3,7 +3,7 @@ import { playbackFlowOf } from '../document/sequenceFlow';
 import { isCollapsedCompensation, visibleEdges } from '../document/compensation';
 import type { DraftDocument, DraftEdge } from '../document/types';
 import type { FlowPlaybackState } from '../store/editorStore';
-import { resolveFlowSteps } from './useFlowPlayback';
+import { resolveFlowSteps } from './steps';
 
 const cache = new WeakMap<DraftDocument, WeakMap<FlowPlaybackState, readonly DraftEdge[]>>();
 
@@ -16,7 +16,7 @@ export function visibleEdgesForPlayback(document: DraftDocument, playback: FlowP
 
   let result = visibleEdges(document.edges);
   if (playback.active && playback.flowId && !playback.stage && playback.step >= 1) {
-    const flow = playbackFlowOf(document, playback.flowId, playback.sequenceNodeId);
+    const flow = playbackFlowOf(document, playback.flowId, playback.sequenceNodeId, playback.walk);
     const step = flow ? resolveFlowSteps(flow, document.edges, document.nodes)[playback.step - 1] : undefined;
     const hiddenIds = new Set(step?.edges.filter(isCollapsedCompensation).map((edge) => edge.id));
     if (hiddenIds.size > 0) result = document.edges.filter((edge) => !isCollapsedCompensation(edge) || hiddenIds.has(edge.id));

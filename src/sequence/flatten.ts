@@ -10,7 +10,7 @@
 import { categoryOf, resolveJunctionEndpoint, type GraphLike } from '../document/connectorSemantics';
 import { displayNameFor } from '../document/factory';
 import type { DraftDocument, DraftEdge, DraftFlow } from '../document/types';
-import { resolveFlowStep } from '../presentation/useFlowPlayback';
+import { resolveFlowStep } from '../presentation/steps';
 
 /** One edge, in flow order, tagged with the step it came from. */
 interface Hop {

@@ -1,0 +1,33 @@
+{
+  "id": "hexagonal",
+  "name": "Hexagonal",
+  "category": "architecture",
+  "summary": "Adapters around a core that owns its ports",
+  "aliases": [
+    "hexagonal",
+    "hexagonal architecture",
+    "ports and adapters",
+    "ports adapters",
+    "hex architecture",
+    "clean architecture",
+    "clean-ish architecture",
+    "onion architecture",
+    "domain core",
+    "adapters"
+  ],
+  "tags": [
+    "ports and adapters",
+    "clean architecture",
+    "domain"
+  ],
+  "useWhen": [
+    "Keeping business rules independent of frameworks, databases and transports.",
+    "Testing the core without infrastructure."
+  ],
+  "watchOutFor": [
+    "More indirection than a small service may need.",
+    "Ports drift into thin wrappers if they mirror one adapter."
+  ],
+  "featured": true,
+  "order": 50
+}

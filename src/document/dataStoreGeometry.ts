@@ -37,12 +37,28 @@ const DS_CAPTION_RESERVE = 64;
 const DS_MARK_RESERVE = 25;
 
 /**
+ * A Service drawn as a glyph keeps the glyph of its default box however its box is stretched to
+ * hold a description: a wider External is the same External with more words under it, where a
+ * bigger Data Store reads as a bigger store. It also keeps such a shape near the size of the card it
+ * replaced, which is what the layouts around it were drawn for.
+ */
+const SERVICE_GLYPH_SCALE = 114 / DS_UNIT_HEIGHT;
+
+type Sized = { width: number; height: number; type?: string };
+
+/** The scale a box asks for before any growth: the older rule, which saved diagrams depend on. */
+function unitScale(node: Sized): number {
+  const scale = Math.max(1, Math.min(node.width / DS_UNIT_WIDTH, node.height / DS_UNIT_HEIGHT));
+  return node.type === 'service' || node.type === 'component' ? Math.min(scale, SERVICE_GLYPH_SCALE) : scale;
+}
+
+/**
  * Keep the established scale for ordinary diagram sizes, then use spare width and height in boxes
  * enlarged past both thresholds. The limits reserve space for the caption, C4 detail and a possible
  * technology mark beside the glyph.
  */
-export function dataStoreScale(node: { width: number; height: number }): number {
-  const original = Math.max(1, Math.min(node.width / DS_UNIT_WIDTH, node.height / DS_UNIT_HEIGHT));
+export function dataStoreScale(node: Sized): number {
+  const original = unitScale(node);
   const growth = Math.min(Math.max(0, node.width - 250), Math.max(0, node.height - 200)) / 45;
   if (growth === 0) return original;
   return Math.max(original, Math.min(
@@ -53,8 +69,8 @@ export function dataStoreScale(node: { width: number; height: number }): number 
 }
 
 /** The original top inset eases toward a smaller one as an enlarged glyph consumes the box. */
-export function dataStoreGlyphTop(node: { width: number; height: number }): number {
-  const original = Math.max(1, Math.min(node.width / DS_UNIT_WIDTH, node.height / DS_UNIT_HEIGHT));
+export function dataStoreGlyphTop(node: Sized): number {
+  const original = unitScale(node);
   const growth = dataStoreScale(node) - original;
   return Math.max(DS_GLYPH_TOP, DS_GLYPH_TOP * original - growth * 5);
 }
@@ -70,7 +86,7 @@ export interface DataStoreGlyphBounds {
  * The glyph's box in the same coordinates as the node, or its extent from the node's own origin
  * when `x`/`y` are 0. Every kind is centred in the box and shares the top and height.
  */
-export function dataStoreGlyphBounds(node: { x: number; y: number; width: number; height: number }): DataStoreGlyphBounds {
+export function dataStoreGlyphBounds(node: { x: number; y: number; width: number; height: number; type?: string }): DataStoreGlyphBounds {
   const scale = dataStoreScale(node);
   const width = Math.min(DS_GLYPH_WIDTH * scale, Math.max(0, node.width - DS_GLYPH_MARGIN * 2));
   const centre = node.x + node.width / 2;
@@ -81,4 +97,51 @@ export function dataStoreGlyphBounds(node: { x: number; y: number; width: number
     left: centre - width / 2,
     right: centre + width / 2,
   };
+}
+
+/** An Artifact's sheet is narrower than any Data Store glyph: a connector has to reach it, not the
+ *  width a cylinder would have had. */
+export const ARTIFACT_GLYPH_WIDTH = 36;
+
+/** An Artifact's glyph: a Data Store's arrangement (same top, height and scale), at its own width. */
+export function artifactGlyphBounds(node: { x: number; y: number; width: number; height: number }): DataStoreGlyphBounds {
+  const bounds = dataStoreGlyphBounds(node);
+  const width = Math.min(ARTIFACT_GLYPH_WIDTH * dataStoreScale(node), Math.max(0, node.width - DS_GLYPH_MARGIN * 2));
+  const centre = node.x + node.width / 2;
+  return { ...bounds, left: centre - width / 2, right: centre + width / 2 };
+}
+
+/**
+ * The Service kinds drawn as a glyph with their name underneath rather than as a card: every kind
+ * but Generic and API. A card says "a thing that runs" and nothing more, so the two kinds that are
+ * nothing more keep it; the rest are in a diagram for what they do with traffic, time or work, and
+ * that is the picture. They take a Data Store's arrangement whole (same glyph box, same scale), so
+ * everything that knows where a Data Store's glyph is knows where theirs is.
+ */
+export function isGlyphServiceKind(kind: string | undefined): boolean {
+  return kind !== undefined && kind !== 'generic' && kind !== 'api';
+}
+
+/**
+ * The Component kinds drawn the same way: every kind but Generic. A Module, an Adapter and a Port
+ * were one box with a different small mark on its edge, told apart mostly by the word in the
+ * corner; each is now the thing it is, in the Service glyphs' arrangement and at their size.
+ */
+export function isGlyphComponentKind(kind: string | undefined): boolean {
+  return kind === 'module' || kind === 'adapter' || kind === 'port';
+}
+
+/** A shape's kind within its own family, whichever family that is: what the two tests above read. */
+export function familyKindOf(node: { serviceKind?: string; componentKind?: string; type?: string }): string | undefined {
+  return node.type === 'component' ? node.componentKind : node.serviceKind;
+}
+
+/** Whether a Service or a Component of this kind is drawn as a glyph with its name underneath. */
+export function isGlyphKind(type: string | undefined, kind: string | undefined): boolean {
+  return (type === 'service' && isGlyphServiceKind(kind)) || (type === 'component' && isGlyphComponentKind(kind));
+}
+
+/** The same test for a whole shape. */
+export function isGlyphShape(node: { type?: string; serviceKind?: string; componentKind?: string }): boolean {
+  return isGlyphKind(node.type, familyKindOf(node));
 }

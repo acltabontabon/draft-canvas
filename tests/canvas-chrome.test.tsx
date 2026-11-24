@@ -1,5 +1,5 @@
 import { act, render } from '@testing-library/react';
-import { ReactFlowProvider, useStoreApi } from '@xyflow/react';
+import { ReactFlowProvider, useReactFlowStoreApi } from '@xyflow/react';
 import { Profiler, useEffect, type ProfilerOnRenderCallback } from 'react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FanInPreview } from '../src/canvas/FanInPreview';
@@ -74,17 +74,17 @@ describe('the recovery arrow', () => {
   });
 });
 
-/** Puts a connection in progress in React Flow's own store, as a drag from a handle does. */
+/** Puts a connection in progress through React Flow's own action, as a drag from a handle does. */
 function Connection({ to }: { to: { x: number; y: number } | null }) {
-  const api = useStoreApi();
+  const { optionsStore, viewportStore } = useReactFlowStoreApi();
   useEffect(() => {
-    api.setState({
-      connection: to
+    viewportStore.setState({ transform: [100, 50, 2] });
+    optionsStore.getState().updateConnection(
+      to
         ? ({ inProgress: true, to, isValid: null, from: { x: 0, y: 0 }, fromHandle: null, fromPosition: null, fromNode: null, toHandle: null, toPosition: null, toNode: null } as never)
         : ({ inProgress: false, isValid: null, from: null, fromHandle: null, fromPosition: null, fromNode: null, to: null, toHandle: null, toPosition: null, toNode: null } as never),
-      transform: [100, 50, 2],
-    });
-  }, [api, to]);
+    );
+  }, [optionsStore, viewportStore, to]);
   return null;
 }
 
@@ -112,7 +112,7 @@ describe('the fan-in lines', () => {
     );
     const lines = [...view.container.querySelectorAll('line')];
     expect(lines).toHaveLength(2);
-    // React Flow keeps the end in pane pixels: (700 − 100) / 2, (450 − 50) / 2.
+    // A drag reports the end in pane pixels, and React Flow keeps it in flow space: (700 − 100) / 2, (450 − 50) / 2.
     expect(lines.map((line) => [line.getAttribute('x2'), line.getAttribute('y2')])).toEqual([['300', '200'], ['300', '200']]);
     expect(lines.map((line) => [line.getAttribute('x1'), line.getAttribute('y1')])).toEqual([['50', '30'], ['350', '30']]);
   });

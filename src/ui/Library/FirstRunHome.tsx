@@ -126,7 +126,7 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
           example={<Button variant="quiet" icon="flow" onClick={() => void session.newDocument(undefined, 'example')}>Try an example</Button>}
           importFile={<Button variant="quiet" icon="upload" onClick={onImport} aria-describedby={importHintId}>Import a file</Button>}
         />
-        <span id={importHintId} className="dc-sr-only">Opens a .draftcanvas, .json or secure .dcenc file, an editable PNG or SVG export, or a Mermaid flowchart.</span>
+        <span id={importHintId} className="dc-sr-only">Opens a .draftcanvas, .json or secure .dcenc file, an editable PNG or SVG export, a Mermaid flowchart, or a library backup ZIP to restore.</span>
         <section className="dc-home-shelf" ref={shelfRef} aria-label="Your sketch shelf">
           <header className="dc-home-shelf-head">
             {showTabs && <div role="tablist" aria-label="Show">

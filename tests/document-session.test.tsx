@@ -12,6 +12,7 @@ import { setFileSaver } from '../src/export/download';
 import { deserializeDocument } from '../src/export/project';
 import { stashForReload } from '../src/storage/reloadStash';
 import { encodeShareLink } from '../src/share/link';
+import { docIdFromLocation } from '../src/lib/documentUrl';
 
 /** A minimal, fully-stubbed `DraftRepository` — every method resolves with a
  *  harmless default; a test overrides only the method it needs to control or
@@ -31,10 +32,6 @@ function stubRepository(overrides: Partial<DraftRepository> = {}): DraftReposito
     saveProject: async () => {},
     deleteProject: async () => {},
     moveDocumentToProject: async () => {},
-    saveBackgroundImage: async () => {},
-    loadBackgroundImage: async () => null,
-    removeBackgroundImage: async () => {},
-    pruneBackgroundImages: async () => {},
     ...overrides,
   };
 }
@@ -207,6 +204,10 @@ describe('useDocumentSession — adoptDocument stale projectId repair', () => {
 });
 
 describe('useDocumentSession — overlapping opens', () => {
+  // The address is the page's, not a test's: a canvas one test left open is in it, and the next test's
+  // session would arrive at that address and try to open it beside whatever the test opens itself.
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
   it('a slow open that resolves after a later one does not replace it', async () => {
     const slow = createDocument('Slow A');
     const fast = createDocument('Fast B');
@@ -235,6 +236,380 @@ describe('useDocumentSession — overlapping opens', () => {
 
     expect(useEditorStore.getState().document.metadata.id).toBe(fast.metadata.id);
     expect(session().openId).toBe(fast.metadata.id);
+  });
+
+  it('a slow open that resolves after going home does not bring its canvas up', async () => {
+    // Back pressed twice quickly: the first asks for the previous diagram, the second for home.
+    const current = createDocument('On screen');
+    const slow = createDocument('Slow A');
+    let releaseSlow: () => void = () => {};
+    const repository = stubRepository({
+      load: async (id) => {
+        if (id === slow.metadata.id) {
+          await new Promise<void>((resolve) => (releaseSlow = resolve));
+          return slow;
+        }
+        return id === current.metadata.id ? current : null;
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(current.metadata.id);
+    });
+
+    let openingSlow!: Promise<void>;
+    await act(async () => {
+      openingSlow = session().openDocument(slow.metadata.id);
+      // Let the open reach its read, so the close below is the later of the two.
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(await session().closeDocument()).toBe(true);
+    });
+    expect(session().openId).toBeNull();
+    await act(async () => {
+      releaseSlow();
+      await openingSlow;
+    });
+
+    expect(session().openId).toBeNull();
+    expect(useEditorStore.getState().document.metadata.id).not.toBe(slow.metadata.id);
+  });
+
+  it('an open asked for while going home is still saving is the one that happens', async () => {
+    // The other order: Home first, its last save still being written, then another diagram.
+    const current = createDocument('On screen');
+    const next = createDocument('Asked for next');
+    let releaseSave: () => void = () => {};
+    let holdSaves = false;
+    const repository = stubRepository({
+      load: async (id) => (id === current.metadata.id ? structuredClone(current) : id === next.metadata.id ? next : null),
+      save: async () => {
+        if (holdSaves) await new Promise<void>((resolve) => (releaseSave = resolve));
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(current.metadata.id);
+    });
+    // An unsaved edit, so going home has something to write first.
+    act(() => useEditorStore.getState().rename('On screen, edited'));
+    holdSaves = true;
+
+    let closing!: Promise<boolean>;
+    let opening!: Promise<void>;
+    await act(async () => {
+      closing = session().closeDocument();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      opening = session().openDocument(next.metadata.id);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      holdSaves = false;
+      releaseSave();
+      await closing;
+      await opening;
+    });
+
+    expect(session().openId).toBe(next.metadata.id);
+    expect(useEditorStore.getState().document.metadata.id).toBe(next.metadata.id);
+  });
+
+  /** A canvas open with an unsaved edit, and saves that wait until `release` is called. */
+  async function openWithPendingSave(others: DraftDocument[] = []) {
+    const current = createDocument('On screen');
+    let releaseSave: () => void = () => {};
+    let holdSaves = false;
+    let held = 0;
+    const repository = stubRepository({
+      load: async (id) => (id === current.metadata.id ? structuredClone(current) : (others.find((doc) => doc.metadata.id === id) ?? null)),
+      save: async () => {
+        if (!holdSaves) return;
+        held += 1;
+        await new Promise<void>((resolve) => (releaseSave = resolve));
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(current.metadata.id);
+    });
+    act(() => useEditorStore.getState().rename('On screen, edited'));
+    holdSaves = true;
+    const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+    const release = () => {
+      holdSaves = false;
+      releaseSave();
+    };
+    /** Resolves once a save is really waiting: what makes "while it is still saving" true, not assumed. */
+    const saving = () => waitFor(() => expect(held).toBeGreaterThan(0));
+    return { current, session, tick, release, saving };
+  }
+
+  it('a new canvas asked for first does not take the place of a diagram asked for after it', async () => {
+    // "Try an example" while the last save is still being written, then another diagram.
+    const next = createDocument('Asked for next');
+    const { session, tick, release, saving } = await openWithPendingSave([next]);
+
+    await act(async () => {
+      const replacing = session().replaceWithNew('example');
+      await saving();
+      const opening = session().openDocument(next.metadata.id);
+      await tick();
+      release();
+      await replacing;
+      await opening;
+    });
+
+    expect(session().openId).toBe(next.metadata.id);
+    expect(useEditorStore.getState().document.metadata.id).toBe(next.metadata.id);
+  });
+
+  it('a new canvas takes the place of the one on screen when nothing newer is asked for', async () => {
+    const { current, session, release, saving } = await openWithPendingSave();
+    await act(async () => {
+      const replacing = session().replaceWithNew();
+      await saving();
+      release();
+      await replacing;
+    });
+    expect(session().openId).not.toBeNull();
+    expect(session().openId).not.toBe(current.metadata.id);
+  });
+
+  it('a new canvas is still made when the address stepping back to Home is heard before the close has finished', async () => {
+    // Closing a canvas steps the address back itself, which arrives as a `popstate` a moment later.
+    // Here it arrives while the close is still re-reading the Library, before the new canvas is made.
+    const current = createDocument('On screen');
+    let releaseList: () => void = () => {};
+    let holdList = false;
+    const repository = stubRepository({
+      load: async (id) => (id === current.metadata.id ? structuredClone(current) : null),
+      list: async () => {
+        if (holdList) await new Promise<void>((resolve) => (releaseList = resolve));
+        return [];
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(current.metadata.id);
+    });
+    expect(docIdFromLocation()).toBe(current.metadata.id);
+
+    let heard = 0;
+    const onPopState = () => (heard += 1);
+    window.addEventListener('popstate', onPopState);
+    holdList = true;
+    // Not inside one `act`: React must render the close for the address to follow it, as it does
+    // in a browser, and an `act` that is still open holds that render back.
+    let replacing!: Promise<void>;
+    act(() => {
+      replacing = session().replaceWithNew('example');
+    });
+    await waitFor(() => expect(heard).toBeGreaterThan(0));
+    expect(docIdFromLocation()).toBeNull();
+    expect(session().openId).toBeNull();
+    await act(async () => {
+      holdList = false;
+      releaseList();
+      await replacing;
+    });
+    window.removeEventListener('popstate', onPopState);
+
+    expect(session().openId).not.toBeNull();
+    expect(session().openId).not.toBe(current.metadata.id);
+  });
+
+  it('a diagram opened straight after going home opens, whenever the address stepping back is heard', async () => {
+    const current = createDocument('On screen');
+    const next = createDocument('Asked for next');
+    let releaseNext: () => void = () => {};
+    const repository = stubRepository({
+      load: async (id) => {
+        if (id === current.metadata.id) return structuredClone(current);
+        if (id !== next.metadata.id) return null;
+        await new Promise<void>((resolve) => (releaseNext = resolve));
+        return next;
+      },
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(current.metadata.id);
+    });
+
+    let heard = 0;
+    const onPopState = () => (heard += 1);
+    window.addEventListener('popstate', onPopState);
+    await act(async () => {
+      expect(await session().closeDocument()).toBe(true);
+    });
+    let opening!: Promise<void>;
+    act(() => {
+      opening = session().openDocument(next.metadata.id);
+    });
+    // The address stepping back to Home is heard while the next diagram is still being read.
+    await waitFor(() => expect(heard).toBeGreaterThan(0));
+    await act(async () => {
+      releaseNext();
+      await opening;
+    });
+    window.removeEventListener('popstate', onPopState);
+
+    expect(session().openId).toBe(next.metadata.id);
+  });
+
+  it('going home from a diagram opened over another leaves the address naming no diagram', async () => {
+    const first = createDocument('Opened first');
+    const second = createDocument('Opened over it');
+    const repository = stubRepository({
+      load: async (id) => (id === first.metadata.id ? structuredClone(first) : id === second.metadata.id ? structuredClone(second) : null),
+    });
+    const session = renderSession(repository);
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(first.metadata.id);
+    });
+    await act(async () => {
+      await session().openDocument(second.metadata.id);
+    });
+    expect(docIdFromLocation()).toBe(second.metadata.id);
+
+    let heard = 0;
+    const onPopState = () => (heard += 1);
+    window.addEventListener('popstate', onPopState);
+    await act(async () => {
+      expect(await session().closeDocument()).toBe(true);
+    });
+    await waitFor(() => expect(heard).toBeGreaterThan(0));
+    window.removeEventListener('popstate', onPopState);
+
+    // The step back landed on the first diagram's entry. Home is showing, so a reload must not reopen it.
+    expect(session().openId).toBeNull();
+    expect(docIdFromLocation()).toBeNull();
+  });
+
+  it('Back then Forward while the last save is still being written leaves the canvas open', async () => {
+    const { current, session, release, saving } = await openWithPendingSave();
+    expect(docIdFromLocation()).toBe(current.metadata.id);
+    const loads = vi.spyOn(session().repository!, 'load');
+
+    // Back, as the browser does it: the address names no diagram, so the canvas starts to close,
+    // and waits on its save.
+    act(() => window.history.back());
+    await saving();
+    expect(docIdFromLocation()).toBeNull();
+    expect(session().openId).toBe(current.metadata.id);
+    // Forward: the address names the diagram on screen again.
+    act(() => window.history.forward());
+    await waitFor(() => expect(docIdFromLocation()).toBe(current.metadata.id));
+    await act(async () => {
+      release();
+      await settled();
+    });
+
+    expect(session().openId).toBe(current.metadata.id);
+    expect(docIdFromLocation()).toBe(current.metadata.id);
+    // Still open because the close stood down, not because it closed and the diagram was read again.
+    expect(loads).not.toHaveBeenCalled();
+  });
+
+  /** Long enough for a step through the history, which the browser makes in a later task, to be heard. */
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 60));
+
+  /** Two stored diagrams, the first open, with nothing held back: every read and write answers at once. */
+  async function openFirstOfTwo() {
+    const first = createDocument('First');
+    const second = createDocument('Second');
+    const session = renderSession(
+      stubRepository({ load: async (id) => (id === first.metadata.id ? structuredClone(first) : id === second.metadata.id ? structuredClone(second) : null) }),
+    );
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      await session().openDocument(first.metadata.id);
+    });
+    await act(settled);
+    expect(docIdFromLocation()).toBe(first.metadata.id);
+    return { first, second, session };
+  }
+
+  // Closing a canvas steps the address back, and the browser makes that step a task later. With a
+  // repository that answers at once, the next thing asked for is on screen before the step is heard.
+  describe('what is asked for straight after going home, before the address has stepped back', () => {
+    it('another diagram opens and stays open, and the address names it', async () => {
+      const { second, session } = await openFirstOfTwo();
+      await act(async () => {
+        await session().closeDocument();
+      });
+      act(() => void session().openDocument(second.metadata.id));
+      await act(settled);
+      await act(settled);
+      expect(session().openId).toBe(second.metadata.id);
+      expect(docIdFromLocation()).toBe(second.metadata.id);
+    });
+
+    it('the same diagram reopens and stays open, and the address names it', async () => {
+      const { first, session } = await openFirstOfTwo();
+      await act(async () => {
+        await session().closeDocument();
+      });
+      act(() => void session().openDocument(first.metadata.id));
+      await act(settled);
+      await act(settled);
+      expect(session().openId).toBe(first.metadata.id);
+      expect(docIdFromLocation()).toBe(first.metadata.id);
+    });
+
+    it('a new canvas takes the place of the one on screen, and the address names it', async () => {
+      const { first, session } = await openFirstOfTwo();
+      await act(async () => {
+        await session().replaceWithNew();
+      });
+      await act(settled);
+      await act(settled);
+      expect(session().openId).not.toBeNull();
+      expect(session().openId).not.toBe(first.metadata.id);
+      expect(docIdFromLocation()).toBe(session().openId);
+    });
+
+    it('going home and nothing else leaves Home showing, and Back from there is still the person’s', async () => {
+      const { first, session } = await openFirstOfTwo();
+      await act(async () => {
+        await session().closeDocument();
+      });
+      await act(settled);
+      expect(session().openId).toBeNull();
+      expect(docIdFromLocation()).toBeNull();
+      // Forward is theirs: it reopens the diagram, as it always has.
+      act(() => window.history.forward());
+      await act(settled);
+      await act(settled);
+      expect(session().openId).toBe(first.metadata.id);
+    });
+  });
+
+  it('a new canvas asked for while a diagram is still being read is the one that arrives', async () => {
+    const slow = createDocument('Slow');
+    let releaseSlow: () => void = () => {};
+    const session = renderSession(
+      stubRepository({
+        load: async (id) => {
+          if (id !== slow.metadata.id) return null;
+          await new Promise<void>((resolve) => (releaseSlow = resolve));
+          return slow;
+        },
+      }),
+    );
+    await waitFor(() => expect(session().ready).toBe(true));
+    await act(async () => {
+      const opening = session().openDocument(slow.metadata.id);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      await session().replaceWithNew();
+      releaseSlow();
+      await opening;
+    });
+    await act(settled);
+    expect(session().openId).not.toBeNull();
+    expect(session().openId).not.toBe(slow.metadata.id);
   });
 
   it('keeps a reload stash over a rename made elsewhere, and opens it unsaved when writing it fails', async () => {
@@ -479,32 +854,6 @@ describe('useDocumentSession — repository failures surface a toast, not an unh
     expect(errorToastShown()).toBe(true);
   });
 
-  it('duplicateDocument that fails copying the background leaves no half-made copy behind', async () => {
-    const source = createDocument('Original');
-    source.settings = { ...source.settings, background: { ...source.settings.background, enabled: true, imageId: 'bg_1' } };
-    const saved: string[] = [];
-    const removed: string[] = [];
-    const repository = stubRepository({
-      load: async () => source,
-      save: async (document) => void saved.push(document.metadata.id),
-      remove: async (id) => void removed.push(id),
-      loadBackgroundImage: async () => ({ blob: new Blob(['x']), width: 10, height: 10 }),
-      saveBackgroundImage: async () => {
-        throw new Error('quota');
-      },
-    });
-    const session = renderSession(repository);
-    await waitFor(() => expect(session().ready).toBe(true));
-
-    await act(async () => {
-      await session().duplicateDocument(source.metadata.id);
-    });
-    expect(saved).toHaveLength(1);
-    expect(saved[0]).not.toBe(source.metadata.id);
-    expect(removed).toEqual(saved);
-    expect(errorToastShown()).toBe(true);
-  });
-
   it('a duplicate or import that was saved is not reported as failed when only the list re-read fails', async () => {
     let lists = 0;
     const repository = stubRepository({
@@ -673,58 +1022,6 @@ describe('useDocumentSession — opening viewport fit request', () => {
       await session().openDocument(doc.metadata.id);
     });
     expect(useUiStore.getState().openFitDocumentId).toBeNull();
-  });
-});
-
-describe('useDocumentSession — closing prunes background images', () => {
-  /** Just enough of the Web Locks API: shared holds counted per name, `ifAvailable` probes. */
-  function fakeLocks() {
-    const held = new Map<string, number>();
-    return {
-      async request(name: string, options: LockOptions, callback: (lock: { name: string } | null) => unknown) {
-        if (options.ifAvailable) return callback(held.get(name) ? null : { name });
-        held.set(name, (held.get(name) ?? 0) + 1);
-        try {
-          return await callback({ name });
-        } finally {
-          held.set(name, held.get(name)! - 1);
-        }
-      },
-    };
-  }
-
-  afterEach(() => {
-    Reflect.deleteProperty(navigator, 'locks');
-  });
-
-  it('leaves them alone while another tab has the canvas open, and prunes once none does', async () => {
-    Object.defineProperty(navigator, 'locks', { value: fakeLocks(), configurable: true });
-    const { holdOpen } = await import('../src/storage/openPresence');
-    const doc = createDocument('Backdrop');
-    const pruned: string[] = [];
-    const repository = stubRepository({
-      load: async () => doc,
-      pruneBackgroundImages: async (id) => void pruned.push(id),
-    });
-    const session = renderSession(repository);
-    await waitFor(() => expect(session().ready).toBe(true));
-    const elsewhere = holdOpen(doc.metadata.id);
-
-    const openAndClose = async () => {
-      await act(async () => {
-        await session().openDocument(doc.metadata.id);
-      });
-      await act(async () => {
-        await session().closeDocument();
-      });
-    };
-    await openAndClose();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(pruned).toEqual([]);
-
-    await elsewhere();
-    await openAndClose();
-    await waitFor(() => expect(pruned).toEqual([doc.metadata.id]));
   });
 });
 

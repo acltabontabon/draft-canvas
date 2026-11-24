@@ -46,7 +46,9 @@ import {
   updateNode,
 } from '../document/operations';
 import { reinferIfEligible } from '../document/reinfer';
+import { technologyKindPatch } from '../document/technologyKind';
 import { freeOriginFor } from '../document/geometry';
+import { fixedIds } from '../document/held';
 import { syncLinks } from '../document/sequenceLinks';
 import { messagesOf, sequenceOf } from '../document/sequenceModel';
 import { editMessageAttachments } from '../document/sequenceOps';
@@ -56,7 +58,7 @@ import { linked, readSequenceSource, sequenceNode, unsupportedAdvice } from './s
 import { DEFAULTS, LIMITS } from '../document/limits';
 import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode, DraftSequence } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
-import { embed, totals, viewOf, walkGraphs, type DepthPath } from '../depth/tree';
+import { embed, samePath, totals, viewOf, walkGraphs, type DepthPath, type Graph } from '../depth/tree';
 import { effectiveLevel, inheritedLevel } from '../depth/level';
 import { assignAnchors } from '../layout/anchors';
 import { naturalCodeSize, naturalTextSize } from '../nodes/describe';
@@ -86,7 +88,8 @@ import { checkQuality, isBetterReport, isClean, type QualityReport } from './qua
 import { moveInside, moveOutside } from './restructure';
 import { newFindings, REVIEW_LIMIT, reviewView } from './review';
 import { technologyAdvice } from './advice';
-import { OP_FIELDS, SET_FIELDS } from './fields';
+import { OP_FIELDS, SET_FIELDS, suggestedField } from './fields';
+import { validateUpdateSet } from './contract';
 import { GROUP_KINDS, LINE_STYLE_NAMES, LINE_STYLES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
 import { applyRoutes, readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
 import { applyPlaces } from './placeExplicit';
@@ -105,22 +108,32 @@ export interface PatchResult {
 
 type Json = Record<string, unknown>;
 
+function forEachGraphId(graph: Graph, visit: (id: string) => void): void {
+  for (const node of graph.nodes) {
+    visit(node.id);
+    for (const item of node.attachments ?? []) visit(item.id);
+  }
+  for (const edge of graph.edges) {
+    visit(edge.id);
+    for (const item of edge.attachments ?? []) visit(item.id);
+  }
+  for (const flow of graph.flows) visit(flow.id);
+}
+
 /** Every id in the file, across every room, of every kind — new ids must avoid all of them. */
 export function idsInFile(file: DraftDocument): Set<string> {
   const out = new Set<string>();
-  walkGraphs(file, (graph) => {
-    for (const n of graph.nodes) {
-      out.add(n.id);
-      for (const a of n.attachments ?? []) out.add(a.id);
-    }
-    for (const e of graph.edges) {
-      out.add(e.id);
-      for (const a of e.attachments ?? []) out.add(a.id);
-    }
-    for (const f of graph.flows) out.add(f.id);
-  });
-  for (const p of file.openPoints ?? []) out.add(p.id);
+  walkGraphs(file, (graph) => forEachGraphId(graph, (id) => out.add(id)));
+  for (const point of file.openPoints ?? []) out.add(point.id);
   return out;
+}
+
+function otherViewsById(file: DraftDocument, path: DepthPath): Map<string, DepthPath> {
+  const paths = new Map<string, DepthPath>();
+  walkGraphs(file, (graph, inside) => {
+    if (!samePath(inside, path)) forEachGraphId(graph, (id) => paths.set(id, inside));
+  });
+  return paths;
 }
 
 /** A captured selection, frozen by id — `read_selection`'s `scope` passed back on a later edit. An
@@ -207,6 +220,20 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   let view = viewOf(file, path);
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
   const originalView = view;
+  const explainOrder = laterAdd(ops);
+  let otherViews: Map<string, DepthPath> | undefined;
+  const missingTarget = (current: DraftDocument, at: string, id: string): void => {
+    const message = `nothing with id "${id}" in this view`;
+    // Use the unchanged file for view instructions: a refused batch won't create or move rooms.
+    otherViews ??= otherViewsById(file, path);
+    const inside = otherViews.get(id);
+    const hint = inside
+      ? inside.length
+        ? `; it is in another view: send this op in a request with view: {inside: ${JSON.stringify(inside)}}`
+        : '; it is in the top view: send this op in a request without view'
+      : explainOrder({ path: at, message }) ?? (taken.has(id) ? '' : labelHint(current, id));
+    problems.add('INVALID_REFERENCE', at, message + hint);
+  };
   const scope = readScope(r, rawScope, '/scope', view);
   problems.throwIfAny();
   const touched = new Set<string>();
@@ -248,8 +275,20 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       return;
     }
     if (kind === 'arrange') {
-      const request = readArrange(r, op, at, view, layout);
+      let request = readArrange(r, op, at, view, layout);
       if (!request || !problems.empty) return;
+      // Shapes the person holds in place stay where they are for an agent too, as they do for
+      // Arrange in the editor (`layoutPlan.ts`): the rest is arranged around them.
+      const fixed = fixedIds(view.nodes);
+      if (fixed.size > 0) {
+        if (request.scope?.group !== undefined) {
+          if (fixed.has(request.scope.group)) return;
+        } else {
+          const moving = (request.scope?.nodes ?? view.nodes.map((n) => n.id)).filter((id) => !fixed.has(id));
+          if (moving.length === 0) return;
+          request = { ...request, scope: { nodes: moving }, keepOutsideFixed: true, bothDirections: false };
+        }
+      }
       if (scope) {
         if (!request.scope) {
           problems.add('OUT_OF_SCOPE', `${at}/scope`, 'a selection scope is active on this request; name what to rearrange with scope: {nodes} or {group} instead of the whole view');
@@ -349,14 +388,15 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       return;
     }
     if (kind === 'remove') {
-      const ids = r.array(op.ids, `${at}/ids`, 200).filter((id): id is string => {
-        if (typeof id !== 'string') { problems.add('INVALID_INPUT', `${at}/ids`, 'ids must be strings'); return false; }
-        return true;
-      });
+      const ids = r.array(op.ids, `${at}/ids`, 200);
       const cascade = r.bool(op.cascade, `${at}/cascade`) ?? false;
       const nodeIds: string[] = [];
       const edgeIds: string[] = [];
-      for (const id of ids) {
+      for (const [index, id] of ids.entries()) {
+        if (typeof id !== 'string') {
+          problems.add('INVALID_INPUT', `${at}/ids/${index}`, 'must be a string');
+          continue;
+        }
         const node = view.nodes.find((n) => n.id === id);
         if (node) {
           if (outOfScope(scope, [id], 'nodes').length) {
@@ -424,7 +464,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
           counts.removed += 1;
           continue;
         }
-        problems.add('INVALID_REFERENCE', `${at}/ids`, `nothing with id "${id}" in this view`);
+        missingTarget(view, `${at}/ids/${index}`, id);
       }
       if (!problems.empty) return;
       const before = view.nodes.length + view.edges.length;
@@ -465,21 +505,32 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
       return;
     }
     const point = findOpenPoint(view, id);
-    const targetNode = view.nodes.find((n) => n.id === id);
-    const isEdge = view.edges.some((e) => e.id === id);
-    const fields = point
-      ? SET_FIELDS.openPoint
-      : targetNode
-        ? SET_FIELDS[NODE_FIELDS[targetNode.type] ?? 'element']
-        : isEdge
-          ? SET_FIELDS.relationship
-          : view.flows.some((f) => f.id === id)
-            ? SET_FIELDS.flow
-            : SET_FIELDS.attachment;
-    r.fields(set, `${at}/set`, fields);
-    for (const field of ['kind', 'language', 'lineStyle', 'code', 'attach', 'place']) if (set[field] === null && !(isEdge && field === 'kind')) problems.add('INVALID_INPUT', `${at}/set/${field}`, 'this required field cannot be cleared');
+    const node = view.nodes.find((item) => item.id === id);
+    const edge = view.edges.find((item) => item.id === id);
+    const flowIndex = view.flows.findIndex((item) => item.id === id);
+    const attached = point || node || edge || flowIndex >= 0 ? undefined : findAttachment(view, id);
+    const target = point ? 'openPoint'
+      : node ? NODE_FIELDS[node.type] ?? 'element'
+      : edge ? 'relationship'
+      : flowIndex >= 0 ? 'flow'
+      : attached ? 'attachment'
+      : undefined;
+    // An unknown id used to be treated as an attachment and refused for its fields.
+    if (!target) {
+      missingTarget(view, `${at}/id`, id);
+      return;
+    }
+    const fields: readonly string[] = SET_FIELDS[target];
+    for (const key of Object.keys(set)) {
+      if (fields.includes(key)) continue;
+      const meant = suggestedField(key, fields);
+      const suggestion = meant ? `; use ${meant}` : '';
+      problems.add('INVALID_INPUT', `${at}/set/${key}`, `not a field of ${SET_TARGET_NAMES[target]} ("${id}")${suggestion}; it takes ${fields.join(', ')}`);
+    }
+    for (const field of ['kind', 'language', 'lineStyle', 'code', 'attach', 'place']) if (set[field] === null && !(edge && field === 'kind')) problems.add('INVALID_INPUT', `${at}/set/${field}`, 'this required field cannot be cleared');
     if (Object.keys(set).length === 0) problems.add('INVALID_INPUT', `${at}/set`, 'name at least one field to change');
     if (!problems.empty) return;
+    validateUpdateSet(set, `${at}/set`);
     if (point) {
       if (scope) {
         refuseOutOfScope(r, `${at}/set`, [id]);
@@ -495,11 +546,11 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const { place: rawPlace, route: rawRoute, ...rest } = set;
     const place = rawPlace !== undefined ? readPlace(r, rawPlace, `${at}/set/place`) : undefined;
     const route = rawRoute === undefined || rawRoute === null ? rawRoute : readRoute(r, rawRoute, `${at}/set/route`);
-    if (rawPlace !== undefined || rawRoute !== undefined) refuseOutOfScope(r, `${at}/set`, outOfScope(scope, [id], isEdge ? 'edges' : 'nodes'));
+    if (rawPlace !== undefined || rawRoute !== undefined) refuseOutOfScope(r, `${at}/set`, outOfScope(scope, [id], edge ? 'edges' : 'nodes'));
     if (!problems.empty) return;
     const before = view;
     if (Object.keys(rest).length) {
-      const result = updateOne(r, view, id, rest, `${at}/set`, ctx, touched, advisories, layout.direction, scope);
+      const result = updateOne(r, view, id, { node, edge, flowIndex, attached }, rest, `${at}/set`, ctx, touched, advisories, layout.direction, scope);
       if (!result) return;
       view = result.view;
     }
@@ -514,7 +565,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     }
     if (view !== before) counts.updated += 1;
   });
-  problems.explain(laterAdd(ops));
+  problems.explain(explainOrder);
   problems.throwIfAny();
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
   // A shape renamed or retyped here is renamed in every sequence it stands in, as it is when a
@@ -787,6 +838,26 @@ function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Js
   return removeParticipantEdges({ ...view, nodes: view.nodes.map((n) => (n.id === node.id ? changed : n)) }, node.id, removed);
 }
 
+/** What an update's target is called in a refusal, by the `SET_FIELDS` it takes. */
+const SET_TARGET_NAMES: Record<keyof typeof SET_FIELDS, string> = {
+  element: 'an element', group: 'a group', note: 'a note', code: 'a code note', label: 'a label', relationship: 'a relationship',
+  flow: 'a flow', sequence: 'a sequence', attachment: 'an attachment', openPoint: 'an open point',
+};
+
+/** Offer a label correction only when the addressed view has one matching target. */
+function labelHint(view: DraftDocument, id: string): string {
+  const words = id.trim().toLowerCase();
+  if (!words) return '';
+  const matches = [
+    ...view.nodes.map((node) => ({ id: node.id, text: node.text })),
+    ...view.edges.map((edge) => ({ id: edge.id, text: edge.label })),
+    ...view.flows.map((flow) => ({ id: flow.id, text: flow.title })),
+    ...view.nodes.flatMap((node) => node.attachments ?? []),
+    ...view.edges.flatMap((edge) => edge.attachments ?? []),
+  ].filter((item) => item.text?.trim().toLowerCase() === words);
+  return matches.length === 1 ? `; that is the label of id "${matches[0]!.id}", and an op takes the id` : '';
+}
+
 /** Which `SET_FIELDS` a node of each type takes: a card's own fields, or an element's. */
 const NODE_FIELDS: Partial<Record<DraftNode['type'], keyof typeof SET_FIELDS>> = { group: 'group', note: 'note', code: 'code', text: 'label', sequence: 'sequence' };
 
@@ -796,6 +867,7 @@ function updateOne(
   r: Reader,
   view: DraftDocument,
   id: string,
+  { node, edge, flowIndex, attached }: { node?: DraftNode; edge?: DraftEdge; flowIndex: number; attached?: FoundAttachment },
   set: Json,
   at: string,
   ctx: ReturnType<typeof measureContext>,
@@ -804,7 +876,6 @@ function updateOne(
   direction: LayoutSpec['direction'],
   scope?: Scope,
 ): { view: DraftDocument } | undefined {
-  const node = view.nodes.find((n) => n.id === id);
   if (node?.type === 'sequence') {
     refuseOutOfScope(r, at, outOfScope(scope, [id], 'nodes'));
     if (!r.problems.empty) return undefined;
@@ -846,6 +917,8 @@ function updateOne(
     else if (set.description !== undefined) patch.description = r.text(set.description, `${at}/description`, AGENT_LIMITS.descriptionLength);
     if (clear('technology')) patch.technology = undefined;
     else if (set.technology !== undefined) patch.technology = r.text(set.technology, `${at}/technology`, AGENT_LIMITS.technologyLength, { singleLine: true });
+    // A known product moves a kind nobody picked, as typing it in the editor does (`technologyKind.ts`).
+    if ('technology' in patch && set.type === undefined) Object.assign(patch, technologyKindPatch(node, patch.technology) ?? {});
     if (set.replicas !== undefined) {
       const replicas = readReplicas(r, set.replicas, `${at}/replicas`, node.type);
       if (replicas === null) patch.replicas = undefined;
@@ -866,6 +939,8 @@ function updateOne(
         r.problems.add('UNSUPPORTED', `${at}/type`, `can't turn a ${node.type} into a ${shape.type}; remove it and add a new element instead`);
       } else {
         Object.assign(patch, shape);
+        // A kind the agent names is picked, as in the editor: a later technology no longer moves it.
+        if (node.kindOrigin) patch.kindOrigin = undefined;
         if (!shape.deliveryRole && node.deliveryRole) patch.deliveryRole = undefined;
       }
     }
@@ -956,7 +1031,7 @@ function updateOne(
       }
     }
     // A new kind re-derives the connectors inference owns, exactly as a kind change in the inspector does.
-    if (set.type !== undefined) {
+    if (set.type !== undefined || 'technology' in patch) {
       const byId = new Map(next.nodes.map((n) => [n.id, n]));
       for (const edge of next.edges) {
         if ((edge.source !== id && edge.target !== id) || !isEligibleForReinference(edge)) continue;
@@ -974,7 +1049,6 @@ function updateOne(
     if (!evidenceOnly) touched.add(id);
     return { view: next };
   }
-  const edge = view.edges.find((e) => e.id === id);
   if (edge) {
     refuseOutOfScope(r, at, outOfScope(scope, [id], 'edges'));
     if (!r.problems.empty) return undefined;
@@ -1079,7 +1153,6 @@ function updateOne(
     if (!Object.keys(set).every((field) => field === 'evidence')) touched.add(id);
     return { view: updateEdge(next, id, patch) };
   }
-  const flowIndex = view.flows.findIndex((f) => f.id === id);
   if (flowIndex >= 0) {
     // Same reasoning as the flow-removal branch above: no scope can ever contain a flow id.
     if (scope) {
@@ -1123,13 +1196,11 @@ function updateOne(
     touched.add(id);
     return { view: { ...view, flows } };
   }
-  const attached = findAttachment(view, id);
   if (attached) {
     refuseOutOfScope(r, at, outOfScope(scope, [attached.hostId], attached.kind === 'node' ? 'nodes' : 'edges'));
     if (!r.problems.empty) return undefined;
     return updateAttachmentOp(r, view, attached, set, at, touched, direction);
   }
-  r.problems.add('INVALID_REFERENCE', at.replace(/\/set$/, '/id'), `nothing with id "${id}" in this view`);
   return undefined;
 }
 

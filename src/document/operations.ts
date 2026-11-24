@@ -15,14 +15,13 @@ import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
 import { cleanDescription, cleanEdgeLabel, cleanText, cleanTextFields, cleanTitle, cleanTechnology } from './sanitize';
 import { replicasField } from './replicas';
-import { finite, oneOf, safeId } from './validationValues';
+import { finite, oneOf } from './validationValues';
 import { dropParticipantLinks, mapSequenceText, repointParticipantLinks } from './sequenceOps';
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
-import { BACKGROUND_FITS, GRID_MODES } from './types';
+import { GRID_MODES } from './types';
+import { canonicalStyle, type DocumentStyle } from './style';
 import type {
-  BackgroundFit,
-  BackgroundSettings,
   DraftInk,
   Attachment,
   DraftDocument,
@@ -1360,8 +1359,8 @@ export interface PlaceAlignment {
  * tube, a Data Store's glyph (`anchorBandOf`) — or of its height when the whole side is the anchor.
  * What `edges/routing.ts` resolves a centred (offset `0.5`) left or right anchor to, minus the top.
  */
-export function anchorOffsetY(shape: Pick<DraftNode, 'type' | 'width' | 'height'>): number {
-  const band = anchorBandOf({ type: shape.type, x: 0, y: 0, width: shape.width, height: shape.height });
+export function anchorOffsetY(shape: Pick<DraftNode, 'type' | 'width' | 'height'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind'>): number {
+  const band = anchorBandOf({ type: shape.type, serviceKind: shape.serviceKind, componentKind: shape.componentKind, x: 0, y: 0, width: shape.width, height: shape.height });
   return band ? (band.top + band.bottom) / 2 : shape.height / 2;
 }
 
@@ -1485,6 +1484,67 @@ function companionCandidates(
   return direction === 'below'
     ? [below, right, belowRight, aboveRight, furtherBelow]
     : [right, below, belowRight, aboveRight, furtherBelow];
+}
+
+/** Room left between a shape moved off a neighbour it was dropped on and that neighbour: enough to
+ *  read as two shapes, small enough that it still lands where it was aimed. */
+export const DROP_CLEARANCE = 16;
+
+/** How many of the closest shapes a drop is steered around. Past the ones it actually landed on,
+ *  only their near neighbours can be in the way of the spot beside them. */
+const DROP_NEIGHBOURS = 24;
+
+/**
+ * Where a shape dropped at `rect` should actually go: `rect` itself when it covers no other shape,
+ * and otherwise the closest spot that is `DROP_CLEARANCE` clear of every shape around it. The point
+ * a connector was let go at can be empty while the box centred on it reaches a neighbour (#178), and
+ * a shape landing on another hides it and its attachments.
+ *
+ * Not a general free-space solver. The closest clear position to a point among boxes always has each
+ * coordinate either unchanged or flush against some box's edge, so only those are tried: exact, and
+ * the same inputs always give the same answer. A boundary is never an obstacle, as in `tryPlaceNear`:
+ * landing inside one is normal. With no clear spot among the candidates (a packed corner) the drop
+ * point is kept, as a committed companion's is by `placeNear`.
+ */
+export function clearSpotNear(doc: DraftDocument, rect: Bounds): { x: number; y: number } {
+  const wanted = { x: clampCoord(rect.x), y: clampCoord(rect.y) };
+  const shapes = doc.nodes.filter((n) => n.type !== 'group');
+  if (!shapes.some((n) => rectsOverlap(rect, n))) return wanted;
+
+  const reach = (rect.width + rect.height) * 2 + DROP_CLEARANCE;
+  const centre = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  // Edge-to-centre distance, so a long shape whose middle is far away still counts as near.
+  const distanceTo = (n: Bounds) =>
+    Math.hypot(Math.max(n.x - centre.x, 0, centre.x - (n.x + n.width)), Math.max(n.y - centre.y, 0, centre.y - (n.y + n.height)));
+  const near = shapes
+    .map((shape) => ({ shape, distance: distanceTo(shape) }))
+    .filter((entry) => entry.distance <= reach)
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, DROP_NEIGHBOURS)
+    .map((entry) => entry.shape);
+
+  const xs = [wanted.x, ...near.flatMap((n) => [n.x - rect.width - DROP_CLEARANCE, n.x + n.width + DROP_CLEARANCE])];
+  const ys = [wanted.y, ...near.flatMap((n) => [n.y - rect.height - DROP_CLEARANCE, n.y + n.height + DROP_CLEARANCE])];
+  const blocked = (x: number, y: number) =>
+    shapes.some(
+      (n) =>
+        x < n.x + n.width + DROP_CLEARANCE &&
+        x + rect.width + DROP_CLEARANCE > n.x &&
+        y < n.y + n.height + DROP_CLEARANCE &&
+        y + rect.height + DROP_CLEARANCE > n.y,
+    );
+  let best: { x: number; y: number; distance: number } | undefined;
+  for (const x of xs) {
+    for (const y of ys) {
+      const distance = (x - wanted.x) ** 2 + (y - wanted.y) ** 2;
+      // Strictly closer only: on a tie the first found stays, so the answer never depends on more
+      // than the order shapes were tried in.
+      if (best && distance >= best.distance) continue;
+      if (Math.abs(x) > LIMITS.maxCoordinate || Math.abs(y) > LIMITS.maxCoordinate || blocked(x, y)) continue;
+      best = { x, y, distance };
+    }
+  }
+  return best ? { x: clampCoord(best.x), y: clampCoord(best.y) } : wanted;
 }
 
 function clampCompanion(
@@ -1788,42 +1848,34 @@ export function setTitle(doc: DraftDocument, title: string): DraftDocument {
 }
 
 /**
- * Canvas settings as a load keeps them: a grid mode that exists, a scrim and a blur between 0 and 1
- * (clamped without a word, as a load clamps them), a fit that exists. A value that is none of those
- * leaves what was there. A patch that changes nothing is no change: the same document comes back, so
+ * Canvas settings as a load keeps them: a grid mode that exists. A value that is not one leaves
+ * what was there. A patch that changes nothing is no change: the same document comes back, so
  * re-picking what is already picked never becomes an undo step.
  */
 export function setSettings(doc: DraftDocument, patch: Partial<DraftSettings>): DraftDocument {
   const was = doc.settings;
-  const background = patch.background === undefined ? was.background : heldBackground(patch.background, was.background);
   const next: DraftSettings = {
     showSequence: patch.showSequence === undefined ? was.showSequence : patch.showSequence !== false,
     grid: oneOf<GridMode>(patch.grid, GRID_MODES, was.grid),
-    background,
   };
-  const same =
-    next.showSequence === was.showSequence &&
-    next.grid === was.grid &&
-    (background === was.background ||
-      (background.enabled === was.background.enabled &&
-        background.fit === was.background.fit &&
-        background.dim === was.background.dim &&
-        background.blur === was.background.blur &&
-        background.imageId === was.background.imageId &&
-        background.image === was.background.image));
+  const same = next.showSequence === was.showSequence && next.grid === was.grid;
   return same ? doc : { ...doc, settings: next };
 }
 
-function heldBackground(patch: BackgroundSettings, was: BackgroundSettings): BackgroundSettings {
-  const imageId = safeId(patch.imageId);
-  return {
-    enabled: patch.enabled === true,
-    fit: oneOf<BackgroundFit>(patch.fit, BACKGROUND_FITS, was.fit),
-    dim: clamp(finite(patch.dim, was.dim), 0, 1),
-    blur: clamp(finite(patch.blur, was.blur), 0, 1),
-    ...(imageId ? { imageId } : {}),
-    ...(patch.image ? { image: patch.image } : {}),
-  };
+/**
+ * Gives the diagram a look of its own, or with `undefined` takes it away so the diagram follows
+ * the device again. Held to the same rules as a style read from a file (`canonicalStyle`), and the
+ * same document when nothing would change, so re-applying the style it already has is no undo step.
+ */
+export function setStyle(doc: DraftDocument, style: DocumentStyle | undefined): DraftDocument {
+  const next = style === undefined ? undefined : canonicalStyle(style);
+  if (next === doc.style) return doc;
+  if (next !== undefined && doc.style !== undefined && JSON.stringify(next) === JSON.stringify(canonicalStyle(doc.style))) return doc;
+  if (next === undefined) {
+    const { style: _style, ...rest } = doc;
+    return rest;
+  }
+  return { ...doc, style: next };
 }
 
 export function touch(doc: DraftDocument, at = Date.now()): DraftDocument {

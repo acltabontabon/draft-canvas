@@ -60,15 +60,19 @@ export function sequenceFlow(node: DraftNode): DraftFlow {
 }
 
 /**
- * The flow playback is asked to tell: one of the document's own, or a sequence's telling of
- * itself. What every reader of `flowPlayback.flowId` uses — never the editing operations, which
- * only ever touch the flows a file really holds.
+ * The flow playback is asked to tell: one of the document's own, a sequence's telling of itself,
+ * or a walk (`presentation/walk.ts`) — the diagram's arrows followed because nobody has made a
+ * flow of them, handed over as `walk` from `flowPlayback.walk`. What every reader of
+ * `flowPlayback.flowId` uses — never the editing operations, which only ever touch the flows a
+ * file really holds.
  */
 export function playbackFlowOf(
   document: Pick<DraftDocument, 'flows' | 'nodes'>,
   flowId: string | null | undefined,
   sequenceNodeId?: string,
+  walk?: DraftFlow,
 ): DraftFlow | undefined {
+  if (walk && walk.id === flowId) return walk;
   if (sequenceNodeId !== undefined) {
     const node = sequencesIn(document.nodes).get(sequenceNodeId);
     return node ? sequenceFlow(node) : undefined;

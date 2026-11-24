@@ -1,11 +1,12 @@
 import { useEffect, useRef } from 'react';
-import { useReactFlow, useStoreApi } from '@xyflow/react';
+import { useReactFlow, useReactFlowStoreApi } from '@xyflow/react';
 import type { FollowState } from '../../../collab/protocol';
 import { pathKey, type DepthPath } from '../../../depth/tree';
 import { motionMs } from '../../../lib/motion';
 import { useCollabStore } from '../../../store/collabStore';
 import { useEditorStore } from '../../../store/editorStore';
-import { decodeFollowViewport, easeOut, followMotion, roomRoute, type FollowMotion } from './follow';
+import { useUiStore } from '../../../store/uiStore';
+import { decodeFollowViewport, easeOut, followedPlayback, followMotion, roomRoute, type FollowedPlayback, type FollowMotion } from './follow';
 
 /**
  * Whether this collaborator's camera should track `presenter` right now. Their own presentation
@@ -42,7 +43,10 @@ function walkTo(to: readonly string[]): void {
 
 /**
  * A collaborator's side of "follow the presenter": while the owner presents and this person
- * follows, their room and camera go where the presenter's do.
+ * follows, their room and camera go where the presenter's do, and the step the presenter is on is
+ * lit on their canvas as it is on the presenter's: the same `flowPlayback` a presentation writes,
+ * here while still editing, so the active interaction and its caption are drawn by the same code.
+ * It is put away the moment following stops, and Escape — which ends playback — stops following.
  *
  * Subscribes to the stores directly: the presenter's camera arrives ten times a second and would
  * otherwise re-render the whole canvas each time. Changing rooms is the editor's ordinary navigation
@@ -55,7 +59,7 @@ function walkTo(to: readonly string[]): void {
  */
 export function useFollowPresenter(path: DepthPath): void {
   const { setViewport, getViewport } = useReactFlow();
-  const storeApi = useStoreApi();
+  const storeApi = useReactFlowStoreApi().viewportStore;
   const guest = useCollabStore((state) => state.role === 'guest');
   const sync = useRef<(arrived: boolean) => void>(() => {});
   /** Set when following itself changes rooms, so the room change that follows isn't taken for the person's own. */
@@ -63,18 +67,42 @@ export function useFollowPresenter(path: DepthPath): void {
 
   useEffect(() => {
     if (!guest) return;
+    /** Whether the playback on this canvas is the presenter's, put there by `show`. */
+    let shown = false;
+    /** Set around `show`'s own writes, so they are not taken for the person ending playback. */
+    let writing = false;
+    /** Lights the presenter's step on this canvas, or (`null`) puts back what following lit. */
+    const show = (next: FollowedPlayback | null) => {
+      if (!next && !shown) return;
+      writing = true;
+      shown = next !== null;
+      useEditorStore
+        .getState()
+        .setFlowPlayback(next ? { active: true, walk: undefined, ...next } : { active: false, flowId: null, sequenceNodeId: undefined, walk: undefined, step: 0, stage: undefined });
+      // The camera is the presenter's: playback's own guided framing must not reframe on a resize.
+      useUiStore.getState().setPresentation({ framing: next ? 'manual' : 'guided' });
+      writing = false;
+    };
+
     /** `arrived`: the canvas has just changed rooms and set off for that room's own view. */
     const run = (arrived = false) => {
       const collab = useCollabStore.getState();
       // Nobody is presenting any more: the next presentation starts with an offer, not a camera grab.
       if (!collab.presenter && collab.following) {
+        show(null);
         useCollabStore.setState({ following: false });
         return;
       }
       const editor = useEditorStore.getState();
-      if (!shouldFollow(collab, editor.mode) || !collab.presenter) return;
+      if (!shouldFollow(collab, editor.mode) || !collab.presenter) {
+        show(null);
+        return;
+      }
       const presenter = collab.presenter;
       if (pathKey(editor.path) !== pathKey(presenter.path)) {
+        // A flow belongs to its room, and leaving a room resets playback: let go of it first, so
+        // that reset is not read as the person ending it.
+        show(null);
         walked.current = true;
         walkTo(presenter.path);
         // A walk that went nowhere (a drag held, a shape not here yet) leaves no room change to
@@ -82,6 +110,7 @@ export function useFollowPresenter(path: DepthPath): void {
         if (pathKey(useEditorStore.getState().path) === pathKey(editor.path)) walked.current = false;
         return;
       }
+      show(followedPlayback(presenter, editor.document));
       const { width, height } = storeApi.getState();
       if (width === 0 || height === 0) return;
       const view = { width, height };
@@ -111,11 +140,29 @@ export function useFollowPresenter(path: DepthPath): void {
     });
     // Leaving their own presentation hands the camera back to the presenter they follow.
     const offEditor = useEditorStore.subscribe((state, previous) => {
-      if (state.mode !== previous.mode) run();
+      if (state.mode !== previous.mode) {
+        // Their own presentation starts from rest, never from the step they were following.
+        if (state.mode === 'present') show(null);
+        run();
+        return;
+      }
+      if (writing) return;
+      if (shown && state.flowPlayback !== previous.flowPlayback && (!state.flowPlayback.active || state.flowPlayback.flowId === null)) {
+        // Playback ended under following: Escape, or the flow deleted (which playback answers with
+        // its picker — nothing a follower who is editing should be left in). Escape lets go of the
+        // presenter as a pan does; a flow that went is simply no longer lit.
+        const ended = !state.flowPlayback.active;
+        show(null);
+        if (ended) useCollabStore.setState({ following: false });
+        return;
+      }
+      // A flow that reached this copy after the presenter's step did.
+      if (!shown && state.document !== previous.document && useCollabStore.getState().following) run();
     });
     run();
 
     return () => {
+      show(null);
       sync.current = () => {};
       offFlow();
       offCollab();

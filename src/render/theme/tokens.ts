@@ -113,7 +113,7 @@ export const LIGHT: Theme = {
   edgeLabelBg: '#ffffff',
   codeBg: '#f7f8fa',
   codeBorder: '#e2e6eb',
-  shadow: 'rgba(19, 24, 32, 0.10)',
+  shadow: 'rgba(19, 24, 32, 0.13)',
   danger: '#b0334d',
   accents: {
     // Same reasoning as DARK.neutral, tuned independently rather than inverted:
@@ -184,4 +184,13 @@ export function applyThemeVariables(theme: Theme, root: HTMLElement): void {
   }
   root.dataset.theme = theme.name;
   root.style.colorScheme = theme.name;
+}
+
+/** Takes back what `applyThemeVariables` put on an element, so it inherits its colours again. */
+export function clearThemeVariables(root: HTMLElement): void {
+  for (const name of [...root.style]) {
+    if (name.startsWith('--dc-')) root.style.removeProperty(name);
+  }
+  delete root.dataset.theme;
+  root.style.removeProperty('color-scheme');
 }

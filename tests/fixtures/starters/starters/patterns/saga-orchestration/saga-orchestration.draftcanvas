@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 25,
+  "version": 31,
   "metadata": {
     "id": "starter-saga-orchestration",
     "title": "Saga – Orchestration",
@@ -9,61 +9,661 @@
   },
   "nodes": [
     {
-      "id": "order",
+      "id": "traveller",
+      "type": "actor",
+      "x": 380,
+      "y": 61,
+      "width": 120,
+      "height": 118,
+      "z": 0,
+      "text": "Traveller",
+      "description": "Books a flight and a hotel in one go.",
+      "textOrigin": "explicit",
+      "actorKind": "human",
+      "actorFrame": "borderless"
+    },
+    {
+      "id": "trips",
       "type": "service",
-      "x": -382,
-      "y": -222,
+      "x": 732,
+      "y": 69,
       "width": 176,
-      "height": 68,
+      "height": 103,
       "z": 0,
-      "text": "Order Service",
+      "text": "Trips API",
+      "description": "Takes a trip request and starts its booking workflow.",
+      "technology": "Go",
       "textOrigin": "explicit",
-      "accent": "teal",
       "serviceKind": "api"
-    },
-    {
-      "id": "coordinator",
-      "type": "group",
-      "x": -102,
-      "y": -284,
-      "width": 248,
-      "height": 166,
-      "z": -1,
-      "text": "Coordinator",
-      "textOrigin": "explicit",
-      "boundaryPreset": "boundary"
-    },
-    {
-      "id": "coordinator-subtitle",
-      "type": "text",
-      "x": -90,
-      "y": -254,
-      "width": 224,
-      "height": 24,
-      "z": 0,
-      "parentId": "coordinator",
-      "text": "Drives the workflow, owns its state",
-      "textOrigin": "explicit",
-      "annotation": true
     },
     {
       "id": "orchestrator",
       "type": "service",
-      "x": -66,
-      "y": -222,
-      "width": 176,
-      "height": 68,
+      "x": 700,
+      "y": 356,
+      "width": 240,
+      "height": 123,
       "z": 0,
-      "parentId": "coordinator",
-      "text": "Saga Orchestrator",
+      "text": "Booking Orchestrator",
+      "description": "Runs each step in turn and undoes the done ones on failure.",
+      "technology": "Temporal",
       "textOrigin": "explicit",
-      "accent": "violet",
       "serviceKind": "generic",
+      "replicas": 2,
       "attachments": [
         {
-          "id": "a_6v5vi66yc16y",
+          "id": "n.one",
           "type": "note",
-          "text": "Owns the saga’s state and the order of steps, and moves only on a reply: \"reserved\" sends the next command, \"failed\" starts the sweep back. Each service commits locally; a compensating action is a new local transaction that undoes an earlier one — never a rollback.",
+          "text": "One place knows the trip's state: the orchestrator. Each service only knows its own step.",
+          "noteKind": "decision",
+          "width": 200,
+          "height": 56
+        },
+        {
+          "id": "n.wf",
+          "type": "code",
+          "language": "plaintext",
+          "code": "saga := NewCompensations()\nhold, err := HoldSeat(ctx, trip)\nif err != nil { return err }\nsaga.Add(ReleaseSeat, hold.ID)\n\nroom, err := ReserveRoom(ctx, trip)\nif err != nil { saga.Run(ctx); return err }\nsaga.Add(CancelRoom, room.ID)\n\nif err := Charge(ctx, trip); err != nil {\n  saga.Run(ctx) // newest first\n}",
+          "width": 354.5,
+          "height": 274.5
+        }
+      ],
+      "inside": {
+        "nodes": [
+          {
+            "id": "o.trips",
+            "type": "service",
+            "x": 230,
+            "y": 0,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Trips API",
+            "technology": "Go",
+            "textOrigin": "explicit",
+            "serviceKind": "api"
+          },
+          {
+            "id": "o.workflow",
+            "type": "component",
+            "x": 242,
+            "y": 140,
+            "width": 152,
+            "height": 80,
+            "z": 0,
+            "text": "BookTrip Workflow",
+            "description": "Runs the steps; keeps the undo stack.",
+            "technology": "Temporal",
+            "textOrigin": "explicit",
+            "componentKind": "generic"
+          },
+          {
+            "id": "o.flights",
+            "type": "component",
+            "x": 8,
+            "y": 358,
+            "width": 160,
+            "height": 142,
+            "z": 0,
+            "text": "Flight Activities",
+            "description": "Holds and releases seats.",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "o.hotels",
+            "type": "component",
+            "x": 238,
+            "y": 358,
+            "width": 160,
+            "height": 142,
+            "z": 0,
+            "text": "Hotel Activities",
+            "description": "Reserves and cancels rooms.",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "o.payments",
+            "type": "component",
+            "x": 468,
+            "y": 358,
+            "width": 160,
+            "height": 142,
+            "z": 0,
+            "text": "Payment Activities",
+            "description": "Charges the trip.",
+            "textOrigin": "explicit",
+            "componentKind": "adapter"
+          },
+          {
+            "id": "o.flights-svc",
+            "type": "service",
+            "x": 0,
+            "y": 572,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Flights Service",
+            "technology": "Spring Boot 3",
+            "textOrigin": "explicit",
+            "serviceKind": "api"
+          },
+          {
+            "id": "o.hotels-svc",
+            "type": "service",
+            "x": 230,
+            "y": 572,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Hotels Service",
+            "technology": "Kotlin",
+            "textOrigin": "explicit",
+            "serviceKind": "api"
+          },
+          {
+            "id": "o.payments-svc",
+            "type": "service",
+            "x": 460,
+            "y": 572,
+            "width": 176,
+            "height": 68,
+            "z": 0,
+            "text": "Payments Service",
+            "technology": "Go",
+            "textOrigin": "explicit",
+            "serviceKind": "api"
+          }
+        ],
+        "edges": [
+          {
+            "id": "o.start",
+            "source": "o.trips",
+            "target": "o.workflow",
+            "label": "StartWorkflow",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "command",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.hold",
+            "source": "o.workflow",
+            "target": "o.flights",
+            "label": "holdSeat()",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.reserve",
+            "source": "o.workflow",
+            "target": "o.hotels",
+            "label": "reserveRoom()",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.charge",
+            "source": "o.workflow",
+            "target": "o.payments",
+            "label": "charge()",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "uses",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.flights-call",
+            "source": "o.flights",
+            "target": "o.flights-svc",
+            "label": "POST /holds",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.hotels-call",
+            "source": "o.hotels",
+            "target": "o.hotels-svc",
+            "label": "POST /reservations",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "semanticsOrigin": "explicit"
+          },
+          {
+            "id": "o.payments-call",
+            "source": "o.payments",
+            "target": "o.payments-svc",
+            "label": "POST /charges",
+            "directed": true,
+            "routing": "smoothstep",
+            "semantic": "http",
+            "semanticsOrigin": "explicit"
+          }
+        ],
+        "flows": [
+          {
+            "id": "o.flow",
+            "title": "Book a trip, inside the orchestrator",
+            "steps": [
+              {
+                "id": "o.flow.s1",
+                "edgeId": "o.start",
+                "caption": "Temporal records the start; the workflow survives any worker restart."
+              },
+              {
+                "id": "o.flow.s2",
+                "edgeId": "o.hold",
+                "caption": "Each step is an activity: retried on its own, its result kept in history."
+              },
+              {
+                "id": "o.flow.s3",
+                "edgeId": "o.flights-call"
+              },
+              {
+                "id": "o.flow.s4",
+                "edgeId": "o.reserve",
+                "caption": "A done step pushes its compensation onto the stack."
+              },
+              {
+                "id": "o.flow.s5",
+                "edgeId": "o.hotels-call"
+              },
+              {
+                "id": "o.flow.s6",
+                "edgeId": "o.charge",
+                "caption": "Last, and the riskiest: if it fails, the stack is unwound."
+              },
+              {
+                "id": "o.flow.s7",
+                "edgeId": "o.payments-call"
+              }
+            ],
+            "accent": "blue"
+          }
+        ],
+        "viewport": {
+          "x": 0,
+          "y": 0,
+          "zoom": 1
+        },
+        "level": "component"
+      },
+      "held": true
+    },
+    {
+      "id": "flights",
+      "type": "service",
+      "x": 1152,
+      "y": 377,
+      "width": 176,
+      "height": 87,
+      "z": 0,
+      "text": "Flights Service",
+      "description": "Holds seats on a flight.",
+      "technology": "Spring Boot 3",
+      "textOrigin": "explicit",
+      "serviceKind": "api"
+    },
+    {
+      "id": "flights-db",
+      "type": "database",
+      "x": 1540,
+      "y": 349,
+      "width": 120,
+      "height": 143,
+      "z": 0,
+      "text": "Flights DB",
+      "description": "Seat holds and tickets.",
+      "technology": "PostgreSQL 16",
+      "textOrigin": "explicit",
+      "databaseKind": "sql"
+    },
+    {
+      "id": "hotels",
+      "type": "service",
+      "x": 312,
+      "y": 377,
+      "width": 176,
+      "height": 87,
+      "z": 0,
+      "text": "Hotels Service",
+      "description": "Reserves hotel rooms.",
+      "technology": "Kotlin",
+      "textOrigin": "explicit",
+      "serviceKind": "api"
+    },
+    {
+      "id": "hotels-db",
+      "type": "database",
+      "x": -30,
+      "y": 350,
+      "width": 140,
+      "height": 140,
+      "z": 0,
+      "text": "Hotels DB",
+      "description": "Room reservations.",
+      "technology": "MongoDB 7",
+      "textOrigin": "explicit",
+      "databaseKind": "nosql"
+    },
+    {
+      "id": "payments",
+      "type": "service",
+      "x": 732,
+      "y": 677,
+      "width": 176,
+      "height": 87,
+      "z": 0,
+      "text": "Payments Service",
+      "description": "Charges the trip total.",
+      "technology": "Go",
+      "textOrigin": "explicit",
+      "serviceKind": "api"
+    },
+    {
+      "id": "stripe",
+      "type": "service",
+      "x": 1180,
+      "y": 657,
+      "width": 120,
+      "height": 126,
+      "z": 0,
+      "text": "Stripe",
+      "description": "Charges cards.",
+      "technology": "Stripe",
+      "textOrigin": "explicit",
+      "serviceKind": "external"
+    },
+    {
+      "id": "title",
+      "type": "text",
+      "x": -30,
+      "y": -97,
+      "width": 1100,
+      "height": 110,
+      "z": 0,
+      "text": "# Saga – Orchestration\nOne workflow books a trip, and undoes the finished steps when one fails.",
+      "textOrigin": "explicit",
+      "textRole": "title"
+    },
+    {
+      "id": "seq",
+      "type": "sequence",
+      "x": -30,
+      "y": 903,
+      "width": 748,
+      "height": 698,
+      "z": 0,
+      "text": "BookTrip, step by step",
+      "textOrigin": "explicit",
+      "sequence": {
+        "participants": [
+          {
+            "id": "sp_usmd1nryp9f0",
+            "name": "Booking Orchestrator",
+            "type": "service",
+            "serviceKind": "generic",
+            "technology": "Temporal",
+            "ref": "orchestrator"
+          },
+          {
+            "id": "sp_gyoraruo7ha7",
+            "name": "Flights Service",
+            "type": "service",
+            "serviceKind": "api",
+            "technology": "Spring Boot 3",
+            "ref": "flights"
+          },
+          {
+            "id": "sp_bzsz09nf7g7k",
+            "name": "Hotels Service",
+            "type": "service",
+            "serviceKind": "api",
+            "technology": "Kotlin",
+            "ref": "hotels"
+          },
+          {
+            "id": "sp_3v86ga6eetj0",
+            "name": "Payments Service",
+            "type": "service",
+            "serviceKind": "api",
+            "technology": "Go",
+            "ref": "payments"
+          }
+        ],
+        "items": [
+          {
+            "id": "sm_jiyiquw1yalb",
+            "t": "message",
+            "from": "sp_usmd1nryp9f0",
+            "to": "sp_gyoraruo7ha7",
+            "kind": "sync",
+            "label": "POST /holds"
+          },
+          {
+            "id": "sm_w17tilrr5gnr",
+            "t": "message",
+            "from": "sp_gyoraruo7ha7",
+            "to": "sp_usmd1nryp9f0",
+            "kind": "reply",
+            "label": "201 Hold",
+            "replyTo": "sm_jiyiquw1yalb"
+          },
+          {
+            "id": "sm_36jkh4ovb7cs",
+            "t": "message",
+            "from": "sp_usmd1nryp9f0",
+            "to": "sp_bzsz09nf7g7k",
+            "kind": "sync",
+            "label": "POST /reservations"
+          },
+          {
+            "id": "sm_rmvrdyrc2xdm",
+            "t": "message",
+            "from": "sp_bzsz09nf7g7k",
+            "to": "sp_usmd1nryp9f0",
+            "kind": "reply",
+            "label": "201 Reservation",
+            "replyTo": "sm_36jkh4ovb7cs"
+          },
+          {
+            "id": "sm_a3k62egvaxtw",
+            "t": "message",
+            "from": "sp_usmd1nryp9f0",
+            "to": "sp_3v86ga6eetj0",
+            "kind": "sync",
+            "label": "POST /charges"
+          },
+          {
+            "id": "sf_cyoaqtsrymh4",
+            "t": "fragment",
+            "operator": "alt",
+            "operands": [
+              {
+                "id": "so_81kryjymsx5i",
+                "guard": "card accepted",
+                "items": [
+                  {
+                    "id": "sm_dnmq88mbaf2k",
+                    "t": "message",
+                    "from": "sp_3v86ga6eetj0",
+                    "to": "sp_usmd1nryp9f0",
+                    "kind": "reply",
+                    "label": "200 Charged",
+                    "replyTo": "sm_a3k62egvaxtw"
+                  }
+                ]
+              },
+              {
+                "id": "so_zm2xb4fstecw",
+                "guard": "card declined",
+                "items": [
+                  {
+                    "id": "sm_vykfrkitb67l",
+                    "t": "message",
+                    "from": "sp_3v86ga6eetj0",
+                    "to": "sp_usmd1nryp9f0",
+                    "kind": "reply",
+                    "label": "402 Declined",
+                    "replyTo": "sm_a3k62egvaxtw"
+                  },
+                  {
+                    "id": "sm_ew6qk4txfwrf",
+                    "t": "message",
+                    "from": "sp_usmd1nryp9f0",
+                    "to": "sp_bzsz09nf7g7k",
+                    "kind": "sync",
+                    "label": "DELETE /reservations/{id}"
+                  },
+                  {
+                    "id": "sm_suhiealrqiof",
+                    "t": "message",
+                    "from": "sp_usmd1nryp9f0",
+                    "to": "sp_gyoraruo7ha7",
+                    "kind": "sync",
+                    "label": "DELETE /holds/{id}"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "edges": [
+    {
+      "id": "request",
+      "source": "traveller",
+      "target": "trips",
+      "label": "Books a trip",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "calls",
+      "semanticsOrigin": "inferred"
+    },
+    {
+      "id": "start",
+      "source": "trips",
+      "target": "orchestrator",
+      "label": "Starts BookTrip",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "command",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "hold-seat",
+      "source": "orchestrator",
+      "target": "flights",
+      "label": "POST /holds",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.32
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.2062
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "reserve-room",
+      "source": "orchestrator",
+      "target": "hotels",
+      "label": "POST /reservations",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.32
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.2062
+      },
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "charge",
+      "source": "orchestrator",
+      "target": "payments",
+      "label": "POST /charges",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "release-seat",
+      "source": "orchestrator",
+      "target": "flights",
+      "label": "DELETE /holds/{id}",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "compensates",
+      "compensationFor": "hold-seat",
+      "compensationVisible": true,
+      "compensationName": "Release seat",
+      "compensationProtocol": "http",
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.68
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.7938
+      },
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.idem",
+          "type": "note",
+          "text": "Compensations are retried until they succeed, so every DELETE must be idempotent — releasing a seat twice is a no-op.",
+          "noteKind": "warning",
+          "width": 200,
+          "height": 56
+        }
+      ]
+    },
+    {
+      "id": "cancel-room",
+      "source": "orchestrator",
+      "target": "hotels",
+      "label": "DELETE /reservations/{id}",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "compensates",
+      "compensationFor": "reserve-room",
+      "compensationVisible": true,
+      "compensationName": "Cancel room",
+      "compensationProtocol": "http",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.68
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.7938
+      },
+      "semanticsOrigin": "explicit",
+      "attachments": [
+        {
+          "id": "n.semantic",
+          "type": "note",
+          "text": "Not a rollback: the room was really reserved for a moment. A cancellation fee is a business decision, not a database one.",
           "noteKind": "note",
           "width": 200,
           "height": 56
@@ -71,256 +671,38 @@
       ]
     },
     {
-      "id": "payment",
-      "type": "service",
-      "x": -338,
-      "y": 42,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Payment Service",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "generic"
-    },
-    {
-      "id": "payment-store",
-      "type": "database",
-      "x": -336,
-      "y": 182,
-      "width": 172,
-      "height": 102,
-      "z": 0,
-      "text": "Payment DB",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic"
-    },
-    {
-      "id": "inventory",
-      "type": "service",
-      "x": -66,
-      "y": 42,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Inventory Service",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "generic"
-    },
-    {
-      "id": "inventory-store",
-      "type": "database",
-      "x": -64,
-      "y": 182,
-      "width": 172,
-      "height": 102,
-      "z": 0,
-      "text": "Inventory DB",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic"
-    },
-    {
-      "id": "fulfillment",
-      "type": "service",
-      "x": 206,
-      "y": 42,
-      "width": 176,
-      "height": 68,
-      "z": 0,
-      "text": "Fulfillment Service",
-      "textOrigin": "explicit",
-      "accent": "teal",
-      "serviceKind": "generic"
-    },
-    {
-      "id": "fulfillment-store",
-      "type": "database",
-      "x": 208,
-      "y": 182,
-      "width": 172,
-      "height": 102,
-      "z": 0,
-      "text": "Fulfillment DB",
-      "textOrigin": "explicit",
-      "accent": "blue",
-      "databaseKind": "generic"
-    }
-  ],
-  "edges": [
-    {
-      "id": "start",
-      "source": "order",
-      "target": "orchestrator",
-      "label": "Start saga",
+      "id": "flights-tx",
+      "source": "flights",
+      "target": "flights-db",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "command",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "left",
-        "offset": 0.5
-      },
+      "semantic": "readsWrites",
       "semanticsOrigin": "explicit"
     },
     {
-      "id": "reserve-payment",
-      "source": "orchestrator",
-      "target": "payment",
-      "label": "Reserve payment",
+      "id": "hotels-tx",
+      "source": "hotels",
+      "target": "hotels-db",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "command",
-      "response": "reserved / failed",
+      "semantic": "readsWrites",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "card",
+      "source": "payments",
+      "target": "stripe",
+      "label": "Charges card",
+      "directed": true,
+      "routing": "smoothstep",
+      "semantic": "http",
       "hasResponse": true,
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "reserve-inventory",
-      "source": "orchestrator",
-      "target": "inventory",
-      "label": "Reserve inventory",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "command",
-      "response": "reserved / failed",
-      "hasResponse": true,
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "schedule-fulfillment",
-      "source": "orchestrator",
-      "target": "fulfillment",
-      "label": "Schedule fulfillment",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "command",
-      "response": "scheduled / failed",
-      "hasResponse": true,
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "commit-payment",
-      "source": "payment",
-      "target": "payment-store",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "writes",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "commit-inventory",
-      "source": "inventory",
-      "target": "inventory-store",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "writes",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "commit-fulfillment",
-      "source": "fulfillment",
-      "target": "fulfillment-store",
-      "directed": true,
-      "routing": "smoothstep",
-      "semantic": "writes",
-      "sourceAnchor": {
-        "side": "bottom",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "release-inventory",
-      "source": "orchestrator",
-      "target": "inventory",
-      "label": "Release inventory",
-      "directed": true,
-      "routing": "smoothstep",
-      "accent": "rose",
-      "semantic": "compensates",
-      "sourceAnchor": {
-        "side": "right",
-        "offset": 0.75
-      },
-      "targetAnchor": {
-        "side": "right",
-        "offset": 0.25
-      },
-      "semanticsOrigin": "explicit"
-    },
-    {
-      "id": "release-payment",
-      "source": "orchestrator",
-      "target": "payment",
-      "label": "Release payment",
-      "directed": true,
-      "routing": "smoothstep",
-      "accent": "rose",
-      "semantic": "compensates",
-      "sourceAnchor": {
-        "side": "left",
-        "offset": 0.75
-      },
-      "targetAnchor": {
-        "side": "right",
-        "offset": 0.25
-      },
       "semanticsOrigin": "explicit"
     }
   ],
   "viewport": {
-    "x": 720,
-    "y": 450,
+    "x": 0,
+    "y": 0,
     "zoom": 1
   },
   "settings": {
@@ -335,80 +717,84 @@
   },
   "flows": [
     {
-      "id": "flow1",
-      "title": "Happy path",
+      "id": "book",
+      "title": "Book a trip",
       "steps": [
         {
-          "id": "fs_wz1rpr3juudy",
-          "edgeId": "start"
+          "id": "book.s1",
+          "edgeId": "request",
+          "caption": "The traveller confirms a flight and a hotel together."
         },
         {
-          "id": "fs_04e4z4oesyyc",
-          "edgeId": "reserve-payment"
+          "id": "book.s2",
+          "edgeId": "start",
+          "caption": "The API starts a BookTrip workflow and answers with its id."
         },
         {
-          "id": "fs_5433e6zt4vup",
-          "edgeId": "commit-payment",
-          "caption": "Local transaction commits — and the reply says \"reserved\""
+          "id": "book.s3",
+          "edgeId": "hold-seat",
+          "extraEdgeIds": [
+            "flights-tx"
+          ],
+          "caption": "Step 1: a seat is held, committed in the Flights DB alone."
         },
         {
-          "id": "fs_qso4f8csehjm",
-          "edgeId": "reserve-inventory",
-          "caption": "Only on that reply does the next step go out"
+          "id": "book.s4",
+          "edgeId": "reserve-room",
+          "extraEdgeIds": [
+            "hotels-tx"
+          ],
+          "caption": "Step 2 starts only once step 1 has answered."
         },
         {
-          "id": "fs_e0pw3ydzcj3o",
-          "edgeId": "commit-inventory",
-          "caption": "Local transaction commits, reply \"reserved\""
+          "id": "book.s5",
+          "edgeId": "charge",
+          "caption": "Step 3, the riskiest last: the trip total is charged."
         },
         {
-          "id": "fs_vcxzkhta1dj7",
-          "edgeId": "schedule-fulfillment"
-        },
-        {
-          "id": "fs_e5lnawwt9fra",
-          "edgeId": "commit-fulfillment",
-          "caption": "Local transaction commits, reply \"scheduled\" — saga complete"
+          "id": "book.s6",
+          "edgeId": "card",
+          "caption": "The card is accepted; the workflow completes and the trip is booked."
         }
       ],
-      "accent": "green"
+      "accent": "teal"
     },
     {
-      "id": "flow2",
-      "title": "Compensation",
+      "id": "declined",
+      "title": "Card declined",
       "steps": [
         {
-          "id": "fs_63q2hfx9b5cj",
-          "edgeId": "reserve-payment",
-          "caption": "Reply: reserved"
+          "id": "declined.s1",
+          "edgeId": "charge",
+          "caption": "The charge comes back 402: the card is declined."
         },
         {
-          "id": "fs_wd26dc3kotyd",
-          "edgeId": "commit-payment",
-          "caption": "Committed locally — nothing outside can roll it back"
+          "id": "declined.s2",
+          "edgeId": "cancel-room",
+          "caption": "The orchestrator undoes the last done step first: the room."
         },
         {
-          "id": "fs_wditsizwh18u",
-          "edgeId": "reserve-inventory",
-          "caption": "Reply: reserved, and committed locally too"
-        },
-        {
-          "id": "fs_qjzg3kljk73c",
-          "edgeId": "schedule-fulfillment",
-          "caption": "Reply: failed — the orchestrator now runs the sweep"
-        },
-        {
-          "id": "fs_okkd6elf0ydo",
-          "edgeId": "release-inventory",
-          "caption": "Undo the last committed step first — a new local transaction"
-        },
-        {
-          "id": "fs_j48zn44n5bcv",
-          "edgeId": "release-payment",
-          "caption": "Then the one before it"
+          "id": "declined.s3",
+          "edgeId": "release-seat",
+          "caption": "Then the seat. The trip ends CANCELLED and the traveller is told."
         }
       ],
-      "accent": "rose"
+      "accent": "rose",
+      "variantOf": "book"
     }
-  ]
+  ],
+  "openPoints": [
+    {
+      "id": "op.timeout",
+      "kind": "tentative",
+      "context": "A hotel that does not answer in 30 s is treated as a failure, and the seat is released.",
+      "targets": [
+        {
+          "kind": "edge",
+          "id": "reserve-room"
+        }
+      ]
+    }
+  ],
+  "level": "container"
 }

@@ -2,7 +2,7 @@
   "id": "kappa",
   "name": "Kappa",
   "category": "data",
-  "summary": "Process live and historical data through one durable stream",
+  "summary": "Card fraud scoring from one durable log: live scoring, and a full replay to rebuild with new rules",
   "aliases": [
     "kappa",
     "kappa architecture",
@@ -10,21 +10,27 @@
     "log replay",
     "materialized view",
     "stream processing",
-    "unified log"
+    "unified log",
+    "fraud detection",
+    "reprocessing",
+    "blue green view"
   ],
   "tags": [
     "streaming",
     "event log",
     "replay",
-    "materialized view"
+    "materialized view",
+    "fraud"
   ],
   "useWhen": [
-    "Real-time views where reprocessing history must use the same code.",
-    "Replacing a separate batch layer."
+    "Real-time views where reprocessing history must use the same code as live processing.",
+    "Replacing a separate batch layer with one stream processor and a log you can replay.",
+    "Changing scoring rules and rebuilding a view side by side before switching to it."
   ],
   "watchOutFor": [
-    "Replays of a long log take time and capacity.",
-    "The log's retention decides how far back you can rebuild."
+    "Replaying a long log takes hours and cluster capacity; plan the cutover.",
+    "The log's retention decides how far back you can rebuild.",
+    "Logic that reads the clock instead of event time scores a replay differently from live."
   ],
   "featured": false,
   "order": 90

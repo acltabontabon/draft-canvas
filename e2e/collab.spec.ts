@@ -1,5 +1,5 @@
 import { expect, test, type Browser, type Page } from '@playwright/test';
-import { create, newCanvas } from './canvas';
+import { clickEdge, connect, create, newCanvas } from './canvas';
 
 /**
  * A live session between two browsers that share nothing — two contexts, two storages — over a real
@@ -244,6 +244,59 @@ test('two browsers edit one canvas live, and the owner stays in charge', async (
   await expect(guest.page.locator('.dc-editor-body')).toHaveAttribute('inert', '');
   await expect(guest.page.locator('.dc-read-only-banner')).toHaveCount(0);
   await guest.page.context().close();
+});
+
+test('a collaborator who follows a walkthrough sees the presenter’s own step, lit on their canvas', async ({ page: owner, browser, browserName }) => {
+  await newCanvas(owner, 'Orders');
+  test.skip(!(await peersConnect(browser, browserName)), 'This engine can’t connect two browser contexts on this machine');
+  await create(owner, 'Service', { x: 260, y: 240 });
+  await create(owner, 'Service', { x: 620, y: 240 });
+  await connect(owner, 0, 1);
+  // One connector, one flow: the chip starts a flow with it and Enter keeps the default name.
+  await clickEdge(owner);
+  await owner.locator('.dc-edge-inspector [data-flow-state]').click();
+  await owner.locator('.dc-flow-title-input').press('Enter');
+  // Naming a flow opens the Flows panel, which sits where the knock card will.
+  await owner.locator('.dc-flow-panel').getByRole('button', { name: 'Close' }).click();
+
+  const link = await startSession(owner);
+  await owner.keyboard.press('Escape');
+  const guest = await knock(browser, link, 'Gus');
+  await letIn(owner, 'Gus', 'Can view');
+  await expect(guest.locator('.dc-edge-line')).toHaveCount(1, { timeout: 30_000 });
+  // Let in to watch: the confirmation says so, and promises no shared edits.
+  await expect(guest.getByText('Joined. You can view this diagram.')).toBeVisible();
+  await expect(guest.getByText('Edits you make are shared live')).toHaveCount(0);
+
+  await owner.getByRole('button', { name: 'Present', exact: true }).click();
+  const prompt = guest.locator('.dc-follow');
+  await expect(prompt).toContainText('Untitled flow · opening', { timeout: 10_000 });
+  await prompt.getByRole('button', { name: 'Follow' }).click();
+  await expect(guest.locator('.dc-edge[data-active="true"]')).toHaveCount(0);
+
+  // The owner's first step is the follower's first step, and its connector is the one lit.
+  await owner.keyboard.press('ArrowRight');
+  await expect(owner.locator('.dc-edge[data-active="true"]')).toHaveCount(1);
+  await expect(prompt).toContainText('Untitled flow · step 1', { timeout: 10_000 });
+  await expect(guest.locator('.dc-edge[data-active="true"]')).toHaveCount(1);
+  // The step's caption comes along; the walkthrough's controls stay the presenter's.
+  await expect(guest.getByRole('region', { name: 'Step details' })).toContainText('Step 1 of 1');
+  await expect(guest.getByRole('region', { name: 'Flow playback' })).toHaveCount(0);
+
+  await owner.keyboard.press('ArrowRight');
+  await expect(prompt).toContainText('Untitled flow · end', { timeout: 10_000 });
+  await expect(guest.locator('.dc-edge[data-active="true"]')).toHaveCount(0);
+
+  // Letting go puts the canvas back as it was; so does the presentation ending.
+  await owner.keyboard.press('ArrowLeft');
+  await expect(guest.locator('.dc-edge[data-active="true"]')).toHaveCount(1, { timeout: 10_000 });
+  await prompt.getByRole('button', { name: 'Stop following' }).click();
+  await expect(guest.locator('.dc-edge[data-active="true"]')).toHaveCount(0);
+  await prompt.getByRole('button', { name: 'Follow' }).click();
+  await expect(guest.locator('.dc-edge[data-active="true"]')).toHaveCount(1);
+  await owner.keyboard.press('Escape');
+  await expect(prompt).toBeHidden({ timeout: 10_000 });
+  await expect(guest.locator('.dc-edge[data-active="true"]')).toHaveCount(0);
 });
 
 test('when the owner ends the session, the collaborator’s canvas closes behind a card, and a copy can be kept', async ({ page: owner, browser, browserName }) => {

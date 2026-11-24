@@ -150,7 +150,6 @@ describe('small names stay clear of decorative dots', () => {
   it.each([
     { type: 'component', text: 'Component' },
     { type: 'service', serviceKind: 'generic', text: 'Long Service Name' },
-    { type: 'service', serviceKind: 'worker', text: 'Worker' },
   ] as const)('keeps $type $text readable at its resize floor', (variant) => {
     const node = createNode({ ...variant, x: 0, y: 0, width: 96, height: 48 });
     const shapes = describeNode(node, clean).shapes;

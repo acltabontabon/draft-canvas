@@ -1,0 +1,37 @@
+{
+  "id": "ride-hailing",
+  "name": "Ride-hailing platform",
+  "category": "example",
+  "summary": "A whole two-sided marketplace: live driver locations, dispatch, surge, trips, payments and payouts",
+  "aliases": [
+    "ride hailing",
+    "ride sharing",
+    "taxi app",
+    "uber-style architecture",
+    "two-sided marketplace",
+    "dispatch",
+    "surge pricing",
+    "geospatial index",
+    "h3"
+  ],
+  "tags": [
+    "example",
+    "system design",
+    "marketplace",
+    "geospatial",
+    "real-time",
+    "payments"
+  ],
+  "useWhen": [
+    "Seeing a real-time, two-sided system drawn end to end, from a driver's GPS ping to a weekly payout.",
+    "Explaining matching: H3 cells, ETA ranking, one offer at a time, and surge drawing drivers in.",
+    "Starting a system-design discussion about a marketplace with live location and money."
+  ],
+  "watchOutFor": [
+    "It is a big picture on purpose: present it flow by flow rather than all at once.",
+    "Scale numbers and surge multipliers are illustrative; replace them before you reason from them.",
+    "Dispatch is held in place and one connector is a portal, so the file is format 29 and needs a current Draft Canvas."
+  ],
+  "featured": false,
+  "order": 120
+}

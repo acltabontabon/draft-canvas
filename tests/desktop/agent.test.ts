@@ -614,6 +614,57 @@ describe('agent requests on desktop', () => {
     expect(busy.error?.code).toBe('DOCUMENT_BUSY');
   });
 
+  // Issue #169: activation ran before the revision check and the gate, so a request answered
+  // "Nothing changed" had already switched the canvas and ended the live session on it.
+  it('leaves the open canvas and its live session alone when an activate request is stale or cancelled', async () => {
+    await openOrders();
+    const other = h.addFile('Other', diagramText());
+    const onScreen = () => h.store.getSnapshot().doc;
+    const before = onScreen();
+
+    const stale = await request('update_diagram', addMailer('f:0', { activate: true }), closedContext(other));
+    expect(stale.error?.code).toBe('REVISION_CONFLICT');
+    h.agent.gateOpen = false;
+    const cancelled = await request('update_diagram', addMailer('f:1', { activate: true }), closedContext(other));
+    expect(cancelled.error?.code).toBe('CANCELLED');
+    h.agent.gateOpen = true;
+    expect(onScreen()).toEqual(before);
+    expect(h.notices.some((n) => n.includes('opened'))).toBe(false);
+
+    // Even a valid one never takes the screen from a shared canvas: ending a session is the owner's call.
+    startHosting({ name: 'Owner' });
+    const shared = await request('update_diagram', addMailer('f:1', { activate: true }), closedContext(other));
+    expect(shared.error).toMatchObject({ code: 'DOCUMENT_BUSY' });
+    expect(shared.error?.message).toContain('live session');
+    const created = await request('open_created', {}, { handle: other });
+    expect(created.value).toMatchObject({ opened: false });
+    expect(useCollabStore.getState()).toMatchObject({ role: 'host', status: 'live' });
+    expect(onScreen()).toEqual(before);
+    // Without activate the file is still changed in the background, as before.
+    const quiet = await request('update_diagram', addMailer('f:1'), closedContext(other));
+    expect(quiet.value).toMatchObject({ applied: true, where: 'file' });
+  });
+
+  it('opens an activated diagram once its change is written, as one undo step', async () => {
+    await openOrders();
+    const other = h.addFile('Other', diagramText());
+    const out = await request('update_diagram', addMailer('f:1', { activate: true }), closedContext(other));
+    expect(out.value).toMatchObject({ applied: true, where: 'file' });
+    // Nothing opens until the shell says the write happened.
+    expect(h.notices.some((n) => n.includes('opened'))).toBe(false);
+    const file = h.files.get(other)!;
+    file.text = String((out.value!.write as { text: string }).text);
+    file.version += 1;
+    await h.hostEvent({ type: 'agent-file-written', id: nextId - 1, handle: other, displayPath: file.displayPath, stamp: `v1:${file.version}`, created: false });
+    for (let i = 0; i < 100 && !fileOf(useEditorStore.getState()).nodes.some((n) => n.id === 'mail'); i += 1) await new Promise((r) => setTimeout(r, 5));
+    await h.settle();
+    expect(fileOf(useEditorStore.getState()).nodes.map((n) => n.id)).toContain('mail');
+    expect(h.notices.some((n) => n.includes('opened Other'))).toBe(true);
+    expect(h.notices.some((n) => n.includes('updated'))).toBe(false);
+    useEditorStore.getState().undo();
+    expect(fileOf(useEditorStore.getState()).nodes.map((n) => n.id)).not.toContain('mail');
+  });
+
   it('refuses a stale revision for a closed file, and a file with unsaved changes held for recovery', async () => {
     const other = h.addFile('Other', diagramText());
     const stale = await request('update_diagram', addMailer('f:0'), closedContext(other));

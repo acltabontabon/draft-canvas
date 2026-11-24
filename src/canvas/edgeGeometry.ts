@@ -6,7 +6,7 @@
  */
 import type { useInternalNode } from '@xyflow/react';
 import { anchorBandOf } from '../document/queueGeometry';
-import type { DraftEdge, DraftNode, DraftNodeType, Side } from '../document/types';
+import type { DraftEdge, DraftNode, Side } from '../document/types';
 import { visibleEdges } from '../document/compensation';
 import { connectorRouteInputs } from '../edges/connectorRoutes';
 import { edgeRoutes } from '../edges/edgeRoutes';
@@ -18,11 +18,17 @@ import { clamp } from '../lib/math';
 
 export type InternalNode = NonNullable<ReturnType<typeof useInternalNode>>;
 
+/** What decides a shape's anchor band: its type, and for a Service the kind it is drawn as. */
+export type BandKind = Pick<DraftNode, 'type'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind'>;
+
 /**
- * `type` opts the rect into its node kind's anchor band (a queue-family node's tube) — routing
- * callers pass it; popover-placement callers, which only want the box, leave it out.
+ * `kind` opts the rect into its node kind's anchor band (a queue-family node's tube, a glyph's
+ * sides) — routing callers pass it; popover-placement callers, which only want the box, leave it
+ * out. It takes the Service or Component kind with the type: on the type alone a Worker or a Gateway had no band
+ * here, so the canvas drew its connectors to the middle of its box, below the glyph and with a jog
+ * the exported picture did not have.
  */
-export function rectOfInternal(node: InternalNode, type?: DraftNodeType): Rect | null {
+export function rectOfInternal(node: InternalNode, kind?: BandKind): Rect | null {
   const width = node.measured?.width ?? node.width;
   const height = node.measured?.height ?? node.height;
   if (width == null || height == null) return null;
@@ -32,7 +38,7 @@ export function rectOfInternal(node: InternalNode, type?: DraftNodeType): Rect |
     width,
     height,
   };
-  const band = type ? anchorBandOf({ type, x: rect.x, y: rect.y, width, height }) : undefined;
+  const band = kind ? anchorBandOf({ type: kind.type, serviceKind: kind.serviceKind, componentKind: kind.componentKind, x: rect.x, y: rect.y, width, height }) : undefined;
   return band ? { ...rect, anchorBand: band } : rect;
 }
 

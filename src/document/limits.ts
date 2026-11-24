@@ -75,12 +75,6 @@ export const LIMITS = {
   /** "daily 02:00 UTC" — a few words, not a schedule. */
   maxCadenceLength: 32,
   maxResponseLength: 120,
-  /**
-   * The largest background image a `.draftcanvas` file carries inline (`BackgroundSettings.image`),
-   * counted in decoded bytes. Base64 adds a third, and a diagram's own JSON is a few hundred KB at
-   * most, so this keeps a file with a backdrop well inside `maxFileBytes` and a `git diff` bearable.
-   */
-  maxEmbeddedBackgroundBytes: 2 * 1024 * 1024,
   /** One sequence. Past forty lifelines nobody can follow a message across the page. */
   maxSequenceParticipants: 40,
   /** Messages, notes and fragments in one sequence, at every depth. */
@@ -145,6 +139,9 @@ export const DEFAULTS = {
    *  Only the *default* differs — an existing or manually resized Component is never touched (see
    *  `document/factory.ts`'s `createNode`, which reads this only when a caller omits `width`/
    *  `height` entirely). */
+  // An Artifact is a small sheet with its name under it: the Data Store family's arrangement.
+  artifactWidth: 120,
+  artifactHeight: 104,
   componentWidth: 152,
   componentHeight: 56,
   /** An empty sequence: room for its title and the first participant. It is sized to what it holds

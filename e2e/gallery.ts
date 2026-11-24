@@ -3,19 +3,29 @@ import { join, normalize } from 'node:path';
 import type { Page } from '@playwright/test';
 
 /**
- * The starters gallery as GitHub would serve it, from the vendored snapshot in
- * `tests/fixtures/starters/` (`npm run starters:fixtures`): the suite never reaches the network.
+ * The starters gallery as GitHub would serve it: the suite never reaches the network.
+ *
+ * The journeys are written against particular shapes, names and counts, so they read a gallery pinned
+ * for them in `e2e/fixtures/starters/`. It is not refreshed with the public gallery: older starter
+ * files must keep opening, and a redrawn starter must not rewrite forty journeys. Today's gallery is
+ * held to its own check (`tests/starter-files.test.ts`, over `tests/fixtures/starters/`), and the
+ * guide screenshots ask for it here with `STARTERS_SNAPSHOT=current`, to picture what people get.
  * `enabled` also records the person's choice to load starters, as "Load starters" does.
  */
 const BASE = 'https://raw.githubusercontent.com/acltabontabon/draft-canvas-starters/main/';
-const ROOT = join(process.cwd(), 'tests', 'fixtures', 'starters');
+const CURRENT = join(process.cwd(), 'tests', 'fixtures', 'starters');
+const root = () => (process.env.STARTERS_SNAPSHOT === 'current' ? CURRENT : join(process.cwd(), 'e2e', 'fixtures', 'starters'));
 
-export async function serveStarterGallery(page: Page, { enabled = true }: { enabled?: boolean } = {}) {
+/**
+ * `current` serves today's gallery whatever the environment says: the style packs are only there,
+ * and a journey that asks for it must not lean on which starters it holds.
+ */
+export async function serveStarterGallery(page: Page, { enabled = true, current = false }: { enabled?: boolean; current?: boolean } = {}) {
   await page.route(`${BASE}**`, async (route) => {
     const path = normalize(new URL(route.request().url()).pathname.slice(new URL(BASE).pathname.length));
     if (path.startsWith('..')) return route.fulfill({ status: 404 });
     try {
-      await route.fulfill({ body: readFileSync(join(ROOT, path), 'utf8'), headers: { 'access-control-allow-origin': '*', 'content-type': 'text/plain; charset=utf-8' } });
+      await route.fulfill({ body: readFileSync(join(current ? CURRENT : root(), path), 'utf8'), headers: { 'access-control-allow-origin': '*', 'content-type': 'text/plain; charset=utf-8' } });
     } catch {
       await route.fulfill({ status: 404, headers: { 'access-control-allow-origin': '*' } });
     }

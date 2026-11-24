@@ -6,6 +6,8 @@
  * from a diagram someone drew and arranged by hand.
  */
 
+import { familyKindOf } from '../document/dataStoreGeometry';
+import { technologyKindPatch } from '../document/technologyKind';
 import { capabilityFor, categoryOf, inferRelationship, isSyncPairing } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { createAttachment, createDocument, createEdge, createNode, defaultSizeFor } from '../document/factory';
@@ -18,11 +20,10 @@ import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
 import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect, type TitleSpan } from '../layout/anchors';
 import { compatibilityKey } from '../edges/bundles';
-import { boundaryHeaderTextBox, describeContext, nameLineCount, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext } from '../nodes/describe';
+import { boundaryHeaderTextBox, nameLineCount, naturalArchitectureSize, naturalCodeSize, naturalNoteHeight, naturalTextSize, type DescribeContext, sizingContext } from '../nodes/describe';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { getMeasurer } from '../render/text/measure';
-import { LIGHT } from '../render/theme/tokens';
 import { BAND, BOUNDARY_HEADER, INNER_BAND, BOUNDARY_HEADER_TITLE_ONLY, BOUNDARY_PAD, GUTTER } from './compose';
 import { AgentError } from './errors';
 import type { AttachmentSpec, FlowSpec, LayoutSpec, NodeSpec, NoteSpec, RelationshipSpec, RoomSpec } from './input';
@@ -47,7 +48,7 @@ export interface PlacedRoom {
 
 export function measureContext(): DescribeContext {
   // Colour never changes where text goes; the light theme is as good as any for measuring.
-  return { ...describeContext(LIGHT), measurer: getMeasurer() };
+  return { ...sizingContext(), measurer: getMeasurer() };
 }
 
 /**
@@ -101,20 +102,26 @@ function attachmentsOf(specs: AttachmentSpec[] | undefined) {
 
 /** A native element for a spec, at its natural size (grown, never shrunk, from the type's default). */
 function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: string): DraftNode {
+  // The technology fixes the kind for an agent's shape as it does for a person's: a "database" that
+  // is Redis arrives as a cache. Only from the type's plain kind — "sql" with Redis stays SQL.
+  const implied = spec.technology ? technologyKindPatch(spec.shape as DraftNode, spec.technology) : null;
+  const shape: NodeSpec['shape'] & Pick<DraftNode, 'kindOrigin'> = implied ? { ...spec.shape, ...implied } : spec.shape;
   const node = createNode({
     id: spec.id,
-    type: spec.shape.type,
+    type: shape.type,
     x: 0,
     y: 0,
     text: spec.label,
-    ...(spec.shape.serviceKind ? { serviceKind: spec.shape.serviceKind } : {}),
-    ...(spec.shape.databaseKind ? { databaseKind: spec.shape.databaseKind } : {}),
-    ...(spec.shape.queueKind ? { queueKind: spec.shape.queueKind } : {}),
-    ...(spec.shape.actorKind ? { actorKind: spec.shape.actorKind } : {}),
-    ...(spec.shape.componentKind ? { componentKind: spec.shape.componentKind } : {}),
-    ...(spec.shape.deliveryRole ? { deliveryRole: spec.shape.deliveryRole } : {}),
+    ...(shape.serviceKind ? { serviceKind: shape.serviceKind } : {}),
+    ...(shape.databaseKind ? { databaseKind: shape.databaseKind } : {}),
+    ...(shape.queueKind ? { queueKind: shape.queueKind } : {}),
+    ...(shape.actorKind ? { actorKind: shape.actorKind } : {}),
+    ...(shape.componentKind ? { componentKind: shape.componentKind } : {}),
+    ...(shape.artifactKind ? { artifactKind: shape.artifactKind } : {}),
+    ...(shape.deliveryRole ? { deliveryRole: shape.deliveryRole } : {}),
     ...(spec.description ? { description: spec.description } : {}),
     ...(spec.technology ? { technology: spec.technology } : {}),
+    ...(shape.kindOrigin ? { kindOrigin: shape.kindOrigin } : {}),
     ...(spec.color ? { accent: spec.color } : {}),
     ...(parentId ? { parentId } : {}),
   });
@@ -133,6 +140,7 @@ const PEER_SUBKIND_FIELD: Partial<Record<DraftNodeType, keyof DraftNode>> = {
   queue: 'queueKind',
   actor: 'actorKind',
   component: 'componentKind',
+  artifact: 'artifactKind',
 };
 
 /** How much larger than its group's typical size a shape may be before it is left as its own case
@@ -291,7 +299,7 @@ export function arrangedSize(node: DraftNode, ctx: DescribeContext): { width: nu
   const lines = node.text?.trim() ? nameLineCount(node, ctx) : 0;
   if (lines > 2) {
     // From the type's own height, so the search can find a shorter box than the column it was.
-    const floor = Math.min(node.height, defaultSizeFor(node.type).height);
+    const floor = Math.min(node.height, defaultSizeFor(node.type, familyKindOf(node)).height);
     const balanced = balancedSize({ ...node, height: floor }, ctx);
     if (balanced && nameLineCount({ ...node, ...balanced }, ctx) < lines) {
       return { width: Math.max(node.width, balanced.width), height: balanced.height };

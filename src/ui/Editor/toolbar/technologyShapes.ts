@@ -15,7 +15,9 @@ export const UNLISTED_TECHNOLOGIES = [
   'Amazon S3', 'Amazon SQS', 'Amazon SNS', 'Amazon DynamoDB', 'Amazon Kinesis', 'Amazon EventBridge', 'Amazon RDS',
   'Amazon Redshift', 'Amazon MSK', 'Amazon ElastiCache', 'Amazon OpenSearch', 'Amazon API Gateway', 'AWS Glue',
   'Azure Service Bus', 'Azure Event Hubs', 'Azure Event Grid', 'Azure Cosmos DB', 'Azure Blob Storage', 'Azure Synapse',
-  'Azure API Management', 'Google Pub/Sub', 'Google Cloud Storage', 'Google Cloud SQL', 'Google BigQuery', 'Google Dataflow',
+  'Azure API Management', 'Application Load Balancer', 'Network Load Balancer', 'Amazon CloudFront', 'Google Pub/Sub', 'Google Cloud Storage', 'Google Cloud SQL', 'Google BigQuery', 'Google Dataflow',
+  'Amazon Aurora', 'Amazon EFS', 'Amazon DocumentDB', 'Amazon Neptune', 'Amazon MQ', 'AWS DMS', 'AWS AppSync', 'Azure SQL',
+  'Azure Files', 'Azure Front Door', 'Debezium', 'Redpanda', 'Pinecone', 'Weaviate', 'pgvector', 'NATS JetStream',
 ];
 
 /**
@@ -68,7 +70,7 @@ function presetFor(technology: string, slug: string): { preset: Preset; known: b
 }
 
 /**
- * The shapes a technology's name stands for — "kafka" is a Queue that is an Apache Kafka topic,
+ * The shapes a technology's name stands for — "kafka" is a Queue that is an Apache Kafka stream,
  * "redis" a Data Store that is a cache — as presets the shape picker can arm like any other.
  *
  * Two existing tables do the work, so this adds no vocabulary of its own: the logo catalog knows

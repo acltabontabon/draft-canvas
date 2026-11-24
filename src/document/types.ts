@@ -6,11 +6,12 @@
  * IndexedDB stores. Rendering libraries are adapted *to* this model, never the
  * other way around, so that upgrading the canvas engine cannot break user files.
  */
+import type { DocumentStyle } from './style';
 
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 28;
+export const CURRENT_VERSION = 32;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -32,16 +33,17 @@ export const NODE_TYPES = [
   'actor',
   'component',
   'sequence',
+  'artifact',
 ] as const;
 
 export type DraftNodeType = (typeof NODE_TYPES)[number];
 
 /**
  * The shapes that stand for a piece of architecture, and so may carry a C4 `description` and
- * `technology`. A note, a label, a code card, a Junction or a Boundary is annotation or structure,
+ * `technology` (an Artifact's technology is its format or where it is kept: YAML, PEM, Vault). A note, a label, a code card, a Junction or a Boundary is annotation or structure,
  * not an element with a responsibility of its own.
  */
-export const C4_TEXT_TYPES = ['service', 'database', 'queue', 'actor', 'component'] as const satisfies readonly DraftNodeType[];
+export const C4_TEXT_TYPES = ['service', 'database', 'queue', 'actor', 'component', 'artifact'] as const satisfies readonly DraftNodeType[];
 
 export const NOTE_KINDS = ['note', 'question', 'warning', 'decision'] as const;
 export type NoteKind = (typeof NOTE_KINDS)[number];
@@ -129,14 +131,9 @@ export interface EdgeAnchor {
 export const GRID_MODES = ['dots', 'lines', 'none'] as const;
 export type GridMode = (typeof GRID_MODES)[number];
 
-/** How a custom canvas background image fills its anchor rectangle — see
- *  `render/backgroundAnchor.ts` and `canvas/CanvasBackground.tsx`. */
-export const BACKGROUND_FITS = ['cover', 'contain', 'tile'] as const;
-export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
-
 /** Sub-kinds of the developer presets. Purely a labelling convenience — the
  *  base type's silhouette and accent always dominate; see `nodes/describe.ts`. */
-export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external', 'scheduler', 'gateway'] as const;
+export const SERVICE_KINDS = ['generic', 'api', 'worker', 'external', 'scheduler', 'gateway', 'load-balancer', 'proxy'] as const;
 export type ServiceKind = (typeof SERVICE_KINDS)[number];
 
 export const DATABASE_KINDS = [
@@ -205,6 +202,22 @@ export type ActorFrame = (typeof ACTOR_FRAMES)[number];
  */
 export const COMPONENT_KINDS = ['generic', 'module', 'adapter', 'port'] as const;
 export type ComponentKind = (typeof COMPONENT_KINDS)[number];
+
+/**
+ * An Artifact is a thing that is *read, mounted, issued or shipped* rather than a thing that runs
+ * or a place data lives: a file, the configuration a service starts with, a secret or key it is
+ * handed, the certificate it presents. It is the one architecture shape that does no work and
+ * holds no one else's data, which is why it is none of Service, Data Store or Component: a config
+ * file is not a small database, and a certificate is not a module.
+ *
+ * Four kinds, each a different relationship to what uses it: a `file` is read or written, a
+ * `config` is read (and watched for change), a `secret` is read by what it unlocks and never
+ * shown, a `certificate` is presented and trusted. Anything narrower ("Dockerfile", ".env", "JWT
+ * signing key", "TLS cert") is a name typed onto one of the four, and what the shape picker's
+ * search finds them by (`lib/conceptPresets.ts`).
+ */
+export const ARTIFACT_KINDS = ['file', 'config', 'secret', 'certificate'] as const;
+export type ArtifactKind = (typeof ARTIFACT_KINDS)[number];
 
 /** Loose, technology-neutral presets for a `group` boundary. A preset only
  *  changes a small secondary caption — never the node's own `text`. */
@@ -341,7 +354,7 @@ export type ViewLevel = (typeof VIEW_LEVELS)[number];
  *
  * Deliberately the same graph a document carries (nodes, connectors, flows, a camera) and
  * nothing else: a room has no title of its own (it is named by the node that owns it, so a
- * rename can never disagree with it), no settings of its own (one grid, one background per
+ * rename can never disagree with it), no settings of its own (one grid per
  * file), and no id (it is addressed by its owner). Owning the inside rather than pointing at it
  * is what makes the reference unbreakable — deleting or copying a shape takes its rooms with it,
  * and a cycle is impossible by construction.
@@ -396,7 +409,7 @@ export interface DraftNode {
    * What it is built with ("Spring Boot", "PostgreSQL 16") — displayed as a recognized technology
    * logo or a generic technology mark. The full value is retained for details and source exports.
    * Architecture shapes only (`C4_TEXT_TYPES`). Setting a known product can set the kind as well —
-   * Redis makes a Data Store a cache, Kafka a Queue a topic (`technologyKind.ts`) — but only a kind
+   * Redis makes a Data Store a cache, Kafka a Queue a stream (`technologyKind.ts`) — but only a kind
    * still at its default or one an earlier technology set (`kindOrigin`); a picked kind stays.
    */
   technology?: string;
@@ -427,8 +440,8 @@ export interface DraftNode {
   serviceKind?: ServiceKind;
   /**
    * `service` nodes only. How many instances of it run — 2 to `LIMITS.maxReplicas`, drawn as a
-   * stack with a small ×N. Absent is one. Read by Traffic: a queue's consumer with replicas has
-   * competing consumers.
+   * stack with a small ×N. Absent is one. Read by an outage walk: a
+   * Service with several loses one instance before it loses them all.
    */
   replicas?: number;
   /** `database` nodes only. */
@@ -441,6 +454,8 @@ export interface DraftNode {
   actorFrame?: ActorFrame;
   /** `component` nodes only. */
   componentKind?: ComponentKind;
+  /** `artifact` nodes only. */
+  artifactKind?: ArtifactKind;
   /** `group` nodes only. */
   boundaryPreset?: BoundaryPreset;
   /** Supporting detail collapsed into this node. Any node type may host one. */
@@ -484,6 +499,13 @@ export interface DraftNode {
   inside?: DraftInside;
   /** `sequence` nodes only — what the sequence says. See `DraftSequence`. */
   sequence?: DraftSequence;
+  /**
+   * Held in place: Arrange and Tidy up leave this shape exactly where the person put it and lay
+   * everything else out around it. A held boundary holds what is inside it too. Absent means free.
+   * It says nothing about dragging — a held shape still moves under the hand — and is never drawn
+   * in an export: it is a note to the layout, not part of the diagram.
+   */
+  held?: boolean;
 }
 
 /**
@@ -507,7 +529,10 @@ export interface DraftSequence {
 }
 
 /** The shapes a participant may be: the ones that stand for a piece of architecture. */
-export type SeqParticipantType = (typeof C4_TEXT_TYPES)[number];
+/** What can stand on a lifeline: the shapes that act or answer. An Artifact is read or presented,
+ *  never called, so it carries C4 text without being one of these. */
+export const SEQ_PARTICIPANT_TYPES = ['service', 'database', 'queue', 'actor', 'component'] as const satisfies readonly DraftNodeType[];
+export type SeqParticipantType = (typeof SEQ_PARTICIPANT_TYPES)[number];
 
 /**
  * One lifeline. It carries the same identity fields as an architecture shape, on purpose: its head
@@ -780,9 +805,18 @@ export interface DraftEdge {
    * as before this field existed; present, the line is drawn through these points in the
    * connector's own `routing` style (a stepped connector stays orthogonal, inserting the elbows
    * it needs), and only the two ends still follow their shapes. Moving both ends together moves
-   * the points with them; "Reset route" clears it. Never set by inference or layout.
+   * the points with them; "Reset route" clears it. Never set by inference or layout: only by a
+   * bend the person dragged, or a path they drew by hand between two shapes (Smart Ink).
    */
   waypoints?: DraftPoint[];
+  /**
+   * Drawn as a portal: a short labelled stub leaving the source ("→ Billing") and one arriving at
+   * the target ("← Checkout"), with no line between them. For a connector that would otherwise
+   * cross the whole diagram. Everything else about it — its meaning, its place in flows, what
+   * outage walks and agents read — is exactly a connector's; only how it is drawn changes. Absent means
+   * drawn in full. Never set by inference or layout.
+   */
+  portal?: boolean;
   /**
    * Whether `semantic`/`kind` were set by `connectorSemantics.ts`'s inference
    * or chosen by the user. Absent means "never explicitly chosen" — the same
@@ -918,56 +952,10 @@ export interface Project {
   updatedAt: number;
 }
 
-/**
- * A decorative, canvas-layer backdrop. Presentation knobs only:
- * the image bytes themselves live in a dedicated IndexedDB store, keyed by
- * this document's id (see `storage/IndexedDbRepository.ts`), never inline
- * here — `localStorage`-style inlining would duplicate large binary data
- * across every save. `enabled: true` with no matching stored row (corruption,
- * a duplicate that failed to copy) degrades to "no background shown," never
- * an error — the same repair-don't-reject discipline as the rest of this file.
- */
-export interface BackgroundSettings {
-  enabled: boolean;
-  fit: BackgroundFit;
-  /** Scrim opacity over the image, 0 (none) – 1 (fully obscured). */
-  dim: number;
-  /** 0 (none) – 1 (maximum), mapped to a CSS/SVG blur radius at render time. */
-  blur: number;
-  /**
-   * Which stored image this is. Each chosen image gets its own id, so replacing one is an ordinary
-   * settings change undo can step back through — the previous image's bytes are still there until
-   * the canvas closes. Absent on backgrounds set before this existed: those read the one image
-   * stored under the document's own id.
-   */
-  imageId?: string;
-  /**
-   * The image itself, only ever in a `.draftcanvas` file in transit — see `EmbeddedBackgroundImage`.
-   * Never present on a stored document: the Library strips it on import and puts the bytes in
-   * the image store (`export/background.ts`'s `adoptEmbeddedBackground`).
-   */
-  image?: EmbeddedBackgroundImage;
-}
-
-/**
- * A background image carried inside a `.draftcanvas` file, so a diagram exported with a backdrop
- * arrives with it. The one exception to "the bytes live in their own store": a file has no second
- * store to keep them in. Small images only (`export/background.ts`'s `MAX_EMBEDDED_BACKGROUND_BYTES`);
- * a larger one is left out of the export, and the dialog says so.
- */
-export interface EmbeddedBackgroundImage {
-  /** `data:image/...;base64,...` — what an `<img>` or an SVG `<image>` can show as is. */
-  dataUri: string;
-  /** Natural size in pixels, kept beside the bytes so importing needs no decoder to store it. */
-  width: number;
-  height: number;
-}
-
 export interface DraftSettings {
   /** Whether to show a flow's step badges on its connectors when it's selected for overlay. */
   showSequence: boolean;
   grid: GridMode;
-  background: BackgroundSettings;
 }
 
 /**
@@ -1042,6 +1030,13 @@ export interface DraftDocument {
   openPoints: OpenPoint[];
   /** The canvas's own level, when it has one — same rule as `DraftInside.level`. */
   level?: ViewLevel;
+  /**
+   * How the diagram is drawn (`document/style.ts`), when it carries its own look. Root-only like
+   * `openPoints`: one diagram has one style, in every room. Absent — every file written before v32,
+   * and any diagram nobody has styled — means it follows the drawing hand of whichever device opens
+   * it, exactly as before.
+   */
+  style?: DocumentStyle;
 }
 
 /** Bump when `libraryShapeOf` changes what it records — the only lever for

@@ -40,8 +40,19 @@ browse other suggestions, such as a reply, a call onward, or a call to itself.
 
 ![The next message offered after a call.](../media/guides/sequence-next.png)
 
-A call starts work on its receiver, drawn as a bar on the lifeline. **Reply** puts the reply below
-whatever that call set going, and ends the bar. A reply is never added on its own.
+A call starts work on its receiver, drawn as a bar on the lifeline. A reply ends it.
+
+### Replies
+
+Drag back. From the lifeline of whoever was called, drag to whoever called it: the line is drawn
+dashed and says **Reply to** the caller before you let go, and it lands as that call's reply. It is
+a reply only when the participant you drag from still owes one to the participant you drag to;
+otherwise the same drag is a call, as always. Hold `⌥` to draw a call anyway.
+
+With a call selected, press `R` or choose **Reply**: the reply goes below whatever that call set
+going. A reply is never added on its own.
+
+![Dragging back from Orders to Checkout API: the line is already a reply.](../media/guides/sequence-reply.png)
 
 To connect two sequences, drag from a lifeline in one to a participant's head or lifeline in the
 other. The connector stays attached as you move either sequence, and its label edits like any
@@ -98,6 +109,12 @@ Type the condition and press `Enter`. **Add branch** adds an *else* (or another 
 `Delete` on a frame removes the frame and keeps its messages; **Delete with its messages** removes
 both.
 
+Each kind of frame has its own colour and mark, so a loop is told from a condition at a glance, and
+every branch after the first is labelled `else` (or `and`, in a parallel frame). None of it is
+yours to style.
+
+![A loop, a condition with an optional part inside it, and parallel branches, each in its own colour.](../media/guides/sequence-frames.png)
+
 ### Notes and groups
 
 **Timeline note** draws a note over one or two participants on its own row.
@@ -146,6 +163,7 @@ the flow as a sequence** can draw it for you.
 | `Enter` or `F2` | Edit |
 | `Tab`, `]` / `[` | Add the offered message; offer another |
 | `P` | Add a participant after the selected one |
+| `R` | Add the reply to the selected call |
 | `⌘D` | Duplicate |
 | `⌘G` / `⌘⇧G` | Wrap messages or group participants / unwrap or ungroup |
 | `Delete` | Delete; on a frame, unwrap |
@@ -154,7 +172,8 @@ the flow as a sequence** can draw it for you.
 
 Select the sequence and choose **Present this sequence** (also in `⌘K` and the right-click menu). It
 plays one message at a time with the [same keys as a flow](flows-and-presentation.md#present). What
-has been said stays, the current message is lit, and the caption names its condition or branch.
+has been said stays, the current message is lit and crosses from its sender to its receiver, the
+frame it is in lights with it, and the caption names its condition or branch.
 
 ![Presentation highlights the current message and keeps every participant's lifeline visible.](../media/guides/sequence-present.png)
 
@@ -173,6 +192,8 @@ has been said stays, the current message is lit, and the caption names its condi
 
 - A sequence is one shape on the canvas: move it, put it in a boundary, connect to it, copy it, attach
   notes and [open points](open-points.md). It never resizes smaller than what it holds.
+- Nothing you write is cut short. A long message, condition, note or title wraps onto more lines
+  and the sequence makes room; the field you type it in wraps the same way.
 - Mermaid has no reference frame, so one is exported as a note. draw.io shows a sequence as a
   labelled box.
 - While [collaborating live](collaborating.md), if two people change the same sequence at once the

@@ -249,6 +249,14 @@ export function handleSequenceKey(event: KeyboardEvent): boolean {
       ui.setSequenceGhost((ui.sequenceGhost + (event.key === ']' ? 1 : offers.length - 1)) % offers.length);
       return done();
     }
+    case 'r':
+    case 'R': {
+      // The reply to the selected call, placed under whatever the call set going.
+      const item = focus.kind === 'item' && focus.ids.length === 1 ? findItem(sequence, focus.ids[0]!)?.item : undefined;
+      if (item?.t !== 'message' || item.kind === 'reply' || item.from === item.to) return false;
+      sequenceActions.addReply(nodeId, item.id);
+      return done();
+    }
     case 'p':
     case 'P': {
       const at = focus.kind === 'participant' ? sequence.participants.findIndex((participant) => participant.id === focus.ids[focus.ids.length - 1]) + 1 : sequence.participants.length;

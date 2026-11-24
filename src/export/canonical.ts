@@ -12,9 +12,9 @@
  * lenient reader) goes after the known ones, sorted, with its own value deep-sorted the same way.
  * A key whose value is `undefined` is not written at all — "absent" is the only spelling of none.
  */
+import { canonicalStyle } from '../document/style';
 import type {
   Attachment,
-  BackgroundSettings,
   DraftDocument,
   DraftEdge,
   DraftFlow,
@@ -27,7 +27,6 @@ import type {
   DraftViewport,
   EdgeAnchor,
   EdgeDetails,
-  EmbeddedBackgroundImage,
   OpenPoint,
   OpenPointTarget,
   SeqFragment,
@@ -72,6 +71,7 @@ const NODE_KEYS = [
   'actorKind',
   'actorFrame',
   'componentKind',
+  'artifactKind',
   'boundaryPreset',
   'attachments',
   'evidence',
@@ -85,6 +85,7 @@ const NODE_KEYS = [
   'textBackground',
   'inside',
   'sequence',
+  'held',
 ] as const satisfies KeysOf<DraftNode>;
 const SEQUENCE_KEYS = ['participants', 'groups', 'items', 'numberMessages'] as const satisfies KeysOf<DraftSequence>;
 const SEQ_PARTICIPANT_KEYS = [
@@ -141,6 +142,7 @@ const EDGE_KEYS = [
   'compensationDescription',
   'condition',
   'cadence',
+  'portal',
   'response',
   'hasResponse',
   'kind',
@@ -158,9 +160,7 @@ const STEP_KEYS = ['id', 'edgeId', 'extraEdgeIds', 'extraNodeIds', 'viewport', '
 const FLOW_KEYS = ['id', 'title', 'steps', 'accent', 'variantOf'] as const satisfies KeysOf<DraftFlow>;
 const INSIDE_KEYS = ['nodes', 'edges', 'flows', 'ink', 'viewport', 'level'] as const satisfies KeysOf<DraftInside>;
 const INK_KEYS = ['id', 'tool', 'color', 'size', 'x', 'y', 'points', 'pressure'] as const satisfies KeysOf<DraftInk>;
-const EMBEDDED_IMAGE_KEYS = ['dataUri', 'width', 'height'] as const satisfies KeysOf<EmbeddedBackgroundImage>;
-const BACKGROUND_KEYS = ['enabled', 'fit', 'dim', 'blur', 'imageId', 'image'] as const satisfies KeysOf<BackgroundSettings>;
-const SETTINGS_KEYS = ['showSequence', 'grid', 'background'] as const satisfies KeysOf<DraftSettings>;
+const SETTINGS_KEYS = ['showSequence', 'grid'] as const satisfies KeysOf<DraftSettings>;
 const OPEN_POINT_TARGET_KEYS = ['kind', 'id'] as const satisfies KeysOf<OpenPointTarget>;
 const OPEN_POINT_KEYS = ['id', 'kind', 'context', 'targets', 'resolved', 'resolution'] as const satisfies KeysOf<OpenPoint>;
 
@@ -247,8 +247,7 @@ function inside(value: unknown): unknown {
   return orderedIfObject(INSIDE_KEYS, { nodes: list(node), edges, flows, ink, viewport })(value);
 }
 
-const background = orderedIfObject(BACKGROUND_KEYS, { image: orderedIfObject(EMBEDDED_IMAGE_KEYS) });
-const settings = orderedIfObject(SETTINGS_KEYS, { background });
+const settings = orderedIfObject(SETTINGS_KEYS);
 
 /** The body of a document, every level in canonical key order. `format`, `version` and `metadata`
  *  are the serializer's own to write, so this covers the rest. */
@@ -260,4 +259,6 @@ export const canonical = {
   flows: flows as (flows: DraftFlow[]) => unknown,
   ink: ink as (strokes: DraftInk[]) => unknown,
   openPoints: list(openPoint) as (points: OpenPoint[]) => unknown,
+  // A style orders its own keys: the check that makes it safe is also what makes it canonical.
+  style: canonicalStyle,
 } satisfies Partial<Record<keyof DraftDocument, unknown>>;

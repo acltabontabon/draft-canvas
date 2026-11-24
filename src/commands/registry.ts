@@ -1,12 +1,16 @@
+import { mayTakeDown } from '../traffic';
+import { startOutage } from './outage';
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
+import { fitPadding } from '../lib/fitPadding';
 import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
+import { CONCEPT_PRESETS, conceptKeywords } from '../lib/conceptPresets';
 import { sequenceCommands, sequenceFromSelectionCommands, sequenceQuickCommands } from './sequence';
 import { sequenceActions } from '../store/sequenceActions';
 import { bridgeProblems } from '../document/splice';
 import { CONVERTIBLE_TYPES, CONVERTIBLE_TYPE_NAMES, isConvertibleType } from '../document/convert';
 import { reconnectProblem } from '../document/reconnect';
-import { capabilityFor, categoryOf, edgeRelationLabel, isServiceInteraction } from '../document/connectorSemantics';
+import { baseCategory, capabilityFor, categoryOf, edgeRelationLabel, isServiceInteraction } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
 import { createAttachment, defaultSizeFor, displayNameFor } from '../document/factory';
 import { stepIndexOf } from '../document/flow';
@@ -23,7 +27,7 @@ import {
   type DraftNode,
   type ViewLevel,
 } from '../document/types';
-import { TEXT_ROLE_OPTION_LABELS } from '../lib/nodeKindLabels';
+import { TEXT_ROLE_OPTION_LABELS, NODE_TYPE_LABELS } from '../lib/nodeKindLabels';
 import { requestClipboardRead } from '../lib/clipboardPermission';
 import { effectiveTextRole } from '../nodes/describe';
 import { continuationsFor, materialize } from '../continuation';
@@ -31,7 +35,8 @@ import { ALT_SYMBOL, MOD_SYMBOL } from '../lib/platform';
 import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
-import { fileOf, fileWithLiveViewport, lensFlow, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
+import { WALK_OF_DIAGRAM, walkOfSelection } from '../presentation/walk';
+import { fileOf, fileWithLiveViewport, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
 import { pointer, pointerFlow, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
 import { setFollowing, useCollabStore } from '../store/collabStore';
@@ -60,6 +65,8 @@ export function warmCopyExports(): void {
 }
 import { readEditableImagePreference } from '../export/exportPreferences';
 import { systemTheme } from '../theme/systemTheme';
+import { deviceHand } from '../theme/deviceHand';
+import { deviceStyle, shapeStartFrom, useStyleStore } from '../store/styleStore';
 import { copyText } from '../ui/collab/clipboard';
 import { focusBounds, focusNodes } from './search';
 import type { GalleryCategory } from '../gallery';
@@ -78,14 +85,21 @@ import type { OpenPointTarget } from '../document/types';
  * Every `run` is one call into an existing store action or hook — see `types.ts`.
  */
 
+/**
+ * How far a shape-by-name command (`conceptPresets.ts`) stands behind everything else. More than a
+ * keyword match costs (`fuzzy.ts`), so "events" is still the Event-Driven starter and "service"
+ * still Add Service, and "load balancer", which nothing else answers to, is still found.
+ */
+const CONCEPT_HANDICAP = 4;
+
 function createCommand(preset: Preset): Command {
   return {
     id: `add-${preset.id}`,
     title: `Add ${preset.label}`,
     group: 'create',
-    keywords: PRESET_KEYWORDS[preset.id],
+    keywords: PRESET_KEYWORDS[preset.id] ?? conceptKeywords(preset),
     hint: preset.hint,
-    shortcut: preset.shortcut,
+    shortcut: preset.shortcut || undefined,
     run: (ctx) => {
       const node = ctx.createAtPointer(preset);
       // Select what was just made, so "Add Service → Connect to…" chains without a mouse.
@@ -256,6 +270,19 @@ function presentModeCommands(ctx: CommandContext): Command[] {
         run: (inner) => inner.ui.setPresentation({ pointer: !inner.ui.presentation.pointer }),
       },
     );
+    // A walk is nobody's until it is kept (`presentation/walk.ts`) — the bar's own button, by name.
+    if (playback.derived && !ctx.ui.readOnly) {
+      commands.push({
+        id: 'present-keep',
+        title: 'Keep as a flow',
+        group: 'flow',
+        shortcut: 'K',
+        keywords: ['save', 'walk', 'walkthrough', 'steps', 'remember'],
+        run: (inner) => {
+          inner.editor.keepWalk();
+        },
+      });
+    }
     // Moving between flows, offered *while* a flow is playing — the whole point being that a
     // question from the room doesn't have to end the presentation to be answered.
     if (playback.flows.length > 1) {
@@ -310,7 +337,7 @@ function presentModeCommands(ctx: CommandContext): Command[] {
       // next guided move would snap the camera straight back.
       run: (inner) => {
         inner.ui.setPresentation({ framing: 'manual' });
-        void inner.camera.fitView({ padding: 0.2, duration: 320 });
+        void inner.camera.fitView({ padding: fitPadding(0.2), duration: 320 });
       },
     },
     {
@@ -413,15 +440,26 @@ function flowCommands(ctx: CommandContext): Command[] {
     id: `flow-trace-${flow.id}`, title: `Trace more steps: ${flow.title}`, group: 'flow',
     run: (inner) => inner.editor.beginFlowTrace(flow.id),
   }))];
+  // Present walks a selection that makes a story before anything else (`presentation/walk.ts`).
+  const selectionWalk = walkOfSelection(ctx.editor.document, ctx.editor.selection);
   if (flows.length > 0) {
     commands.push({
       id: 'present',
-      title: 'Start presentation',
+      title: selectionWalk ? 'Present selection' : 'Start presentation',
       group: 'flow',
       keywords: ['present', 'walkthrough', 'play', 'story', 'meeting'],
       shortcut: `${MOD_SYMBOL} Enter`,
-      hint: flows.length === 1 ? flows[0]!.title : `${flows.length} flows`,
+      hint: selectionWalk ? selectionWalk.flow.title : flows.length === 1 ? flows[0]!.title : `${flows.length} flows`,
       run: startPresentation,
+    });
+    // With flows, Present chooses one of them; the diagram's own order is still a command away.
+    commands.push({
+      id: 'present-diagram',
+      title: 'Present the whole diagram',
+      group: 'flow',
+      keywords: ['walk', 'walkthrough', 'arrows', 'everything', 'play'],
+      hint: 'Following the arrows',
+      run: (inner) => inner.onPresent(WALK_OF_DIAGRAM),
     });
     if (flows.length > 1) {
       commands.push({
@@ -461,11 +499,11 @@ function flowCommands(ctx: CommandContext): Command[] {
   } else {
     commands.push({
       id: 'present',
-      title: 'Start presentation',
+      title: selectionWalk ? 'Present selection' : 'Start presentation',
       group: 'flow',
       keywords: ['present', 'walkthrough', 'play'],
       shortcut: `${MOD_SYMBOL} Enter`,
-      hint: 'No flows yet — presents the diagram',
+      hint: selectionWalk ? selectionWalk.flow.title : 'Walks the diagram in arrow order',
       run: startPresentation,
     });
   }
@@ -521,12 +559,20 @@ function flowCommands(ctx: CommandContext): Command[] {
 export function viewCommands(ctx: CommandContext): Command[] {
   const commands: Command[] = [
     {
+      id: 'toggle-legend',
+      title: ctx.ui.legendShown ? 'Hide legend' : 'Show legend',
+      group: 'view',
+      keywords: ['legend', 'key', 'line styles', 'dashed', 'dotted', 'arrows', 'notation', 'what do the lines mean'],
+      hint: ctx.ui.legendShown ? 'On the canvas and in exported images' : 'Name the kinds of line this diagram uses, here and in exported images',
+      run: (inner) => inner.ui.setLegendShown(!inner.ui.legendShown),
+    },
+    {
       id: 'fit',
       title: 'Fit to view',
       group: 'view',
       keywords: ['zoom', 'center', 'all', 'canvas'],
       shortcut: 'Shift 1',
-      run: (inner) => void inner.camera.fitView({ padding: 0.2, duration: 320 }),
+      run: (inner) => void inner.camera.fitView({ padding: fitPadding(0.2), duration: 320 }),
     },
     ...backOutCommands(ctx),
     {
@@ -571,25 +617,26 @@ export function viewCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.editor.exitFocus(),
     });
   }
-  // Offered once the room has a connector, the way the status bar chip is; the analysis itself
-  // says so when there turns out to be nothing it can read.
-  if (ctx.editor.traffic?.active) {
+  // Offered once the room has a connector, the way the status bar chip is; the walk itself says
+  // so when there turns out to be nothing it can read.
+  if (ctx.editor.outage?.active) {
     commands.push({
-      id: 'traffic-hide',
-      title: 'Hide traffic',
+      id: 'outage-end',
+      title: 'Bring it back up',
       group: 'view',
-      keywords: ['traffic', 'load', 'hotspots', 'clear'],
+      hint: 'End the outage walk',
+      keywords: ['outage', 'failure', 'restore', 'recover', 'clear', 'end', 'what if'],
       shortcut: 'Esc',
-      run: (inner) => inner.editor.hideTraffic(),
+      run: (inner) => inner.editor.endOutage(),
     });
   } else if (ctx.editor.mode === 'edit' && ctx.editor.document.edges.length > 0) {
     commands.push({
-      id: 'traffic-show',
-      title: 'Show traffic',
+      id: 'outage-start',
+      title: 'Take something down…',
       group: 'view',
-      hint: 'Where modeled traffic concentrates',
-      keywords: ['traffic', 'hotspots', 'load', 'convergence', 'shared', 'analyze', 'requests', 'paths'],
-      run: (inner) => inner.editor.showTraffic(lensFlow(inner.editor)?.id ?? null),
+      hint: 'What fails, what holds, what is left open',
+      keywords: ['outage', 'failure', 'what if', 'down', 'blast radius', 'resilience', 'fails', 'break', 'single point of failure', 'spof', 'dead letter', 'fallback'],
+      run: (inner) => startOutage(inner.editor),
     });
   }
   commands.push({
@@ -624,7 +671,7 @@ function copyExportCommands(): Command[] {
       keywords: ['png', 'clipboard', 'picture', 'screenshot', 'paste'],
       run: (inner) => {
         void clipboard()
-          .then(({ copyImage }) => copyImage(inner.editor.document, { theme: systemTheme(), editable: editable(inner, 'png') }))
+          .then(({ copyImage }) => copyImage(inner.editor.document, { theme: systemTheme(), preset: deviceHand(), deviceStyle: deviceStyle(), editable: editable(inner, 'png') }))
           .then(announce(inner.ui, 'Image'))
           .catch(fail(inner.ui, 'Copy as image'));
       },
@@ -636,7 +683,7 @@ function copyExportCommands(): Command[] {
       keywords: ['svg', 'clipboard', 'vector', 'markup', 'readme'],
       run: (inner) => {
         void clipboard()
-          .then(({ copySvg }) => copySvg(inner.editor.document, { theme: systemTheme(), editable: editable(inner, 'svg') }))
+          .then(({ copySvg }) => copySvg(inner.editor.document, { theme: systemTheme(), preset: deviceHand(), deviceStyle: deviceStyle(), editable: editable(inner, 'svg') }))
           .then(announce(inner.ui, 'SVG'))
           .catch(fail(inner.ui, 'Copy as SVG'));
       },
@@ -744,6 +791,72 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       },
     });
   }
+  // Held shapes are the ones Arrange and Tidy up leave alone. Offered by what the selection is:
+  // hold what is free, let go what is held, both when it is mixed.
+  if (!ctx.ui.readOnly && ctx.editor.selection.nodes.length > 0) {
+    const chosen = new Set(ctx.editor.selection.nodes);
+    const picked = ctx.editor.document.nodes.filter((node) => chosen.has(node.id));
+    if (picked.some((node) => !node.held)) {
+      commands.push({
+        id: 'hold-in-place',
+        title: 'Hold in place',
+        group: 'selection',
+        keywords: ['pin', 'lock', 'fix', 'keep', 'anchor', 'stay', 'freeze', 'arrange', 'layout'],
+        hint: 'Arrange and Tidy up leave it where you put it',
+        run: (inner) => void inner.editor.holdSelection(true),
+      });
+    }
+    if (picked.some((node) => node.held)) {
+      commands.push({
+        id: 'let-go',
+        title: 'Let go',
+        group: 'selection',
+        keywords: ['unpin', 'unlock', 'release', 'free', 'unhold', 'arrange', 'layout'],
+        hint: 'Arrange and Tidy up may move it again',
+        run: (inner) => void inner.editor.holdSelection(false),
+      });
+    }
+  }
+  // A connector that crosses the whole diagram can be drawn as a portal instead: a short labelled
+  // stub at each end. Offered by what the selection is, as holding is.
+  if (!ctx.ui.readOnly && ctx.editor.selection.edges.length > 0) {
+    const chosen = new Set(ctx.editor.selection.edges);
+    const picked = ctx.editor.document.edges.filter((edge) => chosen.has(edge.id));
+    // A reply line and a sequence message have no stub to become.
+    const able = picked.filter((edge) => !edge.hasResponse && !edge.sourceAnchor?.participantId && !edge.targetAnchor?.participantId);
+    if (able.some((edge) => !edge.portal)) {
+      commands.push({
+        id: 'draw-as-portal',
+        title: able.length === 1 ? 'Draw as portal' : 'Draw as portals',
+        group: 'selection',
+        keywords: ['portal', 'off-page', 'jump', 'stub', 'teleport', 'long connector', 'hide line', 'declutter', 'crossing'],
+        hint: 'A labelled stub at each end instead of a line across the diagram',
+        run: (inner) => void inner.editor.setEdgesPortal(able.map((edge) => edge.id), true),
+      });
+    }
+    if (picked.some((edge) => edge.portal)) {
+      commands.push({
+        id: 'draw-as-line',
+        title: 'Draw as line',
+        group: 'selection',
+        keywords: ['portal', 'line', 'connector', 'show line', 'restore'],
+        hint: 'Draw the whole connector again',
+        run: (inner) => void inner.editor.setEdgesPortal(picked.filter((edge) => edge.portal).map((edge) => edge.id), false),
+      });
+    }
+  }
+  // Room for one more shape in the middle of a finished diagram, without dragging half of it over
+  // by hand: only worth offering once there is something to push.
+  if (!ctx.ui.readOnly && ctx.editor.document.nodes.length > 1) {
+    commands.push({
+      id: 'make-room',
+      title: 'Make room',
+      group: 'canvas',
+      keywords: ['space', 'insert space', 'push', 'spread', 'gap', 'open up', 'close gap', 'shove', 'room'],
+      hint: 'Then drag across or down: everything past the pointer moves away, or back',
+      run: (inner) => inner.ui.setMakeRoom({ line: null }),
+    });
+  }
   if (!ctx.ui.readOnly && arrangeable) {
     commands.push({
       id: 'arrange',
@@ -753,6 +866,31 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       hint: 'Preview this view laid out again from scratch, and choose which way it reads',
       run: (inner) => void startArrange({}, inner),
     });
+    // A flow somebody authored is the path a reader follows: laid out in one straight line, the rest
+    // hangs off it. Only flows with a connector to follow — a flow of shapes alone has no line to draw.
+    const followable = ctx.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId));
+    if (followable.length > 0) {
+      commands.push({
+        id: 'arrange-around-flow',
+        title: followable.length === 1 ? `Arrange around “${followable[0]!.title}”` : 'Arrange around a flow…',
+        group: 'canvas',
+        keywords: ['layout', 'auto layout', 'spine', 'happy path', 'straight', 'follow', 'flow', 'rearrange', 'main path'],
+        hint: 'Preview the view with one flow in a straight line and the rest around it',
+        run: (inner) => {
+          const flows = inner.editor.document.flows.filter((flow) => flow.steps.some((step) => step.edgeId));
+          if (flows.length === 1) return void startArrange({ preset: { primaryFlow: flows[0]!.id } }, inner);
+          return {
+            prompt: 'Arrange around',
+            options: flows.map((flow) => ({
+              id: `arrange-around-flow:${flow.id}`,
+              title: flow.title,
+              hint: count(flow.steps.length, 'step'),
+              run: () => void startArrange({ preset: { primaryFlow: flow.id } }, inner),
+            })),
+          };
+        },
+      });
+    }
     commands.push({
       id: 'check-layout',
       title: 'Check layout',
@@ -864,8 +1002,28 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       id: 'settings',
       title: 'Canvas settings…',
       group: 'canvas',
-      keywords: ['background', 'personality', 'roughness', 'sketch', 'appearance', 'image', 'theme', 'drawing style', 'preferences', 'intent continuation', 'suggestions'],
-      run: (inner) => inner.ui.setSettingsOpen(true),
+      keywords: ['preferences', 'intent continuation', 'suggestions'],
+      // The canvas's settings are a page of Appearance, the panel beside the canvas.
+      run: (inner) => inner.ui.setStylePanelOpen(true, 'canvas'),
+    },
+    {
+      id: 'appearance',
+      title: 'Appearance…',
+      group: 'canvas',
+      keywords: ['style', 'my style', 'drawing style', 'clean', 'draft', 'sketch', 'colours', 'colors', 'palette', 'line weight', 'corners', 'shadow', 'arrowhead', 'customise', 'customize', 'personalise', 'personalize', 'look'],
+      // Beside the canvas, not over it: the diagram is the preview.
+      run: (inner) => inner.ui.setStylePanelOpen(true),
+    },
+    {
+      // The one way a diagram's own look changes outside Settings: asked for by name, one undo step.
+      id: 'style-apply',
+      title: 'Use my style in this diagram',
+      group: 'canvas',
+      keywords: ['appearance', 'restyle', 'look', 'drawing style', 'theme', 'colours', 'colors', 'apply style'],
+      run: (inner) => {
+        inner.editor.setDocumentStyle(deviceStyle());
+        inner.ui.notify('This diagram is now drawn in your style.');
+      },
     },
     {
       id: 'outline',
@@ -929,6 +1087,7 @@ const TYPE_CAPTIONS: Record<DraftNode['type'], string> = {
   group: 'Boundary',
   ellipse: 'Junction',
   sequence: 'Sequence',
+  artifact: 'Artifact',
 };
 
 function captionFor(node: DraftNode): string {
@@ -958,7 +1117,7 @@ function connectToStage(ctx: CommandContext, source: DraftNode): CommandStage {
     if (edge) inner.editor.setSelection({ nodes: [], edges: [edge.id] });
   });
   // Not a Junction (nothing to name) and not a Sequence (a connector does not lead to one).
-  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse' && preset.id !== 'sequence').map((preset) => ({
+  const fresh: CommandOption[] = DEV_PRESETS.filter((preset) => preset.id !== 'ellipse' && preset.id !== 'sequence' && preset.id !== 'artifact').map((preset) => ({
     id: `connect-new:${preset.id}`,
     title: `New ${preset.label}`,
     keywords: PRESET_KEYWORDS[preset.id],
@@ -1357,7 +1516,7 @@ function serviceQuickCommands(node: DraftNode, level?: ViewLevel): Command[] {
       run: (inner) => inner.editor.addDataStore(node.id),
     });
   }
-  if (categoryOf(node) === 'gateway') {
+  if (baseCategory(categoryOf(node)) === 'gateway') {
     commands.push({
       id: 'add-routed-service',
       title: 'Route to Service',
@@ -1423,6 +1582,36 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       keywords: ['link', 'edge', 'arrow', 'wire', 'draw connection'],
       hint: displayNameFor(node),
       run: (inner) => connectToStage(inner, node),
+    });
+  }
+  // "Make it yours" from the canvas: the next shape of this type starts like this one. A device
+  // preference, so it changes no diagram and is no undo step.
+  const start = node.type === 'sequence' ? null : shapeStartFrom(node);
+  const typeName = NODE_TYPE_LABELS[node.type];
+  // Only when it would change something: a shape exactly as its type starts has nothing to save.
+  if (start && JSON.stringify(start) !== JSON.stringify(useStyleStore.getState().starts[node.type] ?? null)) {
+    commands.push({
+      id: 'save-shape-default',
+      title: `Save as my default ${typeName}`,
+      group: 'selection',
+      keywords: ['default', 'my style', 'always', 'remember', 'new shapes', 'appearance', 'preset'],
+      run: (inner) => {
+        const was = useStyleStore.getState().starts[node.type] ?? null;
+        useStyleStore.getState().setStart(node.type, start);
+        inner.ui.notify(`New ${typeName} shapes will start like this one.`, 'info', { label: 'Undo', run: () => useStyleStore.getState().setStart(node.type, was) });
+      },
+    });
+  }
+  if (useStyleStore.getState().starts[node.type]) {
+    commands.push({
+      id: 'reset-shape-default',
+      title: `Reset my default ${typeName}`,
+      group: 'selection',
+      keywords: ['default', 'forget', 'built-in', 'new shapes'],
+      run: (inner) => {
+        useStyleStore.getState().setStart(node.type, null);
+        inner.ui.notify(`New ${typeName} shapes start as they come again.`);
+      },
     });
   }
   commands.push({
@@ -1523,6 +1712,8 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       keywords: ['focus', 'highlight', 'dim others'],
       run: (inner) => inner.editor.enterFocus([node.id], []),
     },
+    // An outage walk needs something that runs and something connected to it.
+    ...(ctx.editor.mode === 'edit' ? takeDownCommands(ctx, node) : []),
     // Where its data comes from and what it feeds: offered once a shape has a connector at all.
     ...(node.type !== 'group' && ctx.editor.document.edges.some((e) => e.source === node.id || e.target === node.id)
       ? [
@@ -1709,6 +1900,22 @@ function attachCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
     });
   }
   return commands;
+}
+
+/** "Take this connection down": both ends stay up and nothing travels between them. Offered where
+ *  an outage could say something, which is the room having anything that runs at all. */
+function cutConnectorCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
+  const { document, outage } = ctx.editor;
+  if (outage?.cut === edge.id) return [];
+  if (!mayTakeDown(document.nodes, edge.source) && !mayTakeDown(document.nodes, edge.target)) return [];
+  return [{
+    id: 'cut-connector',
+    title: 'Take this connection down',
+    group: 'selection',
+    hint: 'What happens if these two cannot reach each other',
+    keywords: ['outage', 'failure', 'what if', 'down', 'partition', 'network', 'unreachable', 'disconnect', 'cut'],
+    run: (inner) => inner.editor.cutConnector(edge.id),
+  }];
 }
 
 export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
@@ -1926,6 +2133,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       addAttachmentCommand({ hostKind: 'edge', edge }, 'code', 'connector'),
     );
   }
+  commands.push(...cutConnectorCommands(ctx, edge));
   // Nowhere left to add it: every flow already has it or is full, and no room for a new one.
   if (flowsAvailable.length === 0 && !canStartFlow) return commands.filter((command) => command.id !== 'edge-add-to-flow');
   return commands;
@@ -2060,6 +2268,39 @@ export function arrangeSelectionCommands(ctx: CommandContext): Command[] {
     return node && !['note', 'text', 'code'].includes(node.type);
   })) return [];
   return [{ id: 'arrange-selection', title: 'Arrange selection', group: 'selection', keywords: ['layout', 'tidy'], run: (inner) => void startArrange({ selection: true }, inner) }];
+}
+
+/** "Take down" on a shape or a Boundary, and — for a Service drawn with several instances — the
+ *  choice between losing one of them and losing them all. */
+function takeDownCommands(ctx: CommandContext, node: DraftNode): Command[] {
+  const { document, outage } = ctx.editor;
+  if (!mayTakeDown(document.nodes, node.id)) return [];
+  if (node.type !== 'group' && !document.edges.some((edge) => edge.source === node.id || edge.target === node.id)) return [];
+  const keywords = ['outage', 'failure', 'what if', 'down', 'blast radius', 'resilience', 'fails', 'break'];
+  const several = node.type === 'service' && (node.replicas ?? 1) >= 2;
+  const isDown = outage?.down === node.id;
+  const commands: Command[] = [];
+  if (!isDown || (several && outage.whole)) {
+    commands.push({
+      id: 'take-down',
+      title: several ? 'Take one instance down' : node.type === 'group' ? 'Take everything inside down' : 'Take down',
+      group: 'selection',
+      hint: 'What happens if this fails',
+      keywords,
+      run: (inner) => inner.editor.takeDown(node.id),
+    });
+  }
+  if (several && !(isDown && outage.whole)) {
+    commands.push({
+      id: 'take-down-all',
+      title: `Take all ${node.replicas} instances down`,
+      group: 'selection',
+      hint: 'What happens if every instance fails',
+      keywords,
+      run: (inner) => inner.editor.takeDown(node.id, true),
+    });
+  }
+  return commands;
 }
 
 function selectionCommands(ctx: CommandContext): Command[] {
@@ -2214,6 +2455,8 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'select-contents',
   // A device preference, not a document setting.
   'continuation-toggle',
+  // The person's own styles are theirs on any diagram; the one action that restyles a diagram is not here.
+  'appearance',
   // Copying out of the diagram.
   'copy',
   'export',
@@ -2222,13 +2465,15 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'copy-svg',
   'copy-source',
   'copy-share-link',
-  // The app's own panels and dialogs (Canvas settings hides the document's Background itself).
+  // The app's own panels and dialogs.
   // Collaborate is how a view-only collaborator sees who is here and leaves; following and leaving
   // change only this copy's own view and session, never the document.
   'collaborate',
   'leave-session',
   'follow-presenter',
   'settings',
+  // A style is the reader's own, on their device: choosing one changes no shared diagram.
+  'appearance',
   'outline',
   'shortcuts',
   'open-docs',
@@ -2288,6 +2533,8 @@ function editCommands(ctx: CommandContext): Command[] {
     ...inkCommands(ctx),
     ...selectionCommands(ctx),
     ...ALL_PRESETS.map(createCommand),
+    // The same shapes by the names people call them: "Add Load Balancer", "Add TLS Certificate".
+    ...CONCEPT_PRESETS.map((preset) => ({ ...createCommand(preset), handicap: CONCEPT_HANDICAP })),
     ...pencilCommands(ctx),
     { id: 'try-example', title: 'Try an example', group: 'canvas', keywords: ['order', 'processing', 'learn'], run: (inner) => inner.ui.requestExample() },
     { id: 'browse-starters', title: 'Browse starters…', group: 'canvas', keywords: ['starter', 'gallery', 'template', 'example', 'architecture', 'pattern'], hint: 'Ready-made architectures from the starters gallery', run: () => useGalleryStore.getState().openDialog() },

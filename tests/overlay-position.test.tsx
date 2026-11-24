@@ -11,16 +11,18 @@ interface FlowState {
 const flow = vi.hoisted(() => ({
   state: { domNode: null as HTMLDivElement | null, transform: [0, 0, 1] as [number, number, number] },
   listeners: new Set<(state: FlowState) => void>(),
-}));
-vi.mock('@xyflow/react', () => ({
-  useStore: (select: (state: typeof flow.state) => unknown) => select(flow.state),
-  useStoreApi: () => ({
-    getState: () => flow.state,
-    subscribe: (listener: (state: typeof flow.state) => void) => {
+  api: {
+    getState: (): FlowState => flow.state,
+    subscribe: (listener: (state: FlowState) => void) => {
       flow.listeners.add(listener);
       return () => flow.listeners.delete(listener);
     },
-  }),
+  },
+}));
+vi.mock('@xyflow/react', () => ({
+  useOptionsStore: (select: (state: typeof flow.state) => unknown) => select(flow.state),
+  // React Flow keeps the canvas element and the camera in separate stores; one stands in for both here.
+  useReactFlowStoreApi: () => ({ optionsStore: flow.api, viewportStore: flow.api }),
 }));
 
 let observers: Map<Element, ResizeObserverCallback>;

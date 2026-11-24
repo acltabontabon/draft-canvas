@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { toggleFlows } from './canvas';
 
 async function example(page: Page) {
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -187,7 +188,7 @@ test.describe('touch tracing', () => {
   test.skip(({ browserName }) => browserName !== 'chromium', 'Touch target journey uses Chromium.');
   test('tapping a connector previews a step and cancellation preserves the flow', async ({ page }) => {
     await example(page);
-    await page.getByRole('button', { name: 'Flows', exact: true }).click();
+    await toggleFlows(page);
     await page.getByRole('button', { name: 'Trace a flow', exact: true }).click();
     const point = await page.locator('.dc-edge-hit').first().evaluate(element => {
       const path = element as SVGPathElement;

@@ -99,6 +99,12 @@ export interface CommandOption {
   hint?: string;
   /** An existing keyboard chord this command already has, shown as `<kbd>` chips — "Cmd D", "S". */
   shortcut?: string;
+  /**
+   * Score given up when ranked against other entries. For a command that is one of many of its
+   * kind ("Add Load Balancer" among sixty shapes by name) and must never take a query from the
+   * command or starter that query has always meant.
+   */
+  handicap?: number;
   run: (ctx: CommandContext) => void | CommandStage;
 }
 

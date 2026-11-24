@@ -56,10 +56,10 @@ export const REVIEW_LIMIT = 8;
 const ORDER: readonly ReviewCode[] = ['call-cycle', 'shared-database', 'no-consumer', 'no-dead-letter', 'dead-letter-source', 'no-producer', 'cache-not-written', 'unconnected'];
 
 /** Shapes that do something — call, publish, consume, read, write. */
-const ACTING: ReadonlySet<NodeCategory> = new Set(['actor', 'agent', 'device', 'service', 'external', 'worker', 'scheduler', 'gateway', 'component', 'port']);
+const ACTING: ReadonlySet<NodeCategory> = new Set(['actor', 'agent', 'device', 'service', 'external', 'worker', 'scheduler', 'gateway', 'loadBalancer', 'proxy', 'component', 'port']);
 /** Deployable services, the ones a shared database couples. Components share a process. */
 const DEPLOYABLE: ReadonlySet<NodeCategory> = new Set(['service', 'worker', 'scheduler']);
-const CALLERS: ReadonlySet<NodeCategory> = new Set(['service', 'external', 'worker', 'scheduler', 'gateway', 'component']);
+const CALLERS: ReadonlySet<NodeCategory> = new Set(['service', 'external', 'worker', 'scheduler', 'gateway', 'loadBalancer', 'proxy', 'component']);
 const CALLS: ReadonlySet<EdgeSemantic> = new Set(['calls', 'http', 'grpc', 'query', 'uses', 'dependsOn']);
 /** Behaviours that make a connector something other than a call: a callback answers one. */
 const NOT_A_CALL = new Set(['async', 'event', 'callback', 'failure', 'fallback']);

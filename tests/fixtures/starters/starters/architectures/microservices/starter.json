@@ -2,26 +2,32 @@
   "id": "microservices",
   "name": "Microservices",
   "category": "architecture",
-  "summary": "Independently deployed services, each owning its data",
+  "summary": "A food-delivery platform: services behind Kong, each owning its data, talking by gRPC and Kafka events",
   "aliases": [
     "microservices",
     "microservice",
     "distributed services",
     "independent services",
-    "api gateway"
+    "api gateway",
+    "database per service"
   ],
   "tags": [
     "services",
     "api gateway",
-    "database per service"
+    "database per service",
+    "events",
+    "circuit breaker",
+    "service mesh"
   ],
   "useWhen": [
     "Teams need to deploy and scale parts of the system independently.",
-    "Mapping which service owns which data."
+    "Mapping which service owns which data, and how the others reach it.",
+    "Deciding which calls must be synchronous and which can be events."
   ],
   "watchOutFor": [
-    "Calls between services fail and are slow in ways in-process calls are not.",
-    "Queries that span services need their own design."
+    "Calls between services fail and are slow in ways in-process calls are not; guard them.",
+    "Every synchronous call chains availability: one service down can stop the main path.",
+    "Queries that span services need their own design: a read model, an API composer or a BFF."
   ],
   "featured": true,
   "order": 30

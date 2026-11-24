@@ -2,7 +2,7 @@
   "id": "medallion",
   "name": "Medallion",
   "category": "data",
-  "summary": "Refine raw data into validated, business-ready datasets",
+  "summary": "A ride-hailing lakehouse refines raw trips into Bronze, Silver and Gold, and quarantines bad rows",
   "aliases": [
     "medallion",
     "medallion architecture",
@@ -10,21 +10,27 @@
     "lakehouse",
     "data lake",
     "etl",
-    "data pipeline"
+    "elt",
+    "data pipeline",
+    "data quality",
+    "quarantine"
   ],
   "tags": [
     "lakehouse",
     "bronze silver gold",
     "data pipeline",
-    "analytics"
+    "analytics",
+    "data quality"
   ],
   "useWhen": [
-    "Building analytics on data from several operational sources.",
-    "Showing where data quality is enforced."
+    "Building analytics on data from several operational sources at different cadences.",
+    "Showing where data quality is enforced, and where rows that fail it go.",
+    "You need to rebuild cleaned data after a bug fix without asking the sources again."
   ],
   "watchOutFor": [
-    "Each layer stores another copy of the data.",
-    "Late-arriving or corrected data needs reprocessing through every layer."
+    "Each layer stores another copy of the data, and each copy costs storage and compute.",
+    "Late or corrected source data has to be reprocessed through every layer after it.",
+    "A quarantine table nobody triages quietly drops data from every report."
   ],
   "featured": false,
   "order": 80

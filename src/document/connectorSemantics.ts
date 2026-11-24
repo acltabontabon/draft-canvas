@@ -1,4 +1,5 @@
 import { relationLabel, SEMANTIC_DEFAULTS } from './edgeSemantics';
+import { tailsChangeLog } from './technologyKind';
 import type { ConnectorKind, DraftEdge, DraftNode, EdgeSemantic } from './types';
 
 /**
@@ -45,6 +46,8 @@ export type NodeCategory =
   | 'worker'
   | 'scheduler'
   | 'gateway'
+  | 'loadBalancer'
+  | 'proxy'
   | 'component'
   | 'port'
   | 'database'
@@ -57,10 +60,14 @@ export type NodeCategory =
   | 'stream'
   | 'junction'
   | 'deadLetter'
+  | 'artifact'
+  | 'config'
+  | 'secret'
+  | 'certificate'
   | 'generic';
 
 type CategorizableNode = Pick<DraftNode, 'type'> &
-  Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind' | 'queueKind' | 'deliveryRole' | 'componentKind' | 'actorKind'>>;
+  Partial<Pick<DraftNode, 'serviceKind' | 'databaseKind' | 'queueKind' | 'deliveryRole' | 'componentKind' | 'actorKind' | 'artifactKind' | 'technology'>>;
 
 export function categoryOf(node: CategorizableNode): NodeCategory {
   switch (node.type) {
@@ -84,6 +91,14 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
           return 'scheduler';
         case 'gateway':
           return 'gateway';
+        // A load balancer and a proxy are in the same business as a gateway: traffic arrives and is
+        // sent onward, one target per request. They share every gateway row (`baseCategory`) and
+        // keep a category of their own only so a caption can say what each does with a request:
+        // a gateway routes it, a load balancer distributes it, a proxy forwards it.
+        case 'load-balancer':
+          return 'loadBalancer';
+        case 'proxy':
+          return 'proxy';
         // A service acting as a Backend for Frontend *calls* the services it composes — it is not
         // a gateway that routes, so it takes the plain service rows rather than the gateway ones.
         default:
@@ -119,6 +134,21 @@ export function categoryOf(node: CategorizableNode): NodeCategory {
       return 'junction';
     case 'component':
       return node.componentKind === 'port' ? 'port' : 'component';
+    // Every Artifact kind takes part in the same relationships: something reads it, writes it or
+    // watches it for change (`baseCategory` gives them all the `artifact` rows). Never folded to a
+    // data store: nothing queries a certificate. The kinds are told apart for captions alone: a
+    // service is configured by a config, authenticates with a secret, presents a certificate.
+    case 'artifact':
+      switch (node.artifactKind) {
+        case 'config':
+          return 'config';
+        case 'secret':
+          return 'secret';
+        case 'certificate':
+          return 'certificate';
+        default:
+          return 'artifact';
+      }
     default:
       return 'generic';
   }
@@ -256,6 +286,14 @@ export const MATRIX: Record<string, ConnectionCapability> = {
   // already apply — a file system doesn't initiate an ordinary service call.
   'service>fileSystem': capability(['reads', 'writes', 'readsWrites', 'watches', 'dependsOn'], 'writes', []),
   'fileSystem>service': capability(['reads'], 'reads', []),
+  // An Artifact (a file, a config, a secret, a certificate) is read far more often than written:
+  // a service loads its config, mounts its secret, presents its certificate. `watches` is a config
+  // reloaded on change. Drawn the other way round, the arrow is still that read. A person or a
+  // pipeline producing one is left without a default: an operator editing a config and a CA
+  // issuing a certificate are not the same act, and no opinion beats a wrong one.
+  'service>artifact': capability(['reads', 'writes', 'watches', 'uses', 'dependsOn'], 'reads', []),
+  'artifact>service': capability(['reads', 'dependsOn'], 'reads', []),
+  'actor>artifact': capability(['writes', 'reads', 'uses'], undefined, []),
   'service>objectStorage': capability(['reads', 'writes', 'readsWrites', 'dependsOn'], 'writes', []),
   'objectStorage>service': capability(['reads'], 'reads', []),
   // 'reads' deliberately omitted — 'searches' already covers querying, and a
@@ -481,6 +519,13 @@ export const MATRIX: Record<string, ConnectionCapability> = {
     status: 'unusual',
     guidance: 'A Gateway routing directly to a data store is unusual — most gateways route to services, not storage.',
   }),
+  // The one router whose ordinary origin *is* storage: a CDN in front of a bucket, a web server
+  // handing out files from disk. A Proxy shares every other gateway row (`baseCategory`), which
+  // made the commonest static-site drawing there is, CloudFront → S3, read as a mistake. Its own
+  // rows, checked before that fold (`capabilityFor`): the proxy reads what it serves, captioned
+  // "serves from" (`relationLabel`). A Gateway or Load Balancer in front of a store keeps the nudge.
+  'proxy>objectStorage': capability(['reads', 'dependsOn'], 'reads', []),
+  'proxy>fileSystem': capability(['reads', 'dependsOn'], 'reads', []),
 };
 
 /** `port` never folds — a contract is not a flavour of anything, and an unlisted pairing that touched
@@ -498,7 +543,20 @@ export const MATRIX: Record<string, ConnectionCapability> = {
  *  service) inherit that vocabulary for free; the one place folding to `service` would be actively
  *  wrong — two Components talking to each other — has its own exact `component>component` row
  *  above instead, checked first by `capabilityFor` before this fallback is ever reached. */
+/**
+ * The category whose rules a caption-only category follows. A Load Balancer and a Proxy are
+ * gateways to every rule in this file and to everything that asks "does this route?"; a Config, a
+ * Secret and a Certificate are artifacts. Anything that branches on what a shape *does* asks about
+ * this; only wording (`edgeSemantics.ts`'s `relationLabel`) reads the finer category.
+ */
+export function baseCategory(category: NodeCategory): NodeCategory {
+  if (category === 'loadBalancer' || category === 'proxy') return 'gateway';
+  if (category === 'config' || category === 'secret' || category === 'certificate') return 'artifact';
+  return category;
+}
+
 function resolved(category: NodeCategory): NodeCategory {
+  category = baseCategory(category);
   if (category === 'deadLetter') return 'queue';
   if (category === 'agent' || category === 'device') return 'actor';
   // A stream fans a record out to every consumer group the way a topic does to every subscriber;
@@ -523,6 +581,11 @@ export function capabilityFor(source: NodeCategory, target: NodeCategory): Conne
   // skipping past it to `service>queue`, and a Gateway reach `gateway>service` for a Worker target.
   // A dead-letter queue only folds with both sides at once: folding it alone as a *source* would
   // make DLQ → DLQ read as `queue>deadLetter`, a dead-letter path out of a dead-letter queue.
+  // Ahead of all of it, a caption-only category's own row, for the rare rule its base doesn't share.
+  const own = MATRIX[`${source}>${target}`];
+  if (own) return own;
+  source = baseCategory(source);
+  target = baseCategory(target);
   const resolvedSource = resolved(source);
   const resolvedTarget = resolved(target);
   return (
@@ -765,8 +828,16 @@ export function inferRelationship(source: CategorizableNode, target: Categorizab
  * copy: `transforms`, where any other Data Store pair keeps `ingests`. Both are Tables because that
  * is the one case where the kind says "a dataset in a pipeline"; an operational database landing in
  * a table is still ingestion.
+ *
+ * And one the technology decides: a database drawn into a change-data-capture tool (Debezium, AWS
+ * DMS — `tailsChangeLog`) is its change log being tailed, `cdc`, where any other service reading it
+ * is an ordinary read. Only in that direction: the same tool pointed *at* a database may be loading
+ * a copy into it.
  */
 export function refinementBetween(source: CategorizableNode, target: CategorizableNode): Relationship | undefined {
+  if (source.type === 'database' && target.type === 'service' && categoryOf(source) === 'database' && tailsChangeLog(target.technology)) {
+    return { semantic: 'cdc' };
+  }
   if (source.type !== 'database' || target.type !== 'database') return undefined;
   if (source.databaseKind !== 'table' || target.databaseKind !== 'table') return undefined;
   return { semantic: 'transforms' };

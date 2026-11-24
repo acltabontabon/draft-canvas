@@ -2,21 +2,30 @@
   "id": "order-processing",
   "name": "Order processing",
   "category": "example",
-  "summary": "Follow an order from the API through a queue to storage",
+  "summary": "A shop takes the payment, queues fulfilment, and parks orders the warehouse keeps refusing",
   "aliases": [
-    "order example"
+    "order example",
+    "checkout",
+    "e-commerce",
+    "queue and worker",
+    "accept fast fulfil later"
   ],
   "tags": [
     "example",
     "queue",
-    "worker"
+    "worker",
+    "dead letter",
+    "payments"
   ],
   "useWhen": [
-    "Learning how shapes, connectors and flows read on the canvas.",
-    "A starting point for any queue-and-worker design."
+    "Learning how shapes, connectors, flows, notes and drill-down views read on the canvas.",
+    "A request must answer fast while slower work, like booking a shipment, happens after.",
+    "Sketching any queue-and-worker design with a failure path."
   ],
   "watchOutFor": [
-    "It is deliberately small: there is no failure path."
+    "Storing the order and sending the command are two writes; pair it with the Transactional Outbox.",
+    "Competing consumers process orders out of order; nothing here may depend on it.",
+    "A dead-letter queue nobody watches is just a slower way to lose orders."
   ],
   "featured": false,
   "order": 140

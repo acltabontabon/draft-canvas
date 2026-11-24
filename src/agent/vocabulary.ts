@@ -10,6 +10,7 @@
 
 import type {
   ActorKind,
+  ArtifactKind,
   BoundaryPreset,
   ComponentKind,
   DatabaseKind,
@@ -27,6 +28,7 @@ export interface NativeShape {
   queueKind?: QueueKind;
   actorKind?: ActorKind;
   componentKind?: ComponentKind;
+  artifactKind?: ArtifactKind;
   deliveryRole?: 'dead-letter';
 }
 
@@ -36,7 +38,9 @@ export const ELEMENT_TYPES: Record<string, NativeShape & { summary: string }> = 
   api: { type: 'service', serviceKind: 'api', summary: 'A service whose main job is serving an API.' },
   worker: { type: 'service', serviceKind: 'worker', summary: 'A background worker or consumer process.' },
   scheduler: { type: 'service', serviceKind: 'scheduler', summary: 'A scheduled job or cron runner.' },
-  gateway: { type: 'service', serviceKind: 'gateway', summary: 'An API gateway, load balancer or ingress.' },
+  gateway: { type: 'service', serviceKind: 'gateway', summary: 'An API gateway or ingress: authenticates, rate-limits and routes by path.' },
+  'load-balancer': { type: 'service', serviceKind: 'load-balancer', summary: 'Spreads requests across instances of the same service.' },
+  proxy: { type: 'service', serviceKind: 'proxy', summary: 'A reverse or forward proxy, CDN, WAF or sidecar: stands in the path and passes traffic along.' },
   'external-system': { type: 'service', serviceKind: 'external', summary: 'A software system outside the one being described.' },
   database: { type: 'database', databaseKind: 'generic', summary: 'A data store, kind unspecified.' },
   'sql-database': { type: 'database', databaseKind: 'sql', summary: 'A relational database.' },
@@ -60,6 +64,10 @@ export const ELEMENT_TYPES: Record<string, NativeShape & { summary: string }> = 
   module: { type: 'component', componentKind: 'module', summary: 'A module or package.' },
   adapter: { type: 'component', componentKind: 'adapter', summary: 'An adapter (hexagonal architecture).' },
   port: { type: 'component', componentKind: 'port', summary: 'A port (hexagonal architecture).' },
+  file: { type: 'artifact', artifactKind: 'file', summary: 'A file that matters to the story (an image, a schema, an export). Read or written, never called.' },
+  config: { type: 'artifact', artifactKind: 'config', summary: 'Configuration a service starts with or reloads (a YAML file, env vars, feature flags).' },
+  secret: { type: 'artifact', artifactKind: 'secret', summary: 'A secret a service is handed (an API key, a token, a private key).' },
+  certificate: { type: 'artifact', artifactKind: 'certificate', summary: 'A certificate a service presents or trusts (TLS, mTLS, a CA).' },
   junction: { type: 'ellipse', summary: 'A small routing point where connectors meet or split.' },
 };
 
@@ -77,7 +85,19 @@ const ALIASES: Record<string, string> = {
   consumer: 'worker',
   job: 'scheduler',
   cron: 'scheduler',
-  'load-balancer': 'gateway',
+  lb: 'load-balancer',
+  'reverse-proxy': 'proxy',
+  'forward-proxy': 'proxy',
+  cdn: 'proxy',
+  waf: 'proxy',
+  sidecar: 'proxy',
+  ingress: 'gateway',
+  artifact: 'file',
+  configuration: 'config',
+  'config-file': 'config',
+  key: 'secret',
+  credential: 'secret',
+  cert: 'certificate',
   'api-gateway': 'gateway',
   external: 'external-system',
   'external-service': 'external-system',
@@ -190,6 +210,8 @@ export function typeWordOf(node: DraftNode): string {
     }
     case 'component':
       return node.componentKind && node.componentKind !== 'generic' ? node.componentKind : 'component';
+    case 'artifact':
+      return node.artifactKind ?? 'file';
     case 'ellipse':
       return 'junction';
     default:

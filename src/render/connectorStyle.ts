@@ -1,4 +1,5 @@
 import type { DraftEdge } from '../document/types';
+import type { StyleHead } from '../document/style';
 import { roundedStepPath } from '../edges/routing';
 import { stepPolyline } from '../edges/waypoints';
 import { Lru } from '../lib/lru';
@@ -7,13 +8,23 @@ import type { PersonalityProfile } from './roughness/presets';
 import { pencilPath } from './roughness/pencilPath';
 import { roughenPath } from './roughness/roughPath';
 
-/** Sculpted Ink proportions, shared by canvas and export at every drawing style. */
+/**
+ * Sculpted Ink proportions, shared by canvas and export at every drawing style.
+ *
+ * The line is a hair finer than a shape's own outline is bold (1.5), so connectors read as drawn
+ * between shapes and never compete with them; the head is long and narrow, a nib and not a wedge;
+ * and a directed line begins at a small dot just clear of its shape, so where it leaves is as
+ * legible as where it lands.
+ */
 export const CONNECTOR_STYLE = {
-  lineWidth: 2.1,
+  lineWidth: 1.8,
   arrowLength: 14,
-  arrowWidth: 10,
-  openArrowWidth: 1.5,
+  arrowWidth: 8,
+  openArrowWidth: 1.4,
   cornerRadius: 26,
+  originRadius: 2.1,
+  /** How far along the line from its shape the origin dot's centre sits. */
+  originGap: 3.4,
 } as const;
 
 /** Drawing style is a device preference shared by shapes and connectors, never an edge field. */
@@ -40,9 +51,17 @@ export function styledConnectorPath(d: string, edge: Pick<DraftEdge, 'routing' |
   return cache ? styled.getOrCreate(d, build) : styled.get(d) ?? build();
 }
 
-/** A curved, carved nib pointing right. Sketch jitters this same geometry per edge. */
-export function connectorHead(open = false): string {
+/**
+ * An arrowhead pointing right: the curved, carved nib every connector has worn, or a plain
+ * triangle. Sketch jitters this same geometry per edge.
+ *
+ * Both are drawn in the same box with the same tip, so which one a style picks can never move a
+ * route, a clearance or a label.
+ */
+export function connectorHead(open = false, head: StyleHead = 'nib'): string {
+  // Drawn in the `arrowLength` × `arrowWidth` box, tip at its right middle: (14, 4).
+  if (head === 'triangle') return open ? 'M0 0 L14 4 L0 8' : 'M14 4 L0 0 L0 8 Z';
   return open
-    ? 'M0 0 C5 0 9 4.5 14 5 C9 5.5 5 10 0 10'
-    : 'M14 5 C9 4.5 5 0 0 0 Q2 4 4 5 Q2 6 0 10 C5 10 9 5.5 14 5 Z';
+    ? 'M0 0 C5 0 9 3.6 14 4 C9 4.4 5 8 0 8'
+    : 'M14 4 C9 3.6 5 0 0 0 Q2 3.2 3.6 4 Q2 4.8 0 8 C5 8 9 4.4 14 4 Z';
 }

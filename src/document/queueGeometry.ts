@@ -1,4 +1,4 @@
-import { dataStoreGlyphBounds } from './dataStoreGeometry';
+import { artifactGlyphBounds, dataStoreGlyphBounds, isGlyphShape } from './dataStoreGeometry';
 import type { DraftNode } from './types';
 
 /**
@@ -41,13 +41,13 @@ export interface AnchorBand {
 
 /**
  * The band a node's connectors should land on — the tube for a queue-family node (vertical only:
- * it fills the box's width), the glyph for a Data Store (which is narrow, centred and sits near the
+ * it fills the box's width), the glyph for a Data Store or an Artifact (which is narrow, centred and sits near the
  * top of its box, so a left/right arrow used to stop a good way short of it), `undefined` (meaning
  * the whole side) for everything else, whose drawn body fills its box. A bottom connector is
  * unaffected: it leaves below the captions rather than through them.
  */
 export function anchorBandOf(
-  node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'>,
+  node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind'>,
 ): AnchorBand | undefined {
   if (node.type === 'queue') {
     const span = queueTubeSpan(node.height, node.width);
@@ -57,8 +57,12 @@ export function anchorBandOf(
       ...(span.top > 0.75 ? { glyphTop: node.y + span.top } : {}),
     };
   }
-  if (node.type === 'database') {
+  if (node.type === 'database' || isGlyphShape(node)) {
     const glyph = dataStoreGlyphBounds(node);
+    return { top: glyph.top, bottom: glyph.bottom, left: glyph.left, right: glyph.right, glyphTop: glyph.top };
+  }
+  if (node.type === 'artifact') {
+    const glyph = artifactGlyphBounds(node);
     return { top: glyph.top, bottom: glyph.bottom, left: glyph.left, right: glyph.right, glyphTop: glyph.top };
   }
   return undefined;

@@ -6,6 +6,8 @@
   "worker": "worker",
   "scheduler": "scheduler",
   "gateway": "gateway",
+  "load-balancer": "loadBalancer",
+  "proxy": "proxy",
   "external-system": "external",
   "database": "database",
   "sql-database": "database",
@@ -29,6 +31,10 @@
   "module": "component",
   "adapter": "component",
   "port": "port",
+  "file": "artifact",
+  "config": "config",
+  "secret": "secret",
+  "certificate": "certificate",
   "junction": "junction",
   "microservice": "service",
   "application": "service",
@@ -42,7 +48,19 @@
   "consumer": "worker",
   "job": "scheduler",
   "cron": "scheduler",
-  "load-balancer": "gateway",
+  "lb": "loadBalancer",
+  "reverse-proxy": "proxy",
+  "forward-proxy": "proxy",
+  "cdn": "proxy",
+  "waf": "proxy",
+  "sidecar": "proxy",
+  "ingress": "gateway",
+  "artifact": "artifact",
+  "configuration": "config",
+  "config-file": "config",
+  "key": "secret",
+  "credential": "secret",
+  "cert": "certificate",
   "api-gateway": "gateway",
   "external": "external",
   "external-service": "external",
@@ -85,6 +103,8 @@
   "worker",
   "scheduler",
   "gateway",
+  "load-balancer",
+  "proxy",
   "external-system",
   "component",
   "module",
@@ -101,7 +121,13 @@
   "consumer",
   "job",
   "cron",
-  "load-balancer",
+  "lb",
+  "reverse-proxy",
+  "forward-proxy",
+  "cdn",
+  "waf",
+  "sidecar",
+  "ingress",
   "api-gateway",
   "external",
   "external-service",
@@ -120,11 +146,26 @@
    "delegates",
    "uses"
   ],
+  "actor>artifact": [
+   "writes",
+   "reads",
+   "uses"
+  ],
+  "actor>certificate": [
+   "writes",
+   "reads",
+   "uses"
+  ],
   "actor>component": [
    "calls",
    "http",
    "command",
    "query"
+  ],
+  "actor>config": [
+   "writes",
+   "reads",
+   "uses"
   ],
   "actor>device": [
    "uses"
@@ -141,11 +182,28 @@
    "command",
    "query"
   ],
+  "actor>loadBalancer": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "actor>proxy": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
   "actor>scheduler": [
    "calls",
    "http",
    "command",
    "query"
+  ],
+  "actor>secret": [
+   "writes",
+   "reads",
+   "uses"
   ],
   "actor>service": [
    "calls",
@@ -169,11 +227,26 @@
    "asks",
    "calls"
   ],
+  "agent>artifact": [
+   "writes",
+   "reads",
+   "uses"
+  ],
+  "agent>certificate": [
+   "writes",
+   "reads",
+   "uses"
+  ],
   "agent>component": [
    "calls",
    "http",
    "command",
    "query"
+  ],
+  "agent>config": [
+   "writes",
+   "reads",
+   "uses"
   ],
   "agent>database": [
    "reads",
@@ -196,6 +269,18 @@
    "command",
    "query"
   ],
+  "agent>loadBalancer": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "agent>proxy": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
   "agent>scheduler": [
    "calls",
    "http",
@@ -205,6 +290,11 @@
   "agent>searchIndex": [
    "searches",
    "indexes"
+  ],
+  "agent>secret": [
+   "writes",
+   "reads",
+   "uses"
   ],
   "agent>service": [
    "calls",
@@ -218,6 +308,38 @@
    "command",
    "query"
   ],
+  "artifact>component": [
+   "reads",
+   "dependsOn"
+  ],
+  "artifact>external": [
+   "reads",
+   "dependsOn"
+  ],
+  "artifact>gateway": [
+   "reads",
+   "dependsOn"
+  ],
+  "artifact>loadBalancer": [
+   "reads",
+   "dependsOn"
+  ],
+  "artifact>proxy": [
+   "reads",
+   "dependsOn"
+  ],
+  "artifact>scheduler": [
+   "reads",
+   "dependsOn"
+  ],
+  "artifact>service": [
+   "reads",
+   "dependsOn"
+  ],
+  "artifact>worker": [
+   "reads",
+   "dependsOn"
+  ],
   "cache>component": [
    "reads"
   ],
@@ -225,6 +347,12 @@
    "reads"
   ],
   "cache>gateway": [
+   "reads"
+  ],
+  "cache>loadBalancer": [
+   "reads"
+  ],
+  "cache>proxy": [
    "reads"
   ],
   "cache>scheduler": [
@@ -236,6 +364,38 @@
   "cache>worker": [
    "reads"
   ],
+  "certificate>component": [
+   "reads",
+   "dependsOn"
+  ],
+  "certificate>external": [
+   "reads",
+   "dependsOn"
+  ],
+  "certificate>gateway": [
+   "reads",
+   "dependsOn"
+  ],
+  "certificate>loadBalancer": [
+   "reads",
+   "dependsOn"
+  ],
+  "certificate>proxy": [
+   "reads",
+   "dependsOn"
+  ],
+  "certificate>scheduler": [
+   "reads",
+   "dependsOn"
+  ],
+  "certificate>service": [
+   "reads",
+   "dependsOn"
+  ],
+  "certificate>worker": [
+   "reads",
+   "dependsOn"
+  ],
   "component>actor": [
    "notifies",
    "event"
@@ -245,6 +405,13 @@
    "notifies",
    "calls"
   ],
+  "component>artifact": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
   "component>cache": [
    "reads",
    "writes",
@@ -252,10 +419,24 @@
    "invalidates",
    "dependsOn"
   ],
+  "component>certificate": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
   "component>component": [
    "uses",
    "dependsOn",
    "calls"
+  ],
+  "component>config": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
   ],
   "component>database": [
    "readsWrites",
@@ -298,6 +479,16 @@
    "compensates",
    "dependsOn"
   ],
+  "component>loadBalancer": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
   "component>objectStorage": [
    "reads",
    "writes",
@@ -308,6 +499,16 @@
    "uses",
    "calls",
    "implements",
+   "dependsOn"
+  ],
+  "component>proxy": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
    "dependsOn"
   ],
   "component>queue": [
@@ -330,6 +531,13 @@
   "component>searchIndex": [
    "searches",
    "indexes",
+   "dependsOn"
+  ],
+  "component>secret": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "component>service": [
@@ -363,6 +571,38 @@
    "compensates",
    "dependsOn"
   ],
+  "config>component": [
+   "reads",
+   "dependsOn"
+  ],
+  "config>external": [
+   "reads",
+   "dependsOn"
+  ],
+  "config>gateway": [
+   "reads",
+   "dependsOn"
+  ],
+  "config>loadBalancer": [
+   "reads",
+   "dependsOn"
+  ],
+  "config>proxy": [
+   "reads",
+   "dependsOn"
+  ],
+  "config>scheduler": [
+   "reads",
+   "dependsOn"
+  ],
+  "config>service": [
+   "reads",
+   "dependsOn"
+  ],
+  "config>worker": [
+   "reads",
+   "dependsOn"
+  ],
   "database>component": [
    "reads",
    "query",
@@ -381,6 +621,16 @@
    "cdc"
   ],
   "database>gateway": [
+   "reads",
+   "query",
+   "cdc"
+  ],
+  "database>loadBalancer": [
+   "reads",
+   "query",
+   "cdc"
+  ],
+  "database>proxy": [
    "reads",
    "query",
    "cdc"
@@ -413,6 +663,18 @@
    "event"
   ],
   "deadLetter>gateway": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "deadLetter>loadBalancer": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "deadLetter>proxy": [
    "consumes",
    "deliversTo",
    "command",
@@ -452,11 +714,26 @@
    "delegates",
    "uses"
   ],
+  "device>artifact": [
+   "writes",
+   "reads",
+   "uses"
+  ],
+  "device>certificate": [
+   "writes",
+   "reads",
+   "uses"
+  ],
   "device>component": [
    "calls",
    "http",
    "command",
    "query"
+  ],
+  "device>config": [
+   "writes",
+   "reads",
+   "uses"
   ],
   "device>deadLetter": [
    "publishes",
@@ -478,6 +755,18 @@
    "command",
    "query"
   ],
+  "device>loadBalancer": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
+  "device>proxy": [
+   "calls",
+   "http",
+   "command",
+   "query"
+  ],
   "device>queue": [
    "publishes",
    "command",
@@ -488,6 +777,11 @@
    "http",
    "command",
    "query"
+  ],
+  "device>secret": [
+   "writes",
+   "reads",
+   "uses"
   ],
   "device>service": [
    "calls",
@@ -518,11 +812,25 @@
    "notifies",
    "calls"
   ],
+  "external>artifact": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
   "external>cache": [
    "reads",
    "writes",
    "readsWrites",
    "invalidates",
+   "dependsOn"
+  ],
+  "external>certificate": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "external>component": [
@@ -533,6 +841,13 @@
    "query",
    "event",
    "compensates",
+   "dependsOn"
+  ],
+  "external>config": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "external>database": [
@@ -576,6 +891,16 @@
    "compensates",
    "dependsOn"
   ],
+  "external>loadBalancer": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
   "external>objectStorage": [
    "reads",
    "writes",
@@ -585,6 +910,16 @@
   "external>port": [
    "calls",
    "implements",
+   "dependsOn"
+  ],
+  "external>proxy": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
    "dependsOn"
   ],
   "external>queue": [
@@ -607,6 +942,13 @@
   "external>searchIndex": [
    "searches",
    "indexes",
+   "dependsOn"
+  ],
+  "external>secret": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "external>service": [
@@ -649,6 +991,12 @@
   "fileSystem>gateway": [
    "reads"
   ],
+  "fileSystem>loadBalancer": [
+   "reads"
+  ],
+  "fileSystem>proxy": [
+   "reads"
+  ],
   "fileSystem>scheduler": [
    "reads"
   ],
@@ -667,15 +1015,36 @@
    "notifies",
    "calls"
   ],
+  "gateway>artifact": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
   "gateway>cache": [
    "dependsOn",
    "writes",
    "reads",
    "invalidates"
   ],
+  "gateway>certificate": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
   "gateway>component": [
    "routes",
    "calls",
+   "dependsOn"
+  ],
+  "gateway>config": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "gateway>database": [
@@ -712,6 +1081,11 @@
    "calls",
    "dependsOn"
   ],
+  "gateway>loadBalancer": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
   "gateway>objectStorage": [
    "dependsOn",
    "reads",
@@ -720,6 +1094,11 @@
   "gateway>port": [
    "calls",
    "implements",
+   "dependsOn"
+  ],
+  "gateway>proxy": [
+   "routes",
+   "calls",
    "dependsOn"
   ],
   "gateway>queue": [
@@ -738,6 +1117,13 @@
    "dependsOn",
    "searches",
    "indexes"
+  ],
+  "gateway>secret": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
   ],
   "gateway>service": [
    "routes",
@@ -760,6 +1146,146 @@
    "calls",
    "dependsOn"
   ],
+  "loadBalancer>actor": [
+   "notifies",
+   "event"
+  ],
+  "loadBalancer>agent": [
+   "triggers",
+   "notifies",
+   "calls"
+  ],
+  "loadBalancer>artifact": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
+  "loadBalancer>cache": [
+   "dependsOn",
+   "writes",
+   "reads",
+   "invalidates"
+  ],
+  "loadBalancer>certificate": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
+  "loadBalancer>component": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "loadBalancer>config": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
+  "loadBalancer>database": [
+   "dependsOn",
+   "writes",
+   "reads",
+   "query"
+  ],
+  "loadBalancer>deadLetter": [
+   "publishes",
+   "deadLetters"
+  ],
+  "loadBalancer>device": [
+   "notifies",
+   "event"
+  ],
+  "loadBalancer>external": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "loadBalancer>fileSystem": [
+   "dependsOn",
+   "reads",
+   "writes",
+   "watches"
+  ],
+  "loadBalancer>gateway": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "loadBalancer>loadBalancer": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "loadBalancer>objectStorage": [
+   "dependsOn",
+   "reads",
+   "writes"
+  ],
+  "loadBalancer>port": [
+   "calls",
+   "implements",
+   "dependsOn"
+  ],
+  "loadBalancer>proxy": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "loadBalancer>queue": [
+   "command",
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "loadBalancer>scheduler": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "loadBalancer>searchIndex": [
+   "dependsOn",
+   "searches",
+   "indexes"
+  ],
+  "loadBalancer>secret": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
+  "loadBalancer>service": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "loadBalancer>stream": [
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "loadBalancer>topic": [
+   "publishes",
+   "event",
+   "dependsOn"
+  ],
+  "loadBalancer>worker": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
   "objectStorage>component": [
    "reads"
   ],
@@ -775,6 +1301,12 @@
    "reads"
   ],
   "objectStorage>gateway": [
+   "reads"
+  ],
+  "objectStorage>loadBalancer": [
+   "reads"
+  ],
+  "objectStorage>proxy": [
    "reads"
   ],
   "objectStorage>queue": [
@@ -810,6 +1342,12 @@
   "port>gateway": [
    "implementedBy"
   ],
+  "port>loadBalancer": [
+   "implementedBy"
+  ],
+  "port>proxy": [
+   "implementedBy"
+  ],
   "port>scheduler": [
    "implementedBy"
   ],
@@ -818,6 +1356,143 @@
   ],
   "port>worker": [
    "implementedBy"
+  ],
+  "proxy>actor": [
+   "notifies",
+   "event"
+  ],
+  "proxy>agent": [
+   "triggers",
+   "notifies",
+   "calls"
+  ],
+  "proxy>artifact": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
+  "proxy>cache": [
+   "dependsOn",
+   "writes",
+   "reads",
+   "invalidates"
+  ],
+  "proxy>certificate": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
+  "proxy>component": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "proxy>config": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
+  "proxy>database": [
+   "dependsOn",
+   "writes",
+   "reads",
+   "query"
+  ],
+  "proxy>deadLetter": [
+   "publishes",
+   "deadLetters"
+  ],
+  "proxy>device": [
+   "notifies",
+   "event"
+  ],
+  "proxy>external": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
+  "proxy>fileSystem": [
+   "reads",
+   "dependsOn"
+  ],
+  "proxy>gateway": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "proxy>loadBalancer": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "proxy>objectStorage": [
+   "reads",
+   "dependsOn"
+  ],
+  "proxy>port": [
+   "calls",
+   "implements",
+   "dependsOn"
+  ],
+  "proxy>proxy": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "proxy>queue": [
+   "command",
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "proxy>scheduler": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "proxy>searchIndex": [
+   "dependsOn",
+   "searches",
+   "indexes"
+  ],
+  "proxy>secret": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
+  "proxy>service": [
+   "routes",
+   "calls",
+   "dependsOn"
+  ],
+  "proxy>stream": [
+   "publishes",
+   "consumes",
+   "event",
+   "dependsOn"
+  ],
+  "proxy>topic": [
+   "publishes",
+   "event",
+   "dependsOn"
+  ],
+  "proxy>worker": [
+   "routes",
+   "calls",
+   "dependsOn"
   ],
   "queue>component": [
    "consumes",
@@ -835,6 +1510,18 @@
    "event"
   ],
   "queue>gateway": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "queue>loadBalancer": [
+   "consumes",
+   "deliversTo",
+   "command",
+   "event"
+  ],
+  "queue>proxy": [
    "consumes",
    "deliversTo",
    "command",
@@ -875,6 +1562,13 @@
    "notifies",
    "calls"
   ],
+  "scheduler>artifact": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
   "scheduler>cache": [
    "reads",
    "writes",
@@ -882,9 +1576,23 @@
    "invalidates",
    "dependsOn"
   ],
+  "scheduler>certificate": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
   "scheduler>component": [
    "triggers",
    "calls",
+   "dependsOn"
+  ],
+  "scheduler>config": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "scheduler>database": [
@@ -923,6 +1631,11 @@
    "calls",
    "dependsOn"
   ],
+  "scheduler>loadBalancer": [
+   "triggers",
+   "calls",
+   "dependsOn"
+  ],
   "scheduler>objectStorage": [
    "reads",
    "writes",
@@ -932,6 +1645,11 @@
   "scheduler>port": [
    "calls",
    "implements",
+   "dependsOn"
+  ],
+  "scheduler>proxy": [
+   "triggers",
+   "calls",
    "dependsOn"
   ],
   "scheduler>queue": [
@@ -949,6 +1667,13 @@
   "scheduler>searchIndex": [
    "searches",
    "indexes",
+   "dependsOn"
+  ],
+  "scheduler>secret": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "scheduler>service": [
@@ -972,6 +1697,38 @@
    "calls",
    "dependsOn"
   ],
+  "secret>component": [
+   "reads",
+   "dependsOn"
+  ],
+  "secret>external": [
+   "reads",
+   "dependsOn"
+  ],
+  "secret>gateway": [
+   "reads",
+   "dependsOn"
+  ],
+  "secret>loadBalancer": [
+   "reads",
+   "dependsOn"
+  ],
+  "secret>proxy": [
+   "reads",
+   "dependsOn"
+  ],
+  "secret>scheduler": [
+   "reads",
+   "dependsOn"
+  ],
+  "secret>service": [
+   "reads",
+   "dependsOn"
+  ],
+  "secret>worker": [
+   "reads",
+   "dependsOn"
+  ],
   "service>actor": [
    "notifies",
    "event"
@@ -981,11 +1738,25 @@
    "notifies",
    "calls"
   ],
+  "service>artifact": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
   "service>cache": [
    "reads",
    "writes",
    "readsWrites",
    "invalidates",
+   "dependsOn"
+  ],
+  "service>certificate": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "service>component": [
@@ -996,6 +1767,13 @@
    "query",
    "event",
    "compensates",
+   "dependsOn"
+  ],
+  "service>config": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "service>database": [
@@ -1039,6 +1817,16 @@
    "compensates",
    "dependsOn"
   ],
+  "service>loadBalancer": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
   "service>objectStorage": [
    "reads",
    "writes",
@@ -1048,6 +1836,16 @@
   "service>port": [
    "calls",
    "implements",
+   "dependsOn"
+  ],
+  "service>proxy": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
    "dependsOn"
   ],
   "service>queue": [
@@ -1070,6 +1868,13 @@
   "service>searchIndex": [
    "searches",
    "indexes",
+   "dependsOn"
+  ],
+  "service>secret": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "service>service": [
@@ -1121,6 +1926,14 @@
    "consumes",
    "event"
   ],
+  "stream>loadBalancer": [
+   "consumes",
+   "event"
+  ],
+  "stream>proxy": [
+   "consumes",
+   "event"
+  ],
   "stream>queue": [
    "fansOut",
    "deliversTo"
@@ -1156,6 +1969,12 @@
   "topic>gateway": [
    "deliversTo"
   ],
+  "topic>loadBalancer": [
+   "deliversTo"
+  ],
+  "topic>proxy": [
+   "deliversTo"
+  ],
   "topic>queue": [
    "fansOut",
    "deliversTo"
@@ -1182,11 +2001,25 @@
    "notifies",
    "calls"
   ],
+  "worker>artifact": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
+   "dependsOn"
+  ],
   "worker>cache": [
    "reads",
    "writes",
    "readsWrites",
    "invalidates",
+   "dependsOn"
+  ],
+  "worker>certificate": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "worker>component": [
@@ -1197,6 +2030,13 @@
    "query",
    "event",
    "compensates",
+   "dependsOn"
+  ],
+  "worker>config": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "worker>database": [
@@ -1240,6 +2080,16 @@
    "compensates",
    "dependsOn"
   ],
+  "worker>loadBalancer": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
+   "dependsOn"
+  ],
   "worker>objectStorage": [
    "reads",
    "writes",
@@ -1249,6 +2099,16 @@
   "worker>port": [
    "calls",
    "implements",
+   "dependsOn"
+  ],
+  "worker>proxy": [
+   "calls",
+   "http",
+   "grpc",
+   "command",
+   "query",
+   "event",
+   "compensates",
    "dependsOn"
   ],
   "worker>queue": [
@@ -1271,6 +2131,13 @@
   "worker>searchIndex": [
    "searches",
    "indexes",
+   "dependsOn"
+  ],
+  "worker>secret": [
+   "reads",
+   "writes",
+   "watches",
+   "uses",
    "dependsOn"
   ],
   "worker>service": [

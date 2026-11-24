@@ -49,9 +49,9 @@ export function edgeAnchor(
   target: InternalNode | undefined,
 ): FlowAnchor | null {
   if (!source || !target) return null;
-  const types = new Map(document.nodes.map((node) => [node.id, node.type]));
-  const sourceRect = rectOfInternal(source, types.get(edge.source));
-  const targetRect = rectOfInternal(target, types.get(edge.target));
+  const kinds = new Map(document.nodes.map((node) => [node.id, node]));
+  const sourceRect = rectOfInternal(source, kinds.get(edge.source));
+  const targetRect = rectOfInternal(target, kinds.get(edge.target));
   if (!sourceRect || !targetRect) return null;
   // The chip row sits beyond the connector's words (`edges/connectorMarks.ts`): under them beside an
   // upright run, under a caption (which hangs below its line), over a label above a level one. The

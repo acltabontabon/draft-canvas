@@ -18,6 +18,12 @@ export function animateOverviewInk() {
   const marks = overview.querySelectorAll('.feature-mark');
   const matrix = underline.getScreenCTM();
   if (!matrix) return;
+  if (!rail) {
+    // No feature rail on the page: the pencil only underlines the headline.
+    underline.animate([{ strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDasharray: '1 1', strokeDashoffset: 0 }], { delay: 510, duration: 300, fill: 'backwards' });
+    if (pencil) pencil.style.visibility = 'hidden';
+    return;
+  }
 
   const origin = overview.getBoundingClientRect();
   const railBounds = rail.getBoundingClientRect();

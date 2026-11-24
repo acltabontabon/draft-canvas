@@ -1,4 +1,6 @@
 import { useUiStore } from '../store/uiStore';
+import { deviceStyle } from '../store/styleStore';
+import { isSharedEditing } from '../store/collabStore';
 import { createDocument } from '../document/factory';
 import { DEFAULT_TITLE } from '../document/sanitize';
 import type { DraftDocument } from '../document/types';
@@ -279,6 +281,11 @@ function describe(error: unknown): string {
  * the snapshots of unsaved changes — lives in the app's data folder, where a crash or a restart
  * leaves it for Home to offer back.
  */
+/** A new diagram with a copy of the style in use, so it keeps its look whoever opens it later. */
+function styled(document: DraftDocument): DraftDocument {
+  return document.style ? document : { ...document, style: deviceStyle() };
+}
+
 export class DesktopController {
   private readonly api: DesktopApi;
   private readonly docs: DocsPublisher;
@@ -297,7 +304,6 @@ export class DesktopController {
   private expectBaseline = true;
   /** A Quick Draft with anything in it: one left untouched has nothing worth keeping. */
   private edited = false;
-  private pendingBackground: { write: { mime: string; base64: string } } | { remove: true } | null = null;
   private snapshotTimer: unknown = null;
   private snapshotFirstAt: number | null = null;
   /** The recovery id this run wrote a copy of the open file's unsaved changes under, until it is
@@ -456,8 +462,18 @@ export class DesktopController {
     }
     const written = confirmWrite(event.id, event.displayPath, event.stamp);
     // The shell has written it, so its picture can follow; drawn from the text the agent's write held.
-    if (written && handle) void this.docs.refresh(handle, fileStem(event.displayPath), written.after, false);
-    this.ui.notify(`An AI agent updated “${written?.title || 'a diagram'}”.`, show);
+    if (written && handle) void this.docs.refresh(handle, fileStem(event.displayPath), written.after);
+    const updated = () => this.ui.notify(`An AI agent updated “${written?.title || 'a diagram'}”.`, show);
+    if (!written?.activate || !handle) return updated();
+    // `activate`, carried out now that the change is in the file. Still without a question: when
+    // the person has started editing since (or a live session began), the notice offers it instead.
+    void this.agentHost
+      .inTurn(() => this.openQuietly(handle))
+      .then((result) => { if (!result.opened) updated(); })
+      .catch((error) => {
+        logDiagnostic(error, { operation: 'desktop-agent-activate' });
+        updated();
+      });
   }
 
   private readonly agentHost: AgentHost = {
@@ -465,8 +481,9 @@ export class DesktopController {
       this.session.kind === 'file' ? { handle: this.session.handle, stamp: this.session.stamp, readOnly: this.session.readOnly } : null,
     hasRecoveryFor: async (displayPath) =>
       (await this.api.recoveryList()).some((entry) => entry.origin.kind === 'file' && entry.origin.displayPath === displayPath),
+    // Never over a canvas in a live session: taking the screen from it ends the session for everyone.
     canReveal: (requested) =>
-      this.session.kind === 'none' || (this.session.kind === 'quick' && !this.edited) || (requested && !this.dirty),
+      !isSharedEditing() && (this.session.kind === 'none' || (this.session.kind === 'quick' && !this.edited) || (requested && !this.dirty)),
     isClean: () => this.session.kind === 'file' && !this.dirty,
     inTurn: <T>(work: () => Promise<T>) => {
       const next = this.turn.then(work, work);
@@ -481,6 +498,7 @@ export class DesktopController {
     flush: () => this.flushApp({ keepFocus: true }),
     syncWithDisk: () => this.syncWithDisk(),
     openQuietly: (handle) => this.openQuietly(handle),
+    quietOpenRefusal: () => this.quietOpenRefusal(),
     saveQuietly: (handle) => this.saveQuietly(handle),
     notify: (message) => this.ui.notify(message),
   };
@@ -502,18 +520,28 @@ export class DesktopController {
     });
   }
 
+  /** Why what is open can't be replaced without asking the person something, or null. */
+  private quietOpenRefusal(): string | null {
+    // Not waited for: a save can be a Save As dialog left open for minutes, and this holds the
+    // controller's turn — every other agent request and the person's own opens would queue behind it.
+    if (this.saving) return 'A save is in progress.';
+    if (this.dirty) return `${this.displayName} has unsaved changes.`;
+    // Replacing a shared canvas ends its session for everyone on it (`collabBridge.ts`). That is the
+    // owner's decision to make, never a side effect of an agent's request.
+    if (isSharedEditing()) return 'A live session is running on the open canvas, and opening another diagram would end it.';
+    return null;
+  }
+
   /**
    * An agent's `activate`/`open`: makes `handle` the open document without a single question — so it
    * refuses whenever a question would have been needed (unsaved changes, a recovery copy to decide
-   * about). Never brings the window forward; says so in a notice instead.
+   * about, a live session it would end). Never brings the window forward; says so in a notice instead.
    */
   private async openQuietly(handle: Handle): Promise<{ opened: true } | { opened: false; reason: string }> {
     if (this.session.kind === 'file' && this.session.handle === handle) return { opened: true };
     await this.flushApp();
-    // Not waited for: a save can be a Save As dialog left open for minutes, and this holds the
-    // controller's turn — every other agent request and the person's own opens would queue behind it.
-    if (this.saving) return { opened: false, reason: 'A save is in progress.' };
-    if (this.dirty) return { opened: false, reason: `${this.displayName} has unsaved changes.` };
+    const refusal = this.quietOpenRefusal();
+    if (refusal) return { opened: false, reason: refusal };
     const opened = await this.api.openHandle(handle);
     const parsed = deserializeDocument(opened.text);
     if (!parsed.ok) return { opened: false, reason: `${opened.name}.draftcanvas can’t be opened: ${parsed.error}` };
@@ -566,7 +594,6 @@ export class DesktopController {
       if (result.outcome !== 'saved') return { saved: false, reason: 'The file changed on disk since it was opened.' };
       session.stamp = result.stamp;
       this.savedText = text;
-      await this.applyBackground(session.handle);
       void this.docs.refresh(session.handle, session.name, text);
       // See `saveNow`: edits made while this ran keep their snapshot.
       if (this.latestText === text) {
@@ -640,15 +667,6 @@ export class DesktopController {
       case 'draft-canvas:open-external':
         void this.api.openExternal(message.url).catch((error: unknown) => logDiagnostic(error, { operation: 'desktop-open-external' }));
         return;
-      case 'draft-canvas:background-write':
-        this.pendingBackground = { write: { mime: message.mime, base64: message.data } };
-        return;
-      case 'draft-canvas:background-remove':
-        this.pendingBackground = { remove: true };
-        return;
-      case 'draft-canvas:background-read':
-        void this.replyBackground(message.id);
-        return;
       case 'draft-canvas:flushed':
         this.flushes.get(message.id)?.();
         return;
@@ -679,18 +697,6 @@ export class DesktopController {
     this.latestText = info.text;
     if (this.expectBaseline) this.savedText = info.text;
     this.publish();
-  }
-
-  private async replyBackground(id: number): Promise<void> {
-    let image: { mime: string; base64: string } | null = null;
-    if (this.session.kind === 'file') {
-      try {
-        image = await this.api.sidecarRead(this.session.handle);
-      } catch (error) {
-        logDiagnostic(error, { operation: 'desktop-background-read' });
-      }
-    }
-    this.link.deliver({ type: 'draft-canvas:background', id, ...(image ? { mime: image.mime, data: image.base64 } : {}) });
   }
 
   // ─── Document state ─────────────────────────────────────────────────────────────────
@@ -745,7 +751,6 @@ export class DesktopController {
     this.expectBaseline = options.baseline;
     this.savedText = null;
     this.latestText = null;
-    this.pendingBackground = null;
     this.outside = null;
     this.snapshotFirstAt = null;
     this.clearSnapshotTimer();
@@ -790,14 +795,18 @@ export class DesktopController {
     await this.swap('Couldn’t open the file', async () => this.switchTo(await this.api.projectOpenFile(project, relPath)));
   }
 
-  /** Makes `opened` the open document, once whatever is open now has been settled. Returns whether it did. */
-  private async switchTo(opened: OpenedDoc, recovered?: RecoveryEntry): Promise<boolean> {
+  /**
+   * Makes `opened` the open document, once whatever is open now has been settled. Returns whether it
+   * did. `settled` says the caller already settled it in this same switch — New File asks before its
+   * Save dialog — so the question is not put a second time (#171).
+   */
+  private async switchTo(opened: OpenedDoc, recovered?: RecoveryEntry, settled = false): Promise<boolean> {
     const parsed = deserializeDocument(opened.text);
     if (!parsed.ok) {
       await this.api.showError(`Draft Canvas couldn’t open ${opened.name}.draftcanvas`, parsed.error);
       return false;
     }
-    if (!(await this.settleBeforeLeaving())) return false;
+    if (!settled && !(await this.settleBeforeLeaving())) return false;
 
     let text = opened.text;
     let baseline = true;
@@ -921,7 +930,7 @@ export class DesktopController {
     this.store.getSnapshot().explorerSave?.cancel();
     await this.swap('Couldn’t start a Quick Draft', async () => {
       if (!(await this.settleBeforeLeaving())) return;
-      const document = starter === 'example' ? exampleCanvas() : starter ?? createDocument(QUICK_DRAFT_TITLE);
+      const document = styled(starter === 'example' ? exampleCanvas() : starter ?? createDocument(QUICK_DRAFT_TITLE));
       if (starter === 'example') useUiStore.getState().setExampleDocumentId(document.metadata.id);
       this.session = { kind: 'quick', id: `q_${uuid()}` };
       this.edited = false;
@@ -935,14 +944,18 @@ export class DesktopController {
     this.store.getSnapshot().explorerSave?.cancel();
     await this.swap('Couldn’t create the canvas', async () => {
       if (!(await this.settleBeforeLeaving())) return;
-      const blank = encoder.encode(serializeDocument(createDocument()));
+      const blank = encoder.encode(serializeDocument(styled(createDocument())));
       const saved = await this.api.saveAs(DEFAULT_TITLE, blank);
       if (!saved) {
         // Whatever was open stays open; its snapshot was settled above and is only rewritten on the next edit.
         if (this.dirty) this.scheduleSnapshot();
         return;
       }
-      await this.switchTo(await this.api.openHandle(saved.handle));
+      // Settled above, before the file was written: asking again here offered a Cancel that left the
+      // new blank file on disk and the old diagram's recovery copy already discarded (#171).
+      const switched = await this.switchTo(await this.api.openHandle(saved.handle), undefined, true);
+      // The switch can still stop (a recovery copy kept for a file being replaced, and Cancel).
+      if (!switched && this.dirty) this.scheduleSnapshot();
     });
   }
 
@@ -953,7 +966,7 @@ export class DesktopController {
   async newCanvasIn(project: Handle, relPath = ''): Promise<void> {
     await this.swap('Couldn’t create the canvas', async () => {
       if (!(await this.settleBeforeLeaving())) return;
-      const document = createDocument();
+      const document = styled(createDocument());
       this.session = { kind: 'pending', id: `q_${uuid()}`, project, relPath };
       this.edited = false;
       this.load(serializeDocument(document), document.metadata.title, { baseline: true });
@@ -1059,7 +1072,6 @@ export class DesktopController {
       if (result.outcome !== 'saved') return;
       session.stamp = result.stamp;
       this.savedText = text;
-      await this.applyBackground(session.handle);
       void this.docs.refresh(session.handle, session.name, text);
       // Only when nothing was edited while the save ran: those edits keep the file dirty, and their
       // recovery snapshot (already written, or on its timer) is all that stands between them and a
@@ -1143,7 +1155,6 @@ export class DesktopController {
     const saved = await this.api.saveAs(
       this.suggestedName(text),
       encoder.encode(text),
-      session.kind === 'file' && !this.pendingBackground ? session.handle : undefined,
       session.kind === 'pending' ? { projectHandle: session.project, relPath: session.relPath } : undefined,
     );
     if (saved && this.session === session) await this.becomeFile(saved, text);
@@ -1181,7 +1192,6 @@ export class DesktopController {
       readOnly: false,
       recoveryId: `f_${uuid()}`,
     };
-    await this.applyBackground(saved.handle);
     this.savedText = text;
     void this.docs.refresh(saved.handle, saved.name, text);
     // A chooser can stay open while an agent or another app event updates the diagram. Only the
@@ -1196,21 +1206,6 @@ export class DesktopController {
     this.publish();
     void this.refreshRecents();
     void this.refreshRecovery();
-  }
-
-  /** The image is the shell's to keep beside the file, and only a save moves it there. */
-  private async applyBackground(handle: Handle): Promise<void> {
-    const pending = this.pendingBackground;
-    if (!pending) return;
-    this.pendingBackground = null;
-    try {
-      if ('write' in pending) await this.api.sidecarWrite(handle, pending.write.mime, pending.write.base64);
-      else await this.api.sidecarRemove(handle);
-    } catch (error) {
-      // The file itself is saved; only its picture isn't, and the canvas still shows it this session.
-      logDiagnostic(error, { operation: 'desktop-background-save' });
-      this.ui.notify('Saved, but the background image couldn’t be saved beside the file.');
-    }
   }
 
   private suggestedName(text: string): string {
@@ -1441,7 +1436,6 @@ export class DesktopController {
     this.savedText = null;
     this.latestText = null;
     this.edited = false;
-    this.pendingBackground = null;
     this.clearSnapshotTimer();
     this.publish();
     void this.refreshRecents();

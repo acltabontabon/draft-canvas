@@ -6,13 +6,14 @@ import { findItem, messagesOf } from '../src/document/sequenceModel';
 import { addOperand, createMessage, createReply, setMessageKind, wrapItems } from '../src/document/sequenceOps';
 import type { DraftSequence, SeqFragment, SeqMessage, SeqParticipant } from '../src/document/types';
 import { describeSequenceFocus, itemRange, neighbourItem } from '../src/sequence/focus';
-import { defaultMessageLabel, labelSuggestions, nextFromParticipant, nextMessages, suggestedKind } from '../src/sequence/suggest';
+import { answeredCall, defaultMessageLabel, labelSuggestions, nextFromParticipant, nextMessages, suggestedKind } from '../src/sequence/suggest';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { sequenceActions, sequenceIn } from '../src/store/sequenceActions';
 import { useUiStore } from '../src/store/uiStore';
 
 const who = (id: string, extra: Partial<SeqParticipant> = {}): SeqParticipant => ({ id, name: id, type: 'service', serviceKind: 'generic', ...extra });
 const call = (id: string, from: string, to: string): SeqMessage => createMessage({ id, from, to, label: id });
+const setKind = (message: SeqMessage, kind: SeqMessage['kind']): SeqMessage => ({ ...message, kind });
 
 function three(): DraftSequence {
   const get = call('get', 'client', 'api');
@@ -115,6 +116,37 @@ describe('what is offered', () => {
     expect(nextMessages(fresh, 'get').map((offer) => offer.title)).toEqual(['api calls db', 'Reply to client', 'api does something itself']);
   });
 
+  it('a line drawn back to whoever is waiting is the reply, and only then', () => {
+    const open: DraftSequence = { ...three(), items: three().items.slice(0, 2) };
+    const end = { operandId: null, index: 2 };
+    // db is at work for api: drawn back to api, it is answering `select`.
+    expect(answeredCall(open, 'db', 'api', end)?.id).toBe('select');
+    // api is at work for client, but it called db since: the line to client answers `get`.
+    expect(answeredCall(open, 'api', 'client', end)?.id).toBe('get');
+    // Nobody asked db on client's behalf, and client is waiting on nobody: these are calls.
+    expect(answeredCall(open, 'db', 'client', end)).toBeNull();
+    expect(answeredCall(open, 'client', 'api', end)).toBeNull();
+    // Above the call it would answer, there is nothing to answer yet.
+    expect(answeredCall(open, 'db', 'api', { operandId: null, index: 1 })).toBeNull();
+    // Already answered: a second line back is a call of its own.
+    expect(answeredCall(three(), 'db', 'api', { operandId: null, index: 4 })).toBeNull();
+    // Nobody waits on an asynchronous message.
+    const fired: DraftSequence = { ...open, items: [open.items[0]!, setKind(open.items[1] as SeqMessage, 'async')] };
+    expect(answeredCall(fired, 'db', 'api', end)).toBeNull();
+  });
+
+  it('a call answered in one branch is still unanswered in the other', () => {
+    const get = call('get', 'client', 'api');
+    let sequence: DraftSequence = { participants: three().participants, items: [get, { ...createReply(get, 'ok'), id: 'ok' }] };
+    sequence = wrapItems(sequence, ['ok'], { id: 'f', operator: 'alt' });
+    sequence = addOperand(sequence, 'f', { id: 'else' });
+    const first = (findItem(sequence, 'f')!.item as SeqFragment).operands[0]!.id;
+    expect(answeredCall(sequence, 'api', 'client', { operandId: 'else', index: 0 })?.id).toBe('get');
+    expect(answeredCall(sequence, 'api', 'client', { operandId: first, index: 1 })).toBeNull();
+    // After the frame, either branch may have answered it.
+    expect(answeredCall(sequence, 'api', 'client', { operandId: null, index: 2 })).toBeNull();
+  });
+
   it('after a reply: the answer still owed to whoever is waiting', () => {
     const sequence: DraftSequence = { ...three(), items: three().items.slice(0, 3) };
     expect(nextMessages(sequence, 'rows')).toMatchObject([{ from: 'api', to: 'client', kind: 'reply', replyTo: 'get' }]);
@@ -146,7 +178,7 @@ describe('naming a new participant', () => {
   });
 
   it('knows a technology by name, with the kind it implies', () => {
-    expect(preferred('Kafka').participant).toMatchObject({ type: 'queue', queueKind: 'topic', technology: 'Apache Kafka' });
+    expect(preferred('Kafka').participant).toMatchObject({ type: 'queue', queueKind: 'stream', technology: 'Apache Kafka' });
     expect(preferred('PostgreSQL').participant).toMatchObject({ type: 'database', technology: 'PostgreSQL' });
   });
 

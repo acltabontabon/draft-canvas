@@ -1,5 +1,6 @@
 import { Fragment, useEffect } from 'react';
-import { gestureInProgress, useEditorStore } from '../../store/editorStore';
+import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
+import { isInteracting, useEditorStore } from '../../store/editorStore';
 import { useUiStore, type TidyPreview } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { layoutNotes } from './arrangeSummary';
@@ -35,6 +36,10 @@ export function TidyBar() {
   useEffect(() => {
     if (!preview) return;
     const onKey = (event: KeyboardEvent) => {
+      // A dialog, the palette or a menu over the canvas owns these keys while it is up. This listens
+      // on `window` in the capture phase, so without the check Enter in the Export dialog applied the
+      // cleanup behind it, and one Escape closed the dialog and the preview together.
+      if (isImeKeyEvent(event) || overlayAboveCanvasIsOpen()) return;
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) return;
       // A button under focus keeps its own Enter: Cancel must cancel, not apply.
@@ -83,7 +88,7 @@ function applyTidy(preview: TidyPreview) {
   const editor = useEditorStore.getState();
   const before = editor.history.past.at(-1);
   // A drag in progress holds the diagram; the preview stays up for when it ends (see `applyArrange`).
-  if (gestureInProgress()) {
+  if (isInteracting()) {
     ui.notify('Finish what you are dragging first, then apply the cleanup.');
     return;
   }

@@ -77,8 +77,10 @@ test.describe('Topic-aware relationships', () => {
     page,
   }) => {
     await newCanvas(page, 'Insert worker quick fix');
-    await create(page, 'Queue', { x: 300, y: 200 });
-    await createTopic(page, { x: 600, y: 200 });
+    // Far enough apart for the Worker and a caption on each side of it: both legs are drawn
+    // straight to its glyph, and a straight leg shorter than its caption shows none.
+    await create(page, 'Queue', { x: 200, y: 200 });
+    await createTopic(page, { x: 760, y: 200 });
     await connectAndOpen(page, 0, 1);
 
     await page.getByRole('button', { name: 'Insert Worker' }).click();
@@ -89,8 +91,7 @@ test.describe('Topic-aware relationships', () => {
     await expect(inspectorSelect(page, 'Service type')).toHaveText('Worker');
 
     // Both new connectors' own inferred captions read correctly — a more direct check than
-    // clicking each short connector to select it, which the compact layout (the Worker node
-    // necessarily overlapping both its own short edges) makes unreliable.
+    // clicking each connector to select it.
     await expect(page.locator('.dc-edge-caption').filter({ hasText: 'consumed by' })).toBeVisible();
     await expect(page.locator('.dc-edge-caption').filter({ hasText: 'publishes to' })).toBeVisible();
 

@@ -14,7 +14,6 @@ import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
 import { markLastSeenRelease, readLastSeenRelease } from '../releases/seen';
 
-/** A toast's one optional button — e.g. "Undo" for something that was just removed. */
 export type NewCanvasRequest = { kind: 'example' } | { kind: 'canvas'; document: DraftDocument };
 
 export interface FlowTrace {
@@ -28,8 +27,16 @@ export interface FlowTrace {
   message: string;
 }
 
+/** The Settings pages the editor itself can ask for, on the web and the desktop. */
+/** The Appearance panel's three short pages: what to draw in, the paper, and the pen. */
+export type StylePanelTab = 'styles' | 'canvas' | 'drawing';
+
 export type ToastAction = { label: string; run: () => void };
-export type Toast = { id: number; message: string; tone: 'info' | 'error'; action?: ToastAction };
+/**
+ * A toast's optional button — e.g. "Undo" for something that was just removed — and, for the rare
+ * question with more than one answer (a join request while presenting), the other answers beside it.
+ */
+export type Toast = { id: number; message: string; tone: 'info' | 'error'; action?: ToastAction; alternatives?: ToastAction[] };
 
 /**
  * Drives the small type-picker menu (`QuickConnectMenu`) for the two
@@ -45,6 +52,9 @@ export type Toast = { id: number; message: string; tone: 'info' | 'error'; actio
 export interface QuickConnectState {
   /** Absent for a plain double-click-to-create; present for a connector dropped on empty canvas. */
   source?: string;
+  /** The other selected shapes the drag carried (`fanInSources`): the chosen row is connected from
+   *  each of them too, as a drop on an existing shape would be. */
+  fanIn?: readonly string[];
   flowPosition: { x: number; y: number };
   screenPosition: { x: number; y: number };
   /** The raw drop point in flow coordinates (`flowPosition` is that point already offset for a
@@ -144,6 +154,8 @@ export interface TidyPreview {
   partial?: boolean;
   /** How many sketches the room holds: they stay where they are, which the bar says. */
   sketches?: number;
+  /** Shapes held in place that the cleanup left alone. */
+  held?: number;
 }
 
 /** Tidy up found nothing to change. */
@@ -190,6 +202,12 @@ export interface ArrangePreview {
   alternativeSkipped?: boolean;
   /** How many sketches the room holds: they stay where they are, which the bar says. */
   sketches?: number;
+  /** Shapes held in place that the arrangement was worked out around: the bar says they stay. */
+  held?: number;
+  /** Places two connectors cross, now and in each arrangement offered: the bar's "Crossings 12 → 3". */
+  crossings?: { before: number; after: Partial<Record<ArrangeDirection, number>> };
+  /** The flow this arrangement lays out in one line, when one was chosen. */
+  followed?: string;
   /** Asked for by a layout skill of Nodi's: Apply plays the rearrangement (`canvas/arrangeMotion.ts`)
    *  instead of cutting to it. */
   motion?: boolean;
@@ -272,7 +290,17 @@ let changeTimer: ReturnType<typeof setTimeout> | undefined;
 const NO_IDS: ReadonlySet<string> = new Set();
 
 const CONTINUATION_PREFERENCE = 'continuation';
+const LEGEND_PREFERENCE = 'legend';
 const NO_MOVING_NODES: ReadonlySet<string> = new Set();
+
+/** Off unless this device asked for it. Read once at startup, as `initialContinuationsEnabled` is. */
+function initialLegendShown(): boolean {
+  try {
+    return readPreference(LEGEND_PREFERENCE) === 'on';
+  } catch {
+    return false;
+  }
+}
 
 /** On unless the device says otherwise. Read once at startup; a preference store that is not
  *  usable at that moment (blocked storage, a test harness still wiring up) means "on". */
@@ -426,8 +454,6 @@ export interface UiStore {
   exportOpen: boolean;
   aboutOpen: boolean;
   diagnosticsOpen: boolean;
-  /** Canvas Settings — background image and personality preset. */
-  settingsOpen: boolean;
   /** Whether the Collaborate dialog (`ui/collab/CollaborateDialog.tsx`) is open. */
   collabOpen: boolean;
   /**
@@ -544,6 +570,11 @@ export interface UiStore {
   flowPanelOpen: boolean;
   /** Whether the Outline — this view as a navigable list (`OutlinePanel.tsx`) — is docked open. */
   outlinePanelOpen: boolean;
+  /** The Appearance panel, docked beside the canvas so a change is seen on the diagram itself. Never saved. */
+  stylePanelOpen: boolean;
+  stylePanelTab: StylePanelTab;
+  /** Flips each time a different style is chosen, so the canvas can settle into it. Never saved. */
+  restyleBeat: 'a' | 'b' | null;
   /** Whether the proposal review panel (`desktop/ui/ProposalPanel.tsx`, desktop only) is open, and
    *  which proposal it's showing — `null` shows the list for the current diagram. */
   proposalPanelOpen: boolean;
@@ -566,6 +597,10 @@ export interface UiStore {
    * commits. See `edges/routing.ts`'s obstacle-avoidance notes.
    */
   interactionActive: boolean;
+  /** What the outage list's row under the pointer (or with focus) is about, so the canvas can
+   *  circle it: the shapes, and whether that outage reaches a person. A pointer, never a reading:
+   *  nothing is taken down until the row is chosen. */
+  outagePointer: { ids: readonly string[]; reaches: boolean } | null;
   /**
    * The nodes the in-flight gesture is moving or resizing (empty otherwise). Their committed rects
    * are stale until it ends, so a connector touching one skips obstacle avoidance for the gesture
@@ -624,6 +659,23 @@ export interface UiStore {
    * edge's selector is one lookup.
    */
   pointedIds: ReadonlySet<string> | null;
+  /**
+   * The shapes and connectors lit while Shift rests the pointer on a shape: everything its data comes
+   * from and everything it feeds (`canvas/useHoverTrace.ts`). Transient: never saved, undone or
+   * exported. A set, so each node's and edge's selector is one lookup, and only members re-render.
+   */
+  traceIds: ReadonlySet<string> | null;
+  /**
+   * The Make room tool in hand (`canvas/useMakeRoom.ts`), and while its one drag is under way the
+   * line it pushes from and how far: what the canvas draws as its guide. `null` when put down.
+   * Transient: never saved, undone or exported.
+   */
+  makeRoom: { line: { axis: 'x' | 'y'; at: number; delta: number } | null } | null;
+  /**
+   * Whether the canvas shows the legend of line styles in use (`edges/legend.ts`), and an image
+   * export carries it. A device preference, like the drawing style: never part of the file.
+   */
+  legendShown: boolean;
   /**
    * The id of a document that has just arrived and still needs its opening viewport computed —
    * set once as it arrives (see `arriveWith` in `useDocumentSession.ts`) for a genuine new open,
@@ -756,7 +808,6 @@ export interface UiStore {
   setReadOnly: (readOnly: UiStore['readOnly']) => void;
   setAboutOpen: (open: boolean) => void;
   setDiagnosticsOpen: (open: boolean) => void;
-  setSettingsOpen: (open: boolean) => void;
   setCollabOpen: (open: boolean) => void;
   setJoinInvite: (payload: string | null) => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
@@ -784,11 +835,17 @@ export interface UiStore {
   setOpenPointsResolvedOpen: (open: boolean) => void;
   setFlowPanelOpen: (open: boolean) => void;
   setOutlinePanelOpen: (open: boolean) => void;
+  /** Opens it on `tab` (Styles when not said), or closes it. */
+  setStylePanelOpen: (open: boolean, tab?: StylePanelTab) => void;
+  setStylePanelTab: (tab: StylePanelTab) => void;
+  /** A different style was chosen (not a change to one): the canvas plays its small arrival. */
+  beatRestyle: () => void;
   requestFlowRename: (flowId: string | null) => void;
   /** Opens the proposal panel (optionally straight to one proposal), or closes it. */
   setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
   setCompanionOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
+  setOutagePointer: (pointer: { ids: readonly string[]; reaches: boolean } | null) => void;
   requestEdit: (id: string | null) => void;
   setSequenceFocus: (focus: SequenceFocus | null) => void;
   setSequenceEdit: (edit: SequenceEdit | null) => void;
@@ -800,7 +857,7 @@ export interface UiStore {
   setRecoveryConnect: (gesture: UiStore['recoveryConnect']) => void;
   setEditingText: (id: string | null) => void;
   setQuietEdge: (id: string | null) => void;
-  notify: (message: string, tone?: Toast['tone'], action?: ToastAction) => void;
+  notify: (message: string, tone?: Toast['tone'], action?: ToastAction, alternatives?: ToastAction[]) => void;
   dismiss: (id: number) => void;
   /** Holds every toast's auto-dismiss while the pointer or focus is on them, so there's time to
    *  read one — or reach its action — and restarts the countdowns once it leaves. */
@@ -823,6 +880,9 @@ export interface UiStore {
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
   setPointedIds: (ids: ReadonlySet<string> | null) => void;
+  setTraceIds: (ids: ReadonlySet<string> | null) => void;
+  setMakeRoom: (makeRoom: UiStore['makeRoom']) => void;
+  setLegendShown: (shown: boolean) => void;
   /** Marks `documentId` as just arrived and awaiting its opening viewport fit. */
   requestOpenFit: (documentId: string) => void;
   /** Consumes the pending fit for `documentId` — a no-op if a newer request has already replaced
@@ -932,7 +992,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setFlowTrace: (flowTrace) => set({ flowTrace }),
   armed: null,
   pencil: null,
-  setPencil: (pencil) => set((state) => ({ pencil, armed: pencil ? null : state.armed, spliceArmedEdgeTarget: pencil ? null : state.spliceArmedEdgeTarget })),
+  setPencil: (pencil) => set((state) => ({ pencil, armed: pencil ? null : state.armed, makeRoom: pencil ? null : state.makeRoom, spliceArmedEdgeTarget: pencil ? null : state.spliceArmedEdgeTarget })),
   inkPrefs: readInkPrefs(),
   setInkPrefs: (patch) =>
     set((state) => {
@@ -952,7 +1012,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   exportOpen: false,
   aboutOpen: false,
   diagnosticsOpen: false,
-  settingsOpen: false,
   collabOpen: false,
   joinInvite: null,
   readOnly: null,
@@ -984,11 +1043,15 @@ export const useUiStore = create<UiStore>((set, get) => ({
   openPointsResolvedOpen: false,
   flowPanelOpen: false,
   outlinePanelOpen: false,
+  stylePanelOpen: false,
+  stylePanelTab: 'styles',
+  restyleBeat: null,
   proposalPanelOpen: false,
   proposalPanelId: null,
   companionOpen: false,
   flowRenameRequestId: null,
   interactionActive: false,
+  outagePointer: null,
   movingNodeIds: NO_MOVING_NODES,
   editRequestId: null,
   recoveryRequestEdgeId: null,
@@ -1003,6 +1066,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   exportSelectionRequested: false,
   jumpFlashId: null,
   pointedIds: null,
+  traceIds: null,
+  makeRoom: null,
+  legendShown: initialLegendShown(),
   openFitDocumentId: null,
   continuation: null,
   agentPreview: null,
@@ -1032,7 +1098,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
   // A connector a placed shape would have gone into is not one any more once the tool changes.
   // Picking up a shape tool puts the Pencil down; putting a shape tool down (`null`) leaves it be.
-  arm: (armed) => set((state) => ({ armed, spliceArmedEdgeTarget: null, pencil: armed ? null : state.pencil })),
+  arm: (armed) => set((state) => ({ armed, spliceArmedEdgeTarget: null, pencil: armed ? null : state.pencil, makeRoom: armed ? null : state.makeRoom })),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setFindReplaceOpen: (findReplaceOpen) => set({ findReplaceOpen }),
   requestFit: () => set((state) => ({ fitRequestId: state.fitRequestId + 1 })),
@@ -1041,7 +1107,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setReadOnly: (readOnly) => set({ readOnly }),
   setAboutOpen: (aboutOpen) => set({ aboutOpen }),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setCollabOpen: (collabOpen) => set({ collabOpen }),
   setJoinInvite: (joinInvite) => set({ joinInvite }),
   setQuickConnect: (quickConnect) => set({ quickConnect }),
@@ -1126,7 +1191,11 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setOpenPointsPanelOpen: (openPointsPanelOpen) => set({ openPointsPanelOpen }),
   setOpenPointsResolvedOpen: (openPointsResolvedOpen) => set({ openPointsResolvedOpen }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
-  setOutlinePanelOpen: (outlinePanelOpen) => set({ outlinePanelOpen }),
+  // One panel is docked beside the canvas at a time: two would leave little canvas to look at.
+  setOutlinePanelOpen: (outlinePanelOpen) => set(outlinePanelOpen ? { outlinePanelOpen, stylePanelOpen: false } : { outlinePanelOpen }),
+  setStylePanelOpen: (stylePanelOpen, stylePanelTab = 'styles') => set(stylePanelOpen ? { stylePanelOpen, stylePanelTab, outlinePanelOpen: false } : { stylePanelOpen }),
+  setStylePanelTab: (stylePanelTab) => set({ stylePanelTab }),
+  beatRestyle: () => set((state) => ({ restyleBeat: state.restyleBeat === 'a' ? 'b' : 'a' })),
   setProposalPanelOpen: (proposalPanelOpen, proposalId = null) => set({ proposalPanelOpen, proposalPanelId: proposalPanelOpen ? proposalId : null }),
   setCompanionOpen: (companionOpen) => set({ companionOpen }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),
@@ -1138,13 +1207,14 @@ export const useUiStore = create<UiStore>((set, get) => ({
       }
       return { interactionActive, movingNodeIds: moving.size === 0 ? NO_MOVING_NODES : moving };
     }),
+  setOutagePointer: (outagePointer) => set((state) => (state.outagePointer === outagePointer ? state : { outagePointer })),
   requestEdit: (editRequestId) => set({ editRequestId }),
   requestRecovery: (recoveryRequestEdgeId, recoveryRequestActionId = null) => set({ recoveryRequestEdgeId, recoveryRequestActionId }),
   setRecoveryConnect: (recoveryConnect) => set({ recoveryConnect }),
   setEditingText: (editingTextId) => set({ editingTextId }),
   setQuietEdge: (quietEdgeId) => set((state) => (state.quietEdgeId === quietEdgeId ? state : { quietEdgeId })),
 
-  notify(message, tone = 'info', action) {
+  notify(message, tone = 'info', action, alternatives) {
     // The same message again (a paste refused twice in a row) restarts the one already showing
     // rather than stacking a copy; and only the newest few stay, so a burst can't bury the canvas.
     const repeat = get().toasts.find((t) => t.message === message && t.tone === tone && t.action?.label === action?.label);
@@ -1152,10 +1222,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
     const overflow = get().toasts.slice(0, Math.max(0, get().toasts.length - (MAX_TOASTS - 1)));
     for (const old of overflow) get().dismiss(old.id);
     toastId += 1;
-    const toast: Toast = { id: toastId, message, tone, ...(action ? { action } : {}) };
+    const toast: Toast = { id: toastId, message, tone, ...(action ? { action } : {}), ...(action && alternatives?.length ? { alternatives } : {}) };
     set((state) => ({ toasts: [...state.toasts, toast] }));
-    // An action needs time to be reached, not just read.
-    const remaining = tone === 'error' ? 8000 : action ? 6000 : 3500;
+    // An action needs time to be reached, not just read; a choice between several, time to be made.
+    const remaining = toast.alternatives ? 12000 : tone === 'error' ? 8000 : action ? 6000 : 3500;
     const timer = { remaining, startedAt: Date.now(), handle: null as ReturnType<typeof setTimeout> | null };
     toastTimers.set(toast.id, timer);
     if (!toastsPaused) timer.handle = setTimeout(() => get().dismiss(toast.id), remaining);
@@ -1209,6 +1279,13 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setJumpFlashId: (jumpFlashId) =>
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
   setPointedIds: (pointedIds) => set((state) => (state.pointedIds === pointedIds ? state : { pointedIds })),
+  setTraceIds: (traceIds) => set((state) => (state.traceIds === traceIds ? state : { traceIds })),
+  setLegendShown: (legendShown) => {
+    writePreference(LEGEND_PREFERENCE, legendShown ? 'on' : 'off');
+    set({ legendShown });
+  },
+  // Taking the tool up puts down whatever else was in hand: one tool owns the pointer at a time.
+  setMakeRoom: (makeRoom) => set((state) => (makeRoom && !state.makeRoom ? { makeRoom, armed: null, pencil: null, spliceArmedEdgeTarget: null } : { makeRoom })),
   requestOpenFit: (documentId) => set({ openFitDocumentId: documentId }),
   clearOpenFit: (documentId) =>
     set((state) => (state.openFitDocumentId === documentId ? { openFitDocumentId: null } : state)),

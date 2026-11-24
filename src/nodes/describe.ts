@@ -1,10 +1,10 @@
 import type {
   Accent,
+  ArtifactKind,
   BoundaryPreset,
   ComponentKind,
   DatabaseKind,
   DraftNode,
-  NoteKind,
   QueueKind,
   ServiceKind,
   TextAlign,
@@ -14,21 +14,25 @@ import type { DisplayList, RichTextShape, Shape, Stroke, TextRun } from '../rend
 import { languageForFence, tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
-import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import type { PersonalityProfile } from '../render/roughness/presets';
+import { CORNER_SCALE, styleFrom, type ResolvedShape, type ResolvedStyle, type StyleInput } from '../render/style/resolve';
+import { restyle } from '../render/style/restyle';
+import { artShapes, drawnBounds, isWords } from '../render/style/art';
+import { artSlotOf, shapeKindOf } from '../document/style';
 import { BOUNDARY_HEADER_HEIGHT } from '../document/boundaryHeader';
-import { DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreGlyphTop, dataStoreScale } from '../document/dataStoreGeometry';
+import { ARTIFACT_GLYPH_WIDTH, DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreGlyphTop, dataStoreScale, isGlyphComponentKind, isGlyphServiceKind, isGlyphShape } from '../document/dataStoreGeometry';
 import { queueTubeSpan } from '../document/queueGeometry';
 import { roughenPath } from '../render/roughness/roughPath';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
-import { accentOf, boundaryLine, type AccentPalette, type Theme } from '../render/theme/tokens';
+import { accentOf, boundaryLine, LIGHT, type AccentPalette, type Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS, TEXT_SIZES, type FontSpec } from '../render/text/fonts';
 import { baselineOf, fitLabel, layoutRichText, layoutText, type RichBox, type RichRun, type TextLayout } from '../render/text/layout';
 import type { CalloutKind } from '../render/text/markdown';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
-import type { PersonalityPreset } from '../theme/usePersonality';
 import { clamp } from '../lib/math';
 import { nodeTechnologyIcon, technologyIconSnapshot, technologyMarkBounds, TECHNOLOGY_MARK_SIZE, type TechnologyIconSnapshot } from './technology';
+import { NOTE_ACCENTS, NOTE_LABELS } from './noteKinds';
 import { describeSequence, naturalSequenceSize, sequenceFrame, sequenceLayoutOf, type SequenceKit } from './sequence';
 import type { SequenceLayout } from '../sequence/layout';
 
@@ -43,15 +47,29 @@ import type { SequenceLayout } from '../sequence/layout';
 export interface DescribeContext {
   theme: Theme;
   measurer: TextMeasurer;
-  /** Intentional Roughness. Defaults to `'clean'`, today's exact
-   *  appearance, so every existing call site that only passes a theme keeps
-   *  compiling and keeps producing byte-identical output. */
-  preset: PersonalityPreset;
+  /** How the diagram is drawn. Defaults to Clean, today's exact appearance, so every call site
+   *  that only passes a theme keeps compiling and keeps producing byte-identical output. */
+  style: ResolvedStyle;
+  /** The look of the one shape being described, when its style gives it one. `describeNode` sets
+   *  it; a caller never does. */
+  shape?: ResolvedShape;
   technologyIcons: TechnologyIconSnapshot;
 }
 
-export function describeContext(theme: Theme, preset: PersonalityPreset = 'clean'): DescribeContext {
-  return { theme, measurer: getMeasurer(), preset, technologyIcons: technologyIconSnapshot() };
+export function describeContext(theme: Theme, style: StyleInput = 'clean'): DescribeContext {
+  return { theme, measurer: getMeasurer(), style: styleFrom(style), technologyIcons: technologyIconSnapshot() };
+}
+
+/**
+ * The context a shape's size is worked out in.
+ *
+ * A size is stored in the file, so it must come out the same on every device: never from the
+ * theme on screen, and never from how this device happens to draw. Everything that measures a
+ * shape to size it, fit it or hit-test inside it asks here, so a style that changes what text
+ * measures has one place to reach them all.
+ */
+export function sizingContext(): DescribeContext {
+  return describeContext(LIGHT);
 }
 
 const PADDING = 12;
@@ -70,22 +88,8 @@ const NOTE_PADDING_BOTTOM = 8;
  */
 export const NOTE_AUTO_MAX_HEIGHT = 320;
 
-/** Notes are colour-coded by intent — the whole point of having four kinds. Exported so an edge
- *  attachment (`AttachmentChipRow` in `AttachmentPresentation.tsx`) can match a note's own look exactly
- *  rather than duplicating this table. */
-export const NOTE_ACCENTS: Record<NoteKind, 'amber' | 'blue' | 'rose' | 'green'> = {
-  note: 'amber',
-  question: 'blue',
-  warning: 'rose',
-  decision: 'green',
-};
-
-export const NOTE_LABELS: Record<NoteKind, string> = {
-  note: 'NOTE',
-  question: 'QUESTION',
-  warning: 'WARNING',
-  decision: 'DECISION',
-};
+// A note's colour and tag by kind live in `noteKinds.ts`; re-exported here for this file's callers.
+export { NOTE_ACCENTS, NOTE_LABELS };
 
 /**
  * How each boundary kind says what it is — through its outline, its header and a small marker,
@@ -139,6 +143,14 @@ const SERVICE_KIND_LABELS: Partial<Record<ServiceKind, string>> = {
   external: 'EXTERNAL',
   scheduler: 'SCHEDULER',
   gateway: 'GATEWAY',
+  'load-balancer': 'LOAD BALANCER',
+  proxy: 'PROXY',
+};
+/** `file` is the family's baseline, so it carries just its name: the sheet already says "a file". */
+const ARTIFACT_KIND_LABELS: Partial<Record<ArtifactKind, string>> = {
+  config: 'CONFIG',
+  secret: 'SECRET',
+  certificate: 'CERTIFICATE',
 };
 const DATABASE_KIND_LABELS: Partial<Record<DatabaseKind, string>> = {
   sql: 'SQL',
@@ -359,9 +371,14 @@ function pinnedCaption(
 
 export function describeNode(node: DraftNode, ctx: DescribeContext): DisplayList {
   const icon = nodeTechnologyIcon(node, ctx.technologyIcons);
+  // What the style says about this kind of shape, looked up once and carried to whichever helpers
+  // draw it. A sequence describes its participants through here too, each with its own look, so an
+  // outer shape's is never left on the context for an inner one.
+  const look = ctx.style.shape(node);
+  const own = look.plain ? (ctx.shape ? { ...ctx, shape: undefined } : ctx) : { ...ctx, shape: look };
   // This is a display projection only: the full technology (and its version) stays in the file,
   // inspector and source exports. Unrecognized or mixed stacks use the neutral technology mark.
-  const shapes = shapesFor(icon ? { ...node, technology: undefined } : node, ctx);
+  const shapes = restyle(withArt(node, own, shapesFor(icon ? { ...node, technology: undefined } : node, own)), look);
   const mark = technologyMarkBounds(node, ctx.technologyIcons);
   if (icon && mark) {
     shapes.push({
@@ -373,6 +390,25 @@ export function describeNode(node: DraftNode, ctx: DescribeContext): DisplayList
     });
   }
   return { width: node.width, height: node.height, shapes };
+}
+
+/**
+ * A shape with its style's own drawing in place of the built-in one, where the style gives it one.
+ *
+ * Only the drawing changes. The words the shape's describer laid out stay exactly where they are,
+ * and the drawing goes into the box the built-in one took up, so the shape is the same size, its
+ * name is where it was, and a connector meets it where it always did. A `glyph` shape (a picture
+ * with its name beneath) keeps the drawing's proportions; a `body` shape (a box with its name in
+ * it) is filled by it.
+ */
+function withArt(node: DraftNode, ctx: DescribeContext, shapes: Shape[]): Shape[] {
+  const art = ctx.shape?.art;
+  if (!art) return shapes;
+  const slot = artSlotOf(node.type, shapeKindOf(node));
+  if (!slot) return shapes;
+  const box = drawnBounds(shapes) ?? { x: 0, y: 0, w: node.width, h: node.height };
+  const drawing = artShapes(art, box, ctx.shape?.fit ?? (slot === 'glyph' ? 'contain' : 'stretch'), accentOf(ctx.theme, node.accent), ctx.theme);
+  return [...drawing, ...shapes.filter(isWords)];
 }
 
 /** What a sequence borrows from here — see `SequenceKit` — so its heads are these same shapes. */
@@ -422,6 +458,8 @@ function shapesFor(node: DraftNode, ctx: DescribeContext): Shape[] {
       return replicated(node, ctx);
     case 'component':
       return component(node, ctx);
+    case 'artifact':
+      return artifact(node, ctx);
     case 'sequence':
       return describeSequence(node, ctx, SEQUENCE_KIT);
     default:
@@ -487,6 +525,16 @@ function centredLabel(
   ];
 }
 
+/**
+ * A body's corner in the shape's style: the built-in radius, made sharper or rounder. For the
+ * outline of a box that holds a name or content, never for the small parts of a glyph, which keep
+ * the proportions they were drawn with. Unchanged when the style says nothing, so Clean's output
+ * is the bytes it always was.
+ */
+function corner(ctx: DescribeContext, r: number): number {
+  return ctx.shape ? r * CORNER_SCALE[ctx.shape.corners] : r;
+}
+
 function surfaceStroke(ctx: DescribeContext, node: DraftNode): Stroke {
   return { color: accentOf(ctx.theme, node.accent).line, width: 1.5 };
 }
@@ -509,7 +557,7 @@ function outlineShape(
   paint: { fill?: string; opacity?: number; stroke?: Stroke; shadow?: boolean },
   boost = 1,
 ): Shape {
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   const outlineAmp = profile.outline * boost;
   const bowAmp = profile.bow * boost;
   // A caller's fixed corner radius (8 for most shapes, 12 for a Boundary) is never checked
@@ -534,7 +582,7 @@ function outlineShape(
  * doesn't sit crisp among shapes that were drawn by hand. A no-op at Clean.
  */
 function roughOutline(d: string, seedId: string, ctx: DescribeContext): string {
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   return roughenPath(d, seedId, profile.outline, profile.bow);
 }
 
@@ -544,7 +592,7 @@ function box(node: DraftNode, ctx: DescribeContext, radius: number): Shape[] {
     outlineShape(
       node.id,
       ctx,
-      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: radius },
+      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, radius) },
       { fill: palette.fill, stroke: surfaceStroke(ctx, node), shadow: true },
     ),
     ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
@@ -557,7 +605,7 @@ function box(node: DraftNode, ctx: DescribeContext, radius: number): Shape[] {
  * `outline`/`bow` values would be disproportionate on the smallest ones. Both axes clamp to a
  * fraction of the node's own radius instead of using the profile value directly.
  */
-function junctionAmplitude(profile: (typeof PERSONALITY_PROFILES)[PersonalityPreset], rx: number, ry: number) {
+function junctionAmplitude(profile: PersonalityProfile, rx: number, ry: number) {
   const cap = Math.min(rx, ry) * 0.18;
   return { outline: Math.min(profile.outline, cap), bow: Math.min(profile.bow, cap) };
 }
@@ -568,7 +616,7 @@ function ellipse(node: DraftNode, ctx: DescribeContext): Shape[] {
   const cy = node.height / 2;
   const rx = node.width / 2 - 0.75;
   const ry = node.height / 2 - 0.75;
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   const amp = junctionAmplitude(profile, rx, ry);
   const paint = { fill: palette.fill, stroke: surfaceStroke(ctx, node), shadow: true };
   const outline: Shape =
@@ -634,29 +682,34 @@ function dotsGlyph(rightX: number, cy: number, count: number, color: string, lab
 
 /* -------------------------------------------------------------- replicas -- */
 
-/** How far the card behind a replicated Service shows, matching Worker's own back card. */
+/** How far the card behind a replicated Service shows. */
 const REPLICA_OFFSET = 6;
 
 /**
  * A Service that runs as several instances (`DraftNode.replicas`): its own card, in front of one
  * more peeking out bottom-right, and a small `×N` in the front card's free bottom-left corner. A
- * Worker is already drawn as a stack, so it only gains the mark — two back cards would read as
- * something else. Every kind keeps its own silhouette on the front card.
+ * kind drawn as a glyph has no card to stack, so it carries the `×N` beside its glyph instead.
  */
 function replicated(node: DraftNode, ctx: DescribeContext): Shape[] {
+  // A glyph kind carries its own ×N: there is no card to put a second one behind.
+  if (isGlyphServiceKind(node.serviceKind)) return serviceGlyph(node, ctx);
   const count = node.replicas ?? 1;
   if (count < 2) return service(node, ctx);
-  const ownStack = node.serviceKind === 'worker';
+  // A style's own drawing stands for the whole shape: there is no card to stack a second behind,
+  // so it carries its count the way a glyph kind does.
+  if (ctx.shape?.art) {
+    const single = service(node, ctx);
+    return [...single, ...replicaMark(node.width, node.height, count, ctx, single)];
+  }
   const frontWidth = node.width - REPLICA_OFFSET;
   const frontHeight = node.height - REPLICA_OFFSET;
-  const shapes = ownStack ? service(node, ctx) : service({ ...node, width: frontWidth, height: frontHeight }, ctx);
+  const shapes = service({ ...node, width: frontWidth, height: frontHeight }, ctx);
   const mark = replicaMark(frontWidth, frontHeight, count, ctx, shapes);
-  if (ownStack) return [...shapes, ...mark];
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
   const back = outlineShape(
     `${node.id}:replicas`,
     ctx,
-    { x: 0.75 + REPLICA_OFFSET, y: 0.75 + REPLICA_OFFSET, w: frontWidth - 1.5, h: frontHeight - 1.5, r: 8 },
+    { x: 0.75 + REPLICA_OFFSET, y: 0.75 + REPLICA_OFFSET, w: frontWidth - 1.5, h: frontHeight - 1.5, r: corner(ctx, 8) },
     { fill: palette.fill, stroke: backCardStroke(palette) },
   );
   return [back, ...shapes, ...mark];
@@ -729,20 +782,8 @@ function backCardStroke(palette: AccentPalette): Stroke {
  * of them look like clip art.
  */
 function service(node: DraftNode, ctx: DescribeContext): Shape[] {
-  switch (node.serviceKind) {
-    case 'api':
-      return serviceApi(node, ctx);
-    case 'worker':
-      return serviceWorker(node, ctx);
-    case 'external':
-      return serviceExternal(node, ctx);
-    case 'scheduler':
-      return serviceScheduler(node, ctx);
-    case 'gateway':
-      return serviceGateway(node, ctx);
-    default:
-      return serviceGeneric(node, ctx);
-  }
+  if (isGlyphServiceKind(node.serviceKind)) return serviceGlyph(node, ctx);
+  return node.serviceKind === 'api' ? serviceApi(node, ctx) : serviceGeneric(node, ctx);
 }
 
 /** Generic: the family's neutral baseline — a rounded card with a coloured
@@ -756,10 +797,10 @@ function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
     outlineShape(
       node.id,
       ctx,
-      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
+      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, 8) },
       { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
     ),
-    serviceCap({ x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 }, palette),
+    serviceCap({ x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, 8) }, palette),
     // Window-chrome dots, top-right: the family's "this is a running thing" cue. Generic gets the
     // full three; Worker gets two, so the two kinds stay distinguishable by the mark as well as
     // by the silhouette.
@@ -782,10 +823,11 @@ function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
   const h = node.height - 1.5;
   const x = 0.75;
   const y = 0.75;
-  const r = 8;
   const notchH = h * 0.34;
   const notchDepth = Math.min(8, w * 0.1);
   const notchTop = y + (h - notchH) / 2;
+  // Never so round that the corner reaches the notch cut into the left edge.
+  const r = Math.max(0, Math.min(corner(ctx, 8), w / 2, (h - notchH) / 2 - 3));
   const notchBottom = notchTop + notchH;
   const nr = 3;
 
@@ -819,160 +861,234 @@ function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
   ];
 }
 
-/**
- * Worker: two stacked cards — a plain back layer peeking out bottom-right,
- * a front layer (with the usual cap) drawn on top. Reads as "a layered
- * process," distinct from Cache's internal slabs (those sit inside one box;
- * these two layers are the whole node) and deliberately silent about
- * *which* async work it does — nothing here implies queue-only consumption.
- */
-function serviceWorker(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const capHeight = SERVICE_CAP;
-  const offset = 6;
-  const stroke: Stroke = { color: palette.line, width: 1.5 };
-  const back = { x: 0.75 + offset, y: 0.75 + offset, w: node.width - 1.5 - offset, h: node.height - 1.5 - offset, r: 8 };
-  const front = { x: 0.75, y: 0.75, w: node.width - 1.5 - offset, h: node.height - 1.5 - offset, r: 8 };
-  const label = centredLabel(node, ctx, {
-    top: capHeight,
-    bottom: Math.max(offset, tagRow(offset + 5)),
-    color: palette.text,
-    right: offset,
-  });
-  return [
-    outlineShape(`${node.id}:back`, ctx, back, { fill: palette.fill, stroke: backCardStroke(palette) }),
-    outlineShape(node.id, ctx, front, { fill: palette.fill, stroke, shadow: true }),
-    serviceCap(front, palette),
-    // Two dots rather than Generic's three, so the mark itself distinguishes the two kinds. Kept
-    // in the top-right corner: the bottom-right is where this kind's own `WORKER` caption sits,
-    // and a dot cluster there would land on top of it.
-    ...dotsGlyph(front.x + front.w - MARK_INSET, front.y + capHeight + 9, 2, palette.chip, label),
-    ...label,
-    // Measured from the front card's corner, not the node's: the back card fills the node's
-    // bottom-right, and a caption placed there sat on the front card's border.
-    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.worker!, ctx.theme.textMuted, { right: offset + 7, bottom: offset + 5 }),
-  ];
-}
+/* ------------------------------------------------------- service glyphs -- */
 
 /**
- * External: a dashed, detached outer frame around an inset inner card —
- * double outline, a visible gap, and an interrupted boundary all from one
- * small change (`Stroke.dash` on a second `outlineShape` call), so a glance
- * distinguishes "ours" from "outside our ownership" without reading the
- * caption.
+ * Load Balancer and Proxy are drawn as what they do, not as a card with a word in the corner: a
+ * compact glyph with the name and kind underneath, the arrangement the Data Store and Queue
+ * families already use. A card says "a thing that runs", which is true of both and tells a reader
+ * nothing; the two are in a diagram for the path traffic takes through them, so that path is the
+ * picture.
+ *
+ * Each glyph is the mechanism, drawn to be checked against it. A load balancer has one address in
+ * front and several identical instances behind, and each request goes to exactly one of them: one
+ * ring, three equal branches, three equal boxes. A proxy ends the connection it receives and opens
+ * its own to the far side: an arrow in, a body, an arrow out, and nothing drawn straight through.
  */
-function serviceExternal(node: DraftNode, ctx: DescribeContext): Shape[] {
+function serviceGlyph(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const capHeight = SERVICE_CAP;
-  const inset = 6;
-  const outer = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
-  const inner = {
-    x: 0.75 + inset,
-    y: 0.75 + inset,
-    w: node.width - 1.5 - inset * 2,
-    h: node.height - 1.5 - inset * 2,
-    r: 6,
+  const scale = dataStoreScale(node);
+  const top = dataStoreGlyphTop(node);
+  const kind = (node.serviceKind ?? 'load-balancer') as ServiceKind;
+  const box = { x: node.width / 2 - GLYPH_SERVICE_WIDTH / 2, y: DS_GLYPH_TOP, w: GLYPH_SERVICE_WIDTH, h: DS_GLYPH_HEIGHT };
+  // Bodies are drawn by hand at Draft and Sketch like every other outline; the marks on them stay crisp.
+  const hand: Hand = {
+    rect: (key, rect) => outlineShape(`${node.id}:${key}`, ctx, rect, { fill: palette.fill, stroke: { color: palette.line, width: 1.5 } }),
+    path: (key, d) => ({ t: 'path', d: roughOutline(d, `${node.id}:${key}`, ctx), fill: palette.fill, stroke: { color: palette.line, width: 1.5 } }),
   };
+  const glyph =
+    kind === 'proxy'
+      ? proxyGlyph(box, palette, hand)
+      : kind === 'gateway'
+        ? gatewayGlyph(box, palette, hand)
+        : kind === 'worker'
+          ? workerGlyph(box, palette, hand)
+          : kind === 'scheduler'
+            ? schedulerGlyph(box, palette, hand)
+            : kind === 'external'
+              ? externalGlyph(box, palette, hand)
+              : loadBalancerGlyph(box, palette, hand);
+  const shapes = [
+    ...scaledGlyph(glyph, scale, node.width / 2, top - DS_GLYPH_TOP * scale),
+    ...glyphCaption(node, ctx, palette, SERVICE_KIND_LABELS[kind]!, scale, top),
+  ];
+  const count = node.replicas ?? 1;
+  if (count < 2) return shapes;
+  // Several of it: the ×N a replicated card carries, set beside the foot of the glyph.
+  const layout = layoutText(`×${count}`, {
+    font: FONTS.variantTag,
+    maxWidth: 40,
+    lineHeight: FONTS.variantTag.size * LINE_HEIGHTS.label,
+    maxLines: 1,
+    measurer: ctx.measurer,
+  });
+  const x = node.width / 2 + (GLYPH_SERVICE_WIDTH / 2) * scale + 7;
+  const y = top + DS_GLYPH_HEIGHT * scale - layout.height;
+  return [...shapes, { t: 'text', x, y, layout, font: FONTS.variantTag, fill: ctx.theme.textMuted, align: 'start' }];
+}
+
+type GlyphBox = { x: number; y: number; w: number; h: number };
+/** A glyph's filled, outlined bodies, drawn at the canvas's current roughness. */
+interface Hand {
+  rect: (key: string, rect: { x: number; y: number; w: number; h: number; r: number }) => Shape;
+  path: (key: string, d: string) => Shape;
+}
+
+/** The Data Store glyph box's own width (`dataStoreGeometry.ts`), which connectors already aim for. */
+const GLYPH_SERVICE_WIDTH = 54;
+
+/** A small open arrowhead whose point is at (`x`, `y`), facing right. */
+function arrowhead(x: number, y: number): string {
+  return `M${x - 4},${y - 3.2} L${x},${y} L${x - 4},${y + 3.2}`;
+}
+
+/**
+ * One address in, three identical instances out. The branches leave the ring together and arrive
+ * level, each with its own arrowhead, so it reads as "one of these", evenly, and not as a pipeline.
+ */
+function loadBalancerGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const mid = y + h / 2;
+  const ring = 5.5;
+  const cx = x + ring + 0.75;
+  const instance = { w: 11, h: 9 };
+  const left = x + w - instance.w - 0.75;
+  const tip = left - 2.5;
+  const rows = [y + instance.h / 2 + 0.75, mid, y + h - instance.h / 2 - 0.75];
+  const from = cx + ring;
+  const branch = (cy: number) =>
+    cy === mid ? `M${from},${mid} L${tip},${mid}` : `M${from},${mid} C${from + 11},${mid} ${tip - 16},${cy} ${tip},${cy}`;
+  const line: Stroke = { color: palette.chip, width: 1.4, linecap: 'round' };
   return [
-    outlineShape(`${node.id}:frame`, ctx, outer, {
-      fill: 'none',
-      // A hair under the back-card weight would break up; at 1 the dashes still hold together.
-      stroke: { ...backCardStroke(palette), dash: [4, 3] },
-    }),
-    outlineShape(node.id, ctx, inner, { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true }),
-    serviceCap(inner, palette),
-    ...centredLabel(node, ctx, {
-      top: inset + capHeight,
-      bottom: Math.max(inset, tagRow(inset + 5)),
-      color: palette.text,
-      left: inset,
-      right: inset,
-    }),
-    // Inside the inner card, like every other kind's caption: at the node's own corner it ran over
-    // the inner card's border into the gap before the dashed frame.
-    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.external!, ctx.theme.textMuted, { right: inset + 7, bottom: inset + 5 }),
+    { t: 'path', d: rows.map(branch).join(' '), fill: 'none', stroke: line },
+    { t: 'path', d: rows.map((cy) => arrowhead(tip, cy)).join(' '), fill: 'none', stroke: line },
+    { t: 'ellipse', cx, cy: mid, rx: ring, ry: ring, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
+    ...rows.map((cy, i) => hand.rect(`instance-${i}`, { x: left, y: cy - instance.h / 2, w: instance.w, h: instance.h, r: 2.5 })),
+  ];
+}
+
+/** A closed polygon with its corners rounded off, as one path: every glyph body's outline. */
+function roundedPolygon(points: Array<[number, number]>, radius: number): string {
+  const parts: string[] = [];
+  const count = points.length;
+  for (let i = 0; i < count; i += 1) {
+    const [px, py] = points[(i + count - 1) % count]!;
+    const [x, y] = points[i]!;
+    const [nx, ny] = points[(i + 1) % count]!;
+    const inLength = Math.hypot(x - px, y - py);
+    const outLength = Math.hypot(nx - x, ny - y);
+    const r = Math.min(radius, inLength / 2, outLength / 2);
+    const fromX = x + ((px - x) / inLength) * r;
+    const fromY = y + ((py - y) / inLength) * r;
+    const toX = x + ((nx - x) / outLength) * r;
+    const toY = y + ((ny - y) / outLength) * r;
+    parts.push(`${i === 0 ? 'M' : 'L'}${fromX},${fromY} Q${x},${y} ${toX},${toY}`);
+  }
+  return `${parts.join(' ')} Z`;
+}
+
+/**
+ * Proxy: two plates with a gap between them, a line arriving at one and a line leaving the other.
+ * The connection a proxy receives ends at it, and the one it makes onward is its own; nothing is
+ * drawn across the gap because nothing crosses it. The same picture forward or reverse.
+ */
+function proxyGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const mid = y + h / 2;
+  const plate = { w: 8, h: h - 1.5 };
+  const gap = 5;
+  const left = x + w / 2 - gap / 2 - plate.w;
+  const right = x + w / 2 + gap / 2;
+  const line: Stroke = { color: palette.chip, width: 1.4, linecap: 'round' };
+  return [
+    { t: 'path', d: `M${x + 3},${mid} L${left - 2},${mid} M${right + plate.w + 2},${mid} L${x + w - 3},${mid}`, fill: 'none', stroke: line },
+    { t: 'ellipse', cx: x + 3, cy: mid, rx: 2.4, ry: 2.4, fill: palette.chip },
+    { t: 'ellipse', cx: x + w - 3, cy: mid, rx: 2.4, ry: 2.4, fill: palette.chip },
+    hand.rect('plate-in', { x: left, y: y + 0.75, w: plate.w, h: plate.h, r: 3.5 }),
+    hand.rect('plate-out', { x: right, y: y + 0.75, w: plate.w, h: plate.h, r: 3.5 }),
   ];
 }
 
 /**
- * Scheduler: a calendar glyph on the left, and — instead of Generic's one continuous cap — a short
- * cluster of three ticks hanging off the top-right corner, like the binding of a torn-off page.
- * Deliberately clustered and short rather than evenly spaced across the full width: five
- * evenly-spaced dashes spanning the whole top edge reads as a perforation (spiral-notebook
- * binding, tear-off ticket). A few marks confined to one corner reads as a rhythm accent instead,
- * and sitting opposite the glyph keeps the two details from crowding each other.
+ * Gateway: one way in, a gate, and three different things behind it. Everything arrives on the one
+ * arrow; the bar is the gateway; the square, the circle and the triangle are deliberately not alike,
+ * because a gateway chooses a destination by what was asked for. A Load Balancer's three are
+ * identical, and that difference is the whole distinction between the two.
  */
-function serviceScheduler(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const capHeight = SERVICE_CAP;
-  const outer = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
-  const tickCount = 3;
-  const tickW = 3;
-  const gap = 4;
-  const tickH = 7;
-  // Right-aligned: the cluster ends a fixed inset from the card's right edge and grows leftward,
-  // so it stays pinned to that corner at every node width.
-  const endX = outer.x + outer.w - MARK_INSET;
-  const ticks: Shape[] = Array.from({ length: tickCount }, (_, i) => ({
-    t: 'rect',
-    x: endX - tickW - i * (tickW + gap),
-    y: outer.y,
-    w: tickW,
-    h: tickH,
-    r: 1.5,
-    fill: palette.chip,
-  }));
+function gatewayGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const mid = y + h / 2;
+  const line: Stroke = { color: palette.chip, width: 1.4, linecap: 'round' };
+  const bar = { x: x + 17, w: 8 };
+  const rows = [y + 6.25, mid, y + h - 6.25];
+  const stemEnd = x + w - 15.5;
+  const size = 11;
+  const dx = x + w - size - 0.75;
+  const inTip = bar.x - 2.5;
   return [
-    outlineShape(node.id, ctx, outer, { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true }),
-    // Clipped to the card so the ticks stop at its own top edge rather than overhanging it.
-    { t: 'group', clip: outer, children: ticks },
-    ...centredLabel(node, ctx, { top: capHeight, bottom: tagRow(), color: palette.text }),
-    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.scheduler!, ctx.theme.textMuted),
+    { t: 'path', d: `M${x + 1},${mid} L${inTip},${mid} ${arrowhead(inTip, mid)}`, fill: 'none', stroke: line },
+    { t: 'path', d: rows.map((cy) => `M${bar.x + bar.w},${cy} H${stemEnd}`).join(' '), fill: 'none', stroke: line },
+    hand.rect('gate', { x: bar.x, y: y + 0.75, w: bar.w, h: h - 1.5, r: 2.5 }),
+    hand.rect('to-a', { x: dx, y: rows[0]! - size / 2, w: size, h: size, r: 3 }),
+    { t: 'ellipse', cx: dx + size / 2, cy: rows[1]!, rx: size / 2, ry: size / 2, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
+    hand.path('to-c', roundedPolygon([[dx + size / 2, rows[2]! - size / 2], [dx + size + 0.5, rows[2]! + size / 2], [dx - 0.5, rows[2]! + size / 2]], 1.6)),
   ];
 }
 
 /**
- * Gateway: Generic's card with its whole left edge folded into one deep chevron pointing inward —
- * a banner, not a nicked rectangle. An earlier revision cut a small arrowhead at mid-height only;
- * at a glance across a full diagram that read as a blemish on a plain card rather than a direction.
- * Taken to full height it becomes the silhouette: everything arrives on this edge and is routed
- * onward. Its cap is dropped for the same reason — a chevron with a straight band pinned across
- * its top fights itself — so the top edge stays clean and the glyph carries the accent instead.
+ * Worker: a trace. The short span is the request that asked for the work, and it has ended; the long
+ * one underneath is the job it started, still running after the caller was answered. That gap is
+ * what "in the background" means, and it is the picture a tracing tool draws of exactly this.
  */
-function serviceGateway(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const r = 8;
-  // Deep enough to read as a chevron at a glance, capped so a narrow node doesn't lose its body.
-  const chevron = Math.min(22, w * 0.18);
-  const midY = y + h / 2;
-
-  const d = [
-    `M${x + r},${y}`,
-    `L${x + w - r},${y}`,
-    `Q${x + w},${y} ${x + w},${y + r}`,
-    `L${x + w},${y + h - r}`,
-    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
-    `L${x + r},${y + h}`,
-    `Q${x},${y + h} ${x},${y + h - r}`,
-    // The notch is cut *into* the left edge: both outer corners stay at the card's own left edge
-    // and the apex pushes inward, to the right. (Putting the apex on the outside instead turns the
-    // card into a pennant pointing away from the traffic it receives — which is backwards.)
-    `L${x + chevron},${midY + 1.5}`,
-    `Q${x + chevron + 1.5},${midY} ${x + chevron},${midY - 1.5}`,
-    `L${x},${y + r}`,
-    `Q${x},${y} ${x + r},${y}`,
-    'Z',
-  ].join(' ');
-
+function workerGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const panel = { x: x + 1, y: y + 3, w: w - 2, h: h - 6 };
+  const top = panel.y + 11;
+  const bottom = panel.y + panel.h - 11;
+  const handOff = panel.x + 19;
   return [
-    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
-    // The label clears the chevron cut into the left edge.
-    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: palette.text, left: chevron }),
-    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.gateway!, ctx.theme.textMuted),
+    hand.rect('panel', { x: panel.x, y: panel.y, w: panel.w, h: panel.h, r: 6 }),
+    { t: 'path', d: `M${panel.x + 8},${top} H${handOff}`, fill: 'none', stroke: { color: palette.line, width: 4, linecap: 'round' } },
+    { t: 'path', d: `M${handOff},${top} V${bottom}`, fill: 'none', stroke: { color: palette.line, width: 1.2 } },
+    { t: 'path', d: `M${handOff},${bottom} H${panel.x + panel.w - 8}`, fill: 'none', stroke: { color: palette.chip, width: 4, linecap: 'round' } },
+  ];
+}
+
+/**
+ * Scheduler: a page of times with the ones a job runs at filled in. A schedule is particular slots,
+ * not the passing of time, so this is a calendar's grid rather than a clock's face.
+ */
+function schedulerGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const pw = 44;
+  const px = x + w / 2 - pw / 2;
+  const py = y + 0.75;
+  const ph = h - 1.5;
+  const dots: Shape[] = [];
+  for (let row = 0; row < 2; row += 1) {
+    for (let col = 0; col < 4; col += 1) {
+      const on = (row === 0 && col === 1) || (row === 1 && col === 3);
+      dots.push({
+        t: 'ellipse',
+        cx: px + 8.5 + col * 9,
+        cy: py + 19.5 + row * 10.5,
+        rx: 2.6,
+        ry: 2.6,
+        ...(on ? { fill: palette.chip } : { fill: 'none', stroke: { color: palette.line, width: 1.2 } }),
+      });
+    }
+  }
+  return [
+    hand.rect('page', { x: px, y: py, w: pw, h: ph, r: 6 }),
+    { t: 'path', d: `M${px},${py + 10} H${px + pw}`, fill: 'none', stroke: { color: palette.line, width: 1.5 } },
+    { t: 'path', d: `M${px + 11},${py - 0.5} v5 M${px + pw - 11},${py - 0.5} v5`, fill: 'none', stroke: { color: palette.chip, width: 1.4, linecap: 'round' } },
+    ...dots,
+  ];
+}
+
+/**
+ * External: a system inside a boundary that is not yours. The dashed frame is the one this kind has
+ * always worn; what was a card inside it is now just the system.
+ */
+function externalGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const frame = { w: h - 1.5, h: h - 1.5 };
+  const fx = x + w / 2 - frame.w / 2;
+  const inner = 18;
+  return [
+    { t: 'rect', x: fx, y: y + 0.75, w: frame.w, h: frame.h, r: 8, fill: 'none', stroke: { color: palette.line, width: 1.25, dash: [5, 3.5] } },
+    hand.rect('system', { x: x + w / 2 - inner / 2, y: y + h / 2 - inner / 2, w: inner, h: inner, r: 4.5 }),
+    { t: 'path', d: `M${x + w / 2 - 4},${y + h / 2 - 2.5} h8 M${x + w / 2 - 4},${y + h / 2 + 2.5} h5`, fill: 'none', stroke: { color: palette.chip, width: 1.4, linecap: 'round' } },
   ];
 }
 
@@ -981,10 +1097,6 @@ const COMPONENT_KIND_LABELS: Partial<Record<ComponentKind, string>> = {
   adapter: 'ADAPTER',
   port: 'PORT',
 };
-/** Same dash array a Boundary's outline and a generated DLQ already use — "dashed = not a concrete
- *  thing" is an established meaning in this app, and a Port is exactly that: a contract. */
-const PORT_DASH = [6, 5];
-
 /**
  * Component's own stroke — a shade thinner than every other primitive's shared 1.5px
  * (`surfaceStroke`). One of the two deliberate "weighs less than Service" cues that aren't just an
@@ -996,61 +1108,23 @@ function componentStroke(ctx: DescribeContext, node: DraftNode): Stroke {
 }
 
 /**
- * Component earns a distinct silhouette per kind now, the same discipline Service's own kinds
- * follow — but restrained on purpose: where a Service kind sometimes changes the *whole* body
- * (Worker's stacked cards, External's double outline), every Component kind keeps exactly the same
- * plain rounded body and departs from it with only a small mark or two (Module: one, on the top
- * edge; Adapter: two, mirrored left/right — see its own comment for why), because a Component is
- * still meant to read as *contained within* something else, never a peer of the Services around
- * it. `generic` gets no mark at all (and no corner caption — the same "unspecified means unmarked"
- * convention Service's own default kind follows).
+ * Generic is the family's card: a part of something, and nothing more is known about it. The other
+ * three kinds are each a particular thing, and are drawn as it (`componentGlyph`).
+ *
+ * They used to share Generic's box and depart from it by one small mark on its edge (a tab on a
+ * Module, a notch in each side of an Adapter, a dashed outline for a Port). At the size a component
+ * is drawn the marks were a few pixels each, and the three were told apart by the word in the
+ * corner.
  */
 function component(node: DraftNode, ctx: DescribeContext): Shape[] {
-  switch (node.componentKind) {
-    case 'module':
-      return componentModule(node, ctx);
-    case 'adapter':
-      return componentAdapter(node, ctx);
-    case 'port':
-      return componentPort(node, ctx);
-    default:
-      return componentGeneric(node, ctx);
-  }
-}
-
-/**
- * Port: Generic's body drawn as a dashed outline — the one Component kind that isn't a thing
- * doing work but the shape of an agreement, so it borrows the "not concrete" dash a Boundary and a
- * DLQ already speak rather than inventing a glyph. Its `PORT` tag sits centred *under* the name (a
- * queue's name-over-kind stacking) instead of in the corner every other kind uses: a port is meant
- * to be small, and at the width a one-word port name needs, a corner tag would sit on top of the
- * name itself. The name is held above the tag by exactly the tag's own line plus its inset, so the
- * two never touch at any height a port is likely to be drawn at.
- */
-function componentPort(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const portRect = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
-  return [
-    outlineShape(node.id, ctx, portRect, {
-      fill: palette.fill,
-      stroke: { ...componentStroke(ctx, node), dash: PORT_DASH },
-      shadow: true,
-    }),
-    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '' }),
-    // The shared bottom-right tag, like every other captioned kind. This used to centre its tag
-    // under the name instead, on the reasoning that a Port is an agreement rather than a component
-    // and could afford its own arrangement; sitting beside an Adapter or a Module it just looked
-    // like the one shape whose caption had slipped out of place.
-    ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.port!, ctx.theme.textMuted),
-  ];
+  return isGlyphComponentKind(node.componentKind) ? componentGlyph(node, ctx) : componentGeneric(node, ctx);
 }
 
 /** Generic: the family's neutral baseline — a plain rounded box, no cap, no notch, `neutral`
- *  accent, Component's own thinner stroke. Every other kind is a deliberate, restrained departure
- *  from this one. */
+ *  accent, Component's own thinner stroke. */
 function componentGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const rect = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
+  const rect = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, 8) };
   const label = centredLabel(node, ctx, { top: 0, bottom: 0, color: '' });
   return [
     outlineShape(node.id, ctx, rect, { fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true }),
@@ -1059,122 +1133,94 @@ function componentGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   ];
 }
 
+/* ----------------------------------------------------- component glyphs -- */
+
 /**
- * Module: Generic's body with one small tab stepping up from the top edge, near the left corner —
- * a "labelled unit in a set" cue, the same idea as a file/sheet tab. Built as one continuous
- * outline (the technique `serviceApi`/`serviceGateway` already use for their own notches) rather
- * than a second stacked shape (`serviceWorker`'s technique, which reads as *layers*, not a *tab*).
- * Deliberately short and one-sided — a tab spanning the full width would just be Service's own cap
- * band, the one silhouette Component exists specifically not to have.
+ * Module, Port and Adapter in the Service glyphs' arrangement: a compact glyph, the name and kind
+ * underneath. The three are drawn in one notation so they read against each other. A Port offers a
+ * ball on a stem; an Adapter has the cup that a ball sits in on one side and something of another
+ * shape on the other; a Module is the block all of that plugs into.
  */
-function componentModule(node: DraftNode, ctx: DescribeContext): Shape[] {
+function componentGlyph(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const r = 8;
-  const tabX = x + 12;
-  const tabW = Math.min(30, w * 0.32);
-  const tabH = 7;
-  const tr = 2;
-
-  const d = [
-    `M${x + r},${y}`,
-    `L${tabX},${y}`,
-    `L${tabX},${y - tabH + tr}`,
-    `Q${tabX},${y - tabH} ${tabX + tr},${y - tabH}`,
-    `L${tabX + tabW - tr},${y - tabH}`,
-    `Q${tabX + tabW},${y - tabH} ${tabX + tabW},${y - tabH + tr}`,
-    `L${tabX + tabW},${y}`,
-    `L${x + w - r},${y}`,
-    `Q${x + w},${y} ${x + w},${y + r}`,
-    `L${x + w},${y + h - r}`,
-    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
-    `L${x + r},${y + h}`,
-    `Q${x},${y + h} ${x},${y + h - r}`,
-    `L${x},${y + r}`,
-    `Q${x},${y} ${x + r},${y}`,
-    'Z',
-  ].join(' ');
-
+  const scale = dataStoreScale(node);
+  const top = dataStoreGlyphTop(node);
+  const kind = node.componentKind as ComponentKind;
+  const box = { x: node.width / 2 - GLYPH_SERVICE_WIDTH / 2, y: DS_GLYPH_TOP, w: GLYPH_SERVICE_WIDTH, h: DS_GLYPH_HEIGHT };
+  const hand: Hand = {
+    rect: (key, rect) => outlineShape(`${node.id}:${key}`, ctx, rect, { fill: palette.fill, stroke: { color: palette.line, width: 1.5 } }),
+    path: (key, d) => ({ t: 'path', d: roughOutline(d, `${node.id}:${key}`, ctx), fill: palette.fill, stroke: { color: palette.line, width: 1.5 } }),
+  };
+  const glyph = kind === 'port' ? portGlyph(box, palette, hand) : kind === 'adapter' ? adapterGlyph(box, palette, hand) : moduleGlyph(box, palette, hand);
   return [
-    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
-    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '' }),
-    ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.module!, ctx.theme.textMuted),
+    ...scaledGlyph(glyph, scale, node.width / 2, top - DS_GLYPH_TOP * scale),
+    ...glyphCaption(node, ctx, palette, COMPONENT_KIND_LABELS[kind]!, scale, top),
   ];
 }
 
 /**
- * Adapter: Generic's body with a small rectangular notch cut into *both* vertical edges — the same
- * cut-rectangle language `serviceApi`'s own notch already speaks, just mirrored onto each side
- * rather than one.
- *
- * An earlier revision cut the notch into the right edge only, on the reasoning that "Draft Canvas
- * reads left to right, so the side facing onward is the one that bridges toward infrastructure."
- * That baked in a global assumption this starter's own composition disproves: `Persistence
- * Adapter`/`Integration Adapter` face infrastructure on their right, but an inbound adapter (a
- * `REST Adapter` fronting the same core from the left, say) faces infrastructure on its *left* —
- * there is no side of an Adapter that is always the outward one. Fixing that properly means
- * orienting the notch from the node's actual connections, but `describeNode` takes only a node and
- * a theme — deliberately pure, so the same function produces byte-identical output for the canvas
- * and the static exporter — and has no view of the document's edges to orient from. Threading edge
- * direction through it would mean recomputing a node's silhouette every time an edge nearby is
- * dragged, reconnected, undone, or redone, and risks the exact "shape flip-flops while the user is
- * still drawing" failure a directional rule invites. So instead the silhouette itself stays valid
- * regardless of which way the Adapter faces: a notch on *each* vertical edge, bilaterally
- * symmetric, reads as "interfaces on both sides" — true of every Adapter, in either orientation,
- * with no context required and nothing to get wrong while dragging.
+ * Module: a block with two lugs through its left edge, the mark UML has used for a replaceable unit
+ * of a system since before most of what is drawn with it. Not a folder with a tab, which this was
+ * closer to and which is a File System here.
  */
-function componentAdapter(node: DraftNode, ctx: DescribeContext): Shape[] {
-  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const r = 8;
-  const notchH = h * 0.34;
-  const notchDepth = Math.min(8, w * 0.1);
-  const notchTop = y + (h - notchH) / 2;
-  const notchBottom = notchTop + notchH;
-  const nr = 3;
-
-  const d = [
-    `M${x + r},${y}`,
-    `L${x + w - r},${y}`,
-    `Q${x + w},${y} ${x + w},${y + r}`,
-    `L${x + w},${notchTop}`,
-    `L${x + w - notchDepth + nr},${notchTop}`,
-    `Q${x + w - notchDepth},${notchTop} ${x + w - notchDepth},${notchTop + nr}`,
-    `L${x + w - notchDepth},${notchBottom - nr}`,
-    `Q${x + w - notchDepth},${notchBottom} ${x + w - notchDepth + nr},${notchBottom}`,
-    `L${x + w},${notchBottom}`,
-    `L${x + w},${y + h - r}`,
-    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
-    `L${x + r},${y + h}`,
-    `Q${x},${y + h} ${x},${y + h - r}`,
-    `L${x},${notchBottom}`,
-    `L${x + notchDepth - nr},${notchBottom}`,
-    `Q${x + notchDepth},${notchBottom} ${x + notchDepth},${notchBottom - nr}`,
-    `L${x + notchDepth},${notchTop + nr}`,
-    `Q${x + notchDepth},${notchTop} ${x + notchDepth - nr},${notchTop}`,
-    `L${x},${notchTop}`,
-    `L${x},${y + r}`,
-    `Q${x},${y} ${x + r},${y}`,
-    'Z',
-  ].join(' ');
-
-  // The default corner inset (7px from the right edge) sits inside the right notch's own x-range
-  // whenever a notch is this deep — the caption and the silhouette would visually crowd the same
-  // corner. Pushed out exactly as far as the notch itself cuts in, plus a small fixed gap, so the
-  // two never compete regardless of node width.
-  const captionInset = { right: notchDepth + 5 };
-
+function moduleGlyph(box: GlyphBox, _palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const lug = { w: 14, h: 8 };
+  const left = x + 4;
+  const body = { x: left + lug.w / 2, w: w - 8 - lug.w / 2 };
   return [
-    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true },
-    // The label clears the sockets cut into both vertical edges.
-    ...centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: '', left: notchDepth, right: notchDepth }),
-    ...variantCaption(node, ctx, COMPONENT_KIND_LABELS.adapter!, ctx.theme.textMuted, captionInset),
+    hand.rect('body', { x: body.x, y: y + 0.75, w: body.w, h: h - 1.5, r: 6 }),
+    hand.rect('lug-a', { x: left, y: y + 9, w: lug.w, h: lug.h, r: 2.5 }),
+    hand.rect('lug-b', { x: left, y: y + h - 9 - lug.h, w: lug.w, h: lug.h, r: 2.5 }),
+  ];
+}
+
+/** The radius of a Port's ball, and of the cup in an Adapter that holds one. */
+const PORT_BALL = 7.5;
+
+/**
+ * Port: an interface offered at the edge of something, as a ball on a stem. The plate is the edge;
+ * the ball is what a caller sees, and it is empty because a port is an agreement with nothing in it
+ * until something implements it.
+ */
+function portGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const mid = y + h / 2;
+  const plate = { x: x + 7, w: 9 };
+  const cx = x + w - 7 - PORT_BALL;
+  return [
+    { t: 'path', d: `M${plate.x + plate.w},${mid} H${cx - PORT_BALL}`, fill: 'none', stroke: { color: palette.chip, width: 1.4, linecap: 'round' } },
+    hand.rect('edge', { x: plate.x, y: y + 0.75, w: plate.w, h: h - 1.5, r: 3.5 }),
+    { t: 'ellipse', cx, cy: mid, rx: PORT_BALL, ry: PORT_BALL, fill: palette.fill, stroke: { color: palette.line, width: 1.5 } },
+  ];
+}
+
+/**
+ * Adapter: a cup on one side, a square on the other and a body between. The cup takes a Port's ball;
+ * the square is whatever the adapter speaks to on the far side (a database driver, an HTTP client),
+ * and it is a different shape because turning one into the other is the whole job.
+ *
+ * Which side faces outward is not claimed. An adapter in front of the core faces one way and an
+ * adapter behind it the other, and this function sees one shape and none of its connectors.
+ */
+function adapterGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  const mid = y + h / 2;
+  const body = { x: x + w / 2 - 7, w: 14 };
+  const cup = x + 1.5 + PORT_BALL;
+  const plug = 12;
+  const plugX = x + w - plug - 0.75;
+  const line: Stroke = { color: palette.chip, width: 1.4, linecap: 'round' };
+  return [
+    { t: 'path', d: `M${cup},${mid} H${body.x} M${body.x + body.w},${mid} H${plugX}`, fill: 'none', stroke: line },
+    {
+      t: 'path',
+      d: `M${cup - PORT_BALL + 2.5},${mid - PORT_BALL - 1} A${PORT_BALL + 1},${PORT_BALL + 1} 0 0 1 ${cup - PORT_BALL + 2.5},${mid + PORT_BALL + 1}`,
+      fill: 'none',
+      stroke: { color: palette.line, width: 1.5, linecap: 'round' },
+    },
+    hand.rect('body', { x: body.x, y: y + 5, w: body.w, h: h - 10, r: 4 }),
+    hand.rect('plug', { x: plugX, y: mid - plug / 2, w: plug, h: plug, r: 3 }),
   ];
 }
 
@@ -1321,7 +1367,18 @@ const DS_CAPTION_GAP = 5;
 /** The caption under a Data Store's glyph. `generic` has no kind label of its own — it's the
  *  family's baseline, so it carries just the name. */
 function dataStoreCaption(node: DraftNode, ctx: DescribeContext, palette: AccentPalette, scale = 1, glyphTop = DS_GLYPH_TOP * scale): Shape[] {
-  const kindLabel = DATABASE_KIND_LABELS[node.databaseKind ?? 'generic'];
+  return glyphCaption(node, ctx, palette, DATABASE_KIND_LABELS[node.databaseKind ?? 'generic'], scale, glyphTop);
+}
+
+/** The caption under a compact glyph: the name, with the kind under it when the kind has a word. */
+function glyphCaption(
+  node: DraftNode,
+  ctx: DescribeContext,
+  palette: AccentPalette,
+  kindLabel: string | undefined,
+  scale: number,
+  glyphTop: number,
+): Shape[] {
   const top = glyphTop + DS_GLYPH_HEIGHT * scale + DS_CAPTION_GAP;
   if (kindLabel) {
     return pinnedCaption(node, ctx, { top, kindLabel, nameColor: palette.text });
@@ -1345,6 +1402,110 @@ function dataStoreCaption(node: DraftNode, ctx: DescribeContext, palette: Accent
   ];
 }
 
+/* -------------------------------------------------------------- artifact -- */
+
+/**
+ * An Artifact is drawn the way a Data Store is: a compact glyph, its name and kind underneath. The
+ * glyph is always the same sheet with its corner turned, because all four kinds are a document of
+ * some sort; what is drawn on the sheet says which. Nothing here is a card with a cap or a
+ * cylinder, so a config beside the service that reads it can never be mistaken for a second
+ * service or a second store.
+ */
+function artifact(node: DraftNode, ctx: DescribeContext): Shape[] {
+  const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
+  const scale = dataStoreScale(node);
+  const top = dataStoreGlyphTop(node);
+  return [
+    ...scaledGlyph(artifactGlyph(node, ctx, palette), scale, node.width / 2, top - DS_GLYPH_TOP * scale),
+    ...glyphCaption(node, ctx, palette, ARTIFACT_KIND_LABELS[node.artifactKind ?? 'file'], scale, top),
+  ];
+}
+
+/** The sheet, and the kind's mark on it, at its normal size. */
+function artifactGlyph(node: DraftNode, ctx: DescribeContext, palette: AccentPalette): Shape[] {
+  const w = Math.min(ARTIFACT_GLYPH_WIDTH, node.width - PADDING * 2);
+  const x = node.width / 2 - w / 2;
+  const y = DS_GLYPH_TOP;
+  const h = DS_GLYPH_HEIGHT;
+  const r = 4;
+  const fold = 11;
+  const stroke: Stroke = { color: palette.line, width: 1.5 };
+  const mark: Stroke = { color: palette.chip, width: 1.4, linecap: 'round' };
+
+  const sheet = [
+    `M${x + r},${y}`,
+    `L${x + w - fold},${y}`,
+    `L${x + w},${y + fold}`,
+    `L${x + w},${y + h - r}`,
+    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
+    `L${x + r},${y + h}`,
+    `Q${x},${y + h} ${x},${y + h - r}`,
+    `L${x},${y + r}`,
+    `Q${x},${y} ${x + r},${y}`,
+    'Z',
+  ].join(' ');
+  // The turned corner: the two edges of the flap, rounded where they meet.
+  const flap = `M${x + w - fold},${y} L${x + w - fold},${y + fold - 2.5} Q${x + w - fold},${y + fold} ${x + w - fold + 2.5},${y + fold} L${x + w},${y + fold}`;
+
+  return [
+    { t: 'path', d: roughOutline(sheet, node.id, ctx), fill: palette.fill, stroke },
+    { t: 'path', d: flap, fill: 'none', stroke: { color: palette.line, width: 1.2 } },
+    ...artifactMark(node.artifactKind ?? 'file', { x, y, w, h }, palette, mark),
+  ];
+}
+
+/**
+ * What is written on the sheet. A file is ruled lines. A config is two sliders, set differently: a
+ * thing with values someone chose. A secret is a key. A certificate is a line of text over a seal
+ * with its two ribbon tails, the one part of a paper certificate everyone recognises.
+ */
+function artifactMark(
+  kind: ArtifactKind,
+  sheet: { x: number; y: number; w: number; h: number },
+  palette: AccentPalette,
+  mark: Stroke,
+): Shape[] {
+  const { x, y, w, h } = sheet;
+  const left = x + 8;
+  const right = x + w - 8;
+  switch (kind) {
+    case 'config': {
+      const rows: Array<[cy: number, knob: number]> = [
+        [y + 21, left + (right - left) * 0.28],
+        [y + 31.5, left + (right - left) * 0.72],
+      ];
+      return rows.flatMap(([cy, knob]): Shape[] => [
+        { t: 'path', d: `M${left},${cy} H${right}`, fill: 'none', stroke: mark },
+        { t: 'ellipse', cx: knob, cy, rx: 3, ry: 3, fill: palette.fill, stroke: { color: palette.chip, width: 1.4 } },
+      ]);
+    }
+    case 'secret': {
+      const cy = y + 25.5;
+      const ring = 4.6;
+      const cx = left + ring - 0.5;
+      const tip = right + 0.5;
+      return [
+        { t: 'ellipse', cx, cy, rx: ring, ry: ring, fill: 'none', stroke: { color: palette.chip, width: 1.4 } },
+        { t: 'path', d: `M${cx + ring},${cy} H${tip} V${cy + 5.5} M${tip - 5},${cy} V${cy + 4}`, fill: 'none', stroke: mark },
+      ];
+    }
+    case 'certificate': {
+      const cx = right - 3.5;
+      const cy = y + h - 13.5;
+      const seal = 5;
+      return [
+        { t: 'path', d: `M${left},${y + 16} H${right - 9} M${left},${y + 22.5} H${left + 8}`, fill: 'none', stroke: mark },
+        // The tails first, so the seal sits on top of where they are tied.
+        { t: 'path', d: `M${cx - 2.6},${cy + 3.5} L${cx - 4.2},${cy + 10.5} M${cx + 2.6},${cy + 3.5} L${cx + 4.2},${cy + 10.5}`, fill: 'none', stroke: mark },
+        { t: 'ellipse', cx, cy, rx: seal, ry: seal, fill: palette.fill, stroke: { color: palette.chip, width: 1.4 } },
+        { t: 'ellipse', cx, cy, rx: 1.5, ry: 1.5, fill: palette.chip },
+      ];
+    }
+    default:
+      return [{ t: 'path', d: `M${left},${y + 19} H${right} M${left},${y + 25.5} H${right} M${left},${y + 32} H${right - 7}`, fill: 'none', stroke: mark }];
+  }
+}
+
 /**
  * Generic and SQL: a vertical cylinder.
  *
@@ -1361,7 +1522,7 @@ function dataStoreCylinder(node: DraftNode, ctx: DescribeContext): Shape[] {
   const y = DS_GLYPH_TOP;
   const h = DS_GLYPH_HEIGHT;
   const ry = Math.min(8, h * 0.19);
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   const stroke: Stroke = { color: palette.line, width: 1.5 };
 
   const { body, lid } = cylinderPaths(x, y, w, h, ry, node.id, profile.outline, profile.bow);
@@ -1763,7 +1924,7 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // pill's own ends rather than a rounded one, which is what a short queue
   // node (tubeH below the historical 32px cap) would otherwise get.
   const rx = Math.min(tubeH <= 32 ? 14 : tubeH * (14 / 32), w * 0.12, tubeH / 2);
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
 
   // A horizontal cylinder — a pipe messages travel through — built the same
   // way `database()` builds its (vertical) one: elliptical caps joined by
@@ -1964,7 +2125,7 @@ function humanGlyph(
   // A wash this light gives the body presence as a mass without competing with the container's
   // own (unfilled) card — still clearly lighter than a filled architecture shape.
   const bodyFill = 0.12;
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   const outlineAmp = profile.outline;
   const bowAmp = profile.bow;
 
@@ -2134,7 +2295,7 @@ function groupGlyph(
   ctx: DescribeContext,
 ): { shapes: Shape[]; glyphBottom: number } {
   const bottom = GLYPH_BOTTOM;
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   const outlineAmp = profile.outline;
   const bowAmp = profile.bow;
   const bodyFill = 0.12;
@@ -2304,7 +2465,7 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
   const stroke: Stroke = { color: palette.line, width: 1.5 };
   const kind = node.actorKind ?? 'human';
 
-  const card = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 10 };
+  const card = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, 10) };
   const container = outlineShape(node.id, ctx, card, { fill: palette.fill, stroke });
 
   // The family's signature: one short bar straddling the top edge, near the left corner. It is
@@ -2501,7 +2662,7 @@ function note(node: DraftNode, ctx: DescribeContext): Shape[] {
     outlineShape(
       node.id,
       ctx,
-      { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 6 },
+      { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: corner(ctx, 6) },
       // Flat, not the accent gradient the architecture families wear: a note is an annotation
       // sitting on the canvas, and the gradient is part of what says "this is a system element."
       { fill: palette.fill, stroke: { color: palette.line, width: 1 } },
@@ -2509,7 +2670,7 @@ function note(node: DraftNode, ctx: DescribeContext): Shape[] {
     // A colour bar rather than a sticky-note skeuomorph.
     {
       t: 'group',
-      clip: { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 6 },
+      clip: { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: Math.min(corner(ctx, 6), (node.width - 1) / 2, (node.height - 1) / 2) },
       children: [
         { t: 'rect', x: 0.5, y: 0.5, w: NOTE_BAR_WIDTH, h: node.height - 1, fill: palette.chip },
       ],
@@ -2809,9 +2970,9 @@ function freeText(node: DraftNode, ctx: DescribeContext): Shape[] {
   const lines: RichTextShape['lines'] = [];
 
   if (node.textBackground === 'card') {
-    back.push(outlineShape(node.id, ctx, { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 8 }, { fill: palette.fill, stroke: { color: palette.line, width: 1 } }));
+    back.push(outlineShape(node.id, ctx, { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: corner(ctx, 8) }, { fill: palette.fill, stroke: { color: palette.line, width: 1 } }));
   } else if (node.textBackground === 'banner') {
-    back.push(outlineShape(node.id, ctx, { x: 0, y: 0, w: node.width, h: node.height, r: 6 }, { fill: palette.chip }));
+    back.push(outlineShape(node.id, ctx, { x: 0, y: 0, w: node.width, h: node.height, r: corner(ctx, 6) }, { fill: palette.chip }));
   }
 
   for (const box of layout.boxes) {
@@ -2972,12 +3133,6 @@ export function naturalTextHeight(
   return Math.min(TEXT_AUTO_MAX_HEIGHT, Math.ceil(height + pad.y * 2));
 }
 
-/** A boundary is explicitly meant to feel stronger than an ordinary node — "someone drawing a
- *  large boundary around several services... someone just circled this part" — so it boosts its
- *  own bow/outline over the plain per-node profile value, rather than reading identically to the
- *  services it contains. Clean stays 1 (no-op) so this never changes byte-identical output. */
-const BOUNDARY_BOOST: Record<PersonalityPreset, number> = { clean: 1, draft: 1.4, sketch: 1.7 };
-
 /**
  * The boundary header, laid out on one grid so every kind lines up with every other:
  *
@@ -3003,17 +3158,18 @@ const CAP_HEIGHT = 0.71;
 const KAPPA = 0.5523;
 
 /** The outline's rounded top-left corner as a path start, so a tab or band fills it exactly. */
-function topLeftCorner(): string {
-  const k = 1 + BOUNDARY_RADIUS * (1 - KAPPA);
-  return `M1 ${1 + BOUNDARY_RADIUS} C1 ${k} ${k} 1 ${1 + BOUNDARY_RADIUS} 1`;
+function topLeftCorner(radius: number): string {
+  const k = 1 + radius * (1 - KAPPA);
+  return `M1 ${1 + radius} C1 ${k} ${k} 1 ${1 + radius} 1`;
 }
 
 function group(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent);
   const style = BOUNDARY_STYLES[node.boundaryPreset ?? 'boundary'];
-  const profile = PERSONALITY_PROFILES[ctx.preset];
-  const boost = BOUNDARY_BOOST[ctx.preset];
-  const rect = { x: 1, y: 1, w: node.width - 2, h: node.height - 2, r: BOUNDARY_RADIUS };
+  const profile = ctx.style.hand;
+  const boost = profile.boundaryBoost;
+  const radius = boundaryRadius(node, ctx);
+  const rect = { x: 1, y: 1, w: node.width - 2, h: node.height - 2, r: radius };
   const stroke: Stroke = {
     color: boundaryLine(ctx.theme, node.accent),
     width: style.width,
@@ -3101,7 +3257,14 @@ export function boundaryHeaderTextBox(node: DraftNode, ctx: DescribeContext): { 
   return right > left ? { x: left, y: top, width: right - left, height: bottom - top } : undefined;
 }
 
+/** A boundary's corner in its style: its outline and whatever its header cuts from that corner share it. */
+function boundaryRadius(node: DraftNode, ctx: DescribeContext): number {
+  // Never past what a header cut from the corner can hold.
+  return Math.min(corner(ctx, BOUNDARY_RADIUS), BOUNDARY_HEADER_HEIGHT - 12, (node.width - 2) / 2, (node.height - 2) / 2);
+}
+
 function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundaryStyle, palette: AccentPalette): Shape[] {
+  const radius = boundaryRadius(node, ctx);
   const shapes: Shape[] = [];
   const bottom = 1 + BOUNDARY_HEADER_HEIGHT;
   // A tab holds its text with the same padding on both sides, and never reaches the far corner.
@@ -3118,7 +3281,7 @@ function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundarySt
       y: plate,
       w: BOUNDARY_PLATE,
       h: BOUNDARY_PLATE,
-      r: BOUNDARY_RADIUS - BOUNDARY_PLATE_GAP,
+      r: Math.max(1, radius - BOUNDARY_PLATE_GAP),
       fill: palette.chip,
       opacity: ctx.theme.name === 'dark' ? 0.18 : 0.13,
     });
@@ -3161,14 +3324,14 @@ function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundarySt
     // A corner tab cut from the boundary's own top-left corner: it shares the outline's top and
     // left edges, so only its right and bottom edges are drawn. Sized to what it holds, with the
     // same padding after the text as before it.
-    const tabRight = Math.min(node.width - 1 - BOUNDARY_RADIUS, Math.max(headerEnd, BOUNDARY_INSET_X + 24) + BOUNDARY_INSET_X);
-    const r = BOUNDARY_RADIUS - BOUNDARY_PLATE_GAP;
+    const tabRight = Math.min(node.width - 1 - radius, Math.max(headerEnd, BOUNDARY_INSET_X + 24) + BOUNDARY_INSET_X);
+    const r = Math.max(1, radius - BOUNDARY_PLATE_GAP);
     // M/L/Q/C only — the command set `roughenPath` understands — so the edge wobbles with the
     // outline at Draft and Sketch instead of being dropped.
     const edge = `M${tabRight} 1 L${tabRight} ${bottom - r} Q${tabRight} ${bottom} ${tabRight - r} ${bottom} L1 ${bottom}`;
     shapes.push({
       t: 'path',
-      d: `${topLeftCorner()} L${tabRight} 1 L${tabRight} ${bottom - r} Q${tabRight} ${bottom} ${tabRight - r} ${bottom} L1 ${bottom} Z`,
+      d: `${topLeftCorner(radius)} L${tabRight} 1 L${tabRight} ${bottom - r} Q${tabRight} ${bottom} ${tabRight - r} ${bottom} L1 ${bottom} Z`,
       fill: palette.chip,
       opacity: ctx.theme.name === 'dark' ? 0.16 : 0.1,
     });
@@ -3183,10 +3346,10 @@ function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundarySt
     // A label plate ruled off from the contents across the full width — faint tint above, one
     // hairline under — so the runtime scope reads as infrastructure without a heavy panel.
     const w = node.width;
-    const k = BOUNDARY_RADIUS * (1 - KAPPA);
+    const k = radius * (1 - KAPPA);
     shapes.push({
       t: 'path',
-      d: `${topLeftCorner()} L${w - 1 - BOUNDARY_RADIUS} 1 C${w - 1 - k} 1 ${w - 1} ${1 + k} ${w - 1} ${1 + BOUNDARY_RADIUS} L${w - 1} ${bottom} L1 ${bottom} Z`,
+      d: `${topLeftCorner(radius)} L${w - 1 - radius} 1 C${w - 1 - k} 1 ${w - 1} ${1 + k} ${w - 1} ${1 + radius} L${w - 1} ${bottom} L1 ${bottom} Z`,
       fill: palette.chip,
       opacity: ctx.theme.name === 'dark' ? 0.08 : 0.06,
     });
@@ -3390,6 +3553,10 @@ export function naturalCodeSize(
   };
 }
 
+
+/** How many lines of name a glyph shape keeps under its glyph while being edited, before the name
+ *  is treated as a paragraph and given the wide column. */
+const GLYPH_NAME_LINES = 3;
 /**
  * The box an architecture shape needs for its name and C4 detail to show in full, starting from its
  * current size and only ever growing — the size an arranged diagram gives it, so nothing it was
@@ -3410,6 +3577,8 @@ export function naturalArchitectureSize(
   const verdict = (width: number, height: number) => captionVerdict(describeNode({ ...node, width, height }, ctx).shapes, node, bounds.maxNameLines ?? 2);
   const start = verdict(node.width, node.height);
   if (start.fits) return { width: node.width, height: node.height, fits: true };
+  // The shapes drawn as a glyph with the name beneath it, not as a card around the name.
+  const glyph = node.type === 'database' || node.type === 'artifact' || isGlyphShape(node);
 
   // For each width (growing in steps), the least height at which everything shows — by bisection,
   // since more height never shows less. The first width whose shape comes out no taller than it is
@@ -3436,6 +3605,13 @@ export function naturalArchitectureSize(
     if (compactHeight !== undefined && compactHeight <= Math.max(node.height, node.width)) {
       return { width: node.width, height: compactHeight, fits: true };
     }
+    // A glyph shape's name hangs below its glyph, so its box is already about as tall as it is wide
+    // with a one-line name: a second line failed the test above and sent a Gateway renamed "Renamed
+    // orders" to the wide column, 640 across and over its neighbours. A name of a few lines stays
+    // under its glyph; only a pasted paragraph takes the wide column.
+    if (compactHeight !== undefined && glyph && nameLineCount({ ...node, height: compactHeight }, ctx) <= GLYPH_NAME_LINES) {
+      return { width: node.width, height: compactHeight, fits: true };
+    }
     const height = minHeightAt(bounds.maxWidth);
     if (height !== undefined) return { width: bounds.maxWidth, height, fits: true };
     return compactHeight !== undefined
@@ -3444,7 +3620,14 @@ export function naturalArchitectureSize(
   }
   // A Data Store's glyph grows with the smaller of its box's two growths (`dataStoreScale`), so a box
   // grown both ways draws a giant glyph: for one, the shortest box that fits wins outright.
-  const shortest = node.type === 'database';
+  //
+  // A glyph Component is left out. Its glyph stays one size, and the shortest box for a description
+  // is the widest one: 280 across around a glyph 54 across. A connector into the glyph's side then
+  // crosses a hundred pixels of the shape's own empty box, with nowhere for its caption but on it,
+  // and an arranged diagram with a described Adapter failed its readability check. It takes the
+  // balanced box every card does. (A glyph Service has the same wide box and keeps it for now: the
+  // layouts drawn around it are held to it.)
+  const shortest = glyph && node.type !== 'component';
   let best: { width: number; height: number } | undefined;
   for (let width = node.width; ; width = Math.min(bounds.maxWidth, width + WIDTH_STEP)) {
     const height = minHeightAt(width);

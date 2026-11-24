@@ -57,23 +57,11 @@ function policyFor(html) {
  * the shipped HTML: someone with scripting off still gets working downloads and an honest number.
  */
 function fillLandingHtml() {
-  const viewsPath = new URL('./src/checkout-views.json', import.meta.url);
   return {
     name: 'draft-canvas-www:landing-html',
     transformIndexHtml: {
       order: 'pre',
-      handler: (html) => {
-        const { checkout, pipeline, paymentViews, video, lakehouse, search } = JSON.parse(readFileSync(viewsPath, 'utf8'));
-        return html
-          .replaceAll('__VERSION__', appVersion)
-          .replace('__CHECKOUT_SYSTEM__', () => checkout.system)
-          .replace('__CHECKOUT_ATTACHMENTS__', () => checkout.attachments)
-          .replace('__PIPELINE_SYSTEM__', () => pipeline)
-          .replace('__PAYMENT_VIEWS__', () => paymentViews)
-          .replace('__VIDEO_SYSTEM__', () => video)
-          .replace('__LAKEHOUSE_SYSTEM__', () => lakehouse)
-          .replace('__SEARCH_SYSTEM__', () => search);
-      },
+      handler: (html) => html.replaceAll('__VERSION__', appVersion),
     },
   };
 }

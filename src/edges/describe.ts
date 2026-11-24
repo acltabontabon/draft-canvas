@@ -2,9 +2,9 @@ import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../re
 import type { DraftEdge, DraftNode, OpenPoint } from '../document/types';
 import { MARKER_SIZE, describeMarker, type OccupiedRect } from '../openPoints/marker';
 import type { Shape, TextAlign } from '../render/displayList';
-import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import { builtinStyle, type ResolvedStyle } from '../render/style/resolve';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
-import { markerRef } from '../render/svg/markers';
+import { markerRef, originRef } from '../render/svg/markers';
 import type { Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { baselineOf, layoutText, type TextLayout } from '../render/text/layout';
@@ -45,6 +45,8 @@ import { categoryOf } from '../document/connectorSemantics';
 import { connectorCaptionText } from './captionText';
 import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
 import { compensationLabelParts } from './compensationMarker';
+import { PORTAL_RING, portalName, portalOf, portalWordsRect, slotPoint } from './portal';
+import type { PortalSlots } from './portalPlan';
 import { compensationDisplayLabel } from '../document/compensation';
 
 export interface EdgeDescribeContext {
@@ -63,6 +65,8 @@ export interface EdgeDescribeContext {
    * independently, exactly as every connector did before this field existed.
    */
   spine?: EdgeSpine;
+  /** Where each end of a portal sits on its shape (`portalPlan.ts`). Omitted: where the line would attach. */
+  portalSlots?: (edgeId: string) => PortalSlots | undefined;
   /** The nodes this connector may detour around. Omitted: every node but its endpoints and groups. */
   obstacles?: readonly Rect[];
   /**
@@ -79,8 +83,9 @@ export interface EdgeDescribeContext {
   sharedLabel?: { draws: boolean; x: number; y: number; side: Side };
   /** How far the reply's label moves to keep clear of a neighbour's (`edges/replyLabels.ts`). */
   replyShift?: { x: number; y: number };
-  /** Intentional Roughness. Defaults to `'clean'` at call sites
-   *  that construct this object directly without a preset. */
+  /** How the diagram is drawn. Wins over `preset` when both are given. */
+  style?: ResolvedStyle;
+  /** A built-in drawing hand by name, for callers with no resolved style. Defaults to `'clean'`. */
   preset?: PersonalityPreset;
   /**
    * The unresolved open points about this connector, when an export keeps them (`ExportOptions.
@@ -233,6 +238,54 @@ function routesOf(edge: DraftEdge, nodes: Map<string, DraftNode>, ctx: EdgeDescr
   });
 }
 
+/** Padding round a portal's words: `.dc-edge-portal-label`'s own (`canvas.css`). */
+const PORTAL_PADDING_X = 6;
+const PORTAL_PADDING_Y = 2;
+
+/**
+ * A connector drawn as a portal (`portal.ts`): a stub and a ring at each end, each saying where the
+ * other end is. Mirrors the portal branch of `DraftEdgeView.tsx`. Its own label, caption, chips and
+ * marks are not drawn — the label rides in the leaving stub's words, and there is no line to hang
+ * the rest on.
+ */
+function describePortal(edge: DraftEdge, nodes: Map<string, DraftNode>, route: RoutedEdge, color: string, ctx: EdgeDescribeContext, lineWidth: number): DescribedEdge {
+  const source = nodes.get(edge.source);
+  const target = nodes.get(edge.target);
+  // The same seats the canvas gives them (`portalPlan.ts`), from the same shapes and connectors.
+  const slots = source && target ? ctx.portalSlots?.(edge.id) : undefined;
+  const ends = slots && source && target ? { source: slotPoint(rectOf(source), slots.source), target: slotPoint(rectOf(target), slots.target) } : route;
+  const portal = portalOf(ends, edge, { source: portalName(source), target: portalName(target) });
+  const stroke = { color, width: lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
+  const ring = (at: { x: number; y: number }): Shape => ({
+    t: 'ellipse',
+    cx: at.x,
+    cy: at.y,
+    rx: PORTAL_RING,
+    ry: PORTAL_RING,
+    stroke: { color, width: CONNECTOR_STYLE.openArrowWidth },
+  });
+  const line: Shape[] = [
+    { t: 'path', d: portal.out.line, fill: 'none', stroke, markerStart: edge.directed ? originRef(color) : undefined },
+    { t: 'path', d: portal.into.line, fill: 'none', stroke, markerEnd: edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined },
+    ring(portal.out.ring),
+    ring(portal.into.ring),
+  ];
+  const overlay: Shape[] = [];
+  const words: Rect[] = [];
+  for (const end of [portal.out, portal.into]) {
+    const layout = layoutText(end.text, { font: FONTS.edgeLabel, maxWidth: 600, lineHeight: FONTS.edgeLabel.size * LINE_HEIGHTS.label, maxLines: 1, measurer: ctx.measurer });
+    const width = layout.width + PORTAL_PADDING_X * 2;
+    const height = layout.height + PORTAL_PADDING_Y * 2;
+    const { left, top } = portalWordsRect(end, width, height);
+    overlay.push(
+      { t: 'rect', x: left, y: top, w: width, h: height, r: 4, fill: ctx.theme.canvas, opacity: 0.82 },
+      { t: 'text', x: left + PORTAL_PADDING_X, y: top + PORTAL_PADDING_Y, layout, font: FONTS.edgeLabel, fill: ctx.theme.edgeText, align: 'start' },
+    );
+    words.push(boxOf(left, top, width, height));
+  }
+  return { route, line, overlay, color, boxes: { words, marks: [] } };
+}
+
 export function describeEdge(
   edge: DraftEdge,
   nodes: Map<string, DraftNode>,
@@ -266,15 +319,18 @@ export function describeEdge(
   const recoveryParts = compensationLabelParts(edge);
   const recoveryChipSide = recoveryParts && (labelSide === 'top' || labelSide === 'bottom') ? 'bottom' : labelSide;
 
-  const color = resolveEdgeColor(edge, nodes.get(edge.source), ctx.theme);
+  const style = ctx.style ?? builtinStyle(ctx.preset ?? 'clean');
+  const { lineWidth, head } = style.connector;
+  const color = resolveEdgeColor(edge, nodes.get(edge.source), ctx.theme, style.connector.colour);
+  if (edge.portal) return describePortal(edge, nodes, route, color, ctx, lineWidth);
 
   // Geometry (`route`, `labelX`/`labelY`/every overlay below) always reads
   // from the unperturbed `route` object — only the drawn stroke wobbles, so
   // label placement, direction, and attachment points stay exactly as legible
   // as Clean at every preset, and topology/routing never changes.
-  const profile = PERSONALITY_PROFILES[ctx.preset ?? 'clean'];
+  const profile = style.hand;
   const styledPath = styledConnectorPath(route.d, edge);
-  const strokeBase = { color, width: CONNECTOR_STYLE.lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
+  const strokeBase = { color, width: lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
   const variant = markerVariantForEdge(edge);
   // A bundle's members each draw the whole shared trunk, so they must wobble
   // it identically or it frays into a rope — see `strokeSeed`.
@@ -297,6 +353,8 @@ export function describeEdge(
       fill: 'none',
       stroke: strokeBase,
       markerEnd,
+      // Where a directed line leaves its shape: the origin dot. Mirrors `DraftEdgeView.tsx`.
+      markerStart: markerEnd ? originRef(color) : undefined,
     },
     ...(profile.strokes === 2
       ? ([
@@ -319,6 +377,7 @@ export function describeEdge(
               arrowSeed(edge.id, ctx.spine),
               profile.arrowJitter,
               variant,
+              head,
             ),
             fill: variant === 'closed' ? color : 'none',
             stroke: variant === 'open' ? { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' } : undefined,
@@ -354,7 +413,7 @@ export function describeEdge(
           t: 'path',
           d: responseD,
           fill: 'none',
-          stroke: { color, width: Math.max(1.1, CONNECTOR_STYLE.lineWidth * 0.6), linecap: 'round', dash: RESPONSE_DASH },
+          stroke: { color, width: Math.max(1.1, lineWidth * 0.6), linecap: 'round', dash: RESPONSE_DASH },
           markerEnd: edge.directed && !responseHandDrawnArrow ? markerRef(color, 'open') : undefined,
           opacity: 0.8,
         },
@@ -368,6 +427,7 @@ export function describeEdge(
                   `${edge.id}:response-head`,
                   profile.arrowJitter,
                   'open',
+                  head,
                 ),
                 fill: 'none',
                 stroke: { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' },

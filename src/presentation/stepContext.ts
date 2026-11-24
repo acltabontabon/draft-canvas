@@ -11,7 +11,7 @@ import type { DraftDocument } from '../document/types';
 import type { FlowPlaybackState } from '../store/editorStore';
 import { edgeIndex, nodeIndex } from '../store/selectors';
 import { ancestorsOf, crossedBoundaries } from './composition';
-import { resolveFlowStep } from './useFlowPlayback';
+import { resolveFlowStep } from './steps';
 
 export interface StepContext {
   /** Changes exactly when a new transition should play: another step, stage, flow or reply phase. */
@@ -42,7 +42,7 @@ export function stepContextOf(state: { document: DraftDocument; flowPlayback: Fl
 
 function compute(document: DraftDocument, playback: FlowPlaybackState): StepContext | null {
   if (!playback.active || !playback.flowId || playback.stage || playback.step < 1) return null;
-  const flow = playbackFlowOf(document, playback.flowId, playback.sequenceNodeId);
+  const flow = playbackFlowOf(document, playback.flowId, playback.sequenceNodeId, playback.walk);
   if (!flow) return null;
   const edgesById = edgeIndex(document.edges);
   const nodesById = nodeIndex(document.nodes);

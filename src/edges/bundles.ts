@@ -428,6 +428,8 @@ function computePlan(nodes: readonly DraftNode[], edges: readonly DraftEdge[], s
     // A connector the user has taken manual control of is left exactly alone —
     // "auto until touched".
     if (edge.routeMode === 'direct' || edge.waypoints || edge.sourceAnchor?.participantId || edge.targetAnchor?.participantId) continue;
+    // A portal draws no line to share a trunk with.
+    if (edge.portal) continue;
     // Only the orthogonal style has a straight shared run to share.
     if (edge.routing !== 'smoothstep') continue;
     // A parallel sibling already nudges this edge's hub anchor off the shared

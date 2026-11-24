@@ -6,6 +6,7 @@ import { useCollabStore } from '../../store/collabStore';
 import { useEditorStore } from '../../store/editorStore';
 import { Icon } from '../common/Icon';
 import { PeerBadge } from './PeerBadge';
+import { followedStage } from './presence/follow';
 import { presenterOf } from './presence/model';
 import '../../styles/presence.css';
 
@@ -36,13 +37,16 @@ function FollowPromptBody({ following }: { following: boolean }) {
   const flowId = useCollabStore((state) => state.presenter?.flowId ?? null);
   const sequenceNodeId = useCollabStore((state) => state.presenter?.sequenceNodeId);
   const step = useCollabStore((state) => state.presenter?.step ?? null);
+  const stage = useCollabStore((state) => (state.presenter ? followedStage(state.presenter) : undefined));
   const flowTitle = useEditorStore((state) => (playbackFlowOf(state.document, flowId, sequenceNodeId)?.title.trim() || null));
 
   const name = presenter?.name || 'The owner';
   const color = presenter ? presenter.color % 8 : 0;
   const follow = () => useCollabStore.setState({ following: true });
   const stop = () => useCollabStore.setState({ following: false });
-  const where = flowTitle ? (step !== null ? `${flowTitle} · step ${step + 1}` : flowTitle) : null;
+  // The presenter's own count: `step` is already 1-based, and the overviews have no number.
+  const moment = stage === 'opening' ? 'opening' : stage === 'closing' ? 'end' : step !== null ? `step ${step}` : null;
+  const where = flowTitle ? (moment ? `${flowTitle} · ${moment}` : flowTitle) : null;
 
   if (folded && !following) {
     return (

@@ -7,7 +7,7 @@
 import { categoryOf, defaultsToResponse, inferRelationship, type NodeCategory } from '../document/connectorSemantics';
 import { relationLabel } from '../document/edgeSemantics';
 import { itemsAt, messagesOf, slotOf, type SeqSlot } from '../document/sequenceModel';
-import type { DraftEdge, DraftSequence, SeqMessage, SeqMessageKind, SeqParticipant } from '../document/types';
+import type { DraftEdge, DraftSequence, SeqItem, SeqMessage, SeqMessageKind, SeqParticipant } from '../document/types';
 import { executionsOf } from './executions';
 
 const participantOf = (sequence: DraftSequence, id: string): SeqParticipant | undefined => sequence.participants.find((participant) => participant.id === id);
@@ -85,6 +85,71 @@ export function labelSuggestions(
     if (other.id !== message.id && other.from === message.from && other.to === message.to) add(other.label);
   }
   return out.slice(0, 5);
+}
+
+/**
+ * Everything said by the time a slot is reached, in order, the way the sequence runs: what comes
+ * before it in its own list and in each list around it. The other branches of a frame it is inside
+ * are left out — "declined" is not something that has happened in "approved".
+ */
+function saidBefore(sequence: DraftSequence, slot: SeqSlot): SeqMessage[] {
+  interface Step {
+    items: readonly SeqItem[];
+    upTo: number;
+  }
+  const find = (items: readonly SeqItem[], operandId: string | null): Step[] | null => {
+    if (operandId === slot.operandId) return [{ items, upTo: slot.index }];
+    for (let at = 0; at < items.length; at += 1) {
+      const item = items[at]!;
+      if (item.t !== 'fragment') continue;
+      for (const branch of item.operands) {
+        const below = find(branch.items, branch.id);
+        if (below) return [{ items, upTo: at }, ...below];
+      }
+    }
+    return null;
+  };
+  const out: SeqMessage[] = [];
+  const all = (items: readonly SeqItem[]) => {
+    for (const item of items) {
+      if (item.t === 'message') out.push(item);
+      else if (item.t === 'fragment') for (const branch of item.operands) all(branch.items);
+    }
+  };
+  for (const step of find(sequence.items, null) ?? []) all(step.items.slice(0, step.upTo));
+  return out;
+}
+
+/**
+ * The call a message drawn from `from` to `to` at `slot` would be answering, if it would be one.
+ *
+ * It is a reply only when there is no other way to read it: `from` is still at work on a call it
+ * has not answered, and the last such call came from `to`. Then a line drawn back to the caller is
+ * what came back, not a second call the other way — which is what it used to be drawn as, and had
+ * to be turned into a reply by hand. A participant with nothing waiting on it, or one whose work
+ * was asked for by somebody else, is simply calling.
+ */
+export function answeredCall(sequence: DraftSequence, from: string, to: string, slot: SeqSlot): SeqMessage | null {
+  if (from === to) return null;
+  const said = saidBefore(sequence, slot);
+  const answered = new Set(said.flatMap((message) => (message.replyTo ? [message.replyTo] : [])));
+  // A reply that names no call (an imported one) answers the last call from whoever it went to.
+  const unnamed = new Map<string, number>();
+  for (let at = said.length - 1; at >= 0; at -= 1) {
+    const message = said[at]!;
+    if (message.kind === 'reply' && message.from === from && !message.replyTo) {
+      unnamed.set(message.to, (unnamed.get(message.to) ?? 0) + 1);
+      continue;
+    }
+    if (message.kind !== 'sync' || message.to !== from || message.from === message.to || answered.has(message.id)) continue;
+    const taken = unnamed.get(message.from) ?? 0;
+    if (taken > 0) {
+      unnamed.set(message.from, taken - 1);
+      continue;
+    }
+    return message.from === to ? message : null;
+  }
+  return null;
 }
 
 export interface NextMessage {

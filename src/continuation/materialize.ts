@@ -1,3 +1,4 @@
+import { familyKindOf } from '../document/dataStoreGeometry';
 import { capabilityFor, categoryOf, inferRelationship } from '../document/connectorSemantics';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { BOUNDARY_HEADER_BAND } from '../document/boundaryHeader';
@@ -24,6 +25,13 @@ export interface MaterializeOptions {
   /** Top-left for the fragment's first node — the drop point when the user chose where. Otherwise
    *  the node lands where `placeNear` would put a generated companion. */
   at?: { x: number; y: number };
+  /**
+   * `'automatic'` leaves the new connectors' ends unpinned, as a connector drawn by hand has them:
+   * for a shape the person placed themselves by dragging a connector out to it (#180). A pin there
+   * was one they never made, and it kept the side it was drawn on after the shapes moved, wrapping
+   * round both boxes. The default pins connectors between shapes placed here, together.
+   */
+  ends?: 'automatic';
 }
 
 /**
@@ -61,7 +69,7 @@ export function materialize(
   let host: DraftNode = anchor;
 
   for (const [index, spec] of continuation.fragment.nodes.entries()) {
-    const size = defaultSizeFor(spec.type);
+    const size = defaultSizeFor(spec.type, familyKindOf(spec));
     // The gap must clear the caption the connector *into* this node will carry — the same rule
     // `addConsumer`/`addDeadLetterQueue` follow, so "after 3 attempts" never overlaps either box.
     const inbound = continuation.fragment.edges.find((e) => e.to === spec.key);
@@ -80,7 +88,7 @@ export function materialize(
     // The two ends of the connector into this node, level: its anchor is a Queue's tube or a Data
     // Store's glyph, not its box's middle, so top-aligning the boxes drew most suggestions' connectors
     // with a jog — and a jog is where a caption loses its room.
-    const align = { host: anchorOffsetY(host), self: anchorOffsetY({ type: spec.type, ...size }) };
+    const align = { host: anchorOffsetY(host), self: anchorOffsetY({ type: spec.type, serviceKind: spec.serviceKind, componentKind: spec.componentKind, ...size }) };
     // Where the connectors already drawn through here are, so a candidate that would sit on one
     // ranks behind a candidate that wouldn't. A preference only: see `PlaceNearOptions.avoid`.
     // `doc` has neither the nodes placed so far nor the fragment's own new connectors, so a chain is
@@ -152,8 +160,9 @@ export function materialize(
         semanticsOrigin: spec.semantic ? 'explicit' : relationship ? 'inferred' : undefined,
         deliveryAttempts: spec.deliveryAttempts,
         // Pinned only between nodes placed here, together. A connector to a node the user drew
-        // routes dynamically, like any connector drawn by hand to it — preview included.
-        ...(existing.has(spec.from) || existing.has(spec.to) ? {} : anchorsForPlacement(from, to)),
+        // routes dynamically, like any connector drawn by hand to it — preview included. So does
+        // every connector of a fragment the user dragged out themselves (`MaterializeOptions.ends`).
+        ...(options.ends === 'automatic' || existing.has(spec.from) || existing.has(spec.to) ? {} : anchorsForPlacement(from, to)),
         ...(linkedRecovery && parent.source === from.id && parentTarget ? { sourceAnchor: recoveryBranchAnchor(parent, from, parentTarget, to) } : {}),
       }),
     );

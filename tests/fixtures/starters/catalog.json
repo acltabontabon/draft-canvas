@@ -1,113 +1,130 @@
 {
   "$schema": "./catalog.schema.json",
   "schema": 1,
-  "updated": "2026-11-11",
+  "updated": "2026-11-23",
   "starters": [
     {
       "id": "monolith",
       "name": "Monolith",
       "category": "architecture",
-      "summary": "One application, built and deployed as a unit",
+      "summary": "A clinic's booking site, staff screens and API in one Django app, deployed as one unit behind NGINX",
       "aliases": [
         "monolith",
         "monolithic",
         "single deployment",
         "one application",
-        "layered"
+        "layered",
+        "majestic monolith",
+        "django app",
+        "rails app"
       ],
       "tags": [
         "layered",
         "web app",
-        "single deployable"
+        "single deployable",
+        "stateless replicas"
       ],
       "useWhen": [
         "A new product or a small team, where one deployable keeps change cheap.",
-        "Explaining where a request goes before any of it is split out."
+        "Explaining where a request goes before any of it is split out.",
+        "Scaling by running more identical copies behind a load balancer."
       ],
       "watchOutFor": [
-        "Every change ships the whole application.",
-        "Layers blur over time unless their boundaries are kept on purpose."
+        "Every change ships the whole application, and one bad release takes everything down.",
+        "Slow calls inside a request, like sending a text, slow every user; move them to a job.",
+        "Module lines inside the codebase blur unless they are kept on purpose."
       ],
       "featured": true,
       "order": 10,
       "path": "starters/architectures/monolith/monolith.draftcanvas",
-      "sha256": "00c6d7a4ce0fcee44541d0376077f517436b508c4acf6d3d3d0deab0a852c446",
-      "bytes": 5780,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "3bf419391b5f146ee2fa10cf5cfd90243f5b9e26d9476c911064025500c46678",
+      "bytes": 15980,
+      "formatVersion": 28,
+      "updated": "2026-11-21"
     },
     {
       "id": "modular-monolith",
       "name": "Modular Monolith",
       "category": "architecture",
-      "summary": "One deployable, explicitly encapsulated modules inside",
+      "summary": "A course platform as one Spring Boot deployable with Catalog, Enrollment, Billing and Notifications modules",
       "aliases": [
         "modular monolith",
         "modular architecture",
         "modules",
         "module boundaries",
         "majestic monolith",
-        "monolith modules"
+        "monolith modules",
+        "spring modulith",
+        "bounded contexts in one app"
       ],
       "tags": [
         "modules",
         "single deployable",
-        "bounded contexts"
+        "bounded contexts",
+        "schema per module"
       ],
       "useWhen": [
         "You want clear ownership without the cost of distributed services.",
-        "Preparing a monolith to split later, one module at a time."
+        "Preparing a monolith to split later, one module at a time.",
+        "Several teams share one codebase and need lines they cannot cross by accident."
       ],
       "watchOutFor": [
-        "Module boundaries only hold if calls go through the public interface.",
-        "A shared database makes it easy to reach into another module's tables."
+        "Module boundaries only hold if calls go through the public interface; enforce it in a build test.",
+        "A shared database server makes it easy to join another module's tables; grant each module its own schema.",
+        "In-process events vanish on a crash unless they are stored before they are handled."
       ],
       "featured": false,
       "order": 20,
       "path": "starters/architectures/modular-monolith/modular-monolith.draftcanvas",
-      "sha256": "7d4b8c1a9fbeba97608514671bf837d0cb2717f643e180f4a2a6e29d6c7cc3b0",
-      "bytes": 8111,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "c865dfbeb48e7fdb9290dcbcd8965e56b2eeff606e5feae595ce86e5c9d21cbf",
+      "bytes": 17418,
+      "formatVersion": 31,
+      "updated": "2026-11-21"
     },
     {
       "id": "microservices",
       "name": "Microservices",
       "category": "architecture",
-      "summary": "Independently deployed services, each owning its data",
+      "summary": "A food-delivery platform: services behind Kong, each owning its data, talking by gRPC and Kafka events",
       "aliases": [
         "microservices",
         "microservice",
         "distributed services",
         "independent services",
-        "api gateway"
+        "api gateway",
+        "database per service"
       ],
       "tags": [
         "services",
         "api gateway",
-        "database per service"
+        "database per service",
+        "events",
+        "circuit breaker",
+        "service mesh"
       ],
       "useWhen": [
         "Teams need to deploy and scale parts of the system independently.",
-        "Mapping which service owns which data."
+        "Mapping which service owns which data, and how the others reach it.",
+        "Deciding which calls must be synchronous and which can be events."
       ],
       "watchOutFor": [
-        "Calls between services fail and are slow in ways in-process calls are not.",
-        "Queries that span services need their own design."
+        "Calls between services fail and are slow in ways in-process calls are not; guard them.",
+        "Every synchronous call chains availability: one service down can stop the main path.",
+        "Queries that span services need their own design: a read model, an API composer or a BFF."
       ],
       "featured": true,
       "order": 30,
       "path": "starters/architectures/microservices/microservices.draftcanvas",
-      "sha256": "9538f5cf1dce344514f2df97691b4951fcaabe70fa1a18371ec855fed49c98c7",
-      "bytes": 9413,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "bb830afec29f06cb03d7ff3fd93c0360ab0c5a125b4ad0b3a91bc0023f45cbb8",
+      "bytes": 22387,
+      "formatVersion": 28,
+      "updated": "2026-11-21"
     },
     {
       "id": "event-driven",
       "name": "Event-Driven",
       "category": "architecture",
-      "summary": "Pub/sub: a topic fanning out to per-subscriber queues",
+      "summary": "One event, many reactions: a topic fans out to a queue per subscriber, with a dead-letter queue for failures",
       "aliases": [
         "event driven",
         "event-driven",
@@ -118,35 +135,41 @@
         "messaging",
         "fan out",
         "asynchronous",
-        "eda"
+        "eda",
+        "sns sqs",
+        "food delivery"
       ],
       "tags": [
         "pub/sub",
         "topic",
         "queues",
-        "dead letter"
+        "dead letter",
+        "idempotency"
       ],
       "useWhen": [
         "Several consumers react to the same change without the producer knowing them.",
-        "Showing retries and where failed messages go."
+        "One slow or failing consumer must not hold up the others.",
+        "Showing retries, idempotent consumers and where failed messages go."
       ],
       "watchOutFor": [
-        "Delivery is at least once: consumers must handle duplicates.",
-        "The flow of one request is harder to follow end to end."
+        "Delivery is at least once: every consumer must handle duplicates.",
+        "Events can arrive out of order across queues; don't let consumers assume an order.",
+        "One request is harder to follow end to end; keep event ids in your logs and traces.",
+        "An event's shape is a contract with consumers you may not know about. Version it."
       ],
       "featured": true,
       "order": 40,
       "path": "starters/architectures/event-driven/event-driven.draftcanvas",
-      "sha256": "6fa55a6504a8b468e60ca987741f206a887e5138ae4cd413d3510c0885d438ca",
-      "bytes": 9311,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "7bfaf2a8d8be7a722e29c57f337de4a2687f1e6d4d47009e82a2a53aa2616538",
+      "bytes": 21321,
+      "formatVersion": 28,
+      "updated": "2026-11-21"
     },
     {
       "id": "hexagonal",
       "name": "Hexagonal",
       "category": "architecture",
-      "summary": "Adapters around a core that owns its ports",
+      "summary": "A bank's transfers core owns its ports; REST, a job, JPA, Kafka and a fraud vendor plug in as adapters",
       "aliases": [
         "hexagonal",
         "hexagonal architecture",
@@ -162,98 +185,113 @@
       "tags": [
         "ports and adapters",
         "clean architecture",
-        "domain"
+        "domain",
+        "testability"
       ],
       "useWhen": [
-        "Keeping business rules independent of frameworks, databases and transports.",
-        "Testing the core without infrastructure."
+        "Keeping business rules independent of frameworks, databases and vendors.",
+        "Testing the core with in-memory adapters, without infrastructure.",
+        "The same use case is driven from several places: HTTP, a job, a message."
       ],
       "watchOutFor": [
         "More indirection than a small service may need.",
-        "Ports drift into thin wrappers if they mirror one adapter."
+        "Ports drift into thin wrappers if they mirror one adapter or one vendor's API.",
+        "Arrows here read at runtime (port, then the adapter behind it); source dependencies point the other way, inward."
       ],
-      "featured": true,
+      "featured": false,
       "order": 50,
       "path": "starters/architectures/hexagonal/hexagonal.draftcanvas",
-      "sha256": "3ad7e4d19354e73d3dbd13b9110526935dc4dc03296c8340848fe324a42ae317",
-      "bytes": 9616,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "1960f6e44c8f38fe75a446a70c43d6b238aae425919a9e0801ee251fce013459",
+      "bytes": 19969,
+      "formatVersion": 29,
+      "updated": "2026-11-21"
     },
     {
       "id": "bff",
       "name": "Backend for Frontend",
       "category": "architecture",
-      "summary": "A backend per frontend, over shared capabilities",
+      "summary": "Web, mobile and TV each get a backend shaped for their screens, over shared platform APIs",
       "aliases": [
         "bff",
         "backend for frontend",
         "backends for frontends",
         "client adapter",
-        "per-client api"
+        "per-client api",
+        "api composition",
+        "graphql bff",
+        "streaming app"
       ],
       "tags": [
         "backend for frontend",
         "web",
         "mobile",
-        "api composition"
+        "tv",
+        "api composition",
+        "graphql"
       ],
       "useWhen": [
-        "Web and mobile need different shapes of the same data.",
-        "Frontend teams want to change their API without coordinating every release."
+        "Web, mobile and TV need different shapes and sizes of the same data.",
+        "Frontend teams want to change their API without coordinating every release.",
+        "A screen should load in one round trip instead of many calls from a slow network."
       ],
       "watchOutFor": [
-        "Logic duplicated across BFFs instead of living in the shared services.",
-        "One more service per client to run."
+        "Business rules creeping into BFFs and drifting apart; keep them in the platform APIs.",
+        "One more service per client to build, run and keep secure.",
+        "A BFF that waits on every call is as slow as its slowest one; set budgets and degrade."
       ],
       "featured": false,
       "order": 60,
       "path": "starters/architectures/bff/bff.draftcanvas",
-      "sha256": "fc5495d7507e2a11758f71edf32e3a35a7fb0a097d33aece4569df10471b5190",
-      "bytes": 9050,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "3ec3a0c7f476eac767bc391a30f64151f8024dc4062a67515f8973d9a71af349",
+      "bytes": 22305,
+      "formatVersion": 29,
+      "updated": "2026-11-21"
     },
     {
       "id": "cqrs",
       "name": "CQRS",
       "category": "architecture",
-      "summary": "Distinct command and query paths, async read projection",
+      "summary": "A bank's payments write events on one side; projections build balances and searchable history on the other",
       "aliases": [
         "cqrs",
         "command query",
         "command query responsibility segregation",
         "read model",
         "write model",
-        "projection"
+        "projection",
+        "ledger"
       ],
       "tags": [
         "command query",
         "read model",
         "projection",
-        "eventual consistency"
+        "eventual consistency",
+        "event store",
+        "event sourcing"
       ],
       "useWhen": [
         "Reads and writes have very different shapes or loads.",
+        "Several read models (a balance, a search index) answer from one source of truth.",
         "Explaining eventual consistency between the two sides."
       ],
       "watchOutFor": [
-        "Reads lag behind writes.",
-        "Two models to keep in step as the domain changes."
+        "Reads lag behind writes; the UI must cope with its own change not showing yet.",
+        "Two models to keep in step as the domain changes, and projections to rebuild.",
+        "An event a projection can't apply leaves that read model stale until someone acts."
       ],
-      "featured": true,
+      "featured": false,
       "order": 70,
       "path": "starters/architectures/cqrs/cqrs.draftcanvas",
-      "sha256": "e049551264763f309c679553b749930a56d20757bae4e0c97afeab8846fda7b5",
-      "bytes": 11572,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "6c2ab8f1c1715777b3410a6ee58aa4a0d0fa3698c319d96fe5077727a68cdf07",
+      "bytes": 19398,
+      "formatVersion": 28,
+      "updated": "2026-11-21"
     },
     {
       "id": "medallion",
       "name": "Medallion",
       "category": "data",
-      "summary": "Refine raw data into validated, business-ready datasets",
+      "summary": "A ride-hailing lakehouse refines raw trips into Bronze, Silver and Gold, and quarantines bad rows",
       "aliases": [
         "medallion",
         "medallion architecture",
@@ -261,35 +299,41 @@
         "lakehouse",
         "data lake",
         "etl",
-        "data pipeline"
+        "elt",
+        "data pipeline",
+        "data quality",
+        "quarantine"
       ],
       "tags": [
         "lakehouse",
         "bronze silver gold",
         "data pipeline",
-        "analytics"
+        "analytics",
+        "data quality"
       ],
       "useWhen": [
-        "Building analytics on data from several operational sources.",
-        "Showing where data quality is enforced."
+        "Building analytics on data from several operational sources at different cadences.",
+        "Showing where data quality is enforced, and where rows that fail it go.",
+        "You need to rebuild cleaned data after a bug fix without asking the sources again."
       ],
       "watchOutFor": [
-        "Each layer stores another copy of the data.",
-        "Late-arriving or corrected data needs reprocessing through every layer."
+        "Each layer stores another copy of the data, and each copy costs storage and compute.",
+        "Late or corrected source data has to be reprocessed through every layer after it.",
+        "A quarantine table nobody triages quietly drops data from every report."
       ],
       "featured": false,
       "order": 80,
       "path": "starters/data/medallion/medallion.draftcanvas",
-      "sha256": "d574ee692474aeaebfa860a2a0e34af6275e1bbc28bac9a7ffc1d42f47218965",
-      "bytes": 9750,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "c3e12e04cde3aaded7dcf87531ff2e72afa6b15ce178e7a6e8727f7422d8460d",
+      "bytes": 12934,
+      "formatVersion": 28,
+      "updated": "2026-11-21"
     },
     {
       "id": "kappa",
       "name": "Kappa",
       "category": "data",
-      "summary": "Process live and historical data through one durable stream",
+      "summary": "Card fraud scoring from one durable log: live scoring, and a full replay to rebuild with new rules",
       "aliases": [
         "kappa",
         "kappa architecture",
@@ -297,70 +341,83 @@
         "log replay",
         "materialized view",
         "stream processing",
-        "unified log"
+        "unified log",
+        "fraud detection",
+        "reprocessing",
+        "blue green view"
       ],
       "tags": [
         "streaming",
         "event log",
         "replay",
-        "materialized view"
+        "materialized view",
+        "fraud"
       ],
       "useWhen": [
-        "Real-time views where reprocessing history must use the same code.",
-        "Replacing a separate batch layer."
+        "Real-time views where reprocessing history must use the same code as live processing.",
+        "Replacing a separate batch layer with one stream processor and a log you can replay.",
+        "Changing scoring rules and rebuilding a view side by side before switching to it."
       ],
       "watchOutFor": [
-        "Replays of a long log take time and capacity.",
-        "The log's retention decides how far back you can rebuild."
+        "Replaying a long log takes hours and cluster capacity; plan the cutover.",
+        "The log's retention decides how far back you can rebuild.",
+        "Logic that reads the clock instead of event time scores a replay differently from live."
       ],
       "featured": false,
       "order": 90,
       "path": "starters/data/kappa/kappa.draftcanvas",
-      "sha256": "acb3a51ccf445600a83efef17104a857fd458e354cf479f1e0688d9995055ef1",
-      "bytes": 7435,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "30946fb9e1f1e649d3715d081361d478e8e52546d78ae70eb2e9b4a1deeec85d",
+      "bytes": 17495,
+      "formatVersion": 31,
+      "updated": "2026-11-21"
     },
     {
       "id": "cdc",
       "name": "Change Data Capture",
       "category": "data",
-      "summary": "Capture committed changes once, fan out to derived views",
+      "summary": "A marketplace streams committed listing changes from PostgreSQL to search, cache and warehouse",
       "aliases": [
         "cdc",
         "change data capture",
         "cdc pipeline",
         "change stream",
         "log-based replication",
-        "debezium"
+        "debezium",
+        "wal",
+        "outbox alternative",
+        "cache invalidation",
+        "search sync"
       ],
       "tags": [
         "change data capture",
         "replication",
         "derived views",
-        "search index"
+        "search index",
+        "cache"
       ],
       "useWhen": [
-        "Keeping other systems in sync with a database without dual writes.",
-        "Feeding search, caches or analytics from the source of truth."
+        "Keeping search, caches or analytics in sync with a database without dual writes.",
+        "Feeding several derived views, each at its own pace, from one source of truth.",
+        "Backfilling a new view from a snapshot without querying production."
       ],
       "watchOutFor": [
-        "Derived views are eventually consistent.",
-        "Schema changes in the source ripple to every consumer."
+        "Derived views are eventually consistent: they can show the old value for a moment.",
+        "Events mirror the table: a renamed column breaks every consumer.",
+        "If the connector stops for longer than the WAL is kept, it must snapshot again."
       ],
       "featured": false,
       "order": 100,
       "path": "starters/data/cdc/cdc.draftcanvas",
-      "sha256": "62f3a6104b7aba98f49aed91d4dcfcb3ef00f6f53f8f48176673f42fc85e52ca",
-      "bytes": 8910,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "7cb11907948fa732e789218d1ff7b77ad125c62619e571e461086c685ab68ca1",
+      "bytes": 14318,
+      "formatVersion": 31,
+      "updated": "2026-11-21"
     },
     {
       "id": "saga-orchestration",
       "name": "Saga – Orchestration",
       "category": "pattern",
-      "summary": "Local transactions and compensation, one coordinator",
+      "summary": "One orchestrator books a trip step by step, and cancels the done steps in reverse when the card is declined",
       "aliases": [
         "saga",
         "saga orchestration",
@@ -368,126 +425,444 @@
         "orchestrator",
         "distributed transaction",
         "compensating transaction",
-        "compensation"
+        "compensation",
+        "workflow engine",
+        "temporal",
+        "travel booking"
       ],
       "tags": [
         "saga",
         "orchestrator",
         "compensation",
-        "distributed transaction"
+        "distributed transaction",
+        "workflow"
       ],
       "useWhen": [
         "A workflow spans several services and must undo completed steps on failure.",
-        "You want one place that knows the workflow's state."
+        "You want one place that knows the workflow's state and can answer \"where is my booking?\".",
+        "Steps have a fixed order and the riskiest one can go last."
       ],
       "watchOutFor": [
-        "The orchestrator can become a bottleneck or a god service.",
-        "Every step needs a compensation that really undoes it."
+        "The orchestrator can grow into a god service that owns other teams' business rules.",
+        "Every step needs a compensation that really undoes it, and is idempotent when retried.",
+        "A compensation is a new transaction, not a rollback: the seat was held for a while.",
+        "Without durable workflow state, a crash mid-saga leaves steps nobody will undo."
       ],
       "featured": false,
       "order": 110,
       "path": "starters/patterns/saga-orchestration/saga-orchestration.draftcanvas",
-      "sha256": "bfa018f453ca0424cdaf46c10c57b1471157b35f0b604ef100bd5516782387f9",
-      "bytes": 9834,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "5418b38e4647db38f237f99672ab41a59e02c8e5be36d771d7cf0c4158d9969f",
+      "bytes": 21732,
+      "formatVersion": 31,
+      "updated": "2026-11-21"
     },
     {
       "id": "saga-choreography",
       "name": "Saga – Choreography",
       "category": "pattern",
-      "summary": "Local transactions chained by events, with no coordinator",
+      "summary": "A food order moves through payment and kitchen by events alone, and unwinds by events when a restaurant says no",
       "aliases": [
         "saga choreography",
         "choreographed saga",
         "choreography",
         "event-driven saga",
         "no orchestrator",
-        "reactive saga"
+        "reactive saga",
+        "food delivery",
+        "kafka saga"
       ],
       "tags": [
         "saga",
         "choreography",
         "events",
-        "compensation"
+        "compensation",
+        "kafka"
       ],
       "useWhen": [
         "Few steps, owned by different teams, that already communicate through events.",
-        "Avoiding a central workflow service."
+        "Avoiding a central workflow service that every change has to go through.",
+        "Each step can decide on its own what to do when it sees a fact."
       ],
       "watchOutFor": [
-        "The whole workflow is visible only by following the events.",
-        "Cyclic dependencies between services creep in as steps grow."
+        "The whole workflow is visible only by following the events; trace a correlation id.",
+        "Nothing times out a stuck saga unless some service is made responsible for it.",
+        "Cyclic dependencies between services creep in as steps grow.",
+        "Compensations are reactions too: a missed event leaves money taken for a cancelled order."
       ],
       "featured": false,
       "order": 120,
       "path": "starters/patterns/saga-choreography/saga-choreography.draftcanvas",
-      "sha256": "cfb1a00cac9a867bd0e0124d0a9f628ed4de7ce3acdfba347bad7cda59a9f53d",
-      "bytes": 12017,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "ec246c3efd1a03782fac5f777713a482c58a983ed7c45471b4a479004af2172e",
+      "bytes": 14759,
+      "formatVersion": 29,
+      "updated": "2026-11-21"
     },
     {
       "id": "transactional-outbox",
       "name": "Transactional Outbox",
       "category": "pattern",
-      "summary": "Persist state and event intent atomically, publish after",
+      "summary": "A bank transfer and its event commit in one transaction; Debezium publishes it after, and consumers drop duplicates",
       "aliases": [
         "outbox",
         "transactional outbox",
         "outbox pattern",
         "dual write",
-        "reliable publish"
+        "reliable publish",
+        "debezium outbox",
+        "inbox pattern",
+        "idempotent consumer"
       ],
       "tags": [
         "outbox",
         "reliable messaging",
         "events",
-        "consistency"
+        "consistency",
+        "cdc",
+        "idempotency"
       ],
       "useWhen": [
         "A state change and its event must never disagree.",
-        "Publishing events from a service that owns a database."
+        "Publishing events from a service that owns a relational database.",
+        "The broker must not be on the request path: a Kafka outage should not block writes."
       ],
       "watchOutFor": [
-        "Events arrive at least once and slightly late.",
-        "The outbox table needs cleaning up."
+        "Events arrive at least once and slightly late; every consumer must deduplicate.",
+        "The outbox table grows unless rows are deleted once published.",
+        "Ordering holds only per message key; choose the key for the order consumers need.",
+        "The relay is one more thing to run and monitor: lag means late events."
       ],
       "featured": false,
       "order": 130,
       "path": "starters/patterns/transactional-outbox/transactional-outbox.draftcanvas",
-      "sha256": "98a7c16ee25d631f7e38c2e27606d152b9025b6d46726861f5b68d313aa38e52",
-      "bytes": 6689,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "79a635202bbc89281c7366ea9b30d71d4140c850ecdb3e2e61488138d09f54eb",
+      "bytes": 17508,
+      "formatVersion": 28,
+      "updated": "2026-11-21"
+    },
+    {
+      "id": "video-streaming",
+      "name": "Video streaming platform",
+      "category": "example",
+      "summary": "A whole streaming service: devices, edge, playback, discovery, data and an ISP-hosted video edge",
+      "aliases": [
+        "video streaming",
+        "streaming service",
+        "video on demand",
+        "vod",
+        "netflix-style architecture",
+        "ott platform",
+        "cdn",
+        "drm",
+        "encoding pipeline"
+      ],
+      "tags": [
+        "example",
+        "system design",
+        "streaming",
+        "cdn",
+        "recommendations",
+        "kafka"
+      ],
+      "useWhen": [
+        "Seeing every Draft Canvas feature at work in one realistic system before drawing your own.",
+        "Explaining how video reaches screens: playback decisions in the cloud, bytes from the edge.",
+        "Starting a system-design discussion about a large consumer platform."
+      ],
+      "watchOutFor": [
+        "It is a big picture on purpose: present it flow by flow rather than all at once.",
+        "Scale numbers are illustrative; replace them with your own before you reason from them.",
+        "Three connectors are portals and the file is format 29, so it needs a current Draft Canvas."
+      ],
+      "featured": true,
+      "order": 100,
+      "path": "starters/examples/video-streaming/video-streaming.draftcanvas",
+      "sha256": "2919e399f5df593e4000e4efe766f1a338d14eaa1676cc71e9b829afd55c4552",
+      "bytes": 48471,
+      "formatVersion": 29,
+      "updated": "2026-11-21"
+    },
+    {
+      "id": "music-streaming",
+      "name": "Music streaming service",
+      "category": "example",
+      "summary": "A whole music service: playback from a CDN, an AI DJ, weekly mixes, royalties and artist releases",
+      "aliases": [
+        "music streaming",
+        "audio streaming",
+        "spotify-style architecture",
+        "playlists",
+        "royalties",
+        "ai dj",
+        "recommendations",
+        "podcast platform"
+      ],
+      "tags": [
+        "example",
+        "system design",
+        "streaming",
+        "ai agent",
+        "recommendations",
+        "analytics"
+      ],
+      "useWhen": [
+        "Seeing how an AI agent, batch jobs and a live API share one realistic system.",
+        "Explaining how one play becomes a song, a recommendation and a royalty payment.",
+        "Starting a system-design discussion about a consumer platform with a data business."
+      ],
+      "watchOutFor": [
+        "It is a big picture on purpose: present it flow by flow rather than all at once.",
+        "Scale numbers are illustrative; replace them with your own before you reason from them.",
+        "Two connectors are portals and the file is format 29, so it needs a current Draft Canvas."
+      ],
+      "featured": true,
+      "order": 110,
+      "path": "starters/examples/music-streaming/music-streaming.draftcanvas",
+      "sha256": "f8aa23288d37caea71364308abdd50c5b13652ba87e98b2378c1e326e2798c58",
+      "bytes": 46255,
+      "formatVersion": 31,
+      "updated": "2026-11-21"
+    },
+    {
+      "id": "ride-hailing",
+      "name": "Ride-hailing platform",
+      "category": "example",
+      "summary": "A whole two-sided marketplace: live driver locations, dispatch, surge, trips, payments and payouts",
+      "aliases": [
+        "ride hailing",
+        "ride sharing",
+        "taxi app",
+        "uber-style architecture",
+        "two-sided marketplace",
+        "dispatch",
+        "surge pricing",
+        "geospatial index",
+        "h3"
+      ],
+      "tags": [
+        "example",
+        "system design",
+        "marketplace",
+        "geospatial",
+        "real-time",
+        "payments"
+      ],
+      "useWhen": [
+        "Seeing a real-time, two-sided system drawn end to end, from a driver's GPS ping to a weekly payout.",
+        "Explaining matching: H3 cells, ETA ranking, one offer at a time, and surge drawing drivers in.",
+        "Starting a system-design discussion about a marketplace with live location and money."
+      ],
+      "watchOutFor": [
+        "It is a big picture on purpose: present it flow by flow rather than all at once.",
+        "Scale numbers and surge multipliers are illustrative; replace them before you reason from them.",
+        "Dispatch is held in place and one connector is a portal, so the file is format 29 and needs a current Draft Canvas."
+      ],
+      "featured": false,
+      "order": 120,
+      "path": "starters/examples/ride-hailing/ride-hailing.draftcanvas",
+      "sha256": "9ed20b60f29b2e365be2e753e62aaa35b735766ea69eeed054e06f9a4e1ad723",
+      "bytes": 52289,
+      "formatVersion": 31,
+      "updated": "2026-11-21"
+    },
+    {
+      "id": "food-delivery",
+      "name": "Food delivery marketplace",
+      "category": "example",
+      "summary": "A three-sided marketplace: customers, restaurants and couriers, an order saga with refunds, dispatch and payouts",
+      "aliases": [
+        "food delivery",
+        "delivery marketplace",
+        "doordash-style architecture",
+        "uber eats-style architecture",
+        "three-sided marketplace",
+        "order saga",
+        "courier dispatch",
+        "restaurant ordering"
+      ],
+      "tags": [
+        "example",
+        "system design",
+        "marketplace",
+        "saga",
+        "outbox",
+        "dispatch"
+      ],
+      "useWhen": [
+        "Seeing a saga, an outbox and a dead-letter queue work together in one realistic system.",
+        "Explaining how one order moves between a customer, a restaurant and a courier.",
+        "Starting a system-design discussion about a marketplace with real-time logistics."
+      ],
+      "watchOutFor": [
+        "It is a big picture on purpose: present it flow by flow rather than all at once.",
+        "Scale numbers are illustrative; replace them with your own before you reason from them.",
+        "Five connectors are portals and the file is format 29, so it needs a current Draft Canvas."
+      ],
+      "featured": false,
+      "order": 130,
+      "path": "starters/examples/food-delivery/food-delivery.draftcanvas",
+      "sha256": "90a0606457fbbf1528a4643594e376aa627218a82012273d7eeb361c132482cc",
+      "bytes": 55668,
+      "formatVersion": 29,
+      "updated": "2026-11-21"
     },
     {
       "id": "order-processing",
       "name": "Order processing",
       "category": "example",
-      "summary": "Follow an order from the API through a queue to storage",
+      "summary": "A shop takes the payment, queues fulfilment, and parks orders the warehouse keeps refusing",
       "aliases": [
-        "order example"
+        "order example",
+        "checkout",
+        "e-commerce",
+        "queue and worker",
+        "accept fast fulfil later"
       ],
       "tags": [
         "example",
         "queue",
-        "worker"
+        "worker",
+        "dead letter",
+        "payments"
       ],
       "useWhen": [
-        "Learning how shapes, connectors and flows read on the canvas.",
-        "A starting point for any queue-and-worker design."
+        "Learning how shapes, connectors, flows, notes and drill-down views read on the canvas.",
+        "A request must answer fast while slower work, like booking a shipment, happens after.",
+        "Sketching any queue-and-worker design with a failure path."
       ],
       "watchOutFor": [
-        "It is deliberately small: there is no failure path."
+        "Storing the order and sending the command are two writes; pair it with the Transactional Outbox.",
+        "Competing consumers process orders out of order; nothing here may depend on it.",
+        "A dead-letter queue nobody watches is just a slower way to lose orders."
       ],
       "featured": false,
       "order": 140,
       "path": "starters/examples/order-processing/order-processing.draftcanvas",
-      "sha256": "975a67a0c7163cde2b590d5c3c0bbcc2a0ef4f822ab0571e98084590404f94ad",
-      "bytes": 2979,
-      "formatVersion": 25,
-      "updated": "2026-11-11"
+      "sha256": "a24d033188dca779e7ec261116d1eac0898aeb87f8d17eb68c84aae4f269949a",
+      "bytes": 18651,
+      "formatVersion": 28,
+      "updated": "2026-11-21"
+    }
+  ],
+  "styles": [
+    {
+      "id": "professional",
+      "name": "Professional",
+      "summary": "Refined duotone product icons with quiet depth, on a drafting sheet, for documents and slides",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 10,
+      "path": "styles/professional/professional.draftstyle",
+      "sha256": "d9fa0e1692b9119c11d96c01f696ab64970875261daa68da75ce87a35fe65b71",
+      "bytes": 74097,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "geek",
+      "name": "Geek",
+      "summary": "A retro computing lab in glowing phosphor: every shape its own piece of 16-bit pixel hardware",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 20,
+      "path": "styles/geek/geek.draftstyle",
+      "sha256": "6ac58e150aa36f5cc600052268d9f789301cbea0bcbee16792edb29f7bbc8daa",
+      "bytes": 96037,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "arena",
+      "name": "Arena",
+      "summary": "Navy enamel and bevelled gold battle arena: plaques, turrets, cut gems, loot and the lanes between them",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 30,
+      "path": "styles/arena/arena.draftstyle",
+      "sha256": "a37f2bb01abf746046a9485ac48a6aaa86c4c860f4dde3539a37a8aee0ac94cf",
+      "bytes": 106870,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "high-seas",
+      "name": "High seas",
+      "summary": "A hand-coloured woodcut sea chart: a lighthouse, a ledger, a powder keg, a bottle of messages",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 40,
+      "path": "styles/high-seas/high-seas.draftstyle",
+      "sha256": "2011a50b80fd0083f2e4cbcb62ff083f64dfe3a1f9c17745856db77fc90d0ed1",
+      "bytes": 82852,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "high-fantasy",
+      "name": "High fantasy",
+      "summary": "An illuminated storybook on moss-green vellum, in gold leaf and lapis: keeps, cauldrons, rune stones and an owl",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 50,
+      "path": "styles/high-fantasy/high-fantasy.draftstyle",
+      "sha256": "99ae24632f2f6b52fcb1a1217e9509fb18c60c38b6c64c2636524e39040f844c",
+      "bytes": 83372,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "cyberpunk",
+      "name": "Cyberpunk",
+      "summary": "A neon night city of drones, megatowers and maglev trains, in glowing tube and chrome",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 60,
+      "path": "styles/cyberpunk/cyberpunk.draftstyle",
+      "sha256": "da962ab7dc63a5599f8a6bd150d0e4b2a728e08c54a4fa25059819ddcc4ad0d6",
+      "bytes": 81437,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "cute",
+      "name": "Cute",
+      "summary": "A kawaii sticker sheet: a busy bee, a jam jar, a caterpillar queue and bear-eared friends, glossy, die-cut and smiling",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 70,
+      "path": "styles/cute/cute.draftstyle",
+      "sha256": "bc1de5db9fe5907c809b1bcfacb21188f7ad46fccbe04ca18bc42d77eb34641e",
+      "bytes": 204068,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "weeb",
+      "name": "Weeb",
+      "summary": "Inked manga under an after-school sky: a shrine gate, a bento box, ramen bowls in line, carp streamers in the wind",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 80,
+      "path": "styles/weeb/weeb.draftstyle",
+      "sha256": "a358404e3b4b44e2d3326fa7a5f18fa244868e09cebe6b99d973728f965875a2",
+      "bytes": 86348,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "hardwood",
+      "name": "Hardwood",
+      "summary": "Basketball as a bold daylight poster: ball orange, deep ink, white and court teal on warm peach",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 90,
+      "path": "styles/hardwood/hardwood.draftstyle",
+      "sha256": "3ccbec1f1d952fd73079e44ca6fd63bd026e342bc644e16675584b6286208904",
+      "bytes": 62085,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "match-point",
+      "name": "Match Point",
+      "summary": "A sunlit court as a bold club poster in lemon-lime, bottle green and clay: a ball machine, a scoreboard, a can of balls",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 100,
+      "path": "styles/match-point/match-point.draftstyle",
+      "sha256": "69bffa099bec07b47bb79f40a0720e75883eec02e7b80ef27d19ab1fd1adc6b4",
+      "bytes": 61572,
+      "updated": "2026-11-23"
     }
   ]
 }

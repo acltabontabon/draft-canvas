@@ -36,18 +36,16 @@ const SPECS = {
     description: 'Every action, searchable.',
     usageHint: 'Reach any command, flow, or starter without leaving the keyboard.',
   },
-  flows: {
-    title: 'Flows',
-    // Handled directly by the editor's key map, not as a registered command.
-    literalShortcut: 'F',
-    description: 'A named, ordered walkthrough of connectors already on the canvas.',
-    usageHint: 'An explanation layer over the architecture — dim everything else, or step through it.',
+  presentMenu: {
+    title: 'What to present',
+    description: 'The selection, the whole diagram, or a flow you have made.',
+    usageHint: 'Flows are made and edited from here too (F).',
   },
   present: {
     title: 'Present',
     commandId: 'present',
-    description: 'Shows the canvas full screen, without the editor around it.',
-    usageHint: 'With a flow active, reveals it one step at a time.',
+    description: 'Walks through the diagram one connector at a time, full screen.',
+    usageHint: 'Presents the selection, else the active flow, else the whole diagram in arrow order.',
   },
   zoomOut: { title: 'Zoom out', commandId: 'zoom-out' },
   zoomIn: { title: 'Zoom in', commandId: 'zoom-in' },
@@ -55,7 +53,7 @@ const SPECS = {
   export: { title: 'Export', commandId: 'export' },
   arrange: { title: 'Arrange diagram', commandId: 'arrange' },
   findReplace: { title: 'Find and replace…', commandId: 'find-replace' },
-  settings: { title: 'Canvas settings', commandId: 'settings' },
+  settings: { title: 'Appearance', commandId: 'appearance', description: 'Your style, the canvas and its settings, beside the diagram.' },
   help: { title: 'Documentation', commandId: 'open-docs', description: 'The guides and reference, in a new tab.' },
   shortcuts: { title: 'Keyboard shortcuts', commandId: 'shortcuts' },
   about: { title: 'About Draft Canvas', commandId: 'about' },

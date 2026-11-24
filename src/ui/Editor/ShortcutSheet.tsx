@@ -36,7 +36,7 @@ function ShortcutSheetBody() {
   const [query, setQuery] = useState('');
 
   const createRows = useMemo(
-    () => ALL_PRESETS.map((preset) => ({ keys: [preset.shortcut], label: `${preset.label} — ${preset.hint}` })),
+    () => ALL_PRESETS.filter((preset) => preset.shortcut).map((preset) => ({ keys: [preset.shortcut], label: `${preset.label} — ${preset.hint}` })),
     [],
   );
 

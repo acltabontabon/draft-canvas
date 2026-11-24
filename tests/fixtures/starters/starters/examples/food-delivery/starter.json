@@ -1,0 +1,36 @@
+{
+  "id": "food-delivery",
+  "name": "Food delivery marketplace",
+  "category": "example",
+  "summary": "A three-sided marketplace: customers, restaurants and couriers, an order saga with refunds, dispatch and payouts",
+  "aliases": [
+    "food delivery",
+    "delivery marketplace",
+    "doordash-style architecture",
+    "uber eats-style architecture",
+    "three-sided marketplace",
+    "order saga",
+    "courier dispatch",
+    "restaurant ordering"
+  ],
+  "tags": [
+    "example",
+    "system design",
+    "marketplace",
+    "saga",
+    "outbox",
+    "dispatch"
+  ],
+  "useWhen": [
+    "Seeing a saga, an outbox and a dead-letter queue work together in one realistic system.",
+    "Explaining how one order moves between a customer, a restaurant and a courier.",
+    "Starting a system-design discussion about a marketplace with real-time logistics."
+  ],
+  "watchOutFor": [
+    "It is a big picture on purpose: present it flow by flow rather than all at once.",
+    "Scale numbers are illustrative; replace them with your own before you reason from them.",
+    "Five connectors are portals and the file is format 29, so it needs a current Draft Canvas."
+  ],
+  "featured": false,
+  "order": 130
+}

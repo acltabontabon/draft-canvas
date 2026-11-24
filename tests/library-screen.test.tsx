@@ -7,6 +7,12 @@ import type { DraftSummary } from '../src/document/types';
 import { useUiStore } from '../src/store/uiStore';
 import type { DocumentSession } from '../src/store/useDocumentSession';
 import { LibraryScreen } from '../src/ui/Library/LibraryScreen';
+import { restoreLibrary } from '../src/ui/Library/backupActions';
+
+vi.mock('../src/ui/Library/backupActions', async (original) => ({
+  ...(await original<typeof import('../src/ui/Library/backupActions')>()),
+  restoreLibrary: vi.fn(async () => ({ restored: 1, skipped: [] })),
+}));
 
 /**
  * The home screen has to work in every shape a workspace can be in — brand
@@ -28,6 +34,7 @@ function stubSession(overrides: Partial<DocumentSession> = {}): DocumentSession 
     openCollaborative: async () => false,
     makeEditableCopy: async () => {},
     closeDocument: async () => true,
+    replaceWithNew: async () => {},
     resolveConflict: async () => {},
     retrySave: async () => true,
     exportUnsaved: async () => {},
@@ -245,6 +252,21 @@ describe('LibraryScreen — dropped files', () => {
 
     fireEvent.drop(screen.getByRole('heading', { name: 'Recently edited', hidden: true }), dropped());
     await vi.waitFor(() => expect(adoptDocument).toHaveBeenCalledTimes(1));
+  });
+
+  // #172: an empty browser has no Restore button, and a backup read as a diagram was "not valid JSON".
+  it('restores a backup ZIP dropped on a first-run Home instead of importing it as a diagram', async () => {
+    const adoptDocument = vi.fn(async () => {});
+    const refreshLibrary = vi.fn(async () => {});
+    const repository = {} as NonNullable<DocumentSession['repository']>;
+    const { container } = render(<LibraryScreen session={stubSession({ repository, adoptDocument, refreshLibrary })} />);
+    const backup = new File([new Uint8Array([0x50, 0x4b, 0x03, 0x04])], 'draft-canvas-backup.zip', { type: 'application/zip' });
+
+    fireEvent.drop(container.firstElementChild!, { dataTransfer: { types: ['Files'], files: [backup] } });
+    await vi.waitFor(() => expect(refreshLibrary).toHaveBeenCalled());
+    expect(vi.mocked(restoreLibrary).mock.calls[0]!.slice(0, 2)).toEqual([repository, backup]);
+    expect(adoptDocument).not.toHaveBeenCalled();
+    expect(container.querySelector<HTMLInputElement>('input[type="file"]')!.accept).toContain('.zip');
   });
 });
 
