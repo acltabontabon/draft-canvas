@@ -90,7 +90,7 @@
     "@playwright/test": "^1.65.0",
     "@tauri-apps/api": "^2.12.4",
     "@tauri-apps/cli": "^2.12.4",
-    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/jest-dom": "^8.0.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.10",
     "@types/hast": "^3.0.0",
