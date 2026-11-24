@@ -38,6 +38,40 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 - **Load starters** — Loading the gallery no longer says it couldn’t reach GitHub for a moment
   before the starters arrive.
+- **Room copies** — Pasting and duplicating count the sketches and flows inside rooms toward the
+  diagram’s limits, so the file reopens with everything that was pasted.
+- **Appearance** — Use the arrow keys to switch tabs. When you enter a room while Appearance is
+  open, closing the panel keeps that room in view.
+- **Live collaboration** — The reconnecting notice clears when the existing connection starts
+  receiving again.
+- **Starter downloads** — Clearing the gallery stops an active download. A starter loaded after
+  you switch diagrams stays out of the new diagram.
+- **Sketch-only diagrams** — Drawing your first stroke clears the empty canvas prompt, and adding
+  a starter to a sketch keeps the existing title.
+- **Arrange and Tidy up** — Cancel responds immediately while the layout is waiting for the worker.
+- **Reduced motion** — Arrange previews, proposal jumps, and finding a collaborator respect the
+  system’s reduced-motion setting.
+
+### Desktop
+
+#### Fixed
+
+- **Recovery** — Open a recovery copy as a Quick Draft when the original file is unreadable. A
+  save preserves recovery for edits still in progress, and closing a Quick Draft waits for its
+  recovery copy to be written.
+- **Opening through an agent** — An agent’s request to open another diagram respects edits and
+  live sessions that start while the file is being read.
+- **Moving or renaming files** — A file still switches to its new location if the Recent files list
+  can’t update. Draft Canvas warns when a linked SVG uses the old filename, even for a closed file.
+
+### Web
+
+#### Fixed
+
+- **Autosave** — A failed attempt to keep your copy offers retry and recovery controls. Moving the
+  camera leaves Library edit dates intact.
+- **The website film** — Playback keeps your mute choice across chapters and leaves keyboard focus
+  where you put it. Browser video controls are available when scripting is disabled.
 
 ## [1.21.1] - 2026-11-23
 

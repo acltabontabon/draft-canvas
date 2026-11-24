@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ShapePreview } from '../../canvas/ShapePreview';
 import {
   HAND_PRESETS,
@@ -156,6 +156,7 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
   // The store's, not this page's: the way in says which tab (the canvas's settings open on Canvas).
   const tab = useUiStore((state) => state.stylePanelTab);
   const setTab = useUiStore((state) => state.setStylePanelTab);
+  const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const { preset, setPreset } = usePersonality();
   const { name: theme } = useTheme();
   const profiles = useStyleStore((state) => state.profiles);
@@ -320,6 +321,19 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
   );
 
   if (panel) {
+    const onTabKey = (event: KeyboardEvent<HTMLButtonElement>, index: number) => {
+      if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+      const count = PANEL_TABS.length;
+      const next = event.key === 'Home' ? 0
+        : event.key === 'End' ? count - 1
+        : event.key === 'ArrowLeft' ? (index - 1 + count) % count
+        : event.key === 'ArrowRight' ? (index + 1) % count
+        : null;
+      if (next === null) return;
+      event.preventDefault();
+      setTab(PANEL_TABS[next]!.id);
+      tabs.current[next]?.focus();
+    };
     // What the two working tabs change, said once at their head.
     // The cover already names the style being changed; only a built-in needs a word, once: a change copies it.
     const subject = active ? null : <p className="dc-look-subject">A change here makes {HAND_LABELS[preset]} a style of your own.</p>;
@@ -327,8 +341,20 @@ export function AppearanceSettings({ documentOpen = true, layout = 'page' }: { d
       <CompactPrefs value>
       <div className="dc-prefs-page dc-look-column">
         <div className="dc-look-tabs" role="tablist" aria-label="Appearance">
-          {PANEL_TABS.map((entry) => (
-            <button key={entry.id} type="button" role="tab" id={`dc-look-tab-${entry.id}`} aria-selected={tab === entry.id} aria-controls="dc-look-tabpanel" className="dc-look-tab" onClick={() => setTab(entry.id)}>
+          {PANEL_TABS.map((entry, index) => (
+            <button
+              key={entry.id}
+              ref={(element) => { tabs.current[index] = element; }}
+              type="button"
+              role="tab"
+              id={`dc-look-tab-${entry.id}`}
+              aria-selected={tab === entry.id}
+              aria-controls="dc-look-tabpanel"
+              tabIndex={tab === entry.id ? 0 : -1}
+              className="dc-look-tab"
+              onClick={() => setTab(entry.id)}
+              onKeyDown={(event) => onTabKey(event, index)}
+            >
               {entry.label}
             </button>
           ))}

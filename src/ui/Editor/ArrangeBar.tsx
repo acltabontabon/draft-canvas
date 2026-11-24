@@ -5,6 +5,7 @@ import { focusBoundsInView } from '../../commands/search';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument } from '../../document/types';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
+import { motionMs } from '../../lib/motion';
 import { isInteracting, useEditorStore } from '../../store/editorStore';
 import { useUiStore, type ArrangeDirection, type ArrangePreview, type ArrangeShow } from '../../store/uiStore';
 import { Button } from '../common/Button';
@@ -66,7 +67,7 @@ export function ArrangeBar() {
   const show = preview?.show;
   const camera = { viewWidth, viewHeight, setViewport };
   const goBack = () => {
-    if (origin.current) void setViewport(origin.current, { duration: CAMERA_MS });
+    if (origin.current) void setViewport(origin.current, { duration: motionMs(CAMERA_MS) });
   };
   const cancel = () => {
     goBack();

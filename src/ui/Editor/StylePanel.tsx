@@ -1,6 +1,7 @@
 import { useReactFlow, type Viewport } from '@xyflow/react';
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { useDiagramStyle } from '../../canvas/useDiagramStyle';
+import { pathKey } from '../../depth/tree';
 import { backdropTile } from '../../render/style/backdrop';
 import { useTheme } from '../../theme/useTheme';
 import { fitPadding } from '../../lib/fitPadding';
@@ -30,7 +31,7 @@ const HAND_NAMES = { clean: 'Clean', draft: 'Draft', sketch: 'Sketch' } as const
 
 interface Camera {
   /** Where the view was before the sidebar took its room. */
-  before: Viewport | null;
+  before: { viewport: Viewport; documentId: string; room: string } | null;
   /** The person panned or zoomed while it was open: the view is theirs, and stays. */
   moved: boolean;
 }
@@ -59,14 +60,23 @@ export function StylePanel() {
   useEffect(() => {
     const before = was.current;
     was.current = open;
-    if (open && !before) camera.current = { before: getViewport(), moved: false };
+    if (open && !before) {
+      const state = useEditorStore.getState();
+      camera.current = {
+        before: { viewport: getViewport(), documentId: state.document.metadata.id, room: pathKey(state.path) },
+        moved: false,
+      };
+    }
     if (open || !before) return;
-    // The view goes back to where it was, once the canvas has its room again: unless the person
-    // panned or zoomed meanwhile, in which case it is theirs and stays. Asked of what they did, not
-    // of where the camera is: comparing positions after an animation did not hold in every browser.
-    const { before: back, moved } = camera.current;
+    // Restore the camera after the sidebar releases its space while the same room is still in view
+    // and the person has left the camera alone. Check again when the exit animation finishes.
+    const back = camera.current.before;
     const wait = motionMs(LEAVE_MS);
-    const restore = back && !moved ? window.setTimeout(() => void setViewport(back, { duration: motionMs(320) }), wait) : undefined;
+    const restore = back ? window.setTimeout(() => {
+      const state = useEditorStore.getState();
+      if (camera.current.moved || state.document.metadata.id !== back.documentId || pathKey(state.path) !== back.room) return;
+      void setViewport(back.viewport, { duration: motionMs(320) });
+    }, wait) : undefined;
     const timer = window.setTimeout(() => setLeaving(false), wait);
     return () => {
       window.clearTimeout(timer);
