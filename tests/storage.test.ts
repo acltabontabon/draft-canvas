@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { IDBFactory, IDBObjectStore } from 'fake-indexeddb';
 import { cloneDocumentAsNew, createDocument, createEdge, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
@@ -634,113 +634,32 @@ describe('local persistence', () => {
   });
 });
 
-/** Phase 5.1 — one background image blob per document, in its own store. */
-describe.each([
-  ['IndexedDbRepository', () => IndexedDbRepository.open()],
-  ['MemoryRepository', () => Promise.resolve(new MemoryRepository())],
-])('background image storage (%s)', (_name, open) => {
-  /** Pruning spares an image stored in the last day (another tab may be about to name it); these
-   *  tests prune as if that day had passed. */
-  const aDayLater = () => vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 25 * 60 * 60 * 1000);
-  afterEach(() => vi.restoreAllMocks());
-
-  it('spares an image another tab stored moments ago, even though nothing on disk names it yet', async () => {
-    const repository = await open();
-    if (!(repository instanceof IndexedDbRepository)) return; // one tab only: nothing else can be about to name it
-    await repository.saveBackgroundImage('d_fresh', new Blob(['x'], { type: 'image/png' }), { width: 1, height: 1 }, 'bg_new');
-    await repository.pruneBackgroundImages('d_fresh', null);
-    expect(await repository.loadBackgroundImage('d_fresh', 'bg_new')).not.toBeNull();
-    aDayLater();
-    await repository.pruneBackgroundImages('d_fresh', null);
-    expect(await repository.loadBackgroundImage('d_fresh', 'bg_new')).toBeNull();
+/** Background images are gone. The store they were kept in stays, for a build from before that. */
+it('empties the retired background image store on open, and leaves every diagram as it was', async () => {
+  const repository = await IndexedDbRepository.open();
+  const doc = documentWith('Had a backdrop', 2);
+  await repository.save(doc);
+  const db = await new Promise<IDBDatabase>((resolve, reject) => {
+    const request = indexedDB.open('draft-canvas');
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+  await new Promise<void>((resolve, reject) => {
+    const tx = db.transaction('backgroundImages', 'readwrite');
+    tx.objectStore('backgroundImages').put({ id: doc.metadata.id, blob: new Blob(['x']), mimeType: 'image/png', width: 1, height: 1 });
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
   });
 
-  it("removing or pruning a document never touches another document's images whose id extends it with #", async () => {
-    const repository = await open();
-    const dims = { width: 10, height: 10 };
-    const image = () => new Blob(['x'], { type: 'image/png' });
-    await repository.saveBackgroundImage('d_x', image(), dims, 'bg_a');
-    await repository.saveBackgroundImage('d_x#1', image(), dims, 'bg_b');
-
-    aDayLater();
-    await repository.pruneBackgroundImages('d_x', null);
-    expect(await repository.loadBackgroundImage('d_x', 'bg_a')).toBeNull();
-    expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
-
-    await repository.saveBackgroundImage('d_x', image(), dims, 'bg_c');
-    await repository.remove('d_x');
-    expect(await repository.loadBackgroundImage('d_x', 'bg_c')).toBeNull();
-    expect(await repository.loadBackgroundImage('d_x#1', 'bg_b')).not.toBeNull();
+  const reopened = await IndexedDbRepository.open();
+  const left = await new Promise<unknown[]>((resolve, reject) => {
+    const request = db.transaction('backgroundImages').objectStore('backgroundImages').getAll();
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
   });
-
-  it('round-trips a saved image', async () => {
-    const repository = await open();
-    const doc = documentWith('With background');
-    await repository.save(doc);
-    const blob = new Blob(['fake-image-bytes'], { type: 'image/png' });
-
-    await repository.saveBackgroundImage(doc.metadata.id, blob, { width: 200, height: 100 });
-    const loaded = await repository.loadBackgroundImage(doc.metadata.id);
-
-    expect(loaded).not.toBeNull();
-    expect(loaded!.width).toBe(200);
-    expect(loaded!.height).toBe(100);
-    expect(loaded!.blob.type).toBe('image/png');
-  });
-
-  it('keeps each chosen image under its own id, and prunes all but the one showing', async () => {
-    const repository = await open();
-    const doc = documentWith('Replaced background');
-    await repository.save(doc);
-    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['legacy']), { width: 1, height: 1 });
-    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['first']), { width: 2, height: 2 }, 'bg_a');
-    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['second']), { width: 3, height: 3 }, 'bg_b');
-    const other = documentWith('Untouched');
-    await repository.saveBackgroundImage(other.metadata.id, new Blob(['other']), { width: 4, height: 4 });
-
-    // Undo of a replace reads the previous id — its bytes are still there.
-    expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_a'))!.width).toBe(2);
-    expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_b'))!.width).toBe(3);
-
-    aDayLater();
-    await repository.pruneBackgroundImages(doc.metadata.id, { imageId: 'bg_b' });
-    expect(await repository.loadBackgroundImage(doc.metadata.id)).toBeNull();
-    expect(await repository.loadBackgroundImage(doc.metadata.id, 'bg_a')).toBeNull();
-    expect((await repository.loadBackgroundImage(doc.metadata.id, 'bg_b'))!.width).toBe(3);
-    expect((await repository.loadBackgroundImage(other.metadata.id))!.width).toBe(4);
-
-    await repository.remove(doc.metadata.id);
-    expect(await repository.loadBackgroundImage(doc.metadata.id, 'bg_b')).toBeNull();
-    expect((await repository.loadBackgroundImage(other.metadata.id))!.width).toBe(4);
-  });
-
-  it('returns null when no background image is stored', async () => {
-    const repository = await open();
-    expect(await repository.loadBackgroundImage('no-such-document')).toBeNull();
-  });
-
-  it('removing a background image clears it independently of the document', async () => {
-    const repository = await open();
-    const doc = documentWith('Removable background');
-    await repository.save(doc);
-    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['x']), { width: 10, height: 10 });
-
-    await repository.removeBackgroundImage(doc.metadata.id);
-
-    expect(await repository.loadBackgroundImage(doc.metadata.id)).toBeNull();
-    expect(await repository.load(doc.metadata.id)).not.toBeNull();
-  });
-
-  it('deleting the document also clears its background image', async () => {
-    const repository = await open();
-    const doc = documentWith('Deleted with background');
-    await repository.save(doc);
-    await repository.saveBackgroundImage(doc.metadata.id, new Blob(['x']), { width: 10, height: 10 });
-
-    await repository.remove(doc.metadata.id);
-
-    expect(await repository.loadBackgroundImage(doc.metadata.id)).toBeNull();
-  });
+  db.close();
+  expect(left).toEqual([]);
+  expect((await reopened.load(doc.metadata.id))!.nodes).toHaveLength(2);
 });
 
 /** Projects — a flat, optional grouping of canvases. See `document/types.ts`'s `Project`. */

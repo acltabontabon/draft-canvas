@@ -1,4 +1,5 @@
 import type { DraftEdge } from '../document/types';
+import type { StyleHead } from '../document/style';
 import { roundedStepPath } from '../edges/routing';
 import { stepPolyline } from '../edges/waypoints';
 import { Lru } from '../lib/lru';
@@ -50,9 +51,16 @@ export function styledConnectorPath(d: string, edge: Pick<DraftEdge, 'routing' |
   return cache ? styled.getOrCreate(d, build) : styled.get(d) ?? build();
 }
 
-/** A curved, carved nib pointing right. Sketch jitters this same geometry per edge. */
-export function connectorHead(open = false): string {
+/**
+ * An arrowhead pointing right: the curved, carved nib every connector has worn, or a plain
+ * triangle. Sketch jitters this same geometry per edge.
+ *
+ * Both are drawn in the same box with the same tip, so which one a style picks can never move a
+ * route, a clearance or a label.
+ */
+export function connectorHead(open = false, head: StyleHead = 'nib'): string {
   // Drawn in the `arrowLength` × `arrowWidth` box, tip at its right middle: (14, 4).
+  if (head === 'triangle') return open ? 'M0 0 L14 4 L0 8' : 'M14 4 L0 0 L0 8 Z';
   return open
     ? 'M0 0 C5 0 9 3.6 14 4 C9 4.4 5 8 0 8'
     : 'M14 4 C9 3.6 5 0 0 0 Q2 3.2 3.6 4 Q2 4.8 0 8 C5 8 9 4.4 14 4 Z';

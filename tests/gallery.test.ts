@@ -8,7 +8,7 @@ import { canvasFromStarter } from '../src/gallery/canvas';
 import { clearGalleryCache } from '../src/gallery/cache';
 import { matchesQuery, parseCatalog } from '../src/gallery/catalog';
 import { GALLERY_BASE } from '../src/gallery/source';
-import { GalleryRefreshError, loadGallery, markStarterSeen, refreshGallery, starterFile } from '../src/gallery/sync';
+import { GalleryRefreshError, loadGallery, markStarterSeen, refreshGallery, starterFile, stylePackFile } from '../src/gallery/sync';
 import { vendoredCatalog, vendoredCatalogText, vendoredFile, vendoredText } from './fixtures/gallery';
 
 /**
@@ -173,5 +173,88 @@ describe('a starter on the canvas', () => {
     const forged = serializeDocument(canvas).replace(entry.sha256, 'not-a-hash');
     const read = parseDocument(forged);
     expect(read.ok && read.document.metadata.origin).toBeUndefined();
+  });
+});
+
+describe('style packs', () => {
+  it('are listed in the catalog beside the starters, and missing from an older one without harm', () => {
+    const catalog = vendoredCatalog();
+    expect((catalog.styles ?? []).map((entry) => entry.id)).toEqual(['professional', 'geek', 'arena', 'high-seas', 'high-fantasy', 'cyberpunk', 'cute', 'weeb', 'hardwood', 'match-point']);
+    for (const entry of catalog.styles ?? []) expect(entry.path).toBe(`styles/${entry.id}/${entry.id}.draftstyle`);
+    const older = JSON.parse(vendoredCatalogText()) as { styles?: unknown };
+    delete older.styles;
+    const parsed = parseCatalog(JSON.stringify(older));
+    expect(parsed.ok && parsed.catalog.styles).toEqual([]);
+  });
+
+  it('skips a pack entry it can’t trust and keeps the rest', () => {
+    const raw = JSON.parse(vendoredCatalogText()) as { styles: Record<string, unknown>[] };
+    const good = raw.styles[0]!;
+    raw.styles = [
+      good,
+      { ...good, id: 'elsewhere', path: 'https://example.test/evil.draftstyle' },
+      { ...good, id: 'climbing', path: 'styles/../../etc/passwd.draftstyle' },
+      { ...good, id: 'a-diagram', path: 'starters/patterns/saga/saga.draftcanvas' },
+      { ...good, id: 'unhashed', sha256: 'nope' },
+      { ...good, id: 'huge', bytes: 50_000_000 },
+      { ...good },
+    ];
+    const parsed = parseCatalog(JSON.stringify(raw));
+    expect(parsed.ok && parsed.catalog.styles?.map((entry) => entry.id)).toEqual([good.id]);
+  });
+
+  it('are fetched from the gallery repository, checked, and read back as styles', async () => {
+    const fetch = serve();
+    const snapshot = await refreshGallery();
+    expect(snapshot.styles).toHaveLength(10);
+    expect(snapshot.styles.every((pack) => pack.availability === 'ready')).toBe(true);
+    for (const [url] of fetch.mock.calls) expect(String(url).startsWith(GALLERY_BASE)).toBe(true);
+
+    const cute = snapshot.styles.find((pack) => pack.id === 'cute')!;
+    const file = await stylePackFile(cute);
+    expect(file?.name).toBe('Cute');
+    // A drawing for every kind of shape, and the backdrop.
+    expect(file?.style.assets?.length).toBe(35);
+    // Kept through a reload of the gallery from its cache, with no request made.
+    fetch.mockClear();
+    expect((await loadGallery())?.styles.map((pack) => pack.id)).toEqual(snapshot.styles.map((pack) => pack.id));
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('refuses a pack that doesn’t match its hash, and one that isn’t a style', async () => {
+    const catalog = vendoredCatalog();
+    const [professional, geek] = catalog.styles!;
+    const diagram = vendoredText(catalog.starters[0]!);
+    // The second is served a diagram under the hash of that diagram: it matches, and still is no style.
+    const raw = JSON.parse(vendoredCatalogText()) as { styles: Record<string, unknown>[] };
+    raw.styles[1] = { ...raw.styles[1], sha256: sha256(diagram), bytes: Buffer.byteLength(diagram) };
+    serve({ 'catalog.json': JSON.stringify(raw), [professional!.path]: `${vendoredText(professional!)} `, [geek!.path]: diagram });
+    const snapshot = await refreshGallery();
+    expect(snapshot.styles.find((pack) => pack.id === 'professional')?.availability).toBe('missing');
+    expect(snapshot.styles.find((pack) => pack.id === 'geek')?.availability).toBe('missing');
+    expect(snapshot.styles.find((pack) => pack.id === 'arena')?.availability).toBe('ready');
+    expect(await stylePackFile(professional!)).toBeNull();
+  });
+});
+
+describe('the gallery, as the interface sees it', () => {
+  it('stays busy from "Load starters" until the starters arrive, however the list is opened meanwhile', async () => {
+    serve();
+    const { useGalleryStore } = await import('../src/store/galleryStore');
+    useGalleryStore.setState({ enabled: false, status: 'idle', snapshot: null, failure: null });
+    // What a list would have shown at each moment: nothing downloaded and not busy reads as a failure.
+    const stranded: string[] = [];
+    const stop = useGalleryStore.subscribe((state) => {
+      if (state.enabled && !state.snapshot && state.status === 'idle' && !state.failure) stranded.push('idle with nothing');
+    });
+    // "Load starters", and the list it opens reading the copy on this device at the same moment.
+    const enabling = useGalleryStore.getState().enable();
+    const opening = useGalleryStore.getState().load();
+    await Promise.all([enabling, opening]);
+    stop();
+    expect(stranded).toEqual([]);
+    expect(useGalleryStore.getState()).toMatchObject({ status: 'idle', failure: null });
+    expect(useGalleryStore.getState().snapshot?.starters.length).toBeGreaterThan(0);
+    await useGalleryStore.getState().disable();
   });
 });

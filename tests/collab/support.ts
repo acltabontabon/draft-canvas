@@ -3,10 +3,11 @@
  * own operations do — in any room, nesting shapes, wiring them, telling flows over them, raising open
  * points, reordering, renaming — and a way to compare two files the way collaborators share them.
  */
+import { HAND_PRESETS } from '../../src/document/style';
 import { embed, roomsOf, viewOf, type DepthPath } from '../../src/depth/tree';
 import { addFlow, addStepToFlow, createFlow, pruneFlowSteps } from '../../src/document/flow';
 import { addOpenPoint, createOpenPoint, removeOpenPoint } from '../../src/document/openPoints';
-import { addEdges, addNodes, insideHeight, removeElements, setParent, setSettings, setTitle, updateEdge, updateNode } from '../../src/document/operations';
+import { addEdges, addNodes, insideHeight, removeElements, setParent, setSettings, setStyle, setTitle, updateEdge, updateNode } from '../../src/document/operations';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import { LIMITS } from '../../src/document/limits';
 import { addParticipant, createMessage, insertItem, updateSequence, wrapItems } from '../../src/document/sequenceOps';
@@ -140,6 +141,7 @@ export function randomEdit(file: DraftDocument, rng: Rng): DraftDocument {
       return point ? addOpenPoint(file, point) : file;
     }
     case 12:
+      if (rng() < 0.3) return setStyle(file, rng() < 0.25 ? undefined : { v: 1, hand: { base: pick(rng, HAND_PRESETS)! }, general: { weight: rng() < 0.5 ? 'bold' : 'fine' } });
       return rng() < 0.5 ? setTitle(file, `Title ${counter}`) : setSettings(file, { grid: rng() < 0.5 ? 'lines' : 'dots' });
     case 13:
       return room.nodes.length > 0 ? inRoom(file, path, (view) => ({ ...view, level: pick(rng, LEVELS)! })) : file;
@@ -191,11 +193,11 @@ export function sharedContent(file: DraftDocument): unknown {
     flows: g.flows,
     level: g.level ?? null,
   });
-  const { image: _image, ...background } = file.settings.background;
   return JSON.parse(JSON.stringify({
     title: file.metadata.title,
-    settings: { ...file.settings, background },
+    settings: file.settings,
     openPoints: file.openPoints,
+    style: file.style ?? null,
     ...(graph(file) as object),
   }));
 }

@@ -19,7 +19,7 @@ beforeEach(() => {
   useEditorStore.setState({ history: { past: [], future: [] } });
   useUiStore.setState({
     armed: null,
-    settingsOpen: false,
+    stylePanelOpen: false,
     shortcutsOpen: false,
     aboutOpen: false,
     commandPaletteOpen: false,
@@ -42,7 +42,7 @@ describe('help menu', () => {
     render(<HelpMenu />);
     await openMenu(user);
 
-    for (const name of ['Commands', 'Keyboard shortcuts', 'Documentation', 'Watch the film', 'About Draft Canvas']) {
+    for (const name of ['Commands', 'Keyboard shortcuts', 'Documentation', 'About Draft Canvas']) {
       expect(screen.getByRole('menuitem', { name })).toBeInTheDocument();
     }
   });

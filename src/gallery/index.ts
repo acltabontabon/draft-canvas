@@ -5,7 +5,7 @@
  * refreshed on request or when a day old. Imports only `document/`, like `starters/`.
  */
 
-export { GALLERY_CATEGORIES, matchesQuery, type GalleryCategory, type GalleryEntry } from './catalog';
+export { GALLERY_CATEGORIES, matchesQuery, type GalleryCategory, type GalleryEntry, type GalleryStyleEntry } from './catalog';
 export { canvasFromFile, canvasFromStarter } from './canvas';
 export { EXAMPLE_TITLE, exampleCanvas, exampleFileDocument } from './example';
 export { clearGalleryCache, readDismissed, writeDismissed } from './cache';
@@ -16,9 +16,11 @@ export {
   markStarterSeen,
   refreshGallery,
   starterFile,
+  stylePackFile,
   type GalleryAvailability,
   type GalleryMark,
   type GallerySnapshot,
   type GalleryStarter,
+  type GalleryStyle,
   type RefreshFailure,
 } from './sync';

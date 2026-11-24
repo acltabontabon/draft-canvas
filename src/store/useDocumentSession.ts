@@ -5,11 +5,9 @@ import { createId } from '../document/ids';
 import { totals } from '../depth/tree';
 import { LIMITS } from '../document/limits';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
-import { adoptEmbeddedBackground } from '../export/background';
 import { hostKind } from '../host/hostInfo';
 import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl, takeOwnStepBack } from '../lib/documentUrl';
 import { clearShareFragment, decodeShareLink, sharePayloadFromHash, shareLinkIsProtected } from '../share';
-import { holdOpen, openAnywhere } from '../storage/openPresence';
 import { discardReloadStash, stashForReload, takeReloadStash } from '../storage/reloadStash';
 import { logDiagnostic } from '../lib/diagnostics';
 import { loadFailureNotice } from '../lib/staleChunk';
@@ -20,6 +18,7 @@ import { getRepository, reconcileMetadata, type DraftRepository } from '../stora
 import { IndexedDbRepository, onStorageSuperseded } from '../storage/IndexedDbRepository';
 import { useCollabStore } from './collabStore';
 import { useUiStore } from './uiStore';
+import { deviceStyle } from './styleStore';
 
 type EditorStoreModule = typeof import('./editorStore');
 
@@ -263,8 +262,6 @@ export function useDocumentSession(): DocumentSession {
   const [shareLocked, setShareLocked] = useState(protectedShareHash !== null);
   const shareAttempt = useRef(0);
   const openedShareHash = useRef<string | null>(null);
-  /** This tab's hold on the open canvas — see `openPresence.ts`. */
-  const openHold = useRef<{ id: string; release: () => Promise<void> } | null>(null);
   const leaveShared = useCallback(() => {
     shareAttempt.current += 1;
     openedShareHash.current = null;
@@ -418,18 +415,6 @@ export function useDocumentSession(): DocumentSession {
       autosave.current?.untrack(openId);
     };
   }, [notify, openId]);
-
-  // Tells other tabs this canvas is open here, so closing it there leaves this tab's undo history's
-  // background images alone. A shared diagram is nobody's stored canvas: nothing to hold.
-  useEffect(() => {
-    if (!openId || sharedRef.current) return;
-    const hold = { id: openId, release: holdOpen(openId) };
-    openHold.current = hold;
-    return () => {
-      void hold.release();
-      if (openHold.current === hold) openHold.current = null;
-    };
-  }, [openId]);
 
   // A closed tab must not cost the user their last few seconds of work.
   // `beforeunload` is avoided deliberately: it disables the back/forward cache.
@@ -749,10 +734,6 @@ export function useDocumentSession(): DocumentSession {
         // anything is stored under the id, not whether it can be read.
         const taken = await repository.has(document.metadata.id).catch(() => true);
         if (taken) document = cloneDocumentAsNew(document, titleWithSuffix(document.metadata.title, ' copy'));
-        // A file that brought its background along: the image goes into its own store under the
-        // id the canvas will have (so after the clone above), and out of the document, so the
-        // Library never holds it twice. Nothing stored here ever carries `image`.
-        document = await adoptEmbeddedBackground(document, repository);
         await repository.save(document);
         const { useEditorStore } = await loadEditorStore();
         // Saved either way — it's in the Library — but only the latest open/create takes the editor.
@@ -791,7 +772,9 @@ export function useDocumentSession(): DocumentSession {
       // A newer navigation: anything still opening gives way to this canvas.
       navigation.current += 1;
       try {
-        const created = starter === 'example' ? exampleCanvas() : starter ?? createDocument(title ?? DEFAULT_TITLE);
+        const started = starter === 'example' ? exampleCanvas() : starter ?? createDocument(title ?? DEFAULT_TITLE);
+        // Its own look from the first moment, so it never changes with whoever opens it later.
+        const created = started.style ? started : { ...started, style: deviceStyle() };
         const document = projectId ? { ...created, metadata: { ...created.metadata, projectId } } : created;
         await adoptDocument(document, { fresh: true });
         if (starter === 'example') {
@@ -838,36 +821,11 @@ export function useDocumentSession(): DocumentSession {
       );
       return false;
     }
-    // Replaced and removed backgrounds kept their images only so undo could bring them back. Undo
-    // history ends here, so everything but the image actually showing goes — the one the *stored*
-    // copy shows, which another tab may have changed since this one last looked. Not while another
-    // tab has the canvas open (`openPresence.ts`), nor when the browser can't say: that tab's undo
-    // history may name an image this one replaced, and pruning left its undo pointing at nothing.
-    const editor = await loadEditorStore();
-    if (request !== navigation.current) return true;
-    const closing = editor.useEditorStore.getState().document;
-    // A host's file has no other tab, and its in-memory copy is never autosaved: the file on screen
-    // names the background to keep.
-    const hostFile = hostKind() ? editor.fileOf(editor.useEditorStore.getState()) : null;
-    if (repository && closing.metadata.id === openId) {
-      const id = closing.metadata.id;
-      const hold = openHold.current?.id === id ? openHold.current : null;
-      void (async () => {
-        await hold?.release();
-        if ((await openAnywhere(id)) !== false) return;
-        const stored = hostFile ?? (await repository.load(id));
-        if (!stored) return;
-        const { background } = stored.settings;
-        await repository.pruneBackgroundImages(id, background.enabled ? background : null);
-      })().catch((error: unknown) => {
-        logDiagnostic(error, { operation: 'remove-background-image', documentId: id });
-      });
-    }
     setOpenId(null);
     // Home is already showing; a list that can't be re-read just stays as it was.
     await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
     return true;
-  }, [leaveShared, notify, openId, refreshLibrary, repository, setOpenId]);
+  }, [leaveShared, notify, refreshLibrary, setOpenId]);
 
   const replaceWithNew = useCallback(
     async (starter?: 'example' | DraftDocument) => {
@@ -1072,27 +1030,6 @@ export function useDocumentSession(): DocumentSession {
         }
         const clone = cloneDocumentAsNew(source, titleWithSuffix(source.metadata.title, ' copy'));
         await repository.save(clone);
-        // A configured background is part of what the user set up for this
-        // diagram — "Duplicate" should never silently drop it.
-        if (source.settings.background.enabled) {
-          const { imageId } = source.settings.background;
-          try {
-            const image = await repository.loadBackgroundImage(id, imageId);
-            if (image) {
-              await repository.saveBackgroundImage(
-                clone.metadata.id,
-                image.blob,
-                { width: image.width, height: image.height },
-                imageId,
-              );
-            }
-          } catch (error) {
-            // The failure below is reported as "could not duplicate", so no copy may be left behind:
-            // it would turn up in the list on the next refresh, pointing at an image that was never stored.
-            await repository.remove(clone.metadata.id).catch(() => {});
-            throw error;
-          }
-        }
       } catch (error) {
         logDiagnostic(error, { operation: 'duplicate-document', documentId: id });
         notify(storageFailureNotice('duplicate that diagram', error), 'error');

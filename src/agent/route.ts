@@ -20,9 +20,8 @@ import { labelChipBox, labelGroupPlan } from '../edges/labelGroups';
 import { obstaclesForEdge } from '../edges/obstacles';
 import { connectorRoutes } from '../edges/connectorRoutes';
 import { stepPolyline } from '../edges/waypoints';
-import { boundaryHeaderTextBox, describeContext } from '../nodes/describe';
+import { boundaryHeaderTextBox, sizingContext } from '../nodes/describe';
 import { getMeasurer } from '../render/text/measure';
-import { LIGHT } from '../render/theme/tokens';
 import { anchorsHold, labelChipSide, labelLaneOffset, labelSideAwayFromResponse, laneIndex, responseAwayAt, routeEdge } from '../edges/routing';
 
 export interface Box {
@@ -394,7 +393,7 @@ function titlesIn(nodes: readonly DraftNode[]): { id: string; box: Box }[] {
   titles = [];
   const groups = nodes.filter((n) => n.type === 'group');
   // Colour never changes where text goes; the light theme measures as well as any.
-  const ctx = groups.length ? { ...describeContext(LIGHT), measurer: getMeasurer() } : undefined;
+  const ctx = groups.length ? { ...sizingContext(), measurer: getMeasurer() } : undefined;
   for (const group of groups) {
     const text = boundaryHeaderTextBox(group, ctx!);
     if (text) titles.push({ id: group.id, box: { x: group.x + text.x - TITLE_GRAZE, y: group.y + text.y, width: text.width + TITLE_GRAZE * 2, height: text.height } });

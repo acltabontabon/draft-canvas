@@ -93,7 +93,6 @@ export async function installMockShell(page: Page): Promise<void> {
     }
     const files = new Map<string, Held>();
     const recovery = new Map<string, { entry: Record<string, unknown>; text: string }>();
-    const sidecars = new Map<string, { mime: string; base64: string }>();
     const docsImages = new Map<string, string>();
     /** The note's JSON, as the shell lifts it out (`docs.rs`'s `marker_of`). */
     const noteOf = (svg: string) => {
@@ -356,9 +355,6 @@ export async function installMockShell(page: Page): Promise<void> {
         return true;
       },
       open_external: () => null,
-      sidecar_read: (args: { handle: string }) => sidecars.get(args.handle) ?? null,
-      sidecar_write: (args: { handle: string; mime: string; base64: string }) => void sidecars.set(args.handle, args),
-      sidecar_remove: (args: { handle: string }) => void sidecars.delete(args.handle),
       docs_status: (args: { handle: string; withSvg?: boolean }) => {
         const stem = files.get(args.handle)!.name;
         const images = [...docsImages]
@@ -414,7 +410,7 @@ export async function installMockShell(page: Page): Promise<void> {
       },
       explorer_list: (args: { session: string; handle: string; showHidden: boolean; query: string; offset: number }) => explorerList(args.session, args.handle, args.showHidden, args.query, args.offset),
       explorer_save_file: (bytes: unknown, options: unknown) => {
-        const args = meta(options) as { session: string; handle: string; name: string; expectedStamp?: string; copySidecarFrom?: string };
+        const args = meta(options) as { session: string; handle: string; name: string; expectedStamp?: string };
         const parent = explorerPath(args.session, args.handle);
         if (explorerFailure) { const message = explorerFailure; explorerFailure = null; throw { kind: 'PermissionDenied', message }; }
         const name = args.name.trim().replace(/\.draftcanvas$/i, '');
@@ -434,7 +430,6 @@ export async function installMockShell(page: Page): Promise<void> {
         file.displayPath = path;
         file.text = decode(bytes);
         if (match) file.version += 1;
-        if (args.copySidecarFrom && sidecars.has(args.copySidecarFrom)) sidecars.set(handle, sidecars.get(args.copySidecarFrom)!);
         // Mirror the write into every linked or unlinked folder on the mock disk.
         for (const project of folders.values()) if (path.startsWith(`${project.info.displayPath}/`)) project.files.set(path.slice(project.info.displayPath.length + 1), { text: file.text, mtimeMs: Date.now() });
         touch(handle, file);

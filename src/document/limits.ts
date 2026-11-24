@@ -75,12 +75,6 @@ export const LIMITS = {
   /** "daily 02:00 UTC" — a few words, not a schedule. */
   maxCadenceLength: 32,
   maxResponseLength: 120,
-  /**
-   * The largest background image a `.draftcanvas` file carries inline (`BackgroundSettings.image`),
-   * counted in decoded bytes. Base64 adds a third, and a diagram's own JSON is a few hundred KB at
-   * most, so this keeps a file with a backdrop well inside `maxFileBytes` and a `git diff` bearable.
-   */
-  maxEmbeddedBackgroundBytes: 2 * 1024 * 1024,
   /** One sequence. Past forty lifelines nobody can follow a message across the page. */
   maxSequenceParticipants: 40,
   /** Messages, notes and fragments in one sequence, at every depth. */

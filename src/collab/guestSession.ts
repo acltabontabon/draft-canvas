@@ -15,7 +15,7 @@ import { CURRENT_VERSION } from '../document/types';
 import { parseDocument } from '../document/validate';
 import { CLOSE_GRACE_MS, GONE_MS, HEARTBEAT_MS, HOLD_RETRY_MS, REAL_CLOCK, RESYNC_RETRY_MS, SILENT_MS, type Clock } from './clock';
 import type { Change } from './changes';
-import { diffFile, wireSettings } from './diff';
+import { diffFile } from './diff';
 import {
   encode,
   exceedsMessageLimit,
@@ -96,18 +96,6 @@ const RESEND_RATE_BYTES = 768 * 1024;
  */
 const MAX_HELD = 4096;
 const MAX_HELD_BYTES = 2 * MAX_MESSAGE_BYTES;
-
-/**
- * A fresh copy of the owner's file, held to what a change may carry: a file's checks, and no embedded
- * background image — which no change ever carries, and which would otherwise surface only later, in
- * this person's editable copy or an export of it.
- */
-function readSnapshot(snapshot: unknown): ReturnType<typeof parseDocument> {
-  const parsed = parseDocument(snapshot);
-  if (!parsed.ok) return parsed;
-  const settings = wireSettings(parsed.document.settings);
-  return settings === parsed.document.settings ? parsed : { ...parsed, document: { ...parsed.document, settings } };
-}
 
 function resendOf(message: Resend): Resend {
   return message.handled === undefined || message.epoch === undefined ? {} : { handled: message.handled, epoch: message.epoch };
@@ -409,7 +397,7 @@ export class GuestSession {
     // Anyone who was in the session knows its id: only the owner can answer a proof with one of its own.
     if (this.expectProof && !(message.proof !== undefined && this.ownerProof !== null && sameSecret(message.proof, this.ownerProof))) return this.refuseLink();
     if (message.v !== PROTOCOL_VERSION) return this.finish('version');
-    const parsed = readSnapshot(message.snapshot);
+    const parsed = parseDocument(message.snapshot);
     if (!parsed.ok) return this.finish('protocol');
     this.welcomed = true;
     this.sessionId = message.session;
@@ -483,7 +471,7 @@ export class GuestSession {
     this.localChanged();
     const replica = this.replica;
     if (message.t === 'snapshot') {
-      const parsed = readSnapshot(message.snapshot);
+      const parsed = parseDocument(message.snapshot);
       if (!parsed.ok || !replica) return this.finish('protocol');
       replica.reset(parsed.document, message.seq);
       this.awaitingSnapshot = false;

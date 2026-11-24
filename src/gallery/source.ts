@@ -16,9 +16,12 @@ export const GALLERY_BASE = `${GALLERY_ORIGIN}/${GALLERY_REPOSITORY}/main/`;
 /** The highest `catalog.json` schema this app reads; a newer one asks for an app update. */
 export const GALLERY_SCHEMA = 1;
 
-export const MAX_CATALOG_BYTES = 64 * 1024;
+export const MAX_CATALOG_BYTES = 96 * 1024;
 export const MAX_STARTER_BYTES = 512 * 1024;
 export const MAX_STARTERS = 200;
+/** Style packs: each a `.draftstyle` file, with every drawing a style may hold. */
+export const MAX_STYLE_PACK_BYTES = 512 * 1024;
+export const MAX_STYLE_PACKS = 60;
 
 /** A gallery older than this is refreshed when it is next opened, if loading is on. */
 export const STALE_AFTER_MS = 24 * 60 * 60 * 1000;

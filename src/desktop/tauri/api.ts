@@ -73,16 +73,12 @@ export function createTauriApi(): DesktopApi {
 
     openHandle: (handle) => call('open_handle', { handle }),
     saveDocument: (handle, bytes, expectedStamp) => callRaw('save_document', { handle, expectedStamp }, bytes),
-    saveAs: (suggestedName, bytes, copySidecarFrom, startIn) =>
-      callRaw('save_as', { suggestedName, copySidecarFrom, startIn }, bytes),
+    saveAs: (suggestedName, bytes, startIn) => callRaw('save_as', { suggestedName, startIn }, bytes),
     renameFile: (handle, newStem) => call('rename_file', { handle, newStem }),
     checkStamp: (handle, stamp) => call('check_stamp', { handle, stamp }),
     reveal: (handle) => call('reveal', { handle }),
     exportFile: (name, filters, bytes) => callRaw('export_file', { name, filters }, bytes),
     openExternal: (url) => call('open_external', { url }),
-    sidecarRead: (handle) => call('sidecar_read', { handle }),
-    sidecarWrite: (handle, mime, base64) => call('sidecar_write', { handle, mime, base64 }),
-    sidecarRemove: (handle) => call('sidecar_remove', { handle }),
     docsStatus: (handle, withSvg) => call('docs_status', { handle, withSvg: withSvg ?? false }),
     docsPublish: (handle, name, svg, fresh) => callRaw('docs_publish', { handle, name, fresh: fresh ?? false }, new TextEncoder().encode(svg)),
     docsPickMarkdown: (handle) => call('docs_pick_markdown', { handle }),
@@ -102,7 +98,7 @@ export function createTauriApi(): DesktopApi {
 
     explorerOpen: (startIn) => call('explorer_open', { startIn }),
     explorerList: (session, handle, showHidden, query, offset) => call('explorer_list', { session, handle, showHidden, query, offset }),
-    explorerSaveFile: (session, handle, name, bytes, copySidecarFrom, expectedStamp) => callRaw('explorer_save_file', { session, handle, name, copySidecarFrom, expectedStamp }, bytes),
+    explorerSaveFile: (session, handle, name, bytes, expectedStamp) => callRaw('explorer_save_file', { session, handle, name, expectedStamp }, bytes),
     explorerCreateFolder: (session, handle, name) => call('explorer_create_folder', { session, handle, name }),
     explorerPeek: (session, handle) => call('explorer_peek', { session, handle }),
     explorerAddProject: (session, handle) => call('explorer_add_project', { session, handle }),

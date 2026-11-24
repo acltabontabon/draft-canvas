@@ -38,7 +38,7 @@ import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../st
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
-import { usePersonality } from '../theme/usePersonality';
+import { useDiagramStyle } from './useDiagramStyle';
 import { useThemeValue } from '../theme/useTheme';
 import { SvgSurface } from './SvgSurface';
 import { layerBehind } from './insideMark';
@@ -94,7 +94,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const lensMember = useEditorStore((state) => lensMemberFor(state, id));
   const theme = useThemeValue();
   const lensAccent = useEditorStore((state) => lensAccentFor(state, theme, id));
-  const { preset } = usePersonality();
+  const diagramStyle = useDiagramStyle();
   const updateNodeInternals = useUpdateNodeInternals();
   // A boolean, not the id itself: every node's selector runs on every drag
   // frame, so only the two nodes whose armed state actually flips re-render.
@@ -323,9 +323,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     // A Text element keeps its background (a zero-width space is "something", so no empty-state
     // outline) while its source is edited over it.
     const described = editingNote ? { ...liveNode, text: isText ? '\u200b' : '' } : liveNode;
-    return emitDisplayList(describeNode(described, describeContext(theme, preset)));
+    return emitDisplayList(describeNode(described, describeContext(theme, diagramStyle)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- see comment above.
-  }, [liveNode, theme, preset, editingNote, technologyIcon, participantIcons]);
+  }, [liveNode, theme, diagramStyle, editingNote, technologyIcon, participantIcons]);
 
   /**
    * The font a plain shape label (Service/Component/Database/Queue/Actor/Group — everything but
@@ -337,12 +337,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const editingLabel = useMemo<Extract<Shape, { t: 'text' }> | null>(() => {
     if (!editing || !node || isCode || isNote || isText) return null;
     const described = node.text?.trim() ? node : { ...node, text: displayNameFor(node) };
-    const drawn = describeNode(described, describeContext(theme, preset));
+    const drawn = describeNode(described, describeContext(theme, diagramStyle));
     const label = drawn.shapes.find(
       (s): s is Extract<Shape, { t: 'text' }> => s.t === 'text' && s.role === 'label',
     );
     return label ?? null;
-  }, [editing, node, theme, preset, isCode, isNote, isText]);
+  }, [editing, node, theme, diagramStyle, isCode, isNote, isText]);
 
   /**
    * The step's emphasis: this shape's silhouette, to be lit behind it (`canvas/emphasis.ts`). Built
@@ -354,12 +354,12 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
     if (emphasisKey === null || !liveNode) return null;
     beginClipScope(`emphasis-${liveNode.id}`);
     // A sequence is lit along its frame, not along every head, bar and note inside it.
-    const ctx = describeContext(theme, preset);
+    const ctx = describeContext(theme, diagramStyle);
     const shapes = emphasisOf(liveNode.type === 'sequence' ? describeSequenceFrame(liveNode, ctx) : describeNode(liveNode, ctx).shapes);
     if (shapes.length === 0) return null;
     return { markup: emitDisplayList({ width: liveNode.width, height: liveNode.height, shapes }), color: emphasisColorOf(shapes) };
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- same clip-scope reason as `shapes`.
-  }, [liveNode, theme, preset, emphasisKey !== null]);
+  }, [liveNode, theme, diagramStyle, emphasisKey !== null]);
 
   /**
    * The plane behind a shape that has an inside — its own outline, from the same `describeNode`, so
@@ -370,10 +370,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   const layer = useMemo(() => {
     if (!liveNode?.inside?.nodes.length) return null;
     beginClipScope(`layer-${liveNode.id}`);
-    const drawn = describeNode(liveNode, describeContext(theme, preset));
+    const drawn = describeNode(liveNode, describeContext(theme, diagramStyle));
     return emitDisplayList({ ...drawn, shapes: layerBehind(drawn.shapes) });
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- same clip-scope reason as `shapes`.
-  }, [liveNode, theme, preset]);
+  }, [liveNode, theme, diagramStyle]);
 
   // Doesn't depend on `node`, so — like `shapes` above — this is computed and its effect run
   // unconditionally, ahead of the `!node` early return below.
@@ -384,9 +384,9 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // The same geometry the display list above was drawn from (it is kept by the sequence's identity),
   // so every target sits exactly on what it is for.
   const sequenceLayout = useMemo(
-    () => (isSequence && liveNode && mode !== 'present' && (hovered || selected || sequenceBusy) ? sequenceLayoutFor(liveNode, describeContext(theme, preset)) : null),
+    () => (isSequence && liveNode && mode !== 'present' && (hovered || selected || sequenceBusy) ? sequenceLayoutFor(liveNode, describeContext(theme, diagramStyle)) : null),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- `participantIcons` is the redraw signal for loaded logos.
-    [isSequence, liveNode, mode, hovered, selected, sequenceBusy, theme, preset, participantIcons],
+    [isSequence, liveNode, mode, hovered, selected, sequenceBusy, theme, diagramStyle, participantIcons],
   );
 
   // `NodeResizer` below is only rendered while `!readOnly`, so switching to Presentation Mode
@@ -682,10 +682,10 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         {shapes}
       </SvgSurface>
 
-      {isSequence && liveNode && sequenceStep ? <SequenceStepLayer node={liveNode} step={sequenceStep} theme={theme} preset={preset} /> : null}
+      {isSequence && liveNode && sequenceStep ? <SequenceStepLayer node={liveNode} step={sequenceStep} theme={theme} diagramStyle={diagramStyle} /> : null}
 
       {sequenceLayout && liveNode && !capsule && (
-        <SequenceOverlay node={liveNode} layout={sequenceLayout} readOnly={readOnly} selected={Boolean(selected)} preset={preset} />
+        <SequenceOverlay node={liveNode} layout={sequenceLayout} readOnly={readOnly} selected={Boolean(selected)} diagramStyle={diagramStyle} />
       )}
 
       {!editing && !capsule && liveNode && nodeTechnologyIcon(liveNode) && (

@@ -1,5 +1,5 @@
 import { memo, useMemo } from 'react';
-import type { PersonalityPreset } from '../theme/usePersonality';
+import type { ResolvedStyle } from '../render/style/resolve';
 import { DEPTH_GLYPH_SIZE, depthGlyphPaths } from './insideMark';
 
 /**
@@ -8,15 +8,15 @@ import { DEPTH_GLYPH_SIZE, depthGlyphPaths } from './insideMark';
  * `currentColor`; the thin gap cut between layers is `--dc-depth-ground`, whatever it sits on.
  */
 export const DepthGlyph = memo(function DepthGlyph({
-  preset,
+  diagramStyle,
   seedId,
   className,
 }: {
-  preset: PersonalityPreset;
+  diagramStyle: ResolvedStyle;
   seedId: string;
   className?: string;
 }) {
-  const paths = useMemo(() => depthGlyphPaths(preset, seedId), [preset, seedId]);
+  const paths = useMemo(() => depthGlyphPaths(diagramStyle, seedId), [diagramStyle, seedId]);
   return (
     <svg
       className={className ? `dc-depth-glyph ${className}` : 'dc-depth-glyph'}

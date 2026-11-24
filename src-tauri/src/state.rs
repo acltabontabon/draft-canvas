@@ -41,7 +41,7 @@ pub enum MenuCommand {
     Undo,
     Redo,
     SelectAll,
-    /// The open diagram's own settings (background, personality), not the app's.
+    /// The open diagram's own settings (its look and personality), not the app's.
     CanvasSettings,
     FindReplace,
     /// The command palette.

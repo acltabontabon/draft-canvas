@@ -1,6 +1,7 @@
 import { visibleEdges } from '../document/compensation';
 import type { DraftEdge } from '../document/types';
 import { CONNECTOR_STYLE, connectorHead } from '../render/connectorStyle';
+import type { ResolvedConnector } from '../render/style/resolve';
 import type { Shape } from '../render/displayList';
 import { FONTS, LINE_HEIGHTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
@@ -96,7 +97,7 @@ const ENTRY_GAP = 18;
  * are drawn as their own paths (the head every connector wears, `connectorHead`), not referenced
  * markers, so the row draws the same wherever it is placed.
  */
-export function describeLegend(edges: readonly DraftEdge[], ctx: { theme: Theme; measurer?: TextMeasurer }): Legend | null {
+export function describeLegend(edges: readonly DraftEdge[], ctx: { theme: Theme; measurer?: TextMeasurer; connector?: ResolvedConnector }): Legend | null {
   const entries = legendEntries(edges);
   if (entries.length === 0) return null;
   const color = ctx.theme.edge;
@@ -107,7 +108,7 @@ export function describeLegend(edges: readonly DraftEdge[], ctx: { theme: Theme;
   let x = title.width + ENTRY_GAP;
   const y = ROW / 2;
   for (const entry of entries) {
-    const stroke = { color, width: CONNECTOR_STYLE.lineWidth, linecap: 'round' as const, ...(entry.dash ? { dash: entry.dash } : {}) };
+    const stroke = { color, width: ctx.connector?.lineWidth ?? CONNECTOR_STYLE.lineWidth, linecap: 'round' as const, ...(entry.dash ? { dash: entry.dash } : {}) };
     if (entry.kind === 'portal') {
       const end = x + SAMPLE - PORTAL_RING * 2;
       shapes.push(
@@ -124,8 +125,8 @@ export function describeLegend(edges: readonly DraftEdge[], ctx: { theme: Theme;
           translate: { x: x + SAMPLE - CONNECTOR_STYLE.arrowLength, y: y - CONNECTOR_STYLE.arrowWidth / 2 },
           children: [
             entry.head === 'open'
-              ? { t: 'path', d: connectorHead(true), fill: 'none', stroke: { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' } }
-              : { t: 'path', d: connectorHead(false), fill: color },
+              ? { t: 'path', d: connectorHead(true, ctx.connector?.head), fill: 'none', stroke: { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' } }
+              : { t: 'path', d: connectorHead(false, ctx.connector?.head), fill: color },
           ],
         });
       }

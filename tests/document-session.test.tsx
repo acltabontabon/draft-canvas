@@ -32,10 +32,6 @@ function stubRepository(overrides: Partial<DraftRepository> = {}): DraftReposito
     saveProject: async () => {},
     deleteProject: async () => {},
     moveDocumentToProject: async () => {},
-    saveBackgroundImage: async () => {},
-    loadBackgroundImage: async () => null,
-    removeBackgroundImage: async () => {},
-    pruneBackgroundImages: async () => {},
     ...overrides,
   };
 }
@@ -858,32 +854,6 @@ describe('useDocumentSession — repository failures surface a toast, not an unh
     expect(errorToastShown()).toBe(true);
   });
 
-  it('duplicateDocument that fails copying the background leaves no half-made copy behind', async () => {
-    const source = createDocument('Original');
-    source.settings = { ...source.settings, background: { ...source.settings.background, enabled: true, imageId: 'bg_1' } };
-    const saved: string[] = [];
-    const removed: string[] = [];
-    const repository = stubRepository({
-      load: async () => source,
-      save: async (document) => void saved.push(document.metadata.id),
-      remove: async (id) => void removed.push(id),
-      loadBackgroundImage: async () => ({ blob: new Blob(['x']), width: 10, height: 10 }),
-      saveBackgroundImage: async () => {
-        throw new Error('quota');
-      },
-    });
-    const session = renderSession(repository);
-    await waitFor(() => expect(session().ready).toBe(true));
-
-    await act(async () => {
-      await session().duplicateDocument(source.metadata.id);
-    });
-    expect(saved).toHaveLength(1);
-    expect(saved[0]).not.toBe(source.metadata.id);
-    expect(removed).toEqual(saved);
-    expect(errorToastShown()).toBe(true);
-  });
-
   it('a duplicate or import that was saved is not reported as failed when only the list re-read fails', async () => {
     let lists = 0;
     const repository = stubRepository({
@@ -1052,58 +1022,6 @@ describe('useDocumentSession — opening viewport fit request', () => {
       await session().openDocument(doc.metadata.id);
     });
     expect(useUiStore.getState().openFitDocumentId).toBeNull();
-  });
-});
-
-describe('useDocumentSession — closing prunes background images', () => {
-  /** Just enough of the Web Locks API: shared holds counted per name, `ifAvailable` probes. */
-  function fakeLocks() {
-    const held = new Map<string, number>();
-    return {
-      async request(name: string, options: LockOptions, callback: (lock: { name: string } | null) => unknown) {
-        if (options.ifAvailable) return callback(held.get(name) ? null : { name });
-        held.set(name, (held.get(name) ?? 0) + 1);
-        try {
-          return await callback({ name });
-        } finally {
-          held.set(name, held.get(name)! - 1);
-        }
-      },
-    };
-  }
-
-  afterEach(() => {
-    Reflect.deleteProperty(navigator, 'locks');
-  });
-
-  it('leaves them alone while another tab has the canvas open, and prunes once none does', async () => {
-    Object.defineProperty(navigator, 'locks', { value: fakeLocks(), configurable: true });
-    const { holdOpen } = await import('../src/storage/openPresence');
-    const doc = createDocument('Backdrop');
-    const pruned: string[] = [];
-    const repository = stubRepository({
-      load: async () => doc,
-      pruneBackgroundImages: async (id) => void pruned.push(id),
-    });
-    const session = renderSession(repository);
-    await waitFor(() => expect(session().ready).toBe(true));
-    const elsewhere = holdOpen(doc.metadata.id);
-
-    const openAndClose = async () => {
-      await act(async () => {
-        await session().openDocument(doc.metadata.id);
-      });
-      await act(async () => {
-        await session().closeDocument();
-      });
-    };
-    await openAndClose();
-    await new Promise((resolve) => setTimeout(resolve, 10));
-    expect(pruned).toEqual([]);
-
-    await elsewhere();
-    await openAndClose();
-    await waitFor(() => expect(pruned).toEqual([doc.metadata.id]));
   });
 });
 

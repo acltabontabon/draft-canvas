@@ -1,7 +1,7 @@
 {
   "$schema": "./catalog.schema.json",
   "schema": 1,
-  "updated": "2026-11-21",
+  "updated": "2026-11-23",
   "starters": [
     {
       "id": "monolith",
@@ -741,6 +741,128 @@
       "bytes": 18651,
       "formatVersion": 28,
       "updated": "2026-11-21"
+    }
+  ],
+  "styles": [
+    {
+      "id": "professional",
+      "name": "Professional",
+      "summary": "Refined duotone product icons with quiet depth, on a drafting sheet, for documents and slides",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 10,
+      "path": "styles/professional/professional.draftstyle",
+      "sha256": "d9fa0e1692b9119c11d96c01f696ab64970875261daa68da75ce87a35fe65b71",
+      "bytes": 74097,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "geek",
+      "name": "Geek",
+      "summary": "A retro computing lab in glowing phosphor: every shape its own piece of 16-bit pixel hardware",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 20,
+      "path": "styles/geek/geek.draftstyle",
+      "sha256": "6ac58e150aa36f5cc600052268d9f789301cbea0bcbee16792edb29f7bbc8daa",
+      "bytes": 96037,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "arena",
+      "name": "Arena",
+      "summary": "Navy enamel and bevelled gold battle arena: plaques, turrets, cut gems, loot and the lanes between them",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 30,
+      "path": "styles/arena/arena.draftstyle",
+      "sha256": "a37f2bb01abf746046a9485ac48a6aaa86c4c860f4dde3539a37a8aee0ac94cf",
+      "bytes": 106870,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "high-seas",
+      "name": "High seas",
+      "summary": "A hand-coloured woodcut sea chart: a lighthouse, a ledger, a powder keg, a bottle of messages",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 40,
+      "path": "styles/high-seas/high-seas.draftstyle",
+      "sha256": "2011a50b80fd0083f2e4cbcb62ff083f64dfe3a1f9c17745856db77fc90d0ed1",
+      "bytes": 82852,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "high-fantasy",
+      "name": "High fantasy",
+      "summary": "An illuminated storybook on moss-green vellum, in gold leaf and lapis: keeps, cauldrons, rune stones and an owl",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 50,
+      "path": "styles/high-fantasy/high-fantasy.draftstyle",
+      "sha256": "99ae24632f2f6b52fcb1a1217e9509fb18c60c38b6c64c2636524e39040f844c",
+      "bytes": 83372,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "cyberpunk",
+      "name": "Cyberpunk",
+      "summary": "A neon night city of drones, megatowers and maglev trains, in glowing tube and chrome",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 60,
+      "path": "styles/cyberpunk/cyberpunk.draftstyle",
+      "sha256": "da962ab7dc63a5599f8a6bd150d0e4b2a728e08c54a4fa25059819ddcc4ad0d6",
+      "bytes": 81437,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "cute",
+      "name": "Cute",
+      "summary": "A kawaii sticker sheet: a busy bee, a jam jar, a caterpillar queue and bear-eared friends, glossy, die-cut and smiling",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 70,
+      "path": "styles/cute/cute.draftstyle",
+      "sha256": "bc1de5db9fe5907c809b1bcfacb21188f7ad46fccbe04ca18bc42d77eb34641e",
+      "bytes": 204068,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "weeb",
+      "name": "Weeb",
+      "summary": "Inked manga under an after-school sky: a shrine gate, a bento box, ramen bowls in line, carp streamers in the wind",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 80,
+      "path": "styles/weeb/weeb.draftstyle",
+      "sha256": "a358404e3b4b44e2d3326fa7a5f18fa244868e09cebe6b99d973728f965875a2",
+      "bytes": 86348,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "hardwood",
+      "name": "Hardwood",
+      "summary": "Basketball as a bold daylight poster: ball orange, deep ink, white and court teal on warm peach",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 90,
+      "path": "styles/hardwood/hardwood.draftstyle",
+      "sha256": "3ccbec1f1d952fd73079e44ca6fd63bd026e342bc644e16675584b6286208904",
+      "bytes": 62085,
+      "updated": "2026-11-23"
+    },
+    {
+      "id": "match-point",
+      "name": "Match Point",
+      "summary": "A sunlit court as a bold club poster in lemon-lime, bottle green and clay: a ball machine, a scoreboard, a can of balls",
+      "author": "Draft Canvas",
+      "licence": "Apache-2.0",
+      "order": 100,
+      "path": "styles/match-point/match-point.draftstyle",
+      "sha256": "69bffa099bec07b47bb79f40a0720e75883eec02e7b80ef27d19ab1fd1adc6b4",
+      "bytes": 61572,
+      "updated": "2026-11-23"
     }
   ]
 }

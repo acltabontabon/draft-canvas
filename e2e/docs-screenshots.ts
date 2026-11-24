@@ -38,6 +38,7 @@ process.env.STARTERS_SNAPSHOT ??= 'current';
  *   npx tsx e2e/docs-screenshots.ts --sequence-only
  *   npx tsx e2e/docs-screenshots.ts --walk-only
  *   npx tsx e2e/docs-screenshots.ts --layout-only
+ *   npx tsx e2e/docs-screenshots.ts --appearance-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -70,10 +71,13 @@ const CANVAS = '.react-flow__pane';
 const log = (line: string) => process.stdout.write(`${line}\n`);
 
 async function startServer(): Promise<() => Promise<void>> {
+  // On Windows npm is a script, which only a shell can start, and there is no process group to signal.
+  const windows = process.platform === 'win32';
   const child: ChildProcess = spawn('npm', ['run', 'dev', '--', '--port', String(PORT), '--strictPort'], {
     cwd: REPO_ROOT,
     stdio: 'pipe',
-    detached: true,
+    detached: !windows,
+    shell: windows,
     env: { ...process.env, VITE_COLLAB_RELAY: `ws://localhost:${RELAY_PORT}` },
   });
   let exited = false;
@@ -83,7 +87,8 @@ async function startServer(): Promise<() => Promise<void>> {
   const stop = async () => {
     if (child.pid === undefined || exited) return;
     try {
-      process.kill(-child.pid, 'SIGTERM'); // the process group: `npm run dev` wraps vite
+      if (windows) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      else process.kill(-child.pid, 'SIGTERM'); // the process group: `npm run dev` wraps vite
     } catch {
       // already gone
     }
@@ -746,6 +751,81 @@ async function layoutScreenshots(page: Page) {
   await shot(page, 'portal-legend-held');
 }
 
+/** Appearance, as a person reaches it: the palette button in the status bar. It opens beside the canvas, not over it. */
+async function openAppearance(page: Page) {
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+  const panel = page.getByRole('complementary', { name: 'Appearance', exact: true });
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+/** A style of one's own, the canvas it is drawn on, the gallery's packs, and a diagram drawn in seven of them. */
+async function appearanceScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1360, height: 860 });
+  await openStarter(page, 'Microservices');
+  // A starter arrives selected; the pictures are of the diagram at rest.
+  await page.locator(CANVAS).click({ position: { x: 40, y: 420 } });
+  await expect(page.locator('.dc-node.selected, .react-flow__node.selected')).toHaveCount(0);
+
+  let panel = await openAppearance(page);
+  // Opening the panel frames the diagram in the canvas it leaves; closing it does not, so the
+  // pictures of the whole canvas ask for that themselves.
+  const frame = async () => {
+    // After the sidebar has gone and the view has gone back to where it was.
+    await page.waitForTimeout(900);
+    await palette(page, 'Fit to view');
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.waitForTimeout(500);
+  };
+  await shot(page, 'appearance');
+
+  // A canvas of one's own: a colour and a backdrop, seen on the diagram as they are chosen.
+  // Chosen through the control itself, wherever the panel is scrolled to.
+  const pick = (input: HTMLElement) => input.click();
+  const styles = panel.getByRole('group', { name: 'My style' });
+  await panel.getByRole('tab', { name: 'Canvas', exact: true }).click();
+  await panel.getByRole('radiogroup', { name: 'Canvas colour' }).getByRole('radio', { name: 'Midnight', exact: true }).evaluate(pick);
+  await panel.getByRole('radiogroup', { name: 'Brand colour' }).getByRole('radio', { name: 'Amber', exact: true }).evaluate(pick);
+  await panel.getByRole('radiogroup', { name: 'Backdrop' }).getByRole('radio', { name: /^Stars/ }).evaluate(pick);
+  await expect(page.locator('.dc-canvas-backdrop')).toBeVisible();
+  await shot(page, 'appearance-canvas');
+  // The pen: each choice drawn as what it does.
+  await panel.getByRole('tab', { name: 'Drawing', exact: true }).click();
+  await shot(page, 'appearance-drawing');
+  // That made a style of one's own; the pictures after it start from Clean again.
+  await panel.getByRole('tab', { name: 'Styles', exact: true }).click();
+  await panel.getByRole('button', { name: 'Delete style', exact: true }).click();
+  await styles.getByRole('radio', { name: /^Clean/ }).evaluate(pick);
+
+  // The gallery is already loaded (the starter came from it), so its packs are listed.
+  const pack = (name: string) => panel.locator('.dc-prefs-pack', { hasText: name });
+  await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
+
+  for (const [name, file] of [
+    ['High seas', 'style-pack-high-seas'],
+    ['Cyberpunk', 'style-pack-cyberpunk'],
+    ['Arena', 'style-pack-arena'],
+    ['Cute', 'style-pack-cute'],
+    ['Weeb', 'style-pack-weeb'],
+    ['Hardwood', 'style-pack-hardwood'],
+    ['Match Point', 'style-pack-match-point'],
+  ] as const) {
+    await pack(name).getByRole('button', { name: `Add ${name} to my styles`, exact: true }).click();
+    await expect(styles.getByRole('radio', { name: new RegExp(`^${name}`) })).toBeChecked();
+    if (name === 'High seas') {
+      // The pack just added, on the diagram, with the packs it came from still beside it.
+      await panel.getByRole('heading', { name: 'Style packs', exact: true }).evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
+      await shot(page, 'style-packs');
+    }
+    await panel.getByRole('button', { name: 'Close appearance', exact: true }).click();
+    await expect(panel).toBeHidden();
+    await frame();
+    await shot(page, file);
+    panel = await openAppearance(page);
+    await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
+  }
+}
+
 async function readerScreenshots(page: Page) {
   await page.setViewportSize({ width: VIEWPORT.width, height: 760 });
   for (const guided of [true, false]) {
@@ -817,6 +897,11 @@ async function main() {
 
     if (process.argv.includes('--layout-only')) {
       await layoutScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--appearance-only')) {
+      await appearanceScreenshots(page);
       return;
     }
 

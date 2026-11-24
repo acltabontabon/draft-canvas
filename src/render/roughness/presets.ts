@@ -1,4 +1,4 @@
-import type { PersonalityPreset } from '../../theme/usePersonality';
+import type { HandPreset } from '../../document/style';
 
 export interface PersonalityProfile {
   /** Corner/vertex jitter magnitude, in canvas units. 0 = no change from Clean. */
@@ -26,9 +26,13 @@ export interface PersonalityProfile {
   arrowStyle: 'crisp' | 'shared-hand' | 'per-edge-hand';
   /** Arrowhead wing-asymmetry magnitude — scaled to the arrow's own small size, not `outline`. */
   arrowJitter: number;
+  /** How much more a boundary's outline wobbles than the shapes inside it. A boundary is meant to
+   *  feel stronger than an ordinary node ("someone just circled this part"), so it does not read
+   *  identically to the services it contains. 1 at Clean, so Clean's output never changes. */
+  boundaryBoost: number;
 }
 
-export const PERSONALITY_PROFILES: Record<PersonalityPreset, PersonalityProfile> = {
+export const PERSONALITY_PROFILES: Record<HandPreset, PersonalityProfile> = {
   clean: {
     outline: 0,
     bow: 0,
@@ -37,6 +41,7 @@ export const PERSONALITY_PROFILES: Record<PersonalityPreset, PersonalityProfile>
     retrace: false,
     arrowStyle: 'crisp',
     arrowJitter: 0,
+    boundaryBoost: 1,
   },
   draft: {
     outline: 0.9,
@@ -46,6 +51,7 @@ export const PERSONALITY_PROFILES: Record<PersonalityPreset, PersonalityProfile>
     retrace: false,
     arrowStyle: 'shared-hand',
     arrowJitter: 0.35,
+    boundaryBoost: 1.4,
   },
   sketch: {
     outline: 2.2,
@@ -55,5 +61,6 @@ export const PERSONALITY_PROFILES: Record<PersonalityPreset, PersonalityProfile>
     retrace: true,
     arrowStyle: 'per-edge-hand',
     arrowJitter: 1.1,
+    boundaryBoost: 1.7,
   },
 };

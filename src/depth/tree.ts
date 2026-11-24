@@ -237,8 +237,8 @@ export function viewOf(file: DraftDocument, path: DepthPath): DraftDocument | un
 /**
  * The file that results from `view` being the room at `path`.
  *
- * The room's graph is written into the owner chain; `metadata`, `settings` and
- * `openPoints` travel back to the root, since a rename, a grid change, an action captured or a point
+ * The room's graph is written into the owner chain; `metadata`, `settings`,
+ * `openPoints` and `style` travel back to the root, since a rename, a grid change, an action captured or a point
  * raised while inside belongs to the whole file. Returns the same file object when nothing actually changed, so the store's
  * "this operation was a no-op" identity check keeps working at any depth, and refuses (returning
  * the file untouched) if the path stopped resolving rather than inventing a room somewhere else.
@@ -256,7 +256,8 @@ export function embed(file: DraftDocument, path: DepthPath, view: DraftDocument)
   const shared =
     view.metadata !== file.metadata ||
     view.settings !== file.settings ||
-    view.openPoints !== file.openPoints;
+    view.openPoints !== file.openPoints ||
+    view.style !== file.style;
   if (nodes === file.nodes && !shared) return file;
 
   const next: DraftDocument = {
@@ -265,7 +266,10 @@ export function embed(file: DraftDocument, path: DepthPath, view: DraftDocument)
     metadata: view.metadata,
     settings: view.settings,
     openPoints: view.openPoints,
+    ...(view.style === undefined ? {} : { style: view.style }),
   };
+  // Spread from the file above, so a style taken away while inside a room has to come off by hand.
+  if (view.style === undefined) delete next.style;
   // The view this file was just built from is the view it yields — recording that here keeps
   // `viewOf(embed(...))` identity-stable, which is what lets an unchanged room compare equal.
   // Not when the room emptied: there is no room to be stable about, and caching the view anyway

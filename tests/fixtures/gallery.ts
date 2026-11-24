@@ -43,6 +43,7 @@ export function vendoredSnapshot(): GallerySnapshot {
   const catalog = vendoredCatalog();
   return {
     fetchedAt: Date.now(),
+    styles: [],
     starters: catalog.starters.map((entry) => {
       const parsed = parseDocument(vendoredText(entry));
       const shape = parsed.ok ? libraryShapeOf(parsed.document.nodes, parsed.document.edges) : undefined;
