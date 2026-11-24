@@ -35,11 +35,10 @@ import {
   type DepthPath,
 } from '../depth/tree';
 import { getMeasurer } from '../render/text/measure';
-import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight } from '../nodes/describe';
+import { naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight, sizingContext } from '../nodes/describe';
 import { fitSequences, recoverCappedSequence } from '../nodes/sequenceFit';
 import { liveSequenceFocus, sequenceEditStillThere } from '../sequence/focus';
 import { syncLinks } from '../document/sequenceLinks';
-import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
   addNodes,
@@ -79,6 +78,7 @@ import {
   sendToBack,
   setParent,
   setSettings,
+  setStyle,
   setTitle,
   setViewport,
   touch,
@@ -178,6 +178,7 @@ import type {
   Side,
   ViewLevel,
 } from '../document/types';
+import type { DocumentStyle } from '../document/style';
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
 import { addInk, INK_ID_PREFIX, inkOf, inkUnionBounds, removeInk, translateInk } from '../document/ink';
 import { createId } from '../document/ids';
@@ -797,6 +798,8 @@ export interface EditorStore {
   rename: (title: string) => void;
   /** `coalesceKey` folds a continuous control (a slider drag) into one undo step. */
   updateSettings: (patch: Partial<DraftSettings>, options?: { coalesceKey?: string }) => void;
+  /** Gives the open diagram its own look, or with `undefined` lets it follow this device again. One undo step. */
+  setDocumentStyle: (style: DocumentStyle | undefined, options?: { coalesceKey?: string }) => void;
   persistViewport: (viewport: DraftViewport) => void;
 
   /* History */
@@ -1598,7 +1601,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   liveViewport: null,
 
   setDocument(document, options) {
-    const context = describeContext(LIGHT);
+    const context = sizingContext();
     document = mapRooms(document, (graph) => {
       const nodes = graph.nodes.map((node) => recoverCappedSequence(node, context));
       return nodes.some((node, index) => node !== graph.nodes[index]) ? { ...graph, nodes } : graph;
@@ -1644,7 +1647,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // a renamed title — so it is done here, once, rather than remembered by every action.
     // And a participant that stands for a shape is that shape: renaming either renames both, here,
     // in the same step (`sequenceLinks.ts`).
-    const next = touch(fitSequences(before, linksInStep(before, recipe(before)), () => describeContext(LIGHT)));
+    const next = touch(fitSequences(before, linksInStep(before, recipe(before)), () => sizingContext()));
     // Structural sharing means an operation that changed nothing returns the
     // same object, so no-op commands never create a dead undo step.
     if (next === before || shallowEqualDocument(next, before)) return;
@@ -2962,7 +2965,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Resize', (doc) => {
       // A sequence can be given room, never less than it needs: its text does not shrink to fit.
       const node = doc.nodes.find((candidate) => candidate.id === id);
-      const floor = node?.type === 'sequence' ? naturalSequenceSizeFor(node, describeContext(LIGHT)) : null;
+      const floor = node?.type === 'sequence' ? naturalSequenceSizeFor(node, sizingContext()) : null;
       const held = floor ? { ...box, width: Math.max(box.width, floor.width), height: Math.max(box.height, floor.height) } : box;
       return reconcileAfterResize(updateNode(doc, id, held), id);
     });
@@ -3717,6 +3720,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Change settings', (doc) => setSettings(doc, patch), { coalesceKey: options?.coalesceKey });
   },
 
+  setDocumentStyle(style, options) {
+    get().apply(style === undefined ? 'Remove style' : 'Change style', (doc) => setStyle(doc, style), { coalesceKey: options?.coalesceKey });
+  },
+
   persistViewport(viewport) {
     // Saved, but not an edit: no undo step (nobody wants ⌘Z to undo a scroll), no new document,
     // no `updatedAt`. See `liveViewport`.
@@ -4097,6 +4104,8 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
     // Raising, editing or resolving an open point touches nothing on the canvas, so leaving this out
     // would discard every one of those edits as a write that changed nothing.
     a.openPoints === b.openPoints &&
+    // The diagram's own look changes nothing else in the file either.
+    a.style === b.style &&
     // Saying what a view shows changes nothing else about it, so without this the one edit that
     // only ever changes `level` would be thrown away as a no-op.
     a.level === b.level &&
@@ -4172,12 +4181,12 @@ function growArchitectureToFit(doc: DraftDocument, id: string): DraftDocument {
   const node = doc.nodes.find((n) => n.id === id);
   if (!node) return doc;
   if (node.type === 'group') {
-    const width = Math.min(LIMITS.maxNodeSize, Math.max(node.width, naturalBoundaryWidth(node, describeContext(LIGHT))));
+    const width = Math.min(LIMITS.maxNodeSize, Math.max(node.width, naturalBoundaryWidth(node, sizingContext())));
     return width > node.width ? updateNode(doc, id, { width }) : doc;
   }
   if (!(C4_TEXT_TYPES as readonly string[]).includes(node.type)) return doc;
   if (!node.text?.trim() && !node.technology && !node.description) return doc;
-  const needed = naturalArchitectureSize(node, describeContext(LIGHT), {
+  const needed = naturalArchitectureSize(node, sizingContext(), {
     maxWidth: Math.max(node.width, 640),
     maxHeight: LIMITS.maxNodeSize,
     maxNameLines: Number.POSITIVE_INFINITY,

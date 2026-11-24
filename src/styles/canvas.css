@@ -50,25 +50,13 @@
   outline: none;
 }
 
-/* ------------------------------------------------------- 5.1 background -- */
+/* --------------------------------------------------------------- backdrop -- */
 
-.dc-canvas-background {
+.dc-canvas-backdrop {
   position: absolute;
   inset: 0;
-  overflow: hidden;
   pointer-events: none;
-}
-
-.dc-canvas-background-image {
-  position: absolute;
-  inset: 0;
-}
-
-.dc-canvas-background-scrim {
-  position: absolute;
-  inset: 0;
-  background: var(--dc-canvas);
-  transition: opacity 200ms ease;
+  background-repeat: repeat;
 }
 
 .dc-defs {
@@ -7689,4 +7677,9 @@ g[data-ink-erasing='true'] .dc-ink-stroke {
     min-width: 40px;
     height: 40px;
   }
+}
+
+/* Carries a styled diagram's colours to the canvas (`canvas/DiagramTheme.tsx`). No box of its own. */
+.dc-diagram-theme {
+  display: contents;
 }

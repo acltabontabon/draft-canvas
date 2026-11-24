@@ -2831,27 +2831,27 @@ button.dc-depth-plate-step:focus-visible .dc-depth-room-name,
  * way into near-white is no longer a plane. Distance still fades, from a higher floor, and the
  * lines the planes rest on are drawn at full strength.
  */
-:where(:root[data-theme='light']) .dc-depth {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth {
   --dc-depth-line: var(--dc-border-strong);
 }
 
-:where(:root[data-theme='light']) .dc-depth-plate .dc-fingerprint {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth-plate .dc-fingerprint {
   border-color: color-mix(in srgb, var(--dc-plate-line) calc(var(--fade) * 100%), var(--dc-text-muted));
 }
 
-:where(:root[data-theme='light']) .dc-depth-layer .dc-fingerprint {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth-layer .dc-fingerprint {
   --fade: calc(0.95 - var(--dist, 1) * 0.1);
 }
 
-:where(:root[data-theme='light']) .dc-depth-plate-name {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth-plate-name {
   opacity: calc(1.08 - var(--dist, 1) * 0.08);
 }
 
-:where(:root[data-theme='light']) .dc-depth-room[data-kind='beside'] .dc-fingerprint {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth-room[data-kind='beside'] .dc-fingerprint {
   --fade: 0.75;
 }
 
-:where(:root[data-theme='light']) .dc-depth-room[data-kind='beside'] .dc-depth-room-name {
+:where(:root[data-theme='light']:not(:has(.dc-editor[data-theme='dark'])), .dc-editor[data-theme='light']) .dc-depth-room[data-kind='beside'] .dc-depth-room-name {
   color: var(--dc-text-muted);
 }
 

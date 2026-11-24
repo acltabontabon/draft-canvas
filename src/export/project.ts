@@ -39,6 +39,11 @@ export function serializeDocument(document: DraftDocument): string {
     // Only written when the canvas actually has one, so a file from a canvas nobody said anything
     // about is byte-identical to what this has always produced.
     ...(document.level === undefined ? {} : { level: document.level }),
+    // Only when the diagram has a look of its own: an unstyled one writes the bytes it always did.
+    ...(() => {
+      const style = document.style === undefined ? undefined : canonical.style(document.style);
+      return style === undefined ? {} : { style };
+    })(),
   };
   return `${JSON.stringify(payload, null, 2)}\n`;
 }

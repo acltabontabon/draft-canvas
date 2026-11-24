@@ -26,10 +26,6 @@ const repository = {
   saveProject: async () => {},
   deleteProject: async () => {},
   moveDocumentToProject: async () => {},
-  saveBackgroundImage: async () => {},
-  loadBackgroundImage: async () => null,
-  removeBackgroundImage: async () => {},
-  pruneBackgroundImages: async () => {},
 } as unknown as DraftRepository;
 
 afterEach(() => {

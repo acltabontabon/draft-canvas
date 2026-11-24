@@ -89,7 +89,6 @@ export function createHarness() {
   };
   const files = new Map<string, FakeFile>();
   const recovery = new Map<string, { entry: RecoveryEntry; text: string }>();
-  const sidecars = new Map<string, { mime: string; base64: string }>();
   /**
    * The docs pictures in the (one, shared) folder, by file name: `payments.svg`, `payments.ledger.svg`.
    * A diagram's are those named after it, as the shell lists them.
@@ -197,7 +196,7 @@ export function createHarness() {
       file.version += 1;
       return { outcome: 'saved' as const, stamp: stampOf(file) };
     }),
-    saveAs: vi.fn(async (_suggested: string, bytes: Uint8Array, _copySidecarFrom?: string, startIn?: StartLocation): Promise<SavedAs | null> => {
+    saveAs: vi.fn(async (_suggested: string, bytes: Uint8Array, startIn?: StartLocation): Promise<SavedAs | null> => {
       lastSaveAsStartIn = startIn ?? null;
       if (!saveAsPath) return null;
       const handle = addFile(saveAsPath.name, decoder.decode(bytes));
@@ -258,9 +257,6 @@ export function createHarness() {
     docsReveal: vi.fn(async (_handle: string, _name: string) => {}),
     exportFile: vi.fn(async (_name: string, _filters: FileFilter[], _bytes: Uint8Array) => true),
     openExternal: vi.fn(async (_url: string) => {}),
-    sidecarRead: vi.fn(async (handle: string) => sidecars.get(handle) ?? null),
-    sidecarWrite: vi.fn(async (handle: string, mime: string, base64: string) => void sidecars.set(handle, { mime, base64 })),
-    sidecarRemove: vi.fn(async (handle: string) => void sidecars.delete(handle)),
     peekDocument: vi.fn(async (handle: string) => files.get(handle)?.text ?? null),
     projectPeek: vi.fn(async (project: string, relPath: string): Promise<string | null> => folders.get(project)?.files.get(relPath)?.text ?? null),
     explorerOpen: vi.fn(async () => ({ session: 'x_test', places: [], directory: { location: { handle: 'b_home', name: 'Home', displayPath: '~' }, breadcrumbs: [], entries: [], total: 0, nextOffset: null, truncated: false } })),
@@ -511,7 +507,6 @@ export function createHarness() {
     link,
     files,
     recovery,
-    sidecars,
     docsImages,
     delivered,
     posted,

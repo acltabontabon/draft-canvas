@@ -4,6 +4,7 @@ import { emitDisplayList } from '../render/svg/emit';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
+import { useDiagramStyle } from './useDiagramStyle';
 import { SvgSurface } from './SvgSurface';
 
 /**
@@ -15,7 +16,8 @@ export const CanvasLegend = memo(function CanvasLegend() {
   const shown = useUiStore((state) => state.legendShown);
   const edges = useEditorStore((state) => state.document.edges);
   const theme = useThemeValue();
-  const legend = useMemo(() => (shown ? describeLegend(edges, { theme }) : null), [shown, edges, theme]);
+  const { connector } = useDiagramStyle();
+  const legend = useMemo(() => (shown ? describeLegend(edges, { theme, connector }) : null), [shown, edges, theme, connector]);
   if (!legend) return null;
   return (
     <div className="dc-canvas-legend" role="img" aria-label="Legend: the kinds of line in this diagram">

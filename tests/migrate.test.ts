@@ -253,8 +253,8 @@ describe('v3 to v4 migration: flow accent', () => {
 /**
  * The v4→v5 migration: v4 has no concept of a canvas background at all, so
  * there is nothing to backfill — a structural no-op, same shape as
- * `migrateFlowAccent`. `normalizeDocument` gives the migrated document a
- * clean, disabled default background block.
+ * `migrateFlowAccent`. Background images are gone since: a migrated document
+ * has none.
  */
 describe('v4 to v5 migration: canvas background', () => {
   function v4Fixture() {
@@ -269,17 +269,12 @@ describe('v4 to v5 migration: canvas background', () => {
     };
   }
 
-  it('migrates a v4 document to the current version with a clean default background', () => {
+  it('migrates a v4 document to the current version', () => {
     const result = parseDocument(JSON.stringify(v4Fixture()));
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.document.version).toBe(CURRENT_VERSION);
-    expect(result.document.settings.background).toEqual({
-      enabled: false,
-      fit: 'cover',
-      dim: 0.55,
-      blur: 0,
-    });
+    expect(result.document.settings).toEqual({ showSequence: true, grid: 'dots' });
   });
 });
 

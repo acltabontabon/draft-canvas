@@ -11,7 +11,7 @@
  */
 import type { DraftDocument } from '../document/types';
 import type { Change } from './changes';
-import { diffFile, wireSettings } from './diff';
+import { diffFile } from './diff';
 import type { RejectReason, Role } from './protocol';
 import { fileBytes, growthOf, idsUnique, MAX_SHARED_FILE_BYTES, withinLimits } from './limits';
 import { applyChanges } from './apply';
@@ -77,8 +77,7 @@ export class HostCore {
 
   /** The file as it is sent to someone joining. */
   snapshot(): DraftDocument {
-    const settings = wireSettings(this.current.settings);
-    return settings === this.current.settings ? this.current : { ...this.current, settings };
+    return this.current;
   }
 
   /**

@@ -44,8 +44,7 @@ Open **Share → Export…** (`⌘⇧E`).
 
 ![Export with Save an editable file selected.](../media/guides/export-document.png)
 
-- Exports are snapshots made on your device. Files include every level and a background image up to
-  2 MB.
+- Exports are snapshots made on your device. Files include every level.
 - An encrypted file needs a passphrase of 8 or more characters. It cannot be recovered, so send it
   separately. `.dcenc` files open in the web app only.
 - **Copy** puts an image or source on the clipboard; `⌘K` has **Copy as image**, **Copy as SVG** and
@@ -113,7 +112,7 @@ the passphrase. **Lock** discards an unlocked diagram from memory and asks for t
 The link carries the whole diagram, every level, after the `#`; nothing is uploaded, and later edits
 do not update it. Links have no expiry and cannot be revoked, and someone who unlocks a diagram can
 save or capture it. Browsers and messages may keep the link. The compressed limit is 32 KB; export a
-file if the diagram is too large. Background images are left out.
+file if the diagram is too large.
 
 ### Read a shared diagram
 

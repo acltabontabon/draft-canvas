@@ -1,6 +1,5 @@
-import { describeContext, sequenceLayoutFor } from '../nodes/describe';
+import { sequenceLayoutFor, sizingContext } from '../nodes/describe';
 import { sequenceAttachmentChips } from '../nodes/sequence';
-import { LIGHT } from '../render/theme/tokens';
 import { sequenceActions } from '../store/sequenceActions';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -141,7 +140,7 @@ function AttachmentPopoverBody({ detail, closing, listening, editable }: { detai
   let rect = shown ? rectOfInternal(shown.internal) : null;
   let chipRow = null;
   if (rect && messageId && displayHost) {
-    const context = describeContext(LIGHT);
+    const context = sizingContext();
     const layout = sequenceLayoutFor(displayHost, context);
     const drawn = layout.messages.find((message) => message.id === messageId);
     if (drawn) {

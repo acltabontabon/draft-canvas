@@ -14,19 +14,22 @@ import type { DisplayList, RichTextShape, Shape, Stroke, TextRun } from '../rend
 import { languageForFence, tokenizeCode } from '../render/code/highlight';
 import { CODE_THEMES, colorForScope } from '../render/code/theme';
 import { LANGUAGE_LABELS } from '../render/code/highlight';
-import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import type { PersonalityProfile } from '../render/roughness/presets';
+import { CORNER_SCALE, styleFrom, type ResolvedShape, type ResolvedStyle, type StyleInput } from '../render/style/resolve';
+import { restyle } from '../render/style/restyle';
+import { artShapes, drawnBounds, isWords } from '../render/style/art';
+import { artSlotOf, shapeKindOf } from '../document/style';
 import { BOUNDARY_HEADER_HEIGHT } from '../document/boundaryHeader';
 import { ARTIFACT_GLYPH_WIDTH, DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreGlyphTop, dataStoreScale, isGlyphComponentKind, isGlyphServiceKind, isGlyphShape } from '../document/dataStoreGeometry';
 import { queueTubeSpan } from '../document/queueGeometry';
 import { roughenPath } from '../render/roughness/roughPath';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
 import { jitter } from '../render/roughness/seed';
-import { accentOf, boundaryLine, type AccentPalette, type Theme } from '../render/theme/tokens';
+import { accentOf, boundaryLine, LIGHT, type AccentPalette, type Theme } from '../render/theme/tokens';
 import { FONTS, LINE_HEIGHTS, TEXT_SIZES, type FontSpec } from '../render/text/fonts';
 import { baselineOf, fitLabel, layoutRichText, layoutText, type RichBox, type RichRun, type TextLayout } from '../render/text/layout';
 import type { CalloutKind } from '../render/text/markdown';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
-import type { PersonalityPreset } from '../theme/usePersonality';
 import { clamp } from '../lib/math';
 import { nodeTechnologyIcon, technologyIconSnapshot, technologyMarkBounds, TECHNOLOGY_MARK_SIZE, type TechnologyIconSnapshot } from './technology';
 import { NOTE_ACCENTS, NOTE_LABELS } from './noteKinds';
@@ -44,15 +47,29 @@ import type { SequenceLayout } from '../sequence/layout';
 export interface DescribeContext {
   theme: Theme;
   measurer: TextMeasurer;
-  /** Intentional Roughness. Defaults to `'clean'`, today's exact
-   *  appearance, so every existing call site that only passes a theme keeps
-   *  compiling and keeps producing byte-identical output. */
-  preset: PersonalityPreset;
+  /** How the diagram is drawn. Defaults to Clean, today's exact appearance, so every call site
+   *  that only passes a theme keeps compiling and keeps producing byte-identical output. */
+  style: ResolvedStyle;
+  /** The look of the one shape being described, when its style gives it one. `describeNode` sets
+   *  it; a caller never does. */
+  shape?: ResolvedShape;
   technologyIcons: TechnologyIconSnapshot;
 }
 
-export function describeContext(theme: Theme, preset: PersonalityPreset = 'clean'): DescribeContext {
-  return { theme, measurer: getMeasurer(), preset, technologyIcons: technologyIconSnapshot() };
+export function describeContext(theme: Theme, style: StyleInput = 'clean'): DescribeContext {
+  return { theme, measurer: getMeasurer(), style: styleFrom(style), technologyIcons: technologyIconSnapshot() };
+}
+
+/**
+ * The context a shape's size is worked out in.
+ *
+ * A size is stored in the file, so it must come out the same on every device: never from the
+ * theme on screen, and never from how this device happens to draw. Everything that measures a
+ * shape to size it, fit it or hit-test inside it asks here, so a style that changes what text
+ * measures has one place to reach them all.
+ */
+export function sizingContext(): DescribeContext {
+  return describeContext(LIGHT);
 }
 
 const PADDING = 12;
@@ -354,9 +371,14 @@ function pinnedCaption(
 
 export function describeNode(node: DraftNode, ctx: DescribeContext): DisplayList {
   const icon = nodeTechnologyIcon(node, ctx.technologyIcons);
+  // What the style says about this kind of shape, looked up once and carried to whichever helpers
+  // draw it. A sequence describes its participants through here too, each with its own look, so an
+  // outer shape's is never left on the context for an inner one.
+  const look = ctx.style.shape(node);
+  const own = look.plain ? (ctx.shape ? { ...ctx, shape: undefined } : ctx) : { ...ctx, shape: look };
   // This is a display projection only: the full technology (and its version) stays in the file,
   // inspector and source exports. Unrecognized or mixed stacks use the neutral technology mark.
-  const shapes = shapesFor(icon ? { ...node, technology: undefined } : node, ctx);
+  const shapes = restyle(withArt(node, own, shapesFor(icon ? { ...node, technology: undefined } : node, own)), look);
   const mark = technologyMarkBounds(node, ctx.technologyIcons);
   if (icon && mark) {
     shapes.push({
@@ -368,6 +390,25 @@ export function describeNode(node: DraftNode, ctx: DescribeContext): DisplayList
     });
   }
   return { width: node.width, height: node.height, shapes };
+}
+
+/**
+ * A shape with its style's own drawing in place of the built-in one, where the style gives it one.
+ *
+ * Only the drawing changes. The words the shape's describer laid out stay exactly where they are,
+ * and the drawing goes into the box the built-in one took up, so the shape is the same size, its
+ * name is where it was, and a connector meets it where it always did. A `glyph` shape (a picture
+ * with its name beneath) keeps the drawing's proportions; a `body` shape (a box with its name in
+ * it) is filled by it.
+ */
+function withArt(node: DraftNode, ctx: DescribeContext, shapes: Shape[]): Shape[] {
+  const art = ctx.shape?.art;
+  if (!art) return shapes;
+  const slot = artSlotOf(node.type, shapeKindOf(node));
+  if (!slot) return shapes;
+  const box = drawnBounds(shapes) ?? { x: 0, y: 0, w: node.width, h: node.height };
+  const drawing = artShapes(art, box, ctx.shape?.fit ?? (slot === 'glyph' ? 'contain' : 'stretch'), accentOf(ctx.theme, node.accent), ctx.theme);
+  return [...drawing, ...shapes.filter(isWords)];
 }
 
 /** What a sequence borrows from here — see `SequenceKit` — so its heads are these same shapes. */
@@ -484,6 +525,16 @@ function centredLabel(
   ];
 }
 
+/**
+ * A body's corner in the shape's style: the built-in radius, made sharper or rounder. For the
+ * outline of a box that holds a name or content, never for the small parts of a glyph, which keep
+ * the proportions they were drawn with. Unchanged when the style says nothing, so Clean's output
+ * is the bytes it always was.
+ */
+function corner(ctx: DescribeContext, r: number): number {
+  return ctx.shape ? r * CORNER_SCALE[ctx.shape.corners] : r;
+}
+
 function surfaceStroke(ctx: DescribeContext, node: DraftNode): Stroke {
   return { color: accentOf(ctx.theme, node.accent).line, width: 1.5 };
 }
@@ -506,7 +557,7 @@ function outlineShape(
   paint: { fill?: string; opacity?: number; stroke?: Stroke; shadow?: boolean },
   boost = 1,
 ): Shape {
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   const outlineAmp = profile.outline * boost;
   const bowAmp = profile.bow * boost;
   // A caller's fixed corner radius (8 for most shapes, 12 for a Boundary) is never checked
@@ -531,7 +582,7 @@ function outlineShape(
  * doesn't sit crisp among shapes that were drawn by hand. A no-op at Clean.
  */
 function roughOutline(d: string, seedId: string, ctx: DescribeContext): string {
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   return roughenPath(d, seedId, profile.outline, profile.bow);
 }
 
@@ -541,7 +592,7 @@ function box(node: DraftNode, ctx: DescribeContext, radius: number): Shape[] {
     outlineShape(
       node.id,
       ctx,
-      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: radius },
+      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, radius) },
       { fill: palette.fill, stroke: surfaceStroke(ctx, node), shadow: true },
     ),
     ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
@@ -554,7 +605,7 @@ function box(node: DraftNode, ctx: DescribeContext, radius: number): Shape[] {
  * `outline`/`bow` values would be disproportionate on the smallest ones. Both axes clamp to a
  * fraction of the node's own radius instead of using the profile value directly.
  */
-function junctionAmplitude(profile: (typeof PERSONALITY_PROFILES)[PersonalityPreset], rx: number, ry: number) {
+function junctionAmplitude(profile: PersonalityProfile, rx: number, ry: number) {
   const cap = Math.min(rx, ry) * 0.18;
   return { outline: Math.min(profile.outline, cap), bow: Math.min(profile.bow, cap) };
 }
@@ -565,7 +616,7 @@ function ellipse(node: DraftNode, ctx: DescribeContext): Shape[] {
   const cy = node.height / 2;
   const rx = node.width / 2 - 0.75;
   const ry = node.height / 2 - 0.75;
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   const amp = junctionAmplitude(profile, rx, ry);
   const paint = { fill: palette.fill, stroke: surfaceStroke(ctx, node), shadow: true };
   const outline: Shape =
@@ -644,6 +695,12 @@ function replicated(node: DraftNode, ctx: DescribeContext): Shape[] {
   if (isGlyphServiceKind(node.serviceKind)) return serviceGlyph(node, ctx);
   const count = node.replicas ?? 1;
   if (count < 2) return service(node, ctx);
+  // A style's own drawing stands for the whole shape: there is no card to stack a second behind,
+  // so it carries its count the way a glyph kind does.
+  if (ctx.shape?.art) {
+    const single = service(node, ctx);
+    return [...single, ...replicaMark(node.width, node.height, count, ctx, single)];
+  }
   const frontWidth = node.width - REPLICA_OFFSET;
   const frontHeight = node.height - REPLICA_OFFSET;
   const shapes = service({ ...node, width: frontWidth, height: frontHeight }, ctx);
@@ -652,7 +709,7 @@ function replicated(node: DraftNode, ctx: DescribeContext): Shape[] {
   const back = outlineShape(
     `${node.id}:replicas`,
     ctx,
-    { x: 0.75 + REPLICA_OFFSET, y: 0.75 + REPLICA_OFFSET, w: frontWidth - 1.5, h: frontHeight - 1.5, r: 8 },
+    { x: 0.75 + REPLICA_OFFSET, y: 0.75 + REPLICA_OFFSET, w: frontWidth - 1.5, h: frontHeight - 1.5, r: corner(ctx, 8) },
     { fill: palette.fill, stroke: backCardStroke(palette) },
   );
   return [back, ...shapes, ...mark];
@@ -740,10 +797,10 @@ function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
     outlineShape(
       node.id,
       ctx,
-      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 },
+      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, 8) },
       { fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
     ),
-    serviceCap({ x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 }, palette),
+    serviceCap({ x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, 8) }, palette),
     // Window-chrome dots, top-right: the family's "this is a running thing" cue. Generic gets the
     // full three; Worker gets two, so the two kinds stay distinguishable by the mark as well as
     // by the silhouette.
@@ -766,10 +823,11 @@ function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
   const h = node.height - 1.5;
   const x = 0.75;
   const y = 0.75;
-  const r = 8;
   const notchH = h * 0.34;
   const notchDepth = Math.min(8, w * 0.1);
   const notchTop = y + (h - notchH) / 2;
+  // Never so round that the corner reaches the notch cut into the left edge.
+  const r = Math.max(0, Math.min(corner(ctx, 8), w / 2, (h - notchH) / 2 - 3));
   const notchBottom = notchTop + notchH;
   const nr = 3;
 
@@ -1066,7 +1124,7 @@ function component(node: DraftNode, ctx: DescribeContext): Shape[] {
  *  accent, Component's own thinner stroke. */
 function componentGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const rect = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 8 };
+  const rect = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, 8) };
   const label = centredLabel(node, ctx, { top: 0, bottom: 0, color: '' });
   return [
     outlineShape(node.id, ctx, rect, { fill: palette.fill, stroke: componentStroke(ctx, node), shadow: true }),
@@ -1464,7 +1522,7 @@ function dataStoreCylinder(node: DraftNode, ctx: DescribeContext): Shape[] {
   const y = DS_GLYPH_TOP;
   const h = DS_GLYPH_HEIGHT;
   const ry = Math.min(8, h * 0.19);
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   const stroke: Stroke = { color: palette.line, width: 1.5 };
 
   const { body, lid } = cylinderPaths(x, y, w, h, ry, node.id, profile.outline, profile.bow);
@@ -1866,7 +1924,7 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
   // pill's own ends rather than a rounded one, which is what a short queue
   // node (tubeH below the historical 32px cap) would otherwise get.
   const rx = Math.min(tubeH <= 32 ? 14 : tubeH * (14 / 32), w * 0.12, tubeH / 2);
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
 
   // A horizontal cylinder — a pipe messages travel through — built the same
   // way `database()` builds its (vertical) one: elliptical caps joined by
@@ -2067,7 +2125,7 @@ function humanGlyph(
   // A wash this light gives the body presence as a mass without competing with the container's
   // own (unfilled) card — still clearly lighter than a filled architecture shape.
   const bodyFill = 0.12;
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   const outlineAmp = profile.outline;
   const bowAmp = profile.bow;
 
@@ -2237,7 +2295,7 @@ function groupGlyph(
   ctx: DescribeContext,
 ): { shapes: Shape[]; glyphBottom: number } {
   const bottom = GLYPH_BOTTOM;
-  const profile = PERSONALITY_PROFILES[ctx.preset];
+  const profile = ctx.style.hand;
   const outlineAmp = profile.outline;
   const bowAmp = profile.bow;
   const bodyFill = 0.12;
@@ -2407,7 +2465,7 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
   const stroke: Stroke = { color: palette.line, width: 1.5 };
   const kind = node.actorKind ?? 'human';
 
-  const card = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: 10 };
+  const card = { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, 10) };
   const container = outlineShape(node.id, ctx, card, { fill: palette.fill, stroke });
 
   // The family's signature: one short bar straddling the top edge, near the left corner. It is
@@ -2604,7 +2662,7 @@ function note(node: DraftNode, ctx: DescribeContext): Shape[] {
     outlineShape(
       node.id,
       ctx,
-      { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 6 },
+      { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: corner(ctx, 6) },
       // Flat, not the accent gradient the architecture families wear: a note is an annotation
       // sitting on the canvas, and the gradient is part of what says "this is a system element."
       { fill: palette.fill, stroke: { color: palette.line, width: 1 } },
@@ -2612,7 +2670,7 @@ function note(node: DraftNode, ctx: DescribeContext): Shape[] {
     // A colour bar rather than a sticky-note skeuomorph.
     {
       t: 'group',
-      clip: { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 6 },
+      clip: { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: Math.min(corner(ctx, 6), (node.width - 1) / 2, (node.height - 1) / 2) },
       children: [
         { t: 'rect', x: 0.5, y: 0.5, w: NOTE_BAR_WIDTH, h: node.height - 1, fill: palette.chip },
       ],
@@ -2912,9 +2970,9 @@ function freeText(node: DraftNode, ctx: DescribeContext): Shape[] {
   const lines: RichTextShape['lines'] = [];
 
   if (node.textBackground === 'card') {
-    back.push(outlineShape(node.id, ctx, { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: 8 }, { fill: palette.fill, stroke: { color: palette.line, width: 1 } }));
+    back.push(outlineShape(node.id, ctx, { x: 0.5, y: 0.5, w: node.width - 1, h: node.height - 1, r: corner(ctx, 8) }, { fill: palette.fill, stroke: { color: palette.line, width: 1 } }));
   } else if (node.textBackground === 'banner') {
-    back.push(outlineShape(node.id, ctx, { x: 0, y: 0, w: node.width, h: node.height, r: 6 }, { fill: palette.chip }));
+    back.push(outlineShape(node.id, ctx, { x: 0, y: 0, w: node.width, h: node.height, r: corner(ctx, 6) }, { fill: palette.chip }));
   }
 
   for (const box of layout.boxes) {
@@ -3075,12 +3133,6 @@ export function naturalTextHeight(
   return Math.min(TEXT_AUTO_MAX_HEIGHT, Math.ceil(height + pad.y * 2));
 }
 
-/** A boundary is explicitly meant to feel stronger than an ordinary node — "someone drawing a
- *  large boundary around several services... someone just circled this part" — so it boosts its
- *  own bow/outline over the plain per-node profile value, rather than reading identically to the
- *  services it contains. Clean stays 1 (no-op) so this never changes byte-identical output. */
-const BOUNDARY_BOOST: Record<PersonalityPreset, number> = { clean: 1, draft: 1.4, sketch: 1.7 };
-
 /**
  * The boundary header, laid out on one grid so every kind lines up with every other:
  *
@@ -3106,17 +3158,18 @@ const CAP_HEIGHT = 0.71;
 const KAPPA = 0.5523;
 
 /** The outline's rounded top-left corner as a path start, so a tab or band fills it exactly. */
-function topLeftCorner(): string {
-  const k = 1 + BOUNDARY_RADIUS * (1 - KAPPA);
-  return `M1 ${1 + BOUNDARY_RADIUS} C1 ${k} ${k} 1 ${1 + BOUNDARY_RADIUS} 1`;
+function topLeftCorner(radius: number): string {
+  const k = 1 + radius * (1 - KAPPA);
+  return `M1 ${1 + radius} C1 ${k} ${k} 1 ${1 + radius} 1`;
 }
 
 function group(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent);
   const style = BOUNDARY_STYLES[node.boundaryPreset ?? 'boundary'];
-  const profile = PERSONALITY_PROFILES[ctx.preset];
-  const boost = BOUNDARY_BOOST[ctx.preset];
-  const rect = { x: 1, y: 1, w: node.width - 2, h: node.height - 2, r: BOUNDARY_RADIUS };
+  const profile = ctx.style.hand;
+  const boost = profile.boundaryBoost;
+  const radius = boundaryRadius(node, ctx);
+  const rect = { x: 1, y: 1, w: node.width - 2, h: node.height - 2, r: radius };
   const stroke: Stroke = {
     color: boundaryLine(ctx.theme, node.accent),
     width: style.width,
@@ -3204,7 +3257,14 @@ export function boundaryHeaderTextBox(node: DraftNode, ctx: DescribeContext): { 
   return right > left ? { x: left, y: top, width: right - left, height: bottom - top } : undefined;
 }
 
+/** A boundary's corner in its style: its outline and whatever its header cuts from that corner share it. */
+function boundaryRadius(node: DraftNode, ctx: DescribeContext): number {
+  // Never past what a header cut from the corner can hold.
+  return Math.min(corner(ctx, BOUNDARY_RADIUS), BOUNDARY_HEADER_HEIGHT - 12, (node.width - 2) / 2, (node.height - 2) / 2);
+}
+
 function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundaryStyle, palette: AccentPalette): Shape[] {
+  const radius = boundaryRadius(node, ctx);
   const shapes: Shape[] = [];
   const bottom = 1 + BOUNDARY_HEADER_HEIGHT;
   // A tab holds its text with the same padding on both sides, and never reaches the far corner.
@@ -3221,7 +3281,7 @@ function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundarySt
       y: plate,
       w: BOUNDARY_PLATE,
       h: BOUNDARY_PLATE,
-      r: BOUNDARY_RADIUS - BOUNDARY_PLATE_GAP,
+      r: Math.max(1, radius - BOUNDARY_PLATE_GAP),
       fill: palette.chip,
       opacity: ctx.theme.name === 'dark' ? 0.18 : 0.13,
     });
@@ -3264,14 +3324,14 @@ function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundarySt
     // A corner tab cut from the boundary's own top-left corner: it shares the outline's top and
     // left edges, so only its right and bottom edges are drawn. Sized to what it holds, with the
     // same padding after the text as before it.
-    const tabRight = Math.min(node.width - 1 - BOUNDARY_RADIUS, Math.max(headerEnd, BOUNDARY_INSET_X + 24) + BOUNDARY_INSET_X);
-    const r = BOUNDARY_RADIUS - BOUNDARY_PLATE_GAP;
+    const tabRight = Math.min(node.width - 1 - radius, Math.max(headerEnd, BOUNDARY_INSET_X + 24) + BOUNDARY_INSET_X);
+    const r = Math.max(1, radius - BOUNDARY_PLATE_GAP);
     // M/L/Q/C only — the command set `roughenPath` understands — so the edge wobbles with the
     // outline at Draft and Sketch instead of being dropped.
     const edge = `M${tabRight} 1 L${tabRight} ${bottom - r} Q${tabRight} ${bottom} ${tabRight - r} ${bottom} L1 ${bottom}`;
     shapes.push({
       t: 'path',
-      d: `${topLeftCorner()} L${tabRight} 1 L${tabRight} ${bottom - r} Q${tabRight} ${bottom} ${tabRight - r} ${bottom} L1 ${bottom} Z`,
+      d: `${topLeftCorner(radius)} L${tabRight} 1 L${tabRight} ${bottom - r} Q${tabRight} ${bottom} ${tabRight - r} ${bottom} L1 ${bottom} Z`,
       fill: palette.chip,
       opacity: ctx.theme.name === 'dark' ? 0.16 : 0.1,
     });
@@ -3286,10 +3346,10 @@ function boundaryHeader(node: DraftNode, ctx: DescribeContext, style: BoundarySt
     // A label plate ruled off from the contents across the full width — faint tint above, one
     // hairline under — so the runtime scope reads as infrastructure without a heavy panel.
     const w = node.width;
-    const k = BOUNDARY_RADIUS * (1 - KAPPA);
+    const k = radius * (1 - KAPPA);
     shapes.push({
       t: 'path',
-      d: `${topLeftCorner()} L${w - 1 - BOUNDARY_RADIUS} 1 C${w - 1 - k} 1 ${w - 1} ${1 + k} ${w - 1} ${1 + BOUNDARY_RADIUS} L${w - 1} ${bottom} L1 ${bottom} Z`,
+      d: `${topLeftCorner(radius)} L${w - 1 - radius} 1 C${w - 1 - k} 1 ${w - 1} ${1 + k} ${w - 1} ${1 + radius} L${w - 1} ${bottom} L1 ${bottom} Z`,
       fill: palette.chip,
       opacity: ctx.theme.name === 'dark' ? 0.08 : 0.06,
     });

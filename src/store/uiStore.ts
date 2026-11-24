@@ -27,6 +27,10 @@ export interface FlowTrace {
   message: string;
 }
 
+/** The Settings pages the editor itself can ask for, on the web and the desktop. */
+/** The Appearance panel's three short pages: what to draw in, the paper, and the pen. */
+export type StylePanelTab = 'styles' | 'canvas' | 'drawing';
+
 export type ToastAction = { label: string; run: () => void };
 /**
  * A toast's optional button — e.g. "Undo" for something that was just removed — and, for the rare
@@ -450,8 +454,6 @@ export interface UiStore {
   exportOpen: boolean;
   aboutOpen: boolean;
   diagnosticsOpen: boolean;
-  /** Canvas Settings — background image and personality preset. */
-  settingsOpen: boolean;
   /** Whether the Collaborate dialog (`ui/collab/CollaborateDialog.tsx`) is open. */
   collabOpen: boolean;
   /**
@@ -568,6 +570,11 @@ export interface UiStore {
   flowPanelOpen: boolean;
   /** Whether the Outline — this view as a navigable list (`OutlinePanel.tsx`) — is docked open. */
   outlinePanelOpen: boolean;
+  /** The Appearance panel, docked beside the canvas so a change is seen on the diagram itself. Never saved. */
+  stylePanelOpen: boolean;
+  stylePanelTab: StylePanelTab;
+  /** Flips each time a different style is chosen, so the canvas can settle into it. Never saved. */
+  restyleBeat: 'a' | 'b' | null;
   /** Whether the proposal review panel (`desktop/ui/ProposalPanel.tsx`, desktop only) is open, and
    *  which proposal it's showing — `null` shows the list for the current diagram. */
   proposalPanelOpen: boolean;
@@ -801,7 +808,6 @@ export interface UiStore {
   setReadOnly: (readOnly: UiStore['readOnly']) => void;
   setAboutOpen: (open: boolean) => void;
   setDiagnosticsOpen: (open: boolean) => void;
-  setSettingsOpen: (open: boolean) => void;
   setCollabOpen: (open: boolean) => void;
   setJoinInvite: (payload: string | null) => void;
   setQuickConnect: (state: QuickConnectState | null) => void;
@@ -829,6 +835,11 @@ export interface UiStore {
   setOpenPointsResolvedOpen: (open: boolean) => void;
   setFlowPanelOpen: (open: boolean) => void;
   setOutlinePanelOpen: (open: boolean) => void;
+  /** Opens it on `tab` (Styles when not said), or closes it. */
+  setStylePanelOpen: (open: boolean, tab?: StylePanelTab) => void;
+  setStylePanelTab: (tab: StylePanelTab) => void;
+  /** A different style was chosen (not a change to one): the canvas plays its small arrival. */
+  beatRestyle: () => void;
   requestFlowRename: (flowId: string | null) => void;
   /** Opens the proposal panel (optionally straight to one proposal), or closes it. */
   setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
@@ -1001,7 +1012,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   exportOpen: false,
   aboutOpen: false,
   diagnosticsOpen: false,
-  settingsOpen: false,
   collabOpen: false,
   joinInvite: null,
   readOnly: null,
@@ -1033,6 +1043,9 @@ export const useUiStore = create<UiStore>((set, get) => ({
   openPointsResolvedOpen: false,
   flowPanelOpen: false,
   outlinePanelOpen: false,
+  stylePanelOpen: false,
+  stylePanelTab: 'styles',
+  restyleBeat: null,
   proposalPanelOpen: false,
   proposalPanelId: null,
   companionOpen: false,
@@ -1094,7 +1107,6 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setReadOnly: (readOnly) => set({ readOnly }),
   setAboutOpen: (aboutOpen) => set({ aboutOpen }),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
-  setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
   setCollabOpen: (collabOpen) => set({ collabOpen }),
   setJoinInvite: (joinInvite) => set({ joinInvite }),
   setQuickConnect: (quickConnect) => set({ quickConnect }),
@@ -1179,7 +1191,11 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setOpenPointsPanelOpen: (openPointsPanelOpen) => set({ openPointsPanelOpen }),
   setOpenPointsResolvedOpen: (openPointsResolvedOpen) => set({ openPointsResolvedOpen }),
   setFlowPanelOpen: (flowPanelOpen) => set({ flowPanelOpen }),
-  setOutlinePanelOpen: (outlinePanelOpen) => set({ outlinePanelOpen }),
+  // One panel is docked beside the canvas at a time: two would leave little canvas to look at.
+  setOutlinePanelOpen: (outlinePanelOpen) => set(outlinePanelOpen ? { outlinePanelOpen, stylePanelOpen: false } : { outlinePanelOpen }),
+  setStylePanelOpen: (stylePanelOpen, stylePanelTab = 'styles') => set(stylePanelOpen ? { stylePanelOpen, stylePanelTab, outlinePanelOpen: false } : { stylePanelOpen }),
+  setStylePanelTab: (stylePanelTab) => set({ stylePanelTab }),
+  beatRestyle: () => set((state) => ({ restyleBeat: state.restyleBeat === 'a' ? 'b' : 'a' })),
   setProposalPanelOpen: (proposalPanelOpen, proposalId = null) => set({ proposalPanelOpen, proposalPanelId: proposalPanelOpen ? proposalId : null }),
   setCompanionOpen: (companionOpen) => set({ companionOpen }),
   requestFlowRename: (flowRenameRequestId) => set({ flowRenameRequestId }),

@@ -349,49 +349,8 @@ describe('SVG export', () => {
     expect(svg).not.toContain('xlink:');
   });
 
-  it('emits no <image> element when no background is configured', () => {
+  it('emits no <image> element', () => {
     const { svg } = renderDocumentSvg(exportFixture());
-    expect(svg).not.toContain('<image');
-  });
-
-  it('embeds a configured background as an inline data URI, never a remote or blob reference', () => {
-    const background = {
-      dataUri: 'data:image/png;base64,AAAA',
-      fit: 'cover' as const,
-      dim: 0.4,
-      blur: 0,
-      naturalWidth: 200,
-      naturalHeight: 100,
-    };
-    const { svg } = renderDocumentSvg(exportFixture(), { background });
-    const hrefs = [...svg.matchAll(/<image[^>]*href="([^"]*)"/g)].map((m) => m[1]);
-    expect(hrefs.length).toBeGreaterThan(0);
-    for (const href of hrefs) expect(href).toMatch(/^data:image\//);
-  });
-
-  it('paints a configured background behind everything else', () => {
-    const background = {
-      dataUri: 'data:image/png;base64,AAAA',
-      fit: 'cover' as const,
-      dim: 0.4,
-      blur: 0,
-      naturalWidth: 200,
-      naturalHeight: 100,
-    };
-    const { svg } = renderDocumentSvg(exportFixture(), { background });
-    expect(svg.indexOf('<image')).toBeLessThan(svg.indexOf('Order Service'));
-  });
-
-  it('omits the background when includeBackground is explicitly false', () => {
-    const background = {
-      dataUri: 'data:image/png;base64,AAAA',
-      fit: 'cover' as const,
-      dim: 0.4,
-      blur: 0,
-      naturalWidth: 200,
-      naturalHeight: 100,
-    };
-    const { svg } = renderDocumentSvg(exportFixture(), { background, includeBackground: false });
     expect(svg).not.toContain('<image');
   });
 
@@ -1075,12 +1034,11 @@ describe('an exported SVG stands on its own, and beside another', () => {
     expect(renderDocumentSvg(doc).svg).toBe(one);
   });
 
-  it('draws its shadow with SVG 1.1 primitives, and declares xlink for the readers that need it', () => {
+  it('draws its shadow with SVG 1.1 primitives', () => {
     const { svg } = renderDocumentSvg(exportFixture());
     expect(svg).not.toContain('feDropShadow');
     expect(svg).toContain('<feGaussianBlur');
     expect(svg).toContain('<feMerge');
-    expect(svg).toContain('xmlns:xlink="http://www.w3.org/1999/xlink"');
   });
 
   it('drops the two non-characters XML forbids, along with the control characters', () => {

@@ -455,7 +455,6 @@ export function createDocument(title = DEFAULT_TITLE): DraftDocument {
     settings: {
       showSequence: true,
       grid: 'dots',
-      background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 },
     },
     flows: [],
     openPoints: [],
@@ -477,8 +476,7 @@ export function cloneDocumentAsNew(doc: DraftDocument, title: string): DraftDocu
       createdAt: now,
       updatedAt: now,
       ...(doc.metadata.origin ? { origin: structuredClone(doc.metadata.origin) } : {}),
-      // Duplicate stays in the same project, same principle as carrying over
-      // the background image — see `useDocumentSession.ts`'s `duplicateDocument`.
+      // Duplicate stays in the same project — see `useDocumentSession.ts`'s `duplicateDocument`.
       ...(doc.metadata.projectId ? { projectId: doc.metadata.projectId } : {}),
     },
   };

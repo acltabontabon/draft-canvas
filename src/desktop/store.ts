@@ -20,7 +20,7 @@ export interface MoveTarget {
 }
 
 /** The pages of Settings, in rail order (see `settings/SettingsDialog.tsx`). */
-export type SettingsCategory = 'general' | 'canvas' | 'agents' | 'updates' | 'support';
+export type SettingsCategory = 'general' | 'appearance' | 'canvas' | 'agents' | 'updates' | 'support';
 
 /** What the open document is, for the status bar, the window title and Home. */
 export type DesktopDoc =

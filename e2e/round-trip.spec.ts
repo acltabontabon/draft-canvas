@@ -84,7 +84,7 @@ const richDocument = () => ({
     { id: 'act2', text: 'Write up the migration plan', done: true },
   ],
   viewport: { x: 40, y: 40, zoom: 0.7 },
-  settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
+  settings: { showSequence: true, grid: 'dots' },
 });
 
 type Json = Record<string, unknown>;

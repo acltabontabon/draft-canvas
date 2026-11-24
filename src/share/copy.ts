@@ -55,6 +55,7 @@ export async function copyShareLink(
   // A successful write is not a way to retrieve the link: embedded browsers can isolate their
   // clipboard from the host. Always expose it so opening and manual copying remain available.
   onReady?.(result.url);
+  if (result.withoutArtwork) notify('This link leaves out the diagram’s custom drawings, which do not fit in a link. Export the file to share them.', 'info');
   checkShareCancelled(options.signal);
   options.onProgress?.('copying');
   if (await copyPreparedShareLink(result.url, notify, passphrase !== undefined)) return true;

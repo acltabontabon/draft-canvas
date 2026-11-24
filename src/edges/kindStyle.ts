@@ -1,4 +1,5 @@
 import type { Accent, DraftEdge } from '../document/types';
+import type { StyleEdgeColour } from '../document/style';
 import type { MarkerVariant } from '../render/svg/markers';
 import { accentOf, type Theme } from '../render/theme/tokens';
 
@@ -66,10 +67,12 @@ export function resolveEdgeColor(
   edge: Pick<DraftEdge, 'accent'> & Partial<Pick<DraftEdge, 'semantic' | 'compensationFor'>>,
   sourceNode: { accent?: Accent } | undefined,
   theme: Theme,
+  /** What an uncoloured connector wears: its source's colour, or with `plain` the theme's own line. */
+  rule: StyleEdgeColour = 'source',
 ): string {
   const explicit = edge.accent;
   if (explicit === undefined && edge.semantic === 'compensates' && edge.compensationFor) return theme.accents.rose.line;
-  const effective = explicit ?? sourceNode?.accent ?? 'neutral';
+  const effective = explicit ?? (rule === 'plain' ? undefined : sourceNode?.accent) ?? 'neutral';
   if (effective === 'neutral') return theme.edge;
   const palette = accentOf(theme, effective);
   return explicit !== undefined ? palette.chip : palette.line;

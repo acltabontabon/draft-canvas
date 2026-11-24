@@ -40,12 +40,12 @@ import { PresentationPointer } from './presentation/PresentationPointer';
 import { edgeIndex, nodeIndex, selectSequenceMessage, sequenceNodes } from '../store/selectors';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
-import { CanvasBackground } from './CanvasBackground';
+import { DiagramTheme } from './DiagramTheme';
+import { StyleBackdrop } from './StyleBackdrop';
 import { ATTACH_DWELL_MS, evaluateAttachCandidates, isAttachableType } from './dragTargets';
 import { isLinkable, isPartOfDiagram } from '../document/sequenceLinks';
 import { LIMITS } from '../document/limits';
-import { describeContext, sequenceLayoutFor } from '../nodes/describe';
-import { LIGHT } from '../render/theme/tokens';
+import { sequenceLayoutFor, sizingContext } from '../nodes/describe';
 import { hitSequence, participantIndexAt } from '../sequence/layout';
 import { sequenceActions } from '../store/sequenceActions';
 import {
@@ -194,10 +194,6 @@ function connectFrom(source: string, target: string): void {
 /** See `onSelectionChange`: more reports than this inside the window is a feedback loop, not clicks. */
 const SELECTION_BURST_WINDOW_MS = 300;
 const SELECTION_BURST_LIMIT = 10;
-
-/** How much further Presentation Mode dims a configured background, on top of
- *  the user's own setting — enough to recede further without disappearing. */
-const PRESENTATION_EXTRA_DIM = 0.2;
 
 interface ProjectionState {
   nodes: DraftRfNode[];
@@ -828,7 +824,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       if (!host || !sequence || sequence.participants.length >= LIMITS.maxSequenceParticipants || sequence.participants.some((participant) => participant.ref === dragged.id)) {
         return clearSequenceDrop();
       }
-      const index = participantIndexAt(sequenceLayoutFor(host, describeContext(LIGHT)), centre.x - host.x);
+      const index = participantIndexAt(sequenceLayoutFor(host, sizingContext()), centre.x - host.x);
       // A shape that is part of a diagram stays in it and is stood in for. One with nothing attached
       // to it is simply being put into the sequence: leaving a copy behind would be a duplicate.
       const stays = isPartOfDiagram(useEditorStore.getState().document, dragged);
@@ -1009,7 +1005,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             }, undefined)
             : undefined;
           const hit = host?.type === 'sequence'
-            ? hitSequence(sequenceLayoutFor(host, describeContext(LIGHT)), aim.x - host.x, aim.y - host.y)
+            ? hitSequence(sequenceLayoutFor(host, sizingContext()), aim.x - host.x, aim.y - host.y)
             : null;
           const message = hit?.kind === 'message' && host?.sequence
             ? selectSequenceMessage(state.document, host.id, hit.id)
@@ -2352,11 +2348,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       aria-roledescription="diagram canvas"
       aria-label="Diagram canvas"
     >
-      <CanvasBackground
-        settings={document.settings.background}
-        documentId={document.metadata.id}
-        extraDim={explainActive ? PRESENTATION_EXTRA_DIM : 0}
-      />
+      <StyleBackdrop />
       <Markers />
       {mode === 'present' && <PresentationPointer />}
       <ReactFlow
@@ -2455,8 +2447,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             color={theme.grid}
             // React Flow's own grid layer paints an opaque backdrop by
             // default — without this, it silently covers `.dc-canvas`'s own
-            // background (and a configured background
-            // image) with its own dark fill, coincidentally close enough to
+            // background (and the style's backdrop) with its own dark fill, coincidentally close enough to
             // the app's dark theme that this went unnoticed until now.
             bgColor="transparent"
           />
@@ -2530,7 +2521,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
  */
 export const Canvas = memo(function Canvas(props: CanvasProps) {
   return (
-    <>
+    <DiagramTheme>
       <EdgeLabelRoot>
         <CanvasBody {...props} />
       </EdgeLabelRoot>
@@ -2538,6 +2529,6 @@ export const Canvas = memo(function Canvas(props: CanvasProps) {
           context menu, a tap deselects) must never see a press on this offer's buttons. */}
       <FollowPrompt />
       <CanvasLegend />
-    </>
+    </DiagramTheme>
   );
 });

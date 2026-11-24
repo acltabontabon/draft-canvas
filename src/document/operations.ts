@@ -15,14 +15,13 @@ import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
 import { cleanDescription, cleanEdgeLabel, cleanText, cleanTextFields, cleanTitle, cleanTechnology } from './sanitize';
 import { replicasField } from './replicas';
-import { finite, oneOf, safeId } from './validationValues';
+import { finite, oneOf } from './validationValues';
 import { dropParticipantLinks, mapSequenceText, repointParticipantLinks } from './sequenceOps';
 import { centerOf, clamp, pointInBox } from '../lib/math';
 import { boundsOf, clampCoord, type Bounds } from './geometry';
-import { BACKGROUND_FITS, GRID_MODES } from './types';
+import { GRID_MODES } from './types';
+import { canonicalStyle, type DocumentStyle } from './style';
 import type {
-  BackgroundFit,
-  BackgroundSettings,
   DraftInk,
   Attachment,
   DraftDocument,
@@ -1849,42 +1848,34 @@ export function setTitle(doc: DraftDocument, title: string): DraftDocument {
 }
 
 /**
- * Canvas settings as a load keeps them: a grid mode that exists, a scrim and a blur between 0 and 1
- * (clamped without a word, as a load clamps them), a fit that exists. A value that is none of those
- * leaves what was there. A patch that changes nothing is no change: the same document comes back, so
+ * Canvas settings as a load keeps them: a grid mode that exists. A value that is not one leaves
+ * what was there. A patch that changes nothing is no change: the same document comes back, so
  * re-picking what is already picked never becomes an undo step.
  */
 export function setSettings(doc: DraftDocument, patch: Partial<DraftSettings>): DraftDocument {
   const was = doc.settings;
-  const background = patch.background === undefined ? was.background : heldBackground(patch.background, was.background);
   const next: DraftSettings = {
     showSequence: patch.showSequence === undefined ? was.showSequence : patch.showSequence !== false,
     grid: oneOf<GridMode>(patch.grid, GRID_MODES, was.grid),
-    background,
   };
-  const same =
-    next.showSequence === was.showSequence &&
-    next.grid === was.grid &&
-    (background === was.background ||
-      (background.enabled === was.background.enabled &&
-        background.fit === was.background.fit &&
-        background.dim === was.background.dim &&
-        background.blur === was.background.blur &&
-        background.imageId === was.background.imageId &&
-        background.image === was.background.image));
+  const same = next.showSequence === was.showSequence && next.grid === was.grid;
   return same ? doc : { ...doc, settings: next };
 }
 
-function heldBackground(patch: BackgroundSettings, was: BackgroundSettings): BackgroundSettings {
-  const imageId = safeId(patch.imageId);
-  return {
-    enabled: patch.enabled === true,
-    fit: oneOf<BackgroundFit>(patch.fit, BACKGROUND_FITS, was.fit),
-    dim: clamp(finite(patch.dim, was.dim), 0, 1),
-    blur: clamp(finite(patch.blur, was.blur), 0, 1),
-    ...(imageId ? { imageId } : {}),
-    ...(patch.image ? { image: patch.image } : {}),
-  };
+/**
+ * Gives the diagram a look of its own, or with `undefined` takes it away so the diagram follows
+ * the device again. Held to the same rules as a style read from a file (`canonicalStyle`), and the
+ * same document when nothing would change, so re-applying the style it already has is no undo step.
+ */
+export function setStyle(doc: DraftDocument, style: DocumentStyle | undefined): DraftDocument {
+  const next = style === undefined ? undefined : canonicalStyle(style);
+  if (next === doc.style) return doc;
+  if (next !== undefined && doc.style !== undefined && JSON.stringify(next) === JSON.stringify(canonicalStyle(doc.style))) return doc;
+  if (next === undefined) {
+    const { style: _style, ...rest } = doc;
+    return rest;
+  }
+  return { ...doc, style: next };
 }
 
 export function touch(doc: DraftDocument, at = Date.now()): DraftDocument {

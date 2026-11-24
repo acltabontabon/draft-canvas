@@ -13,8 +13,7 @@ import { createId } from '../../document/ids';
 import type { DraftDocument } from '../../document/types';
 import { deserializeDocument, serializeDocument } from '../../export/project';
 import { createDocument, createNode } from '../../document/factory';
-import { describeContext, naturalSequenceSizeFor } from '../../nodes/describe';
-import { LIGHT } from '../../render/theme/tokens';
+import { naturalSequenceSizeFor, sizingContext } from '../../nodes/describe';
 import { cleanTitle } from '../../document/sanitize';
 import { parseMermaidFlowchart } from './parse';
 import { logDiagnostic } from '../../lib/diagnostics';
@@ -83,7 +82,7 @@ function importMermaidSequence(text: string, title?: string): ImportResult {
   if (!parsed.ok) return parsed;
   const name = cleanTitle(title && parsed.title === UNTITLED_SEQUENCE ? title : parsed.title, UNTITLED_SEQUENCE);
   const bare = { ...createNode({ type: 'sequence', x: 0, y: 0, text: name }), sequence: parsed.sequence };
-  const node = { ...bare, ...naturalSequenceSizeFor(bare, describeContext(LIGHT)) };
+  const node = { ...bare, ...naturalSequenceSizeFor(bare, sizingContext()) };
   // Through the file reader, like every other document: what an import makes is checked the same way a file is.
   const read = deserializeDocument(serializeDocument({ ...createDocument(name), nodes: [node] }));
   if (!read.ok) return { ok: false, error: 'That sequence diagram couldn’t be turned into a diagram.' };

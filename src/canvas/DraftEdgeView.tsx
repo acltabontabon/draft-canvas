@@ -50,14 +50,13 @@ import { unresolvedOpenPointsFor } from '../document/openPoints';
 import { captionAnchor as captionAnchorRect, conditionChipRect, conditionChipSize, edgeMetaText, labelChipRect } from '../edges/describe';
 import type { OccupiedRect } from '../openPoints/marker';
 import { connectorCaptionText } from '../edges/captionText';
-import { PERSONALITY_PROFILES } from '../render/roughness/presets';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { accentOf } from '../render/theme/tokens';
 import { isEdgeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
 import { outageEdgeOf } from '../store/outage';
 import { selectEdge, selectNode } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
-import { usePersonality } from '../theme/usePersonality';
+import { useDiagramStyle } from './useDiagramStyle';
 import { useThemeValue } from '../theme/useTheme';
 import { FONTS, cssFont } from '../render/text/fonts';
 import { Lru } from '../lib/lru';
@@ -298,7 +297,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     [id],
   );
   const theme = useThemeValue();
-  const { preset } = usePersonality();
+  const diagramStyle = useDiagramStyle();
 
   // A primitive, not the `LaneAssignment` object — see `laneIndex`'s comment.
   // Only the edges whose own lane actually shifts re-render when a sibling
@@ -525,7 +524,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         ? accentOf(theme, edge.accent).chip
         : undefined;
   const color =
-    presentationAccent ?? lensAccent ?? (edge ? resolveEdgeColor(edge, { accent: sourceAccent }, theme) : theme.edge);
+    presentationAccent ?? lensAccent ?? (edge ? resolveEdgeColor(edge, { accent: sourceAccent }, theme, diagramStyle.connector.colour) : theme.edge);
 
   // A brief, one-shot path pulse the moment this connector newly joins the
   // active lens (switching flows, or a flow being selected for the first
@@ -763,7 +762,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // below reads from the styled route before roughening (never `drawnPath`), so it stays
   // exactly as precise as Clean regardless of how bold Sketch's wobble gets —
   // see the hit-path/decorative-path split further down.
-  const profile = PERSONALITY_PROFILES[preset];
+  const profile = diagramStyle.hand;
   const styledPath = portal ? portal.d : styledConnectorPath(route.d, edge, !transient);
   // Bundle members each draw the whole shared trunk, so they must wobble it
   // identically or it frays into a rope — see `strokeSeed`.
@@ -794,6 +793,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         arrowSeed(edge.id, route.trunkLabel ? spine : undefined),
         profile.arrowJitter,
         markerVariantForEdge(edge),
+        diagramStyle.connector.head,
       )
     : null;
 
@@ -815,6 +815,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         `${edge.id}:response-head`,
         profile.arrowJitter,
         'open',
+        diagramStyle.connector.head,
       )
     : null;
   // Deliberately not labelLaneOffset: its extra clearance is for real sibling edges. Stacking
@@ -906,14 +907,14 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
         markerStart={edge.directed && !usesHandDrawnArrow ? originRef(strokeColor) : undefined}
         style={{
           stroke: strokeColor,
-          strokeWidth: Math.max(CONNECTOR_STYLE.lineWidth,
+          strokeWidth: Math.max(diagramStyle.connector.lineWidth,
             isActiveStep
               ? 2.6
               : selected || attachTarget || spliceTarget
                 ? 2.4
                 : lensMember || (overview && isShownStep) || hoverShown || outageReading === 'recovery'
                   ? 2.0
-                  : CONNECTOR_STYLE.lineWidth),
+                  : diagramStyle.connector.lineWidth),
           strokeLinecap: 'round',
           strokeDasharray: dashForEdge(edge)?.join(' '),
         }}
@@ -975,7 +976,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           markerEnd={edge.directed && !responseUsesHandDrawnArrow ? markerRef(strokeColor, 'open') : undefined}
           style={{
             stroke: strokeColor,
-            strokeWidth: Math.max(1.1, CONNECTOR_STYLE.lineWidth * 0.6),
+            strokeWidth: Math.max(1.1, diagramStyle.connector.lineWidth * 0.6),
             strokeLinecap: 'round',
             strokeDasharray: RESPONSE_DASH.join(' '),
           }}
@@ -1004,7 +1005,7 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
           pathLength={1}
           fill="none"
           stroke={strokeColor}
-          strokeWidth={CONNECTOR_STYLE.lineWidth + 0.4}
+          strokeWidth={diagramStyle.connector.lineWidth + 0.4}
           strokeLinecap="round"
           pointerEvents="none"
         />

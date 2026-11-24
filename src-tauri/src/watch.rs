@@ -108,7 +108,7 @@ impl Watches {
     }
 }
 
-/// Whether an event could change what the page shows: a diagram or its background image appearing,
+/// Whether an event could change what the page shows: a diagram appearing,
 /// going or changing, or a folder being created, removed or renamed. A watched folder is whatever the
 /// person keeps files in (Downloads, a repository root), so everything else it sees — browser
 /// downloads, `.git` lock files, build output, our own temp files — would otherwise wake the page into
@@ -141,7 +141,7 @@ fn relevant(event: &notify::Event) -> bool {
         }
         let name = name.to_ascii_lowercase();
         let dot = format!(".{}", crate::paths::DOC_EXT);
-        if name.ends_with(&dot) || name.contains(&format!("{dot}.background.")) {
+        if name.ends_with(&dot) {
             return true;
         }
         // A name with no extension is taken for a folder. That missed `v2.0/` or `docs.old/` being
@@ -248,13 +248,12 @@ mod tests {
         use notify::event::{AccessKind, CreateKind, ModifyKind, RemoveKind, RenameMode};
         use notify::EventKind::{Access, Create, Modify, Remove};
         let data = Modify(ModifyKind::Data(notify::event::DataChange::Any));
-        // A diagram, its background, and a folder appearing, going or being renamed.
+        // A diagram and a folder appearing, going or being renamed.
         assert!(relevant(&event(data, "/p/plan.draftcanvas")));
         assert!(relevant(&event(
             Create(CreateKind::File),
             "/p/Plan.DraftCanvas"
         )));
-        assert!(relevant(&event(data, "/p/plan.draftcanvas.background.png")));
         assert!(relevant(&event(Create(CreateKind::Folder), "/p/docs")));
         assert!(relevant(&event(Remove(RemoveKind::Folder), "/p/docs")));
         assert!(relevant(&event(

@@ -3,10 +3,9 @@ import { useReactFlow } from '@xyflow/react';
 import { findItem, messagesOf, sequenceOf, type SeqSlot } from '../../document/sequenceModel';
 import type { DraftNode, SeqItem, SeqOperator } from '../../document/types';
 import { sequenceArrowShapes, sequenceAttachmentChips } from '../../nodes/sequence';
-import { describeContext, sequenceLayoutFor } from '../../nodes/describe';
+import { sequenceLayoutFor, sizingContext } from '../../nodes/describe';
 import { emitDisplayList } from '../../render/svg/emit';
 import { getMeasurer } from '../../render/text/measure';
-import { LIGHT } from '../../render/theme/tokens';
 import { moveProblem } from '../../sequence/check';
 import { itemRange, type SequenceEditTarget, type SequenceFocus } from '../../sequence/focus';
 import {
@@ -25,7 +24,7 @@ import { useEditorStore } from '../../store/editorStore';
 import { nodeIndex } from '../../store/selectors';
 import { sequenceActions } from '../../store/sequenceActions';
 import { useUiStore } from '../../store/uiStore';
-import type { PersonalityPreset } from '../../theme/usePersonality';
+import type { ResolvedStyle } from '../../render/style/resolve';
 import { SvgSurface } from '../SvgSurface';
 import { SequenceEditors } from './SequenceEditors';
 import './sequence.css';
@@ -92,10 +91,10 @@ interface Props {
   layout: SequenceLayout;
   readOnly: boolean;
   selected: boolean;
-  preset: PersonalityPreset;
+  diagramStyle: ResolvedStyle;
 }
 
-export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, readOnly, selected, preset }: Props) {
+export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, readOnly, selected, diagramStyle }: Props) {
   const nodeId = node.id;
   const { screenToFlowPosition } = useReactFlow();
   const sequence = sequenceOf(node);
@@ -222,7 +221,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
         const flow = screenToFlowPosition({ x: event.clientX, y: event.clientY }, { snapToGrid: false });
         const x = flow.x - otherNode.x;
         const y = flow.y - otherNode.y;
-        const targetLayout = sequenceLayoutFor(otherNode, describeContext(LIGHT));
+        const targetLayout = sequenceLayoutFor(otherNode, sizingContext());
         const column = participantAt(targetLayout, { x, y });
         if (column) {
           other = { nodeId: otherNode.id, participantId: column.id, offset: offsetOnLifeline(column, y) };
@@ -409,7 +408,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           {emitDisplayList({
             width: node.width,
             height: node.height,
-            shapes: highlightedArrows.flatMap((message) => sequenceArrowShapes(message, 'currentColor', `${node.id}:${message.id}`, preset)),
+            shapes: highlightedArrows.flatMap((message) => sequenceArrowShapes(message, 'currentColor', `${node.id}:${message.id}`, diagramStyle)),
           })}
         </SvgSurface>
       )}
@@ -684,7 +683,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           {emitDisplayList({
             width: node.width,
             height: node.height,
-            shapes: sequenceArrowShapes(reordering, 'currentColor', `${node.id}:${reordering.id}`, preset),
+            shapes: sequenceArrowShapes(reordering, 'currentColor', `${node.id}:${reordering.id}`, diagramStyle),
           })}
         </SvgSurface>
       )}
@@ -705,7 +704,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
       {attachmentArrow && (
         <>
           <SvgSurface className="dc-seq-selected-arrows" width={node.width} height={node.height}>
-            {emitDisplayList({ width: node.width, height: node.height, shapes: sequenceArrowShapes(attachmentArrow, 'currentColor', `${nodeId}:${attachmentArrow.id}`, preset) })}
+            {emitDisplayList({ width: node.width, height: node.height, shapes: sequenceArrowShapes(attachmentArrow, 'currentColor', `${nodeId}:${attachmentArrow.id}`, diagramStyle) })}
           </SvgSurface>
           <div className="dc-seq-add-target" style={{ left: (attachmentArrow.x1 + attachmentArrow.x2) / 2, top: attachmentArrow.yEnd }} data-message-attach-target="">
             Attach to message

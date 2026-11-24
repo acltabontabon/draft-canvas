@@ -6,7 +6,7 @@ import { sequenceAttachmentChips, sequenceLifelines } from '../../nodes/sequence
 import { getMeasurer } from '../../render/text/measure';
 import { beginClipScope, emitDisplayList } from '../../render/svg/emit';
 import type { Theme } from '../../render/theme/tokens';
-import type { PersonalityPreset } from '../../theme/usePersonality';
+import type { ResolvedStyle } from '../../render/style/resolve';
 import { selectSequenceMessage } from '../../store/selectors';
 import { useEditorStore } from '../../store/editorStore';
 import { sequenceActions } from '../../store/sequenceActions';
@@ -30,18 +30,18 @@ export const SequenceStepLayer = memo(function SequenceStepLayer({
   node,
   step,
   theme,
-  preset,
+  diagramStyle,
 }: {
   node: DraftNode;
   /** The step being told, counted from 1. */
   step: number;
   theme: Theme;
-  preset: PersonalityPreset;
+  diagramStyle: ResolvedStyle;
 }) {
   const messageId = sequenceFlow(node).steps[step - 1]?.id;
   const message = useEditorStore((state) => messageId ? selectSequenceMessage(state.document, node.id, messageId) : undefined);
   const count = message?.attachments?.length ?? 0;
-  const layout = sequenceLayoutFor(node, describeContext(theme, preset));
+  const layout = sequenceLayoutFor(node, describeContext(theme, diagramStyle));
   const row = layout.messages.find((entry) => entry.id === messageId);
   const chips = count && row && message?.attachments ? sequenceAttachmentChips(row, message.attachments, layout.width, getMeasurer()) : [];
   useEffect(() => () => {
@@ -58,14 +58,14 @@ export const SequenceStepLayer = memo(function SequenceStepLayer({
     const ids = sequenceFlow(node).steps.map((entry) => entry.id);
     const now = ids[step - 1];
     if (!now) return null;
-    const ctx = describeContext(theme, preset);
+    const ctx = describeContext(theme, diagramStyle);
     const draw = (scope: string, only: ReadonlySet<string>) => {
       if (only.size === 0) return null;
       beginClipScope(`${scope}-${node.id}`);
       return emitDisplayList({ width: node.width, height: node.height, shapes: describeSequenceMessages(node, ctx, only) });
     };
     return { told: draw('seq-told', new Set(ids.slice(0, step - 1))), now: draw('seq-now', new Set([now])) };
-  }, [node, step, theme, preset]);
+  }, [node, step, theme, diagramStyle]);
   if (!layers) return null;
   return (
     <>
