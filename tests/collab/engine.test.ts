@@ -363,6 +363,25 @@ it('still lets someone in after many others have dropped', () => {
 });
 
 describe('a quiet or abusive connection', () => {
+  it('shows the session as live when the existing connection starts receiving again', () => {
+    const clock = manualClock();
+    const { host } = ownerOf(base(), clock);
+    const { a, b, pump } = loopbackPair();
+    host.attach(a, { role: 'editor' });
+    const guest = guestOf(clock);
+    guest.session.connect(b);
+    settle(pump);
+    expect(guest.state.statuses.at(-1)).toBe('live');
+
+    // Let the heartbeat time out without closing the transport or delivering its queued traffic.
+    clock.advance(SILENT_MS + HEARTBEAT_MS);
+    expect(b.state).toBe('open');
+    expect(guest.state.statuses.at(-1)).toBe('reconnecting');
+
+    settle(pump);
+    expect(guest.state.statuses.at(-1)).toBe('live');
+  });
+
   it('marks a silent collaborator as reconnecting, then gone', () => {
     const clock = manualClock();
     const { host, state: owner } = ownerOf(base(), clock);

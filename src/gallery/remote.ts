@@ -22,8 +22,9 @@ export class GalleryRequestError extends Error {
 }
 
 /** Reads one gallery file as text, refusing anything over `maxBytes`. */
-export async function readGalleryFile(path: string, maxBytes: number): Promise<string> {
+export async function readGalleryFile(path: string, maxBytes: number, signal?: AbortSignal): Promise<string> {
   if (!SAFE_PATH.test(path) || path.includes('..')) throw new GalleryRequestError('refused');
+  const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
   let response: Response;
   try {
     response = await fetch(GALLERY_BASE + path, {
@@ -34,7 +35,7 @@ export async function readGalleryFile(path: string, maxBytes: number): Promise<s
       // GitHub caches raw files for a few minutes; ask it to check rather than answer from the
       // browser's own cache, so Refresh means refresh.
       cache: 'no-cache',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
     });
   } catch {
     throw new GalleryRequestError('offline');
