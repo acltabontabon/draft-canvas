@@ -40,7 +40,7 @@ describe('buildOutline', () => {
     expect(byKey.get(nodeKey('api'))!.reading).toBe('Orders API, service, 2 connectors');
     expect(byKey.get(nodeKey('api'))!.detail).toBe('service');
     const out = byKey.get(edgeKey('w', 'api'))!;
-    expect(out).toMatchObject({ label: 'Orders', detail: 'writes to', direction: 'out', reading: 'Orders API writes to Orders' });
+    expect(out).toMatchObject({ label: 'Orders', detail: 'writes to', direction: 'out', reading: 'Orders API to Orders, writes to' });
     const inbound = byKey.get(edgeKey('u', 'api'))!;
     expect(inbound).toMatchObject({ label: 'Shopper', detail: 'places order', direction: 'in', reading: 'Shopper places order Orders API' });
   });

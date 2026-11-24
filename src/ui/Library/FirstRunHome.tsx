@@ -32,7 +32,6 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
   const shelfRef = useRef<HTMLElement>(null);
   const rowRef = useRef<HTMLDivElement>(null);
   const importHintId = useId();
-  const startHintId = useId();
   const [chosen, setChosen] = useState<HomeView | null>(null);
   const [creating, setCreating] = useState(false);
   const [renaming, setRenaming] = useState<DraftSummary | null>(null);
@@ -110,7 +109,7 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
         {notice}
         <WebHomeScene
           start={
-            <button ref={sheetRef} type="button" className="dc-web-start" aria-label="Quick Draft" aria-describedby={startHintId}
+            <button ref={sheetRef} type="button" className="dc-web-start"
               onClick={() => void session.newDocument()}
               onKeyDown={(event) => {
                 if (event.key !== 'ArrowDown') return;
@@ -119,8 +118,10 @@ export function FirstRunHome({ session, notice, onImport, onBrowse }: {
                 if (tab) tab.focus(); else focusRow();
               }}>
               <span className="dc-web-start-mark" aria-hidden="true"><Icon name="plus" size={28} /></span>
-              <span className="dc-web-start-name">Quick Draft<Icon name="forward" size={18} /></span>
-              <span id={startHintId} className="dc-web-start-hint">No title needed. Just begin.</span>
+              {/* Named by what it shows, hint included: a name of its own that left the hint out is
+                  one a person speaking what they see cannot use. */}
+              <span className="dc-web-start-name">Quick Draft<Icon name="forward" size={18} /></span>{' '}
+              <span className="dc-web-start-hint">No title needed. Just begin.</span>
             </button>
           }
           example={<Button variant="quiet" icon="flow" onClick={() => void session.newDocument(undefined, 'example')}>Try an example</Button>}
