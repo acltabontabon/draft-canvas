@@ -201,9 +201,10 @@ fn move_file_now(
     }
     let new_handle = state.grant_file(&target)?;
     let new_grant = state.file(&new_handle)?;
-    state
+    // A Recent entry is best-effort. The caller still needs the new handle after a successful move.
+    let _ = state
         .recents
-        .rename(&grant.path, &new_grant.path, &new_grant.name)?;
+        .rename(&grant.path, &new_grant.path, &new_grant.name);
     Ok(MovedFile {
         handle: new_handle,
         display_path: display_path(&new_grant.path),
@@ -369,6 +370,24 @@ mod tests {
         // Asked again, it is already there: nothing moves, nothing is renumbered.
         let again = move_file_now(&state, &moved.handle, &project.handle, true).unwrap();
         assert_eq!(state.file(&again.handle).unwrap().path, target);
+    }
+
+    #[test]
+    fn returns_the_moved_file_even_when_recents_are_unreadable() {
+        let (dir, state) = test_state();
+        let old = doc(&dir, "inbox/checkout.draftcanvas", "{}");
+        let root = dir.path().join("Payments");
+        fs::create_dir(&root).unwrap();
+        let project = open_project_at(&state, &root).unwrap();
+        let handle = state.grant_file(&old).unwrap();
+        fs::create_dir_all(dir.path().join("config/recents.json")).unwrap();
+
+        let moved = move_file_now(&state, &handle, &project.handle, false).unwrap();
+
+        assert!(!old.exists());
+        let new_path = state.file(&moved.handle).unwrap().path;
+        assert!(new_path.ends_with("Payments/checkout.draftcanvas"));
+        assert_eq!(fs::read_to_string(new_path).unwrap(), "{}");
     }
 
     #[test]
