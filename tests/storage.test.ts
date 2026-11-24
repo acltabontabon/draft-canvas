@@ -337,6 +337,25 @@ describe('local persistence', () => {
       expect((await repository.load(doc.metadata.id))!.viewport.x).toBe(-480);
     });
 
+    it('keeps the edit date of a rename made in another tab', async () => {
+      const tabA = await IndexedDbRepository.open();
+      const tabB = await IndexedDbRepository.open();
+      const original = documentWith('Shared');
+      const doc = { ...original, metadata: { ...original.metadata, createdAt: 100, updatedAt: 100 } };
+      const id = doc.metadata.id;
+      await tabA.save(doc);
+      await tabB.rename(id, 'Renamed');
+      const [renamed] = await tabB.list();
+      expect(renamed!.updatedAt).toBeGreaterThan(doc.metadata.updatedAt);
+
+      await tabA.save(withCamera(doc, -480), { title: 'Shared' }, { cameraOnly: true });
+
+      expect(await tabB.list()).toEqual([renamed]);
+      const reopened = await tabB.load(id);
+      expect(reopened?.metadata.updatedAt).toBe(renamed!.updatedAt);
+      expect(reopened?.viewport.x).toBe(-480);
+    });
+
     it("never replaces content another tab saved since, and doesn't ask anyone to resolve it", async () => {
       const tabA = await IndexedDbRepository.open();
       const tabB = await IndexedDbRepository.open();
@@ -1111,6 +1130,33 @@ describe('autosave', () => {
     autosave.holdConflict(doc);
     expect(await autosave.resolveConflict('keep')).toBe(true);
     expect(repository.saved).toEqual([doc]);
+    autosave.dispose();
+  });
+
+  it('offers save recovery when keeping a copy fails and restricts overwrite to that copy', async () => {
+    const repository = new GatedRepository();
+    const first = documentWith('Keep this copy');
+    const other = documentWith('Other canvas');
+    await MemoryRepository.prototype.save.call(repository, other);
+    const states: { status: string; failure?: string; conflict?: string }[] = [];
+    const autosave = new Autosave({ repository, onStateChange: (state) => states.push(state) });
+    autosave.track(other);
+    autosave.holdConflict(first);
+
+    repository.failNext = true;
+    const keeping = autosave.resolveConflict('keep');
+    repository.release!();
+    expect(await keeping).toBe(false);
+    expect(states.at(-1)).toMatchObject({ status: 'error', failure: 'other' });
+    expect(states.at(-1)?.conflict).toBeUndefined();
+
+    // Leaving without saving that copy must not authorize overwriting a different canvas.
+    autosave.discardPending(first.metadata.id);
+    await repository.remove(other.metadata.id);
+    autosave.schedule(addNodes(other, [createNode({ type: 'note', x: 0, y: 400 })]));
+    expect(await autosave.flush()).toBe(false);
+    expect(states.at(-1)).toMatchObject({ status: 'error', conflict: 'deleted' });
+    expect(await repository.load(other.metadata.id)).toBeNull();
     autosave.dispose();
   });
 

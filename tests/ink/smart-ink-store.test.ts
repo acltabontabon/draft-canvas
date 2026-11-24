@@ -9,6 +9,7 @@ vi.mock('../../src/lib/preferences', () => ({
 
 import { __resetInkSession, chooseSuggestion, convertStrokes, flushSmartInk, offerStale, smartStrokeKept, strokeAbandoned, strokeStarted } from '../../src/canvas/inkSession';
 import { inkOf } from '../../src/document/ink';
+import { LIMITS } from '../../src/document/limits';
 import { createDocument, createNode } from '../../src/document/factory';
 import type { DraftInk } from '../../src/document/types';
 import { buildStroke } from '../../src/ink/capture';
@@ -47,6 +48,47 @@ function draw(points: { x: number; y: number }[]): DraftInk {
 
 const nodeIds = () => store.getState().document.nodes.map((n) => n.id);
 const strokes = () => inkOf(store.getState().document).length;
+
+describe('copying rooms with sketches near the file limit', () => {
+  const ink: DraftInk = { id: 'k_room', tool: 'pen', color: 'graphite', size: 3, x: 0, y: 0, points: [0, 0] };
+  const owner = {
+    ...createNode({ type: 'service', x: 0, y: 0 }),
+    inside: {
+      nodes: [createNode({ type: 'component', x: 0, y: 0 })],
+      edges: [],
+      flows: [],
+      viewport: { x: 0, y: 0, zoom: 1 },
+      ink: [ink],
+    },
+  };
+  const fill = (count: number) => Array.from({ length: count }, (_, index) => ({ ...ink, id: `k_existing${index}` }));
+
+  it('refuses a duplicate whose room will not fit', () => {
+    reset([owner]);
+    store.setState((state) => ({ document: { ...state.document, ink: fill(LIMITS.maxInkStrokes - 1) } }));
+    store.getState().setSelection({ nodes: [owner.id], edges: [] });
+
+    store.getState().duplicateSelection();
+
+    expect(store.getState().document.nodes).toEqual([owner]);
+    expect(store.getState().history.past).toHaveLength(0);
+  });
+
+  it('counts the room and selected strokes against the same allowance', () => {
+    reset([]);
+    const existing = fill(LIMITS.maxInkStrokes - 1);
+    store.setState((state) => ({
+      document: { ...state.document, ink: existing },
+      clipboard: { nodes: [owner], edges: [], ink: [{ ...ink, id: 'k_clipboard' }] },
+    }));
+
+    store.getState().paste();
+
+    const document = store.getState().document;
+    expect(document.nodes[0]?.inside?.ink).toHaveLength(1);
+    expect(document.ink).toEqual(existing);
+  });
+});
 
 describe('drawing and erasing', () => {
   beforeEach(() => reset());

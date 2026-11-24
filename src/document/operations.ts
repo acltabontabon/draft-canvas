@@ -7,7 +7,7 @@
 import { reconnectProblem } from './reconnect';
 import { repairCompensationLinks } from './compensation';
 import { createId } from './ids';
-import { INK_ID_PREFIX } from './ink';
+import { addInk, reissueInk } from './ink';
 import { OPEN_POINT_ID_PREFIX, pruneOpenPoints } from './openPoints';
 import { defaultSizeFor, maxSizeFor } from './factory';
 import { anchorBandOf } from './queueGeometry';
@@ -42,21 +42,9 @@ import type {
 
 export { boundsOf, freeOriginFor, INSERT_GAP, type Bounds } from './geometry';
 
-/**
- * Whether the canvas holds nothing at all — the one definition of "empty" the editor's empty
- * state is allowed to use.
- *
- * Nodes alone are sufficient, which looks like a shortcut and isn't. A document's content is
- * `nodes`, `edges` and `flows`; an edge cannot outlive its endpoints (`validate.ts` drops a
- * dangling one on load, `removeElements` prunes it on delete), and a flow step only ever points
- * at an edge — so a non-empty `edges` or `flows` implies a non-empty `nodes`. It is also what the
- * status bar already calls the truth when it counts *elements*.
- *
- * Named rather than inlined so that if some future element is ever stored outside `nodes`, there
- * is exactly one place that has to learn about it.
- */
-export function isCanvasEmpty(doc: Pick<DraftDocument, 'nodes'>): boolean {
-  return doc.nodes.length === 0;
+/** Whether the canvas holds any drawing. Connectors and rooms need shapes; sketches can stand alone. */
+export function isCanvasEmpty(doc: Pick<DraftDocument, 'nodes' | 'ink'>): boolean {
+  return doc.nodes.length === 0 && !doc.ink?.length;
 }
 
 const clampSize = (n: number, maxSize: number = LIMITS.maxNodeSize) =>
@@ -577,7 +565,7 @@ function reidentifyInside(inside: DraftInside, renamed?: IdRenames): DraftInside
 
   const next: DraftInside = { nodes, edges, flows, viewport: inside.viewport };
   // Sketches over the room travel with it, each under a new id: ids are unique across the file.
-  if (inside.ink && inside.ink.length > 0) next.ink = inside.ink.map((stroke) => ({ ...stroke, id: createId(INK_ID_PREFIX) }));
+  if (inside.ink && inside.ink.length > 0) next.ink = reissueInk(inside.ink);
   // What the room says it shows is part of the room, not part of its identity: a copy that lost it
   // would start deriving a level from whatever it was pasted under, and a room deliberately marked
   // as just a drawing would quietly stop being one.
@@ -585,22 +573,23 @@ function reidentifyInside(inside: DraftInside, renamed?: IdRenames): DraftInside
   return next;
 }
 
+interface ContentCount {
+  nodes: number;
+  edges: number;
+  flows: number;
+  ink: number;
+}
+
 /** What one node costs against the document limits: itself, plus everything in its rooms. */
-export function insideCost(node: DraftNode): { nodes: number; edges: number; flows: number } {
-  let nodes = 1;
-  let edges = 0;
-  let flows = 0;
-  if (node.inside) {
-    edges += node.inside.edges.length;
-    flows += node.inside.flows.length;
-    for (const inner of node.inside.nodes) {
-      const cost = insideCost(inner);
-      nodes += cost.nodes;
-      edges += cost.edges;
-      flows += cost.flows;
-    }
-  }
-  return { nodes, edges, flows };
+function insideCost(node: DraftNode): ContentCount {
+  const inside = node.inside;
+  if (!inside) return { nodes: 1, edges: 0, flows: 0, ink: 0 };
+  const cost = costOf(inside.nodes);
+  cost.nodes += 1;
+  cost.edges += inside.edges.length;
+  cost.flows += inside.flows.length;
+  cost.ink += inside.ink?.length ?? 0;
+  return cost;
 }
 
 /** How many rooms deep a node goes: 0 for a plain shape, 1 for one whose room holds only plain shapes. */
@@ -612,13 +601,31 @@ export function insideHeight(node: DraftNode): number {
 }
 
 /** What a set of nodes costs against the document limits, rooms and all. */
-export function costOf(nodes: readonly DraftNode[]): { nodes: number; edges: number; flows: number } {
-  let total = { nodes: 0, edges: 0, flows: 0 };
+export function costOf(nodes: readonly DraftNode[]): ContentCount {
+  const total: ContentCount = { nodes: 0, edges: 0, flows: 0, ink: 0 };
   for (const node of nodes) {
     const cost = insideCost(node);
-    total = { nodes: total.nodes + cost.nodes, edges: total.edges + cost.edges, flows: total.flows + cost.flows };
+    total.nodes += cost.nodes;
+    total.edges += cost.edges;
+    total.flows += cost.flows;
+    total.ink += cost.ink;
   }
   return total;
+}
+
+type PasteUsage = Pick<ContentCount, 'nodes' | 'edges'> & Partial<Pick<ContentCount, 'flows' | 'ink'>> & { depth?: number };
+
+function pasteUsage(doc: DraftDocument, used: PasteUsage | undefined): ContentCount {
+  if (used?.flows !== undefined && used.ink !== undefined) {
+    return { nodes: used.nodes, edges: used.edges, flows: used.flows, ink: used.ink };
+  }
+  const nested = costOf(doc.nodes);
+  return {
+    nodes: used?.nodes ?? nested.nodes,
+    edges: used?.edges ?? nested.edges + doc.edges.length,
+    flows: used?.flows ?? nested.flows + doc.flows.length,
+    ink: used?.ink ?? nested.ink + (doc.ink?.length ?? 0),
+  };
 }
 
 /** Old id to new, for everything `reidentifyInside` renamed — what a copied open point is re-pointed by. */
@@ -715,29 +722,29 @@ export function pasteFragment(
   fragment: Clipboard,
   offset: { x: number; y: number },
   /** What the whole file already holds, rooms included, and how deep `doc` sits. Defaults to this
-   *  room alone, at the top. */
-  used: { nodes: number; edges: number; flows?: number; depth?: number } = {
-    nodes: doc.nodes.length,
-    edges: doc.edges.length,
-  },
-): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[]; truncated: boolean; tooDeep: boolean; renamed: IdRenames } {
+   *  document it was handed, at the top. */
+  used?: PasteUsage,
+): { doc: DraftDocument; nodeIds: string[]; edgeIds: string[]; inkIds: string[]; nestedFlows: number; truncated: boolean; tooDeep: boolean; renamed: IdRenames } {
   const instantiated = instantiateFragment(fragment, offset);
+  const current = pasteUsage(doc, used);
   // `LIMITS.maxNodes`/`maxEdges` are otherwise only enforced on a document taken as a whole (file
   // import, clipboard decode) — pasting/duplicating repeatedly into an already-open document has
   // no other choke point, so cap the *result* here rather than let a document grow without bound.
-  const nodeRoom = Math.max(0, LIMITS.maxNodes - used.nodes);
-  const edgeRoom = Math.max(0, LIMITS.maxEdges - used.edges);
+  const nodeRoom = Math.max(0, LIMITS.maxNodes - current.nodes);
+  const edgeRoom = Math.max(0, LIMITS.maxEdges - current.edges);
   // A pasted shape costs whatever it brings with it: a Service with a room full of components is
   // not one node, and the cap has to know that or a paste could put the file over its own limit.
   // Flows and depth the same way: a room's flows count against the file, and a shape pasted into a
   // room already a few levels down must not carry rooms past the deepest a file keeps — the
   // reader would drop them on the next load.
-  const flowRoom = Math.max(0, LIMITS.maxFlows - (used.flows ?? doc.flows.length));
-  const depthRoom = LIMITS.maxInsideDepth - (used.depth ?? 0);
+  const flowRoom = Math.max(0, LIMITS.maxFlows - current.flows);
+  const inkRoom = Math.max(0, LIMITS.maxInkStrokes - current.ink);
+  const depthRoom = LIMITS.maxInsideDepth - (used?.depth ?? 0);
   let keptCount = 0;
   let spentNodes = 0;
   let spentEdges = 0;
   let spentFlows = 0;
+  let spentInk = 0;
   let tooDeep = false;
   for (const node of instantiated.nodes) {
     if (insideHeight(node) > depthRoom) {
@@ -745,13 +752,20 @@ export function pasteFragment(
       break;
     }
     const cost = insideCost(node);
-    if (spentNodes + cost.nodes > nodeRoom || spentEdges + cost.edges > edgeRoom || spentFlows + cost.flows > flowRoom) break;
+    if (spentNodes + cost.nodes > nodeRoom || spentEdges + cost.edges > edgeRoom ||
+        spentFlows + cost.flows > flowRoom || spentInk + cost.ink > inkRoom) break;
     spentNodes += cost.nodes;
     spentEdges += cost.edges;
     spentFlows += cost.flows;
+    spentInk += cost.ink;
     keptCount += 1;
   }
-  const truncated = keptCount < instantiated.nodes.length || instantiated.edges.length > edgeRoom - spentEdges;
+  // Keep rooms intact first. Strokes drawn in this room can be pasted independently up to the
+  // remaining file budget, at the same offset as the shapes they were copied with.
+  const strokes = fragment.ink ?? [];
+  const pastedInk = reissueInk(strokes.slice(0, inkRoom - spentInk), offset.x, offset.y);
+  const truncated = keptCount < instantiated.nodes.length ||
+    instantiated.edges.length > edgeRoom - spentEdges || pastedInk.length < strokes.length;
   const keptNodeIds = new Set(instantiated.nodes.slice(0, keptCount).map((n) => n.id));
   const created = {
     // A boundary sits after its members in the fragment, so the cap can cut it while keeping
@@ -769,7 +783,7 @@ export function pasteFragment(
       .filter((e) => keptNodeIds.has(e.source) && keptNodeIds.has(e.target))
       .slice(0, Math.max(0, edgeRoom - spentEdges))),
   };
-  let next = addEdges(addNodes(doc, created.nodes), created.edges);
+  let next = addInk(addEdges(addNodes(doc, created.nodes), created.edges), pastedInk);
   // Only what actually landed can be pointed at; a point cut down to nothing by the cap is dropped,
   // and past the file's own cap the rest are left out rather than the oldest pushed off.
   if (instantiated.openPoints?.length) {
@@ -794,6 +808,8 @@ export function pasteFragment(
     doc: next,
     nodeIds: created.nodes.map((n) => n.id),
     edgeIds: created.edges.map((e) => e.id),
+    inkIds: pastedInk.map((stroke) => stroke.id),
+    nestedFlows: spentFlows,
     truncated,
     tooDeep,
     renamed: {
@@ -811,16 +827,17 @@ export function pasteFragment(
  */
 export function pasteDocument(
   doc: DraftDocument,
-  source: Pick<DraftDocument, 'nodes' | 'edges' | 'flows' | 'openPoints'>,
+  source: Pick<DraftDocument, 'nodes' | 'edges' | 'flows' | 'openPoints' | 'ink'>,
   offset: { x: number; y: number },
-  used?: Parameters<typeof pasteFragment>[3],
+  used?: PasteUsage,
 ): ReturnType<typeof pasteFragment> & { flowIds: string[] } {
   const fragment = extractFragment(source as DraftDocument, source.nodes.map((n) => n.id));
-  const pasted = pasteFragment(doc, fragment, offset, used);
+  const current = pasteUsage(doc, used);
+  const pasted = pasteFragment(doc, { ...fragment, ink: source.ink }, offset, { ...current, depth: used?.depth });
   const { nodes, edges } = pasted.renamed;
   const flowIds = new Map<string, string>();
   for (const flow of source.flows) flowIds.set(flow.id, createId('f'));
-  const room = Math.max(0, LIMITS.maxFlows - (used?.flows ?? doc.flows.length));
+  const room = Math.max(0, LIMITS.maxFlows - current.flows - pasted.nestedFlows);
   const flows: DraftFlow[] = [];
   for (const flow of source.flows) {
     if (flows.length >= room) break;
@@ -832,6 +849,7 @@ export function pasteDocument(
       if (edgeId) next.edgeId = edgeId;
       if (step.extraEdgeIds) next.extraEdgeIds = step.extraEdgeIds.flatMap((id) => edges.get(id) ?? []);
       if (step.extraNodeIds) next.extraNodeIds = step.extraNodeIds.flatMap((id) => nodes.get(id) ?? []);
+      if (!edgeId && !next.extraEdgeIds?.length && !next.extraNodeIds?.length && !next.viewport) continue;
       // A step's camera looks at the same shapes, now `offset` away.
       if (step.viewport) next.viewport = { ...step.viewport, x: step.viewport.x - offset.x * step.viewport.zoom, y: step.viewport.y - offset.y * step.viewport.zoom };
       steps.push(next);
