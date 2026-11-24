@@ -114,11 +114,14 @@ test('the diagram is framed again in the canvas the panel leaves it', async ({ p
   await create(page, 'Data Store', { x: 1150, y: 320 });
   await page.keyboard.press('Escape');
   const settings = await openAppearance(page);
-  // Both ends of the diagram are on the canvas, clear of the panel beside it.
-  const edge = (await settings.boundingBox())!.x;
+  // Both ends of the diagram are on the canvas, clear of the panel beside it. The panel's edge is
+  // read each time, and kept only once the diagram is clear of it: read once as the panel appears
+  // it is still on its way in, far to the right of where it stops, and a diagram framed flush
+  // against the panel (or a pixel under it) passed.
   await expect
-    .poll(async () => Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right)))))
-    .toBeLessThan(edge);
+    .poll(async () => (await settings.boundingBox())!.x - Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right)))))
+    .toBeGreaterThan(8);
+  const edge = (await settings.boundingBox())!.x;
   expect(Math.min(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().left))))).toBeGreaterThan(0);
 
   // Done puts the view back where it was before the panel took its room.
