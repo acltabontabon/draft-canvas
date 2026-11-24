@@ -2,6 +2,7 @@ import { mayTakeDown } from '../traffic';
 import { startOutage } from './outage';
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
+import { fitPadding } from '../lib/fitPadding';
 import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
 import { CONCEPT_PRESETS, conceptKeywords } from '../lib/conceptPresets';
 import { sequenceCommands, sequenceFromSelectionCommands, sequenceQuickCommands } from './sequence';
@@ -334,7 +335,7 @@ function presentModeCommands(ctx: CommandContext): Command[] {
       // next guided move would snap the camera straight back.
       run: (inner) => {
         inner.ui.setPresentation({ framing: 'manual' });
-        void inner.camera.fitView({ padding: 0.2, duration: 320 });
+        void inner.camera.fitView({ padding: fitPadding(0.2), duration: 320 });
       },
     },
     {
@@ -569,7 +570,7 @@ export function viewCommands(ctx: CommandContext): Command[] {
       group: 'view',
       keywords: ['zoom', 'center', 'all', 'canvas'],
       shortcut: 'Shift 1',
-      run: (inner) => void inner.camera.fitView({ padding: 0.2, duration: 320 }),
+      run: (inner) => void inner.camera.fitView({ padding: fitPadding(0.2), duration: 320 }),
     },
     ...backOutCommands(ctx),
     {

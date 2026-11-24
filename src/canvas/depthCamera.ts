@@ -1,6 +1,7 @@
 import { getViewportForBounds } from '@xyflow/system';
 import { boundsOf, type Bounds } from '../document/geometry';
 import type { DraftViewport } from '../document/types';
+import { fitPadding } from '../lib/fitPadding';
 
 /**
  * Where the camera goes when you step into a shape or back out of one, and where it sets off from.
@@ -18,7 +19,7 @@ import type { DraftViewport } from '../document/types';
 export const DEPTH_MOVE_MS = 640;
 
 /** Fit to view's own options: the same padding, and the canvas's zoom limits. */
-const FIT_PADDING = 0.2;
+const FIT_PADDING = fitPadding(0.2);
 export const DEPTH_MIN_ZOOM = 0.1;
 export const DEPTH_MAX_ZOOM = 4;
 

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { useStoreApi } from '@xyflow/react';
+import { useReactFlowStoreApi } from '@xyflow/react';
 import type { FollowState } from '../../../collab/protocol';
 import { publishPresenter } from '../../../store/collabBridge';
 import { useCollabStore } from '../../../store/collabStore';
@@ -20,7 +20,7 @@ export const PRESENTER_INTERVAL_MS = 100;
  * of a presentation, it is not saved, not undone and not exported.
  */
 export function usePresenterBroadcast(): void {
-  const storeApi = useStoreApi();
+  const storeApi = useReactFlowStoreApi().viewportStore;
   const hosting = useCollabStore((state) => state.role === 'host' && state.status === 'live');
 
   useEffect(() => {

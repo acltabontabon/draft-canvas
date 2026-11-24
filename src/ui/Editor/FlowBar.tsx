@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type RefObject } from 'react';
-import { useStore, useStoreApi } from '@xyflow/react';
+import { useReactFlowStoreApi, useViewportStore } from '@xyflow/react';
 import type { DraftEdge, DraftFlow, DraftNode } from '../../document/types';
 import { isActivatableTarget, isEditableTarget, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
 import { count } from '../../lib/plural';
@@ -595,9 +595,9 @@ function StepCaption({
  * when the corner actually changes.
  */
 function useCaptionFollowsCamera() {
-  const storeApi = useStoreApi();
-  const viewWidth = useStore((state) => state.width);
-  const viewHeight = useStore((state) => state.height);
+  const storeApi = useReactFlowStoreApi().viewportStore;
+  const viewWidth = useViewportStore((state) => state.width);
+  const viewHeight = useViewportStore((state) => state.height);
   useEffect(() => {
     let frame = 0;
     const place = () => {

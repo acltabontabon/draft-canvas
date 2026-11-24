@@ -8,11 +8,12 @@ import {
   BackgroundVariant,
   ConnectionMode,
   ReactFlow,
-  applyEdgeChanges,
-  applyNodeChanges,
+  EdgeChangeset,
+  NodeChangeset,
+  useOptionsStore,
   useReactFlow,
-  useStore,
-  useStoreApi,
+  useReactFlowStoreApi,
+  useViewportStore,
   type Connection,
   type FinalConnectionState,
   type EdgeChange,
@@ -314,7 +315,7 @@ const MakeRoomLine = memo(function MakeRoomLine({ line }: { line: { axis: 'x' | 
 });
 
 function useZoomVariable() {
-  const storeApi = useStoreApi();
+  const { optionsStore, viewportStore } = useReactFlowStoreApi();
   useEffect(() => {
     let written: { node: HTMLElement; zoom: number } | null = null;
     let timer: number | undefined;
@@ -340,7 +341,8 @@ function useZoomVariable() {
     const quantized = (transform: [number, number, number]) => Math.round(transform[2] * 20) / 20;
     const write = () => {
       timer = undefined;
-      const { domNode, transform } = storeApi.getState();
+      const { domNode } = optionsStore.getState();
+      const { transform } = viewportStore.getState();
       // A room transition lands the camera once, then flies its layer. Publishing the inherited
       // hit-area scale during that flight restyled every shape halfway through the animation.
       if (domNode?.hasAttribute('data-depth-moving')) {
@@ -358,7 +360,10 @@ function useZoomVariable() {
       written = { node: domNode, zoom };
     };
     write();
-    const unsubscribe = storeApi.subscribe(({ domNode, transform }) => {
+    // The canvas element and the camera live in two of React Flow's stores; either changing is read alike.
+    const follow = () => {
+      const { domNode } = optionsStore.getState();
+      const { transform } = viewportStore.getState();
       followZoom(domNode, transform[2]);
       if (written === null) {
         write();
@@ -367,14 +372,21 @@ function useZoomVariable() {
       if (timer !== undefined) window.clearTimeout(timer);
       // Back to the value already published: nothing to follow, so nothing is scheduled.
       timer = written.node === domNode && written.zoom === quantized(transform) ? undefined : window.setTimeout(write, ZOOM_VARIABLE_SETTLE_MS);
+    };
+    const offCamera = viewportStore.subscribe((state, previous) => {
+      if (state.transform !== previous.transform) follow();
+    });
+    const offRoot = optionsStore.subscribe((state, previous) => {
+      if (state.domNode !== previous.domNode) follow();
     });
     return () => {
-      unsubscribe();
+      offCamera();
+      offRoot();
       if (timer !== undefined) window.clearTimeout(timer);
       if (zooming) window.clearTimeout(zooming.timer);
       settleZoom();
     };
-  }, [storeApi]);
+  }, [optionsStore, viewportStore]);
 }
 
 /** A host's name in the one-line "Attach to …" pill — a note can hold pages of text, and the pill
@@ -498,8 +510,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   // The same `state.width`/`state.height` `useCommandContext.ts`'s `viewWidth`/`viewHeight` read —
   // zero until the pane's own `ResizeObserver` has measured it, which is exactly the "layout is
   // ready" signal `openFitDocumentId` below needs, with no observer of our own to set up or tear down.
-  const openFitWidth = useStore((state) => state.width);
-  const openFitHeight = useStore((state) => state.height);
+  const openFitWidth = useViewportStore((state) => state.width);
+  const openFitHeight = useViewportStore((state) => state.height);
   const openFitDocumentId = useUiStore((state) => state.openFitDocumentId);
   // The two fields the effect below reads of the document — it depends on those, not on the whole
   // document, which is a new object on every keystroke.
@@ -690,7 +702,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
   const connectCancelled = useRef(false);
   const stopWatchingConnect = useRef<(() => void) | null>(null);
   const [connectionCancelled, setConnectionCancelled] = useState(false);
-  const rfStore = useStoreApi();
+  const rfStore = useReactFlowStoreApi().optionsStore;
   const clearDwell = useCallback(() => {
     if (dwellTimer.current !== null) {
       window.clearTimeout(dwellTimer.current);
@@ -722,7 +734,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
 
   // React Flow's own marquee (rubber-band) selection state — see `onEdgesChange`
   // for why this is read here.
-  const userSelectionActive = useStore((state) => state.userSelectionActive);
+  const userSelectionActive = useOptionsStore((state) => state.userSelectionActive);
 
   /**
    * The rendered arrays are derived from the document during render rather than
@@ -852,7 +864,8 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
    * drag one undo entry and stops autosave firing sixty times a second.
    */
   const onNodesChange = useCallback(
-    (changes: NodeChange<DraftRfNode>[]) => {
+    (changeset: NodeChangeset<DraftRfNode>) => {
+      let changes = changeset.toArray();
       // A cancelled drag (Escape) still receives frames until the pointer is released — React
       // Flow has no cancel of its own. Dropping their position changes is what pins the card
       // where `onDragCancel` put it back; everything else (a dimensions change, a selection
@@ -1138,7 +1151,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       }
 
       setNodes((current) => {
-        const next = applyNodeChanges(snapped.changes, current);
+        const next = new NodeChangeset(snapped.changes).applyTo(current);
         return sweepDescendants(next, sweptDescendants.current, useEditorStore.getState().document);
       });
 
@@ -1210,19 +1223,20 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
    * about to do anyway — skip it exactly then, and only then.
    *
    * `userSelectionActive` is React Flow's own store flag for "a marquee is
-   * in progress" (read via `useStore` above), not a ref this file maintains
+   * in progress" (read via `useOptionsStore` above), not a ref this file maintains
    * itself — React Flow resets it unconditionally on every qualifying
    * pointer-up via native pointer capture, so it can't desync from what's
    * actually happening the way a hand-rolled ref tracking the same thing
    * could (e.g. if an interrupted gesture ever left a local ref stuck).
    */
   const onEdgesChange = useCallback(
-    (changes: EdgeChange<DraftRfEdge>[]) => {
+    (changeset: EdgeChangeset<DraftRfEdge>) => {
+      const changes: EdgeChange<DraftRfEdge>[] = changeset.toArray();
       const rest = userSelectionActive
         ? changes.filter((change) => change.type !== 'select')
         : changes;
       if (rest.length === 0) return;
-      setEdges((current) => applyEdgeChanges(rest, current));
+      setEdges((current) => new EdgeChangeset(rest).applyTo(current));
     },
     [setEdges, userSelectionActive],
   );
@@ -2430,7 +2444,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         // *on* a connector or shape into the start of a marquee, which swallowed Shift-click.
         selectionKeyCode={null}
         proOptions={PRO_OPTIONS}
-        colorMode={theme.name}
+        forceColorMode={theme.name}
         connectionLineStyle={connectionLineStyle}
       >
         {grid !== 'none' && (

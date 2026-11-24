@@ -1,5 +1,5 @@
 import { createContext, memo, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type KeyboardEvent, type ReactNode } from 'react';
-import { useReactFlow, useStoreApi, useStore as useReactFlowStore } from '@xyflow/react';
+import { useReactFlow, useReactFlowStoreApi, useViewportStore as useReactFlowStore } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import { Icon } from '../../ui/common/Icon';
 import { SegmentedControl } from '../../ui/common/SegmentedControl';
@@ -483,7 +483,7 @@ function CompanionFor({ buildCommandContext }: { buildCommandContext?: () => Com
   const [hot, setHot] = useState<number | null>(null);
   const setPointedIds = useUiStore((s) => s.setPointedIds);
   const { setViewport } = useReactFlow();
-  const flowStore = useStoreApi();
+  const flowStore = useReactFlowStoreApi().viewportStore;
   const pointAt = useCallback(
     (point: number | null, parts: readonly string[]) => {
       setHot(point);

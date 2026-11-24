@@ -1,4 +1,4 @@
-import { useStore } from '@xyflow/react';
+import { useConnectionStore } from '@xyflow/react';
 
 /**
  * Which of this shape's handles a connection in flight starts at and would validly land on, as
@@ -6,7 +6,7 @@ import { useStore } from '@xyflow/react';
  * when its own answer changes, and never while nothing is being connected.
  */
 export function useConnectingHandles(nodeId: string): { from: string | null; to: string | null } {
-  const key = useStore((state) => {
+  const key = useConnectionStore((state) => {
     const { fromHandle, toHandle, isValid } = state.connection;
     if (!fromHandle) return '';
     const from = fromHandle.nodeId === nodeId ? (fromHandle.id ?? '') : '';

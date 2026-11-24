@@ -8,6 +8,7 @@ import { pathKey, roomsOf, type DepthPath } from '../depth/tree';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import type { Command, CommandContext } from './types';
+import { fitPadding } from '../lib/fitPadding';
 import { count } from '../lib/plural';
 // A static import although that module imports this one: the cycle is safe (neither runs the
 // other at load), and the old dynamic import was ineffective — the registry and the editor already
@@ -28,7 +29,7 @@ import { navigateToRoom } from './depthNavigation';
 /** How many jump rows may follow the command matches. Enough to disambiguate, never a directory. */
 export const JUMP_LIMIT = 8;
 const JUMP_MAX_ZOOM = 1.2;
-const JUMP_PADDING = 0.4;
+const JUMP_PADDING = fitPadding(0.4);
 export const JUMP_FLASH_MS = 900;
 /**
  * Ranked together with commands, a jump row gives up this much score — so "Data Store" the node

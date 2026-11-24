@@ -1,6 +1,6 @@
 import { playbackFlowOf } from '../document/sequenceFlow';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
-import { useReactFlow, useStore, useStoreApi } from '@xyflow/react';
+import { useReactFlow, useReactFlowStoreApi, useViewportStore } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
 import { flowIsPlayable } from '../document/flow';
 import { boundsOf, type Bounds } from '../document/operations';
@@ -149,11 +149,11 @@ export function useFlowPlayback({ reader = false }: { reader?: boolean } = {}): 
     useShallow((state) => state.document.flows.filter((candidate) => flowIsPlayable(state.document, candidate))),
   );
   const { setViewport, getViewport } = useReactFlow();
-  const storeApi = useStoreApi();
+  const storeApi = useReactFlowStoreApi().optionsStore;
   // Selected separately: returning an object literal from a store selector
   // creates a new identity on every store change and re-renders forever.
-  const viewWidth = useStore((state) => state.width);
-  const viewHeight = useStore((state) => state.height);
+  const viewWidth = useViewportStore((state) => state.width);
+  const viewHeight = useViewportStore((state) => state.height);
 
   const steps = useMemo(() => (flow ? resolveFlowSteps(flow, edges, nodes) : []), [edges, nodes, flow]);
 

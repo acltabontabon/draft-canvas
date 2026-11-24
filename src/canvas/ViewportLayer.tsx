@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useStore, type ReactFlowState } from '@xyflow/react';
+import { useOptionsStore, type ReactFlowState } from '@xyflow/react';
 
 /**
  * A portal into React Flow's viewport layer, for canvas chrome that pans and zooms with the diagram
@@ -26,6 +26,6 @@ function selectViewportLayer(state: ReactFlowState): HTMLElement | null {
 }
 
 export function ViewportLayer({ children }: { children: ReactNode }) {
-  const layer = useStore(selectViewportLayer);
+  const layer = useOptionsStore(selectViewportLayer);
   return layer ? createPortal(children, layer) : null;
 }

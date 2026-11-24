@@ -1,4 +1,4 @@
-import { ReactFlowProvider, useStoreApi } from '@xyflow/react';
+import { ReactFlowProvider, useReactFlowStoreApi } from '@xyflow/react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AgentSettings, Proposal, ProposalAction } from '../../src/desktop/api';
@@ -90,9 +90,9 @@ function fakeController(proposal: Proposal) {
 const ACCESS: AgentSettings = { enabled: true, listening: true, connections: 0, sidecarPath: null, sidecarWarning: null, background: 'ready', projects: [{ handle: 'ready', name: 'Work', displayPath: '~/work', agent: true }] };
 
 /** React Flow's store, for putting the camera somewhere: jsdom never measures the canvas. */
-let flow: ReturnType<typeof useStoreApi> | null = null;
+let flow: ReturnType<typeof useReactFlowStoreApi>['viewportStore'] | null = null;
 function FlowStore() {
-  flow = useStoreApi();
+  flow = useReactFlowStoreApi().viewportStore;
   return null;
 }
 

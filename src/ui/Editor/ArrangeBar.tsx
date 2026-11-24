@@ -1,4 +1,4 @@
-import { useReactFlow, useStore as useReactFlowStore, type Viewport } from '@xyflow/react';
+import { useReactFlow, useViewportStore as useReactFlowStore, type Viewport } from '@xyflow/react';
 import { Fragment, useEffect, useMemo, useRef } from 'react';
 import { withArrangeMotion } from '../../canvas/arrangeMotion';
 import { focusBoundsInView } from '../../commands/search';

@@ -1,6 +1,6 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useStore, type ReactFlowState } from '@xyflow/react';
+import { useOptionsStore, type ReactFlowState } from '@xyflow/react';
 
 /**
  * A portal into React Flow's edge-label layer, for a connector's labels, chips and attachment rows.
@@ -31,7 +31,7 @@ function selectLabelRoot(state: ReactFlowState): HTMLElement | null {
 
 /** Wrap the `<ReactFlow>` element in this, once. It is the only subscriber that looks the layer up. */
 export function EdgeLabelRoot({ children }: { children: ReactNode }) {
-  const layer = useStore(selectLabelRoot);
+  const layer = useOptionsStore(selectLabelRoot);
   return <EdgeLabelRootContext.Provider value={layer}>{children}</EdgeLabelRootContext.Provider>;
 }
 

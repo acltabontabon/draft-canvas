@@ -1,5 +1,5 @@
 import { memo, type CSSProperties } from 'react';
-import { addEdge, useStoreApi, type Connection, type Position } from '@xyflow/react';
+import { addEdge, useReactFlowStoreApi, type Connection, type Position } from '@xyflow/react';
 import { XYHandle } from '@xyflow/system';
 
 /**
@@ -39,7 +39,7 @@ export const DraftHandle = memo(function DraftHandle({
   className?: string;
   style?: CSSProperties;
 }) {
-  const store = useStoreApi();
+  const { optionsStore: store, viewportStore, connectionStore, nodesStore, edgesStore } = useReactFlowStoreApi();
   // Neither changes while the canvas is mounted; read, not subscribed to.
   const { rfId, noPanClassName } = store.getState();
 
@@ -51,7 +51,8 @@ export const DraftHandle = memo(function DraftHandle({
       const { defaultEdgeOptions, onConnect: onConnectAction, hasDefaultEdges } = store.getState();
       const edgeParams = { ...defaultEdgeOptions, ...params };
       if (hasDefaultEdges) {
-        const { edges, setEdges, onError } = store.getState();
+        const { edges } = edgesStore.getState();
+        const { setEdges, onError } = store.getState();
         setEdges(addEdge(edgeParams, edges, { onError }));
       }
       onConnectAction?.(edgeParams);
@@ -62,8 +63,8 @@ export const DraftHandle = memo(function DraftHandle({
       connectionMode: state.connectionMode,
       connectionRadius: state.connectionRadius,
       domNode: state.domNode,
-      nodeLookup: state.nodeLookup,
-      lib: state.lib,
+      nodeLookup: nodesStore.getState().nodeLookup,
+      lib: 'react',
       isTarget: false,
       handleId: id,
       nodeId,
@@ -75,8 +76,8 @@ export const DraftHandle = memo(function DraftHandle({
       updateConnection: state.updateConnection,
       onConnect,
       isValidConnection: (...args) => store.getState().isValidConnection?.(...args) ?? true,
-      getTransform: () => store.getState().transform,
-      getFromHandle: () => store.getState().connection.fromHandle,
+      getTransform: () => viewportStore.getState().transform,
+      getFromHandle: () => connectionStore.getState().connection.fromHandle,
       autoPanSpeed: state.autoPanSpeed,
       dragThreshold: state.connectionDragThreshold,
     });

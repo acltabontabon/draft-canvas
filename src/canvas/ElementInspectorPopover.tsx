@@ -5,7 +5,7 @@ import { GENERIC_TECHNOLOGY_ICON } from '../nodes/technology';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { LIMITS } from '../document/limits';
 import { createPortal } from 'react-dom';
-import { useInternalNode, useReactFlow, useStore } from '@xyflow/react';
+import { useInternalNode, useNodesStore, useReactFlow } from '@xyflow/react';
 import { nodeCommands, primaryCommandsFor } from '../commands/registry';
 import { menuLabelOf } from '../commands/contextMenu';
 import { DepthGlyph } from './DepthGlyph';
@@ -177,7 +177,7 @@ export function ElementInspectorPopover({ buildCommandContext }: { buildCommandC
       ? state.selection.nodes[0]!
       : null,
   );
-  const measured = useStore((state) => (selectedNodeId ? state.nodeLookup.has(selectedNodeId) : false));
+  const measured = useNodesStore((state) => (selectedNodeId ? state.nodeLookup.has(selectedNodeId) : false));
   // Not while stepping between rooms: the camera is still gliding, and backing out selects the shape
   // it lands on — the popover waits for the move to settle instead of chasing it.
   const moving = useUiStore((state) => state.depthTransition !== null);

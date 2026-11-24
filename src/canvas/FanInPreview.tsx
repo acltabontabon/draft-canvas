@@ -1,22 +1,21 @@
 import { memo } from 'react';
-import { useStore, type ReactFlowState } from '@xyflow/react';
+import { useConnectionStore, type ConnectionStore } from '@xyflow/react';
 import { useEditorStore } from '../store/editorStore';
 import { nodeIndex } from '../store/selectors';
 import { useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
 
-/** Where the live connection's end is, in flow space — `null` unless one is being drawn. React
- *  Flow keeps it in the pane's own pixels (`getEventPosition`), so it is taken back through the
- *  viewport here. Two selectors that answer a plain number each, so the store hands back the same
- *  value until it moves and no pair is built to be taken apart again. */
-function selectConnectionEndX(state: ReactFlowState): number | null {
+/** Where the live connection's end is, in flow space, which is how React Flow keeps it: `null`
+ *  unless one is being drawn. Two selectors that answer a plain number each, so the store hands back
+ *  the same value until it moves and no pair is built to be taken apart again. */
+function selectConnectionEndX(state: ConnectionStore): number | null {
   const connection = state.connection;
-  return connection.inProgress ? (connection.to.x - state.transform[0]) / state.transform[2] : null;
+  return connection.inProgress ? connection.to.x : null;
 }
 
-function selectConnectionEndY(state: ReactFlowState): number | null {
+function selectConnectionEndY(state: ConnectionStore): number | null {
   const connection = state.connection;
-  return connection.inProgress ? (connection.to.y - state.transform[1]) / state.transform[2] : null;
+  return connection.inProgress ? connection.to.y : null;
 }
 
 /**
@@ -34,8 +33,8 @@ export const FanInPreview = memo(function FanInPreview() {
 });
 
 function FanInLines({ sources }: { sources: readonly string[] }) {
-  const x = useStore(selectConnectionEndX);
-  const y = useStore(selectConnectionEndY);
+  const x = useConnectionStore(selectConnectionEndX);
+  const y = useConnectionStore(selectConnectionEndY);
   const nodes = useEditorStore((state) => state.document.nodes);
   const theme = useThemeValue();
   if (x === null || y === null) return null;

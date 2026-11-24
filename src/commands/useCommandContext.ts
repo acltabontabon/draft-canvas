@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { useReactFlow, useStore } from '@xyflow/react';
+import { useReactFlow, useViewportStore } from '@xyflow/react';
 import type { Preset } from '../lib/presets';
 import type { DraftNode } from '../document/types';
 import type { FlowPlaybackController } from '../presentation/useFlowPlayback';
@@ -26,8 +26,8 @@ export function useCommandContext({ createAt, createAtPointer, playback, onPrese
   const { fitView, zoomIn, zoomOut, zoomTo, screenToFlowPosition, setViewport } = useReactFlow();
   // Selected separately, as `useFlowPlayback` does: an object literal from a store selector is a
   // new identity every time and would re-render forever.
-  const viewWidth = useStore((state) => state.width);
-  const viewHeight = useStore((state) => state.height);
+  const viewWidth = useViewportStore((state) => state.width);
+  const viewHeight = useViewportStore((state) => state.height);
   return useCallback(
     (): CommandContext => {
       const editor = useEditorStore.getState();
