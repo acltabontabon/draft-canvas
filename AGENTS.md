@@ -137,7 +137,16 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   store action through `commands/outage.ts` (one undo step), and "Keep as open point" is `addOpenPoint`.
 - Every way in (status bar, palette, shape menu) goes through `commands/outage.ts`. `OutageLayer` is
   canvas chrome drawn with `canvas/sketchPaths.ts`; product behaviour lives only in
-  `traffic/technology.ts`, as documented defaults matched on an assigned product name.
+  `traffic/technology.ts`, as documented defaults matched on an assigned product name. Every fact
+  there names the vendor page it was read from and the day it was checked; a note that quotes one
+  carries the source (`tests/traffic/technology.test.ts`).
+- What is taken down is a shape, a Boundary or a connector (`OutageTarget`); a connector leaves both
+  ends up and is read by the same rules, never a second set. Its notes say "can't be reached".
+- A flow is read against the outage (`OutageFlow`), and is the only source of order: a step breaks
+  only where its own connector does, and half-done work "has happened" only where a flow puts it
+  before the step that fails. Without one, the note says "if".
+- The list before anything is picked (`traffic/review.ts`) is `outageOf` repeated: no score, no
+  severity, and no sentence a person would not get by taking that one thing down.
 - Agents get the same reading through `read_diagram`'s `outage`, as facts and open questions.
 
 ### Sketches and Smart Ink

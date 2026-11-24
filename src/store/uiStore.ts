@@ -590,6 +590,10 @@ export interface UiStore {
    * commits. See `edges/routing.ts`'s obstacle-avoidance notes.
    */
   interactionActive: boolean;
+  /** What the outage list's row under the pointer (or with focus) is about, so the canvas can
+   *  circle it: the shapes, and whether that outage reaches a person. A pointer, never a reading:
+   *  nothing is taken down until the row is chosen. */
+  outagePointer: { ids: readonly string[]; reaches: boolean } | null;
   /**
    * The nodes the in-flight gesture is moving or resizing (empty otherwise). Their committed rects
    * are stale until it ends, so a connector touching one skips obstacle avoidance for the gesture
@@ -830,6 +834,7 @@ export interface UiStore {
   setProposalPanelOpen: (open: boolean, proposalId?: string | null) => void;
   setCompanionOpen: (open: boolean) => void;
   setInteractionActive: (active: boolean, movingNodeIds?: Iterable<string>) => void;
+  setOutagePointer: (pointer: { ids: readonly string[]; reaches: boolean } | null) => void;
   requestEdit: (id: string | null) => void;
   setSequenceFocus: (focus: SequenceFocus | null) => void;
   setSequenceEdit: (edit: SequenceEdit | null) => void;
@@ -1033,6 +1038,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   companionOpen: false,
   flowRenameRequestId: null,
   interactionActive: false,
+  outagePointer: null,
   movingNodeIds: NO_MOVING_NODES,
   editRequestId: null,
   recoveryRequestEdgeId: null,
@@ -1185,6 +1191,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
       }
       return { interactionActive, movingNodeIds: moving.size === 0 ? NO_MOVING_NODES : moving };
     }),
+  setOutagePointer: (outagePointer) => set((state) => (state.outagePointer === outagePointer ? state : { outagePointer })),
   requestEdit: (editRequestId) => set({ editRequestId }),
   requestRecovery: (recoveryRequestEdgeId, recoveryRequestActionId = null) => set({ recoveryRequestEdgeId, recoveryRequestActionId }),
   setRecoveryConnect: (recoveryConnect) => set({ recoveryConnect }),

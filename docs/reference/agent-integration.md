@@ -113,7 +113,9 @@ attachments and flows with their ids. Elements, boundaries, notes, relationships
 | `include: ["attachments"]` / `["fullText"]` | Attachment previews, or complete text. |
 | `include: ["suggestions"]` | Up to 5 next-step suggestions per element. Never applied. |
 | `include: ["views"]` | An outline of every inside view. |
-| `outage: {element, allInstances?}` | What the drawing says follows if that element or group goes down: `headline`, `affected` (id and state), `unaffected` and `notes`, an open question carrying `open`. First page only. |
+| `outage: {element, allInstances?}` | What the drawing says follows if that element or group goes down: `headline`, `affected` (id and state), `unaffected`, `notes` (an open question carrying `open`, a quoted product behaviour its `sources`) and `flows` (each flow's `state`, and the `step` it breaks at). First page only. |
+| `outage: {connector}` | The same for a relationship taken down while both of its ends stay up. |
+| `outage: {}` | Every element, group and relationship whose loss changes something drawn: `review` and `connectors` (each with `reaches`, `flows`, `affected`, `open` and a sentence), `oneInstanceOfSeveral` and `nothingElseChanges`. An order, not a severity. |
 | `format: "outline"` | File title and revision, plus paths, owners, levels and counts for up to 100 inside views (`viewsTruncated` marks a longer outline). |
 | `format: "mermaid"` / `"plantuml"` / `"c4"` | Flows as sequence-diagram source, or the architecture as C4-PlantUML, as Export writes them. |
 

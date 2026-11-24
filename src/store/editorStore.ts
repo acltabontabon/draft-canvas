@@ -266,7 +266,8 @@ export interface FocusState {
 /**
  * An outage walk (`src/traffic/outage.ts`): `active` while the canvas is asking "what if this goes
  * down?", `down` the shape or Boundary taken down (none yet while one is still to be picked), and
- * `whole` whether every instance of a Service drawn with several is down rather than one. What the
+ * `whole` whether every instance of a Service drawn with several is down rather than one. `cut` is
+ * a connector taken down instead of a shape: both its ends stay up and nothing travels it. What the
  * outage does is never stored — `store/outage.ts` derives it from the room on demand — so it can't
  * describe a graph that has since changed. Like Focus: transient, never saved, never in history,
  * never shared with collaborators, and dropped by `resetViewSession` along with everything else
@@ -276,9 +277,10 @@ export interface OutageView {
   active: boolean;
   down: string | null;
   whole: boolean;
+  cut: string | null;
 }
 
-export const OUTAGE_OFF: OutageView = { active: false, down: null, whole: false };
+export const OUTAGE_OFF: OutageView = { active: false, down: null, whole: false, cut: null };
 
 /**
  * An edge counts as focused if it was explicitly added, or if both of its
@@ -824,6 +826,8 @@ export interface EditorStore {
   /** Takes a shape (or a Boundary and what is in it) down and shows what follows across the room.
    *  `whole` takes every instance of a Service drawn with several, rather than one of them. */
   takeDown: (nodeId: string, whole?: boolean) => void;
+  /** Takes a connector down: its two ends stay up, and nothing travels between them. */
+  cutConnector: (edgeId: string) => void;
   endOutage: () => void;
 
   /* Depth */
@@ -3908,7 +3912,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((s) => {
       if (s.mode === 'present' || s.outage.active) return s;
       return {
-        outage: { active: true, down: null, whole: false },
+        outage: { active: true, down: null, whole: false, cut: null },
         focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
       };
     });
@@ -3920,7 +3924,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (s.outage.down === nodeId && s.outage.whole === whole) return s;
       if (!s.document.nodes.some((node) => node.id === nodeId)) return s;
       return {
-        outage: { active: true, down: nodeId, whole },
+        outage: { active: true, down: nodeId, whole, cut: null },
+        focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+      };
+    });
+  },
+
+  cutConnector(edgeId) {
+    set((s) => {
+      if (s.mode === 'present' || s.outage.cut === edgeId) return s;
+      if (!s.document.edges.some((edge) => edge.id === edgeId)) return s;
+      return {
+        outage: { active: true, down: null, whole: false, cut: edgeId },
         focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
       };
     });

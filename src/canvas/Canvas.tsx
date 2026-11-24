@@ -1,7 +1,7 @@
 import { mayTakeDown } from '../traffic';
 import { playbackFlowOf } from '../document/sequenceFlow';
 import { FlowTraceBadges } from './FlowTraceBadges';
-import { OutageLayer, OutageStrip } from './OutageLayer';
+import { OutageDock, OutageLayer } from './OutageLayer';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Background,
@@ -2178,6 +2178,26 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
         }
         return;
       }
+      // During an outage walk a plain click on a connector takes it down, the way one on a shape
+      // does. A modified click still only selects, and the walk's own notes and list keep theirs.
+      if (
+        editable &&
+        presented.outage.active &&
+        event.button === 0 &&
+        !event.shiftKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !useUiStore.getState().armed &&
+        !(event.target instanceof Element && event.target.closest('button, [role="button"], .react-flow__panel'))
+      ) {
+        const pick = edgeAtEvent(event);
+        if (pick && pick.part !== 'control') {
+          event.preventDefault();
+          event.stopPropagation();
+          presented.cutConnector(pick.id);
+          return;
+        }
+      }
       const trace = useUiStore.getState().flowTrace;
       if (trace && event.button === 0) {
         const pick = edgeAtEvent(event);
@@ -2483,7 +2503,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             </div>
           )}
         </ViewportLayer>
-        {outageActive && <OutageStrip />}
+        {outageActive && <OutageDock />}
       </ReactFlow>
     </div>
   );
