@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 
 import { useDiagramStyle } from '../../canvas/useDiagramStyle';
 import { backdropTile } from '../../render/style/backdrop';
 import { useTheme } from '../../theme/useTheme';
+import { fitPadding } from '../../lib/fitPadding';
 import { motionMs } from '../../lib/motion';
 import { flowFitViewNodes, hasSomethingToFit, useEditorStore } from '../../store/editorStore';
 import { useStyleStore } from '../../store/styleStore';
@@ -118,7 +119,7 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
       if (!useUiStore.getState().stylePanelOpen) return;
       const state = useEditorStore.getState();
       if (!hasSomethingToFit(state)) return;
-      void fitView({ padding: 0.2, duration: motionMs(360), maxZoom: getZoom(), nodes: flowFitViewNodes(state) });
+      void fitView({ padding: fitPadding(0.2), duration: motionMs(360), maxZoom: getZoom(), nodes: flowFitViewNodes(state) });
     };
     // A wheel over the canvas, or a drag that starts on its empty pane, is the person moving the
     // view. A press on a shape is not: selecting something to look at leaves the view where it is.
