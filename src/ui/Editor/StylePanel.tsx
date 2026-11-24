@@ -214,7 +214,8 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
             <span className="dc-style-cover-brand" style={{ background: theme.selection, borderColor: theme.selection }} />
           </div>
         </header>
-        <div className="dc-style-panel-body dc-prefs">
+        {/* Firefox gives scroll containers a tab stop. The controls inside already provide keyboard access. */}
+        <div className="dc-style-panel-body dc-prefs" tabIndex={-1}>
           <AppearanceSettings layout="panel" />
         </div>
       </div>
