@@ -132,6 +132,7 @@ export const SECTIONS: Section[] = [
       { keys: ['Arrow'], label: 'Move the message up or down, or the participant left or right' },
       { keys: ['Tab'], label: 'Add the message that usually comes next — ] and [ offer others' },
       { keys: ['P'], label: 'Add a participant after the selected one' },
+      { keys: ['R'], label: 'Add the reply to the selected call' },
       { keys: [mod, 'G'], label: 'Wrap the selected messages, or group the selected participants' },
       { gesture: 'Drop a shape in', label: 'It stands in the sequence — a shape on its own moves in' },
     ],

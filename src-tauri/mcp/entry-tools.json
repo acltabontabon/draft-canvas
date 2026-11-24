@@ -1,12 +1,13 @@
 [
   {
     "name": "diagram_tool",
-    "description": "Rename once: tool=rename_element, args={diagramId,requestId:UUID,from:exactLabel,to:newLabel,view?}. help: {} lists operations; {tool:NAME} gives arguments.",
+    "description": "Draft Canvas diagrams, one operation per call. tool:\"help\", args:{} lists operations; tool:\"help\", args:{tool:\"NAME\"} gives the arguments of NAME. Then tool:\"NAME\", args:{...}; read_diagram gives the ids and revision update_diagram needs. Exact-label rename, no read: tool:\"rename_element\", args:{diagramId,requestId:UUID,from,to,view?}.",
     "inputSchema": {
       "type": "object",
       "properties": {
         "tool": {
-          "type": "string"
+          "type": "string",
+          "description": "Operation name, or \"help\"."
         },
         "args": {
           "type": "object"

@@ -1849,6 +1849,22 @@ function attachCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   return commands;
 }
 
+/** "Take this connection down": both ends stay up and nothing travels between them. Offered where
+ *  an outage could say something, which is the room having anything that runs at all. */
+function cutConnectorCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
+  const { document, outage } = ctx.editor;
+  if (outage?.cut === edge.id) return [];
+  if (!mayTakeDown(document.nodes, edge.source) && !mayTakeDown(document.nodes, edge.target)) return [];
+  return [{
+    id: 'cut-connector',
+    title: 'Take this connection down',
+    group: 'selection',
+    hint: 'What happens if these two cannot reach each other',
+    keywords: ['outage', 'failure', 'what if', 'down', 'partition', 'network', 'unreachable', 'disconnect', 'cut'],
+    run: (inner) => inner.editor.cutConnector(edge.id),
+  }];
+}
+
 export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   const doc = ctx.editor.document;
   const serviceCall = isServiceInteraction(doc, edge);
@@ -2064,6 +2080,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       addAttachmentCommand({ hostKind: 'edge', edge }, 'code', 'connector'),
     );
   }
+  commands.push(...cutConnectorCommands(ctx, edge));
   // Nowhere left to add it: every flow already has it or is full, and no room for a new one.
   if (flowsAvailable.length === 0 && !canStartFlow) return commands.filter((command) => command.id !== 'edge-add-to-flow');
   return commands;

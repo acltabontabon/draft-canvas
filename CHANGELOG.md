@@ -6,11 +6,88 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+## [1.21.1] - 2026-11-23
+
+Clearer sequences, and fixes for opening files, keyboard handling and agents.
+
 ### Shared
 
 #### Added
 
-- **Watch the film** — **Help → Watch the film** opens the product film on the Draft Canvas website.
+- **Outage: every outage at once** — opening an outage with nothing selected lists what losing each
+  shape, boundary and connector would do: whom it reaches, which flows break and what it leaves
+  open. Point at a row to circle it on the canvas, click it to take it down.
+- **Outage: a connection down** — click a connector during an outage, or choose **Take this
+  connection down** from its menu, to see what happens when two shapes stay up but can't reach
+  each other.
+- **Outage: which flows break** — an outage says what it does to each flow: the first step that can
+  no longer happen, a failure path that comes into use, or that it carries on.
+- **Outage: work caught half-done** — an outage asks what undoes a write that happened before the
+  step that failed, whether a consumer is safe to run twice when its queue redelivers, and what
+  keeps a store and a message in step when the publish fails. A recovery action drawn for the
+  earlier step answers it.
+- **Outage: sources** — a note that quotes a product's documented behaviour (Amazon SQS, Kafka,
+  Redis and the rest) links to the vendor's page it was read from. Unfold the note to see it.
+- **Outage: one card** — the strip along the bottom of an outage is now a card: what the outage
+  does to each flow, what the colours mean, and the way out.
+- **Outage for agents** — `read_diagram`'s `outage` returns each flow's reading, takes a
+  `connector`, and with `{}` returns the whole list.
+
+#### Changed
+
+- **Sequences that read better** — Each kind of frame has its own colour and mark, long messages,
+  conditions and notes wrap instead of being cut short, and a new message is seen to arrive. <!-- highlight -->
+- **Replies by dragging back** — Drag from whoever was called back to its caller and the line is
+  the reply: dashed, and tied to the call it answers. <!-- highlight -->
+
+#### Fixed
+
+- **Outage: a queue's limit** — a queue with no product named no longer reads as holding messages
+  "until it's back". It says the drawing doesn't show how long or how much it keeps.
+- **Outage: calls nobody waits on** — an asynchronous call to something that is down no longer
+  passes without comment: the outage asks what becomes of the calls.
+- **Outage: a store that is only read** — a data store nothing reaches any more says "is no longer
+  read", and "stops being updated" only when something wrote to it.
+- **Outage: Redis, Valkey and Memcached** — a cache taken down no longer says Redis or Valkey come
+  back empty: by default they reload their last snapshot. Memcached's note now allows for a warm
+  restart.
+- **Outage: unfolded notes** — a note's full sentence no longer covers a neighbouring shape or its
+  own answers.
+- **Participants with a technology** — A lifeline no longer runs through the kind written under a
+  data store, queue or external service.
+- **Files that would not open** — A diagram with sequence fragments nested extremely deep, or a
+  shape name of hundreds of thousands of lines, now opens instead of being refused.
+- **Shared links keep sequences linked** — A lifeline in a shared copy still points at the shape
+  it stands for.
+- **Deleting mid-drag** — Starting to drag a shape while a connector is selected no longer lets
+  Delete remove the shape being dragged.
+- **Tidy up and Arrange previews** — Enter and Escape in a dialog opened over a preview now answer
+  the dialog, not the preview behind it.
+- **Going home** — A diagram still loading when you go home no longer opens afterwards, and a
+  reload at home no longer brings back a diagram opened earlier.
+- **A panel that fails to load** — An invite that cannot be fetched says so instead of blanking
+  the app.
+- **Diagrams dated in the future** — A file with a date years ahead no longer stays first in the
+  library.
+- **Flow variants and open points** — A variant of a flow whose id is used twice attaches to the
+  right flow, and an open point keeps the attachment that is still there.
+- **Sketches while sharing** — A stroke a collaborator erases is no longer left selected.
+
+### Desktop
+
+#### Fixed
+
+- **Agents told what went wrong** — An agent that named a shape by its label, or a shape in
+  another view, is now told which id or view to use and that nothing was changed, instead of
+  retrying an update that could not work.
+- **Typing to Nodi with an input method** — The Enter that confirms a conversion no longer sends
+  the prompt.
+- **Rename File** — Pressing Enter twice renames once, and the dialog stays until the rename has
+  answered.
+
+#### Security
+
+- Web address handling is updated past a stack overflow advisory.
 
 ## [1.21.0] - 2026-11-22
 
@@ -2818,7 +2895,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.0...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.1...main
+[1.21.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.0...v1.21.1
 [1.21.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.20.0...v1.21.0
 [1.20.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.19.0...v1.20.0
 [1.19.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.18.1...v1.19.0

@@ -921,6 +921,13 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
       {/* The route an outage brings into use (a fallback, a dead-letter route): light travelling
           along the very path drawn, so what now carries the work reads at a glance. Pure CSS — see
           `.dc-outage-flow` — and still under reduced motion. Chrome: never exported. */}
+      {/* The connector taken down: struck through at its middle, as a shape taken down is. */}
+      {outageReading === 'cut' && (
+        <g className="dc-outage-cut" fill="none" pointerEvents="none">
+          <path d={`M ${labelX - 15} ${labelY - 14} Q ${labelX - 1} ${labelY + 3} ${labelX + 15} ${labelY + 14}`} />
+          <path d={`M ${labelX + 15} ${labelY - 14} Q ${labelX + 2} ${labelY - 2} ${labelX - 15} ${labelY + 14}`} />
+        </g>
+      )}
       {outageReading === 'recovery' && (
         <g className="dc-outage-flow" fill="none" pointerEvents="none">
           <path className="dc-outage-channel" d={drawnPath} />
@@ -1466,8 +1473,10 @@ function EdgeEditHandles({
  * from the document, topmost z first, groups excluded. Target highlighting
  * only writes to the store when the hovered node or attachment id changes, so a
  * drag does not re-render anything on every pointer-move frame.
+ *
+ * Exported for its gesture-lifecycle test.
  */
-function EdgeEndpointHandle({
+export function EdgeEndpointHandle({
   edgeId,
   endpoint,
   x,
@@ -1531,9 +1540,15 @@ function EdgeEndpointHandle({
 
   const endDrag = useCallback(() => {
     if (onKeyDownRef.current) window.removeEventListener('keydown', onKeyDownRef.current);
-    useUiStore.getState().setReconnectHoverTarget(null);
-    useUiStore.getState().setReconnectDragActive(false);
-    useUiStore.getState().setInteractionActive(false);
+    // Only what this handle took. These fields are shared with every other gesture, and this runs
+    // on unmount too (below): a selected connector's handles unmount the moment a shape drag starts
+    // and selects the shape instead, and clearing `interactionActive` there switched the keyboard's
+    // mid-gesture guard off for the rest of that drag, so Delete could remove the shape being dragged.
+    if (dragStarted.current) {
+      useUiStore.getState().setReconnectHoverTarget(null);
+      useUiStore.getState().setReconnectDragActive(false);
+      useUiStore.getState().setInteractionActive(false);
+    }
     lastHover.current = null;
     dragStarted.current = false;
     startClient.current = null;
@@ -1546,8 +1561,8 @@ function EdgeEndpointHandle({
   // (which un-renders this handle entirely) — that path never runs. Without also resetting the
   // shared `uiStore` fields here, `interactionActive` is left stuck `true`, which silently
   // freezes every open popover's placement and suppresses continuation offers until an unrelated
-  // gesture happens to flip it back off. `endDrag` is written to be idempotent
-  // (resetting already-idle state is a no-op), so calling it unconditionally on unmount is safe.
+  // gesture happens to flip it back off. `endDrag` gives back only what this handle's own drag took,
+  // so calling it on every unmount is safe: with no drag under way it touches nothing shared.
   const endDragRef = useRef(endDrag);
   useEffect(() => {
     endDragRef.current = endDrag;

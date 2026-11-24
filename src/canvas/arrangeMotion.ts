@@ -157,16 +157,3 @@ export async function withArrangeMotion(apply: () => Promise<boolean>, direction
   for (const animation of back) animation.cancel();
   return true;
 }
-
-/** Whether a shape now lies even partly outside the canvas on screen: a layout that grew past the edge. */
-export function shapesOffScreen(): boolean {
-  const root = canvasRoot();
-  if (!root) return false;
-  const frame = root.getBoundingClientRect();
-  if (frame.width === 0) return false;
-  for (const element of nodeElements(root).values()) {
-    const box = element.getBoundingClientRect();
-    if (box.left < frame.left || box.top < frame.top || box.right > frame.right || box.bottom > frame.bottom) return true;
-  }
-  return false;
-}

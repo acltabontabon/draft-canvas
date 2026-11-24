@@ -19,16 +19,18 @@ const MEANT: Record<string, readonly string[]> = {
   to: ['target'],
 };
 
-/**
- * What to say about a field `allowed` doesn't have: the field it most likely means (a near spelling,
- * or a name from `MEANT`), and the fields this object takes when there are few enough to list.
- */
-export function unknownFieldHint(key: string, allowed: readonly string[]): string {
+/** The closest allowed field, by spelling or a known alias. */
+export function suggestedField(key: string, allowed: readonly string[]): string | undefined {
   const lower = key.toLowerCase();
   // Edit distance cannot be less than the length difference. Skip impossible matches before
   // traversing a hostile field name: validation runs on the page, before the worker's time limit.
   const near = lower.length >= 4 ? allowed.find((field) => field !== key && Math.abs(lower.length - field.length) <= 2 && distance(lower, field.toLowerCase()) <= 2) : undefined;
-  const meant = near ?? allowed.find((field) => MEANT[field]?.includes(lower));
+  return near ?? allowed.find((field) => MEANT[field]?.includes(lower));
+}
+
+/** The likely field name and, for small objects, every field this object takes. */
+export function unknownFieldHint(key: string, allowed: readonly string[]): string {
+  const meant = suggestedField(key, allowed);
   const listed = allowed.length <= 12 ? ` (takes ${allowed.join(', ')})` : '';
   return meant ? `; use ${meant}${listed}` : listed;
 }

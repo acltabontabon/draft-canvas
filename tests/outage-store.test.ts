@@ -11,7 +11,7 @@ vi.mock('../src/lib/preferences', () => ({
 import { applyOutageFix, outageCandidate, outageFixLabel, startOutage, toggleOutage } from '../src/commands/outage';
 import { parseDocument } from '../src/document/validate';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
-import { outageEdgeOf, outageIn, outageNodeReading, roomMayHaveOutage, runtimeOf } from '../src/store/outage';
+import { outageEdgeOf, outageIn, outageNodeReading, outageReviewIn, roomMayHaveOutage, runtimeOf } from '../src/store/outage';
 
 /*
  * The outage walk through the real store: what taking a shape down sets, what each shape and
@@ -43,7 +43,7 @@ describe('outage walk in the store', () => {
     expect(outageNodeReading(store.getState(), 'external')).toBeNull();
 
     store.getState().startOutage();
-    expect(store.getState().outage).toEqual({ active: true, down: null, whole: false });
+    expect(store.getState().outage).toEqual({ active: true, down: null, whole: false, cut: null });
     expect(outageIn(store.getState())).toBeNull();
     expect(outageNodeReading(store.getState(), 'external')).toBeNull();
     expect(outageEdgeOf(store.getState(), 'call-external')).toBeNull();
@@ -93,7 +93,7 @@ describe('outage walk in the store', () => {
 describe('ways in', () => {
   it('takes the selected shape down, or opens the walk to wait for one', () => {
     toggleOutage();
-    expect(store.getState().outage).toEqual({ active: true, down: null, whole: false });
+    expect(store.getState().outage).toEqual({ active: true, down: null, whole: false, cut: null });
     toggleOutage();
     expect(store.getState().outage.active).toBe(false);
 
@@ -147,5 +147,57 @@ describe('answering a question by drawing it', () => {
 
     applyOutageFix(question.fix!);
     expect(notes().some((note) => note.startsWith('dead-letters after'))).toBe(true);
+  });
+
+  it('reads the flows against the outage, and again when a flow is edited', () => {
+    store.getState().takeDown('external');
+    const before = outageIn(store.getState());
+    expect(before?.flows.map((flow) => flow.note)).toEqual(['carries on', 'breaks at step 3 of 4', 'comes into use']);
+    // Nothing changed: the same reading, by identity, so the canvas does not re-render.
+    expect(outageIn(store.getState())).toBe(before);
+
+    store.getState().renameFlow('flow2', 'Call the provider');
+    expect(outageIn(store.getState())?.flows[1]?.text).toMatch(/^Step 3 of 4 in Call the provider /);
+  });
+
+  it('reviews every shape only while a walk is open and nothing is down, and keeps the reading', () => {
+    expect(outageReviewIn(store.getState())).toBeNull();
+
+    store.getState().startOutage();
+    const review = outageReviewIn(store.getState());
+    expect(review?.entries.length).toBeGreaterThan(0);
+    // The same reading by identity, so a selection or a drag does not work it out again.
+    expect(outageReviewIn(store.getState())).toBe(review);
+    const moved = store.getState().document.nodes.map((item, index) => (index === 0 ? { ...item, x: item.x + 40 } : item));
+    store.setState((state) => ({ document: { ...state.document, nodes: moved } }));
+    expect(outageReviewIn(store.getState())).toBe(review);
+
+    store.getState().takeDown(review!.entries[0]!.id);
+    expect(outageReviewIn(store.getState())).toBeNull();
+  });
+
+  it('takes a connector down in place of a shape, and strikes only that connector', () => {
+    store.getState().takeDown('external');
+    store.getState().cutConnector('call-external');
+
+    expect(store.getState().outage).toEqual({ active: true, down: null, whole: false, cut: 'call-external' });
+    expect(outageIn(store.getState())?.connector).toEqual({ from: ['integration-worker'], to: ['external'] });
+    expect(outageEdgeOf(store.getState(), 'call-external')).toBe('cut');
+    expect(outageEdgeOf(store.getState(), 'consume-integration')).toBe('failing');
+    // The far end is up: unreached, not struck out.
+    expect(outageNodeReading(store.getState(), 'external')).toBe('quiet');
+    expect(outageReviewIn(store.getState())).toBeNull();
+
+    // A shape taken down next replaces it, and a connector that is gone leaves nothing to read.
+    store.getState().takeDown('external');
+    expect(store.getState().outage.cut).toBeNull();
+    store.getState().cutConnector('not-a-connector');
+    expect(store.getState().outage.down).toBe('external');
+  });
+
+  it('starts from one selected connector', () => {
+    store.getState().setSelection({ nodes: [], edges: ['consume-projection'] });
+    startOutage();
+    expect(store.getState().outage.cut).toBe('consume-projection');
   });
 });

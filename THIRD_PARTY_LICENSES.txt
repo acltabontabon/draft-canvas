@@ -3764,7 +3764,7 @@ THE SOFTWARE.
 
 (no licence file in the package; see its registry page)
 
-### cookie 0.18.2 — MIT OR Apache-2.0
+### cookie 0.18.3 — MIT OR Apache-2.0
 
 (no licence file in the package; see its registry page)
 

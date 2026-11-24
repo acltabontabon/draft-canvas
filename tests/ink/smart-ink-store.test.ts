@@ -91,6 +91,16 @@ describe('drawing and erasing', () => {
     store.getState().setSelection({ nodes: ['n_api'], edges: [] });
     expect(useUiStore.getState().inkSelection).toEqual([]);
   });
+
+  it('a stroke a collaborator erased is no longer chosen, and one they left still is', () => {
+    const a = draw(c.line({ x: 0, y: 200 }, { x: 300, y: 200 }, c.hand(1))[0]!);
+    const b = draw(c.line({ x: 0, y: 260 }, { x: 300, y: 260 }, c.hand(2))[0]!);
+    useUiStore.getState().setInkSelection([a.id, b.id]);
+    const file = fileOf(store.getState());
+    expect(store.getState().applyRemote({ ...file, ink: inkOf(file).filter((stroke) => stroke.id !== a.id) })).toBe(true);
+    expect(strokes()).toBe(1);
+    expect(useUiStore.getState().inkSelection).toEqual([b.id]);
+  });
 });
 
 describe('copying sketches', () => {

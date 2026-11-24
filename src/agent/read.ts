@@ -17,10 +17,10 @@ import { effectiveLevel } from '../depth/level';
 import { canCreateInside, hasInside, ownerAt, resolvePath, roomsOf, viewOf, type DepthPath } from '../depth/tree';
 import { relationshipCaptionLabel } from '../document/edgeSemantics';
 import { categoryOf } from '../document/connectorSemantics';
-import type { Attachment, DraftDocument, DraftEdge, DraftFlowStep, DraftNode } from '../document/types';
+import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode } from '../document/types';
 import { AgentError } from './errors';
 import { reviewView, type ReviewFinding } from './review';
-import { analyzeTraffic, outageOf } from '../traffic';
+import { analyzeTraffic, outageOf, outageReview, type Outage, type OutageReviewEntry } from '../traffic';
 import { sequenceRead } from './sequences';
 import { groupKindOf, lineStyleOf, typeWordOf } from './vocabulary';
 import { routeGeometry } from './route';
@@ -45,7 +45,7 @@ export interface ReadArgs {
   focus?: { nodes?: unknown; group?: unknown; flow?: unknown };
   include?: unknown;
   cursor?: unknown;
-  outage?: { element?: unknown; allInstances?: unknown };
+  outage?: { element?: unknown; allInstances?: unknown; connector?: unknown };
 }
 
 export function viewPathOf(file: DraftDocument, view: unknown): DepthPath {
@@ -274,28 +274,64 @@ export function readDiagram(file: DraftDocument, args: ReadArgs, revision: strin
 }
 
 /**
- * "What if this goes down?" for one element of the view, as the editor's outage walk reads it
- * (`traffic/outage.ts`): from the drawing alone, with no load or timing assumed. What the drawing
- * leaves open comes back as `open` questions — facts for the agent to reason about and the person to
- * decide, never a change to make unasked.
+ * "What if this goes down?" as the editor's outage walk reads it (`traffic/outage.ts`): from the
+ * drawing alone, with no load or timing assumed. For one element, for one connector (both of its
+ * ends stay up), or with neither for every one of them at once, as the editor lists them before
+ * one is picked. What the drawing leaves open comes back as `open` questions — facts for the agent
+ * to reason about and the person to decide, never a change to make unasked.
  */
-function outageRead(view: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[] }, input: ReadArgs['outage']): Record<string, unknown> | undefined {
+function outageRead(view: { nodes: readonly DraftNode[]; edges: readonly DraftEdge[]; flows: readonly DraftFlow[] }, input: ReadArgs['outage']): Record<string, unknown> | undefined {
   if (input === undefined || input === null) return undefined;
-  if (typeof input !== 'object' || Array.isArray(input)) throw new AgentError('INVALID_INPUT', 'outage is {element, allInstances?}.');
-  const element = typeof input.element === 'string' ? input.element : '';
-  if (!view.nodes.some((node) => node.id === element)) {
+  if (typeof input !== 'object' || Array.isArray(input)) throw new AgentError('INVALID_INPUT', 'outage is {element?, allInstances?} or {connector}.');
+  const connector = input.connector === undefined ? undefined : typeof input.connector === 'string' ? input.connector : '';
+  const element = input.element === undefined ? undefined : typeof input.element === 'string' ? input.element : '';
+  if (connector !== undefined && !view.edges.some((edge) => edge.id === connector)) {
+    throw new AgentError('INVALID_INPUT', 'outage.connector is not a relationship of this view.', { hint: 'Read the view first and pass one of its relationship ids.' });
+  }
+  if (connector === undefined && element !== undefined && !view.nodes.some((node) => node.id === element)) {
     throw new AgentError('INVALID_INPUT', 'outage.element is not an element or group of this view.', { hint: 'Read the view first and pass one of its element or group ids.' });
   }
-  const outage = outageOf(analyzeTraffic({ nodes: view.nodes, edges: view.edges }), view.nodes, view.edges, { id: element, whole: input.allInstances === true });
-  if (!outage) return { element, readable: false, reason: 'Nothing that runs here depends on it or is reached through it, so the drawing says nothing about its outage.' };
+  const analysis = analyzeTraffic({ nodes: view.nodes, edges: view.edges });
+  if (connector !== undefined) {
+    const outage = outageOf(analysis, view.nodes, view.edges, { id: connector, connector: true }, view.flows);
+    if (!outage) return { connector, readable: false, reason: 'It carries no work between things that run here, so the drawing says nothing about losing it.' };
+    return { connector, ...outageFacts(outage) };
+  }
+  if (element !== undefined) {
+    const outage = outageOf(analysis, view.nodes, view.edges, { id: element, whole: input.allInstances === true }, view.flows);
+    if (!outage) return { element, readable: false, reason: 'Nothing that runs here depends on it or is reached through it, so the drawing says nothing about its outage.' };
+    return { element, ...outageFacts(outage) };
+  }
+  const review = outageReview(analysis, view.nodes, view.edges, view.flows);
+  const row = (entry: OutageReviewEntry) => ({
+    id: entry.id,
+    ...(entry.kind === 'boundary' ? { everythingInside: true } : {}),
+    reaches: entry.reaches,
+    flows: entry.flows.map((flow) => flow.id),
+    affected: entry.affected,
+    open: entry.questions,
+    text: entry.text,
+  });
   return {
-    element,
+    basis: 'Read from the drawing alone: no load, timing or likelihood is assumed. Listed in the order the drawing gives (what reaches a person first), not by severity.',
+    review: review.entries.map(row),
+    connectors: review.connectors.map(row),
+    oneInstanceOfSeveral: review.covered.map((item) => item.id),
+    nothingElseChanges: review.spared.map((item) => item.id),
+  };
+}
+
+function outageFacts(outage: Outage): Record<string, unknown> {
+  return {
     basis: 'Read from the drawing alone: no load, timing or likelihood is assumed.',
     ...(outage.instances ? { instances: outage.instances } : {}),
     headline: outage.headline,
     affected: [...outage.nodes].filter(([, state]) => state !== 'unaffected').map(([id, state]) => ({ id, state })),
     unaffected: [...outage.nodes].filter(([, state]) => state === 'unaffected').map(([id]) => id),
-    notes: outage.notes.map((note) => ({ kind: note.tone, ids: note.focus, text: note.text, ...(note.ask ? { open: note.ask } : {}) })),
+    notes: outage.notes.map((note) => ({ kind: note.tone, ids: note.focus, text: note.text, ...(note.ask ? { open: note.ask } : {}), ...(note.sources ? { sources: note.sources.map((source) => source.url) } : {}) })),
+    ...(outage.flows.length > 0
+      ? { flows: outage.flows.map((flow) => ({ id: flow.id, state: flow.state, ...(flow.step ? { step: flow.step } : {}), of: flow.of, text: flow.text })) }
+      : {}),
   };
 }
 

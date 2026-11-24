@@ -4,7 +4,8 @@ import { withArrangeMotion } from '../../canvas/arrangeMotion';
 import { focusBoundsInView } from '../../commands/search';
 import { boundsOf } from '../../document/geometry';
 import type { DraftDocument } from '../../document/types';
-import { gestureInProgress, useEditorStore } from '../../store/editorStore';
+import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../../lib/isEditableTarget';
+import { isInteracting, useEditorStore } from '../../store/editorStore';
 import { useUiStore, type ArrangeDirection, type ArrangePreview, type ArrangeShow } from '../../store/uiStore';
 import { Button } from '../common/Button';
 import { LayoutNotes } from './LayoutBusyBar';
@@ -75,7 +76,7 @@ export function ArrangeBar() {
     // A drag or resize in progress holds the diagram: nothing is wrong with the preview, it just
     // cannot go in yet. It stays up (and the camera where it is), rather than being thrown away with
     // a message about the diagram having changed.
-    if (gestureInProgress()) {
+    if (isInteracting()) {
       useUiStore.getState().notify('Finish what you are dragging first, then apply the arrangement.');
       return;
     }
@@ -116,6 +117,8 @@ export function ArrangeBar() {
   useEffect(() => {
     if (!preview) return;
     const onKey = (event: KeyboardEvent) => {
+      // As in `TidyBar`: a dialog, the palette or a menu over the canvas owns these keys while it is up.
+      if (isImeKeyEvent(event) || overlayAboveCanvasIsOpen()) return;
       const target = event.target;
       if (target instanceof HTMLElement && (target.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName))) {
         // The direction choice is a radio group: Escape still cancels from it, Enter is its own.

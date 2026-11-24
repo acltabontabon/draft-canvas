@@ -1,6 +1,7 @@
 import { openGallery, openStarter } from './library';
 import { createReaderExample } from './reader-example';
-import { storeDocument } from './fixtures/outage';
+import { clickEdge } from './canvas';
+import { storeWithFlows } from './fixtures/outage';
 
 // The guides picture the starters people get today, not the set pinned for the test journeys (`gallery.ts`).
 process.env.STARTERS_SNAPSHOT ??= 'current';
@@ -372,7 +373,7 @@ async function outageScreenshots(page: Page) {
   await page.locator('input[type="file"]').setInputFiles({
     name: 'outage-guide.draftcanvas',
     mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(storeDocument())),
+    buffer: Buffer.from(JSON.stringify(storeWithFlows())),
   });
   await expect(page.locator('.dc-editor')).toBeVisible();
   const settled = () => expect(page.locator('.dc-outage-note, .dc-outage-actions').last()).toHaveCSS('opacity', '1', { timeout: 10000 });
@@ -381,6 +382,14 @@ async function outageScreenshots(page: Page) {
     await settled();
   };
   await page.locator('.dc-status-outage').click();
+  await expect(page.locator('.dc-outage-card[data-listing]')).toBeVisible();
+  // Dismissed here, not by `shot`: its click would take the pointer off the row.
+  for (const dismiss of await page.locator('.dc-toast-dismiss').all()) await dismiss.click();
+  await page.locator('.dc-outage-card summary').click();
+  await page.locator('.dc-outage-card ul:not(details ul) button', { hasText: 'Order events' }).hover();
+  await expect(page.locator('.dc-outage-point .dc-sketch-loop')).toHaveCSS('opacity', /0\.9/, { timeout: 10000 });
+  await shot(page, 'outage-review');
+  await page.mouse.move(720, 120);
   await takeDown('payments');
   await shot(page, 'outage-overview');
   const calls = page.locator('button.dc-outage-note', { hasText: 'calls fail' });
@@ -393,8 +402,17 @@ async function outageScreenshots(page: Page) {
   await shot(page, 'outage-fix');
   await takeDown('checkout');
   await shot(page, 'outage-instances');
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="orders-fulfilment"] .dc-edge-line').first());
+  await settled();
+  await page.mouse.move(720, 120);
+  await shot(page, 'outage-connector');
   await takeDown('cache');
+  await page.locator('button.dc-outage-note', { hasText: 'every read falls to' }).click();
   await shot(page, 'outage-cache');
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="checkout-orders"] .dc-edge-line').first());
+  await settled();
+  await page.locator('button.dc-outage-note', { hasText: "can't publish" }).click();
+  await shot(page, 'outage-half-done');
 }
 
 /** Import a real example and follow the same share-link route as a recipient. */
@@ -452,7 +470,7 @@ async function sequenceScreenshots(page: Page) {
     await expect(hint).toContainText(offered);
     if (label === 'POST /orders') await shot(page, 'sequence-next');
     await page.keyboard.press('Tab');
-    await expect(page.locator('input.dc-seq-editor[aria-label="Message"]')).toBeFocused();
+    await expect(page.locator('textarea.dc-seq-editor[aria-label="Message"]')).toBeFocused();
     await page.keyboard.type(label);
     await page.keyboard.press('Enter');
   }
@@ -541,6 +559,81 @@ async function sequenceScreenshots(page: Page) {
   await page.keyboard.press('Shift+Digit1');
   await page.mouse.move(20, 85);
   await shot(page, 'sequence-cross-frame');
+
+  /** A sequence from Mermaid text, pasted: the frames and the reply are then whatever the editor draws. */
+  const pasted = async (name: string, source: string) => {
+    await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+    await page.getByRole('button', { name: START_BUTTON }).first().click();
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    await title.fill(name);
+    await title.blur();
+    await page.evaluate((text) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', text);
+      document.querySelector('.dc-canvas')!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    }, source);
+    await expect(frames).toHaveCount(1);
+    await page.keyboard.press('F2');
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type(name);
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Shift+Digit1');
+    await page.mouse.move(20, 85);
+  };
+
+  // Every kind of frame a checkout meets, each in its own colour, with a condition long enough to wrap.
+  await page.setViewportSize({ width: VIEWPORT.width, height: 900 });
+  await pasted('Pay for an order', `sequenceDiagram
+  participant Web as Storefront
+  participant API as Checkout API
+  participant Pay as Payment provider
+  participant DB as Orders
+  Web->>API: POST /orders
+  loop until the payment settles, or three attempts have been made without success
+    API->>Pay: authorize
+    Pay-->>API: result
+  end
+  alt approved
+    API->>DB: INSERT order
+    DB-->>API: order id
+    opt the shopper asked for a receipt
+      API->>API: queue the receipt
+    end
+    API-->>Web: 201 Created
+  else declined
+    API-->>Web: 402 Payment required
+  end
+  par
+    API->>DB: reserve stock
+  and
+    API->>Pay: capture
+  end
+`);
+  await shot(page, 'sequence-frames');
+  await page.setViewportSize(VIEWPORT);
+
+  // A reply, drawn back to whoever is waiting: photographed with the line still in hand.
+  await pasted('Save an order', `sequenceDiagram
+  participant Web as Storefront
+  participant API as Checkout API
+  participant DB as Orders
+  Web->>API: POST /orders
+  API->>DB: INSERT order
+`);
+  await frames.first().hover({ position: { x: 30, y: 12 } });
+  const lifelines = frames.first().locator('.dc-seq-lifeline');
+  const asked = await box(lifelines.nth(2));
+  const asker = await box(lifelines.nth(1));
+  const at = asked.y + asked.height - 34;
+  await page.mouse.move(asked.x + asked.width / 2, at);
+  await page.mouse.down();
+  await page.mouse.move(asked.x - 40, at + 2, { steps: 6 });
+  await page.mouse.move(asker.x + asker.width / 2 + 30, at + 2, { steps: 10 });
+  await expect(page.locator('.dc-seq-add-target[data-reply="true"]')).toContainText('Reply to Checkout API');
+  await shot(page, 'sequence-reply');
+  await page.mouse.up();
+  await page.keyboard.press('Escape');
 }
 
 /**

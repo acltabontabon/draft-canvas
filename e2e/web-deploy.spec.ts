@@ -3,11 +3,11 @@ import AxeBuilder from '@axe-core/playwright';
 
 /**
  * What has to be true of the published artifact, served the way it is hosted: the site and the
- * editor each at the root of an origin of their own (draftcanvas.dev, app.draftcanvas.dev), and the
- * old front door under /draft-canvas/ (acltabontabon.com). scripts/serve-web.mjs gives each a port.
+ * editor each at the root of an origin of their own (draftcanvas.dev, app.draftcanvas.dev).
+ * scripts/serve-web.mjs gives each a port.
  *
  * These are failures a single root-served preview cannot see: an asset URL wrong by one directory,
- * the two bundles leaking into each other, an old link that stopped forwarding. They are about
+ * the two bundles leaking into each other. They are about
  * behaviour and structure — deliberately not about the copy on the page, which is rewritten often
  * and is not what a test should be pinning down.
  */
@@ -15,7 +15,6 @@ import AxeBuilder from '@axe-core/playwright';
 const port = Number(process.env.DC_WEB_PORT ?? 4174);
 const SITE = '/';
 const APP = `http://localhost:${port + 1}/`;
-const OLD = `http://localhost:${port + 2}/draft-canvas/`;
 
 test('the landing page is served at the root, and points at the editor\'s own address', async ({ page }) => {
   const failures: string[] = [];
@@ -175,62 +174,6 @@ test('the editor asks not to be indexed as a second landing page', async ({ page
 
   await page.goto(SITE);
   await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://draftcanvas.dev/');
-});
-
-test.describe('the old address', () => {
-  test('says where Draft Canvas moved, styled and without errors', async ({ page }) => {
-    const failures: string[] = [];
-    page.on('response', (response) => {
-      if (response.status() >= 400) failures.push(`${response.status()} ${response.url()}`);
-    });
-    const errors: string[] = [];
-    page.on('pageerror', (error) => errors.push(error.message));
-
-    await page.goto(OLD);
-    await expect(page.locator('h1')).toBeVisible();
-    await expect(page.locator('body')).toHaveCSS('background-color', /rgb\(/);
-    await expect(page.getByRole('link', { name: 'Go to draftcanvas.dev' })).toHaveAttribute('href', 'https://draftcanvas.dev/');
-    await expect(page.locator('link[rel="canonical"]')).toHaveAttribute('href', 'https://draftcanvas.dev/');
-    expect(failures).toEqual([]);
-    expect(errors).toEqual([]);
-  });
-
-  test('redirects a directory without its trailing slash rather than breaking', async ({ page }) => {
-    /*
-     * With a relative `base`, a page served at /draft-canvas would resolve ./assets/* against the
-     * origin root and load nothing at all. GitHub Pages redirects to the trailing-slash form instead
-     * — verified against the sibling project site, https://acltabontabon.com/scuttle — and
-     * scripts/serve-web.mjs reproduces that here so the preview cannot be more forgiving than
-     * production.
-     */
-    const response = await page.goto(OLD.replace(/\/$/, ''));
-    expect(response?.status()).toBe(200);
-    await expect(page).toHaveURL(OLD);
-    await expect(page.locator('h1')).toBeVisible();
-  });
-
-  test('keeps the editor, so diagrams saved there can be brought along', async ({ page }) => {
-    await page.goto(`${OLD}editor/`);
-    await expect(page.locator('#root')).not.toBeEmpty();
-  });
-
-  test('puts their diagrams first for someone who has drawn here', async ({ page }) => {
-    // The key the app writes the first time it runs. Nothing is opened and no diagram is read.
-    await page.addInitScript(() => localStorage.setItem('draft-canvas.personality', 'plain'));
-    await page.goto(OLD);
-    await expect(page.locator('#yours')).toHaveAttribute('data-found', '');
-    await expect(page.locator('#yours a[href="./editor/"]')).toBeVisible();
-  });
-
-  test('forwards every other old link to the same page on draftcanvas.dev', async ({ page }) => {
-    // Stop at the forward rather than leaving the machine: the target is the real domain.
-    await page.route('https://draftcanvas.dev/**', (route) =>
-      route.fulfill({ status: 200, contentType: 'text/html', body: '<h1>new home</h1>' }),
-    );
-    await page.goto(`${OLD}docs/getting-started/?from=old#install`);
-    // The fragment never reaches a server, so it is the address bar that has to carry it across.
-    await expect(page).toHaveURL('https://draftcanvas.dev/docs/getting-started/?from=old#install');
-  });
 });
 
 test.describe('the documentation', () => {

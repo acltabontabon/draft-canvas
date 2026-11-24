@@ -40,6 +40,26 @@ describe('importing untrusted files', () => {
     expect(result.document.nodes).toHaveLength(1);
   });
 
+  it('never dates a file later than tomorrow, so one cannot sit first in the library for good', () => {
+    const before = Date.now();
+    const result = parse({ ...base, metadata: { id: 'doc1', title: 'From the future', createdAt: 1e15, updatedAt: 1e15 + 5 }, nodes: [], edges: [] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+    const { createdAt, updatedAt } = result.document.metadata;
+    expect(createdAt).toBeGreaterThanOrEqual(before);
+    expect(createdAt).toBeLessThanOrEqual(tomorrow);
+    expect(updatedAt).toBeGreaterThanOrEqual(createdAt);
+    expect(updatedAt).toBeLessThanOrEqual(tomorrow);
+  });
+
+  it('keeps the dates a file was given, and an edit never earlier than its making', () => {
+    const result = parse({ ...base, metadata: { id: 'doc1', title: 'Old', createdAt: 5000, updatedAt: 1000 }, nodes: [], edges: [] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.metadata).toMatchObject({ createdAt: 5000, updatedAt: 5000 });
+  });
+
   it('preserves an explicit neutral accent instead of falling back to the type default', () => {
     // Regression test: a node's accent is an explicit override of its type's
     // default colour (teal for a service, blue for a database, ...), and
@@ -883,5 +903,49 @@ describe('importing what is inside a shape', () => {
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.repairs.join(' ')).toContain('What was inside a shape had 2 nodes; kept the first 1.');
+  });
+
+});
+
+describe('what a file refers to by id', () => {
+  it('a variant of a flow whose id is used twice belongs to the first of them, the one that keeps the id', () => {
+    const result = parse({
+      ...base,
+      nodes: [],
+      edges: [],
+      flows: [
+        { id: 'f1', title: 'Checkout', steps: [] },
+        { id: 'f1', title: 'A second flow under the same id', steps: [] },
+        { id: 'f2', title: 'Checkout, card declined', variantOf: 'f1', steps: [] },
+      ],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [checkout, twin, variant] = result.document.flows;
+    expect(checkout!.id).toBe('f1');
+    expect(twin!.id).not.toBe('f1');
+    expect(variant!.variantOf).toBe('f1');
+  });
+
+  it('an open point keeps the attachment that is still there, however many gone ones come before it', () => {
+    const gone = Array.from({ length: LIMITS.maxOpenPointTargets + 5 }, (_, index) => ({ kind: 'node', id: `gone-${index}` }));
+    const result = parse({
+      ...base,
+      nodes: [{ id: 'api', type: 'service', x: 0, y: 0, width: 160, height: 80, text: 'API' }],
+      edges: [],
+      openPoints: [{ id: 'op1', kind: 'awaiting', targets: [...gone, { kind: 'node', id: 'api' }, { kind: 'node', id: 'api' }], context: 'Who owns this?' }],
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.openPoints).toHaveLength(1);
+    expect(result.document.openPoints[0]!.targets).toEqual([{ kind: 'node', id: 'api' }]);
+  });
+
+  it('an open point never keeps more attachments than the limit', () => {
+    const nodes = Array.from({ length: LIMITS.maxOpenPointTargets + 5 }, (_, index) => ({ id: `n${index}`, type: 'service', x: index * 200, y: 0, width: 160, height: 80, text: '' }));
+    const result = parse({ ...base, nodes, edges: [], openPoints: [{ id: 'op1', kind: 'awaiting', targets: nodes.map((node) => ({ kind: 'node', id: node.id })) }] });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.openPoints[0]!.targets).toHaveLength(LIMITS.maxOpenPointTargets);
   });
 });

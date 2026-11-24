@@ -1022,3 +1022,22 @@ describe('v30 to v31 migration: Module, Adapter and Port become glyphs', () => {
     expect(doc.nodes[0]!.inside?.nodes[0]?.height).toBe(114);
   });
 });
+
+describe('a migration reads text nobody has cut yet', () => {
+  it('opens a file whose shape name runs to hundreds of thousands of lines', () => {
+    // v29: a Worker is still a card, so the v29 to v30 move measures its name to size the new box.
+    const result = parseDocument(
+      JSON.stringify({
+        format: DRAFT_FORMAT,
+        version: 29,
+        metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0 },
+        nodes: [{ id: 'w', type: 'service', serviceKind: 'worker', x: 0, y: 0, width: 160, height: 60, z: 0, text: `Projection${'\n'.repeat(400_000)}` }],
+        edges: [],
+        flows: [],
+      }),
+    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.document.nodes[0]!.width).toBe(120);
+  });
+});

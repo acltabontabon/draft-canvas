@@ -203,7 +203,7 @@ describe('MCP fidelity regressions', () => {
   });
 
   it('rejects unknown patch fields and fields belonging to another op at runtime', () => {
-    expect(() => applyUpdate(base(), [], [{ op: 'update', id: 'api', set: { technlogy: 'Rust' } }], undefined)).toThrow(/unsupported field/);
+    expect(() => applyUpdate(base(), [], [{ op: 'update', id: 'api', set: { technlogy: 'Rust' } }], undefined)).toThrow(/not a field of an element .*; use technology/);
     expect(() => applyUpdate(base(), [], [{ op: 'update', id: 'api', set: { label: 'A' }, ids: ['db'] }], undefined)).toThrow(/unsupported field/);
     expect(() => applyUpdate(base(), [], [{ op: 'update', id: 'api', set: {} }], undefined)).toThrow(/at least one/);
   });

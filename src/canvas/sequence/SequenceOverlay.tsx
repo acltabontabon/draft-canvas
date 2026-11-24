@@ -1,7 +1,7 @@
 import { memo, useEffect, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { findItem, messagesOf, sequenceOf, type SeqSlot } from '../../document/sequenceModel';
-import type { DraftNode, SeqItem } from '../../document/types';
+import type { DraftNode, SeqItem, SeqOperator } from '../../document/types';
 import { sequenceArrowShapes, sequenceAttachmentChips } from '../../nodes/sequence';
 import { describeContext, sequenceLayoutFor } from '../../nodes/describe';
 import { emitDisplayList } from '../../render/svg/emit';
@@ -20,7 +20,7 @@ import {
   type SequenceLayout,
   type SlotLayout,
 } from '../../sequence/layout';
-import { nextFor } from '../../sequence/suggest';
+import { answeredCall, nextFor } from '../../sequence/suggest';
 import { useEditorStore } from '../../store/editorStore';
 import { nodeIndex } from '../../store/selectors';
 import { sequenceActions } from '../../store/sequenceActions';
@@ -58,12 +58,20 @@ type ParticipantDrop = { nodeId: string; participantId: string; offset: number }
 
 type Gesture =
   /** A message being drawn from a lifeline. `to` is null past the last lifeline: a new participant. */
-  | { kind: 'draw'; from: string; to: string | null; slot: SlotLayout | null; originY: number; pointer: Point; other: ParticipantDrop | null }
+  | { kind: 'draw'; from: string; to: string | null; slot: SlotLayout | null; originY: number; pointer: Point; other: ParticipantDrop | null; reply: string | null }
   /** A message, note or fragment being moved to another place in the order. */
   | { kind: 'item'; id: string; slot: SlotLayout | null; problem: string | null; offset: Point }
   | { kind: 'endpoint'; id: string; end: 'from' | 'to'; participant: string | null; pointer: Point }
   /** A participant being moved along the row. */
   | { kind: 'participant'; id: string; index: number; x: number };
+
+interface Arrival {
+  id: string;
+  what: 'message' | 'frame';
+  box: Rect;
+  toward?: 'left' | 'right';
+  operator?: SeqOperator;
+}
 
 const DROP_REACH = 20;
 const NEW_PARTICIPANT_REACH = 180;
@@ -107,6 +115,35 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
   const anchor = useRef<string | null>(null);
   const [gesture, setGestureState] = useState<Gesture | null>(null);
   const [hover, setHover] = useState<{ participantId: string; slot: SlotLayout } | null>(null);
+
+  /**
+   * What has just been added, so it can be seen to arrive: a message is swept along the way it runs,
+   * a frame closes around what it was wrapped around. Chrome only, played once and then gone; the
+   * picture underneath is already the finished one. The first layout seen is the starting point, so
+   * opening or hovering a sequence marks nothing.
+   */
+  const known = useRef<Set<string> | null>(null);
+  const [arrived, setArrived] = useState<Arrival[]>([]);
+  useEffect(() => {
+    const now = new Set<string>([...layout.messages.map((message) => message.id), ...layout.fragments.map((frame) => frame.id)]);
+    const before = known.current;
+    known.current = now;
+    if (!before) return;
+    const fresh: Arrival[] = [
+      ...layout.messages
+        .filter((message) => !before.has(message.id))
+        .map((message): Arrival => ({ id: message.id, what: 'message', box: message.box, toward: message.self || message.x2 >= message.x1 ? 'right' : 'left' })),
+      ...layout.fragments
+        .filter((frame) => !before.has(frame.id))
+        .map((frame): Arrival => ({ id: frame.id, what: 'frame', box: frame.box, operator: frame.operator })),
+    ];
+    // A paste or an undo brings many at once: that is not something arriving, it is a new picture.
+    // An undo then a redo inside one sweep brings back an id whose mark is still playing: it is
+    // replaced, not added beside itself (two marks under one key).
+    if (fresh.length > 0 && fresh.length <= 3) {
+      setArrived((marks) => [...marks.filter((mark) => now.has(mark.id) && !fresh.some((entry) => entry.id === mark.id)), ...fresh]);
+    }
+  }, [layout]);
 
   const setGesture = (next: Gesture | null) => {
     gestureRef.current = next;
@@ -197,14 +234,19 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
       const beyond = !column && (hoveredNode === nodeId || (!hoveredNode && hovered?.classList.contains('react-flow__pane'))) && !!last && point.x > last.head.x + last.head.w
         && point.x <= layout.width + NEW_PARTICIPANT_REACH
         && point.y >= layout.bodyTop - DROP_REACH && point.y <= layout.bodyBottom + DROP_REACH;
+      const slot = column || beyond ? slotAt(layout, point.x, point.y) : null;
+      // Drawn back to whoever is waiting on this participant, it is the reply (`answeredCall`).
+      // Alt keeps it a call, for the rare time the callee really does call its caller back.
+      const reply = column && slot && !other && !event.altKey ? answeredCall(sequence, start.id, column.id, { operandId: slot.operandId, index: slot.index }) : null;
       setGesture({
         kind: 'draw',
         from: start.id,
         to: column?.id ?? null,
-        slot: column || beyond ? slotAt(layout, point.x, point.y) : null,
+        slot,
         originY: start.origin.y,
         pointer: point,
         other,
+        reply: reply?.id ?? null,
       });
     } else if (start.what === 'endpoint') {
       const participant = participantAt(layout, point)?.id ?? null;
@@ -248,6 +290,8 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
       const slot: SeqSlot = { operandId: done.slot.operandId, index: done.slot.index };
       if (done.to === null) {
         sequenceActions.addMessageToNewParticipant(nodeId, done.from, slot);
+      } else if (done.reply) {
+        sequenceActions.addReplyAt(nodeId, done.reply, slot);
       } else {
         sequenceActions.addMessage(nodeId, { from: done.from, to: done.to }, slot);
       }
@@ -369,6 +413,18 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           })}
         </SvgSurface>
       )}
+      {arrived.map((mark) => (
+        <span
+          key={mark.id}
+          className="dc-seq-arrived"
+          data-what={mark.what}
+          data-operator={mark.operator}
+          data-toward={mark.toward}
+          style={box(mark.box, mark.what === 'frame' ? 0 : 2)}
+          aria-hidden="true"
+          onAnimationEnd={() => setArrived((marks) => marks.filter((entry) => entry.id !== mark.id))}
+        />
+      ))}
       {/* Groups: their caption is the handle. */}
       {layout.groups.map((group) => (
         <div
@@ -407,6 +463,8 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           {frame.operands.map((branch, at) => {
             const top = at === 0 ? 0 : (branch.separatorY ?? frame.box.y) - frame.box.y;
             const left = at === 0 ? frame.tab.w : 0;
+            // The whole of a condition that runs onto more lines is its handle, not only its first.
+            const words = branch.guard ? branch.guard.y + branch.guard.layout.height - frame.box.y - top + 3 : 0;
             return (
               <div
                 key={branch.id}
@@ -414,7 +472,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
                 data-focused={isFocused('operand', branch.id) ? 'true' : undefined}
                 role="button"
                 aria-label={branch.guard ? `Branch ${branch.guard.layout.lines.map((line) => line.text).join(' ')}` : 'Branch'}
-                style={{ left, top, width: frame.box.w - left, height: at === 0 ? frame.tab.h + 4 : 20 }}
+                style={{ left, top, width: frame.box.w - left, height: Math.max(at === 0 ? frame.tab.h + 4 : 22, words) }}
                 {...targetProps('operand', branch.id, { kind: 'guard', id: branch.id })}
               />
             );
@@ -604,6 +662,7 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
           from={{ x: columnX(gesture.from) ?? 0, y: gesture.originY }}
           to={gesture.pointer}
           drop={gesture.slot && { x: columnX(gesture.to) ?? gesture.pointer.x, y: gesture.slot.y }}
+          reply={gesture.reply !== null}
           width={node.width}
           height={node.height}
         />
@@ -611,6 +670,13 @@ export const SequenceOverlay = memo(function SequenceOverlay({ node, layout, rea
       {gesture?.kind === 'draw' && gesture.slot && !gesture.to && (
         <div className="dc-seq-add-target" style={{ left: gesture.pointer.x, top: gesture.slot.y }}>
           Add participant
+        </div>
+      )}
+      {gesture?.kind === 'draw' && gesture.slot && gesture.to && gesture.reply && (
+        <div className="dc-seq-add-target" data-reply="true" style={{ left: gesture.pointer.x, top: Math.max(gesture.pointer.y, gesture.slot.y) + 8 }}>
+          Reply to {nameOf(gesture.to)}
+          <kbd>⌥</kbd>
+          <span>for a call</span>
         </div>
       )}
       {reordering && gesture?.kind === 'item' && (
@@ -682,7 +748,7 @@ function holds(item: SeqItem, operandId: string): boolean {
 }
 
 /** The cursor controls the loose end. The drop marker shows where the message would settle. */
-function PointerArrow({ from, to, drop, width, height }: { from: Point; to: Point; drop?: Point | null; width: number; height: number }) {
+function PointerArrow({ from, to, drop, reply, width, height }: { from: Point; to: Point; drop?: Point | null; reply?: boolean; width: number; height: number }) {
   const length = Math.hypot(to.x - from.x, to.y - from.y) || 1;
   const dx = (to.x - from.x) / length;
   const dy = (to.y - from.y) / length;
@@ -690,8 +756,8 @@ function PointerArrow({ from, to, drop, width, height }: { from: Point; to: Poin
   const x = to.x - back * dx;
   const y = to.y - back * dy;
   return (
-    <svg className="dc-seq-draw" width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
-      <path d={`M ${from.x} ${from.y} L ${to.x} ${to.y}`} />
+    <svg className="dc-seq-draw" data-reply={reply ? 'true' : undefined} width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-hidden="true">
+      <path className="dc-seq-draw-line" d={`M ${from.x} ${from.y} L ${to.x} ${to.y}`} />
       <path d={`M ${x + 4.5 * dy} ${y - 4.5 * dx} L ${to.x} ${to.y} L ${x - 4.5 * dy} ${y + 4.5 * dx}`} />
       {drop && <circle cx={drop.x} cy={drop.y} r={4} />}
     </svg>

@@ -8,9 +8,9 @@ import { familyOf } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import { createRng } from '../render/roughness/seed';
 import { useEditorStore } from '../store/editorStore';
-import { outageIn, runtimeOf } from '../store/outage';
+import { outageIn, outageReviewIn, runtimeOf } from '../store/outage';
 import { useUiStore } from '../store/uiStore';
-import type { Outage, OutageNote } from '../traffic';
+import type { Outage, OutageFlow, OutageNote, OutageReviewEntry } from '../traffic';
 import { outageSummary } from '../traffic/outage';
 import { arrowFor, placeSketches, type Rect, type SketchRequest } from '../traffic/sketchLayout';
 import { markerArrow, markerLoop } from './sketchPaths';
@@ -19,15 +19,19 @@ import { markerArrow, markerLoop } from './sketchPaths';
  * An outage walk, told on the canvas — the way someone reviewing the diagram would mark up a
  * whiteboard.
  *
- * What is down is struck out. Above the diagram, one handwritten line says what went down and what
+ * What is down is struck out: a shape here, a connector taken down in its own view
+ * (`DraftEdgeView`). Above the diagram, one handwritten line says what went down and what
  * carries on. Beside each shape the outage reaches: a marker loop, a few words ("calls fail — no
- * fallback drawn", "holds messages until it's back") and an arrow flicked from one to the other, in
+ * fallback drawn", "holds messages while it's down") and an arrow flicked from one to the other, in
  * the order the consequence travels. Tap a note and it unfolds, in place, into the full sentence.
  *
  * A question — something the drawing leaves open — carries its answers under it: the edit that
  * would settle it, where one exists, and "Keep as open point", which leaves the question on that
  * shape in the file. Both are ordinary edits the person makes; the walk reads the diagram again as
  * soon as one lands, so drawing an answer shows what it changes.
+ *
+ * Outside the drawing, docked at the canvas edge (`OutageDock`): one card that lists what each
+ * outage would do before anything is taken down, and what this one does to each flow after.
  *
  * Drawn in flow space, so it pans with the shapes. Chrome, not content: nothing here is saved,
  * undone, shared or exported, and nothing can be dragged. The notes are buttons, so a keyboard
@@ -52,6 +56,8 @@ const FRAME_MARGIN = 40;
 /** The toolbar floats over the top of the canvas; the headline must clear it. */
 const TOP_CLEARANCE = 76;
 const BOTTOM_CLEARANCE = 76;
+/** The outage card's width while it lists (`.dc-outage-card`) and its margins, kept clear when framing beside it. */
+const LIST_ROOM = 492;
 /** Room under a question's words for its answers. */
 const ACTION_ROOM = 27;
 const ACTION_WIDTH = { one: 136, two: 300 };
@@ -69,17 +75,31 @@ interface Placed {
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
-const PICK = 'Pick a service, queue, data store or boundary to take down.';
+/** An unfolded note's sentence (`.dc-outage-note-more`): its box, its inner padding, its line, and
+ *  the space between it and the words above with its own padding top and bottom. */
+const MORE_WIDTH = 290;
+const MORE_PADDING = 16;
+const MORE_LINE_HEIGHT = 19.5;
+const MORE_GAP = 24;
+/** Room under an unfolded sentence for the line that says where a product's behaviour was read. */
+const SOURCE_ROOM = 22;
+const PICK = 'Pick a service, queue, data store, boundary or connector to take down.';
 
 export const OutageLayer = memo(function OutageLayer() {
   const analysis = useEditorStore(runtimeOf);
   const outage = useEditorStore(outageIn);
   const down = useEditorStore((state) => state.outage.down);
+  const cut = useEditorStore((state) => state.outage.cut);
   const live = useEditorStore((state) => state.document.nodes);
   const openPoints = useEditorStore((state) => state.document.openPoints);
   // While a shape is being dragged the notes hold still (faded) and are placed again on release:
   // laying them out sixty times a second would be work nobody can read.
   const moving = useUiStore((state) => state.interactionActive);
+  // The list's row under the pointer circles its shape, so a name in the list is found in the drawing.
+  const pointer = useUiStore((state) => state.outagePointer);
+  // The list takes the canvas's bottom-left corner; where there is room the drawing is framed
+  // beside it, so what the rows name is not sitting underneath them.
+  const listed = useEditorStore(listsOutages);
   const [nodes, setNodes] = useState(live);
   useEffect(() => {
     // Synchronising with the gesture, which lives in another store: hold the last layout while it runs.
@@ -113,12 +133,13 @@ export const OutageLayer = memo(function OutageLayer() {
 
   const headline = useMemo(() => {
     if (outage) return outage.headline;
+    if (cut) return 'That connector carries no work between things that run here. Pick another.';
     if (!down) return PICK;
     const gone = nodes.find((node) => node.id === down);
     return `${gone ? displayNameFor(gone) || 'That shape' : 'That shape'} takes no part in anything that runs here. Pick another.`;
-  }, [outage, down, nodes]);
-  const drawn = useMemo(() => layout(outage, nodes, headline), [outage, nodes, headline]);
-  useFrameNotes(drawn?.extent ?? null, outage ? `${outage.target}:${outage.instances ? 'one' : 'all'}` : '');
+  }, [outage, down, cut, nodes]);
+  const drawn = useMemo(() => layout(outage, nodes, headline, open), [outage, nodes, headline, open]);
+  useFrameNotes(drawn?.extent ?? null, outage ? `${outage.target}:${outage.instances ? 'one' : 'all'}` : listed ? 'list' : '', listed);
 
   if (!analysis || !drawn) return null;
   const toggle = (id: string) => setOpen((current) => (current === id ? null : id));
@@ -135,6 +156,7 @@ export const OutageLayer = memo(function OutageLayer() {
     if (!note.ask || !note.focus[0]) return;
     useEditorStore.getState().addOpenPoint('awaiting', [{ kind: 'node', id: note.focus[0] }], note.ask);
   };
+  const pointed = !outage && pointer ? nodes.filter((node) => pointer.ids.includes(node.id)) : [];
   const struck = outage ? nodes.filter((node) => (outage.instances ? node.id === outage.target : outage.lost.includes(node.id))) : [];
 
   return (
@@ -147,6 +169,11 @@ export const OutageLayer = memo(function OutageLayer() {
             {!outage!.instances && (
               <path className="dc-sketch-stroke dc-sketch-arrow" pathLength={1} d={`M ${node.x + node.width - 7} ${node.y + 5} Q ${node.x + node.width * 0.55} ${node.y + node.height * 0.44} ${node.x + 5} ${node.y + node.height - 4}`} />
             )}
+          </g>
+        ))}
+        {pointed.map((node) => (
+          <g key={`point:${node.id}`} className="dc-outage-sketch dc-outage-point" data-reaches={pointer?.reaches || undefined}>
+            <path className="dc-sketch-stroke dc-sketch-loop" pathLength={1} d={markerLoop({ x: node.x - 16, y: node.y - 14, width: node.width + 32, height: node.height + 28 }, `point:${node.id}`)} />
           </g>
         ))}
         {drawn.notes.map((placed) => (
@@ -184,13 +211,11 @@ export const OutageLayer = memo(function OutageLayer() {
               className="dc-outage-note dc-hand nodrag nopan nowheel"
               data-tone={note.tone}
               data-plain={drawn.plain || undefined}
-              data-up={placed.y > (drawn.extent.minY + drawn.extent.maxY) / 2 || undefined}
               aria-expanded={unfolded}
               style={
                 {
                   transform: `translate(${placed.x}px, ${placed.y}px) rotate(${placed.tilt.toFixed(2)}deg)`,
                   '--dc-sketch-delay': `${placed.delay + 380}ms`,
-                  '--dc-note-height': `${placed.label.height - (note.ask ? ACTION_ROOM : 0)}px`,
                   // The face the words were measured in (`layout`): set here, not inherited.
                   fontFamily: drawn.plain ? familyOf('sans') : undefined,
                 } as CSSProperties
@@ -206,6 +231,24 @@ export const OutageLayer = memo(function OutageLayer() {
             </button>
           );
         })}
+
+        {/* Where an unfolded note's product behaviour was read: a link under the sentence, beside the
+            note and not inside it, since the note is itself a button. */}
+        {drawn.notes.filter((placed) => placed.note.id === open && placed.note.sources).map((placed) => (
+          <p
+            key={`source:${placed.note.id}`}
+            className="dc-outage-source nodrag nopan nowheel"
+            style={{ transform: `translate(${placed.x + 8}px, ${placed.y + placed.label.height - (placed.note.ask ? ACTION_ROOM : 0) - SOURCE_ROOM + 2}px)`, fontFamily: familyOf('sans') }}
+            onPointerDown={hold}
+          >
+            Source:{' '}
+            {placed.note.sources!.map((source) => (
+              <a key={source.url} href={source.url} target="_blank" rel="noreferrer">
+                {source.name} documentation
+              </a>
+            ))}
+          </p>
+        ))}
 
         {/* A question's answers sit under its words — siblings of the note, not buttons inside one. */}
         {drawn.notes.filter((placed) => placed.note.ask).map((placed) => {
@@ -245,41 +288,163 @@ export const OutageLayer = memo(function OutageLayer() {
   );
 });
 
+/** Whether the walk is showing its list: nothing taken down yet, and something to choose from. */
+function listsOutages(state: Parameters<typeof outageReviewIn>[0]): boolean {
+  const review = outageReviewIn(state);
+  return !!review && review.entries.length + review.connectors.length > 0;
+}
+
 /**
- * The walk's own strip, at the canvas edge and outside the zooming drawing: what the colours mean,
- * how much of a Service with several instances is down, and the way out.
+ * The walk's own chrome: one card at the canvas edge, outside the zooming drawing. Before anything
+ * is taken down it lists what each outage would do. Once something is, it says what that outage
+ * does to each flow, how much of a Service with several instances is down, and what the colours on
+ * the canvas mean. Its foot is always the way out.
  */
-export function OutageStrip() {
+export function OutageDock() {
   const outage = useEditorStore(outageIn);
+  const listed = useEditorStore(listsOutages);
   const whole = useEditorStore((state) => state.outage.whole);
   const instances = useEditorStore((state) => {
     const node = state.outage.down ? state.document.nodes.find((item) => item.id === state.outage.down) : undefined;
     return node?.type === 'service' ? (node.replicas ?? 1) : 1;
   });
   const editor = useEditorStore.getState;
+  // The title carries on from the list's: "If it goes down" becomes "While it's down".
+  const title = outage ? (outage.connector ? "While it's cut off" : outage.instances ? 'While one is down' : "While it's down") : listed ? 'If it goes down' : 'Outage';
   return (
-    <Panel position="bottom-left" className="dc-outage-strip nodrag nopan nowheel" aria-label="Outage walk" data-dc-keyboard-region="">
-      <span className="dc-outage-strip-title">Outage</span>
-      {outage ? (
-        <>
-          <ul className="dc-outage-legend" aria-label="What the colours mean">
-            <li data-key="fails">fails</li>
-            <li data-key="absorbs">absorbs it</li>
-            <li data-key="quiet">goes quiet</li>
-          </ul>
-          {instances >= 2 && (
-            <span className="dc-outage-extent" role="group" aria-label="How much of it is down">
-              <button type="button" aria-pressed={!whole} onClick={() => editor().takeDown(outage.target, false)}>One instance</button>
-              <button type="button" aria-pressed={whole} onClick={() => editor().takeDown(outage.target, true)}>All {instances}</button>
-            </span>
-          )}
-          <span>Click another shape to take it down instead</span>
-        </>
-      ) : (
-        <span>Read from the drawing alone: no load or timing is assumed</span>
-      )}
-      <button type="button" onClick={() => editor().endOutage()}>{outage ? 'Bring it back up' : 'Done'}</button>
+    <Panel position="bottom-left" className="dc-outage-dock nodrag nopan nowheel" aria-label="Outage walk" data-dc-keyboard-region="">
+      <section className="dc-outage-card" data-listing={(!outage && listed) || undefined} aria-label={outage ? 'What this outage does' : 'What each outage would do'}>
+        <h2 className="dc-outage-card-title dc-hand" style={{ fontFamily: familyOf('hand') }}>{title}</h2>
+        {outage ? (
+          <div className="dc-outage-card-body">
+            {instances >= 2 && (
+              <div className="dc-outage-extent" role="group" aria-label="How much of it is down">
+                <button type="button" aria-pressed={!whole} onClick={() => editor().takeDown(outage.target, false)}>One instance</button>
+                <button type="button" aria-pressed={whole} onClick={() => editor().takeDown(outage.target, true)}>All {instances}</button>
+              </div>
+            )}
+            <OutageFlows flows={outage.flows} />
+            <h3 id="dc-outage-legend">On the canvas</h3>
+            <ul className="dc-outage-legend" aria-labelledby="dc-outage-legend">
+              <li data-key="fails">fails</li>
+              <li data-key="absorbs">absorbs it</li>
+              <li data-key="quiet">goes quiet</li>
+            </ul>
+          </div>
+        ) : (
+          <OutageReviewList />
+        )}
+        <p className="dc-outage-card-foot">
+          <button type="button" onClick={() => editor().endOutage()}>{outage ? 'Bring it back up' : 'Done'}</button>
+          <span>{outage ? 'or click anything else to take that down instead' : 'Read from the drawing alone: no load or timing is assumed'}</span>
+        </p>
+      </section>
     </Panel>
+  );
+}
+
+/**
+ * Before anything is taken down: every shape, Boundary and connector whose loss changes something
+ * drawn, the ones that reach a person first. Each row is the walk's own reading of that one thing,
+ * and choosing it takes it down — so the list is a way into the walk, never a second account of
+ * it. Pointing at a row circles what it names on the canvas.
+ */
+function OutageReviewList() {
+  const review = useEditorStore(outageReviewIn);
+  const point = useUiStore((state) => state.setOutagePointer);
+  // Gone with the list: once something is taken down nothing is being pointed at.
+  useEffect(() => () => point(null), [point]);
+  if (!review || review.entries.length + review.connectors.length === 0) return null;
+  const { covered, spared, connectors } = review;
+  const seen = review.entries.filter((entry) => entry.reaches.length > 0);
+  const inside = review.entries.filter((entry) => entry.reaches.length === 0);
+  const editor = useEditorStore.getState;
+  const rows = (entries: readonly OutageReviewEntry[]) =>
+    entries.map((entry) => {
+      const pointer = { ids: entry.focus, reaches: entry.reaches.length > 0 };
+      return (
+        <li key={entry.id}>
+          <button
+            type="button"
+            title={entry.text}
+            data-tone={pointer.reaches ? 'fails' : 'absorbs'}
+            onPointerEnter={() => point(pointer)}
+            onPointerLeave={() => point(null)}
+            onFocus={() => point(pointer)}
+            onBlur={() => point(null)}
+            onClick={() => (entry.kind === 'connector' ? editor().cutConnector(entry.id) : editor().takeDown(entry.id))}
+          >
+            <strong>{entry.name}</strong>
+            <span>{entry.note}</span>
+            {entry.questions > 0 && <em>{entry.questions === 1 ? '1 question' : `${entry.questions} questions`}</em>}
+          </button>
+        </li>
+      );
+    });
+  return (
+    <>
+      <div className="dc-outage-card-body">
+        {seen.length > 0 && (
+          <>
+            <h3 id="dc-outage-review-seen">A person sees it</h3>
+            <ul className="dc-outage-rows" aria-labelledby="dc-outage-review-seen">{rows(seen)}</ul>
+          </>
+        )}
+        {inside.length > 0 && (
+          <>
+            <h3 id="dc-outage-review-inside">No one drawn waits on it</h3>
+            <ul className="dc-outage-rows" aria-labelledby="dc-outage-review-inside">{rows(inside)}</ul>
+          </>
+        )}
+        {/* Folded: most connections say what one of their ends already says above. */}
+        {connectors.length > 0 && (
+          <details>
+            <summary id="dc-outage-review-connectors">
+              Connections <span>{connectors.length}</span>
+            </summary>
+            <ul className="dc-outage-rows" aria-labelledby="dc-outage-review-connectors">{rows(connectors)}</ul>
+          </details>
+        )}
+      </div>
+      {(covered.length > 0 || spared.length > 0) && (
+        <p className="dc-outage-card-rest">
+          {covered.length > 0 && <span>{covered.map((item) => `${item.name} ×${item.instances}`).join(', ')}: losing one instance changes nothing drawn.</span>}
+          {spared.length > 0 && <span>Nothing else drawn changes without {spared.map((item) => item.name).join(', ')}.</span>}
+        </p>
+      )}
+    </>
+  );
+}
+
+/**
+ * What the outage does to each flow: the ones that break first and by name, since those are what a
+ * person can no longer do; the ones that carry on folded into a count once there are more than
+ * two, so a diagram with many flows does not bury the ones that matter.
+ */
+function OutageFlows({ flows }: { flows: readonly OutageFlow[] }) {
+  if (flows.length === 0) return null;
+  const hit = flows.filter((flow) => flow.state !== 'unaffected');
+  const rest = flows.filter((flow) => flow.state === 'unaffected');
+  const tone = { breaks: 'fails', recovery: 'absorbs', unaffected: 'quiet' } as const;
+  const row = (flow: OutageFlow) => (
+    <li key={flow.id} data-tone={tone[flow.state]} title={flow.text}>
+      <strong>{flow.title}</strong> <span>{flow.note}</span>
+    </li>
+  );
+  return (
+    <>
+      <h3>Your flows</h3>
+      <ul className="dc-outage-rows" aria-label="What it does to each flow">
+        {hit.map(row)}
+        {rest.length > 2 ? (
+          <li data-tone="quiet" title={rest.map((flow) => flow.title).join(', ')}>
+            <span>{rest.length} flows carry on</span>
+          </li>
+        ) : (
+          rest.map(row)
+        )}
+      </ul>
+    </>
   );
 }
 
@@ -304,7 +469,7 @@ function boundsOf(nodes: readonly DraftNode[]): Bounds | null {
 }
 
 /** Where the notes go: each one's own few words, beside what it circles, clear of the shapes. */
-function layout(outage: Outage | null, nodes: readonly DraftNode[], title: string) {
+function layout(outage: Outage | null, nodes: readonly DraftNode[], title: string, unfolded: string | null = null) {
   const bounds = boundsOf(nodes);
   if (!bounds) return null;
   const rects = new Map<string, Rect>(nodes.map((node) => [node.id, { x: node.x, y: node.y, width: node.width, height: node.height }]));
@@ -343,6 +508,19 @@ function layout(outage: Outage | null, nodes: readonly DraftNode[], title: strin
   };
   const headlineRect = { x: headline.x, y: headline.y, width: Math.ceil(titleLayout.width), height: titleLayout.height };
   const placed = placeSketches(requests, [...obstacles, headlineRect], { gap: 30 });
+  // An unfolded note is its words plus a sentence: several times the room its place was chosen
+  // for. It alone is placed again, with that room and around every other note where it stands, so
+  // the sentence covers no shape and nothing else on the canvas moves.
+  const at = placed.findIndex((sketch) => sketch.id === unfolded);
+  const opened = requests.find((request) => request.id === unfolded);
+  if (at >= 0 && opened) {
+    const note = chosen.find((item) => item.id === unfolded)!;
+    const sentence = layoutText(note.text, { font: { stack: 'sans', size: 13, weight: 400 }, maxWidth: MORE_WIDTH - MORE_PADDING, lineHeight: MORE_LINE_HEIGHT, maxLines: 16 });
+    const label = { ...opened.label, width: Math.max(opened.label.width, MORE_WIDTH), height: opened.label.height + MORE_GAP + sentence.height + (note.sources ? SOURCE_ROOM : 0) };
+    const others = placed.filter((sketch) => sketch.id !== unfolded).map((sketch) => sketch.label);
+    const again = placeSketches([{ ...opened, label }], [...obstacles, headlineRect, ...others], { gap: 30 })[0];
+    if (again) placed[at] = again;
+  }
 
   // One loop per shape: a second note about the same shape points at the loop already there.
   const looped = new Set<string>();
@@ -388,7 +566,7 @@ function layout(outage: Outage | null, nodes: readonly DraftNode[], title: strin
  * once per shape taken down, the camera eases out just enough when it isn't. Never zooms in, and
  * never moves again until another shape is chosen.
  */
-function useFrameNotes(extent: Bounds | null, key: string) {
+function useFrameNotes(extent: Bounds | null, key: string, besideList = false) {
   const { getViewport, setViewport } = useReactFlow();
   const framed = useRef<string | null>(null);
   useEffect(() => {
@@ -402,13 +580,16 @@ function useFrameNotes(extent: Bounds | null, key: string) {
       const minY = extent.minY - 8;
       const maxX = extent.maxX + 16;
       const maxY = extent.maxY + 16;
+      // Room for the list at the left, on a canvas wide enough to spare it. Narrower than that, the
+      // list overlaps and the person pans: halving the drawing to make room would be worse.
+      const left = besideList && pane.width >= LIST_ROOM * 2.4 ? LIST_ROOM : 0;
       const { x, y, zoom } = getViewport();
-      const fits = x + minX * zoom >= 0 && y + minY * zoom >= TOP_CLEARANCE && x + maxX * zoom <= pane.width && y + maxY * zoom <= pane.height - BOTTOM_CLEARANCE;
+      const fits = x + minX * zoom >= left && y + minY * zoom >= TOP_CLEARANCE && x + maxX * zoom <= pane.width && y + maxY * zoom <= pane.height - BOTTOM_CLEARANCE;
       if (fits) return;
-      const next = Math.max(0.1, Math.min(zoom, (pane.width - FRAME_MARGIN * 2) / (maxX - minX), (pane.height - TOP_CLEARANCE - BOTTOM_CLEARANCE - FRAME_MARGIN) / (maxY - minY)));
+      const next = Math.max(0.1, Math.min(zoom, (pane.width - left - FRAME_MARGIN * 2) / (maxX - minX), (pane.height - TOP_CLEARANCE - BOTTOM_CLEARANCE - FRAME_MARGIN) / (maxY - minY)));
       void setViewport(
         {
-          x: (pane.width - (maxX - minX) * next) / 2 - minX * next,
+          x: left + (pane.width - left - (maxX - minX) * next) / 2 - minX * next,
           y: TOP_CLEARANCE + (pane.height - TOP_CLEARANCE - BOTTOM_CLEARANCE - (maxY - minY) * next) / 2 - minY * next,
           zoom: next,
         },
@@ -416,5 +597,5 @@ function useFrameNotes(extent: Bounds | null, key: string) {
       );
     });
     return () => cancelAnimationFrame(frame);
-  }, [extent, key, getViewport, setViewport]);
+  }, [extent, key, besideList, getViewport, setViewport]);
 }

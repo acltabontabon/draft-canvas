@@ -105,6 +105,8 @@ export interface OperandLayout {
   guard: LabelLayout | null;
   /** The dashed line above every branch but the first. */
   separatorY: number | null;
+  /** The word that says how this branch relates to the one above it (`else`, `and`), on its dashed line. */
+  tag: { box: Rect; text: LabelLayout } | null;
 }
 
 export interface FragmentLayout {
@@ -114,6 +116,8 @@ export interface FragmentLayout {
   /** The corner tab holding the operator's name. */
   tab: Rect;
   tabText: LabelLayout;
+  /** The square the operator's own mark is drawn in, at the start of the tab. */
+  glyph: Rect;
   /** A `ref`'s name, centred in its frame. */
   label: LabelLayout | null;
   operands: OperandLayout[];
@@ -174,8 +178,9 @@ const PAD_X = 30;
 const PAD_TOP = 12;
 const PAD_BOTTOM = 14;
 const TITLE_GAP = 8;
-/** A title makes its sequence this wide at most; a longer one is cut short, in full in its editor. */
+/** A title makes its sequence this wide at most; a longer one goes onto more lines. */
 const TITLE_MAX_WIDTH = 360;
+const TITLE_MAX_LINES = 3;
 /** Room above the heads for a technology mark (`markerRail.ts`: a 16px mark lifted 5px). */
 const MARK_HEADROOM = 24;
 const NO_MARK_HEADROOM = 4;
@@ -191,6 +196,14 @@ const LIFELINE_TAIL = 24;
 
 const LABEL_MAX_WIDTH = 240;
 const LABEL_MIN_WIDTH = 56;
+/**
+ * How many lines anything said in a sequence may run to. Words are never cut short to save room: a
+ * long message, condition or note takes the lines it needs and its row grows to hold them. The limit
+ * is only there so a pasted page cannot make one row taller than a screen.
+ */
+const LABEL_MAX_LINES = 8;
+const GUARD_MAX_LINES = 6;
+const NOTE_MAX_LINES = 16;
 /** Clear of the lifeline (and any bar on it) at each end of a message's words. */
 const LABEL_SIDE = 16;
 const LABEL_GAP = 4;
@@ -212,18 +225,30 @@ const BAR_MIN_HEIGHT = 12;
 const FRAME_SIDE = 24;
 /** And this far from a frame inside it. */
 const FRAME_NEST = 8;
-const FRAME_HEADER = 24;
-const FRAME_BRANCH_HEADER = 20;
+const FRAME_HEADER = 26;
+const FRAME_BRANCH_HEADER = 24;
 const FRAME_EMPTY = 22;
 const FRAME_BOTTOM = 8;
+/**
+ * A row leaves `ROW_AFTER` under itself for whatever comes next. Under the last row of a branch
+ * nothing does, so most of it is given back: the frame closes as far under its last message as its
+ * header sits above its first, instead of trailing a band of empty frame.
+ */
+const FRAME_TRIM = 18;
 const TAB_PAD_X = 8;
-const TAB_HEIGHT = 18;
+const TAB_HEIGHT = 20;
+/** The operator's mark in its tab, and the space between it and the word. */
+const TAB_GLYPH = 11;
+const TAB_GLYPH_GAP = 5;
+const TAG_PAD_X = 7;
+const TAG_HEIGHT = 18;
 /** Between a tab's cut corner and the lifeline beside it. */
 const TAB_CLEAR = 12;
 const GUARD_GAP = 8;
 /** From a lifeline to a condition written beside it: past two stacked bars. */
 const GUARD_CLEAR = 16;
-const GUARD_MAX_WIDTH = 200;
+/** A condition makes its frame this wide at most; a longer one goes onto more lines. */
+const GUARD_MAX_WIDTH = 240;
 const REF_HEIGHT = 44;
 
 const NOTE_PAD_X = 8;
@@ -243,6 +268,16 @@ export const OPERATOR_WORDS: Record<SeqOperator, string> = {
   critical: 'critical',
   ref: 'ref',
 };
+
+/** What a branch after the first is to the one above it: UML leaves it to the dashed line, a reader should not have to. */
+export const BRANCH_WORDS: Partial<Record<SeqOperator, string>> = {
+  alt: 'else',
+  par: 'and',
+  critical: 'option',
+};
+
+const tabWidthOf = (operator: SeqOperator, measurer: TextMeasurer): number =>
+  Math.ceil(measurer.width(OPERATOR_WORDS[operator], FONTS.sequenceOperator)) + TAB_PAD_X * 2 + TAB_GLYPH + TAB_GLYPH_GAP;
 
 /* -------------------------------------------------------------------- columns -- */
 
@@ -289,8 +324,8 @@ function spaceColumns(input: LayoutInput, heads: { width: number; height: number
     if (column > 0) gaps[column - 1] = Math.max(gaps[column - 1]!, width);
     else spacing.left = Math.max(spacing.left, width);
   };
-  const widthOf = (text: string, font: FontSpec, max: number): number =>
-    text.trim() ? layoutText(text, { font, maxWidth: max, lineHeight: lineHeightOf(font), maxLines: 2, measurer }).width : 0;
+  const widthOf = (text: string, font: FontSpec, max: number, maxLines = LABEL_MAX_LINES): number =>
+    text.trim() ? layoutText(text, { font, maxWidth: max, lineHeight: lineHeightOf(font), maxLines, measurer }).width : 0;
 
   /** `depth` is how many frames sit between the item and the open sequence: each needs its own margin. */
   const visit = (items: readonly SeqItem[], depth: number) => {
@@ -313,7 +348,7 @@ function spaceColumns(input: LayoutInput, heads: { width: number; height: number
         if (columns.length === 0) continue;
         const first = Math.min(...columns);
         const last = Math.max(...columns);
-        const width = widthOf(item.text, FONTS.sequenceNote, NOTE_MAX_WIDTH) + NOTE_PAD_X * 2;
+        const width = widthOf(item.text, FONTS.sequenceNote, NOTE_MAX_WIDTH, NOTE_MAX_LINES) + NOTE_PAD_X * 2;
         if (item.side === 'right') needRight(first, NOTE_SIDE_GAP + width + NOTE_SIDE_GAP + FRAME_NEST * depth);
         else if (item.side === 'left') needLeft(first, NOTE_SIDE_GAP + width + NOTE_SIDE_GAP + FRAME_NEST * depth);
         else if (first === last) {
@@ -327,11 +362,14 @@ function spaceColumns(input: LayoutInput, heads: { width: number; height: number
       const last = touched.length > 0 ? Math.max(...touched) : Math.max(0, count - 1);
       // Its own margin beyond the lifelines, plus one for every frame it holds and every one around it.
       // On the left the margin also has to hold the tab, which sits clear of the first lifeline.
-      const tab = Math.ceil(measurer.width(OPERATOR_WORDS[item.operator], FONTS.sequenceOperator)) + TAB_PAD_X * 2;
+      const tab = tabWidthOf(item.operator, measurer);
       const margin = FRAME_SIDE + FRAME_NEST * (heightOf(item) - 1);
       needLeft(first, Math.max(margin, tab + TAB_CLEAR) + FRAME_NEST * depth + (first > 0 ? LABEL_SIDE : 0));
       needRight(last, margin + FRAME_NEST * depth + (last < count - 1 ? LABEL_SIDE : 0));
-      const guard = item.operator === 'ref' ? widthOf(item.label ?? '', FONTS.sequenceMessage, GUARD_MAX_WIDTH) : widthOf(item.operands[0]?.guard ? `[${item.operands[0].guard}]` : '', FONTS.sequenceGuard, GUARD_MAX_WIDTH);
+      // The widest condition of any branch: they are written in one column, so one width serves all.
+      const guard = item.operator === 'ref'
+        ? widthOf(item.label ?? '', FONTS.sequenceMessage, GUARD_MAX_WIDTH, GUARD_MAX_LINES)
+        : Math.max(0, ...item.operands.map((branch) => widthOf(branch.guard ? `[${branch.guard}]` : '', FONTS.sequenceGuard, GUARD_MAX_WIDTH, GUARD_MAX_LINES)));
       const header = tab + TAB_CLEAR + GUARD_CLEAR + guard + GUARD_GAP * 2;
       if (last > first) spans.push({ a: first, b: last, width: header - margin * 2 });
       else needRight(first, header - margin + FRAME_NEST * depth);
@@ -374,10 +412,34 @@ export function layoutSequence(input: LayoutInput): SequenceLayout {
   const measurer = input.measurer ?? getMeasurer();
   const heads = input.sequence.participants.map((participant) => input.headSize(participant));
   const spacing = spaceColumns(input, heads, measurer);
-  const snug = solve(input, measurer, heads, spacing, 0, null);
-  const slack = (input.box?.width ?? 0) - snug.natural.width;
-  if (slack <= 0 || spacing.gaps.length === 0) return snug;
-  return solve(input, measurer, heads, spacing, slack, snug.natural);
+  const snug = settle((headers) => solve(input, measurer, heads, spacing, 0, null, headers), NO_HEADERS);
+  const slack = (input.box?.width ?? 0) - snug.layout.natural.width;
+  if (slack <= 0 || spacing.gaps.length === 0) return snug.layout;
+  return settle((headers) => solve(input, measurer, heads, spacing, slack, snug.layout.natural, headers), snug.headers).layout;
+}
+
+/**
+ * How tall each condition is written, by the id of its branch (or of its `ref`).
+ *
+ * A condition wraps to the width of its frame, and a frame is only as wide as what it holds turns
+ * out to be — which is known after its rows are placed, while the rows need to know how much header
+ * to leave. So the rows are placed assuming one line, the conditions are measured in the frames that
+ * gives, and the rows are placed once more with the heights that found. Widths never depend on
+ * heights, so the second answer is the final one.
+ */
+type Headers = ReadonlyMap<string, number>;
+const NO_HEADERS: Headers = new Map();
+
+interface Solved {
+  layout: SequenceLayout;
+  /** The height each wrapped condition turned out to need. */
+  headers: Headers;
+}
+
+function settle(run: (headers: Headers) => Solved, assumed: Headers): Solved {
+  const first = run(assumed);
+  const same = first.headers.size === assumed.size && [...first.headers].every(([id, height]) => assumed.get(id) === height);
+  return same ? first : run(first.headers);
 }
 
 function solve(
@@ -387,13 +449,17 @@ function solve(
   spacing: Spacing,
   slackX: number,
   known: { width: number; height: number } | null,
-): SequenceLayout {
+  headers: Headers,
+): Solved {
+  const wanted = new Map<string, number>();
+  /** How much taller than one line a condition was found to be. */
+  const extraFor = (id: string, font: FontSpec): number => Math.max(0, (headers.get(id) ?? 0) - lineHeightOf(font));
   const { sequence } = input;
   const participants = sequence.participants;
   const indexOf = new Map(participants.map((participant, at) => [participant.id, at]));
   const boxes = new Map<string, Rect>();
 
-  const words = (text: string, font: FontSpec, maxWidth: number, maxLines = 2): TextLayout =>
+  const words = (text: string, font: FontSpec, maxWidth: number, maxLines = LABEL_MAX_LINES): TextLayout =>
     layoutText(text, { font, maxWidth: Math.max(LABEL_MIN_WIDTH, maxWidth), lineHeight: lineHeightOf(font), maxLines, measurer });
 
   /* Across. */
@@ -412,7 +478,7 @@ function solve(
 
   /* Down: the top band. */
   const titleText = input.title?.trim() ?? '';
-  const titleLayout = titleText ? words(titleText, FONTS.groupTitle, Math.max(TITLE_MAX_WIDTH, naturalWidth + slackX - PAD_X * 2), 1) : null;
+  const titleLayout = titleText ? words(titleText, FONTS.groupTitle, Math.max(TITLE_MAX_WIDTH, naturalWidth + slackX - PAD_X * 2), TITLE_MAX_LINES) : null;
   const title: LabelLayout | null = titleLayout ? { x: PAD_X - 6, y: PAD_TOP - 2, align: 'start', layout: titleLayout, font: FONTS.groupTitle } : null;
   const anyMark = participants.some((participant) => input.hasMark?.(participant));
   const anyGroup = (sequence.groups?.length ?? 0) > 0;
@@ -532,7 +598,7 @@ function solve(
     const last = Math.max(...columns);
     const spanning = last > first && !item.side;
     const maxText = spanning ? last - first + NOTE_SIDE_GAP * 2 - NOTE_PAD_X * 2 : NOTE_MAX_WIDTH;
-    const layout = words(item.text.trim() ? item.text : ' ', FONTS.sequenceNote, maxText, 6);
+    const layout = words(item.text.trim() ? item.text : ' ', FONTS.sequenceNote, maxText, NOTE_MAX_LINES);
     const width = spanning ? last - first + NOTE_SIDE_GAP * 2 : Math.max(layout.width, 40) + NOTE_PAD_X * 2;
     const height = layout.height + NOTE_PAD_Y * 2;
     const x = spanning ? first - NOTE_SIDE_GAP : item.side === 'right' ? first + NOTE_SIDE_GAP : item.side === 'left' ? first - NOTE_SIDE_GAP - width : first - width / 2;
@@ -546,21 +612,23 @@ function solve(
   const placeFragment = (item: SeqFragment, depth: number): Extent => {
     const top = cursor;
     const tabWord = OPERATOR_WORDS[item.operator];
-    const tabWidth = Math.ceil(measurer.width(tabWord, FONTS.sequenceOperator)) + TAB_PAD_X * 2;
+    const tabWidth = tabWidthOf(item.operator, measurer);
     const placed: { id: string; top: number; bottom: number; guard?: string; separatorY: number | null }[] = [];
     let extent = NOTHING;
 
     if (item.operator === 'ref') {
-      cursor += REF_HEIGHT;
+      cursor += REF_HEIGHT + extraFor(item.id, FONTS.sequenceMessage);
     } else {
-      cursor += FRAME_HEADER;
       item.operands.forEach((branch, at) => {
         const branchTop = at === 0 ? top : cursor;
         const separatorY = at === 0 ? null : cursor;
-        if (at > 0) cursor += FRAME_BRANCH_HEADER;
+        cursor += (at === 0 ? FRAME_HEADER : FRAME_BRANCH_HEADER) + extraFor(branch.id, FONTS.sequenceGuard);
         const before = cursor;
         extent = join(extent, placeItems(branch.items, branch.id, depth + 1));
         if (cursor === before) cursor += FRAME_EMPTY;
+        // Only under the last branch: a branch with another below it keeps its room, so its last
+        // message and that message's number stand clear of the dashed line.
+        else if (at === item.operands.length - 1) cursor -= FRAME_TRIM;
         placed.push({ id: branch.id, top: branchTop, bottom: cursor, guard: branch.guard, separatorY });
       });
       cursor += FRAME_BOTTOM;
@@ -579,35 +647,61 @@ function solve(
     const around = [...participantsIn(item)].map((id) => indexOf.get(id)).filter((at): at is number => at !== undefined);
     const firstLifeline = around.length > 0 ? columnX[Math.min(...around)]! : extent.min + FRAME_SIDE;
     extent = { min: Math.min(extent.min, firstLifeline - tabWidth - TAB_CLEAR), max: extent.max };
-    const firstGuard = item.operands[0]?.guard ? `[${item.operands[0].guard}]` : '';
-    const header = tabWidth + TAB_CLEAR + GUARD_CLEAR + (firstGuard ? Math.min(GUARD_MAX_WIDTH, measurer.width(firstGuard, FONTS.sequenceGuard)) : 0) + GUARD_GAP;
+    const guardFont = FONTS.sequenceGuard;
+    const widest = Math.max(0, ...item.operands.map((branch) => (branch.guard ? Math.min(GUARD_MAX_WIDTH, measurer.width(`[${branch.guard}]`, guardFont)) : 0)));
+    const header = tabWidth + TAB_CLEAR + GUARD_CLEAR + widest + GUARD_GAP;
     const box: Rect = { x: extent.min, y: top, w: Math.max(extent.max - extent.min, header, tabWidth + 24), h: bottom - top };
     boxes.set(item.id, box);
 
     const tabLayout = words(tabWord, FONTS.sequenceOperator, tabWidth, 1);
     const tab: Rect = { x: box.x, y: box.y, w: tabWidth, h: TAB_HEIGHT };
+    const glyph: Rect = { x: tab.x + TAB_PAD_X, y: tab.y + (TAB_HEIGHT - TAB_GLYPH) / 2, w: TAB_GLYPH, h: TAB_GLYPH };
+    const branchWord = BRANCH_WORDS[item.operator];
+    const guardLine = lineHeightOf(guardFont);
     const operands: OperandLayout[] = placed.map((branch, at) => {
       const text = branch.guard ? `[${branch.guard}]` : '';
+      let tag: OperandLayout['tag'] = null;
+      if (at > 0 && branchWord) {
+        const tagLayout = words(branchWord, FONTS.sequenceOperator, 80, 1);
+        // Hung from its dashed line the way the tab hangs from the frame's top edge.
+        const tagBox: Rect = { x: box.x, y: branch.separatorY!, w: Math.ceil(tagLayout.width) + TAG_PAD_X * 2, h: TAG_HEIGHT };
+        tag = { box: tagBox, text: { x: tagBox.x + TAG_PAD_X, y: tagBox.y + (TAG_HEIGHT - tagLayout.height) / 2, align: 'start', layout: tagLayout, font: FONTS.sequenceOperator } };
+      }
       // Every branch's condition starts just past the first lifeline: clear of the tab, clear of
       // any bar on that lifeline, and in one column down the frame.
-      const guardX = Math.max(box.x + (at === 0 ? tabWidth : 0) + GUARD_GAP, Math.min(firstLifeline + GUARD_CLEAR, box.x + box.w - 60));
-      const guardLayout = text ? words(text, FONTS.sequenceGuard, box.x + box.w - guardX - GUARD_GAP, 1) : null;
-      const guardY = (at === 0 ? box.y + (TAB_HEIGHT - (guardLayout?.height ?? 0)) / 2 : branch.separatorY! + (FRAME_BRANCH_HEADER - (guardLayout?.height ?? 0)) / 2);
+      const lead = at === 0 ? tabWidth : tag ? tag.box.w : 0;
+      const guardX = Math.max(box.x + lead + GUARD_GAP, Math.min(firstLifeline + GUARD_CLEAR, box.x + box.w - 60));
+      const guardLayout = text ? words(text, guardFont, box.x + box.w - guardX - GUARD_GAP, GUARD_MAX_LINES) : null;
+      if (guardLayout && guardLayout.lines.length > 1) wanted.set(branch.id, guardLayout.height);
+      // Its first line sits level with the tab (or the branch's own word); the rest run on under it.
+      const guardY = at === 0 ? box.y + (TAB_HEIGHT - guardLine) / 2 : branch.separatorY! + (TAG_HEIGHT - guardLine) / 2 + 1;
       const operandBox: Rect = { x: box.x, y: branch.top, w: box.w, h: (at === placed.length - 1 ? bottom : branch.bottom) - branch.top };
       boxes.set(branch.id, operandBox);
       return {
         id: branch.id,
         box: operandBox,
-        guard: guardLayout ? { x: guardX, y: guardY, align: 'start', layout: guardLayout, font: FONTS.sequenceGuard } : null,
+        guard: guardLayout ? { x: guardX, y: guardY, align: 'start', layout: guardLayout, font: guardFont } : null,
         separatorY: branch.separatorY,
+        tag,
       };
     });
     let label: LabelLayout | null = null;
     if (item.operator === 'ref' && item.label?.trim()) {
-      const layout = words(item.label, FONTS.sequenceMessage, box.w - 24, 1);
-      label = { x: box.x + box.w / 2, y: box.y + (REF_HEIGHT - layout.height) / 2 + 4, align: 'middle', layout, font: FONTS.sequenceMessage };
+      const layout = words(item.label, FONTS.sequenceMessage, box.w - 24, GUARD_MAX_LINES);
+      if (layout.lines.length > 1) wanted.set(item.id, layout.height);
+      label = { x: box.x + box.w / 2, y: box.y + (box.h - layout.height) / 2 + 4, align: 'middle', layout, font: FONTS.sequenceMessage };
     }
-    fragments.push({ id: item.id, operator: item.operator, box, tab, tabText: { x: tab.x + TAB_PAD_X, y: tab.y + (TAB_HEIGHT - tabLayout.height) / 2, align: 'start', layout: tabLayout, font: FONTS.sequenceOperator }, label, operands, depth });
+    fragments.push({
+      id: item.id,
+      operator: item.operator,
+      box,
+      tab,
+      tabText: { x: glyph.x + TAB_GLYPH + TAB_GLYPH_GAP, y: tab.y + (TAB_HEIGHT - tabLayout.height) / 2, align: 'start', layout: tabLayout, font: FONTS.sequenceOperator },
+      glyph,
+      label,
+      operands,
+      depth,
+    });
     return { min: box.x - FRAME_NEST, max: box.x + box.w + FRAME_NEST };
   };
 
@@ -751,7 +845,7 @@ function solve(
     boxes.set(group.id, box);
   }
 
-  return { natural, width, height, title, columns, messages, notes, fragments, executions, groups, slots, bodyTop, bodyBottom, boxes };
+  return { layout: { natural, width, height, title, columns, messages, notes, fragments, executions, groups, slots, bodyTop, bodyBottom, boxes }, headers: wanted };
 }
 
 /* ------------------------------------------------------------------ hit tests -- */
@@ -781,6 +875,7 @@ export function hitSequence(layout: SequenceLayout, x: number, y: number): Seque
   for (const frame of frames) {
     if (!inside(frame.box, x, y, FRAME_EDGE)) continue;
     for (const branch of frame.operands) {
+      if (branch.tag && inside(branch.tag.box, x, y)) return { kind: 'operand', id: branch.id, fragmentId: frame.id };
       if (branch.guard && inside({ x: branch.guard.x - 3, y: branch.guard.y - 2, w: branch.guard.layout.width + 6, h: branch.guard.layout.height + 4 }, x, y)) {
         return { kind: 'operand', id: branch.id, fragmentId: frame.id };
       }

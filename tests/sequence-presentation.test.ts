@@ -114,7 +114,8 @@ describe('stepping through it', () => {
     const words = (shapes: readonly Shape[]): string[] =>
       shapes.flatMap((shape) => (shape.t === 'group' ? words(shape.children) : shape.t === 'text' ? [shape.layout.lines.map((line) => line.text).join(' ')] : []));
     const now = describeSequenceMessages(node, ctx, new Set(['pay']));
-    expect(words(now).sort()).toEqual(['2', 'Checkout API', 'Payment Provider', 'authorize']);
+    // With it, the frame it is in: its tab and the condition of the branch being told.
+    expect(words(now).sort()).toEqual(['2', 'Checkout API', 'Payment Provider', '[card accepted]', 'alt', 'authorize']);
     const all = describeSequenceMessages(node, ctx, new Set(['post', 'pay', 'approved']));
     expect(words(all)).toEqual(expect.arrayContaining(['POST /orders', 'authorize', 'approved', 'Storefront']));
     expect(words(all)).not.toContain('Orders');

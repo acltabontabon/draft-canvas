@@ -1,6 +1,6 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb';
 import { requestPersistentStorage } from '../lib/storagePersistence';
-import { parseDocument } from '../document/validate';
+import { isPlausibleDate, parseDocument } from '../document/validate';
 import { decryptDocument } from '../crypto/documentCipher';
 import { getMasterKey } from '../crypto/keyStore';
 import { isEncryptedBody, isLegacyBody, isPlainBody, type LegacyBody } from '../crypto/bodyShapes';
@@ -267,8 +267,41 @@ export class IndexedDbRepository implements DraftRepository {
           error,
         );
       }
+    } else if (read.misdated && summary) {
+      // The stored diagram is dated years ahead, so the load above dated it "now". The summary is
+      // what the library sorts by and what the person has been shown, so it holds the dates:
+      if (isPlausibleDate(summary.updatedAt) && isPlausibleDate(summary.createdAt)) {
+        // put right on an earlier open. This read keeps them. Dated afresh on every open instead,
+        // a diagram only looked at and panned was saved with that fresh date and went to the top
+        // of Recent as though it had been edited.
+        return { ...document, metadata: { ...document.metadata, createdAt: summary.createdAt, updatedAt: summary.updatedAt } };
+      }
+      await this.redateSummary(id, document.metadata.createdAt, document.metadata.updatedAt);
     }
     return document;
+  }
+
+  /**
+   * Puts right the dates on a stored summary that is dated years ahead: such a row sorts first in
+   * the library for good, and the listing reads the summary, never the copy a load corrects.
+   *
+   * The summary's two dates and nothing else. The stored diagram is not touched: whatever else the
+   * load repaired in memory (a dangling connector dropped) is still "kept on your next edit", as
+   * the person is told, and not written because a date happened to be wrong too. Best-effort, like
+   * the migration write-back: the next real save writes the dates in any case.
+   */
+  private async redateSummary(id: string, createdAt: number, updatedAt: number): Promise<void> {
+    try {
+      const tx = this.db.transaction('documents', 'readwrite');
+      const current = await tx.store.get(id);
+      // Only a row still dated ahead: another tab may have saved it properly in the meantime.
+      if (current && !(isPlausibleDate(current.updatedAt) && isPlausibleDate(current.createdAt))) {
+        await tx.store.put({ ...current, createdAt, updatedAt });
+      }
+      await tx.done;
+    } catch (error) {
+      console.warn(`[draft-canvas] Could not correct the stored dates of record ${id}:`, error);
+    }
   }
 
   /**
@@ -305,6 +338,8 @@ export class IndexedDbRepository implements DraftRepository {
     document: DraftDocument;
     priorVersion: unknown;
     row: BodyRow;
+    /** The stored diagram carries a date no diagram can have; `document`'s are the time of this read. */
+    misdated: boolean;
   } | null> {
     let rawDocument: unknown;
     this.loadFailures.set(id, 'unreadable');
@@ -342,7 +377,7 @@ export class IndexedDbRepository implements DraftRepository {
     const changed = result.repairs.filter((line) => !line.startsWith('Upgraded document format'));
     if (changed.length > 0) this.repairs.set(id, changed);
     else this.repairs.delete(id);
-    return { document: result.document, priorVersion, row };
+    return { document: result.document, priorVersion, row, misdated: isMisdated(rawDocument) };
   }
 
   /**
@@ -690,6 +725,14 @@ function requestPersistenceOnce(): void {
   if (persistenceRequested) return;
   persistenceRequested = true;
   requestPersistentStorage();
+}
+
+/** Whether a stored diagram, as written, carries a creation or edit date no diagram can have. */
+function isMisdated(rawDocument: unknown): boolean {
+  const metadata = isRecord(rawDocument) && isRecord(rawDocument.metadata) ? rawDocument.metadata : null;
+  if (!metadata) return false;
+  const ahead = (value: unknown) => typeof value === 'number' && Number.isFinite(value) && !isPlausibleDate(value);
+  return ahead(metadata.createdAt) || ahead(metadata.updatedAt);
 }
 
 /** Whether two reads of a `bodies` row are the same write. A plain row carries a fresh stamp per

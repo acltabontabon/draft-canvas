@@ -195,7 +195,7 @@ async function requestedStarter(args: Record<string, unknown>): Promise<AgentSta
 
 async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<unknown> {
   const { args, context } = event;
-  validateToolInput(event.tool, event.tool !== 'create_diagram' && context.diagramId ? { diagramId: context.diagramId, ...args } : args);
+  validateToolInput(event.tool, event.tool !== 'create_diagram' && context.diagramId ? { diagramId: context.diagramId, ...args } : args, { deferUpdateSet: true });
   switch (event.tool) {
     case 'get_capabilities': {
       const wantsStarters = args.tool === undefined && (typeof args.starter === 'string' || !Array.isArray(args.topics) || args.topics.includes('starters'));

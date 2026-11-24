@@ -246,6 +246,21 @@ describe('the companion', () => {
     expect(controller.companionSend).toHaveBeenCalledTimes(1);
   });
 
+  it('does not send on the Enter that confirms an IME conversion, as WebKit reports it', async () => {
+    useUiStore.setState({ companionOpen: true });
+    mount();
+    await settle();
+    const input = screen.getByLabelText('Message Claude Code');
+    fireEvent.change(input, { target: { value: 'what breaks first?' } });
+    // WebKit: `isComposing` is already false on this keydown; only keyCode 229 says it is the IME's.
+    fireEvent.keyDown(input, { key: 'Enter', keyCode: 229 });
+    await settle();
+    expect(controller.companionSend).not.toHaveBeenCalled();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await settle();
+    expect(controller.companionSend).toHaveBeenCalledTimes(1);
+  });
+
   it.each(['yes', 'okay', 'sure', 'sounds good'])('sends "%s" back to the agent after its offer, even after local small talk', async (confirmation) => {
     useUiStore.setState({ companionOpen: true });
     companion.begin(doc.metadata.id, 'offer', 'Change the layout', null);

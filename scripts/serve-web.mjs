@@ -4,16 +4,11 @@
  *
  *   :PORT     the site        (draftcanvas.dev, Cloudflare)
  *   :PORT+1   the editor      (app.draftcanvas.dev, Cloudflare)
- *   :PORT+2   the old address (acltabontabon.com, GitHub Pages) — the moved-house page at /draft-canvas/
  *
  * `vite preview` is close, but not close enough to be worth trusting for this: it answers a
- * directory without its trailing slash with a 404, where both hosts redirect to the slash form.
- * That matters because every build here uses a relative `base` — a page served at /draft-canvas
- * would resolve ./assets/* against the origin root and every asset would 404. And on the old
- * address a missing path gets 404.html, which is what forwards old links to the new domain.
- *
- * (Checked against the sibling project site: https://acltabontabon.com/scuttle redirects to
- * /scuttle/ and renders. Pages has always done this.)
+ * directory without its trailing slash with a 404, where the host redirects to the slash form.
+ * That matters because every build here uses a relative `base` — a page served without its
+ * trailing slash would resolve its relative URLs one directory too high and they would 404.
  *
  * Run through `npm run site:preview`, which builds, assembles and stages first.
  */
@@ -109,9 +104,7 @@ function serve(root, notFound) {
 }
 
 serve(join(staged, 'site'), '404.html').listen(port);
-serve(join(staged, 'app'), null).listen(port + 1);
-serve(join(staged, 'legacy'), 'draft-canvas/404.html').listen(port + 2, () => {
+serve(join(staged, 'app'), null).listen(port + 1, () => {
   console.log(`serve-web: site    http://localhost:${port}/`);
   console.log(`serve-web: editor  http://localhost:${port + 1}/`);
-  console.log(`serve-web: old     http://localhost:${port + 2}/draft-canvas/  (editor at /draft-canvas/editor/)`);
 });

@@ -3,7 +3,7 @@ import { playbackFlowOf } from '../document/sequenceFlow';
 import { isCollapsedCompensation, visibleEdges } from '../document/compensation';
 import type { DraftDocument, DraftEdge } from '../document/types';
 import type { FlowPlaybackState } from '../store/editorStore';
-import { resolveFlowSteps } from './useFlowPlayback';
+import { resolveFlowSteps } from './steps';
 
 const cache = new WeakMap<DraftDocument, WeakMap<FlowPlaybackState, readonly DraftEdge[]>>();
 

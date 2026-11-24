@@ -7,7 +7,7 @@ import { LIMITS } from '../document/limits';
 import type { DraftDocument, DraftSummary, Project } from '../document/types';
 import { adoptEmbeddedBackground } from '../export/background';
 import { hostKind } from '../host/hostInfo';
-import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl } from '../lib/documentUrl';
+import { clearDocUrl, docIdFromLocation, pushDocUrl, replaceDocUrl, takeOwnStepBack } from '../lib/documentUrl';
 import { clearShareFragment, decodeShareLink, sharePayloadFromHash, shareLinkIsProtected } from '../share';
 import { holdOpen, openAnywhere } from '../storage/openPresence';
 import { discardReloadStash, stashForReload, takeReloadStash } from '../storage/reloadStash';
@@ -168,8 +168,14 @@ export interface DocumentSession {
   openCollaborative: (document: DraftDocument) => Promise<boolean>;
   /** Copies the shared diagram on screen into the library, under a fresh id, and opens that copy editable. */
   makeEditableCopy: () => Promise<void>;
-  /** Resolves `true` once the canvas is closed, `false` when unsaved work kept it open. */
+  /**
+   * Resolves `true` once the canvas is closed, `false` when unsaved work kept it open. Also `true`
+   * when a newer navigation took over while this one was saving: the canvas was left, by that one.
+   */
   closeDocument: () => Promise<boolean>;
+  /** Leaves the canvas on screen for a new one (blank, the example, or a starter), as one navigation:
+   *  nothing is made if unsaved work keeps the canvas open, or if something newer was asked for meanwhile. */
+  replaceWithNew: (starter?: 'example' | DraftDocument) => Promise<void>;
   /**
    * After another tab deleted or changed the open canvas: `keep` saves this tab's copy over it;
    * `discard` reloads the stored copy, or closes the canvas when it was deleted.
@@ -804,13 +810,21 @@ export function useDocumentSession(): DocumentSession {
   const closeDocument = useCallback(async () => {
     // A shared diagram has nothing to flush and nothing stored to prune: it simply leaves the screen.
     if (sharedRef.current) {
+      navigation.current += 1;
       leaveShared();
       editorStoreModule?.useEditorStore.getState().setDocument(createDocument());
       setOpenId(null);
       await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
       return true;
     }
+    // Going home is a navigation too, numbered when it is asked for like every open: a diagram still
+    // being read (Back pressed twice quickly) gives way to it and must not put its canvas back up
+    // afterwards, and an open asked for while this is still saving is the newer of the two and wins.
+    // Numbered only after the awaits, as it first was, this close cancelled that newer open.
+    const request = (navigation.current += 1);
     const saved = (await autosave.current?.flush()) ?? true;
+    // Superseded: the newer navigation owns the screen now, and says so itself if it cannot leave.
+    if (request !== navigation.current) return true;
     if (!saved) {
       // Leaving now would drop the only copy of the unsaved edits — the editor
       // still holds them, so stay there where Export can rescue them. A pending
@@ -830,6 +844,7 @@ export function useDocumentSession(): DocumentSession {
     // tab has the canvas open (`openPresence.ts`), nor when the browser can't say: that tab's undo
     // history may name an image this one replaced, and pruning left its undo pointing at nothing.
     const editor = await loadEditorStore();
+    if (request !== navigation.current) return true;
     const closing = editor.useEditorStore.getState().document;
     // A host's file has no other tab, and its in-memory copy is never autosaved: the file on screen
     // names the background to keep.
@@ -853,6 +868,19 @@ export function useDocumentSession(): DocumentSession {
     await refreshLibrary().catch((error: unknown) => logDiagnostic(error, { operation: 'refresh-library' }));
     return true;
   }, [leaveShared, notify, openId, refreshLibrary, repository, setOpenId]);
+
+  const replaceWithNew = useCallback(
+    async (starter?: 'example' | DraftDocument) => {
+      // One intent under one number: the close takes the next one as it starts, and only if that is
+      // still the newest when it has finished is the new canvas made. Done as two steps by the
+      // caller, a close that a newer open had superseded still answered "closed", and the canvas
+      // made after it took a fresh number and cancelled that open.
+      const request = navigation.current + 1;
+      if (!(await closeDocument()) || request !== navigation.current) return;
+      await newDocument(undefined, starter);
+    },
+    [closeDocument, newDocument],
+  );
 
   // The open canvas in the address (`lib/documentUrl.ts`), so a refresh, Back/Forward and a bookmark
   // all come back to it. The web app only: the desktop shell opens files and owns its own navigation.
@@ -907,6 +935,19 @@ export function useDocumentSession(): DocumentSession {
   useEffect(() => {
     if (!urlRouting) return;
     const onPopState = () => {
+      // The app's own step back after a close (`clearDocUrl`), heard a task later: bookkeeping, not
+      // somebody pressing Back. It is never followed. If something was opened in the meantime, the
+      // address has just moved off it, so it is put back to naming what is on screen. Followed as a
+      // navigation, this closed a diagram opened straight after going home, or reopened the one
+      // just closed, and it could cancel a navigation that was still under way.
+      if (takeOwnStepBack()) {
+        const showing = openIdRef.current;
+        if (showing && !sharedRef.current) pushDocUrl(showing);
+        // The step back landed on another diagram's entry (one opened before the one just closed).
+        // Home is showing, so the address must not go on naming it: a reload would reopen it.
+        else if (!showing && docIdFromLocation() !== null) replaceDocUrl(null);
+        return;
+      }
       // A share link pasted into the address bar of a tab already on the app is a same-document
       // navigation: no reload, so the arrival effect above never sees it — this does.
       if (sharePayloadFromHash(window.location.hash) !== null) {
@@ -915,7 +956,17 @@ export function useDocumentSession(): DocumentSession {
       }
       const id = docIdFromLocation();
       const open = openIdRef.current;
-      if (id === open) return;
+      if (id === open) {
+        // The address names the canvas on screen again, and that is the newest thing asked for.
+        // Without a number of its own, Back then Forward while the last save was still being written
+        // left the close from Back running, and the canvas the address had just returned to was closed.
+        //
+        // Only for a canvas: "Home, and Home is showing" asks for nothing, and counting it would
+        // cancel whatever is on its way (an example `replaceWithNew` is about to make, a diagram
+        // being opened).
+        if (id !== null) navigation.current += 1;
+        return;
+      }
       if (id) {
         void openDocument(id);
         return;
@@ -1169,6 +1220,7 @@ export function useDocumentSession(): DocumentSession {
     openCollaborative,
     makeEditableCopy,
     closeDocument,
+    replaceWithNew,
     resolveConflict,
     retrySave,
     exportUnsaved,
