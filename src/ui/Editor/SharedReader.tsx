@@ -1,11 +1,12 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useReactFlow, useStore } from '@xyflow/react';
+import { useReactFlow, useViewportStore } from '@xyflow/react';
 import { effectiveConnectorText } from '../../document/edgeSemantics';
 import { displayNameFor } from '../../document/factory';
 import { hasInside, pathKey } from '../../depth/tree';
 import { collectRooms } from '../../export/rooms';
 import { readerAttachments, type ReaderContextItem } from '../../share/context';
 import type { ElementTarget } from '../../openPoints/locate';
+import { fitPadding } from '../../lib/fitPadding';
 import { isActivatableTarget, isEditableTarget } from '../../lib/isEditableTarget';
 import { motionMs } from '../../lib/motion';
 import { PRODUCT } from '../../product';
@@ -37,9 +38,9 @@ export function SharedReader({ session, playback, children }: {
   const rooms = useMemo(() => collectRooms(outer ?? document), [outer, document]);
   const attachments = useMemo(() => readerAttachments(outer ?? document), [outer, document]);
   const { fitView, zoomIn, zoomOut } = useReactFlow();
-  const zoom = useStore((state) => Math.round(state.transform[2] * 100));
-  const viewWidth = useStore((state) => state.width);
-  const viewHeight = useStore((state) => state.height);
+  const zoom = useViewportStore((state) => Math.round(state.transform[2] * 100));
+  const viewWidth = useViewportStore((state) => state.width);
+  const viewHeight = useViewportStore((state) => state.height);
   const [contentsOpen, setContentsOpen] = useState(false);
   const [elementsOpen, setElementsOpen] = useState(false);
   const attachmentScope = `${pathKey(path)}:${playback.active ? `${playback.flow?.id}:${playback.stage}:${playback.step}` : 'idle'}`;
@@ -48,7 +49,7 @@ export function SharedReader({ session, playback, children }: {
   const contentsId = useId();
   const pendingStep = useRef<{ flowId: string; step: number } | null>(null);
   const chosen = playback.flow ?? playback.flows.find((flow) => flow.id === selectedFlowId) ?? playback.flows[0];
-  const fitPadding = 0.08;
+  const readerPadding = fitPadding(0.08);
   const steps = useMemo(() => chosen ? resolveFlowSteps(chosen, document.edges, document.nodes) : [], [chosen, document.edges, document.nodes]);
   const nodesById = useMemo(() => nodeIndex(document.nodes), [document.nodes]);
   const stories = useMemo(() => steps.map((step) => describeFlowStep(step, nodesById)), [steps, nodesById]);
@@ -71,8 +72,8 @@ export function SharedReader({ session, playback, children }: {
   useEffect(() => {
     if (playbackActive || viewWidth <= 0 || viewHeight <= 0) return;
     if (useUiStore.getState().presentation.framing === 'manual') return;
-    void fitView({ padding: fitPadding, duration: 0 });
-  }, [playbackActive, viewWidth, viewHeight, path, fitPadding, fitView]);
+    void fitView({ padding: readerPadding, duration: 0 });
+  }, [playbackActive, viewWidth, viewHeight, path, readerPadding, fitView]);
 
   useEffect(() => {
     const pending = pendingStep.current;
@@ -85,7 +86,7 @@ export function SharedReader({ session, playback, children }: {
     if (playback.active) playback.overview();
     else {
       useUiStore.getState().setPresentation({ framing: 'guided' });
-      void fitView({ padding: fitPadding, duration: motionMs(240) });
+      void fitView({ padding: readerPadding, duration: motionMs(240) });
     }
   };
   const changeZoom = (direction: 'in' | 'out') => {
@@ -124,7 +125,7 @@ export function SharedReader({ session, playback, children }: {
     if (!reveal && !changedRoom) return;
     const ids = edge ? [edge.source, edge.target] : target.kind === 'node' ? [target.id] : [];
     useUiStore.getState().setPresentation({ framing: 'manual' });
-    requestAnimationFrame(() => { void fitView({ nodes: ids.map((id) => ({ id })), padding: 0.65, maxZoom: 1, duration: motionMs(240) }); });
+    requestAnimationFrame(() => { void fitView({ nodes: ids.map((id) => ({ id })), padding: fitPadding(0.65), maxZoom: 1, duration: motionMs(240) }); });
   };
 
   useEffect(() => {

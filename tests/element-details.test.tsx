@@ -16,7 +16,7 @@ const internal = vi.hoisted(() => ({
 // jsdom has no canvas layout; keep placement fixed while exercising the real toolbar and store.
 vi.mock('@xyflow/react', async (importOriginal) => ({
   ...await importOriginal<typeof import('@xyflow/react')>(),
-  useStore: (select: (state: { nodeLookup: Map<string, typeof internal> }) => unknown) =>
+  useNodesStore: (select: (state: { nodeLookup: Map<string, typeof internal> }) => unknown) =>
     select({ nodeLookup: new Map([['element', internal]]) }),
   useInternalNode: () => internal,
   useReactFlow: () => ({

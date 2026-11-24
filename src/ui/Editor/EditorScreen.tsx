@@ -19,6 +19,7 @@ import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { canvasBounds, canvasCenter } from '../../canvas/canvasFrame';
 import type { DraftNode, DraftViewport } from '../../document/types';
+import { fitPadding } from '../../lib/fitPadding';
 import { loadFailureNotice } from '../../lib/staleChunk';
 import { presetForShortcut, type Preset } from '../../lib/presets';
 import { isConvertibleType, type ConvertibleType } from '../../document/convert';
@@ -1345,7 +1346,7 @@ export function useKeyboard({
         // walkthrough's own O (overview) and R (re-centre) are the camera keys there.
         if (presenting) return;
         event.preventDefault();
-        if (hasSomethingToFit(state)) void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
+        if (hasSomethingToFit(state)) void fitView({ padding: fitPadding(0.2), duration: motionMs(320), nodes: flowFitViewNodes(state) });
         return;
       }
 

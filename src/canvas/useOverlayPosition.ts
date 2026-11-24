@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
-import { useStore, useStoreApi } from '@xyflow/react';
+import { useOptionsStore, useReactFlowStoreApi } from '@xyflow/react';
 
 export interface OverlayPoint {
   x: number;
@@ -53,8 +53,8 @@ export function useOverlayPosition<P extends string>(
    *  unfreezes it places it again. */
   frozen = false,
 ): { target: HTMLDivElement | null; placement: P } {
-  const target = useStore((state) => state.domNode);
-  const storeApi = useStoreApi();
+  const target = useOptionsStore((state) => state.domNode);
+  const { optionsStore, viewportStore } = useReactFlowStoreApi();
   const [placement, setPlacement] = useState<P>(initial);
   const placementRef = useRef(placement);
   const placeRef = useRef(place);
@@ -87,7 +87,7 @@ export function useOverlayPosition<P extends string>(
     }
     applyRef.current = () => {
       const panel = panelRef.current;
-      const root = storeApi.getState().domNode;
+      const root = optionsStore.getState().domNode;
       if (!panel || !root || frozen) return;
       if (sizeRef.current.width === 0) {
         sizeRef.current = { width: Math.round(panel.offsetWidth), height: Math.round(panel.offsetHeight) };
@@ -97,7 +97,7 @@ export function useOverlayPosition<P extends string>(
       // pan/zoom only changes the transform, so conversion needs no further DOM reads.
       if (rootRef.current?.node !== root) rootRef.current = { node: root, rect: root.getBoundingClientRect() };
       const rootRect = rootRef.current.rect;
-      const [panX, panY, zoom] = storeApi.getState().transform;
+      const [panX, panY, zoom] = viewportStore.getState().transform;
       const result = placeRef.current(
         {
           flowToScreenPosition: (point) => ({ x: point.x * zoom + panX + rootRect.left, y: point.y * zoom + panY + rootRect.top }),
@@ -125,13 +125,13 @@ export function useOverlayPosition<P extends string>(
 
   // Pan and zoom: follow the viewport without re-rendering anything.
   useEffect(() => {
-    let last = storeApi.getState().transform;
-    return storeApi.subscribe((state) => {
+    let last = viewportStore.getState().transform;
+    return viewportStore.subscribe((state) => {
       if (state.transform === last) return;
       last = state.transform;
       applyRef.current();
     });
-  }, [storeApi]);
+  }, [viewportStore]);
 
   // The canvas itself changing size — a panel docking beside it, or leaving — moves where its edges
   // are without moving the viewport or re-rendering anything here.

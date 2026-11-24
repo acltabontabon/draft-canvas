@@ -73,8 +73,8 @@
     "adoption:compare": "tsx benchmark/adoption/compare.ts"
   },
   "dependencies": {
-    "@xyflow/react": "^12.12.0",
-    "@xyflow/system": "0.0.83",
+    "@xyflow/react": "^13.0.3",
+    "@xyflow/system": "1.0.1",
     "fflate": "^0.8.3",
     "idb": "^8.0.4",
     "marked": "^18.2.0",

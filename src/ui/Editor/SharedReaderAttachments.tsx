@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useInternalNode, useStore, useStoreApi } from '@xyflow/react';
+import { useInternalNode, useReactFlowStoreApi, useViewportStore } from '@xyflow/react';
 import { ReadOnlyCode } from '../../canvas/AttachmentPresentation';
 import { markerLoop } from '../../canvas/sketchPaths';
 import { familyOf } from '../../render/text/fonts';
@@ -41,7 +41,7 @@ function DetailGlyph({ item }: { item: ReaderContextItem }) {
 /** Reader-only chrome. The underlying canvas keeps drawing the actual shapes and connectors. */
 export function SharedReaderAttachments({ items, selected, onSelect, onClose }: Props) {
   const path = useEditorStore((state) => state.path);
-  const compact = useStore((state) => state.width <= 650 || state.height < 340);
+  const compact = useViewportStore((state) => state.width <= 650 || state.height < 340);
   const groups = useMemo(() => {
     const byHost = new Map<string, AttachmentGroup>();
     for (const item of items) for (const target of item.targets) {
@@ -113,17 +113,18 @@ function AttachmentMarker({ group, selected, onSelect, onClose }: Pick<Props, 's
 function FloatingDetail({ target, children }: { target: ElementTarget; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   const anchor = useDetailAnchor(target);
-  const store = useStoreApi();
+  const { optionsStore, viewportStore, nodesStore } = useReactFlowStoreApi();
   const obstacles = useRef<Box[]>([]);
   const otherMarkers = useRef<Array<{ x: number; y: number; width: number; height: number }>>([]);
   const chrome = useRef<{ root: DOMRect; boxes: Box[] } | null>(null);
   useLayoutEffect(() => {
-    obstacles.current = [...store.getState().nodeLookup.values()].flatMap((node) => {
+    obstacles.current = [...nodesStore.getState().nodeLookup.values()].flatMap((node) => {
       if (node.type === 'group') return [];
       const rect = rectOfInternal(node);
       return rect ? [rect] : [];
     });
-    const { domNode, transform: [panX, panY, zoom] } = store.getState();
+    const { domNode } = optionsStore.getState();
+    const [panX, panY, zoom] = viewportStore.getState().transform;
     if (!domNode) return;
     const root = domNode.getBoundingClientRect();
     // A card must leave every other detail reachable. Cache marker anchors in flow space and
@@ -134,17 +135,17 @@ function FloatingDetail({ target, children }: { target: ElementTarget; children:
         const rect = marker.getBoundingClientRect();
         return { x: (rect.x + rect.width / 2 - root.x - panX) / zoom, y: (rect.y + rect.height + 10 - root.y - panY) / zoom, width: rect.width, height: rect.height };
       });
-  }, [anchor, store, target.kind, target.id]);
+  }, [anchor, optionsStore, viewportStore, nodesStore, target.kind, target.id]);
   const { target: portal } = useOverlayPosition<CalloutPlacementName>(ref, 'above', (frame, current) => {
     if (!anchor || frame.size.width === 0) return null;
-    const zoom = store.getState().transform[2];
+    const zoom = viewportStore.getState().transform[2];
     const screenBox = (box: Box): Box => ({ ...frame.flowToScreenPosition(box), width: box.width * zoom, height: box.height * zoom });
     const point = frame.flowToScreenPosition(anchor.point);
     const marker = { x: point.x - 40, y: point.y - 38, width: 80, height: 28 };
     // Only the camera controls occupy this corner; reserving the entire bottom strip forced
     // otherwise-clear cards into the middle of the diagram on shorter desktop windows.
     if (chrome.current?.root !== frame.root) {
-      const camera = store.getState().domNode?.closest('.dc-reader-canvas')?.querySelector('.dc-reader-camera')?.getBoundingClientRect();
+      const camera = optionsStore.getState().domNode?.closest('.dc-reader-canvas')?.querySelector('.dc-reader-camera')?.getBoundingClientRect();
       chrome.current = { root: frame.root, boxes: camera ? [inflate({ x: camera.x, y: camera.y, width: camera.width, height: camera.height }, 8)] : [] };
     }
     const placed = placeCallout({

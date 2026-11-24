@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useReactFlow, useStore } from '@xyflow/react';
+import { useReactFlow, useViewportStore } from '@xyflow/react';
 import { flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
 import { useShallow } from 'zustand/react/shallow';
 import { CanvasSettingsButton, HelpMenu, HistoryControls } from './HelpMenu';
 import { useCollabStore } from '../../store/collabStore';
+import { fitPadding } from '../../lib/fitPadding';
 import { count } from '../../lib/plural';
 import { LEVEL_HINTS, LEVEL_LABELS } from '../../depth/level';
 import { Button } from '../common/Button';
@@ -358,7 +359,7 @@ function LevelChip() {
  * shouldn't re-render with it.
  */
 function ZoomControls() {
-  const percent = useStore((state) => Math.round(state.transform[2] * 100));
+  const percent = useViewportStore((state) => Math.round(state.transform[2] * 100));
   const { zoomIn, zoomOut, fitView } = useReactFlow();
   // A surface without a camera (the toolbar's Arrange item) asks for a fit through the UI store;
   // this is the one always-mounted control that holds the React Flow instance, so it answers.
@@ -366,12 +367,12 @@ function ZoomControls() {
   useEffect(() => {
     if (fitRequestId === 0) return;
     const state = useEditorStore.getState();
-    if (hasSomethingToFit(state)) void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
+    if (hasSomethingToFit(state)) void fitView({ padding: fitPadding(0.2), duration: motionMs(320), nodes: flowFitViewNodes(state) });
     useUiStore.getState().clearFitRequest(fitRequestId);
   }, [fitRequestId, fitView]);
   const fitNow = () => {
     const state = useEditorStore.getState();
-    if (hasSomethingToFit(state)) void fitView({ padding: 0.2, duration: motionMs(300), nodes: flowFitViewNodes(state) });
+    if (hasSomethingToFit(state)) void fitView({ padding: fitPadding(0.2), duration: motionMs(300), nodes: flowFitViewNodes(state) });
   };
   return (
     <TooltipGroup>

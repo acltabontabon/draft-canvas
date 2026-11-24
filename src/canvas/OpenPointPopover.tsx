@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { createPortal } from 'react-dom';
-import { useInternalNode, useStore } from '@xyflow/react';
+import { useInternalNode, useNodesStore } from '@xyflow/react';
 import { displayNameFor } from '../document/factory';
 import { OPEN_POINT_HINTS, OPEN_POINT_LABELS, normalizeOpenPointText, openPointsFor } from '../document/openPoints';
 import { OPEN_POINT_KINDS, type DraftDocument, type OpenPoint, type OpenPointKind, type OpenPointTarget } from '../document/types';
@@ -59,7 +59,7 @@ export function OpenPointPopover() {
       ? selectNode(state.document, popover.anchor.id) !== undefined
       : selectEdge(state.document, popover.anchor.id) !== undefined;
   });
-  const measured = useStore((state) => {
+  const measured = useNodesStore((state) => {
     if (!popover) return false;
     if (popover.anchor.kind === 'node') return state.nodeLookup.has(popover.anchor.id);
     // A connector's position comes from its endpoints, which must both be measured.

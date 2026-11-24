@@ -4,7 +4,7 @@ import { LIGHT } from '../render/theme/tokens';
 import { sequenceActions } from '../store/sequenceActions';
 import { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { useInternalNode, useStore } from '@xyflow/react';
+import { useInternalNode, useNodesStore } from '@xyflow/react';
 import { useEditorStore } from '../store/editorStore';
 import { selectNode, selectSequenceMessage } from '../store/selectors';
 import { useUiStore, type AttachmentDetail } from '../store/uiStore';
@@ -59,7 +59,7 @@ export function AttachmentPopover() {
       : selectNode(state.document, detail.hostId);
     return Boolean(host?.attachments?.length);
   });
-  const measured = useStore((state) => (hostId ? state.nodeLookup.has(hostId) : false));
+  const measured = useNodesStore((state) => (hostId ? state.nodeLookup.has(hostId) : false));
   const setOpenAttachmentDetail = useUiStore((state) => state.setOpenAttachmentDetail);
 
   // Detaching or deleting the last attachment must close the popover, not
