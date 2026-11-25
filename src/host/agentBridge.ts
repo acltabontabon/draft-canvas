@@ -18,6 +18,7 @@ import { fileWithLiveViewport, isInteracting, useEditorStore } from '../store/ed
 import { useUiStore } from '../store/uiStore';
 import { useCollabStore } from '../store/collabStore';
 import { collaboratorTouches } from '../store/collabBridge';
+import { noteAgentCommit } from '../store/evolution/bridge';
 
 /** Changes once per page load, so a revision from before a reload or restart can never match. */
 const EPOCH = Math.random().toString(36).slice(2, 8);
@@ -91,7 +92,11 @@ export function handleAgentRequest(request: AgentEditorRequest): AgentEditorRepl
   // Not busy: no retry makes a read-only copy writable, so the agent is told not to try.
   if (useUiStore.getState().readOnly) return { kind: 'refused', code: 'READ_ONLY', revision, reason: 'The diagram is open read-only.' };
   const applied = state.applyToFile(request.label, () => request.file);
-  if (applied) return { kind: 'committed', revision: currentRevision() };
+  if (applied) {
+    // History records an agent's reviewed changes as one revision per batch, not one per write.
+    noteAgentCommit('Coding agent');
+    return { kind: 'committed', revision: currentRevision() };
+  }
   // Refused by the store's own last gates, which `busyReason` can miss in a race. Answered as
   // committed, the agent was told its change landed when nothing changed.
   if (isInteracting()) return { kind: 'refused', code: 'BUSY', revision, reason: 'Someone is dragging or resizing on the canvas.' };

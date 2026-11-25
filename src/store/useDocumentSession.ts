@@ -408,11 +408,16 @@ export function useDocumentSession(): DocumentSession {
         // No new revision means the camera is all that moved: remembered, but not a content change.
         autosave.current?.schedule(fileWithLiveViewport(state), { cameraOnly: state.revision === previous.revision });
       });
+      // Canvas Evolution records this copy's history in the background (`store/evolution/`).
+      void import('./evolution/bridge').then((history) => {
+        if (!cancelled && !sharedRef.current) void history.attachHistory({ kind: 'library', documentId: openId });
+      });
     });
     return () => {
       cancelled = true;
       unsubscribe?.();
       autosave.current?.untrack(openId);
+      void import('./evolution/bridge').then((history) => history.detachHistory({ kind: 'library', documentId: openId }));
     };
   }, [notify, openId]);
 

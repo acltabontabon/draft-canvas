@@ -36,6 +36,7 @@ Web diagrams stay in this browser profile and do not sync.
 | IndexedDB `draft-canvas-keys` | Key for legacy encrypted records, read-only |
 | IndexedDB `draft-canvas-starters` | Downloaded starters gallery and its style packs, when you load it; never your diagrams |
 | IndexedDB `draft-canvas-styles` | The styles you made in Settings → Appearance; never your diagrams |
+| IndexedDB `draft-canvas-history` | Each diagram's history, as Git objects, including content later deleted from the diagram (see [Diagram history](../guides/history.md#privacy)) |
 | Cache Storage | Offline app files, never diagrams |
 | localStorage | Short preferences, such as theme, export choices and live-session name |
 | sessionStorage | Unsaved edits held across a reload, removed once restored |
@@ -49,7 +50,7 @@ Web diagrams stay in this browser profile and do not sync.
 
 - Diagrams are `.draftcanvas` files where you save them.
 - The app's data folder holds recent files, settings and recovery copies, removed once saved or
-  discarded.
+  discarded, and each diagram's history (`history/`) until you remove it in Settings → History.
 - It reads only files and folders you pick, plus folders you allow for agents. **Use in docs**
   writes its pictures beside the saved diagram and adds one line to a Markdown file you choose.
 

@@ -10,6 +10,7 @@ import { DesktopExplorer } from '../DesktopExplorer';
 import { AgentSettings } from './AgentSettings';
 import { AppearanceSettingsPage, CanvasSettingsPage } from './CanvasSettingsPage';
 import { GeneralSettings } from './GeneralSettings';
+import { HistorySettings } from '../../../ui/settings/HistorySettings';
 import { SupportSettings } from './SupportSettings';
 import { UpdateSettings } from './UpdateSettings';
 import '../desktop.css';
@@ -84,6 +85,7 @@ const CATEGORIES: readonly [SettingsCategoryEntry<SettingsCategory>, ...Settings
   { id: 'general', label: 'General', icon: 'sliders', Page: GeneralSettings },
   { id: 'appearance', label: 'Appearance', icon: 'palette', Page: AppearanceSettingsPage },
   { id: 'canvas', label: 'Canvas', icon: 'pencil', Page: CanvasSettingsPage },
+  { id: 'history', label: 'History', icon: 'timeline', Page: HistorySettings },
   { id: 'agents', label: 'AI agents', icon: 'agent', Page: AgentSettings },
   { id: 'updates', label: 'Updates', icon: 'refresh', Page: UpdateSettings },
   { id: 'support', label: 'Support', icon: 'help', Page: SupportSettings },

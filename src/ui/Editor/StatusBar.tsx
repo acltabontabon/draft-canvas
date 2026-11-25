@@ -20,6 +20,7 @@ import { pointsOf } from '../../document/openPoints';
 import { roomMayHaveOutage } from '../../store/outage';
 import { toggleOutage } from '../../commands/outage';
 import type { SaveFailure } from '../../storage/saveFailure';
+import { HistoryStatus } from './history/HistoryStatus';
 
 /**
  * The save indicator is the only place the local-first promise is visible while
@@ -222,6 +223,7 @@ export function StatusBar({ durable, presenting = false, onResolveConflict, onSa
           <span className="dc-save" data-status={save.status} data-durable={durable ? undefined : 'false'}>
             {saveLabel(save, durable)}
           </span>
+          {durable && <HistoryStatus />}
           {save.conflict && onResolveConflict && <ConflictChoice conflict={save.conflict} onResolveConflict={onResolveConflict} />}
           {failed && <SaveFailureChoice failure={save.failure} actions={onSaveFailure!} />}
           {failed && save.message && <span className="dc-muted dc-status-hint">{save.message}</span>}

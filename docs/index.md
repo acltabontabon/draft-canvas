@@ -25,6 +25,7 @@ first diagram.
 | [Flows and presenting](guides/flows-and-presentation.md) | Record a path and walk through it step by step |
 | [Sequence diagrams](guides/sequence-diagrams.md) | Who says what to whom, in order, beside your architecture |
 | [Saving and sharing](guides/saving-and-sharing.md) | Back up, import, export and share diagrams |
+| [Diagram history](guides/history.md) | How each diagram's history is kept, explored and exported |
 | [Diagrams in your docs](guides/diagrams-in-docs.md) | Put a diagram in a README and keep it updated |
 | [Collaborating live](guides/collaborating.md) | Edit a shared canvas in real time |
 
@@ -41,3 +42,5 @@ first diagram.
 | Document | Covers |
 | --- | --- |
 | [Privacy and security](reference/privacy.md) | Local storage, data protection, vulnerability reporting |
+| [Canvas Evolution](reference/evolution.md) | How diagram history is built: Git backends, identity, recovery |
+| [Canvas Evolution security](reference/evolution-security.md) | Threat model for history, bundles and remotes |
