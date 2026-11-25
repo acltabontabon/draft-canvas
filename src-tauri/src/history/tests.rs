@@ -445,8 +445,17 @@ fn journal_entries_round_trip_and_bad_ids_are_refused() {
     );
 }
 
+/// Backdates a loose object. Git writes them read-only, which Unix enforces (EACCES on a write
+/// open), while setting a file's times there needs only ownership; Windows needs write-attribute
+/// access to the handle, which only a write open asks for.
 fn age(path: &Path, by: Duration) {
-    let file = std::fs::File::options().write(true).open(path).unwrap();
+    let mut options = std::fs::File::options();
+    if cfg!(windows) {
+        options.write(true);
+    } else {
+        options.read(true);
+    }
+    let file = options.open(path).unwrap();
     file.set_modified(SystemTime::now() - by).unwrap();
 }
 
