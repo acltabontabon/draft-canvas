@@ -5,6 +5,8 @@ import { decideIdentity, type KnownHistory } from '../../src/evolution/identity'
 import { operationRecord, recoveryFor, type OperationData } from '../../src/evolution/journal';
 import { branchOf, isSafeRefName } from '../../src/evolution/refs';
 import { formatMessage, parseMessage } from '../../src/evolution/trailers';
+import { handle, type Request } from '../../src/evolution/workerHost';
+import { createDocument } from '../../src/document/factory';
 
 const A = 'a'.repeat(40);
 const B = 'b'.repeat(40);
@@ -121,5 +123,16 @@ describe('ref names and bundles', () => {
     expect(() => parseBundle(v3('@filter=blob:none'))).toThrow(/partial/);
     expect(parseBundle(v3('@object-format=sha1')).header.version).toBe(3);
     expect(() => parseBundle(new TextEncoder().encode(`# v2 git bundle\n${A} refs/heads/../x\n\nPACK`))).toThrow(HistoryError);
+  });
+});
+
+describe('worker requests', () => {
+  it('calls only the compute methods it defines, whatever name another thread sends', async () => {
+    for (const method of ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf', 'nope']) {
+      const request = { family: 'compute', method, args: [] } as unknown as Request;
+      await expect(handle(request, undefined)).rejects.toMatchObject({ code: 'invalid' });
+    }
+    const prepared = (await handle({ family: 'compute', method: 'prepare', args: [createDocument('Worker')] }, undefined)) as { blobId: string };
+    expect(prepared.blobId).toMatch(/^[0-9a-f]{40}$/);
   });
 });

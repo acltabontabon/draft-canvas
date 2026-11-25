@@ -89,12 +89,21 @@ export function serializeError(error: unknown): SerializedError {
   return { code: 'internal', message: 'History could not complete that.' };
 }
 
+/**
+ * The compute methods by name, taken once from `compute`'s own functions. A request names one by
+ * string from another thread: looking it up here, never as a property of an object, means a name
+ * such as `constructor` or `__proto__` finds nothing to call.
+ */
+const COMPUTE_CALLS: ReadonlyMap<string, (...args: unknown[]) => Promise<unknown>> = new Map(
+  Object.entries(compute).map(([name, fn]) => [name, (fn as (...args: unknown[]) => Promise<unknown>).bind(compute)]),
+);
+
 /** Answers one request. `backend` is absent where the shell keeps histories (desktop). */
 export async function handle(request: Request, backend: HistoryBackend | undefined): Promise<unknown> {
   switch (request.family) {
     case 'compute': {
-      const fn = (compute as Record<string, (...args: unknown[]) => Promise<unknown>>)[request.method];
-      if (!Object.prototype.hasOwnProperty.call(compute, request.method) || !fn) throw new HistoryError('invalid', 'Unknown history request.');
+      const fn = COMPUTE_CALLS.get(request.method);
+      if (!fn) throw new HistoryError('invalid', 'Unknown history request.');
       return fn(...request.args);
     }
     case 'backend': {
