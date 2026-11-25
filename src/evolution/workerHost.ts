@@ -15,6 +15,7 @@ import type { DraftDocument } from '../document/types';
 import type { HistoryBackend } from './backend';
 import { HistoryError, type VersionStore } from './contracts';
 import { semanticDiff } from './diff';
+import { merge, type Side } from './merge';
 import { blobId } from './hash';
 import { historyText, readHistoryText } from './snapshot';
 import { describe, touchedNames } from './summary';
@@ -35,6 +36,10 @@ export const compute = {
   },
   async diff(before: DraftDocument | null, after: DraftDocument) {
     return semanticDiff(before, after);
+  },
+  /** The three-way merge; `choices` as [conflict id, side] pairs (a Map does not cross a worker). */
+  async merge(base: DraftDocument, ours: DraftDocument, theirs: DraftDocument, choices: [string, Side][] = []) {
+    return merge(base, ours, theirs, new Map(choices));
   },
   async describe(before: DraftDocument | null, after: DraftDocument) {
     const diff = semanticDiff(before, after);

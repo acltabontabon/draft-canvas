@@ -118,6 +118,7 @@ function computeApi(channel: Channel): ComputeApi {
     parse: call('parse'),
     diff: call('diff'),
     describe: call('describe'),
+    merge: call('merge'),
   } as ComputeApi;
 }
 
