@@ -53,6 +53,8 @@ Choose **Quick Draft** on Home (`⌘N`) and start drawing; no name or folder nee
 
 A project is an ordinary folder of `.draftcanvas` files. **New canvas here** adds a diagram to the
 current folder. **Find a diagram** (`⌘F` on Home) searches projects, recent files and drafts.
+Diagrams are listed with the most recently edited first; choose **Name** above the list to sort them
+alphabetically. Home remembers the choice.
 **Remove from Home** forgets a project; its files stay.
 
 To move a diagram to another project, point at its tile on Home or in **Find a diagram** and choose

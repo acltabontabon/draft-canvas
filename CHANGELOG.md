@@ -58,6 +58,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 - **OpenCode** — **Settings → AI agents** connects OpenCode 1 and 2 in one click, alongside Claude
   Code, Codex, Cursor, Gemini CLI and Junie, and shows how to check the connection.
+- **Sort your diagrams** — Every list in **Find a diagram** shows the most recently edited first,
+  or sorts by **Name** instead. The choice is remembered.
 
 #### Changed
 

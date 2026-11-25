@@ -21,6 +21,7 @@ export function draftTile(entry: RecoveryEntry, controller: DesktopController): 
     // Changes to a file were left unsaved when the app closed without asking: that one is a warning.
     meta: fromFile ? `Unsaved changes · ${when}` : when,
     edited: true,
+    when: entry.updatedAt,
     label: fromFile ? `Recover unsaved changes to ${name}` : `Open ${name}, a draft not saved to a file`,
     description: fromFile ? `Changes to ${name} that were never saved · ${when}` : `Saved locally, not to a file · ${when}`,
     haystack: name.toLowerCase(),
@@ -36,6 +37,8 @@ export function recentTile(item: RecentItem, controller: DesktopController): Bro
     kind: 'document',
     name: item.name,
     meta: relativeTime(item.lastOpenedMs),
+    // A file outside every project is only ever known by when it was last opened.
+    when: item.lastOpenedMs,
     label: `Open ${item.name}`,
     description: `${item.displayPath} · opened ${relativeTime(item.lastOpenedMs)}`,
     haystack: `${item.name} ${item.displayPath}`.toLowerCase(),
@@ -65,6 +68,7 @@ export function projectTile(file: ProjectFile, project: ProjectInfo, controller:
     kind: 'document',
     name: file.name,
     meta: folder ? `${folder} · ${relativeTime(file.mtimeMs)}` : relativeTime(file.mtimeMs),
+    when: file.mtimeMs,
     label: `Open ${file.name}`,
     description: `${folder || project.name} · edited ${relativeTime(file.mtimeMs)}`,
     haystack: `${file.relPath} ${project.name}`.toLowerCase(),
@@ -135,16 +139,32 @@ function inAnyRegisteredProject(item: RecentItem, projects: ProjectState[]): boo
  * project, or inside one not yet scanned, still shows under its Recent tile — nothing to prefer it over.
  */
 export function everythingTiles(state: DesktopState, controller: DesktopController): BrowseTile[] {
-  interface Ranked {
-    when: number;
-    tile: BrowseTile;
-  }
-  const fromDrafts: Ranked[] = state.recovery.map((entry) => ({ when: entry.updatedAt, tile: draftTile(entry, controller) }));
-  const fromProjects: Ranked[] = state.projects
+  const fromDrafts = state.recovery.map((entry) => draftTile(entry, controller));
+  const fromProjects = state.projects
     .filter((project) => project.status === 'ready')
-    .flatMap((project) => project.files.map((file) => ({ when: file.mtimeMs, tile: projectTile(file, project.info, controller) })));
-  const fromRecent: Ranked[] = state.recents
+    .flatMap((project) => project.files.map((file) => projectTile(file, project.info, controller)));
+  const fromRecent = state.recents
     .filter((item) => item.kind === 'file' && !inAnyRegisteredProject(item, state.projects))
-    .map((item) => ({ when: item.lastOpenedMs, tile: recentTile(item, controller) }));
-  return [...fromDrafts, ...fromProjects, ...fromRecent].sort((a, b) => b.when - a.when).map((ranked) => ranked.tile);
+    .map((item) => recentTile(item, controller));
+  return sortTiles([...fromDrafts, ...fromProjects, ...fromRecent], 'edited');
+}
+
+/** How the browse view orders a list: newest first, or by name. A person's choice, kept on this device. */
+export type BrowseOrder = 'edited' | 'name';
+
+/**
+ * Folders first, by name, whichever order is chosen: they're places to go, not diagrams to compare.
+ * Then the diagrams, newest first or by name (`numeric`, so "Step 2" comes before "Step 10"); a tie
+ * in time falls back to the name, so the same listing always comes out in the same order.
+ */
+export function sortTiles(tiles: BrowseTile[], order: BrowseOrder): BrowseTile[] {
+  return [...tiles].sort((a, b) => {
+    const folders = Number(b.kind === 'folder') - Number(a.kind === 'folder');
+    if (folders !== 0) return folders;
+    if (order === 'edited') {
+      const newer = (b.when ?? 0) - (a.when ?? 0);
+      if (newer !== 0) return newer;
+    }
+    return a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true });
+  });
 }
