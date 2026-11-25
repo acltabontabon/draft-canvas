@@ -634,6 +634,37 @@ export interface IdRenames {
   edges: Map<string, string>;
 }
 
+/**
+ * What a copy does to linked Junctions (`DraftNode.link`), in every room of what was copied.
+ *
+ * A group copied together — two or more of its Junctions in the one fragment — becomes a group of
+ * its own: the copied flow keeps its continuation points, and they lead to each other, never back
+ * into the flow they were copied from. A Junction copied alone keeps its link: it is one more place
+ * the same group is drawn, which is what duplicating a single "A" means. Pasted into a file that
+ * has no such group it is simply a Junction waiting for a counterpart.
+ */
+function regroupCopiedJunctions(nodes: DraftNode[]): DraftNode[] {
+  const copies = new Map<string, number>();
+  const count = (list: readonly DraftNode[]) => {
+    for (const node of list) {
+      if (node.link) copies.set(node.link, (copies.get(node.link) ?? 0) + 1);
+      if (node.inside) count(node.inside.nodes);
+    }
+  };
+  count(nodes);
+  const fresh = new Map<string, string>();
+  for (const [link, seen] of copies) if (seen > 1) fresh.set(link, createId('j'));
+  if (fresh.size === 0) return nodes;
+  const relink = (list: DraftNode[]): DraftNode[] =>
+    list.map((node) => {
+      const link = node.link ? fresh.get(node.link) : undefined;
+      const inner = node.inside ? relink(node.inside.nodes) : undefined;
+      if (!link && !inner) return node;
+      return { ...node, ...(link ? { link } : {}), ...(inner ? { inside: { ...node.inside!, nodes: inner } } : {}) };
+    });
+  return relink(nodes);
+}
+
 /** Re-identifies a fragment and offsets it, so paste never collides with the original. */
 function instantiateFragment(
   fragment: Clipboard,
@@ -644,7 +675,7 @@ function instantiateFragment(
   // Only collected when a point could need it: most fragments carry none.
   const inner: IdRenames | undefined = fragment.openPoints?.length ? { nodes: new Map(), edges: new Map() } : undefined;
 
-  const nodes = fragment.nodes.map((node) => {
+  const copied = fragment.nodes.map((node) => {
     const next: DraftNode = {
       ...node,
       id: idMap.get(node.id)!,
@@ -672,6 +703,7 @@ function instantiateFragment(
     // alone goes on standing for the originals.
     return repointParticipantLinks(next, idMap);
   });
+  const nodes = regroupCopiedJunctions(copied);
 
   const edgeIdMap = new Map(fragment.edges.map((edge) => [edge.id, createId('e')]));
   const edges = fragment.edges.map((edge) => {

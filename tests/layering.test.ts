@@ -167,6 +167,8 @@ describe('the dependency rules are kept', () => {
     ['gallery', within('document')],
     ['traffic', within('document')],
     ['ink', within('document')],
+    // Linked Junctions read the file, room by room, and nothing of the editor.
+    ['junctions', within('document', 'depth')],
     ['layout', (to: string) => layerOf(to) === 'document' || to === 'src/edges/bundles.ts'],
     ['collab', within('document', 'depth', 'lib')],
     ['history', (to: string) => within('document', 'depth')(to) || to === 'src/collab/selective.ts'],
@@ -208,7 +210,7 @@ describe('the dependency rules are kept', () => {
   // "`src/document/` imports neither React nor React Flow." The same holds for the other layers that
   // are React-free by rule (`collab/`, `ink/`, `agent/`) or by what they are. `edges/` is not
   // listed: `routing.ts` builds its paths with React Flow's own path functions.
-  it.each(['document', 'collab', 'ink', 'agent', 'depth', 'traffic', 'gallery', 'history', 'layout', 'sequence'])(
+  it.each(['document', 'collab', 'ink', 'agent', 'depth', 'traffic', 'gallery', 'history', 'layout', 'sequence', 'junctions'])(
     '%s/ imports neither React, React Flow nor the store library',
     (layer) => {
       const packages = IMPORTS.filter((entry) => !entry.relative && layerOf(entry.from) === layer && /^(react|react-dom|@xyflow\/|zustand)/.test(entry.to));

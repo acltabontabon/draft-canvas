@@ -87,6 +87,10 @@ function undescribed(schema: Schema): Schema {
  *  Explained once, in `get_capabilities`' field notes, to keep the repeated element schema small. */
 const replicasSchema: Schema = { type: 'integer', minimum: AGENT_LIMITS.replicas.min, maximum: AGENT_LIMITS.replicas.max };
 
+/** Junctions only: the name of the group a junction continues in. Explained once, like `replicas`,
+ *  in `get_capabilities`' field notes. */
+const linkSchema: Schema = { type: 'string', minLength: 1, maxLength: AGENT_LIMITS.linkLength };
+
 /** An element `depth` rooms below the top; with an `inside` while a room may still nest there. */
 const element = (depth: number): Schema => ({
   type: 'object',
@@ -97,6 +101,7 @@ const element = (depth: number): Schema => ({
     description: text(AGENT_LIMITS.descriptionLength, 'C4 description: its responsibility, in a sentence.'),
     technology: text(AGENT_LIMITS.technologyLength, 'One product, as named, e.g. "Spring Boot 3": shows its logo.'),
     replicas: replicasSchema,
+    link: linkSchema,
     group: { type: 'string', description: 'Id of the group/boundary it sits in.' },
     color: ref('accent'),
     evidence: ref('evidence'),
@@ -386,7 +391,7 @@ const opAdd: Schema = {
 const nullable = (schema: Schema): Schema => ({ anyOf: [schema, { type: 'null' }] });
 const setProperties: Record<string, Schema> = {
   label: nullable(text(1000)), text: text(1000), type: { anyOf: [ref('elementType'), { type: 'string', maxLength: 64 }] },
-  description: nullable(text(280)), technology: nullable(text(60)), replicas: nullable(replicasSchema), color: nullable(ref('accent')),
+  description: nullable(text(280)), technology: nullable(text(60)), replicas: nullable(replicasSchema), link: nullable(linkSchema), color: nullable(ref('accent')),
   group: nullable({ type: 'string' }), kind: nullable({ enum: [...new Set([...Object.keys(GROUP_KINDS), ...NOTE_FORM_NAMES, ...CONNECTOR_KINDS, ...OPEN_POINT_KINDS])] }),
   semantic: nullable({ enum: EDGE_SEMANTICS }), directed: { type: 'boolean' }, async: { type: 'boolean' },
   condition: nullable(text(120)), title: text(100),
@@ -795,6 +800,7 @@ const compactElement: Schema = {
   type: 'object', properties: {
     id: { type: 'string' }, type: { type: 'string', description: 'E.g. person, service, database, queue, component; get_capabilities lists all types.' },
     label: { type: 'string' }, description: { type: 'string' }, technology: { type: 'string' }, group: { type: 'string' },
+    link: { type: 'string', description: 'Junction group id' },
     inside: briefObject('Nested room: nodes, relationships, groups, flows, notes; at most 3 levels.'),
   }, required: ['id', 'type', 'label'],
 };

@@ -8,7 +8,7 @@
  */
 
 import type { DepthPath } from '../depth/tree';
-import { viewOf, walkGraphs } from '../depth/tree';
+import { roomsOf, viewOf, walkGraphs } from '../depth/tree';
 import { AgentError } from './errors';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../document/types';
 import { OPEN_POINT_LABELS } from '../document/openPoints';
@@ -378,9 +378,35 @@ export function reviewPath(before: DraftDocument, after: DraftDocument, path: De
 export function diffForReview(before: DraftDocument, after: DraftDocument, path: DepthPath, includeRootMetadata = true): ElementDiffRow[] {
   if (includeRootMetadata) {
     const from = reviewPath(before, after, path);
-    if (from.length < path.length) return diffAt(before, after, from, true).map((row) => (row.path ? row : { ...row, path: [...from] }));
+    if (from.length < path.length) return [...diffAt(before, after, from, true).map((row) => (row.path ? row : { ...row, path: [...from] })), ...diffElsewhere(before, after, from)];
   }
-  return diffAt(before, after, path, includeRootMetadata);
+  return [...diffAt(before, after, path, includeRootMetadata), ...diffElsewhere(before, after, path)];
+}
+
+/**
+ * Shapes a change reached outside the view it was sent to and the views inside that one: a linked
+ * junction renamed with its group in another part of the file. Every change an agent makes is
+ * reviewed before it lands, so the review names these too, each with the view it is in. A room that
+ * kept its shapes (the usual case) costs one identity check.
+ */
+function diffElsewhere(before: DraftDocument, after: DraftDocument, from: DepthPath): ElementDiffRow[] {
+  const rows: ElementDiffRow[] = [];
+  const within = (at: DepthPath) => at.length >= from.length && from.every((id, index) => at[index] === id);
+  const was = new Map(roomsOf(before).map((room) => [room.path.join('\u0000'), room]));
+  for (const room of roomsOf(after)) {
+    if (within(room.path)) continue;
+    const old = was.get(room.path.join('\u0000'));
+    if (!old || old.graph.nodes === room.graph.nodes) continue;
+    const earlier = new Map(old.graph.nodes.map((node) => [node.id, node]));
+    const where = room.owners.length ? `${room.owners.map((owner) => owner.text ?? owner.id).join(' ▸ ')} ▸ ` : '';
+    for (const node of room.graph.nodes) {
+      const prior = earlier.get(node.id);
+      if (!prior || prior === node) continue;
+      const fields = changedFields(nodeFields(prior), nodeFields(node));
+      if (fields.length) rows.push({ kind: node.type === 'group' ? 'group' : 'element', id: node.id, change: 'modified', label: `${where}${node.text ?? prior.text ?? node.id}`, fields, path: [...room.path] });
+    }
+  }
+  return rows;
 }
 
 function diffAt(before: DraftDocument, after: DraftDocument, path: DepthPath, includeRootMetadata: boolean): ElementDiffRow[] {

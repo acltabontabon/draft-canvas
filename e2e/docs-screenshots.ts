@@ -2,6 +2,7 @@ import { openGallery, openStarter } from './library';
 import { createReaderExample } from './reader-example';
 import { clickEdge } from './canvas';
 import { storeWithFlows } from './fixtures/outage';
+import { paymentsDocument } from './fixtures/junctions';
 
 // The guides picture the starters people get today, not the set pinned for the test journeys (`gallery.ts`).
 process.env.STARTERS_SNAPSHOT ??= 'current';
@@ -39,6 +40,7 @@ process.env.STARTERS_SNAPSHOT ??= 'current';
  *   npx tsx e2e/docs-screenshots.ts --walk-only
  *   npx tsx e2e/docs-screenshots.ts --layout-only
  *   npx tsx e2e/docs-screenshots.ts --appearance-only
+ *   npx tsx e2e/docs-screenshots.ts --junctions-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -418,6 +420,56 @@ async function outageScreenshots(page: Page) {
   await settled();
   await page.locator('button.dc-outage-note', { hasText: "can't publish" }).click();
   await shot(page, 'outage-half-done');
+}
+
+/**
+ * Linked Junctions, on a payment drawn in far-apart parts: resting on one shows where it continues,
+ * the Go key lists the places when there are several, and following one arrives at the place with a
+ * way back. Driven through the pointer and the keyboard, as the guide describes it.
+ */
+async function junctionScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1440, height: 860 });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'payments.draftcanvas',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(paymentsDocument())),
+  });
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  const junction = (id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
+  const card = page.locator('.dc-junction-peek');
+  for (const dismiss of await page.locator('.dc-toast-dismiss').all()) await dismiss.click();
+
+  // The first part of the flow, at a size its names read at, wherever the import left the camera.
+  await junction('orders').click();
+  await page.keyboard.press('Control+k');
+  await page.keyboard.type('Fit selection');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(600);
+
+  // Resting on a Junction that continues in one place.
+  const b = await box(junction('b-initiation'));
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await expect(card).toBeVisible();
+  await expect(card.locator('.dc-junction-picture svg')).toBeVisible();
+  await shot(page, 'junction-peek');
+  await page.mouse.move(40, 420);
+  await expect(card).toHaveCount(0);
+
+  // Asked of one that continues in several.
+  await junction('a-initiation').click();
+  await page.keyboard.press('g');
+  await expect(card.getByRole('option')).toHaveCount(3);
+  await page.keyboard.press('ArrowDown');
+  await expect(card.locator('.dc-junction-picture')).toContainText('Reconciliation');
+  await shot(page, 'junction-places');
+
+  // Followed: the place it continues, and the way back.
+  await page.keyboard.press('Enter');
+  await expect(junction('ledger')).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('navigation', { name: 'Junction history' })).toBeVisible();
+  await page.mouse.move(720, 760);
+  await shot(page, 'junction-arrived');
 }
 
 /** Import a real example and follow the same share-link route as a recipient. */
@@ -882,6 +934,11 @@ async function main() {
 
     if (process.argv.includes('--outage-only')) {
       await outageScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--junctions-only')) {
+      await junctionScreenshots(page);
       return;
     }
 

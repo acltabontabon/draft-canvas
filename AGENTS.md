@@ -202,6 +202,30 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - Draw ink with `render/ink.ts` in both canvas and export. A stroke in progress is written to the DOM
   directly (`canvas/liveInk.ts`), never through React state, and kept as one stroke at pen-up.
 
+### Linked junctions
+
+- A Junction's group is `DraftNode.link`, an opaque id on the Junction, and nothing else. Do not add
+  a table of groups or key anything on the label: two groups may read "A". The label is each
+  member's `text`; only `renameJunctionGroup` writes it on all of them.
+- A link is not a connector. Routing, flows, Arrange, Tidy up, semantics, outage walks, sequence
+  export and image export must not read it. The ring a linked Junction wears is canvas chrome in
+  `styles/junctions.css`, never a shape in `nodes/describe.ts`.
+- `src/junctions/` imports `document/` and `depth/` only. Validation reads `link` on its own, never
+  against other Junctions: a shared session checks one node at a time, and a group of one is valid.
+- Every way to travel (the Go key, the peek card, menus, search, a click while presenting) goes
+  through `commands/junctions.ts`. Where the camera stops and how it moves are decided in
+  `junctions/journey.ts`; what is framed in `junctions/destination.ts`, which must stay bounded.
+- The peek (`uiStore.junctionPeek`), a counterpart in hand (`junctionPlacing`) and the trail
+  (`junctionTrail`) are transient: never saved, undone, shared or exported. Following a Junction
+  leaves nothing selected and records no history entry.
+- A Junction's selectors read `store/junctions.ts`, two map lookups. Previews draw only the context
+  through `canvas/junctionPreview.ts`, which keeps a bounded number and drops one when its room changes.
+- Copies follow `regroupCopiedJunctions` in `document/operations.ts`: a group copied together gets a
+  new link, a Junction copied alone keeps its own.
+- Agents keep the same rules through `settleJunctionLabels` (`junctions/groups.ts`), run once after an
+  update's ops: a label set on a linked junction is the group's, in every view; a junction joining a
+  group takes its label. A change that reaches other views is listed by `diffForReview` with its view.
+
 ### Live collaboration
 
 - `src/collab/` is React-free and store-free: it imports `document/`, `depth/` and `lib/` only (and its own
@@ -239,7 +263,7 @@ and the presence hooks in `ui/collab/`. The theme and personality hooks live in 
 labels and presets in `lib/`.
 Library and editor are states of `src/App.tsx`, with no router. Keep the editor's Vite `base: './'`.
 
-`depth/`, `gallery/` and `traffic/` import only `document/`; `layout/` also imports `edges/bundles`. `collab/`
+`depth/`, `gallery/` and `traffic/` import only `document/`; `layout/` also imports `edges/bundles`. `junctions/` imports `document/` and `depth/`. `collab/`
 imports `document/`, `depth/` and `lib/`. `history/` imports `document/` and `depth/`, plus `collab/selective`'s
 `changeKeys`, which records what an edit touched while a session is live. `continuation/` also imports
 `render/text` and `edges/` routing helpers; `openPoints/` also imports `depth/` and `render/` types. None of these import UI, canvas or

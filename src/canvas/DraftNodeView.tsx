@@ -37,6 +37,7 @@ import type { Shape } from '../render/displayList';
 import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { selectNode } from '../store/selectors';
+import { junctionPeerCount } from '../store/junctions';
 import { useUiStore } from '../store/uiStore';
 import { useDiagramStyle } from './useDiagramStyle';
 import { useThemeValue } from '../theme/useTheme';
@@ -123,6 +124,11 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // Identity-stable out of a per-document index (`unresolvedIndex`), so this costs every node one
   // map lookup per store update and re-renders only the nodes whose own points changed.
   const openPoints = useEditorStore((state) => unresolvedOpenPointsFor(state.document.openPoints, { kind: 'node', id }));
+  // A linked Junction (`DraftNode.link`): how many other places its group is drawn in, and whether
+  // its group is the one being pointed out. Two lookups each, and constant for every other shape
+  // (`store/junctions.ts`). Canvas chrome only: an export draws the Junction and its label.
+  const linkPeers = useEditorStore((state) => junctionPeerCount(state, node?.link));
+  const linkPointed = useUiStore((state) => state.junctionPeerLink !== null && state.junctionPeerLink === node?.link);
 
   const [editing, setEditing] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
@@ -505,6 +511,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-pointed={pointed ? 'true' : undefined}
       data-traced={traced ? 'true' : undefined}
       data-held={node.held ? 'true' : undefined}
+      data-link={node.link ? (linkPeers > 0 ? 'linked' : 'waiting') : undefined}
+      data-link-pointed={node.link && linkPointed ? 'true' : undefined}
       data-settle={settling ? 'true' : undefined}
       data-arriving={arriving && !settling ? 'true' : undefined}
       data-changed={changed ? 'true' : undefined}
@@ -539,6 +547,19 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           shape's own name rather than a separate thing to find: "has an inside" is a fact about
           this shape, like its kind. */}
       {insideCount > 0 && <span className="dc-sr-only">, has an inside, {count(insideCount, 'shape')}</span>}
+      {node.link && (
+        <>
+          <span className="dc-sr-only">{linkPeers > 0 ? `, continues in ${count(linkPeers, 'other place')}` : ', not linked to another junction yet'}</span>
+          {/* The link, as the canvas shows it: a ring around the Junction, whole when it leads
+              somewhere and dashed while it waits, with how many places when there are several. */}
+          <span className="dc-junction-link" aria-hidden="true" />
+          {linkPeers > 1 && (
+            <span className="dc-junction-count" aria-hidden="true">
+              {linkPeers}
+            </span>
+          )}
+        </>
+      )}
       {!readOnly && (
         <NodeResizer
           isVisible={Boolean(selected) && !sequenceEditing}

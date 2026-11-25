@@ -34,6 +34,7 @@ import {
   withCamerasOf,
   type DepthPath,
 } from '../depth/tree';
+import { junctionOf, linkJunctions as linkJunctionsIn, renameJunctionGroup as renameJunctionGroupIn, unlinkJunctions as unlinkJunctionsIn } from '../junctions/groups';
 import { getMeasurer } from '../render/text/measure';
 import { naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight, sizingContext } from '../nodes/describe';
 import { fitSequences, recoverCappedSequence } from '../nodes/sequenceFit';
@@ -645,6 +646,22 @@ export interface EditorStore {
    *  already appears to branch, and re-points that bundle's members through
    *  it — the deliberate step from automatic routing to explicit control. */
   convertBundleToJunction: (edgeId: string) => void;
+  /**
+   * Puts Junctions into one group (`DraftNode.link`, `src/junctions/`), wherever in the file they
+   * are — one undo step. `into` names a group to join; without it the first that already has one
+   * decides, or a new group is made. The group's link, or `null` when nothing changed.
+   */
+  linkJunctions: (ids: readonly string[], into?: string) => string | null;
+  /** Takes Junctions out of their groups, keeping each shape, its label and its connectors. */
+  unlinkJunctions: (ids: readonly string[]) => boolean;
+  /** Renames a group: the label on every member, in every room, as one undo step. */
+  renameJunctionGroup: (link: string, label: string) => boolean;
+  /**
+   * Adds a counterpart of a Junction to the room on screen, centred on `center` and selected: the
+   * same label, colour and size, in the same group. A Junction that had no group yet gets one in the
+   * same undo step. `null` when the Junction is gone or the file is full.
+   */
+  addJunctionCounterpart: (sourceId: string, center: { x: number; y: number }) => DraftNode | null;
   setEdgeInteractionMode: (id: string, mode: 'sync' | 'async') => void;
   toggleEdgeAsync: (id: string) => void;
   /** Sets (or clears) a connector's flow-behaviour kind — see `ConnectorKind`. */
@@ -1218,6 +1235,8 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     depthPlateFocusId: null,
     // Anchored to an element of the canvas being left.
     openPointPopover: null,
+    junctionPeek: null,
+    junctionPeerLink: null,
     // Strokes and a drawing's offer belong to the room being left.
     inkSelection: [],
     inkSuggestion: null,
@@ -2188,6 +2207,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateNodeText(id, rawText, options) {
     // Held to what a load keeps (`parseDocument`), so a save never holds text the next open trims.
     const text = rawText.slice(0, LIMITS.maxTextLength);
+    // A linked Junction's label is its group's: typed on one, it is the same words on every one,
+    // in every room, as one undo step (`junctions/groups.ts`).
+    const junction = get().document.nodes.find((n) => n.id === id);
+    if (junction?.type === 'ellipse' && junction.link) {
+      get().renameJunctionGroup(junction.link, text);
+      return;
+    }
     // A manual edit is permanent intent from this point on, even if the typed value happens to
     // match a subtype's own default (e.g. renaming an API to literally "API") — see
     // `DraftNode.textOrigin`'s doc comment. `updateNodeById`'s Service auto-relabeling never
@@ -2934,6 +2960,55 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   commitPositions(positions) {
     get().apply('Move', (doc) => moveNodes(doc, positions));
+  },
+
+  linkJunctions(ids, into) {
+    let link: string | null = null;
+    const changed = get().applyToFile(ids.length > 1 ? 'Link junctions' : 'Link junction', (file) => {
+      const result = linkJunctionsIn(file, ids, into);
+      link = result.link;
+      return result.file;
+    });
+    return changed ? link : null;
+  },
+
+  unlinkJunctions(ids) {
+    return get().applyToFile(ids.length > 1 ? 'Unlink junctions' : 'Unlink junction', (file) => unlinkJunctionsIn(file, ids));
+  },
+
+  renameJunctionGroup(link, label) {
+    return get().applyToFile('Rename junction group', (file) => renameJunctionGroupIn(file, link, label));
+  },
+
+  addJunctionCounterpart(sourceId, center) {
+    if (!roomFor(1, 0)) return null;
+    const state = get();
+    let made: DraftNode | null = null;
+    const changed = state.applyToFile('Add linked junction', (file) => {
+      // The source first: one that had no group yet starts it, and takes the next free letter.
+      const linked = linkJunctionsIn(file, [sourceId]);
+      const source = junctionOf(linked.file, sourceId)?.node;
+      if (!source?.link) return file;
+      const room = viewOf(linked.file, state.path);
+      if (!room) return file;
+      const node = createNode({
+        type: 'ellipse',
+        x: Math.round(center.x - source.width / 2),
+        y: Math.round(center.y - source.height / 2),
+        width: source.width,
+        height: source.height,
+        text: source.text ?? '',
+        link: source.link,
+        ...(source.accent !== undefined ? { accent: source.accent } : {}),
+      });
+      made = node;
+      return embed(linked.file, state.path, reconcileMembershipOp(addNodes(room, [node]), [node.id]));
+    });
+    const node = made as DraftNode | null;
+    if (!changed || !node) return null;
+    // Selected where it landed, like any shape just made — `applyToFile` keeps the old selection.
+    if (get().document.nodes.some((other) => other.id === node.id)) set({ selection: { nodes: [node.id], edges: [] } });
+    return node;
   },
 
   holdSelection(held) {

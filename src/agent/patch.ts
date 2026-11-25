@@ -67,7 +67,7 @@ import {
   AGENT_LIMITS,
   extrasOf,
   readDeliveryAttempts,
-  readReplicas,
+  readLink, readReplicas,
   readEvidence,
   readHighlight,
   readLabelStyle,
@@ -89,10 +89,16 @@ import { moveInside, moveOutside } from './restructure';
 import { newFindings, REVIEW_LIMIT, reviewView } from './review';
 import { technologyAdvice } from './advice';
 import { OP_FIELDS, SET_FIELDS, suggestedField } from './fields';
+import { settleJunctionLabels } from '../junctions/groups';
+import { isRecord } from '../lib/isRecord';
+
 import { validateUpdateSet } from './contract';
 import { GROUP_KINDS, LINE_STYLE_NAMES, LINE_STYLES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
 import { applyRoutes, readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
 import { applyPlaces } from './placeExplicit';
+
+/** Every field `set` takes on anything: a name here is a real field, of this target or another. */
+const EVERY_SET_FIELD: ReadonlySet<string> = new Set(Object.values(SET_FIELDS).flat());
 
 export interface PatchResult {
   file: DraftDocument;
@@ -523,7 +529,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const fields: readonly string[] = SET_FIELDS[target];
     for (const key of Object.keys(set)) {
       if (fields.includes(key)) continue;
-      const meant = suggestedField(key, fields);
+      const meant = suggestedField(key, fields, EVERY_SET_FIELD);
       const suggestion = meant ? `; use ${meant}` : '';
       problems.add('INVALID_INPUT', `${at}/set/${key}`, `not a field of ${SET_TARGET_NAMES[target]} ("${id}")${suggestion}; it takes ${fields.join(', ')}`);
     }
@@ -594,7 +600,27 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     problems.throwIfAny();
   }
 
-  const nextFile = path.length ? embed(base, path, view) : view;
+  let nextFile = path.length ? embed(base, path, view) : view;
+  // A linked junction's label is its group's, in every view (`junctions/groups.ts`): a label set on
+  // one is written on the rest, and one that joined a group takes the group's. Settled once, after
+  // every op, so the order the ops ran in decides it.
+  const relabelled = ops.flatMap((op) => (isRecord(op) && op.op === 'update' && typeof op.id === 'string' && isRecord(op.set) && op.set.label !== undefined ? [op.id] : []));
+  const settled = settleJunctionLabels(file, nextFile, relabelled);
+  if (settled.file !== nextFile) {
+    nextFile = settled.file;
+    const here = viewOf(nextFile, path);
+    if (here) {
+      const was = new Map(view.nodes.map((node) => [node.id, node]));
+      for (const node of here.nodes) if (was.get(node.id) !== node) touched.add(node.id);
+      view = here;
+    }
+    for (const { link, label, changed } of settled.renamed) {
+      advisories.push(`Junction group "${link}" reads "${label}" everywhere it is drawn: ${changed} other junction${changed === 1 ? '' : 's'} renamed with it.`);
+    }
+    for (const { id, link, label, was } of settled.adopted) {
+      advisories.push(`Junction "${id}" joined group "${link}" and reads "${label}", the group's label, not "${was}". To rename the group, update any of its junctions with set.label.`);
+    }
+  }
   // Only what this request could plausibly have broken — `touched` plus, through `checkQuality`'s
   // pairwise checks, anything untouched it collides with — never a claim the whole file is clean.
   const quality: QualityReport = { errors: [], warnings: [] };
@@ -923,6 +949,11 @@ function updateOne(
       const replicas = readReplicas(r, set.replicas, `${at}/replicas`, node.type);
       if (replicas === null) patch.replicas = undefined;
       else if (replicas !== undefined) patch.replicas = replicas;
+    }
+    if (set.link !== undefined) {
+      const link = readLink(r, set.link, `${at}/link`, node.type);
+      if (link === null) patch.link = undefined;
+      else if (link !== undefined) patch.link = link;
     }
     if (clear('color')) patch.accent = undefined;
     else if (set.color !== undefined) {

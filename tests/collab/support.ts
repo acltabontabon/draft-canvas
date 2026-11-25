@@ -14,6 +14,7 @@ import { addParticipant, createMessage, insertItem, updateSequence, wrapItems } 
 import { addInk, inkOf, removeInk, translateInk, withInk } from '../../src/document/ink';
 import type { DraftDocument, DraftInside, DraftNode, DraftSequence, ViewLevel } from '../../src/document/types';
 import { canHoldInside } from '../../src/collab/apply';
+import { junctionIndex, linkJunctions, renameJunctionGroup, unlinkJunctions } from '../../src/junctions/groups';
 import type { CollabTransport, TransportState } from '../../src/collab/transport/types';
 
 export type Rng = () => number;
@@ -36,6 +37,12 @@ function pick<T>(rng: Rng, items: readonly T[]): T | undefined {
 
 const TYPES = ['service', 'component', 'database', 'queue', 'note', 'group', 'actor', 'sequence'] as const;
 const LEVELS: ViewLevel[] = ['context', 'container', 'component', 'none'];
+/** A few groups, so linked Junctions land in the same one often enough to matter. */
+const JUNCTION_GROUPS = [
+  { link: 'j_alpha', label: 'A' },
+  { link: 'j_beta', label: 'B' },
+  { link: 'j_gamma', label: 'A' },
+] as const;
 
 /** Mostly a room that has shapes to work with; sometimes an empty one inside a shape that could hold one. */
 function chooseRoom(file: DraftDocument, rng: Rng): DepthPath {
@@ -80,7 +87,25 @@ export function randomEdit(file: DraftDocument, rng: Rng): DraftDocument {
   counter += 1;
 
   const stroke = pick(rng, inkOf(room));
-  switch (Math.floor(rng() * 21)) {
+  switch (Math.floor(rng() * 23)) {
+    // Linked Junctions: drawn into one of a few groups, in whichever room the edit lands in, then
+    // renamed as a group, taken out of it or joined to another — the edits that touch several
+    // Junctions, in several rooms, in one step.
+    case 21: {
+      const group = pick(rng, JUNCTION_GROUPS)!;
+      const created = { ...createNode({ type: 'ellipse', text: group.label, x: Math.round(rng() * 800), y: Math.round(rng() * 600) }), link: group.link };
+      return inRoom(file, path, (view) => addNodes(view, [created]));
+    }
+    case 22: {
+      const junctions = [...junctionIndex(file).byId.values()];
+      const chosen = pick(rng, junctions);
+      if (!chosen) return file;
+      const dice = rng();
+      if (dice < 0.34 && chosen.node.link) return renameJunctionGroup(file, chosen.node.link, `G${counter}`);
+      if (dice < 0.67) return chosen.node.link ? unlinkJunctions(file, [chosen.node.id]) : linkJunctions(file, [chosen.node.id], pick(rng, JUNCTION_GROUPS)!.link).file;
+      const second = pick(rng, junctions)!;
+      return linkJunctions(file, [chosen.node.id, second.node.id]).file;
+    }
     // Sketches: drawn, moved, erased and restacked, in whichever room the edit lands in. A room with
     // no shapes holds no sketches (it does not exist), so nothing is drawn there.
     case 18: {

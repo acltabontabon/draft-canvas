@@ -434,6 +434,10 @@
               "group": {
                 "type": "string"
               },
+              "link": {
+                "type": "string",
+                "description": "Junction group id"
+              },
               "inside": {
                 "type": "object",
                 "description": "Nested room: nodes, relationships, groups, flows, notes; at most 3 levels."
@@ -670,7 +674,7 @@
               "op"
             ]
           },
-          "description": "Ops run in order as one change. {op:\"update\",id,set:{field:value}} uses the id from read_diagram in the addressed view; null clears optional fields. set by target — element: label,type,description,technology,replicas,color,group,evidence,place; group: label,kind,group,color,place; note: label,text,kind,about,near,group,color,attach,place; code: code,language,kind,about,near,group,color,attach,place; label: label,text,kind,style,about,near,group,color,attach,place; relationship: label,semantic,kind,directed,async,condition,color,lineStyle,response,deliveryAttempts,from,to,compensationFor,compensationVisible,compensationName,compensationProtocol,compensationDescription,evidence,route; flow: title,color,steps,variantOf; sequence: title,mermaid,links,place; attachment: label,text,kind,code,language,about,attach; openPoint: kind,context,resolved,resolution,about. {op:\"add\",nodes:[{id,type,label}],relationships:[{id,from,to}],groups:[{id,label}],flows:[{id,title,steps:[relationshipId]}],notes:[{id,text}],sequences:[{id,title,mermaid}],openPoints:[{kind,about}],level?}; omit unused lists. {op:\"remove\",ids,cascade?}; {op:\"arrange\",scope?,connectors?,move?,direction?,spacing?,primaryFlow?}; {op:\"setLevel\",level}; {op:\"moveInside\",owner,ids}; {op:\"moveOutside\",ids}. Full schema: get_capabilities({tool:\"update_diagram\"})."
+          "description": "Ops run in order as one change. {op:\"update\",id,set:{field:value}} uses the id from read_diagram in the addressed view; null clears optional fields. set by target — element: label,type,description,technology,replicas,link,color,group,evidence,place; group: label,kind,group,color,place; note: label,text,kind,about,near,group,color,attach,place; code: code,language,kind,about,near,group,color,attach,place; label: label,text,kind,style,about,near,group,color,attach,place; relationship: label,semantic,kind,directed,async,condition,color,lineStyle,response,deliveryAttempts,from,to,compensationFor,compensationVisible,compensationName,compensationProtocol,compensationDescription,evidence,route; flow: title,color,steps,variantOf; sequence: title,mermaid,links,place; attachment: label,text,kind,code,language,about,attach; openPoint: kind,context,resolved,resolution,about. {op:\"add\",nodes:[{id,type,label}],relationships:[{id,from,to}],groups:[{id,label}],flows:[{id,title,steps:[relationshipId]}],notes:[{id,text}],sequences:[{id,title,mermaid}],openPoints:[{kind,about}],level?}; omit unused lists. {op:\"remove\",ids,cascade?}; {op:\"arrange\",scope?,connectors?,move?,direction?,spacing?,primaryFlow?}; {op:\"setLevel\",level}; {op:\"moveInside\",owner,ids}; {op:\"moveOutside\",ids}. Full schema: get_capabilities({tool:\"update_diagram\"})."
         },
         "rename": {
           "type": "object",

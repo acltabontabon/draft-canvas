@@ -605,6 +605,9 @@ function box(node: DraftNode, ctx: DescribeContext, radius: number): Shape[] {
  * `outline`/`bow` values would be disproportionate on the smallest ones. Both axes clamp to a
  * fraction of the node's own radius instead of using the profile value directly.
  */
+/** How far a Junction's label stays from its rim on each side. */
+const JUNCTION_LABEL_INSET = 5;
+
 function junctionAmplitude(profile: PersonalityProfile, rx: number, ry: number) {
   const cap = Math.min(rx, ry) * 0.18;
   return { outline: Math.min(profile.outline, cap), bow: Math.min(profile.bow, cap) };
@@ -634,9 +637,12 @@ function ellipse(node: DraftNode, ctx: DescribeContext): Shape[] {
       opacity: 0.55,
     });
   }
+  // A circle this small has no card padding to keep: the label gets the width a circle really has
+  // across its middle, so "A" and "AB" sit on one line at the label's own size.
+  const spare = Math.max(0, PADDING - JUNCTION_LABEL_INSET);
   return [
     ...shapes,
-    ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '' }),
+    ...centredLabel(node, ctx, { top: 0, bottom: 0, color: '', left: -spare, right: -spare }),
   ];
 }
 

@@ -194,6 +194,9 @@ function roomJumpCommands(document: DraftDocument, elsewhere: Elsewhere | null):
   for (const node of document.nodes) {
     const name = names.get(node.id)!;
     if (!name.trim()) continue;
+    // A linked Junction is listed by `commands/junctions.ts`, with where it is and what it leads
+    // to, and is travelled to the way following one is.
+    if (node.type === 'ellipse' && node.link) continue;
     commands.push({
       id: `jump-node:${node.id}`,
       title: name,

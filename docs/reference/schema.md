@@ -10,7 +10,7 @@ A document (`DraftDocument` in `src/document/types.ts`) is JSON with these root 
 | Field | Contents |
 | --- | --- |
 | `format` | Always `"draft-canvas"` |
-| `version` | Format version, currently **32** (`CURRENT_VERSION`) |
+| `version` | Format version, currently **33** (`CURRENT_VERSION`) |
 | `metadata` | `id`, `title`, `createdAt`, `updatedAt`, optional `projectId` |
 | `nodes`, `edges`, `flows`, `viewport` | The top-level graph |
 | `ink` | Optional handwritten strokes over the top-level graph (`DraftInk`). Absent when there are none |
@@ -35,6 +35,11 @@ a coordinate: layout, work bars and the node's size are derived.
   same note and code payloads as a canvas connector.
 - A canvas connector can attach to a participant through `sourceAnchor.participantId` or
   `targetAnchor.participantId`; its anchor offset is then measured along the participant's lifeline.
+
+A Junction (a node of type `ellipse`) may carry `link`, an opaque id of at most 128 characters.
+Junctions with the same `link`, in any room of the file, are one continuation point drawn in
+several places. It is kept on Junctions only, is never a node id, and is read on its own: a link no
+other Junction shares is valid. Their labels are each node's own `text`.
 
 IndexedDB's `bodies` store holds the same shape.
 
@@ -88,6 +93,7 @@ Rules for a new version:
 | v29 → v30 | `migrateCardKindsToGlyphs` | A Service of kind `worker`, `external`, `scheduler` or `gateway` grows to the height its glyph, name and details need (114, 128 with a technology, 143 with a description), placed so the glyph's middle is where the card's middle was: those kinds are drawn as a glyph with the name underneath. Also the first version with the `artifact` shape and `serviceKind` of `load-balancer` and `proxy` |
 | v30 → v31 | `migrateComponentKindsToGlyphs` | A Component of kind `module`, `adapter` or `port` grows the same way, for the same reason: those kinds are drawn as a glyph with the name underneath |
 | v31 → v32 | identity | No-op (optional root `style`: how the diagram is drawn). Background images are retired: `settings.background`, with any image inside it, is discarded by normalization |
+| v32 → v33 | identity | No-op (optional `link` on Junctions: the group a Junction continues in). Junctions that only share a label are not linked by the migration |
 
 Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17, v20, v29 and v30. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.

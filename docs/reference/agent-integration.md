@@ -192,6 +192,28 @@ Render it with `render_diagram({diagramId, previewId})`, then apply it with
 `update_diagram({requestId, diagramId, expectedRevision, previewId})`. Candidates last 10 minutes; at
 most 4 (64 MB) are kept per page. A changed diagram refuses the candidate; panning and zooming do not count.
 
+**Linked junctions.** A `junction` takes `link`, a name of up to 64 characters that the agent
+chooses. Junctions with the same `link` are one continuation point drawn in several places, in one
+view or across inside views, and people travel between them. Use a pair in place of a relationship
+that would cross the whole diagram: end the line at one junction, start it again from another with
+the same `link`, and give both the same short label.
+
+- Create or add: `{id: "out", type: "junction", label: "A", link: "payment-handoff"}`.
+- Link, move to another group, or unlink: `{op: "update", id, set: {link: "payment-handoff"}}`,
+  `set: {link: null}`.
+- `read_diagram` returns each junction's `link`, and `linkedJunctions: [{link, label, places:
+  [{id, view}]}]` for every group with a member on the page: where each is drawn, by view path.
+  `query` finds junctions by their link as well as their label.
+- A group reads as one label, as it does for a person:
+  - Junctions sharing a `link` in one create or `add` need the same label (`INVALID_INPUT` otherwise).
+  - `set.label` on any junction of a group renames every member, in every view. The receipt says
+    how many others changed, and a review or proposal lists each with its view.
+  - A junction joining an existing group (`add` with `link`, or `set.link` alone) takes the
+    group's label, with an advisory when that replaced its own.
+- `rename_element` renames a linked group by its label when no architecture shape carries that label.
+- A link adds no relationship. Flows, semantics and outage reads follow drawn relationships only.
+- `link` on any other element type is `UNSUPPORTED`.
+
 **Source evidence.** Elements and relationships take up to 8 `evidence` entries:
 `{path, basis: "observed" | "inferred", symbol?, commit?, line?, explanation?}`, with a
 repository-relative `path`. They show under **Source evidence** in Details and are never fetched or checked.
