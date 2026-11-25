@@ -390,3 +390,135 @@
 .dc-editor[data-studio] .dc-history-status {
   display: none;
 }
+
+/* A session's label is a quiet button: it compares the session's start with its end. */
+button.dc-timeline-session-label {
+  padding: 2px 6px;
+  margin: -2px -6px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  font: inherit;
+  font-size: 11px;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.dc-timeline-session-label:hover:not(:disabled) {
+  background: var(--dc-surface-hover);
+}
+
+button.dc-timeline-session-label:focus-visible {
+  outline: 2px solid var(--dc-selection);
+}
+
+button.dc-timeline-session-label:disabled {
+  cursor: default;
+}
+
+/* Comparing: one calm row, the list of changes only when asked for. */
+.dc-compare-bar {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-compare-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-compare-bar-what {
+  display: inline-flex;
+  flex: 1 1 200px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.dc-compare-bar-side {
+  overflow: hidden;
+  max-width: 220px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-compare-list-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.dc-compare-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  max-height: 150px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dc-compare-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-compare-item:hover,
+.dc-compare-item[aria-current='true'] {
+  background: var(--dc-surface-hover);
+}
+
+.dc-compare-item:focus-visible {
+  outline: 2px solid var(--dc-selection);
+}
+
+.dc-compare-item-glyph {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-caution);
+  color: var(--dc-canvas);
+  font-weight: 700;
+}
+
+.dc-compare-item[data-change='added'] .dc-compare-item-glyph {
+  background: var(--dc-selection);
+}
+
+.dc-compare-item[data-change='removed'] .dc-compare-item-glyph {
+  background: var(--dc-danger);
+}
+
+.dc-compare-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-compare-item-what {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--dc-text-faint);
+}

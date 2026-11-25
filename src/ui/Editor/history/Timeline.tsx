@@ -7,10 +7,12 @@ import { CATEGORIES } from '../../../evolution/diff';
 import { groupSessions, matches, type Revision, type Session } from '../../../evolution/timeline';
 import { relativeTime } from '../../../lib/relativeTime';
 import { useEvolutionStore, type PlaybackState } from '../../../store/evolution/evolutionStore';
+import { compareVersions, endCompare } from '../../../store/evolution/compare';
 import { lensEnter, loadTimeline, sessionSummary, showLive, showRevision, stepRevision } from '../../../store/evolution/historyView';
 import { Button } from '../../common/Button';
 import { Icon } from '../../common/Icon';
 import { Tooltip } from '../../common/Tooltip';
+import { CompareBar } from './CompareBar';
 import { MenuButton } from './MenuButton';
 import { RevisionActions } from './RevisionActions';
 import './history.css';
@@ -57,17 +59,26 @@ function SessionLabel({ session }: { session: Session }) {
       live = false;
     };
   }, [session.before, session.last]);
+  // A session's label compares its start with its end: its net change, on the canvas.
+  const from = session.before ?? session.revisions.at(-1)!.oid;
   return (
-    <span className="dc-timeline-session-label" title={summary ?? undefined}>
+    <button
+      type="button"
+      className="dc-timeline-session-label"
+      title={summary ? `${summary} — compare the start and end of this session` : 'Compare the start and end of this session'}
+      disabled={from === session.last}
+      onClick={() => void compareVersions(from, session.last)}
+    >
       <span className="dc-timeline-session-when">{formatWhen(session.end)}</span>
       <span className="dc-timeline-session-summary">{summary ?? ' '}</span>
-    </span>
+    </button>
   );
 }
 
 export function Timeline() {
-  const { open, timeline, lens, playback, altName, capture, changes } = useEvolutionStore(
+  const { open, timeline, lens, playback, altName, capture, changes, compare } = useEvolutionStore(
     useShallow((state) => ({
+      compare: state.compare,
       open: state.timelineOpen,
       timeline: state.timeline,
       lens: state.lens,
@@ -147,7 +158,7 @@ export function Timeline() {
       },
       End: showLive,
       ' ': () => void togglePlay(),
-      Escape: () => (lens ? showLive() : setTimelineOpen(false)),
+      Escape: () => (compare ? endCompare() : lens ? showLive() : setTimelineOpen(false)),
     };
     const run = keys[event.key];
     if (!run) return;
@@ -237,7 +248,7 @@ export function Timeline() {
             <SessionLabel session={session} />
             <div className="dc-timeline-marks">
               {[...session.revisions].reverse().map((revision) => (
-                <RevisionMark key={revision.oid} revision={revision} current={lens?.oid === revision.oid} />
+                <RevisionMark key={revision.oid} revision={revision} current={lens?.oid === revision.oid || compare?.base.oid === revision.oid} />
               ))}
             </div>
           </div>
@@ -252,7 +263,8 @@ export function Timeline() {
         </button>
       </div>
 
-      {selected && lens && (
+      {compare && <CompareBar compare={compare} />}
+      {!compare && selected && lens && (
         <div className="dc-timeline-detail">
           <div className="dc-timeline-detail-text">
             <span className="dc-timeline-detail-summary">
@@ -285,7 +297,7 @@ function RevisionMark({ revision, current }: { revision: Revision; current: bool
   const milestone = revision.milestones[0];
   const when = new Date(revision.at).toLocaleString();
   return (
-    <Tooltip content={{ title: revision.summary, description: milestone ? `${milestone.name} · ${when}` : when }}>
+    <Tooltip content={{ title: revision.summary, description: `${milestone ? `${milestone.name} · ` : ''}${when} · Shift-click to compare` }}>
       {(tip) => (
         <button
           type="button"
@@ -296,7 +308,12 @@ function RevisionMark({ revision, current }: { revision: Revision; current: bool
           className="dc-timeline-mark"
           data-kind={revision.initiator}
           data-milestone={milestone ? 'true' : undefined}
-          onClick={() => void showRevision(revision.oid)}
+          onClick={(event) => {
+            // Shift-click a second revision to compare the two.
+            const shown = useEvolutionStore.getState().lens;
+            if (event.shiftKey && shown && shown.oid !== 'live') void compareVersions(shown.oid, revision.oid);
+            else void showRevision(revision.oid);
+          }}
           {...tip}
         />
       )}

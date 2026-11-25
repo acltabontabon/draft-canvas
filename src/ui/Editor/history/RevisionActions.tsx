@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Revision } from '../../../evolution/timeline';
+import { compareVersions } from '../../../store/evolution/compare';
 import { addMilestone } from '../../../store/evolution/historyView';
 import { useUiStore } from '../../../store/uiStore';
 import { Button } from '../../common/Button';
@@ -14,6 +15,7 @@ export function RevisionActions({ revision }: { revision: Revision }) {
   const [details, setDetails] = useState(false);
 
   const more = () => [
+    ...(revision.parents[0] ? [{ id: 'previous', label: 'Compare with the revision before', onSelect: () => void compareVersions(revision.parents[0]!, revision.oid) }] : []),
     { id: 'name', label: revision.milestones.length > 0 ? 'Add another name…' : 'Name this revision…', onSelect: () => setNaming(true) },
     {
       id: 'copy',
@@ -28,6 +30,9 @@ export function RevisionActions({ revision }: { revision: Revision }) {
   return (
     <>
       <div className="dc-timeline-actions">
+        <Button variant="quiet" onClick={() => void compareVersions(revision.oid, 'now')}>
+          Compare with now
+        </Button>
         <MenuButton icon="more" label="More for this revision" items={more} />
       </div>
       {naming && <MilestoneForm oid={revision.oid} onDone={() => setNaming(false)} />}

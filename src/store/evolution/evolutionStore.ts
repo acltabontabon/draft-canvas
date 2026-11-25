@@ -12,6 +12,7 @@ import { create } from 'zustand';
 import type { DepthPath } from '../../depth/tree';
 import type { DraftDocument } from '../../document/types';
 import type { Oid } from '../../evolution/contracts';
+import type { SemanticDiff } from '../../evolution/diff';
 import type { Revision, RevisionQuery } from '../../evolution/timeline';
 
 export type CaptureState =
@@ -67,6 +68,30 @@ export interface EvolutionState {
   /** A past revision on screen in place of the live diagram, privately and read-only. */
   lens: LensState | null;
   playback: PlaybackState;
+  /** Two versions compared on the canvas, while the person looks. */
+  compare: CompareState | null;
+}
+
+export interface CompareSide {
+  /** A revision, or `'now'`: the live diagram as it was when the comparison began. */
+  oid: Oid | 'now';
+  label: string;
+  file: DraftDocument;
+}
+
+export interface CompareState {
+  /** The earlier side. */
+  base: CompareSide;
+  /** The later side. */
+  target: CompareSide;
+  diff: SemanticDiff;
+  mode: 'overlay' | 'split';
+  /** In overlay mode: which side is drawn, with the other's differences marked on it. */
+  side: 'after' | 'before';
+  /** Only additions, removals and changes of structure, relationships, grouping and links. */
+  structuralOnly: boolean;
+  /** The change the camera was last taken to, for the list to show. */
+  focused: string | null;
 }
 
 export interface TimelineState {
@@ -120,6 +145,7 @@ export const INITIAL_EVOLUTION: EvolutionState = {
   timeline: { revisions: [], loading: false, error: null, more: false, query: {} },
   lens: null,
   playback: { playing: false, speed: 1, focus: true },
+  compare: null,
 };
 
 export const useEvolutionStore = create<EvolutionState>(() => INITIAL_EVOLUTION);
