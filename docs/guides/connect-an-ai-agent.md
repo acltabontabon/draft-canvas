@@ -1,6 +1,6 @@
 # Connect an AI agent
 
-Let a coding agent, such as Claude Code, Codex, Cursor, Gemini CLI or Junie, draw and update diagrams
+Let a coding agent, such as Claude Code, Codex, Cursor, Gemini CLI, Junie or OpenCode, draw and update diagrams
 in Draft Canvas Desktop on macOS or Windows. Agents reach only the folders you allow. Your agent may
 send diagram content to its AI provider, as it does with code.
 
@@ -10,9 +10,12 @@ send diagram content to its AI provider, as it does with code.
 2. Turn on **Allow agent access**.
 3. Under **Allowed folders**, tick the folders the agent may use. Subfolders are included. A folder
    is listed once you have opened it in Draft Canvas.
-4. Under **Connect an agent**, choose your agent and click its button.
-5. Optional: under **Agent skill**, click **Install skill**. It teaches the agent to draw a repository.
-6. Start a new agent session. Keep Draft Canvas running while the agent works.
+4. Under **Connect an agent**, choose your agent. An agent that is already set up has a tick.
+5. **Connect**: click the agent's button.
+6. **Add the skill** (optional): click **Install skill**. It teaches the agent to draw a repository.
+7. **Try it**: start a new agent session and ask it to list your Draft Canvas diagrams. The step
+   says **1 agent connected** once the agent gets through. Keep Draft Canvas running while the
+   agent works.
 
 ![AI agent settings with Add to Codex.](../media/guides/agent-setup-codex.png)
 
@@ -23,10 +26,41 @@ send diagram content to its AI provider, as it does with code.
 | Cursor | **Add to Cursor** (opens Cursor) |
 | Gemini CLI | **Add to Gemini CLI**; start sessions in a trusted folder |
 | Junie | **Add to Junie** |
-| Other MCP clients | Copy the `mcpServers` entry into the client's configuration |
+| OpenCode | **Add to OpenCode** (every project); restart OpenCode. See [OpenCode](#opencode) |
+| Other MCP clients | Choose **Other** and copy the `mcpServers` entry into the client's configuration |
 
 If Draft Canvas cannot find `claude` or `gemini`, Settings shows a terminal command to run instead.
 To configure by hand, open **Set it up by hand instead** (Cursor: **Copy the config instead**).
+
+### OpenCode
+
+**Add to OpenCode** adds a `draft-canvas` server to OpenCode's global configuration,
+`~/.config/opencode/opencode.json` (on Windows, `.config\opencode\opencode.json` in your user
+folder). OpenCode 1 and OpenCode 2 both read the entry. OpenCode does not need to be installed
+first. The rest of the file is kept, and clicking again changes nothing.
+
+**Set up** means the file is written, not that OpenCode has connected. **Try it** says when an
+agent has. To check from OpenCode's side, open **Check from a terminal instead**, or run this in
+your project folder:
+
+```bash
+opencode mcp list
+```
+
+It should show `draft-canvas` as connected. In OpenCode 2 it may say `pending` for a moment, and the
+agent calls Draft Canvas through its `execute` tool. The skill is found in `~/.agents/skills`.
+
+Draft Canvas leaves the file alone, and says why, when:
+
+- the file has comments or trailing commas. Draft Canvas reads them but cannot keep them when
+  saving. If only `opencode.jsonc` has them, `opencode.json` beside it is written instead; OpenCode
+  reads both.
+- Draft Canvas is already there more than once, in both files or under both `mcp` and
+  `mcp.servers`. OpenCode 1 and 2 pick different ones. Keep one, then click again.
+- a server named `draft-canvas` is not this connector, such as a remote server. Rename or remove it.
+
+To set it up by hand, or for one project only, paste the entry from **Set it up by hand instead**
+into that file or into the project's `opencode.json`. Access is still limited to **Allowed folders**.
 
 The skill installs in `~/.claude/skills` (Claude Code) or `~/.agents/skills` (other agents) and
 updates with Draft Canvas. If you edit your copy, updates leave it alone until you click **Replace
@@ -214,5 +248,7 @@ In **Settings → AI agents**:
 | Layout refused | Ask for a smaller diagram, or put detail inside services. |
 | Version mismatch, or Settings shows **Update** *agent* | Click it to point the agent at this copy of Draft Canvas. |
 | Claude Code finds Draft Canvas in one folder only | Use **Add to Claude Code**, which sets it up for every project. |
+| OpenCode is **Set up** but `opencode mcp list` does not show `draft-canvas` as connected | Restart OpenCode. Then look for something overriding the global file: a `draft-canvas` entry in the project's `opencode.json` or `.opencode/` folder, or `OPENCODE_CONFIG`, `OPENCODE_CONFIG_DIR`, `OPENCODE_CONFIG_CONTENT` or `XDG_CONFIG_HOME` set in your shell. `opencode debug config` shows what OpenCode loaded. Draft Canvas cannot see these; paste the entry where OpenCode reads it. |
+| **Add to OpenCode** says the file has comments, or that Draft Canvas is set up more than once | See [OpenCode](#opencode). |
 | No Nodi in the status bar | Install Claude Code (2.1.295 or later) or Codex (0.163.0 or later), then reopen the diagram. |
 | Nodi says the agent isn't signed in | Run `claude` or `codex` once in Terminal to sign in, then try again. A desktop app does not see an `ANTHROPIC_API_KEY` set only in a shell profile; sign in with the CLI instead. |

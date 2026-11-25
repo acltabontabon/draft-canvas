@@ -17,7 +17,7 @@
       "id": "agent",
       "type": "external-actor",
       "label": "Coding agent",
-      "description": "Claude Code, Codex, Cursor, Gemini CLI, Junie."
+      "description": "Claude Code, Codex, Cursor, Gemini CLI, Junie, OpenCode."
     },
     {
       "id": "sidecar",

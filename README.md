@@ -14,7 +14,7 @@ Free, open source, and your diagrams stay on your device.
 - **Tech-aware shapes.** Services, APIs, workers, stores, queues, actors, and boundaries.
 - **Presentation flows.** Trace and present happy or failure paths.
 - **Sequence diagrams.** Lifelines, replies, conditions and loops that lay themselves out, beside the architecture.
-- **Bring your own agent.** Connect Claude Code, Codex, Cursor, or any MCP client.
+- **Bring your own agent.** Connect Claude Code, Codex, Cursor, OpenCode, or any MCP client.
 - **Live collaboration.** Share, manage access, and follow presentations.
 - **Context for decisions.** Notes, code, sources, and open questions.
 - **Import and export.** Import Mermaid and editable files; export images, editable files, Mermaid, PlantUML, Structurizr, and draw.io.

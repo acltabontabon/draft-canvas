@@ -158,12 +158,13 @@ export interface AgentProject {
 }
 
 /** A coding agent Settings can set up with one click (`src-tauri/src/agent/clients.rs`). */
-export type AgentClient = 'codex' | 'claude-code' | 'gemini' | 'junie';
+export type AgentClient = 'codex' | 'claude-code' | 'gemini' | 'junie' | 'opencode';
 
 /** Where one agent's MCP configuration stands. */
 export interface AgentClientSetup {
   client: AgentClient;
-  /** `outdated`: it launches another copy of the connector (a moved or older app), or is turned off. */
+  /** What the agent's configuration says, never whether it has connected. `outdated`: it launches another
+   *  copy of the connector (a moved or older app), is turned off, or (OpenCode) is one Draft Canvas can't update. */
   state: 'not-set-up' | 'ready' | 'outdated';
   /** Whether the shell can do the setup itself; false for Claude Code or Gemini CLI when its command can't be found. */
   automatic: boolean;
@@ -174,8 +175,8 @@ export interface AgentClientSetup {
 }
 
 /** Where an agent skill is installed for every project (`src-tauri/src/agent/skill.rs`):
- *  `claude-code` is `~/.claude/skills`; `agents` is `~/.agents/skills`, which Codex, Cursor, Gemini CLI
- *  and Junie read. */
+ *  `claude-code` is `~/.claude/skills`; `agents` is `~/.agents/skills`, which Codex, Cursor, Gemini CLI,
+ *  Junie and OpenCode read. */
 export type AgentSkillTarget = 'claude-code' | 'agents';
 
 /** Where the Draft Canvas agent skill stands in one target. */
