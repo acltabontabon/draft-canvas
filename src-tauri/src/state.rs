@@ -220,6 +220,8 @@ pub struct AppState {
     pub recents: Recents,
     pub settings: SettingsStore,
     pub recovery: Recovery,
+    /// Canvas Evolution's diagram histories, in the local-data folder beside recovery copies.
+    pub history: crate::history::History,
     pub events: EventBus,
     pub quit: Mutex<QuitMachine>,
     /// Flipped the first time the window is shown, by `host_ready` or by the fallback timer.
@@ -242,6 +244,7 @@ impl AppState {
             recents: Recents::new(config_dir),
             settings: SettingsStore::new(config_dir),
             recovery: Recovery::new(local_data_dir),
+            history: crate::history::History::new(local_data_dir.join("history")),
             events: EventBus::default(),
             quit: Mutex::default(),
             window_shown: AtomicBool::new(false),

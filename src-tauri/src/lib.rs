@@ -10,6 +10,7 @@ mod docs;
 mod errors;
 mod explorer;
 mod grants;
+mod history;
 mod lifecycle;
 mod menu;
 mod paths;
@@ -92,6 +93,35 @@ pub fn run() {
             commands::recovery::recovery_list,
             commands::recovery::recovery_read,
             commands::recovery::recovery_discard,
+            commands::history::history_list,
+            commands::history::history_create,
+            commands::history::history_remove,
+            commands::history::history_meta,
+            commands::history::history_write_meta,
+            commands::history::history_write_snapshot,
+            commands::history::history_update_ref,
+            commands::history::history_read_ref,
+            commands::history::history_list_refs,
+            commands::history::history_read_commits,
+            commands::history::history_read_snapshot,
+            commands::history::history_log,
+            commands::history::history_merge_bases,
+            commands::history::history_is_ancestor,
+            commands::history::history_write_tag,
+            commands::history::history_list_tags,
+            commands::history::history_journal_put,
+            commands::history::history_journal_list,
+            commands::history::history_journal_delete,
+            commands::history::history_usage,
+            commands::history::history_maintain,
+            commands::history::history_pack_reachable,
+            commands::history::history_import_begin,
+            commands::history::history_import_commit,
+            commands::history::history_import_abort,
+            commands::history::history_binding_get,
+            commands::history::history_binding_put,
+            commands::history::history_binding_delete,
+            commands::history::history_binding_list,
             commands::host::settings_set,
             commands::host::ask,
             commands::host::show_error,

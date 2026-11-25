@@ -17,6 +17,14 @@ pub enum ErrorKind {
     InvalidPath,
     AlreadyExists,
     Io,
+    /// A diagram history refused a write because someone else changed it first (`history/`).
+    Conflict,
+    /// A diagram history holds something it should not, or something that could not be read.
+    Corrupt,
+    /// A request to a diagram history that is not well formed: a bad id, ref or object id.
+    Invalid,
+    /// A repository in a format history does not read (SHA-256).
+    Unsupported,
 }
 
 /// What every command rejects with, already worded for a person. Nothing here ever carries a raw OS
@@ -53,6 +61,7 @@ pub enum Subject<'a> {
     Path(&'a Path),
     RecoveryCopy,
     Preferences,
+    History,
 }
 
 impl Subject<'_> {
@@ -61,6 +70,7 @@ impl Subject<'_> {
             Subject::Path(p) => file_name(p),
             Subject::RecoveryCopy => "a recovery copy".to_string(),
             Subject::Preferences => "your settings".to_string(),
+            Subject::History => "this diagram's history".to_string(),
         }
     }
 

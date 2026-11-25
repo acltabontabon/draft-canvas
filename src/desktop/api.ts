@@ -17,7 +17,30 @@ import type { CollabLanStarted, DocsPublished, DocsStatus, MarkdownFile, Markdow
 export type { DocsImage, DocsPublished, DocsStatus, MarkdownFile, MarkdownSaveResult } from './wire';
 export type { CollabLanStarted, ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, MovedFile, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
 
+import type {
+  Binding,
+  CommitRecord,
+  JournalRecord,
+  LogQuery,
+  Oid,
+  RefEntry,
+  RefName,
+  RefUpdate,
+  RefUpdateResult,
+  RepoMeta,
+  RepoUsage,
+  SnapshotWrite,
+  TagRecord,
+  TagWrite,
+} from '../evolution/contracts';
+
 export type Handle = string;
+
+/** What history maintenance did; `skipped: 'journal'` while an operation is still open. */
+export interface HistoryMaintainOutcome {
+  skipped: 'journal' | null;
+  pruned: number;
+}
 
 export type AppErrorKind =
   | 'NotFound'
@@ -29,7 +52,12 @@ export type AppErrorKind =
   | 'InvalidHandle'
   | 'InvalidPath'
   | 'AlreadyExists'
-  | 'Io';
+  | 'Io'
+  // A diagram history's refusals (`historyStore.ts` turns them into `HistoryError` codes).
+  | 'Conflict'
+  | 'Corrupt'
+  | 'Invalid'
+  | 'Unsupported';
 
 /** A refusal from the shell, already worded for a person ("…because the file is read-only."). */
 export class DesktopError extends Error {
@@ -338,6 +366,46 @@ export interface DesktopApi {
   recoveryList(): Promise<RecoveryEntry[]>;
   recoveryRead(id: string): Promise<string>;
   recoveryDiscard(id: string): Promise<void>;
+
+  // Canvas Evolution's diagram histories (`src-tauri/src/history/`): bare Git repositories in the
+  // app's own data folder, named by id only. `historyStore.ts` wraps these as a `VersionStore`.
+  /** Every history's `repo.json`, by id. Imports still being checked are not listed. */
+  historyList(): Promise<RepoMeta[]>;
+  /** A new bare repository on `main` with this `repo.json`; `Conflict` when the id is taken. */
+  historyCreate(meta: RepoMeta): Promise<void>;
+  historyRemove(repo: string): Promise<void>;
+  /** `repo` is a history id or, for the read methods, an import's `.staging-<id>`. */
+  historyMeta(repo: string): Promise<RepoMeta>;
+  historyWriteMeta(repo: string, meta: RepoMeta): Promise<void>;
+  historyWriteSnapshot(repo: string, write: SnapshotWrite): Promise<Oid>;
+  historyUpdateRef(repo: string, update: RefUpdate): Promise<RefUpdateResult>;
+  historyReadRef(repo: string, name: RefName): Promise<Oid | null>;
+  historyListRefs(repo: string, prefix: string): Promise<RefEntry[]>;
+  /** At most 1000 at once, in the order asked. */
+  historyReadCommits(repo: string, oids: Oid[]): Promise<CommitRecord[]>;
+  historyReadSnapshot(repo: string, oid: Oid): Promise<string>;
+  historyLog(repo: string, query: LogQuery): Promise<CommitRecord[]>;
+  historyMergeBases(repo: string, a: Oid, b: Oid): Promise<Oid[]>;
+  historyIsAncestor(repo: string, ancestor: Oid, descendant: Oid): Promise<boolean>;
+  historyWriteTag(repo: string, tag: TagWrite): Promise<Oid>;
+  historyListTags(repo: string, prefix: string): Promise<TagRecord[]>;
+  historyJournalPut(repo: string, record: JournalRecord): Promise<void>;
+  historyJournalList(repo: string): Promise<JournalRecord[]>;
+  historyJournalDelete(repo: string, opId: string): Promise<void>;
+  historyUsage(repo: string): Promise<RepoUsage>;
+  /** Prunes old unreachable loose objects, judged by the shell's clock. */
+  historyMaintain(repo: string): Promise<HistoryMaintainOutcome>;
+  /** A version 2 pack of every object `tips` reach, for a bundle. */
+  historyPackReachable(repo: string, tips: Oid[]): Promise<Uint8Array>;
+  /** Indexes a pack into a hidden staging repository and returns its name (`.staging-<id>`). */
+  historyImportBegin(meta: RepoMeta, pack: Uint8Array): Promise<string>;
+  /** Creates `refs` in a checked import and moves it into place; returns its history id. */
+  historyImportCommit(staging: string, refs: RefEntry[]): Promise<string>;
+  historyImportAbort(staging: string): Promise<void>;
+  historyBindingGet(copyId: string): Promise<Binding | null>;
+  historyBindingPut(binding: Binding): Promise<void>;
+  historyBindingDelete(copyId: string): Promise<void>;
+  historyBindingList(): Promise<Binding[]>;
 
   // Settings and dialogs
   settingsSet(patch: Partial<DesktopSettings>): Promise<DesktopSettings>;

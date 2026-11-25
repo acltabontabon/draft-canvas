@@ -82,9 +82,33 @@ let unsubscribe: (() => void) | null = null;
 let agentTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** The desktop shell keeps histories itself: called once at startup, before any document opens. */
-export function installHistoryBackend(factory: () => HistoryBackend): void {
+export function installHistoryBackend(factory: () => HistoryBackend, copyKey?: () => CopyKey | null): void {
   historyWorkerComputesOnly();
   backendFactory = factory;
+  hostCopyKeyOf = copyKey ?? null;
+}
+
+let hostCopyKeyOf: (() => CopyKey | null) | null = null;
+
+/** The working copy a host shell has open (the desktop's file or draft), when a shell says. */
+export function hostCopyKey(): CopyKey | null {
+  return hostCopyKeyOf?.() ?? null;
+}
+
+/**
+ * The same working copy under a new identity: a Quick Draft saved to a file, a file renamed or
+ * moved from inside the app. Its history goes with it; nothing is recorded or lost.
+ */
+export async function rebindHistoryCopy(from: CopyKey, to: CopyKey): Promise<void> {
+  const fromId = copyIdOf(from);
+  const toId = copyIdOf(to);
+  if (fromId === toId) return;
+  const backend = backendFactory();
+  const binding = await backend.binding(fromId);
+  if (!binding) return;
+  await backend.putBinding({ ...binding, copyId: toId, at: Date.now() });
+  await backend.deleteBinding(fromId);
+  if (useEvolutionStore.getState().copyId === fromId) await attachHistory(to);
 }
 
 /** Collaboration reports who contributed to what will be captured (`collabBridge.ts`). */

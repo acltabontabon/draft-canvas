@@ -10,7 +10,7 @@
  * `@object-format=sha1` only; a SHA-256 or filtered (partial) bundle is refused by name.
  */
 import { HISTORY_LIMITS, HistoryError, type Oid, type RefEntry } from './contracts';
-import { isOid, isSafeRefName } from './refs';
+import { ALT_PREFIX, ARCHIVE_PREFIX, MAIN_REF, MILESTONE_PREFIX, isOid, isSafeId, isSafeRefName } from './refs';
 
 export interface BundleHeader {
   version: 2 | 3;
@@ -96,3 +96,22 @@ export function parseBundle(bytes: Uint8Array): { header: BundleHeader; packStar
   }
   return { header: { version, prerequisites, refs, head }, packStart: end + 2 };
 }
+
+/** Which bundle refs an import keeps, and under what name. Anything else is reported, not created. */
+export function acceptedRefs(refs: RefEntry[], head: Oid | null): { accepted: RefEntry[]; ignored: string[] } {
+  const accepted: RefEntry[] = [];
+  const ignored: string[] = [];
+  for (const entry of refs) {
+    const keep =
+      entry.ref === MAIN_REF ||
+      (entry.ref.startsWith(ALT_PREFIX) && isSafeId(entry.ref.slice(ALT_PREFIX.length))) ||
+      (entry.ref.startsWith(ARCHIVE_PREFIX) && isSafeId(entry.ref.slice(ARCHIVE_PREFIX.length))) ||
+      (entry.ref.startsWith(MILESTONE_PREFIX) && isSafeId(entry.ref.slice(MILESTONE_PREFIX.length)));
+    if (keep) accepted.push(entry);
+    else ignored.push(entry.ref);
+  }
+  // A bundle made elsewhere may call its primary branch something else: `HEAD` says which.
+  if (!accepted.some((entry) => entry.ref === MAIN_REF) && head) accepted.push({ ref: MAIN_REF, oid: head });
+  return { accepted, ignored };
+}
+

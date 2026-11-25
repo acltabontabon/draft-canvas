@@ -1,6 +1,8 @@
 import { useUiStore } from '../store/uiStore';
 import { deviceStyle } from '../store/styleStore';
 import { isSharedEditing } from '../store/collabStore';
+import { attachHistory, rebindHistoryCopy } from '../store/evolution/bridge';
+import type { CopyKey } from '../evolution/identity';
 import { createDocument } from '../document/factory';
 import { DEFAULT_TITLE } from '../document/sanitize';
 import type { DraftDocument } from '../document/types';
@@ -101,6 +103,13 @@ export interface ControllerDeps {
   store: DesktopStore;
   ui: DesktopUi;
   clock?: Clock;
+}
+
+/** The working copy a session is, for history (ADR-2): a saved file by path, anything else by its recovery entry. */
+function historyKeyOf(session: Session): CopyKey | null {
+  if (session.kind === 'file') return { kind: 'file', path: session.displayPath };
+  if (session.kind === 'quick' || session.kind === 'pending') return { kind: 'draft', recoveryId: session.id };
+  return null;
 }
 
 type Session =
@@ -325,6 +334,11 @@ export class DesktopController {
   }
 
   // ─── Start-up and events from the shell ─────────────────────────────────────────────
+
+  /** Which working copy is open, for Canvas Evolution. */
+  historyCopyKey(): CopyKey | null {
+    return historyKeyOf(this.session);
+  }
 
   async start(): Promise<void> {
     const boot = await this.api.hostReady((event) => void this.onHostEvent(event));
@@ -1176,6 +1190,7 @@ export class DesktopController {
 
   private async becomeFile(saved: SavedAs, text: string): Promise<void> {
     const before = this.session;
+    const historyBefore = historyKeyOf(before);
     this.session = {
       kind: 'file',
       handle: saved.handle,
@@ -1187,6 +1202,13 @@ export class DesktopController {
     };
     this.savedText = text;
     void this.docs.refresh(saved.handle, saved.name, text);
+    // A draft saved to a file is the same working copy: its history goes with it. Save As of a file is
+    // a new copy: history asks whether it continues the original's (ADR-2).
+    const historyAfter = historyKeyOf(this.session);
+    if (historyBefore && historyAfter) {
+      if (before.kind === 'file') void attachHistory(historyAfter);
+      else void rebindHistoryCopy(historyBefore, historyAfter);
+    }
     // A chooser can stay open while an agent or another app event updates the diagram. Only the
     // captured snapshot was written; newer edits must stay dirty and gain recovery under the new file.
     this.latestText ??= text;
@@ -1362,7 +1384,11 @@ export class DesktopController {
         this.ui.notify(`${what} where your Markdown points and no longer follow${pictures.length === 1 ? 's' : ''} this diagram. Publish again in Use in docs to give it ${pictures.length === 1 ? 'a picture' : 'pictures'} of its own.`);
       }
       if (this.session.kind === 'file' && this.session.handle === handle) {
+        const historyBefore = historyKeyOf(this.session);
         this.session = { ...this.session, handle: changed.handle, name: changed.name, displayPath: changed.displayPath };
+        // Renamed or moved from here: the same diagram, so its history follows it.
+        const historyAfter = historyKeyOf(this.session);
+        if (historyBefore && historyAfter) void rebindHistoryCopy(historyBefore, historyAfter);
         this.publish();
         // The recovery copy names the file by its old handle and path, and a crash now would offer it
         // back for a file that is no longer there. Rewritten once this change is over (it waits for it).

@@ -34,6 +34,10 @@ import { DesktopStore } from '../../src/desktop/store';
 export const decoder = new TextDecoder();
 
 /** A `.draftcanvas` document's text, as the app writes it. */
+async function noHistory(): Promise<never> {
+  throw new DesktopError('Unsupported', 'This harness keeps no diagram history.');
+}
+
 export function documentText(title = 'Payments'): string {
   return serializeDocument(createDocument(title));
 }
@@ -452,6 +456,36 @@ export function createHarness() {
     collabLanStop: vi.fn(async () => {}),
     collabLanSend: vi.fn(async (_connId: string, _text: string) => {}),
     collabLanClose: vi.fn(async (_connId: string, _reason: string) => {}),
+    // No diagram history in this harness: Canvas Evolution's desktop backend has its own Rust tests.
+    historyList: vi.fn(async () => []),
+    historyCreate: vi.fn(noHistory),
+    historyRemove: vi.fn(noHistory),
+    historyMeta: vi.fn(noHistory),
+    historyWriteMeta: vi.fn(noHistory),
+    historyWriteSnapshot: vi.fn(noHistory),
+    historyUpdateRef: vi.fn(noHistory),
+    historyReadRef: vi.fn(noHistory),
+    historyListRefs: vi.fn(noHistory),
+    historyReadCommits: vi.fn(noHistory),
+    historyReadSnapshot: vi.fn(noHistory),
+    historyLog: vi.fn(noHistory),
+    historyMergeBases: vi.fn(noHistory),
+    historyIsAncestor: vi.fn(noHistory),
+    historyWriteTag: vi.fn(noHistory),
+    historyListTags: vi.fn(noHistory),
+    historyJournalPut: vi.fn(noHistory),
+    historyJournalList: vi.fn(noHistory),
+    historyJournalDelete: vi.fn(noHistory),
+    historyUsage: vi.fn(noHistory),
+    historyMaintain: vi.fn(noHistory),
+    historyPackReachable: vi.fn(noHistory),
+    historyImportBegin: vi.fn(noHistory),
+    historyImportCommit: vi.fn(noHistory),
+    historyImportAbort: vi.fn(noHistory),
+    historyBindingGet: vi.fn(async () => null),
+    historyBindingPut: vi.fn(noHistory),
+    historyBindingDelete: vi.fn(noHistory),
+    historyBindingList: vi.fn(async () => []),
   } satisfies DesktopApi;
 
   const link: HostLink = {

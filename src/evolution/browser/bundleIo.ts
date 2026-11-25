@@ -12,11 +12,11 @@
  * explicit merge.
  */
 import git from 'isomorphic-git';
-import { parseBundle, encodeBundle } from '../bundle';
+import { acceptedRefs, encodeBundle, parseBundle } from '../bundle';
 import { DIAGRAM_PATH, HISTORY_LIMITS, HistoryError, type Oid, type RefEntry, type RepoMeta } from '../contracts';
 import type { LockRunner } from '../locks';
 import { scanPack, PackRejected } from '../packScan';
-import { ALT_PREFIX, ARCHIVE_PREFIX, MAIN_REF, MILESTONE_PREFIX, isSafeId } from '../refs';
+import { MAIN_REF, MILESTONE_PREFIX } from '../refs';
 import { IgitStore } from './igitStore';
 import type { KvFs } from './kvfs';
 
@@ -47,24 +47,6 @@ export async function exportBundle(store: IgitStore, refs: RefEntry[]): Promise<
   const { packfile } = await git.packObjects({ fs: store.fs, gitdir: store.gitdir, oids: [...oids].sort() });
   const head = refs.find((entry) => entry.ref === MAIN_REF)?.oid ?? null;
   return encodeBundle(refs, head, packfile!);
-}
-
-/** Which bundle refs an import keeps, and under what name. Anything else is reported, not created. */
-export function acceptedRefs(refs: RefEntry[], head: Oid | null): { accepted: RefEntry[]; ignored: string[] } {
-  const accepted: RefEntry[] = [];
-  const ignored: string[] = [];
-  for (const entry of refs) {
-    const keep =
-      entry.ref === MAIN_REF ||
-      (entry.ref.startsWith(ALT_PREFIX) && isSafeId(entry.ref.slice(ALT_PREFIX.length))) ||
-      (entry.ref.startsWith(ARCHIVE_PREFIX) && isSafeId(entry.ref.slice(ARCHIVE_PREFIX.length))) ||
-      (entry.ref.startsWith(MILESTONE_PREFIX) && isSafeId(entry.ref.slice(MILESTONE_PREFIX.length)));
-    if (keep) accepted.push(entry);
-    else ignored.push(entry.ref);
-  }
-  // A bundle made elsewhere may call its primary branch something else: `HEAD` says which.
-  if (!accepted.some((entry) => entry.ref === MAIN_REF) && head) accepted.push({ ref: MAIN_REF, oid: head });
-  return { accepted, ignored };
 }
 
 export interface ImportResult {
