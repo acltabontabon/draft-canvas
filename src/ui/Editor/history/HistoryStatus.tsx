@@ -14,6 +14,7 @@ import { Button } from '../../common/Button';
 import { Icon } from '../../common/Icon';
 import { Tooltip } from '../../common/Tooltip';
 import { resolveUnfinished } from '../../../store/evolution/operations';
+import { addMilestone } from '../../../store/evolution/historyView';
 import { reportOutcome as report } from '../../../commands/evolution';
 import { HistorySettingsDialog } from './HistorySettingsDialog';
 import './history.css';
@@ -80,9 +81,10 @@ function remoteLine(remote: RemoteState): string | null {
 }
 
 export function HistoryStatus() {
-  const { capture, remote, tipAt, revisions, altName, firstUse, open, repoId, unfinished } = useEvolutionStore(
+  const { capture, remote, tipAt, revisions, altName, firstUse, open, repoId, unfinished, suggestion } = useEvolutionStore(
     useShallow((state) => ({
       unfinished: state.unfinished,
+      suggestion: state.milestoneSuggestion,
       capture: state.capture,
       remote: state.remote,
       tipAt: state.tipAt,
@@ -139,7 +141,7 @@ export function HistoryStatus() {
           >
             <Icon name="timeline" size={14} />
             {label && <span className="dc-history-chip-label">{label}</span>}
-            {(firstUse || unfinished || tone === 'pending') && !label && <span className="dc-history-chip-dot" data-attention={unfinished ? 'true' : undefined} aria-hidden="true" />}
+            {(firstUse || unfinished || suggestion || tone === 'pending') && !label && <span className="dc-history-chip-dot" data-attention={unfinished || suggestion ? 'true' : undefined} aria-hidden="true" />}
           </button>
         )}
       </Tooltip>
@@ -162,6 +164,23 @@ export function HistoryStatus() {
               </Button>
               <Button variant="quiet" onClick={() => answerHistoryIdentity(false)}>
                 Start new history
+              </Button>
+            </div>
+          )}
+          {suggestion && (
+            <div className="dc-history-note" role="group" aria-label="Suggested milestone">
+              <p>An agent suggests naming a revision “{suggestion.name}”.</p>
+              <Button
+                variant="solid"
+                onClick={() => {
+                  useEvolutionStore.setState({ milestoneSuggestion: null });
+                  void addMilestone(suggestion.revision, suggestion.name).catch(() => undefined);
+                }}
+              >
+                Name it
+              </Button>
+              <Button variant="quiet" onClick={() => useEvolutionStore.setState({ milestoneSuggestion: null })}>
+                Dismiss
               </Button>
             </div>
           )}

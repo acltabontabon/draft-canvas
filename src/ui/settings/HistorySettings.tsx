@@ -112,6 +112,7 @@ export function HistorySettings() {
   const [usage, setUsage] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [paused, setPaused] = useState(() => historyService().paused);
+  const [agentsRead, setAgentsRead] = useState(() => readPreference(HISTORY_PREFS.agentsRead) === 'on');
   const fileInput = useRef<HTMLInputElement>(null);
   const { repoId, changes } = useEvolutionStore(useShallow((state) => ({ repoId: state.repoId, changes: state.changes })));
 
@@ -172,6 +173,22 @@ export function HistorySettings() {
         <SettingRow label="Add a revision after" description="this long without changes." control={<IntervalSelect prefKey={HISTORY_PREFS.idle} fallback={30} label="Add a revision after" />} />
         <SettingRow label="While drawing steadily, at least every" control={<IntervalSelect prefKey={HISTORY_PREFS.max} fallback={120} label="At least every" />} />
       </SettingsSection>
+
+      {__DESKTOP__ && (
+        <SettingsSection title="Agents" description="Connected agents can always list and compare revisions, and preview a restore or merge. Reading a past revision in full is separate: history can hold what was later removed from a diagram.">
+          <ChoiceRow
+            type="checkbox"
+            toggle
+            label="Let agents read past revisions in full"
+            checked={agentsRead}
+            onChange={(event) => {
+              setAgentsRead(event.target.checked);
+              if (event.target.checked) writePreference(HISTORY_PREFS.agentsRead, 'on');
+              else removePreference(HISTORY_PREFS.agentsRead);
+            }}
+          />
+        </SettingsSection>
+      )}
 
       <SettingsSection
         title="Recorded as"

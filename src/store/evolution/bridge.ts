@@ -26,6 +26,8 @@ export const HISTORY_PREFS = {
   note: 'history-note',
   name: 'history-name',
   email: 'history-email',
+  /** Agents may read past revisions' whole content (off by default: history can hold removed content). */
+  agentsRead: 'history-agents-read',
 } as const;
 
 export function historyEnabled(): boolean {
@@ -76,7 +78,7 @@ async function holdCopy(copyId: string): Promise<(() => void) | null> {
 }
 
 let backendFactory: () => HistoryBackend = browserHistoryBackend;
-let attribution: (() => Attribution) | undefined;
+let attribution: ((changedKeys: string[]) => Attribution) | undefined;
 let service: HistoryService | null = null;
 let unsubscribe: (() => void) | null = null;
 let agentTimer: ReturnType<typeof setTimeout> | null = null;
@@ -112,7 +114,7 @@ export async function rebindHistoryCopy(from: CopyKey, to: CopyKey): Promise<voi
 }
 
 /** Collaboration reports who contributed to what will be captured (`collabBridge.ts`). */
-export function setHistoryAttribution(source: (() => Attribution) | undefined): void {
+export function setHistoryAttribution(source: ((changedKeys: string[]) => Attribution) | undefined): void {
   attribution = source;
 }
 
@@ -130,7 +132,7 @@ export function historyService(): HistoryService {
     enabled: historyEnabled,
     signature: historySignature,
     holdCopy,
-    attribution: () => attribution?.() ?? { contributors: [], agents: [] },
+    attribution: (keys) => attribution?.(keys) ?? { contributors: [], agents: [] },
     firstUseSeen: () => readPreference(HISTORY_PREFS.note) === 'seen',
   });
   return service;

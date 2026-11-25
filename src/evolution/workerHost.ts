@@ -43,7 +43,8 @@ export const compute = {
   },
   async describe(before: DraftDocument | null, after: DraftDocument) {
     const diff = semanticDiff(before, after);
-    return { ...describe(diff), touched: touchedNames(diff) };
+    // `keys` names each changed element the way collaboration does (`node:n_1`), for attribution.
+    return { ...describe(diff), touched: touchedNames(diff), keys: diff.elements.map((change) => `${change.kind}:${change.id}`) };
   },
 };
 

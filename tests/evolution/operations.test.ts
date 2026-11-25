@@ -209,3 +209,43 @@ describe('merging alternatives', { timeout: 60_000 }, () => {
     expect(fileOf(useEditorStore.getState()).nodes.map((node) => node.id).sort()).toEqual(['n_api', 'n_q']);
   });
 });
+
+describe('the agent history tool', { timeout: 60_000 }, () => {
+  it('reads summaries, compares and previews, and changes nothing', async () => {
+    const { historyTool } = await import('../../src/store/evolution/agentTool');
+    const doc = await start();
+    const first = await tipOf();
+    await edit((file) => addNodes(file, [createNode({ type: 'database', x: 0, y: 200, id: 'n_db', text: 'PostgreSQL' })]));
+    const before = fileOf(useEditorStore.getState());
+    const list = await historyTool({ diagramId: doc.metadata.id, action: 'list' });
+    expect((list.revisions as unknown[]).length).toBe(2);
+    const compared = await historyTool({ diagramId: doc.metadata.id, action: 'compare', revision: first, against: 'live' });
+    expect(compared.summary).toBe('Add PostgreSQL');
+    const preview = await historyTool({ diagramId: doc.metadata.id, action: 'preview_restore', revision: first });
+    expect(preview.wouldChange).toBe('Remove PostgreSQL');
+    expect(fileOf(useEditorStore.getState())).toBe(before);
+  });
+
+  it('refuses a closed diagram, and full past content unless the person allowed it', async () => {
+    const { historyTool, HistoryToolError } = await import('../../src/store/evolution/agentTool');
+    const doc = await start();
+    const first = await tipOf();
+    await expect(historyTool({ diagramId: 'd_other', action: 'summary' })).rejects.toMatchObject({ code: 'NOT_ACTIVE' });
+    await expect(historyTool({ diagramId: doc.metadata.id, action: 'read', revision: first })).rejects.toBeInstanceOf(HistoryToolError);
+    localStorage.setItem('draft-canvas.history-agents-read', 'on');
+    try {
+      const read = await historyTool({ diagramId: doc.metadata.id, action: 'read', revision: first });
+      expect(read.nodes).toBe(1);
+    } finally {
+      localStorage.removeItem('draft-canvas.history-agents-read');
+    }
+  });
+
+  it('only suggests a milestone: nothing is named until the person accepts', async () => {
+    const { historyTool } = await import('../../src/store/evolution/agentTool');
+    const doc = await start();
+    await historyTool({ diagramId: doc.metadata.id, action: 'suggest_milestone', name: 'Reviewed' });
+    expect(useEvolutionStore.getState().milestoneSuggestion).toMatchObject({ name: 'Reviewed' });
+    expect(await historyService().store!.listTags('refs/tags/milestone')).toEqual([]);
+  });
+});

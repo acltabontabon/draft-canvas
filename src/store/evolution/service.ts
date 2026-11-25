@@ -66,8 +66,11 @@ export interface ServiceDeps {
   signature: (at: number) => Signature;
   /** Holds the copy's editing lock for history; `null` when another tab already records it. */
   holdCopy: (copyId: string) => Promise<(() => void) | null>;
-  /** Who contributed to what is being captured, gathered since the last capture, then cleared. */
-  attribution?: () => Attribution;
+  /**
+   * Who contributed to what is being captured: given the elements this revision changes, the people
+   * whose changes to them the snapshot actually contains (never everyone who was connected).
+   */
+  attribution?: (changedKeys: string[]) => Attribution;
   /** Whether this device has shown the first-use note. */
   firstUseSeen: () => boolean;
 }
@@ -341,7 +344,7 @@ export class HistoryService {
       const ref = branchOf(session.binding?.altId ?? null);
       const content = historyContent(snapshot);
       const description = await this.deps.compute.describe(session.tipDocument, content);
-      const attribution = this.deps.attribution?.() ?? { contributors: [], agents: [] };
+      const attribution = this.deps.attribution?.(description.keys) ?? { contributors: [], agents: [] };
       const agents = [...new Set([...attribution.agents, ...session.agents])];
       const at = this.deps.clock.now();
       const signature = this.deps.signature(at);

@@ -850,7 +850,8 @@ mod tests {
                 "preview_diagram",
                 "submit_proposal",
                 "get_proposal",
-                "list_proposals"
+                "list_proposals",
+                "diagram_history"
             ]
         );
     }

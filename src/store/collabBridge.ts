@@ -17,6 +17,8 @@ import type { DraftDocument } from '../document/types';
 import { announce } from '../lib/announce';
 import { logDiagnostic } from '../lib/diagnostics';
 import { PRODUCT } from '../product';
+import { captureNow as requestSessionCapture, setHistoryAttribution } from './evolution/bridge';
+import type { Attribution } from './evolution/service';
 import { COLLAB_AT_REST, useCollabStore, type SessionStatus } from './collabStore';
 import { documentLoadCount, fileOf, isInteracting, useEditorStore } from './editorStore';
 import { useUiStore } from './uiStore';
@@ -204,6 +206,9 @@ export function startHosting(options: HostOptions): HostSession {
   );
   useCollabStore.setState({ ...COLLAB_AT_REST, role: 'host', status: 'live', access: 'owner', selfId: HOST_ORIGIN, selfName: options.name });
   const session = host;
+  // History is the owner's alone, captured from this canvas; it learns who contributed what.
+  frozenTouches = null;
+  setHistoryAttribution(historyAttribution);
   stopWatching = watchEdits(
     () => session.commitLocal(),
     () => stopHosting('document-changed'),
@@ -215,6 +220,11 @@ export function startHosting(options: HostOptions): HostSession {
 export function stopHosting(reason: EndReason = 'ended'): void {
   if (!host) return;
   const session = host;
+  // A session ending is a safe boundary: record what it changed, with who contributed, before the
+  // record of who touched what goes with it.
+  frozenTouches = collaboratorTouches();
+  frozenSeq = session.seq;
+  requestSessionCapture();
   host = null;
   session.end(reason);
   cleanUp();
@@ -223,6 +233,23 @@ export function stopHosting(reason: EndReason = 'ended'): void {
 
 export function hostSession(): HostSession | null {
   return host && !host.isEnded ? host : null;
+}
+
+let frozenTouches: { key: string; by: string }[] | null = null;
+let frozenSeq: number | undefined;
+
+/**
+ * Who a revision credits: the people whose changes to the elements it records are still in the
+ * snapshot — not everyone who was connected, and not someone whose changes were all undone. Names
+ * are as the session gave them, unverified, and labelled so in the revision.
+ */
+export function historyAttribution(changedKeys: string[]): Attribution {
+  const live = hostSession();
+  const touches = live ? collaboratorTouches() : (frozenTouches ?? []);
+  const changed = new Set(changedKeys);
+  const contributors = [...new Set(touches.filter((touch) => changed.has(touch.key)).map((touch) => touch.by))].sort();
+  const seq = live ? live.seq : frozenSeq;
+  return { contributors, agents: [], ...(seq !== undefined ? { collabSeq: seq } : {}) };
 }
 
 /** Session provenance stays with the owner's live canvas, never a saved file or a guest's copy. */

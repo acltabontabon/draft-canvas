@@ -73,6 +73,8 @@ export interface EvolutionState {
   compare: CompareState | null;
   /** A merge being reviewed: transient here, durable in the journal until finished or cancelled. */
   merge: MergeSession | null;
+  /** An agent suggested naming a revision; nothing is named until the person accepts. */
+  milestoneSuggestion: { revision: Oid; name: string } | null;
 }
 
 export interface MergeSession {
@@ -168,6 +170,7 @@ export const INITIAL_EVOLUTION: EvolutionState = {
   playback: { playing: false, speed: 1, focus: true },
   compare: null,
   merge: null,
+  milestoneSuggestion: null,
 };
 
 export const useEvolutionStore = create<EvolutionState>(() => INITIAL_EVOLUTION);
