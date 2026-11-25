@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow, useViewportStore } from '@xyflow/react';
 import { flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
 import { useShallow } from 'zustand/react/shallow';
-import { CanvasSettingsButton, HelpMenu, HistoryControls } from './HelpMenu';
+import { CanvasSettingsButton, HelpMenu } from './HelpMenu';
 import { useCollabStore } from '../../store/collabStore';
 import { fitPadding } from '../../lib/fitPadding';
 import { count } from '../../lib/plural';
@@ -244,7 +244,6 @@ export function StatusBar({ durable, presenting = false, onResolveConflict, onSa
         <OutageChip />
         <OpenPointsChip />
         <LevelChip />
-        <HistoryControls />
         <ZoomControls />
         <CanvasSettingsButton />
         <HelpMenu />

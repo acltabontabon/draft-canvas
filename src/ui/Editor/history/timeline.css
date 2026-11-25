@@ -24,61 +24,78 @@
 }
 
 .dc-timeline-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .dc-timeline-title {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-weight: 600;
-}
-
-.dc-timeline-alt {
+  min-width: 0;
+  overflow: hidden;
   color: var(--dc-text-muted);
-  font-weight: 500;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.dc-timeline-controls {
-  display: flex;
+/* Step, play, step: the one group the eye should find first, centred like a player's. */
+.dc-timeline-transport {
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
-  flex-wrap: wrap;
+  gap: 2px;
 }
 
-.dc-timeline-speed,
+.dc-timeline-play[data-icon-only='true'] {
+  width: 30px;
+  height: 30px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
+}
+
+.dc-timeline-tools {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
 .dc-timeline-room {
   height: 26px;
   font-size: 12px;
 }
 
-.dc-timeline-toggle {
-  display: inline-flex;
+.dc-timeline-find {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
-  padding: 0 6px;
-  color: var(--dc-text-muted);
-  font-size: 12px;
-  white-space: nowrap;
+  gap: 8px;
+  margin-top: 8px;
 }
 
 .dc-timeline-search {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 8px;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
   color: var(--dc-text-faint);
 }
 
+.dc-timeline-search:focus-within {
+  border-color: var(--dc-selection);
+}
+
 .dc-timeline-search input {
-  width: 140px;
+  width: 200px;
   border: 0;
   background: transparent;
   color: var(--dc-text);
@@ -91,7 +108,6 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
-  margin-top: 6px;
 }
 
 .dc-timeline-chip {

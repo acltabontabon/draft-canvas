@@ -51,7 +51,7 @@ test('real MCP sidecar: create smart attachments, render them, and accept a prop
     expect(after.ok).toBe(true);
     expect(after.value.relationships).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'nearby', geometry: { from: 'left', to: 'right', path: expect.any(Array) } })]));
     await page.screenshot({ path: test.info().outputPath('mcp-smart-attachments.png') });
-    await page.getByRole('button', { name: 'Undo', exact: true }).click();
+    await page.keyboard.press('ControlOrMeta+z');
     const undone = await client.call('read_diagram', { diagramId: 'd_mcp00000001', include: ['geometry'] });
     expect(undone.value.relationships).toEqual(initial.value.relationships);
   } finally {
@@ -182,7 +182,7 @@ for (const local of [false, true]) {
       expect(after.nodes).toEqual(expected.nodes);
       expect(after.edges).toEqual(before.edges);
       expect(after.flows).toEqual(before.flows);
-      await page.getByRole('button', { name: 'Undo', exact: true }).click();
+      await page.keyboard.press('ControlOrMeta+z');
       await expect(page.locator('.react-flow__node[data-id="api"]')).toContainText('Orders API');
       const read = await connection.client.call('diagram_tool', { tool: 'read_diagram', args: { diagramId: 'd_mcp00000001' } });
       expect(read.value.elements).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'api', label: 'Orders API' })]));
