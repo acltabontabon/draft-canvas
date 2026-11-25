@@ -78,6 +78,12 @@ export function setCompare(patch: Partial<Pick<CompareState, 'mode' | 'side' | '
   if (patch.side && patch.side !== compare.side) drawSide(next);
 }
 
+/** Drops the comparison and leaves the lens where it is (another revision was just chosen). */
+export function clearCompare(): void {
+  comparing += 1;
+  if (useEvolutionStore.getState().compare) useEvolutionStore.setState({ compare: null });
+}
+
 /** Ends the comparison, back to the later revision on its own — or to the live diagram. */
 export function endCompare(): void {
   const compare = useEvolutionStore.getState().compare;

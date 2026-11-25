@@ -7,7 +7,7 @@ import { CATEGORIES } from '../../../evolution/diff';
 import { groupSessions, matches, type Revision, type Session } from '../../../evolution/timeline';
 import { relativeTime } from '../../../lib/relativeTime';
 import { useEvolutionStore, type PlaybackState } from '../../../store/evolution/evolutionStore';
-import { compareVersions, endCompare } from '../../../store/evolution/compare';
+import { clearCompare, compareVersions, endCompare } from '../../../store/evolution/compare';
 import { lensEnter, loadTimeline, sessionSummary, showLive, showRevision, stepRevision } from '../../../store/evolution/historyView';
 import { Button } from '../../common/Button';
 import { Icon } from '../../common/Icon';
@@ -105,6 +105,24 @@ export function Timeline() {
   useEffect(() => {
     if (finding) findInput.current?.focus();
   }, [finding]);
+
+  // Esc steps back wherever focus is: out of a comparison, then out of the past, then the timeline.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('input, textarea, select, [contenteditable=true], [role=dialog], [role=menu], .dc-timeline')) return;
+      const state = useEvolutionStore.getState();
+      if (state.merge) return;
+      if (state.compare) endCompare();
+      else if (state.lens) showLive();
+      else return;
+      event.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open]);
 
   const filtering = finding && (query.trim() !== '' || categories.length > 0 || milestonesOnly);
   const shown = useMemo(
@@ -312,7 +330,11 @@ function RevisionMark({ revision, current }: { revision: Revision; current: bool
             // Shift-click a second revision to compare the two.
             const shown = useEvolutionStore.getState().lens;
             if (event.shiftKey && shown && shown.oid !== 'live') void compareVersions(shown.oid, revision.oid);
-            else void showRevision(revision.oid);
+            else {
+              // Choosing a revision ends a comparison (a merge keeps its own until finished or cancelled).
+              if (!useEvolutionStore.getState().merge) clearCompare();
+              void showRevision(revision.oid);
+            }
           }}
           {...tip}
         />
