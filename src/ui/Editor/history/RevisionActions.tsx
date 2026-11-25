@@ -2,6 +2,9 @@ import { useState } from 'react';
 import type { Revision } from '../../../evolution/timeline';
 import { compareVersions } from '../../../store/evolution/compare';
 import { addMilestone } from '../../../store/evolution/historyView';
+import { restoreRevision } from '../../../store/evolution/operations';
+import { reportOutcome as report } from '../../../commands/evolution';
+import { NameAlternative } from './Alternatives';
 import { useUiStore } from '../../../store/uiStore';
 import { Button } from '../../common/Button';
 import { MenuButton } from './MenuButton';
@@ -13,8 +16,11 @@ import { MenuButton } from './MenuButton';
 export function RevisionActions({ revision }: { revision: Revision }) {
   const [naming, setNaming] = useState(false);
   const [details, setDetails] = useState(false);
+  const [confirming, setConfirming] = useState(false);
+  const [exploring, setExploring] = useState(false);
 
   const more = () => [
+    { id: 'explore', label: 'Explore an alternative from here…', onSelect: () => setExploring(true) },
     ...(revision.parents[0] ? [{ id: 'previous', label: 'Compare with the revision before', onSelect: () => void compareVersions(revision.parents[0]!, revision.oid) }] : []),
     { id: 'name', label: revision.milestones.length > 0 ? 'Add another name…' : 'Name this revision…', onSelect: () => setNaming(true) },
     {
@@ -30,11 +36,35 @@ export function RevisionActions({ revision }: { revision: Revision }) {
   return (
     <>
       <div className="dc-timeline-actions">
-        <Button variant="quiet" onClick={() => void compareVersions(revision.oid, 'now')}>
-          Compare with now
-        </Button>
-        <MenuButton icon="more" label="More for this revision" items={more} />
+        {confirming ? (
+          <span className="dc-timeline-confirm" role="group" aria-label="Restore this version">
+            <span className="dc-timeline-detail-meta">The diagram becomes this version; the current one stays in history.</span>
+            <Button
+              variant="solid"
+              onClick={() => {
+                setConfirming(false);
+                void restoreRevision(revision.oid).then(report);
+              }}
+            >
+              Restore
+            </Button>
+            <Button variant="quiet" onClick={() => setConfirming(false)}>
+              Cancel
+            </Button>
+          </span>
+        ) : (
+          <>
+            <Button variant="quiet" onClick={() => void compareVersions(revision.oid, 'now')}>
+              Compare with now
+            </Button>
+            <Button variant="quiet" onClick={() => setConfirming(true)}>
+              Restore…
+            </Button>
+            <MenuButton icon="more" label="More for this revision" items={more} />
+          </>
+        )}
       </div>
+      {exploring && <NameAlternative from={revision.oid} onDone={() => setExploring(false)} />}
       {naming && <MilestoneForm oid={revision.oid} onDone={() => setNaming(false)} />}
       {details && (
         <dl className="dc-timeline-git">

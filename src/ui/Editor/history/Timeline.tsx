@@ -12,6 +12,7 @@ import { lensEnter, loadTimeline, sessionSummary, showLive, showRevision, stepRe
 import { Button } from '../../common/Button';
 import { Icon } from '../../common/Icon';
 import { Tooltip } from '../../common/Tooltip';
+import { AlternativeSwitcher } from './Alternatives';
 import { CompareBar } from './CompareBar';
 import { MenuButton } from './MenuButton';
 import { RevisionActions } from './RevisionActions';
@@ -76,14 +77,13 @@ function SessionLabel({ session }: { session: Session }) {
 }
 
 export function Timeline() {
-  const { open, timeline, lens, playback, altName, capture, changes, compare } = useEvolutionStore(
+  const { open, timeline, lens, playback, capture, changes, compare } = useEvolutionStore(
     useShallow((state) => ({
       compare: state.compare,
       open: state.timelineOpen,
       timeline: state.timeline,
       lens: state.lens,
       playback: state.playback,
-      altName: state.altName,
       capture: state.capture,
       changes: state.changes,
     })),
@@ -186,9 +186,8 @@ export function Timeline() {
   return (
     <div className="dc-timeline" role="region" aria-label="Timeline" onKeyDown={onKeyDown}>
       <div className="dc-timeline-head">
-        <span className="dc-timeline-title">
-          <Icon name="timeline" size={15} />
-          {altName ?? 'Timeline'}
+        <span className="dc-timeline-title-slot">
+          <AlternativeSwitcher />
         </span>
         <div className="dc-timeline-transport" role="group" aria-label="Playback">
           <Tooltip content={{ title: 'Older', shortcut: '←' }}>{(tip) => <Button variant="quiet" icon="back" aria-label="Older revision" onClick={() => void stepRevision(-1)} {...tip} />}</Tooltip>

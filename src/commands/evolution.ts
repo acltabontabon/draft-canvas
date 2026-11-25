@@ -4,6 +4,7 @@
  */
 import { captureNow, dismissHistoryNote, historyService } from '../store/evolution/bridge';
 import type { Command } from './types';
+import { useUiStore } from '../store/uiStore';
 import { useEvolutionStore } from '../store/evolution/evolutionStore';
 import { closeLens, loadTimeline } from '../store/evolution/historyView';
 
@@ -42,6 +43,11 @@ export function answerHistoryIdentity(continueHistory: boolean): void {
 
 export function acknowledgeHistoryNote(): void {
   dismissHistoryNote();
+}
+
+/** Says how an operation went, quietly, when it has something to say. */
+export function reportOutcome(outcome: { ok: boolean; message?: string }): void {
+  if (outcome.message) useUiStore.getState().notify(outcome.message);
 }
 
 /** History in ⌘K: the timeline, recording now, and history's settings. */

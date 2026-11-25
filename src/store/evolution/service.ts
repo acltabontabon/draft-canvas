@@ -36,6 +36,18 @@ export interface Clock {
   clearTimeout(handle: unknown): void;
 }
 
+export interface OperationContext {
+  token: number;
+  copyId: string;
+  readOnly: boolean;
+  store: VersionStore | null;
+  binding: Binding | null;
+  meta: RepoMeta | null;
+  tip: Oid | null;
+  tipBlob: string | null;
+  tipDocument: DraftDocument | null;
+}
+
 export interface Attribution {
   contributors: string[];
   agents: string[];
@@ -503,6 +515,70 @@ export class HistoryService {
   /** Bytes all histories take on this device. */
   usage(): Promise<number> {
     return this.deps.backend().usage();
+  }
+
+  /**
+   * What an operation (`operations.ts`) needs to know about the open session, as a snapshot it
+   * carries through its steps (ADR-3): the result is applied only if `token` is still current.
+   */
+  context(): OperationContext | null {
+    const session = this.session;
+    if (!session) return null;
+    return {
+      token: session.token,
+      copyId: session.copyId,
+      readOnly: session.readOnly || session.question !== null,
+      store: session.store,
+      binding: session.binding,
+      meta: session.meta,
+      tip: session.tip,
+      tipBlob: session.tipBlob,
+      tipDocument: session.tipDocument,
+    };
+  }
+
+  /** Writes a working copy's binding (an operation moved it to another alternative). */
+  putBindingFor(binding: Binding): Promise<void> {
+    return this.deps.backend().putBinding(binding);
+  }
+
+  /** Records what is pending now and waits for it, so an operation starts from a recorded state. */
+  async flush(): Promise<void> {
+    const session = this.session;
+    if (!session || session.readOnly || session.question) return;
+    if (session.schedule.inFlight !== null) {
+      // One is running: wait for it by polling its end, briefly.
+      for (let i = 0; i < 200 && session.schedule.inFlight !== null; i += 1) await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    if (!session.store || isPending(session.schedule)) await this.capture(session, 'auto');
+  }
+
+  /**
+   * An operation moved the session's history: adopt its new tip (and binding or metadata) if the
+   * session is still the one it began in. The working copy is then compared afresh.
+   */
+  async adopt(token: number, next: { tip: Oid | null; binding?: Binding; meta?: RepoMeta; store?: VersionStore }): Promise<void> {
+    const session = this.session;
+    if (!session || session.token !== token) return;
+    if (next.store) session.store = next.store;
+    if (next.binding) session.binding = next.binding;
+    if (next.meta) session.meta = next.meta;
+    session.tip = next.tip;
+    if (next.tip && session.store) {
+      const parsed = await this.deps.compute.parse(await session.store.readSnapshot(next.tip));
+      session.tipBlob = parsed.blobId;
+      session.tipDocument = parsed.document;
+    } else {
+      session.tipBlob = null;
+      session.tipDocument = null;
+    }
+    if (this.session !== session) return;
+    const working = await this.deps.compute.prepare(this.deps.editor.file());
+    const dirty = working.blobId !== session.tipBlob;
+    this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
+    this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+    useEvolutionStore.setState({ tipAt: this.deps.clock.now() });
+    this.publishTip(session, 1);
   }
 
   /** The open session's history, for views (timeline, compare) to read. */

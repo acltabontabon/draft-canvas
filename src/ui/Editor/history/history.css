@@ -171,3 +171,12 @@
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-sm);
 }
+
+/* Something unfinished waits for an answer: the dot takes the caution colour. */
+.dc-history-chip-dot[data-attention='true'] {
+  background: var(--dc-caution);
+}
+
+.dc-history-note .dc-button + .dc-button {
+  margin-left: 6px;
+}

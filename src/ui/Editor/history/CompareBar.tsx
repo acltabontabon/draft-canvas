@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { ROOT_ROOM } from '../../../collab/changes';
 import type { ElementChange } from '../../../evolution/diff';
 import { endCompare, focusChange, setCompare, visibleChanges } from '../../../store/evolution/compare';
+import { restoreElements } from '../../../store/evolution/operations';
+import { reportOutcome as report } from '../../../commands/evolution';
 import type { CompareState } from '../../../store/evolution/evolutionStore';
 import { Button } from '../../common/Button';
 import { SegmentedControl } from '../../common/SegmentedControl';
@@ -25,6 +27,8 @@ function counts(changes: ElementChange[]): string {
 export function CompareBar({ compare }: { compare: CompareState }) {
   const [listing, setListing] = useState(false);
   const changes = visibleChanges(compare);
+  // Comparing a revision with now: what it had can be brought back, one element at a time.
+  const from = compare.target.oid === 'now' && compare.base.oid !== 'now' ? compare.base.oid : null;
   return (
     <div className="dc-compare-bar">
       <div className="dc-compare-bar-row">
@@ -85,6 +89,11 @@ export function CompareBar({ compare }: { compare: CompareState }) {
                     {change.room !== ROOT_ROOM && compare.diff.rooms[change.room] ? ` · in ${compare.diff.rooms[change.room]}` : ''}
                   </span>
                 </button>
+                {from && change.change !== 'added' && (
+                  <Button variant="quiet" className="dc-compare-bring" onClick={() => void restoreElements(from, [change]).then(report)}>
+                    Bring back
+                  </Button>
+                )}
               </li>
             ))}
             {changes.length === 0 && <li className="dc-timeline-empty">Nothing differs{compare.structuralOnly ? ' in structure' : ''}.</li>}

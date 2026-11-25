@@ -522,3 +522,128 @@ button.dc-timeline-session-label:disabled {
   flex-shrink: 0;
   color: var(--dc-text-faint);
 }
+
+/* The title is the alternatives switcher: the name of the architecture on screen. */
+.dc-timeline-title-slot {
+  min-width: 0;
+}
+
+button.dc-timeline-title {
+  max-width: 100%;
+  height: 26px;
+  padding: 0 8px;
+  margin-left: -4px;
+  border: 0;
+  border-radius: var(--dc-radius-pill);
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+button.dc-timeline-title:hover,
+button.dc-timeline-title[aria-expanded='true'] {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+button.dc-timeline-title:focus-visible {
+  outline: 2px solid var(--dc-selection);
+}
+
+.dc-timeline-title-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dc-timeline-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.dc-compare-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dc-compare-bring {
+  flex-shrink: 0;
+  height: 24px;
+  font-size: 12px;
+  opacity: 0;
+}
+
+.dc-compare-list li:hover .dc-compare-bring,
+.dc-compare-bring:focus-visible {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .dc-compare-bring {
+    opacity: 1;
+  }
+}
+
+/* Alternatives: naming one, and the short list of them. */
+.dc-alt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dc-alt-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dc-alt-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-alt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-alt-row[data-archived='true'] {
+  opacity: 0.65;
+}
+
+.dc-alt-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.dc-alt-meta {
+  color: var(--dc-text-faint);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.dc-alt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.dc-alt-rename {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+}

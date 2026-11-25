@@ -153,6 +153,8 @@ export async function attachHistory(key: CopyKey, options: { readOnly?: boolean 
   // A lens open on the previous diagram's history closes with it.
   useUiStore.getState().setHistoryLens(false);
   await historyService().attach(key, options);
+  // Anything a crash left half done for this copy is finished, dropped or asked about (ADR-3).
+  void import('./operations').then((operations) => operations.recoverOperations()).catch(() => undefined);
 }
 
 let watchingVisibility = false;
