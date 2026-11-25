@@ -58,6 +58,8 @@ async function milestones(): Promise<Milestone[]> {
 
 /** Loads (or reloads) the newest page of the current alternative's revisions. */
 export async function loadTimeline(more = false): Promise<void> {
+  const token = historyService().current;
+  const current = () => historyService().current === token;
   const store = historyService().store;
   const binding = historyService().binding;
   const state = useEvolutionStore.getState();
@@ -72,13 +74,18 @@ export async function loadTimeline(more = false): Promise<void> {
       useEvolutionStore.setState((s) => ({ timeline: { ...s.timeline, revisions: [], loading: false, more: false } }));
       return;
     }
-    const known = more ? useEvolutionStore.getState().timeline.revisions : [];
-    const oldest = known.at(-1);
-    const from = oldest ? oldest.parents : [tip];
+    const loaded = useEvolutionStore.getState().timeline.revisions;
+    const known = more ? loaded : [];
+    // Earlier pages continue from every parent not yet listed — after a merge, both sides.
+    const listed = new Set(known.map((revision) => revision.oid));
+    const from = more ? [...new Set(known.flatMap((revision) => revision.parents))].filter((oid) => !listed.has(oid)) : [tip];
     const marks = await milestones();
-    const commits = from.length > 0 ? await store.log({ from, limit: PAGE, hide: [] }) : [];
-    const revisions = [...known, ...commits.map((commit) => toRevision(commit, marks))];
-    useEvolutionStore.setState((s) => ({ timeline: { ...s.timeline, revisions, loading: false, more: commits.length === PAGE } }));
+    // A reload keeps as many revisions as were showing, so a new one never throws earlier pages away.
+    const limit = more ? PAGE : Math.min(500, Math.max(PAGE, loaded.length + 1));
+    const commits = from.length > 0 ? await store.log({ from, limit, hide: [] }) : [];
+    if (!current()) return;
+    const revisions = [...known, ...commits.filter((commit) => !listed.has(commit.oid)).map((commit) => toRevision(commit, marks))];
+    useEvolutionStore.setState((s) => ({ timeline: { ...s.timeline, revisions, loading: false, more: commits.length === limit } }));
   } catch (error) {
     useEvolutionStore.setState((s) => ({ timeline: { ...s.timeline, loading: false, error: error instanceof Error ? error.message : 'History could not be read.' } }));
   }
@@ -102,8 +109,9 @@ let showing = 0;
 /** Shows a past revision in the lens, in the room being looked at. */
 export async function showRevision(oid: Oid): Promise<void> {
   const request = ++showing;
+  const token = historyService().current;
   const file = await snapshotOf(oid);
-  if (request !== showing) return;
+  if (request !== showing || historyService().current !== token) return;
   const current = useEvolutionStore.getState().lens;
   const path = current?.path ?? useEditorStore.getState().path;
   setLens(file, oid, path);
@@ -166,6 +174,8 @@ export async function stepRevision(delta: -1 | 1): Promise<boolean> {
 export async function addMilestone(oid: Oid, name: string, note = ''): Promise<void> {
   const store = historyService().store;
   if (!store) throw new HistoryError('unavailable', 'This diagram has no history yet.');
+  // Only a revision this history has: a tag naming anything else would break export and maintenance.
+  await store.readCommit(oid);
   const id = randomId('m');
   await store.writeTag({ ref: milestoneRef(id), name: `milestone/${id}`, target: oid, tagger: historySignature(Date.now()), message: milestoneMessage(name, note) });
   useEvolutionStore.setState((state) => ({ changes: state.changes + 1 }));

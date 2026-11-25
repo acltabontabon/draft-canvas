@@ -176,15 +176,26 @@ export async function switchAlternative(altId: string | null): Promise<Outcome> 
     const target = await store.readRef(branchOf(altId));
     if (!target) return refused('That alternative is no longer in this history.');
     const live = fileOf(useEditorStore.getState());
+    const expectedRevision = useEditorStore.getState().revision;
     const next = withLiveBookkeeping(await snapshotOf(target), live);
     const compute = historyCompute();
     const [before, after] = await Promise.all([compute.prepare(live), compute.prepare(next)]);
     const opId = randomId('o');
     const data = opData(context, store.repoId, { kind: 'binding', copyId: context.copyId, fromAlt, toAlt: altId }, before.blobId, after.blobId, target);
+    // Read again before anything moves: an edit (the person's, an agent's) or another diagram opened
+    // meanwhile means this switch no longer describes what is on screen.
+    const stale = () => useEditorStore.getState().revision !== expectedRevision || service.current !== context.token;
+    if (stale()) return refused('The diagram changed meanwhile; nothing was switched. Try again.');
     await store.journalPut(operationRecord(opId, 'switch', 'prepared', data, Date.now()));
     const binding = { ...context.binding, altId, lastSeen: target, at: Date.now() };
     await historyService().putBindingFor(binding);
     await store.journalPut(operationRecord(opId, 'switch', 'pointer-moved', data, Date.now()));
+    if (stale()) {
+      // Undo the move of the binding; what is on screen stays the person's.
+      await historyService().putBindingFor(context.binding);
+      await store.journalDelete(opId);
+      return refused('The diagram changed meanwhile; nothing was switched. Try again.');
+    }
     closeLens();
     if (before.blobId !== after.blobId) useEditorStore.getState().setDocument(next, { keepPath: true });
     await store.journalDelete(opId);
@@ -254,7 +265,12 @@ export async function archiveAlternative(altId: string, archived: boolean): Prom
     if (!tip) return refused('That alternative is not in this history.');
     const placed = await store.updateRef({ ref: to, expected: null, next: tip });
     if (!placed.ok) return refused('That alternative changed meanwhile; try again.');
-    await store.updateRef({ ref: from, expected: tip, next: null });
+    const removed = await store.updateRef({ ref: from, expected: tip, next: null });
+    if (!removed.ok) {
+      // It moved meanwhile: keep it where it is, and drop the copy just made.
+      await store.updateRef({ ref: to, expected: tip, next: null });
+      return refused('That alternative changed meanwhile; try again.');
+    }
     const meta = await store.meta();
     const nextMeta = { ...meta, alternatives: meta.alternatives.map((alt) => (alt.altId === altId ? { ...alt, archived: archived || undefined } : alt)) };
     await store.writeMeta(nextMeta);
@@ -294,6 +310,7 @@ async function complete(op: Operation): Promise<boolean> {
   if (!context?.store) return false;
   const live = fileOf(useEditorStore.getState());
   const target = withLiveBookkeeping(await snapshotOf(op.data.target), live);
+  if (service.current !== context.token) return false;
   if (op.kind === 'switch') {
     useEditorStore.getState().setDocument(target, { keepPath: true });
   } else if (!useEditorStore.getState().applyToFile(op.kind === 'restore' ? 'Restore' : 'Finish merging', () => target)) {

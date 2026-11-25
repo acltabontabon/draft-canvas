@@ -54,14 +54,14 @@ function backendWith(inner: BrowserBackend, wrap: (store: VersionStore) => Versi
   }) as HistoryBackend;
 }
 
-function service(backend: () => HistoryBackend, file: () => DraftDocument, generation: () => number) {
+function service(backend: () => HistoryBackend, file: () => DraftDocument, generation: () => number, recordable: () => boolean = () => true) {
   let now = 1_700_000_000_000;
   return {
     advance: (ms: number) => (now += ms),
     history: new HistoryService({
       backend,
       compute,
-      editor: { file, generation, atBoundary: () => true },
+      editor: { file, generation, atBoundary: () => true, recordable },
       // Timers never fire on their own here: each test asks for captures explicitly.
       clock: { now: () => now, setTimeout: () => 0, clearTimeout: () => {} },
       schedule: () => DEFAULT_SCHEDULE,
@@ -120,17 +120,17 @@ describe('history under failure', () => {
     const first = service(() => inner, () => fileA, () => 1);
     await first.history.attach({ kind: 'library', documentId: fileA.metadata.id });
     await first.history.flush();
-    // A second copy continuing the same history (the person said so), on the same branch.
+    // A second writer bound to the same branch (two windows on one history: bindings say so directly).
+    const [meta] = await inner.list();
+    await inner.putBinding({ copyId: 'draft_q_other', repoId: meta!.repoId, altId: null, documentId: fileA.metadata.id, lastSeen: null, at: 1 });
     let fileB = updateNode(fileA, 'n_a', { text: 'From B' });
     const second = service(() => inner, () => fileB, () => 1);
     await second.history.attach({ kind: 'draft', recoveryId: 'q_other' });
-    await second.history.answerIdentity(true);
     fileA = updateNode(fileA, 'n_a', { text: 'From A' });
     fileB = updateNode(fileB, 'n_a', { y: 90 });
     first.history.noteEdit();
     second.history.noteEdit();
     await Promise.all([first.history.flush(), second.history.flush()]);
-    const [meta] = await inner.list();
     const store = (await inner.open(meta!.repoId))!;
     const log = await store.log({ from: [(await store.readRef(MAIN_REF))!], limit: 10 });
     const texts = await Promise.all(log.map((commit) => store.readSnapshot(commit.oid)));
@@ -150,5 +150,63 @@ describe('history under failure', () => {
     await again.history.attach({ kind: 'library', documentId: file.metadata.id });
     await settle();
     expect(useEvolutionStore.getState().capture).toMatchObject({ kind: 'unavailable', message: 'That revision could not be read.' });
+  });
+});
+
+describe('history never records the wrong thing', () => {
+  it('never records another diagram into a closing diagram’s history', async () => {
+    const inner = new BrowserBackend(new KvFs(new MemoryKv()), new MemoryState(), processLocks());
+    let file = doc();
+    const { history } = service(() => inner, () => file, () => 1);
+    await history.attach({ kind: 'library', documentId: file.metadata.id });
+    await history.flush();
+    // Diagram B is already in the editor when A's last capture would run.
+    file = addNodes(createDocument('B'), [createNode({ type: 'queue', x: 0, y: 0, id: 'n_b', text: 'B' })]);
+    history.noteEdit();
+    await history.detach();
+    const [meta] = await inner.list();
+    const store = (await inner.open(meta!.repoId))!;
+    const log = await store.log({ from: [(await store.readRef(MAIN_REF))!], limit: 10 });
+    expect(log).toHaveLength(1);
+    expect(await store.readSnapshot(log[0]!.oid)).not.toContain('"B"');
+  });
+
+  it('records nothing for a copy that is not this device’s to record (a guest’s, a share link’s)', async () => {
+    const inner = new BrowserBackend(new KvFs(new MemoryKv()), new MemoryState(), processLocks());
+    const file = doc();
+    const { history } = service(() => inner, () => file, () => 1, () => false);
+    await history.attach({ kind: 'library', documentId: file.metadata.id });
+    history.noteEdit();
+    await history.flush();
+    expect(await inner.list()).toEqual([]);
+  });
+
+  it('stays quiet after "pause, then remove": no new history appears on its own', async () => {
+    const inner = new BrowserBackend(new KvFs(new MemoryKv()), new MemoryState(), processLocks());
+    const file = doc();
+    const { history } = service(() => inner, () => file, () => 1);
+    await history.attach({ kind: 'library', documentId: file.metadata.id });
+    await history.flush();
+    await history.setPaused(true);
+    await history.removeHistory();
+    history.noteEdit();
+    await history.flush();
+    expect(await inner.list()).toEqual([]);
+    expect(useEvolutionStore.getState().capture).toMatchObject({ kind: 'off', reason: 'diagram' });
+  });
+
+  it('continues a copy’s history on an alternative of its own', async () => {
+    const inner = new BrowserBackend(new KvFs(new MemoryKv()), new MemoryState(), processLocks());
+    const file = doc();
+    const first = service(() => inner, () => file, () => 1);
+    await first.history.attach({ kind: 'library', documentId: file.metadata.id });
+    await first.history.flush();
+    await first.history.detach({ capture: false });
+    const second = service(() => inner, () => file, () => 1);
+    await second.history.attach({ kind: 'draft', recoveryId: 'q_copy' });
+    await second.history.answerIdentity(true);
+    expect(second.history.binding?.altId).toBeTruthy();
+    const [meta] = await inner.list();
+    expect(meta!.alternatives.map((alt) => alt.name)).toEqual(['Copy: Faults']);
   });
 });

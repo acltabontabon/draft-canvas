@@ -28,6 +28,11 @@ export interface EditorPort {
   generation(): number;
   /** No gesture is held: the document is in a consistent state. */
   atBoundary(): boolean;
+  /**
+   * The open diagram is this device's own to record: not a share link's read-only copy, not a guest's
+   * copy in someone else's live session. Absent means always.
+   */
+  recordable?(): boolean;
 }
 
 export interface Clock {
@@ -92,14 +97,20 @@ interface Session {
   /** The identity question, while one is open. */
   question: { candidate: KnownHistory; relation: 'moved' | 'copy' } | null;
   readOnly: boolean;
+  /** Recording is paused for this diagram; kept on the session so removing its history keeps it paused. */
+  paused: boolean;
   initiator: Initiator;
   agents: Set<string>;
 }
 
 let tokens = 0;
 
+/** Revisions between background maintenance runs (packing, pruning what nothing reaches). */
+const MAINTAIN_EVERY = 40;
+
 export class HistoryService {
   private session: Session | null = null;
+  private recorded = 0;
 
   private readonly deps: ServiceDeps;
 
@@ -152,6 +163,7 @@ export class HistoryService {
       release: null,
       question: null,
       readOnly: options.readOnly === true,
+      paused: false,
       initiator: 'auto',
       agents: new Set(),
     };
@@ -227,6 +239,7 @@ export class HistoryService {
     session.store = store;
     session.meta = meta;
     session.tip = tip;
+    session.paused = meta.paused === true;
     if (meta.paused) this.setCapture(session, { kind: 'off', reason: 'diagram' });
     if (tip) {
       const parsed = await this.deps.compute.parse(await store.readSnapshot(tip));
@@ -242,11 +255,28 @@ export class HistoryService {
   async answerIdentity(continueHistory: boolean): Promise<void> {
     const session = this.session;
     if (!session?.question) return;
-    const { candidate } = session.question;
+    const { candidate, relation } = session.question;
     session.question = null;
     try {
       if (continueHistory) {
-        const binding: Binding = { copyId: session.copyId, repoId: candidate.repoId, altId: null, documentId: session.documentId, lastSeen: null, at: this.deps.clock.now() };
+        let altId: string | null = null;
+        if (session.question === null && relation === 'copy') {
+          // A copy carries the past on but goes its own way: an alternative of its own, started where
+          // the original's history is, so the two never record onto one branch.
+          const store = await this.deps.backend().open(candidate.repoId);
+          const tip = store ? await store.readRef(branchOf(null)) : null;
+          if (store && tip) {
+            altId = randomId('a');
+            const made = await store.updateRef({ ref: branchOf(altId), expected: null, next: tip });
+            if (made.ok) {
+              const meta = await store.meta();
+              await store.writeMeta({ ...meta, alternatives: [...meta.alternatives, { altId, name: `Copy: ${this.deps.editor.file().metadata.title}`.slice(0, 80), createdAt: this.deps.clock.now(), from: tip }] });
+            } else {
+              altId = null;
+            }
+          }
+        }
+        const binding: Binding = { copyId: session.copyId, repoId: candidate.repoId, altId, documentId: session.documentId, lastSeen: null, at: this.deps.clock.now() };
         await this.deps.backend().putBinding(binding);
         await this.bind(session, binding);
       }
@@ -278,6 +308,7 @@ export class HistoryService {
   noteEdit(agent?: string): void {
     const session = this.session;
     if (!session || session.readOnly || session.question) return;
+    if (this.deps.editor.recordable && !this.deps.editor.recordable()) return;
     if (agent) session.agents.add(agent);
     const now = this.deps.clock.now();
     const wasClean = session.schedule.dirtySince === null;
@@ -326,9 +357,15 @@ export class HistoryService {
    * branch it began with, and touches no editor state.
    */
   private async capture(session: Session, initiator: Initiator): Promise<void> {
-    if (session.readOnly || session.question || session.meta?.paused) return;
+    if (session.readOnly || session.question || session.meta?.paused || session.paused) return;
+    if (!this.deps.enabled()) return;
     const generation = this.deps.editor.generation();
     const snapshot = this.deps.editor.file();
+    // The editor may already hold another diagram (one opened as this one closed), or a copy that is
+    // not this device's to record. Never record either into this copy's history: what this copy had
+    // pending is safe in autosave and is recorded the next time it opens.
+    if (snapshot.metadata.id !== session.documentId) return;
+    if (this.deps.editor.recordable && !this.deps.editor.recordable()) return;
     session.schedule = step(session.schedule, { kind: 'started', at: this.deps.clock.now(), generation });
     this.setCapture(session, { kind: 'capturing' });
     try {
@@ -379,6 +416,9 @@ export class HistoryService {
             result = await store.updateRef({ ref, expected: actual, next: oid });
           }
         }
+        if (!result.ok && result.actual === null && parent !== null) {
+          throw new HistoryError('not-found', 'This alternative was archived or removed elsewhere. Switch to another one to keep recording; the diagram itself is safe.');
+        }
         if (!result.ok) throw new HistoryError('conflict', 'History changed elsewhere while recording; it will try again.');
       }
       session.tip = oid;
@@ -392,12 +432,16 @@ export class HistoryService {
       }
       if (this.session === session) useEvolutionStore.setState({ tipAt: at });
       this.publishTip(session, 1);
+      this.recorded += 1;
+      if (this.recorded % MAINTAIN_EVERY === 0) void store.maintain().catch(() => undefined);
       this.finish(session, true);
     } catch (error) {
       session.schedule = step(session.schedule, { kind: 'failed', at: this.deps.clock.now() });
       const quota = error instanceof HistoryError && error.code === 'quota';
-      this.setCapture(session, { kind: 'failed', message: messageOf(error), quota, retryAt: session.schedule.retryAt });
-      this.arm(session);
+      const gone = error instanceof HistoryError && error.code === 'not-found';
+      this.setCapture(session, { kind: 'failed', message: messageOf(error), quota, retryAt: gone ? null : session.schedule.retryAt });
+      // A branch that is gone does not come back by retrying: wait for the person instead.
+      if (!gone) this.arm(session);
       throw error;
     }
   }
@@ -429,6 +473,7 @@ export class HistoryService {
     if (!paused) delete meta.paused;
     await session.store.writeMeta(meta);
     session.meta = meta;
+    session.paused = paused;
     if (paused) {
       this.setCapture(session, { kind: 'off', reason: 'diagram' });
     } else {
@@ -440,7 +485,12 @@ export class HistoryService {
   }
 
   get paused(): boolean {
-    return this.session?.meta?.paused === true;
+    return this.session?.paused === true;
+  }
+
+  /** The document id of the copy history is attached to. */
+  get documentId(): string | null {
+    return this.session?.documentId ?? null;
   }
 
   /**
@@ -476,9 +526,9 @@ export class HistoryService {
     session.tipBlob = null;
     session.tipDocument = null;
     useEvolutionStore.setState({ repoId: null, tip: null, tipAt: null, revisions: 0, changes: useEvolutionStore.getState().changes + 1 });
-    const working = await this.deps.compute.prepare(this.deps.editor.file());
-    this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty: working.blobId !== null });
-    this.setCapture(session, { kind: 'pending', since: this.deps.clock.now() });
+    // Nothing is recorded again until something changes — or ever, while recording is paused.
+    this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty: false });
+    this.setCapture(session, session.paused ? { kind: 'off', reason: 'diagram' } : { kind: 'empty' });
   }
 
   /**

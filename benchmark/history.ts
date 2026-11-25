@@ -79,7 +79,7 @@ async function measure(name: keyof typeof SCALE_SPECS) {
   }
   const list = await median(3, () => store.log({ from: [tip!], limit: 100 }));
   const before = (await store.usage()).bytes;
-  await store.maintain(Number.MAX_SAFE_INTEGER);
+  await (await backend.open(`r_${name}`))!.maintain(Number.MAX_SAFE_INTEGER);
   const packed = (await store.usage()).bytes;
   const fileBytes = (await compute.prepare(current)).text.length;
   return { name, prepare, diff, merge, record, list, revisions: n, looseBytes: before, packedBytes: packed, fileBytes };

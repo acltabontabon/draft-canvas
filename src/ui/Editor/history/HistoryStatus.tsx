@@ -44,6 +44,8 @@ function summary(capture: CaptureState): { label: string | null; tone: Tone; des
         tone: 'attention',
         describe: capture.relation === 'moved' ? `This looks like “${capture.title}”, moved.` : `This looks like a copy of “${capture.title}”.`,
       };
+    case 'empty':
+      return { label: null, tone: 'quiet', describe: 'No history yet. The next change starts it.' };
     case 'up-to-date':
       return { label: null, tone: 'quiet', describe: 'Every change is in this diagram’s history.' };
     case 'pending':
@@ -188,7 +190,7 @@ export function HistoryStatus() {
             <div className="dc-history-note" role="group" aria-label="Unfinished">
               <p>{unfinished.reason}</p>
               <Button variant="solid" onClick={() => void resolveUnfinished(true).then(report)}>
-                {unfinished.kind === 'switch' ? 'Finish switching' : 'Finish restoring'}
+                {unfinished.kind === 'switch' ? 'Finish switching' : unfinished.kind === 'merge' ? 'Finish merging' : unfinished.kind === 'fast-forward' ? 'Finish bringing it in' : 'Finish restoring'}
               </Button>
               <Button variant="quiet" onClick={() => void resolveUnfinished(false).then(report)}>
                 Keep the diagram as it is

@@ -76,6 +76,11 @@ function ConflictRow({ conflict, session }: { conflict: Conflict; session: Merge
         <span className="dc-compare-item-label">{conflict.label}</span>
         <span className="dc-compare-item-what">{conflict.description}</span>
       </button>
+      {conflict.ours === null && conflict.theirs === null ? (
+        <Button variant={choice ? 'quiet' : 'solid'} aria-pressed={choice !== undefined} onClick={() => void chooseConflict(conflict.id, 'ours')}>
+          {choice ? 'Accepted' : 'Accept as combined'}
+        </Button>
+      ) : (
       <SegmentedControl
         name={`merge-${conflict.id}`}
         legend={`Keep for ${conflict.label}`}
@@ -86,6 +91,7 @@ function ConflictRow({ conflict, session }: { conflict: Conflict; session: Merge
         ]}
         onChange={(side) => void chooseConflict(conflict.id, side)}
       />
+      )}
     </li>
   );
 }

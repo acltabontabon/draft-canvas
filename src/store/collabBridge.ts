@@ -249,6 +249,10 @@ export function historyAttribution(changedKeys: string[]): Attribution {
   const changed = new Set(changedKeys);
   const contributors = [...new Set(touches.filter((touch) => changed.has(touch.key)).map((touch) => touch.by))].sort();
   const seq = live ? live.seq : frozenSeq;
+  if (!live) {
+    frozenTouches = null;
+    frozenSeq = undefined;
+  }
   return { contributors, agents: [], ...(seq !== undefined ? { collabSeq: seq } : {}) };
 }
 

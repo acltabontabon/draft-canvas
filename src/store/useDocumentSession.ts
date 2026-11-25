@@ -371,7 +371,6 @@ export function useDocumentSession(): DocumentSession {
     if (!openId || sharedRef.current) return;
     let unsubscribe: (() => void) | undefined;
     let cancelled = false;
-    let hostKey: import('../evolution/identity').CopyKey | null = null;
     // Already loaded — `openId` is only ever set after the document went into the store — so this
     // subscribes a microtask later, before any edit can happen.
     void loadEditorStore().then((module) => {
@@ -391,7 +390,6 @@ export function useDocumentSession(): DocumentSession {
         void import('./evolution/bridge').then((history) => {
           const key = history.hostCopyKey();
           if (!cancelled && !sharedRef.current && key) {
-            hostKey = key;
             void history.attachHistory(key);
           }
         });
@@ -426,7 +424,7 @@ export function useDocumentSession(): DocumentSession {
       cancelled = true;
       unsubscribe?.();
       autosave.current?.untrack(openId);
-      void import('./evolution/bridge').then((history) => history.detachHistory(hostKey ?? { kind: 'library', documentId: openId }));
+      void import('./evolution/bridge').then((history) => history.detachHistoryFor(openId));
     };
   }, [notify, openId]);
 

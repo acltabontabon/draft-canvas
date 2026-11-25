@@ -97,6 +97,10 @@ earlier pending edits are sent on reconnection.
 available, and Draft Canvas says when some were forgotten. Save a copy before a session if you need a
 complete record to return to.
 
+Only the owner records the diagram's [history](history.md#live-sessions). Revisions credit the people
+whose changes they contain, and ending the session records what it changed. History is never sent to
+collaborators, and alternatives cannot be switched or merged until the session ends.
+
 ## Desktop: share on your local network
 
 For people on the same Wi-Fi, the desktop app can serve the editor itself:

@@ -132,6 +132,9 @@ export async function historyTool(args: HistoryToolArgs): Promise<Record<string,
     }
     case 'suggest_milestone': {
       const revision = known(args.revision ?? context.tip ?? '');
+      await store.readCommit(revision).catch(() => {
+        throw new HistoryToolError('NOT_FOUND', 'No revision with that id in this diagram’s history.');
+      });
       const name = (args.name ?? '').trim().slice(0, 120);
       if (!name) throw new HistoryToolError('INVALID', 'name is required for suggest_milestone.');
       useEvolutionStore.setState({ milestoneSuggestion: { revision, name } });

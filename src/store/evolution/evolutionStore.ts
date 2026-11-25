@@ -26,6 +26,8 @@ export type CaptureState =
   /** Waiting for the person to say whether this copy continues an existing history. */
   | { kind: 'identity'; title: string; relation: 'moved' | 'copy' }
   | { kind: 'up-to-date' }
+  /** No history yet (or it was removed): the next change starts one. */
+  | { kind: 'empty' }
   | { kind: 'pending'; since: number }
   | { kind: 'capturing' }
   | { kind: 'failed'; message: string; quota: boolean; retryAt: number | null };

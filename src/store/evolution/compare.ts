@@ -13,6 +13,7 @@ import { fileOf, useEditorStore } from '../editorStore';
 import { useUiStore } from '../uiStore';
 import { historyCompute } from './client';
 import { useEvolutionStore, type CompareSide, type CompareState } from './evolutionStore';
+import { historyService } from './bridge';
 import { showLive, showRevision, snapshotOf } from './historyView';
 
 async function sideOf(oid: Oid | 'now'): Promise<CompareSide> {
@@ -35,10 +36,11 @@ let comparing = 0;
 export async function compareVersions(a: Oid | 'now', b: Oid | 'now'): Promise<void> {
   if (a === b) return;
   const request = ++comparing;
+  const token = historyService().current;
   const [older, newer] = age(a) <= age(b) ? [a, b] : [b, a];
   const [base, target] = await Promise.all([sideOf(older), sideOf(newer)]);
   const diff = await historyCompute().diff(base.file, target.file);
-  if (request !== comparing) return;
+  if (request !== comparing || historyService().current !== token) return;
   const previous = useEvolutionStore.getState().compare;
   const compare: CompareState = {
     base,

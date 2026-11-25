@@ -12,7 +12,8 @@ import { HistoryError, type Signature } from '../../evolution/contracts';
 import { copyIdOf, type CopyKey } from '../../evolution/identity';
 import { copyLock } from '../../evolution/locks';
 import { readPreference, writePreference } from '../../lib/preferences';
-import { fileOf, isInteracting, useEditorStore } from '../editorStore';
+import { useCollabStore } from '../collabStore';
+import { documentLoadCount, fileOf, isInteracting, useEditorStore } from '../editorStore';
 import { useUiStore } from '../uiStore';
 import { browserHistoryBackend, historyCompute, historyWorkerComputesOnly } from './client';
 import { useEvolutionStore } from './evolutionStore';
@@ -106,8 +107,13 @@ export async function rebindHistoryCopy(from: CopyKey, to: CopyKey): Promise<voi
   const toId = copyIdOf(to);
   if (fromId === toId) return;
   const backend = backendFactory();
+  // A first capture may still be on its way: let it finish so its binding moves too.
+  if (useEvolutionStore.getState().copyId === fromId) await service?.flush().catch(() => undefined);
   const binding = await backend.binding(fromId);
-  if (!binding) return;
+  if (!binding) {
+    if (useEvolutionStore.getState().copyId === fromId) await attachHistory(to);
+    return;
+  }
   await backend.putBinding({ ...binding, copyId: toId, at: Date.now() });
   await backend.deleteBinding(fromId);
   if (useEvolutionStore.getState().copyId === fromId) await attachHistory(to);
@@ -126,6 +132,9 @@ export function historyService(): HistoryService {
       file: () => fileOf(useEditorStore.getState()),
       generation: () => useEditorStore.getState().revision,
       atBoundary: () => !isInteracting(),
+      // A share link's read-only copy and a guest's copy of someone else's session are never this
+      // device's to record, whatever id they carry.
+      recordable: () => !useUiStore.getState().readOnly && useCollabStore.getState().role !== 'guest',
     },
     clock: { now: () => Date.now(), setTimeout: (run, ms) => setTimeout(run, ms), clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>) },
     schedule: historySchedule,
@@ -140,8 +149,20 @@ export function historyService(): HistoryService {
 
 function listen(documentId: string): void {
   unsubscribe?.();
+  let loads = documentLoadCount('all');
   unsubscribe = useEditorStore.subscribe((state, previous) => {
     if (state.revision === previous.revision) return;
+    // Another file opened in this window under the same id (a duplicate made outside the app): the
+    // shell's working copy changed, so history follows it rather than the id.
+    const loaded = documentLoadCount('all');
+    if (loaded !== loads) {
+      loads = loaded;
+      const key = hostCopyKey();
+      if (key && copyIdOf(key) !== useEvolutionStore.getState().copyId) {
+        void attachHistory(key);
+        return;
+      }
+    }
     if (state.document.metadata.id !== documentId) return;
     historyService().noteEdit();
   });
@@ -180,6 +201,19 @@ function watchVisibility(): void {
  */
 export async function detachHistory(key?: CopyKey): Promise<void> {
   if (key && useEvolutionStore.getState().copyId !== copyIdOf(key)) return;
+  await detachNow();
+}
+
+/**
+ * The diagram with this id is closing: detach if it is the one attached. By document, not by copy
+ * key, so a copy rebound while open (a draft saved to a file) is still let go when it closes.
+ */
+export async function detachHistoryFor(documentId: string): Promise<void> {
+  if (service?.documentId !== documentId) return;
+  await detachNow();
+}
+
+async function detachNow(): Promise<void> {
   unsubscribe?.();
   unsubscribe = null;
   await service?.detach();

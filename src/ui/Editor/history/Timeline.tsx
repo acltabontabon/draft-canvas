@@ -180,6 +180,10 @@ export function Timeline() {
       ' ': () => void togglePlay(),
       Escape: () => (merge ? undefined : compare ? endCompare() : lens ? showLive() : setTimelineOpen(false)),
     };
+    const target = event.target as HTMLElement;
+    const onTrack = target === event.currentTarget || target.closest('.dc-timeline-track') !== null;
+    if (!onTrack && event.key !== 'Escape') return;
+    if (target.closest('.dc-timeline-track') && target.tagName === 'BUTTON' && (event.key === ' ' || event.key === 'Enter') && !target.classList.contains('dc-timeline-mark')) return;
     const run = keys[event.key];
     if (!run) return;
     event.preventDefault();
@@ -296,7 +300,7 @@ export function Timeline() {
             <span className="dc-timeline-detail-meta">
               {relativeTime(selected.at)}
               {selected.agents.length > 0 && ' · reviewed agent change'}
-              {selected.contributors.length > 0 && ` · with ${selected.contributors.join(', ')}`}
+              {selected.contributors.length > 0 && ` · with ${selected.contributors.join(', ')} (names as given, unverified)`}
               {lens.missing && ` · ${lens.missing}`}
             </span>
           </div>

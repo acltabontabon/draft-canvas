@@ -207,6 +207,12 @@ Agents use ordinary shapes, connectors, notes, flows, [sequences](sequence-diagr
 [rich text](shapes-and-connectors.md#write-rich-text). Ask for one by what it shows: "Add a sequence
 for placing an order, with the payment-declined branch."
 
+An agent can also ask how the open diagram evolved: "What changed in this diagram since Monday?" or
+"What would bringing in the event-driven alternative change?" It reads summaries and previews from the
+diagram's [history](history.md#agents-and-history), and can suggest naming a revision for you to
+accept. It never restores or merges. Reading a past revision in full is off unless you allow it in
+**Settings → History**.
+
 ## Watch and undo
 
 - Longer requests show progress above the status bar, with **Show** for a new diagram.

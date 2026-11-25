@@ -41,7 +41,9 @@ function refused(message: string): Outcome {
 
 /** Shows the session's result on the canvas, marked against this architecture. */
 async function preview(session: MergeSession): Promise<void> {
+  const token = historyService().current;
   const diff = await historyCompute().diff(session.oursFile, session.result.candidate);
+  if (historyService().current !== token) return;
   const lens = useEvolutionStore.getState().lens;
   useEvolutionStore.setState({
     timelineOpen: true,
@@ -161,11 +163,20 @@ async function fastForward(theirs: Oid, source: string | null): Promise<Outcome>
 }
 
 /** Chooses a side for one conflict, and works the result out again. */
-export async function chooseConflict(id: string, side: Side): Promise<void> {
+let choosing: Promise<void> = Promise.resolve();
+
+/** Choices are worked out one at a time, each from the latest, so a quick second click is never lost. */
+export function chooseConflict(id: string, side: Side): Promise<void> {
+  choosing = choosing.then(() => applyChoice(id, side)).catch(() => undefined);
+  return choosing;
+}
+
+async function applyChoice(id: string, side: Side): Promise<void> {
   const session = useEvolutionStore.getState().merge;
   if (!session) return;
   const choices = { ...session.choices, [id]: side };
   const result = await historyCompute().merge(session.base, session.oursFile, session.theirsFile, Object.entries(choices));
+  if (useEvolutionStore.getState().merge?.opId !== session.opId) return;
   const next = { ...session, choices, result };
   await preview(next);
   const store = historyService().store;
