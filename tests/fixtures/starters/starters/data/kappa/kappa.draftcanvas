@@ -51,7 +51,7 @@
     {
       "id": "gateway",
       "type": "service",
-      "x": -20,
+      "x": -100,
       "y": 355,
       "width": 240,
       "height": 142,
@@ -65,7 +65,7 @@
     {
       "id": "network",
       "type": "service",
-      "x": 12,
+      "x": -68,
       "y": 518,
       "width": 176,
       "height": 99,
@@ -419,7 +419,7 @@
     {
       "id": "title",
       "type": "text",
-      "x": -20,
+      "x": -100,
       "y": -197,
       "width": 1200,
       "height": 110,
@@ -439,6 +439,10 @@
       "routing": "smoothstep",
       "semantic": "publishes",
       "kind": "event",
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.3
+      },
       "semanticsOrigin": "explicit"
     },
     {
@@ -450,6 +454,20 @@
       "routing": "smoothstep",
       "semantic": "publishes",
       "kind": "event",
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.85
+      },
+      "waypoints": [
+        {
+          "x": 250,
+          "y": 567
+        },
+        {
+          "x": 250,
+          "y": 405.2
+        }
+      ],
       "semanticsOrigin": "explicit"
     },
     {

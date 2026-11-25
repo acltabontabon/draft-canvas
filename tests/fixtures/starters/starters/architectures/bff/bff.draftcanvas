@@ -637,6 +637,16 @@
         "side": "left",
         "offset": 0.3
       },
+      "waypoints": [
+        {
+          "x": 1240,
+          "y": 181.46
+        },
+        {
+          "x": 1240,
+          "y": 436.98
+        }
+      ],
       "semanticsOrigin": "explicit"
     },
     {
@@ -702,6 +712,16 @@
         "side": "left",
         "offset": 0.7
       },
+      "waypoints": [
+        {
+          "x": 1240,
+          "y": 714.26
+        },
+        {
+          "x": 1240,
+          "y": 458.74
+        }
+      ],
       "semanticsOrigin": "explicit"
     },
     {

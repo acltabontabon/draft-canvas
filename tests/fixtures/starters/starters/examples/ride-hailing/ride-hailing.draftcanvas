@@ -26,7 +26,7 @@
       "x": 616,
       "y": -145,
       "width": 1728,
-      "height": 1549,
+      "height": 1579,
       "z": -2,
       "text": "Swiftride cloud",
       "textOrigin": "explicit",
@@ -93,7 +93,7 @@
       "x": 1298,
       "y": 849,
       "width": 594,
-      "height": 505,
+      "height": 535,
       "z": -1,
       "parentId": "cloud",
       "text": "Payments",
@@ -105,7 +105,7 @@
       "id": "notify-d",
       "type": "group",
       "x": 648,
-      "y": 1081,
+      "y": 1111,
       "width": 304,
       "height": 291,
       "z": -1,
@@ -118,7 +118,7 @@
       "id": "data-d",
       "type": "group",
       "x": 968,
-      "y": 1081,
+      "y": 1111,
       "width": 304,
       "height": 291,
       "z": -1,
@@ -457,8 +457,8 @@
             "routing": "smoothstep",
             "semantic": "uses",
             "sourceAnchor": {
-              "side": "bottom",
-              "offset": 0.75
+              "side": "right",
+              "offset": 0.8707
             },
             "targetAnchor": {
               "side": "left",
@@ -672,7 +672,7 @@
           {
             "id": "d.search",
             "type": "component",
-            "x": 732,
+            "x": 792,
             "y": 0,
             "width": 152,
             "height": 99,
@@ -685,7 +685,7 @@
           {
             "id": "d.geo",
             "type": "database",
-            "x": 1030,
+            "x": 1090,
             "y": 8.63636363636364,
             "width": 120,
             "height": 114,
@@ -698,7 +698,7 @@
           {
             "id": "d.scorer",
             "type": "component",
-            "x": 732,
+            "x": 792,
             "y": 168.36363636363637,
             "width": 152,
             "height": 95,
@@ -711,7 +711,7 @@
           {
             "id": "d.eta",
             "type": "service",
-            "x": 1030,
+            "x": 1090,
             "y": 177,
             "width": 120,
             "height": 114,
@@ -724,7 +724,7 @@
           {
             "id": "d.sequencer",
             "type": "component",
-            "x": 732,
+            "x": 792,
             "y": 345,
             "width": 152,
             "height": 95,
@@ -737,7 +737,7 @@
           {
             "id": "d.timer",
             "type": "component",
-            "x": 1014,
+            "x": 1074,
             "y": 345,
             "width": 152,
             "height": 114,
@@ -926,7 +926,7 @@
       "id": "payouts",
       "type": "service",
       "x": 1350,
-      "y": 1179,
+      "y": 1209,
       "width": 220,
       "height": 142,
       "z": 0,
@@ -951,7 +951,7 @@
       "id": "ledger",
       "type": "database",
       "x": 1740,
-      "y": 1179,
+      "y": 1209,
       "width": 120,
       "height": 143,
       "z": 0,
@@ -980,7 +980,7 @@
       "id": "notify",
       "type": "service",
       "x": 680,
-      "y": 1179,
+      "y": 1209,
       "width": 240,
       "height": 142,
       "z": 0,
@@ -995,7 +995,7 @@
       "id": "fcm",
       "type": "service",
       "x": 412,
-      "y": 1201,
+      "y": 1231,
       "width": 176,
       "height": 99,
       "z": 0,
@@ -1009,7 +1009,7 @@
       "id": "warehouse",
       "type": "database",
       "x": 1000,
-      "y": 1161,
+      "y": 1191,
       "width": 240,
       "height": 179,
       "z": 0,
@@ -1063,7 +1063,7 @@
       "id": "seq-request",
       "type": "sequence",
       "x": 1094,
-      "y": 1504,
+      "y": 1534,
       "width": 773,
       "height": 844,
       "z": 0,
@@ -1466,7 +1466,7 @@
       },
       "targetAnchor": {
         "side": "top",
-        "offset": 0.55
+        "offset": 0.8
       },
       "semanticsOrigin": "explicit"
     },
@@ -1489,7 +1489,7 @@
       },
       "targetAnchor": {
         "side": "top",
-        "offset": 0.12
+        "offset": 0.375
       },
       "semanticsOrigin": "explicit",
       "attachments": [

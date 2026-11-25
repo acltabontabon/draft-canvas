@@ -24,9 +24,9 @@
       "id": "cloud",
       "type": "group",
       "x": 636,
-      "y": -23,
-      "width": 1678,
-      "height": 1057,
+      "y": -93,
+      "width": 1788,
+      "height": 1127,
       "z": -2,
       "text": "Reelwave cloud",
       "textOrigin": "explicit",
@@ -48,10 +48,10 @@
     {
       "id": "discovery",
       "type": "group",
-      "x": 1258,
-      "y": 29,
+      "x": 1368,
+      "y": -41,
       "width": 1024,
-      "height": 463,
+      "height": 503,
       "z": -1,
       "parentId": "cloud",
       "text": "Discovery",
@@ -76,7 +76,7 @@
     {
       "id": "data",
       "type": "group",
-      "x": 1258,
+      "x": 1368,
       "y": 492,
       "width": 1024,
       "height": 510,
@@ -197,8 +197,8 @@
     {
       "id": "graph",
       "type": "service",
-      "x": 1290,
-      "y": 199,
+      "x": 1400,
+      "y": 129,
       "width": 240,
       "height": 142,
       "z": 0,
@@ -223,8 +223,8 @@
     {
       "id": "recs",
       "type": "service",
-      "x": 1660,
-      "y": 107,
+      "x": 1770,
+      "y": 37,
       "width": 280,
       "height": 126,
       "z": 0,
@@ -249,8 +249,8 @@
     {
       "id": "features",
       "type": "database",
-      "x": 2030,
-      "y": 81,
+      "x": 2140,
+      "y": 11,
       "width": 220,
       "height": 179,
       "z": 0,
@@ -264,8 +264,8 @@
     {
       "id": "catalog",
       "type": "service",
-      "x": 1660,
-      "y": 299,
+      "x": 1770,
+      "y": 269,
       "width": 280,
       "height": 142,
       "z": 0,
@@ -279,8 +279,8 @@
     {
       "id": "search",
       "type": "database",
-      "x": 2030,
-      "y": 281,
+      "x": 2140,
+      "y": 251,
       "width": 220,
       "height": 179,
       "z": 0,
@@ -584,7 +584,7 @@
     {
       "id": "events",
       "type": "queue",
-      "x": 1370,
+      "x": 1480,
       "y": 571,
       "width": 140,
       "height": 139,
@@ -599,7 +599,7 @@
     {
       "id": "aggregator",
       "type": "service",
-      "x": 1710,
+      "x": 1820,
       "y": 562,
       "width": 180,
       "height": 157,
@@ -615,7 +615,7 @@
     {
       "id": "history",
       "type": "database",
-      "x": 2070,
+      "x": 2180,
       "y": 544,
       "width": 140,
       "height": 192,
@@ -630,7 +630,7 @@
     {
       "id": "lake",
       "type": "database",
-      "x": 1310,
+      "x": 1420,
       "y": 791,
       "width": 260,
       "height": 179,
@@ -645,7 +645,7 @@
     {
       "id": "training",
       "type": "service",
-      "x": 1680,
+      "x": 1790,
       "y": 809,
       "width": 240,
       "height": 142,
@@ -821,11 +821,11 @@
             "semantic": "writes",
             "sourceAnchor": {
               "side": "right",
-              "offset": 0.75
+              "offset": 0.25
             },
             "targetAnchor": {
-              "side": "bottom",
-              "offset": 0.25
+              "side": "left",
+              "offset": 0.5
             },
             "semanticsOrigin": "explicit"
           },
@@ -840,12 +840,12 @@
             "kind": "async",
             "async": true,
             "sourceAnchor": {
-              "side": "bottom",
+              "side": "right",
               "offset": 0.75
             },
             "targetAnchor": {
               "side": "left",
-              "offset": 0.75
+              "offset": 0.5
             },
             "semanticsOrigin": "explicit"
           },
@@ -878,12 +878,12 @@
             "kind": "failure",
             "async": true,
             "sourceAnchor": {
-              "side": "right",
-              "offset": 0.75
+              "side": "bottom",
+              "offset": 0.5
             },
             "targetAnchor": {
               "side": "left",
-              "offset": 0.25
+              "offset": 0.5
             },
             "semanticsOrigin": "explicit",
             "deliveryAttempts": 3
@@ -1001,7 +1001,7 @@
       "id": "slo",
       "type": "text",
       "x": 640,
-      "y": 29,
+      "y": -41,
       "width": 330,
       "height": 172,
       "z": 0,
@@ -1028,7 +1028,7 @@
       "id": "title",
       "type": "text",
       "x": -97,
-      "y": -181,
+      "y": -251,
       "width": 1000,
       "height": 110,
       "z": 0,
@@ -1039,7 +1039,7 @@
     {
       "id": "seq-play",
       "type": "sequence",
-      "x": 1339,
+      "x": 1449,
       "y": 1114,
       "width": 975,
       "height": 840,
@@ -1487,6 +1487,10 @@
       "routing": "smoothstep",
       "semantic": "reads",
       "cadence": "Nightly 02:00",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.12
+      },
       "semanticsOrigin": "inferred"
     },
     {
@@ -1498,6 +1502,10 @@
       "routing": "smoothstep",
       "semantic": "reads",
       "kind": "fallback",
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.28
+      },
       "semanticsOrigin": "explicit"
     },
     {
@@ -1518,6 +1526,10 @@
       "directed": true,
       "routing": "smoothstep",
       "semantic": "writes",
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.85
+      },
       "semanticsOrigin": "explicit"
     },
     {

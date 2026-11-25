@@ -23,7 +23,7 @@
     {
       "id": "holder",
       "type": "actor",
-      "x": -60,
+      "x": -140,
       "y": 232,
       "width": 120,
       "height": 152,
@@ -37,7 +37,7 @@
     {
       "id": "api",
       "type": "service",
-      "x": 200,
+      "x": 120,
       "y": 230,
       "width": 200,
       "height": 157,
@@ -386,7 +386,7 @@
       "id": "inbox",
       "type": "database",
       "x": 1530,
-      "y": 409,
+      "y": 479,
       "width": 180,
       "height": 183,
       "z": 0,
@@ -413,7 +413,7 @@
     {
       "id": "title",
       "type": "text",
-      "x": -60,
+      "x": -140,
       "y": -125,
       "width": 1100,
       "height": 110,

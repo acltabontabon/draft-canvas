@@ -159,7 +159,7 @@
           {
             "id": "d.policy",
             "type": "component",
-            "x": 766,
+            "x": 816,
             "y": 0,
             "width": 152,
             "height": 95,
@@ -173,7 +173,7 @@
           {
             "id": "d.money",
             "type": "component",
-            "x": 766,
+            "x": 816,
             "y": 149,
             "width": 152,
             "height": 95,
@@ -187,7 +187,7 @@
           {
             "id": "d.event",
             "type": "component",
-            "x": 766,
+            "x": 816,
             "y": 298,
             "width": 152,
             "height": 95,
@@ -504,6 +504,16 @@
         "side": "top",
         "offset": 0.25
       },
+      "waypoints": [
+        {
+          "x": 1052.4,
+          "y": 110
+        },
+        {
+          "x": 737.77,
+          "y": 110
+        }
+      ],
       "semanticsOrigin": "explicit"
     },
     {
@@ -540,6 +550,16 @@
         "side": "top",
         "offset": 0.25
       },
+      "waypoints": [
+        {
+          "x": 1143.6,
+          "y": 110
+        },
+        {
+          "x": 1457.77,
+          "y": 110
+        }
+      ],
       "semanticsOrigin": "explicit"
     },
     {

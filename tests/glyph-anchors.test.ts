@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { dataStoreGlyphBounds, dataStoreScale } from '../src/document/dataStoreGeometry';
 import { createNode } from '../src/document/factory';
 import { anchorBandOf, bandSpan } from '../src/document/queueGeometry';
-import type { DraftNode } from '../src/document/types';
+import type { DraftEdge, DraftNode } from '../src/document/types';
+import { connectorRoutes } from '../src/edges/connectorRoutes';
 import { anchorPoint, ANCHOR_OFFSETS, rectOf, snappedAnchorForDrop } from '../src/edges/routing';
 import { describeNode, sizingContext } from '../src/nodes/describe';
 import type { Shape } from '../src/render/displayList';
@@ -157,5 +158,30 @@ describe('a connector dropped near a glyph', () => {
 
   it('stays automatic for a drop on the middle of the glyph', () => {
     expect(snappedAnchorForDrop(rect, { x: adapter.x + adapter.width / 2, y: middle })).toBeUndefined();
+  });
+});
+
+describe('a reply beside its request on a glyph', () => {
+  // A person a little lower than the API they call: the request is straightened onto the bottom of
+  // the glyph's short side, and the reply, stepped below it and clamped back, was drawn on the very
+  // same line: one stroke with an arrowhead at each end.
+  const person = { ...createNode({ type: 'actor', x: 10, y: 597 } as Parameters<typeof createNode>[0]), id: 'person', width: 120, height: 134 };
+  const api = { ...shape({ serviceKind: 'api', text: 'Orders Service', description: 'Takes orders and publishes what happens to them.' }, { width: 180, height: 157 }), id: 'api', x: 310, y: 586 };
+  const call: DraftEdge = { id: 'call', source: 'person', target: 'api', directed: true, routing: 'smoothstep', label: 'Places order', hasResponse: true };
+
+  it('is drawn on a line of its own, on the side of the request that has room', () => {
+    const routes = connectorRoutes(call, { nodes: [person, api], edges: [call] }, 'transient')!;
+    const band = anchorBandOf(api)!;
+    const { request, response } = routes;
+    expect(response).not.toBeNull();
+    // Level, both of them, and a lane apart at both ends.
+    expect(request.source.y).toBeCloseTo(request.target.y, 6);
+    expect(response!.source.y).toBeCloseTo(response!.target.y, 6);
+    expect(Math.abs(response!.source.y - request.target.y)).toBeGreaterThanOrEqual(16);
+    // Both still on the glyph.
+    for (const y of [request.target.y, response!.source.y]) {
+      expect(y).toBeGreaterThanOrEqual(band.top);
+      expect(y).toBeLessThanOrEqual(band.bottom);
+    }
   });
 });

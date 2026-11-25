@@ -2105,7 +2105,7 @@ function pinNudge(rect: Rect, side: Side, lane: number, replyStep: number): { x:
 function endsFor(
   sourceRect: Rect,
   targetRect: Rect,
-  options: Pick<RouteOptions, 'anchors' | 'waypoints' | 'lane' | 'replyStep' | 'spread' | 'mode'> | undefined,
+  options: Pick<RouteOptions, 'anchors' | 'waypoints' | 'lane' | 'replyStep' | 'spread' | 'mode' | 'avoid' | 'spine'> | undefined,
 ): ConnectorEnds {
   const anchors = options?.anchors;
   const waypoints = options?.waypoints?.length ? options.waypoints : undefined;
@@ -2156,8 +2156,69 @@ function endsFor(
       if (from.x !== to.x && !sourcePinned && !sourcePlaced) from.x = levelOnto(sourceRect, sourceSide, to.x, from.x);
       alignFacingEnds(from, to, sourceRect, targetRect, sourceSide, targetSide, sourcePinned || sourcePlaced, targetPinned || targetPlaced);
     }
+    if (replyStep && options?.avoid && !options.spine) keepReplyApart(from, to, sourceRect, targetRect, sourceSide, targetSide, options.avoid, replyStep);
   }
   return { from, to, sourceSide, targetSide };
+}
+
+/** Closer than this along a side, a reply's end reads as its request's: one line, both arrowheads. */
+const REPLY_APART = 8;
+
+/**
+ * Keeps a reply's ends off the points its request holds. A reply is stepped out from its request
+ * and then clamped to the side, and straightened within what the two sides share: on a short side
+ * (a glyph's is 54px) with the request already at the end of it, both of those bring the reply back
+ * to the request's own point, and the pair was drawn as one line with an arrowhead at each end.
+ * When that happens the reply takes the step on whichever side of the request has room for it, at
+ * both ends together so the two lines still never cross: the same way at both ends of a line between
+ * facing sides, and round the same side of the corner when the line turns one.
+ */
+function keepReplyApart(
+  from: { x: number; y: number },
+  to: { x: number; y: number },
+  source: Rect,
+  target: Rect,
+  sourceSide: Side,
+  targetSide: Side,
+  request: readonly { x: number; y: number }[],
+  replyStep: number,
+): void {
+  const first = request[0];
+  const last = request[request.length - 1];
+  if (!first || !last) return;
+  // The reply leaves where its request arrived, and arrives where it left.
+  const ends = [
+    { point: from, rect: source, side: sourceSide, held: last },
+    { point: to, rect: target, side: targetSide, held: first },
+  ].map((end) => {
+    const axis = isHorizontalSide(end.side) ? ('y' as const) : ('x' as const);
+    const cross = axis === 'y' ? ('x' as const) : ('y' as const);
+    const reach = bandReach(end.rect, end.rect.anchorBand);
+    const span = axis === 'y' ? verticalSpan(end.rect) : { start: reach.min, length: reach.max - reach.min };
+    const same = Math.abs(end.point[cross] - end.held[cross]) < REPLY_APART;
+    return { ...end, axis, low: span.start, high: span.start + span.length, same, hidden: same && Math.abs(end.point[axis] - end.held[axis]) < REPLY_APART };
+  });
+  if (!ends.some((end) => end.hidden) || !ends.every((end) => end.same)) return;
+  const step = Math.abs(replyStep) * LANE_SPACING;
+  // Round a corner, the reply stays outside the request's bend or inside it at both ends: which way
+  // that is along the second side depends on which way the line turns.
+  const [a, b] = ends as [(typeof ends)[number], (typeof ends)[number]];
+  const turn = a.axis === b.axis ? 1 : a.axis === 'x' ? Math.sign((b.held.x - a.held.x) * (a.held.y - b.held.y)) || 1 : Math.sign((a.held.x - b.held.x) * (b.held.y - a.held.y)) || 1;
+  const sense = (end: (typeof ends)[number]) => (end === b ? turn : 1);
+  const fits = (sign: number) => ends.every((end) => end.held[end.axis] + sign * sense(end) * step >= end.low - 0.5 && end.held[end.axis] + sign * sense(end) * step <= end.high + 0.5);
+  const out = Math.sign(replyStep) || 1;
+  const sign = fits(out) ? out : fits(-out) ? -out : 0;
+  if (sign) {
+    for (const end of ends) end.point[end.axis] = clamp(end.held[end.axis] + sign * sense(end) * step, end.low, end.high);
+    return;
+  }
+  // No room for a whole step on either side at both ends: each hidden end goes as far from the
+  // request as its own side lets it.
+  for (const end of ends) {
+    if (!end.hidden) continue;
+    const at = end.held[end.axis];
+    end.point[end.axis] = at - end.low > end.high - at ? Math.max(end.low, at - step) : Math.min(end.high, at + step);
+  }
 }
 
 /**

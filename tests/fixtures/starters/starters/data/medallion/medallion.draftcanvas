@@ -11,7 +11,7 @@
     {
       "id": "sources",
       "type": "group",
-      "x": -52,
+      "x": -112,
       "y": 97,
       "width": 304,
       "height": 633,
@@ -88,7 +88,7 @@
     {
       "id": "rides",
       "type": "database",
-      "x": -20,
+      "x": -80,
       "y": 149,
       "width": 240,
       "height": 143,
@@ -103,8 +103,8 @@
     {
       "id": "events",
       "type": "queue",
-      "x": -20,
-      "y": 348,
+      "x": -80,
+      "y": 341,
       "width": 240,
       "height": 104,
       "z": 0,
@@ -118,7 +118,7 @@
     {
       "id": "payouts",
       "type": "database",
-      "x": -20,
+      "x": -80,
       "y": 519,
       "width": 240,
       "height": 179,
@@ -268,7 +268,7 @@
     {
       "id": "title",
       "type": "text",
-      "x": -52,
+      "x": -112,
       "y": -69,
       "width": 1100,
       "height": 110,
@@ -294,16 +294,16 @@
       },
       "targetAnchor": {
         "side": "left",
-        "offset": 0.15
+        "offset": 0.2
       },
       "waypoints": [
         {
-          "x": 404,
-          "y": 220
+          "x": 372,
+          "y": 197
         },
         {
-          "x": 404,
-          "y": 364
+          "x": 372,
+          "y": 335.93
         }
       ],
       "semanticsOrigin": "explicit"
@@ -335,16 +335,16 @@
       },
       "targetAnchor": {
         "side": "left",
-        "offset": 0.85
+        "offset": 0.88
       },
       "waypoints": [
         {
-          "x": 404,
+          "x": 372,
           "y": 580
         },
         {
-          "x": 404,
-          "y": 437
+          "x": 372,
+          "y": 380.13
         }
       ],
       "semanticsOrigin": "explicit"

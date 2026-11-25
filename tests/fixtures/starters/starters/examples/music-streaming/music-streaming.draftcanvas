@@ -25,7 +25,7 @@
       "type": "group",
       "x": 616,
       "y": 41,
-      "width": 1766,
+      "width": 1826,
       "height": 1475,
       "z": -2,
       "text": "Earshot cloud",
@@ -48,7 +48,7 @@
     {
       "id": "library",
       "type": "group",
-      "x": 948,
+      "x": 1008,
       "y": 121,
       "width": 664,
       "height": 463,
@@ -62,7 +62,7 @@
     {
       "id": "listening",
       "type": "group",
-      "x": 948,
+      "x": 1008,
       "y": 679,
       "width": 664,
       "height": 274,
@@ -76,7 +76,7 @@
     {
       "id": "personal",
       "type": "group",
-      "x": 948,
+      "x": 1008,
       "y": 1051,
       "width": 664,
       "height": 254,
@@ -90,7 +90,7 @@
     {
       "id": "insights",
       "type": "group",
-      "x": 1678,
+      "x": 1738,
       "y": 121,
       "width": 692,
       "height": 1162,
@@ -201,7 +201,7 @@
     {
       "id": "playlists",
       "type": "service",
-      "x": 1030,
+      "x": 1090,
       "y": 212,
       "width": 180,
       "height": 157,
@@ -217,7 +217,7 @@
     {
       "id": "playlists-db",
       "type": "database",
-      "x": 1340,
+      "x": 1400,
       "y": 201,
       "width": 240,
       "height": 179,
@@ -242,7 +242,7 @@
     {
       "id": "search",
       "type": "service",
-      "x": 980,
+      "x": 1040,
       "y": 409,
       "width": 280,
       "height": 142,
@@ -257,7 +257,7 @@
     {
       "id": "index",
       "type": "database",
-      "x": 1400,
+      "x": 1460,
       "y": 409,
       "width": 120,
       "height": 143,
@@ -272,7 +272,7 @@
     {
       "id": "audio",
       "type": "service",
-      "x": 980,
+      "x": 1040,
       "y": 759,
       "width": 280,
       "height": 142,
@@ -288,7 +288,7 @@
     {
       "id": "events",
       "type": "queue",
-      "x": 1390,
+      "x": 1450,
       "y": 782,
       "width": 140,
       "height": 139,
@@ -303,7 +303,7 @@
     {
       "id": "dj",
       "type": "actor",
-      "x": 1050,
+      "x": 1110,
       "y": 1135,
       "width": 140,
       "height": 134,
@@ -329,7 +329,7 @@
     {
       "id": "recs",
       "type": "service",
-      "x": 1350,
+      "x": 1410,
       "y": 1131,
       "width": 220,
       "height": 142,
@@ -373,7 +373,7 @@
           {
             "id": "r.candidates",
             "type": "component",
-            "x": 749,
+            "x": 819,
             "y": 0,
             "width": 152,
             "height": 114,
@@ -387,7 +387,7 @@
           {
             "id": "r.vectors",
             "type": "database",
-            "x": 1036,
+            "x": 1106,
             "y": 0.75,
             "width": 260,
             "height": 179,
@@ -401,7 +401,7 @@
           {
             "id": "r.ranker",
             "type": "component",
-            "x": 749,
+            "x": 819,
             "y": 153,
             "width": 152,
             "height": 99,
@@ -415,7 +415,7 @@
           {
             "id": "r.features",
             "type": "database",
-            "x": 1056,
+            "x": 1126,
             "y": 187.5625,
             "width": 220,
             "height": 179,
@@ -429,7 +429,7 @@
           {
             "id": "r.mix",
             "type": "component",
-            "x": 749,
+            "x": 819,
             "y": 306,
             "width": 152,
             "height": 99,
@@ -562,7 +562,7 @@
     {
       "id": "warehouse",
       "type": "database",
-      "x": 1710,
+      "x": 1770,
       "y": 741,
       "width": 220,
       "height": 179,
@@ -577,7 +577,7 @@
     {
       "id": "weekly",
       "type": "service",
-      "x": 1690,
+      "x": 1750,
       "y": 219,
       "width": 260,
       "height": 142,
@@ -602,7 +602,7 @@
     {
       "id": "royalties",
       "type": "service",
-      "x": 2030,
+      "x": 2090,
       "y": 759,
       "width": 260,
       "height": 142,
@@ -617,7 +617,7 @@
     {
       "id": "labels",
       "type": "actor",
-      "x": 2530,
+      "x": 2590,
       "y": 762,
       "width": 140,
       "height": 137,
@@ -863,6 +863,16 @@
               "side": "left",
               "offset": 0.25
             },
+            "waypoints": [
+              {
+                "x": 600,
+                "y": 120.6
+              },
+              {
+                "x": 600,
+                "y": 221.75
+              }
+            ],
             "semanticsOrigin": "inferred"
           },
           {
@@ -969,7 +979,7 @@
     {
       "id": "counts",
       "type": "text",
-      "x": 1835,
+      "x": 1895,
       "y": 1070,
       "width": 330,
       "height": 164,
@@ -983,7 +993,7 @@
     {
       "id": "money",
       "type": "text",
-      "x": 2130,
+      "x": 2190,
       "y": 272,
       "width": 188,
       "height": 36,
@@ -1009,7 +1019,7 @@
     {
       "id": "seq-dj",
       "type": "sequence",
-      "x": 1594,
+      "x": 1654,
       "y": 1596,
       "width": 788,
       "height": 798,
@@ -1246,7 +1256,7 @@
       "semantic": "routes",
       "sourceAnchor": {
         "side": "top",
-        "offset": 0.3
+        "offset": 0.25
       },
       "targetAnchor": {
         "side": "left",
@@ -1264,7 +1274,7 @@
       "semantic": "routes",
       "sourceAnchor": {
         "side": "top",
-        "offset": 0.7
+        "offset": 0.75
       },
       "targetAnchor": {
         "side": "left",
@@ -1711,7 +1721,7 @@
       "tool": "highlighter",
       "color": "yellow",
       "size": 14,
-      "x": 2126,
+      "x": 2186,
       "y": 294,
       "points": [
         0,

@@ -24,9 +24,9 @@
       "id": "cloud",
       "type": "group",
       "x": 596,
-      "y": -9,
-      "width": 1748,
-      "height": 1303,
+      "y": -119,
+      "width": 1768,
+      "height": 1413,
       "z": -3,
       "text": "Forkful cloud",
       "textOrigin": "explicit",
@@ -62,9 +62,9 @@
       "id": "ordering",
       "type": "group",
       "x": 993,
-      "y": 360,
+      "y": 335,
       "width": 591,
-      "height": 579,
+      "height": 604,
       "z": -2,
       "parentId": "cloud",
       "text": "Ordering",
@@ -89,7 +89,7 @@
       "id": "payments-d",
       "type": "group",
       "x": 1298,
-      "y": 71,
+      "y": -39,
       "width": 324,
       "height": 291,
       "z": -2,
@@ -103,7 +103,7 @@
       "id": "kitchen",
       "type": "group",
       "x": 1698,
-      "y": 360,
+      "y": 335,
       "width": 604,
       "height": 550,
       "z": -2,
@@ -116,8 +116,8 @@
     {
       "id": "logistics",
       "type": "group",
-      "x": 1628,
-      "y": 71,
+      "x": 1668,
+      "y": -39,
       "width": 664,
       "height": 291,
       "z": -2,
@@ -143,7 +143,7 @@
     {
       "id": "notify-d",
       "type": "group",
-      "x": 968,
+      "x": 998,
       "y": 971,
       "width": 304,
       "height": 291,
@@ -302,7 +302,7 @@
       "id": "saga",
       "type": "service",
       "x": 1372,
-      "y": 440,
+      "y": 415,
       "width": 176,
       "height": 89,
       "z": 0,
@@ -623,7 +623,7 @@
       "id": "payments",
       "type": "service",
       "x": 1330,
-      "y": 169,
+      "y": 59,
       "width": 260,
       "height": 142,
       "z": 0,
@@ -639,7 +639,7 @@
       "id": "stripe",
       "type": "service",
       "x": 1372,
-      "y": -139,
+      "y": -327,
       "width": 176,
       "height": 99,
       "z": 0,
@@ -712,8 +712,8 @@
     {
       "id": "dispatch",
       "type": "service",
-      "x": 1660,
-      "y": 169,
+      "x": 1700,
+      "y": 59,
       "width": 280,
       "height": 142,
       "z": 0,
@@ -944,8 +944,8 @@
     {
       "id": "locations",
       "type": "database",
-      "x": 2020,
-      "y": 151,
+      "x": 2060,
+      "y": 41,
       "width": 240,
       "height": 179,
       "z": 0,
@@ -1024,7 +1024,7 @@
     {
       "id": "notifier",
       "type": "service",
-      "x": 1000,
+      "x": 1030,
       "y": 1069,
       "width": 240,
       "height": 142,
@@ -1039,7 +1039,7 @@
     {
       "id": "fcm",
       "type": "service",
-      "x": 1032,
+      "x": 1062,
       "y": 1351,
       "width": 176,
       "height": 99,
@@ -1091,7 +1091,7 @@
       "id": "title",
       "type": "text",
       "x": 10,
-      "y": -297,
+      "y": -485,
       "width": 1200,
       "height": 110,
       "z": 0,
@@ -1480,6 +1480,14 @@
       "semantic": "http",
       "response": "hold id",
       "hasResponse": true,
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.3013
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.2
+      },
       "semanticsOrigin": "explicit"
     },
     {
@@ -1494,6 +1502,14 @@
       "compensationVisible": true,
       "compensationName": "Refund payment",
       "compensationProtocol": "http",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.6987
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.8
+      },
       "semanticsOrigin": "explicit"
     },
     {
@@ -1588,8 +1604,8 @@
       "response": "courier",
       "hasResponse": true,
       "sourceAnchor": {
-        "side": "top",
-        "offset": 0.85
+        "side": "right",
+        "offset": 0.1
       },
       "targetAnchor": {
         "side": "bottom",
@@ -1597,12 +1613,16 @@
       },
       "waypoints": [
         {
-          "x": 1522,
-          "y": 365
+          "x": 1641,
+          "y": 423.9
         },
         {
-          "x": 1800,
-          "y": 365
+          "x": 1641,
+          "y": 282
+        },
+        {
+          "x": 1840,
+          "y": 282
         }
       ],
       "semanticsOrigin": "explicit"
@@ -2005,7 +2025,7 @@
       "color": "red",
       "size": 3,
       "x": 1400,
-      "y": 437.2,
+      "y": 412.2,
       "points": [
         0,
         0,

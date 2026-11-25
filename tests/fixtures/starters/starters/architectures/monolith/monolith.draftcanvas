@@ -12,9 +12,9 @@
       "id": "system",
       "type": "group",
       "x": 258,
-      "y": -411,
+      "y": -451,
       "width": 1044,
-      "height": 803,
+      "height": 843,
       "z": -1,
       "text": "Clinic system",
       "textOrigin": "explicit",
@@ -215,12 +215,12 @@
             "routing": "smoothstep",
             "semantic": "uses",
             "sourceAnchor": {
-              "side": "right",
-              "offset": 0.25
+              "side": "top",
+              "offset": 0.5
             },
             "targetAnchor": {
               "side": "left",
-              "offset": 0.75
+              "offset": 0.5
             },
             "semanticsOrigin": "explicit"
           },
@@ -233,12 +233,12 @@
             "routing": "smoothstep",
             "semantic": "readsWrites",
             "sourceAnchor": {
-              "side": "bottom",
-              "offset": 0.75
+              "side": "right",
+              "offset": 0.5
             },
             "targetAnchor": {
-              "side": "bottom",
-              "offset": 0.25
+              "side": "left",
+              "offset": 0.5
             },
             "semanticsOrigin": "explicit"
           },
@@ -355,7 +355,7 @@
       "id": "cache",
       "type": "database",
       "x": 620,
-      "y": -359,
+      "y": -399,
       "width": 280,
       "height": 179,
       "z": 0,
@@ -399,7 +399,7 @@
       "id": "title",
       "type": "text",
       "x": -70,
-      "y": -569,
+      "y": -609,
       "width": 1000,
       "height": 110,
       "z": 0,

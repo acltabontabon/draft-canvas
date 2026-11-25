@@ -64,6 +64,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   connectors into its side. Arrowheads used to be drawn through it.
 - **Connecting to a glyph** — Dropping a connector on the middle of a glyph's side attaches it
   there. It used to jump to the corner point above.
+- **Replies on a glyph** — A reply line is drawn beside its request on a glyph's short side, on
+  whichever side has room. The two used to be drawn as one line with an arrowhead at each end.
 - **Load starters** — Loading the gallery no longer says it couldn’t reach GitHub for a moment
   before the starters arrive.
 - **Room copies** — Pasting and duplicating count the sketches and flows inside rooms toward the
