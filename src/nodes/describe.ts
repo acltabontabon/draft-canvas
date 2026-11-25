@@ -20,7 +20,7 @@ import { restyle } from '../render/style/restyle';
 import { artShapes, drawnBounds, isWords } from '../render/style/art';
 import { artSlotOf, shapeKindOf } from '../document/style';
 import { BOUNDARY_HEADER_HEIGHT } from '../document/boundaryHeader';
-import { ARTIFACT_GLYPH_WIDTH, DS_GLYPH_HEIGHT, DS_GLYPH_TOP, dataStoreGlyphTop, dataStoreScale, isGlyphComponentKind, isGlyphServiceKind, isGlyphShape } from '../document/dataStoreGeometry';
+import { ADAPTER_BODY_INSET, ARTIFACT_GLYPH_WIDTH, DS_GLYPH_HEIGHT, DS_GLYPH_TOP, MODULE_GLYPH_WIDTH, PORT_GLYPH_WIDTH, SCHEDULER_GLYPH_WIDTH, dataStoreGlyphTop, dataStoreScale, isGlyphComponentKind, isGlyphServiceKind, isGlyphShape, setWordsMeasure } from '../document/dataStoreGeometry';
 import { queueTubeSpan } from '../document/queueGeometry';
 import { roughenPath } from '../render/roughness/roughPath';
 import { bowControlPoint, roughEllipsePath, roughRectOvershootPath, roughRectPath } from '../render/roughness/roughRect';
@@ -73,6 +73,18 @@ export function sizingContext(): DescribeContext {
 }
 
 const PADDING = 12;
+
+/**
+ * Where a glyph stands in its box depends on how many lines its words take (`standingOf` in
+ * `dataStoreGeometry.ts`), and only this module lays words out. It hands the geometry the count it
+ * arrives at itself: the same font, width and line height `pinnedCaption` and `c4Detail` set them
+ * in. Registered as the module loads, which touches nothing: the measurer is asked for only when a
+ * count is.
+ */
+setWordsMeasure((text, width, part) => {
+  const font = part === 'name' ? FONTS.nodeLabel : FONTS.nodeDescription;
+  return layoutText(text, { font, maxWidth: width, lineHeight: font.size * LINE_HEIGHTS.label, measurer: getMeasurer() }).lines.length;
+});
 const CODE_HEADER_HEIGHT = 26;
 const CODE_PADDING_X = 12;
 const CODE_PADDING_Y = 8;
@@ -716,7 +728,8 @@ function replicated(node: DraftNode, ctx: DescribeContext): Shape[] {
     `${node.id}:replicas`,
     ctx,
     { x: 0.75 + REPLICA_OFFSET, y: 0.75 + REPLICA_OFFSET, w: frontWidth - 1.5, h: frontHeight - 1.5, r: corner(ctx, 8) },
-    { fill: palette.fill, stroke: backCardStroke(palette) },
+    // Somebody else's instances are somebody else's too: the card behind keeps the dashes.
+    { fill: palette.fill, stroke: { ...backCardStroke(palette), ...(node.serviceKind === 'external' ? { dash: EXTERNAL_DASH } : {}) } },
   );
   return [back, ...shapes, ...mark];
 }
@@ -789,7 +802,7 @@ function backCardStroke(palette: AccentPalette): Stroke {
  */
 function service(node: DraftNode, ctx: DescribeContext): Shape[] {
   if (isGlyphServiceKind(node.serviceKind)) return serviceGlyph(node, ctx);
-  return node.serviceKind === 'api' ? serviceApi(node, ctx) : serviceGeneric(node, ctx);
+  return node.serviceKind === 'external' ? serviceExternal(node, ctx) : serviceGeneric(node, ctx);
 }
 
 /** Generic: the family's neutral baseline — a rounded card with a coloured
@@ -815,55 +828,55 @@ function serviceGeneric(node: DraftNode, ctx: DescribeContext): Shape[] {
   ];
 }
 
+/** The dashes of an External system's outline: long enough to read as a line, at any size. */
+const EXTERNAL_DASH = [6, 4];
+
 /**
- * API: the card's own outline carries an inward notch on its left edge —
- * a socket cut into the side, reading as "an exposed interface" without
- * drawing a protocol-specific glyph (no HTTP badge, no globe). The notch
- * sits at vertical mid-height, well clear of the top cap band, so the cap
- * is identical to Generic's and stays a plain clipped rect.
+ * External: a system that is somebody else's. The family's card, drawn with a dashed outline and
+ * no cap: the box is there, and it is not yours to open. The arrow in its corner is the one a link
+ * that leaves the page carries, pointing out of the card the way a call to it leaves your system.
+ *
+ * It was a glyph for a while, a small card inside a dashed frame with the name underneath. A glyph
+ * is for a kind that does something worth drawing; this one only says whose the system is, so the
+ * glyph was a card made small, in a box that resizing did nothing to and whose connection points
+ * stood off from what was drawn.
  */
-function serviceApi(node: DraftNode, ctx: DescribeContext): Shape[] {
+function serviceExternal(node: DraftNode, ctx: DescribeContext): Shape[] {
   const palette = accentOf(ctx.theme, node.accent ?? 'neutral');
-  const capHeight = SERVICE_CAP;
-  const w = node.width - 1.5;
-  const h = node.height - 1.5;
-  const x = 0.75;
-  const y = 0.75;
-  const notchH = h * 0.34;
-  const notchDepth = Math.min(8, w * 0.1);
-  const notchTop = y + (h - notchH) / 2;
-  // Never so round that the corner reaches the notch cut into the left edge.
-  const r = Math.max(0, Math.min(corner(ctx, 8), w / 2, (h - notchH) / 2 - 3));
-  const notchBottom = notchTop + notchH;
-  const nr = 3;
-
-  const d = [
-    `M${x + r},${y}`,
-    `L${x + w - r},${y}`,
-    `Q${x + w},${y} ${x + w},${y + r}`,
-    `L${x + w},${y + h - r}`,
-    `Q${x + w},${y + h} ${x + w - r},${y + h}`,
-    `L${x + r},${y + h}`,
-    `Q${x},${y + h} ${x},${y + h - r}`,
-    `L${x},${notchBottom}`,
-    `L${x + notchDepth - nr},${notchBottom}`,
-    `Q${x + notchDepth},${notchBottom} ${x + notchDepth},${notchBottom - nr}`,
-    `L${x + notchDepth},${notchTop + nr}`,
-    `Q${x + notchDepth},${notchTop} ${x + notchDepth - nr},${notchTop}`,
-    `L${x},${notchTop}`,
-    `L${x},${y + r}`,
-    `Q${x},${y} ${x + r},${y}`,
-    'Z',
-  ].join(' ');
-
+  const label = centredLabel(node, ctx, { top: 0, bottom: tagRow(), color: palette.text });
   return [
-    { t: 'path', d: roughOutline(d, node.id, ctx), fill: palette.fill, stroke: { color: palette.line, width: 1.5 }, shadow: true },
-    serviceCap({ x, y, w, h, r }, palette),
-    // No glyph, deliberately: API's whole identity is the socket cut into its own outline, and the
-    // reference sheet leaves this one card iconless for exactly that reason — the silhouette has
-    // already said it.
-    ...centredLabel(node, ctx, { top: capHeight, bottom: tagRow(), color: palette.text }),
-    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.api!, ctx.theme.textMuted),
+    outlineShape(
+      node.id,
+      ctx,
+      { x: 0.75, y: 0.75, w: node.width - 1.5, h: node.height - 1.5, r: corner(ctx, 8) },
+      { fill: palette.fill, stroke: { color: palette.line, width: 1.5, dash: EXTERNAL_DASH }, shadow: true },
+    ),
+    ...leavingArrow(node.width - MARK_INSET + 2, 8, palette.chip, label),
+    ...label,
+    ...variantCaption(node, ctx, SERVICE_KIND_LABELS.external!, ctx.theme.textMuted),
+  ];
+}
+
+/**
+ * The arrow out of an External card's top-right corner, its point at (`tipX`, `tipY`). Left out
+ * when a wrapped name reaches the corner: the name wins over the mark, as it does over the dots.
+ */
+function leavingArrow(tipX: number, tipY: number, color: string, labels: readonly Shape[]): Shape[] {
+  const reach = 9;
+  const head = 5.5;
+  const crowded = labels.some((shape) => {
+    if (shape.t !== 'text') return false;
+    const textLeft = shape.align === 'middle' ? shape.x - shape.layout.width / 2 : shape.align === 'end' ? shape.x - shape.layout.width : shape.x;
+    return textLeft + shape.layout.width > tipX - reach - 2 && textLeft < tipX + 2 && shape.y < tipY + reach + 2 && shape.y + shape.layout.height > tipY - 2;
+  });
+  if (crowded) return [];
+  return [
+    {
+      t: 'path',
+      d: `M${tipX - reach},${tipY + reach} L${tipX},${tipY} M${tipX - head},${tipY} H${tipX} V${tipY + head}`,
+      fill: 'none',
+      stroke: { color, width: 1.5, linecap: 'round' },
+    },
   ];
 }
 
@@ -893,7 +906,9 @@ function serviceGlyph(node: DraftNode, ctx: DescribeContext): Shape[] {
     path: (key, d) => ({ t: 'path', d: roughOutline(d, `${node.id}:${key}`, ctx), fill: palette.fill, stroke: { color: palette.line, width: 1.5 } }),
   };
   const glyph =
-    kind === 'proxy'
+    kind === 'api'
+      ? apiGlyph(box, palette, hand)
+      : kind === 'proxy'
       ? proxyGlyph(box, palette, hand)
       : kind === 'gateway'
         ? gatewayGlyph(box, palette, hand)
@@ -901,9 +916,7 @@ function serviceGlyph(node: DraftNode, ctx: DescribeContext): Shape[] {
           ? workerGlyph(box, palette, hand)
           : kind === 'scheduler'
             ? schedulerGlyph(box, palette, hand)
-            : kind === 'external'
-              ? externalGlyph(box, palette, hand)
-              : loadBalancerGlyph(box, palette, hand);
+            : loadBalancerGlyph(box, palette, hand);
   const shapes = [
     ...scaledGlyph(glyph, scale, node.width / 2, top - DS_GLYPH_TOP * scale),
     ...glyphCaption(node, ctx, palette, SERVICE_KIND_LABELS[kind]!, scale, top),
@@ -936,6 +949,45 @@ const GLYPH_SERVICE_WIDTH = 54;
 /** A small open arrowhead whose point is at (`x`, `y`), facing right. */
 function arrowhead(x: number, y: number): string {
   return `M${x - 4},${y - 3.2} L${x},${y} L${x - 4},${y + 3.2}`;
+}
+
+/** The radius of one of an API's operations: three of them down the glyph, with air between. */
+const API_BALL = 5;
+
+/**
+ * API: a body with three balls held out on stems, and one of them in use. The ball on a stem is the
+ * mark this library already draws a Port with, and what UML has always drawn for an interface
+ * something provides: here is a thing you can call. An API is a service's own set of those, so it is
+ * the same mark three times over on one body, facing the callers. The filled one is an operation
+ * being called; the two open ones are waiting to be.
+ *
+ * The three balls stand where the glyph's three left connection points are, so a connector into its
+ * side lands on an operation, which is what it is a call to.
+ *
+ * It was the family's card with a socket cut into its left edge, eight pixels deep. At the size a
+ * card is drawn that was a nick in the outline, and the kind was told from Generic by the word in
+ * the corner, while every kind beside it was drawn as what it does.
+ */
+function apiGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
+  const { x, y, w, h } = box;
+  // Wide enough to stand under the glyph's middle: a connector into the top lands on the body.
+  const body = { x: x + w - 30.75, w: 30 };
+  const cx = x + 0.75 + API_BALL;
+  const rows = [y + h / 2 - 14, y + h / 2, y + h / 2 + 14];
+  const line: Stroke = { color: palette.chip, width: 1.4, linecap: 'round' };
+  return [
+    { t: 'path', d: rows.map((cy) => `M${cx + API_BALL},${cy} H${body.x}`).join(' '), fill: 'none', stroke: line },
+    hand.rect('body', { x: body.x, y: y + 0.75, w: body.w, h: h - 1.5, r: 6 }),
+    ...rows.map((cy, i): Shape => ({
+      t: 'ellipse',
+      cx,
+      cy,
+      rx: API_BALL,
+      ry: API_BALL,
+      fill: i === 0 ? palette.chip : palette.fill,
+      stroke: { color: i === 0 ? palette.chip : palette.line, width: 1.5 },
+    })),
+  ];
 }
 
 /**
@@ -1056,7 +1108,7 @@ function workerGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[]
  */
 function schedulerGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
   const { x, y, w, h } = box;
-  const pw = 44;
+  const pw = SCHEDULER_GLYPH_WIDTH;
   const px = x + w / 2 - pw / 2;
   const py = y + 0.75;
   const ph = h - 1.5;
@@ -1079,22 +1131,6 @@ function schedulerGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shap
     { t: 'path', d: `M${px},${py + 10} H${px + pw}`, fill: 'none', stroke: { color: palette.line, width: 1.5 } },
     { t: 'path', d: `M${px + 11},${py - 0.5} v5 M${px + pw - 11},${py - 0.5} v5`, fill: 'none', stroke: { color: palette.chip, width: 1.4, linecap: 'round' } },
     ...dots,
-  ];
-}
-
-/**
- * External: a system inside a boundary that is not yours. The dashed frame is the one this kind has
- * always worn; what was a card inside it is now just the system.
- */
-function externalGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
-  const { x, y, w, h } = box;
-  const frame = { w: h - 1.5, h: h - 1.5 };
-  const fx = x + w / 2 - frame.w / 2;
-  const inner = 18;
-  return [
-    { t: 'rect', x: fx, y: y + 0.75, w: frame.w, h: frame.h, r: 8, fill: 'none', stroke: { color: palette.line, width: 1.25, dash: [5, 3.5] } },
-    hand.rect('system', { x: x + w / 2 - inner / 2, y: y + h / 2 - inner / 2, w: inner, h: inner, r: 4.5 }),
-    { t: 'path', d: `M${x + w / 2 - 4},${y + h / 2 - 2.5} h8 M${x + w / 2 - 4},${y + h / 2 + 2.5} h5`, fill: 'none', stroke: { color: palette.chip, width: 1.4, linecap: 'round' } },
   ];
 }
 
@@ -1172,8 +1208,8 @@ function componentGlyph(node: DraftNode, ctx: DescribeContext): Shape[] {
 function moduleGlyph(box: GlyphBox, _palette: AccentPalette, hand: Hand): Shape[] {
   const { x, y, w, h } = box;
   const lug = { w: 14, h: 8 };
-  const left = x + 4;
-  const body = { x: left + lug.w / 2, w: w - 8 - lug.w / 2 };
+  const left = x + (w - MODULE_GLYPH_WIDTH) / 2;
+  const body = { x: left + lug.w / 2, w: MODULE_GLYPH_WIDTH - lug.w / 2 };
   return [
     hand.rect('body', { x: body.x, y: y + 0.75, w: body.w, h: h - 1.5, r: 6 }),
     hand.rect('lug-a', { x: left, y: y + 9, w: lug.w, h: lug.h, r: 2.5 }),
@@ -1192,8 +1228,9 @@ const PORT_BALL = 7.5;
 function portGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[] {
   const { x, y, w, h } = box;
   const mid = y + h / 2;
-  const plate = { x: x + 7, w: 9 };
-  const cx = x + w - 7 - PORT_BALL;
+  const inset = (w - PORT_GLYPH_WIDTH) / 2;
+  const plate = { x: x + inset, w: 9 };
+  const cx = x + w - inset - PORT_BALL;
   return [
     { t: 'path', d: `M${plate.x + plate.w},${mid} H${cx - PORT_BALL}`, fill: 'none', stroke: { color: palette.chip, width: 1.4, linecap: 'round' } },
     hand.rect('edge', { x: plate.x, y: y + 0.75, w: plate.w, h: h - 1.5, r: 3.5 }),
@@ -1225,7 +1262,7 @@ function adapterGlyph(box: GlyphBox, palette: AccentPalette, hand: Hand): Shape[
       fill: 'none',
       stroke: { color: palette.line, width: 1.5, linecap: 'round' },
     },
-    hand.rect('body', { x: body.x, y: y + 5, w: body.w, h: h - 10, r: 4 }),
+    hand.rect('body', { x: body.x, y: y + ADAPTER_BODY_INSET, w: body.w, h: h - ADAPTER_BODY_INSET * 2, r: 4 }),
     hand.rect('plug', { x: plugX, y: mid - plug / 2, w: plug, h: plug, r: 3 }),
   ];
 }

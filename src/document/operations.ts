@@ -10,7 +10,7 @@ import { createId } from './ids';
 import { addInk, reissueInk } from './ink';
 import { OPEN_POINT_ID_PREFIX, pruneOpenPoints } from './openPoints';
 import { defaultSizeFor, maxSizeFor } from './factory';
-import { anchorBandOf } from './queueGeometry';
+import { anchorBandOf, bandWords } from './queueGeometry';
 import { pruneFlowSteps } from './flow';
 import { LIMITS } from './limits';
 import { cleanDescription, cleanEdgeLabel, cleanText, cleanTextFields, cleanTitle, cleanTechnology } from './sanitize';
@@ -1409,8 +1409,8 @@ export interface PlaceAlignment {
  * tube, a Data Store's glyph (`anchorBandOf`) — or of its height when the whole side is the anchor.
  * What `edges/routing.ts` resolves a centred (offset `0.5`) left or right anchor to, minus the top.
  */
-export function anchorOffsetY(shape: Pick<DraftNode, 'type' | 'width' | 'height'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind'>): number {
-  const band = anchorBandOf({ type: shape.type, serviceKind: shape.serviceKind, componentKind: shape.componentKind, x: 0, y: 0, width: shape.width, height: shape.height });
+export function anchorOffsetY(shape: Pick<DraftNode, 'type' | 'width' | 'height'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind' | 'databaseKind' | 'artifactKind' | 'text' | 'technology' | 'description'>): number {
+  const band = anchorBandOf({ ...bandWords(shape), type: shape.type, x: 0, y: 0, width: shape.width, height: shape.height });
   return band ? (band.top + band.bottom) / 2 : shape.height / 2;
 }
 

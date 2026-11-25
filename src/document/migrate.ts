@@ -689,6 +689,202 @@ function cardsToGlyphs(doc: Record<string, unknown>, formerCard: (node: Record<s
   };
 }
 
+/** The least a card is high (a Service's default), and what a glyph box held over a card's: the
+ *  glyph above the name, less the room a card keeps for its tag. Less is given back from a box with
+ *  a technology or a description, whose words sit in a padded block in a card. Measured against the
+ *  renderer at v34 and frozen here. */
+const CARD_HEIGHT = 68;
+const GLYPH_OVER_CARD = { plain: 68, detailed: 40 } as const;
+
+/**
+ * Where an External system's glyph stood in its box at v32, from the box's top: `glyphMiddle`'s rule
+ * with what v30's did not have yet, a glyph that grows once its box passes 250 by 200.
+ */
+function externalGlyph(width: number, height: number): { top: number; height: number } {
+  const original = Math.min(114 / 88, Math.max(1, Math.min(width / 90, height / 88)));
+  const growth = Math.min(Math.max(0, width - 250), Math.max(0, height - 200)) / 45;
+  const scale = growth === 0 ? original : Math.max(original, Math.min(original + growth, (width - 49) / 56, (height - 86) / 42));
+  const top = Math.min(height, Math.max(9, 9 * original - (scale - original) * 5));
+  return { top, height: Math.min(height - top, 42 * scale) };
+}
+
+/**
+ * v34 draws an External system as a card again: the family's box with a dashed outline and its
+ * name inside, where v30 had made it a glyph with the name underneath. The reverse of that move,
+ * for the same reason it was made the way it was: the box gives back the height the glyph took, and
+ * is placed so the card's middle is where the glyph's middle was. That is where a connector into
+ * its side met it, so a line that ran straight still does. The width is left alone: the words were
+ * fitted to it, and the shapes beside it were placed around it.
+ *
+ * A connector pinned to its left or right was pinned to a point on the glyph, which was shorter
+ * than the card is. Its pin keeps the height it was drawn at, so a line somebody routed runs where
+ * they routed it and only ends sooner, at the card's edge.
+ */
+function migrateExternalToCard(doc: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(doc.nodes)) return doc;
+  const written = (value: unknown) => typeof value === 'string' && value.trim() !== '';
+  /** By id: where a pin at `offset` down the old glyph sits down the new card. */
+  const repin = new Map<unknown, (offset: number) => number>();
+  const nodes = doc.nodes.map((raw) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const node = raw as Record<string, unknown>;
+    if (node.type !== 'service' || node.serviceKind !== 'external') return raw;
+    const { y, width, height } = node;
+    if (typeof y !== 'number' || typeof width !== 'number' || typeof height !== 'number') return raw;
+    if (!Number.isFinite(y) || !Number.isFinite(width) || !Number.isFinite(height) || height <= 0) return raw;
+    const over = written(node.description) || written(node.technology) ? GLYPH_OVER_CARD.detailed : GLYPH_OVER_CARD.plain;
+    const short = Math.min(height, Math.max(CARD_HEIGHT, Math.round(height - over)));
+    const glyph = externalGlyph(width, height);
+    const top = Math.round(y + glyph.top + glyph.height / 2 - short / 2);
+    repin.set(node.id, (offset) => {
+      const at = (y + glyph.top + offset * glyph.height - top) / short;
+      return Math.round(Math.min(1, Math.max(0, at)) * 10000) / 10000;
+    });
+    return { ...node, y: top, height: short };
+  });
+  const moved = (anchor: unknown, end: unknown): unknown => {
+    const at = repin.get(end);
+    if (!at || !anchor || typeof anchor !== 'object') return anchor;
+    const { side, offset } = anchor as Record<string, unknown>;
+    if ((side !== 'left' && side !== 'right') || typeof offset !== 'number' || !Number.isFinite(offset)) return anchor;
+    return { ...anchor, offset: at(offset) };
+  };
+  const edges = Array.isArray(doc.edges) && repin.size
+    ? doc.edges.map((raw) => {
+        if (!raw || typeof raw !== 'object') return raw;
+        const edge = raw as Record<string, unknown>;
+        if (!repin.has(edge.source) && !repin.has(edge.target)) return raw;
+        return {
+          ...edge,
+          ...(edge.sourceAnchor ? { sourceAnchor: moved(edge.sourceAnchor, edge.source) } : {}),
+          ...(edge.targetAnchor ? { targetAnchor: moved(edge.targetAnchor, edge.target) } : {}),
+        };
+      })
+    : doc.edges;
+  return { ...doc, nodes, ...(edges === doc.edges ? {} : { edges }) };
+}
+
+/**
+ * v34 draws an API as a glyph with its name underneath (a body holding out three operations), where
+ * it was a card with a notch in its side. The move v30 made for a Worker and a Gateway, made the
+ * same way: the box grows to hold the glyph above the words, with the glyph's middle where the
+ * card's middle was.
+ *
+ * A pin on the card's left or right named a fraction of the card's height, and the glyph's side is
+ * shorter. Each keeps the height it was drawn at (or the glyph's corner, from a card taller than the
+ * glyph), so a line pinned level with its neighbour is still level with it.
+ */
+function migrateApiToGlyph(doc: Record<string, unknown>): Record<string, unknown> {
+  const isApi = (node: Record<string, unknown>) => node.type === 'service' && node.serviceKind === 'api';
+  const grown = cardsToGlyphs(doc, isApi);
+  if (!Array.isArray(doc.nodes) || !Array.isArray(grown.nodes) || !Array.isArray(doc.edges)) return grown;
+  const repin = new Map<unknown, (offset: number) => number>();
+  doc.nodes.forEach((raw, index) => {
+    const after = (grown.nodes as unknown[])[index];
+    if (!raw || typeof raw !== 'object' || !after || typeof after !== 'object' || after === raw) return;
+    const card = raw as Record<string, unknown>;
+    const box = after as Record<string, unknown>;
+    if (!isApi(card)) return;
+    const { y, height } = card;
+    const { y: top, width: wide, height: tall } = box;
+    if (typeof y !== 'number' || typeof height !== 'number' || typeof top !== 'number' || typeof wide !== 'number' || typeof tall !== 'number') return;
+    const scale = Math.min(114 / 88, Math.max(1, Math.min(wide / 90, tall / 88)));
+    const band = { top: top + 9 * scale, height: 42 * scale };
+    repin.set(card.id, (offset) => Math.round(Math.min(1, Math.max(0, (y + offset * height - band.top) / band.height)) * 10000) / 10000);
+  });
+  if (repin.size === 0) return grown;
+  const moved = (anchor: unknown, end: unknown): unknown => {
+    const at = repin.get(end);
+    if (!at || !anchor || typeof anchor !== 'object') return anchor;
+    const { side, offset } = anchor as Record<string, unknown>;
+    if ((side !== 'left' && side !== 'right') || typeof offset !== 'number' || !Number.isFinite(offset)) return anchor;
+    return { ...anchor, offset: at(offset) };
+  };
+  return {
+    ...grown,
+    edges: doc.edges.map((raw) => {
+      if (!raw || typeof raw !== 'object') return raw;
+      const edge = raw as Record<string, unknown>;
+      if (!repin.has(edge.source) && !repin.has(edge.target)) return raw;
+      return {
+        ...edge,
+        ...(edge.sourceAnchor ? { sourceAnchor: moved(edge.sourceAnchor, edge.source) } : {}),
+        ...(edge.targetAnchor ? { targetAnchor: moved(edge.targetAnchor, edge.target) } : {}),
+      };
+    }),
+  };
+}
+
+/** How wide each glyph is drawn at its normal size, as `dataStoreGeometry.ts` had it at v34. */
+function glyphUnitWidth(node: Record<string, unknown>): number | undefined {
+  if (node.type === 'database') return 54;
+  if (node.type === 'artifact') return 36;
+  if (node.type === 'service') {
+    const kind = node.serviceKind;
+    if (kind === 'scheduler') return 44;
+    return kind === 'api' || kind === 'load-balancer' || kind === 'proxy' || kind === 'gateway' || kind === 'worker' ? 54 : undefined;
+  }
+  if (node.type === 'component') {
+    const kind = node.componentKind;
+    return kind === 'module' ? 46 : kind === 'port' ? 40 : kind === 'adapter' ? 54 : undefined;
+  }
+  return undefined;
+}
+
+/**
+ * v34 spreads the top and bottom anchors of a shape drawn as a glyph along the glyph's reach (as
+ * much wider than the glyph as a default box is), where they were spread along its whole box. A pin there names a
+ * fraction of that stretch, so on a box wider than the reach the same fraction is now a different
+ * place. Each such pin is given the fraction that keeps it where it was drawn, or at the glyph's
+ * corner when it stood out past it, beside the glyph, in the air. A line somebody routed straight
+ * down into a shape still runs straight.
+ */
+function keepGlyphPins(doc: Record<string, unknown>): Record<string, unknown> {
+  if (!Array.isArray(doc.nodes) || !Array.isArray(doc.edges)) return doc;
+  /** By id: the fraction of the new stretch that is where `offset` of the box's width was. */
+  const repin = new Map<unknown, (offset: number) => number>();
+  for (const raw of doc.nodes) {
+    if (!raw || typeof raw !== 'object') continue;
+    const node = raw as Record<string, unknown>;
+    const unit = glyphUnitWidth(node);
+    const { width, height } = node;
+    if (unit === undefined || typeof width !== 'number' || typeof height !== 'number') continue;
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0) continue;
+    const fromBox = Math.max(1, Math.min(width / 90, height / 88));
+    const original = node.type === 'service' || node.type === 'component' ? Math.min(fromBox, 114 / 88) : fromBox;
+    const growth = Math.min(Math.max(0, width - 250), Math.max(0, height - 200)) / 45;
+    const scale = growth === 0 ? original : Math.max(original, Math.min(original + growth, (width - 49) / 56, (height - 86) / 42));
+    const glyph = Math.min(unit * scale, Math.max(0, width - 24));
+    const reach = Math.min(width, (glyph * 120 * 88) / (54 * 114));
+    if (reach >= width || reach <= 0) continue;
+    repin.set(node.id, (offset) => {
+      const at = Math.min((width + glyph) / 2, Math.max((width - glyph) / 2, offset * width));
+      return Math.round(Math.min(1, Math.max(0, (at - (width - reach) / 2) / reach)) * 10000) / 10000;
+    });
+  }
+  if (repin.size === 0) return doc;
+  const moved = (anchor: unknown, end: unknown): unknown => {
+    const at = repin.get(end);
+    if (!at || !anchor || typeof anchor !== 'object') return anchor;
+    const { side, offset } = anchor as Record<string, unknown>;
+    if ((side !== 'top' && side !== 'bottom') || typeof offset !== 'number' || !Number.isFinite(offset)) return anchor;
+    return { ...anchor, offset: at(offset) };
+  };
+  return {
+    ...doc,
+    edges: doc.edges.map((raw) => {
+      if (!raw || typeof raw !== 'object') return raw;
+      const edge = raw as Record<string, unknown>;
+      if (!repin.has(edge.source) && !repin.has(edge.target)) return raw;
+      return {
+        ...edge,
+        ...(edge.sourceAnchor ? { sourceAnchor: moved(edge.sourceAnchor, edge.source) } : {}),
+        ...(edge.targetAnchor ? { targetAnchor: moved(edge.targetAnchor, edge.target) } : {}),
+      };
+    }),
+  };
+}
+
 /**
  * `MIGRATIONS[n]` upgrades a version-`n` document to version `n + 1`.
  */
@@ -748,6 +944,10 @@ const MIGRATIONS: Record<number, Migration> = {
   // what it always did, and Junctions that merely share a label are never linked by a guess. The
   // version moves so an older build refuses the file rather than unlinking every group on save.
   32: (document) => document,
+  // An External system stops being a glyph (`migrateExternalToCard`), an API becomes one
+  // (`migrateApiToGlyph`), and the pins on the top and bottom of every shape that is one stay where
+  // they were drawn (`keepGlyphPins`).
+  33: everyRoom((graph) => keepGlyphPins(migrateApiToGlyph(migrateExternalToCard(graph)))),
 };
 
 export class UnsupportedVersionError extends Error {

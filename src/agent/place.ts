@@ -15,7 +15,7 @@ import { createFlow, setFlowVariantOf } from '../document/flow';
 import { DEFAULTS } from '../document/limits';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode, DraftNodeType, Side, ViewLevel } from '../document/types';
 import { hasAttachmentRoom } from '../document/operations';
-import { anchorBandOf } from '../document/queueGeometry';
+import { anchorBandOf, bandSpan } from '../document/queueGeometry';
 import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
 import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect, type TitleSpan } from '../layout/anchors';
@@ -390,13 +390,8 @@ export function edgeLabelSize(edge: DraftEdge, source: DraftNode, target: DraftN
 
 /** Where a connector meets a shape along one side: the side's axis coordinate (y for left/right). */
 function anchorCoordinate(node: DraftNode, side: 'left' | 'right' | 'top' | 'bottom', offset: number): number {
-  if (side === 'left' || side === 'right') {
-    const band = anchorBandOf(node);
-    const top = band?.top ?? node.y;
-    const bottom = band?.bottom ?? node.y + node.height;
-    return top + offset * (bottom - top);
-  }
-  return node.x + offset * node.width;
+  const span = bandSpan(node, anchorBandOf(node), side);
+  return span.start + offset * span.length;
 }
 
 /** Past this, two ends are meant to be at different heights; under it, the difference is a jog. A
@@ -485,7 +480,12 @@ export function lineOf(node: DraftNode): { x: number; y: number } {
 
 export function anchorRectOf(node: DraftNode): AnchorRect {
   const band = anchorBandOf(node);
-  return { x: node.x, y: node.y, width: node.width, height: node.height, ...(band ? { bandTop: band.top, bandBottom: band.bottom } : {}) };
+  const across = bandSpan(node, band, 'top');
+  return {
+    x: node.x, y: node.y, width: node.width, height: node.height,
+    ...(band ? { bandTop: band.top, bandBottom: band.bottom } : {}),
+    ...(across.length !== node.width ? { bandLeft: across.start, bandRight: across.start + across.length } : {}),
+  };
 }
 
 /** Caption sizes for connectors among `nodes`, for the route check (`route.ts`). */

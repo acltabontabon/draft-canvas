@@ -94,8 +94,9 @@ Rules for a new version:
 | v30 → v31 | `migrateComponentKindsToGlyphs` | A Component of kind `module`, `adapter` or `port` grows the same way, for the same reason: those kinds are drawn as a glyph with the name underneath |
 | v31 → v32 | identity | No-op (optional root `style`: how the diagram is drawn). Background images are retired: `settings.background`, with any image inside it, is discarded by normalization |
 | v32 → v33 | identity | No-op (optional `link` on Junctions: the group a Junction continues in). Junctions that only share a label are not linked by the migration |
+| v33 → v34 | `migrateExternalToCard`, `migrateApiToGlyph`, `keepGlyphPins` | A Service of kind `external` gives back the height its glyph took (68 from a box with only a name, 40 from one with a technology or a description, never below 68), placed so the card's middle is where the glyph's middle was: the kind is drawn as a card with a dashed outline and its name inside, and a pin on its left or right keeps the height it was drawn at. A Service of kind `api` grows the way v30 grew a Worker, with its side pins kept at the height they were drawn: it is drawn as a glyph with the name underneath. A pin on the top or bottom of any shape drawn as a glyph is given the offset that keeps it where it was drawn, or at the glyph's corner: those anchors are spread along the glyph's reach, not the whole box |
 
-Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17, v20, v29 and v30. `migrateActionsToNotes` is
+Wrapped in `everyRoom`: the migrations from v1, v2, v6, v7, v10, v13, v17, v20, v29, v30 and v32. `migrateActionsToNotes` is
 root-only but walks rooms itself to resolve anchors.
 
 **Compensating actions** are ordinary connectors. One can name its originating interaction

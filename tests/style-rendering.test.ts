@@ -91,7 +91,7 @@ describe('a styled shape', () => {
   it('rounds every kind of body, and the pieces of a glyph not at all', () => {
     const round = resolveStyle(style({ general: { corners: 'round' } }));
     for (const node of [
-      createNode({ id: 'api', type: 'service', x: 0, y: 0, text: 'API', serviceKind: 'api' }),
+      createNode({ id: 'ext', type: 'service', x: 0, y: 0, text: 'Payments', serviceKind: 'external' }),
       createNode({ id: 'cmp', type: 'component', x: 0, y: 0, text: 'Part' }),
       createNode({ id: 'note', type: 'note', x: 0, y: 0, text: 'Note' }),
       createNode({ id: 'grp', type: 'group', x: 0, y: 0, text: 'Scope', boundaryPreset: 'system' }),

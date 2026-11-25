@@ -24,6 +24,7 @@ import { drawnConnectors, type DrawnConnector, type DrawnLine } from './drawn';
 import { flattenPath, rectOf, type Rect, type Side } from '../../../src/edges/routing';
 import { stepPolyline } from '../../../src/edges/waypoints';
 import { endpointPlan } from '../../../src/edges/endpoints';
+import { bandSpan } from '../../../src/document/queueGeometry';
 import { separationPlan } from '../../../src/edges/separation';
 
 interface Point {
@@ -157,10 +158,15 @@ function sideLine(rect: Rect, side: Side): { fixed: number; from: number; to: nu
       return { fixed: band?.left ?? rect.x, from: band?.top ?? rect.y, to: band?.bottom ?? rect.y + rect.height, horizontal: true };
     case 'right':
       return { fixed: band?.right ?? rect.x + rect.width, from: band?.top ?? rect.y, to: band?.bottom ?? rect.y + rect.height, horizontal: true };
-    case 'top':
-      return { fixed: band?.glyphTop ?? rect.y, from: rect.x, to: rect.x + rect.width, horizontal: false };
-    case 'bottom':
-      return { fixed: rect.y + rect.height, from: rect.x, to: rect.x + rect.width, horizontal: false };
+    // The stretch the side's anchors are spread along (`bandSpan`): a glyph's reach, not its box.
+    case 'top': {
+      const span = bandSpan(rect, band, side);
+      return { fixed: band?.glyphTop ?? rect.y, from: span.start, to: span.start + span.length, horizontal: false };
+    }
+    case 'bottom': {
+      const span = bandSpan(rect, band, side);
+      return { fixed: rect.y + rect.height, from: span.start, to: span.start + span.length, horizontal: false };
+    }
   }
 }
 
@@ -172,6 +178,18 @@ function glyphOf(rect: Rect): Rect {
   const right = band.right ?? rect.x + rect.width;
   const top = band.glyphTop ?? rect.y;
   return { x: left, y: top, width: right - left, height: rect.y + rect.height - top };
+}
+
+/** What of a shape a caption can cover: its box, or a glyph and the words under it (the agent's own
+ *  rule, `route.ts`): the margin beside a glyph is where a line into it runs. */
+function drawnParts(rect: Rect): Rect[] {
+  const band = rect.anchorBand;
+  if (band?.left === undefined || band.right === undefined) return [rect];
+  const top = band.glyphTop ?? band.top;
+  return [
+    { x: band.left, y: top, width: band.right - band.left, height: band.bottom - top },
+    { x: rect.x, y: band.bottom, width: rect.width, height: rect.y + rect.height - band.bottom },
+  ];
 }
 
 /** An end point lies on its side's anchor line, within that side's extent. */
@@ -296,7 +314,7 @@ export function measure(
   // Tier 1: captions over shapes and over each other.
   const chips = connectors.flatMap((c) => (c.chip ? [{ id: c.edge.id, chip: c.chip, group: c.labelGroup }] : []));
   for (const { chip } of chips) {
-    if (solid.some((s) => s.rect.width > 2 * CAPTION_INSET && overlaps(chip, inset(s.rect, CAPTION_INSET)))) quality.tiers.obstruction += 1;
+    if (solid.some((s) => s.rect.width > 2 * CAPTION_INSET && drawnParts(s.rect).some((part) => overlaps(chip, inset(part, CAPTION_INSET))))) quality.tiers.obstruction += 1;
   }
   for (let i = 0; i < chips.length; i += 1) {
     for (let j = i + 1; j < chips.length; j += 1) {

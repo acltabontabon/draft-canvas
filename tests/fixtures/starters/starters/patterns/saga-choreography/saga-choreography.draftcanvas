@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 29,
+  "version": 34,
   "metadata": {
     "id": "starter-saga-choreography",
     "title": "Saga – Choreography",
@@ -12,7 +12,7 @@
       "id": "customer",
       "type": "actor",
       "x": -70,
-      "y": 141,
+      "y": 173,
       "width": 140,
       "height": 118,
       "z": 0,
@@ -25,10 +25,10 @@
     {
       "id": "order",
       "type": "service",
-      "x": 242,
-      "y": 149,
-      "width": 176,
-      "height": 103,
+      "x": 190,
+      "y": 161,
+      "width": 280,
+      "height": 142,
       "z": 0,
       "text": "Order Service",
       "description": "Takes orders and follows their fate from events.",
@@ -92,9 +92,9 @@
       "id": "payment-db",
       "type": "database",
       "x": 1070,
-      "y": -111,
+      "y": -116,
       "width": 120,
-      "height": 143,
+      "height": 153,
       "z": 0,
       "text": "Payments DB",
       "description": "Authorizations and refunds.",
@@ -106,9 +106,9 @@
       "id": "adyen",
       "type": "service",
       "x": 1392,
-      "y": 143,
+      "y": 151,
       "width": 176,
-      "height": 115,
+      "height": 99,
       "z": 0,
       "text": "Adyen",
       "description": "Authorizes cards and refunds them.",
@@ -134,9 +134,9 @@
       "id": "kitchen",
       "type": "service",
       "x": 1042,
-      "y": 759,
+      "y": 751,
       "width": 176,
-      "height": 83,
+      "height": 98,
       "z": 0,
       "text": "Kitchen Service",
       "description": "Sends tickets to restaurants and records their answer.",
@@ -207,10 +207,34 @@
       "serviceKind": "generic"
     },
     {
+      "id": "j.to-cancel.out",
+      "type": "ellipse",
+      "x": 847,
+      "y": 436,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "to-cancel"
+    },
+    {
+      "id": "j.to-cancel.in",
+      "type": "ellipse",
+      "x": 347,
+      "y": 382,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "to-cancel"
+    },
+    {
       "id": "title",
       "type": "text",
       "x": -70,
-      "y": -269,
+      "y": -274,
       "width": 1100,
       "height": 110,
       "z": 0,
@@ -461,22 +485,27 @@
     {
       "id": "to-cancel",
       "source": "payments-events",
-      "target": "order",
+      "target": "j.to-cancel.out",
       "label": "PaymentRefunded",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "deliversTo",
-      "portal": true,
       "kind": "failure",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "to-cancel.in",
+      "source": "j.to-cancel.in",
+      "target": "order",
+      "directed": true,
+      "routing": "smoothstep",
       "sourceAnchor": {
-        "side": "left",
+        "side": "top",
         "offset": 0.5
       },
       "targetAnchor": {
         "side": "bottom",
         "offset": 0.85
-      },
-      "semanticsOrigin": "explicit"
+      }
     }
   ],
   "viewport": {
@@ -486,13 +515,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {
@@ -585,6 +608,11 @@
           "id": "rejected.s4",
           "edgeId": "to-cancel",
           "caption": "Order Service reacts: the order is CANCELLED and the customer told."
+        },
+        {
+          "id": "rejected.s5",
+          "edgeId": "to-cancel.in",
+          "caption": "Order Service hears that the payment was refunded."
         }
       ],
       "accent": "rose",

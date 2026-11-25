@@ -339,15 +339,37 @@ function relaxArranged(before: DraftDocument, arranged: Arranged): Arranged {
   return { ...arranged, view: { ...arranged.view, edges } };
 }
 
-/** The other reading direction at its best: both layerings when peers call each other (see `peers`). */
+/**
+ * The other reading direction at its best: both layerings when peers call each other (see `peers`),
+ * and its own choice of trunks, made the way the first direction's was. Whether labelled connectors
+ * share a trunk is decided by what reads better; turned on its side the same fan leaves from another
+ * side of its shape, and the choice that untangled one direction can cross the other. Judged only
+ * with the first direction's choice, a turn that would have read clearly better lost to it.
+ */
 function otherDirection(best: Judged, judge: (layout: LayoutSpec) => Judged | undefined, peers: boolean): Judged | undefined {
-  const { peers: _peers, ...layout } = best.layout;
+  const { peers: _peers, fans: _fans, ...layout } = best.layout;
   const direction = layout.direction === 'right' ? 'down' : 'right';
-  const staircase = judge({ ...layout, direction });
-  const row = peers && !pastDeadline() ? judge({ ...layout, direction, peers: 'layer' }) : undefined;
-  if (!row) return staircase;
-  if (!staircase) return row;
-  return crossingsOf(row) <= crossingsOf(staircase) && (betterByErrors(row, staircase) || (tied(row, staircase) && cost(row) < cost(staircase))) ? row : staircase;
+  const at = (fans?: LayoutSpec['fans']): Judged | undefined => {
+    const spec: LayoutSpec = { ...layout, direction, ...(fans ? { fans } : {}) };
+    const staircase = judge(spec);
+    const row = peers && !pastDeadline() ? judge({ ...spec, peers: 'layer' }) : undefined;
+    if (!row) return staircase;
+    if (!staircase) return row;
+    return crossingsOf(row) <= crossingsOf(staircase) && (betterByErrors(row, staircase) || (tied(row, staircase) && cost(row) < cost(staircase))) ? row : staircase;
+  };
+  const reads = (other: Judged | undefined, kept: Judged) => other && (betterByErrors(other, kept) || (tied(other, kept) && cost(other) < cost(kept)));
+  let other = at(best.layout.fans);
+  if (!other && best.layout.fans && !pastDeadline()) other = at();
+  if (!other || pastDeadline()) return other;
+  // The first direction's own two questions (see `arrange`), asked of this one.
+  if (best.layout.fans !== 'unlabelled' && hasLabelledTrunk(other.arranged.view)) {
+    const shared = hasSharedSideTrunk(other.arranged.view);
+    const alone = at('unlabelled');
+    if (reads(alone, other)) other = alone!;
+    const unshared = shared && best.layout.fans !== 'unshared' && !pastDeadline() ? at('unshared') : undefined;
+    if (reads(unshared, other)) other = unshared!;
+  }
+  return other;
 }
 
 function arrangeOnce(view: DraftDocument, inScope: ReadonlySet<string>, request: ArrangeRequest, layout: LayoutSpec, ctx: DescribeContext): Arranged | undefined {

@@ -1,4 +1,5 @@
 import { isRecord } from '../lib/isRecord';
+import { isGlyphComponentKind, isGlyphServiceKind } from './dataStoreGeometry';
 import { isFiniteNumber } from '../lib/math';
 import { cleanText } from './sanitize';
 import {
@@ -280,9 +281,9 @@ export function artSlotOf(type: DraftNodeType, kind: string | undefined): ArtSlo
     case 'actor':
       return 'glyph';
     case 'service':
-      return kind === undefined || kind === 'generic' || kind === 'api' ? 'body' : 'glyph';
+      return isGlyphServiceKind(kind) ? 'glyph' : 'body';
     case 'component':
-      return kind === undefined || kind === 'generic' ? 'body' : 'glyph';
+      return isGlyphComponentKind(kind) ? 'glyph' : 'body';
     case 'queue':
     case 'ellipse':
       return 'body';

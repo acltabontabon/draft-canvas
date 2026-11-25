@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 31,
+  "version": 34,
   "metadata": {
     "id": "starter-modular-monolith",
     "title": "Modular Monolith",
@@ -12,9 +12,9 @@
       "id": "app",
       "type": "group",
       "x": -112,
-      "y": -123,
+      "y": -130,
       "width": 1024,
-      "height": 706,
+      "height": 721,
       "z": -1,
       "text": "Course Platform",
       "textOrigin": "explicit",
@@ -24,9 +24,9 @@
       "id": "learner",
       "type": "actor",
       "x": 340,
-      "y": -329,
+      "y": -337,
       "width": 120,
-      "height": 118,
+      "height": 134,
       "z": 0,
       "text": "Learner",
       "description": "Browses courses and enrols in them.",
@@ -38,9 +38,9 @@
       "id": "api",
       "type": "component",
       "x": 320,
-      "y": -71,
+      "y": -78,
       "width": 160,
-      "height": 142,
+      "height": 157,
       "z": 0,
       "parentId": "app",
       "text": "Web API",
@@ -63,9 +63,9 @@
       "id": "catalog",
       "type": "component",
       "x": -80,
-      "y": 409,
+      "y": 402,
       "width": 160,
-      "height": 142,
+      "height": 157,
       "z": 0,
       "parentId": "app",
       "text": "Catalog",
@@ -133,7 +133,7 @@
             "x": 238,
             "y": 400,
             "width": 152,
-            "height": 80,
+            "height": 114,
             "z": 0,
             "text": "Enrollment Service",
             "description": "Runs the enrol use case in one transaction.",
@@ -147,7 +147,7 @@
             "x": 0,
             "y": 618,
             "width": 180,
-            "height": 142,
+            "height": 160,
             "z": 0,
             "text": "Enrollment Repository",
             "description": "Reads and writes enrollment tables only.",
@@ -158,10 +158,10 @@
           {
             "id": "e.tables",
             "type": "database",
-            "x": 105,
+            "x": 86,
             "y": 832,
             "width": 120,
-            "height": 114,
+            "height": 120,
             "z": 0,
             "text": "enrollment.*",
             "technology": "PostgreSQL 16",
@@ -174,7 +174,7 @@
             "x": 234,
             "y": 626,
             "width": 160,
-            "height": 126,
+            "height": 142,
             "z": 0,
             "text": "BillingApi",
             "description": "Billing's public interface.",
@@ -206,6 +206,10 @@
             "directed": true,
             "routing": "smoothstep",
             "semantic": "uses",
+            "targetAnchor": {
+              "side": "top",
+              "offset": 0.25
+            },
             "semanticsOrigin": "explicit"
           },
           {
@@ -234,14 +238,6 @@
             "directed": true,
             "routing": "smoothstep",
             "semantic": "readsWrites",
-            "sourceAnchor": {
-              "side": "bottom",
-              "offset": 0.75
-            },
-            "targetAnchor": {
-              "side": "top",
-              "offset": 0.25
-            },
             "semanticsOrigin": "explicit"
           },
           {
@@ -252,6 +248,10 @@
             "directed": true,
             "routing": "smoothstep",
             "semantic": "uses",
+            "targetAnchor": {
+              "side": "top",
+              "offset": 0.25
+            },
             "semanticsOrigin": "explicit"
           },
           {
@@ -355,9 +355,9 @@
       "id": "t.catalog",
       "type": "database",
       "x": -60,
-      "y": 669,
+      "y": 665,
       "width": 120,
-      "height": 143,
+      "height": 150,
       "z": 0,
       "text": "catalog.*",
       "description": "Courses, cohorts and seats.",
@@ -369,9 +369,9 @@
       "id": "t.enrollment",
       "type": "database",
       "x": 1140,
-      "y": 161,
+      "y": 148,
       "width": 120,
-      "height": 143,
+      "height": 169,
       "z": 0,
       "text": "enrollment.*",
       "description": "Held and confirmed places.",
@@ -393,9 +393,9 @@
       "id": "t.billing",
       "type": "database",
       "x": 730,
-      "y": 669,
+      "y": 668,
       "width": 140,
-      "height": 143,
+      "height": 145,
       "z": 0,
       "text": "billing.*",
       "description": "Charges and invoices.",
@@ -406,10 +406,10 @@
     {
       "id": "stripe",
       "type": "service",
-      "x": 1110,
-      "y": 417,
-      "width": 180,
-      "height": 126,
+      "x": 1112,
+      "y": 405,
+      "width": 176,
+      "height": 85,
       "z": 0,
       "text": "Stripe",
       "description": "Takes card payments.",
@@ -420,10 +420,10 @@
     {
       "id": "mail",
       "type": "service",
-      "x": 310,
-      "y": 677,
-      "width": 180,
-      "height": 126,
+      "x": 312,
+      "y": 690,
+      "width": 176,
+      "height": 100,
       "z": 0,
       "text": "Mailgun",
       "description": "Delivers transactional email.",
@@ -435,7 +435,7 @@
       "id": "title",
       "type": "text",
       "x": -112,
-      "y": -487,
+      "y": -495,
       "width": 900,
       "height": 110,
       "z": 0,
@@ -565,13 +565,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {
