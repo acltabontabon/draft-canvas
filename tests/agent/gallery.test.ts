@@ -5,7 +5,7 @@ import { starterKeptIds } from '../../src/agent/starter';
 import { applyUpdate } from '../../src/agent/patch';
 import { lineOf, measureContext } from '../../src/agent/place';
 import { checkQuality } from '../../src/agent/quality';
-import { bendsOf, drawnRoute, routeGeometry } from '../../src/agent/route';
+import { bendsOf, drawnRoute } from '../../src/agent/route';
 import { walkGraphs } from '../../src/depth/tree';
 import { viewOf } from '../../src/depth/tree';
 import { deserializeDocument } from '../../src/export/project';
@@ -161,7 +161,8 @@ describe('layout gallery', { timeout: 45_000 }, () => {
     for (const id of ['branch', 'bureau', 'fraud', 'core', 'mail']) expect(advice[0]).toContain(`{"op":"update","id":"${id}","set":{"group":null}}`);
     expect(advice[0]).toContain('{"op":"arrange"}');
     // After the advised ops: the three externals the worker calls hang across the flow from the batch
-    // boundary, level with the worker, each reached by a straight connector out of its side; the
+    // boundary, level with the worker, each reached by a short connector of its own
+    // (they are cards, too tall for three lines out of one side of the worker to reach unbent); the
     // vendor the notification worker calls (last in the boundary's flow) stays after it, in the flow.
     // The view was drawn reading right; the cleanup turns it to read down, where the hub's fan hangs
     // beside it with nothing crossing anything, instead of keeping a direction that reads worse.
@@ -173,15 +174,17 @@ describe('layout gallery', { timeout: 45_000 }, () => {
     for (const id of ['bureau', 'fraud', 'core']) {
       expect(at(id).x, id).toBeGreaterThanOrEqual(batch.x + batch.width);
       expect(at(id).parentId, id).toBeUndefined();
-      // As drawn: its ends may be automatic now, attaching where the layout put them.
+      // As drawn: its ends may be automatic now, attaching where the layout put them. The one level
+      // with the worker runs straight out of its side; the ones above and below step over to theirs.
       const edge = doc.edges.find((e) => e.target === id)!;
-      const sides = routeGeometry(edge, doc.nodes, doc.edges)!;
-      expect(sides.from, id).toBe('right');
-      expect(sides.to, id).toBe('left');
+      expect(bendsOf(drawnRoute(edge, doc.nodes, doc.edges)!.points), id).toBeLessThanOrEqual(2);
     }
-    // Level by where their connectors meet them: a Worker and an External are glyphs, and a line
-    // lands on the glyph, not on the middle of the box its name hangs in.
-    expect(lineOf(at('fraud')).y).toBeCloseTo(lineOf(worker).y, -1);
+    // Level by where their connectors meet them: a Worker is a glyph, and a line lands on the
+    // glyph, not on the middle of the box its name hangs in. The card beside it is taller than the
+    // glyph, so the line that reaches it straight meets it above its own middle.
+    const toFraud = doc.edges.find((e) => e.target === 'fraud')!;
+    expect(bendsOf(drawnRoute(toFraud, doc.nodes, doc.edges)!.points)).toBe(0);
+    expect(Math.abs(lineOf(at('fraud')).y - lineOf(worker).y)).toBeLessThan(at('fraud').height / 2);
     expect(at('mail').y).toBeGreaterThanOrEqual(at('notify').y + at('notify').height);
     expect(at('mail').x).toBeLessThan(batch.x + batch.width);
     const legibility = legibilityOf(doc.nodes, doc.edges);

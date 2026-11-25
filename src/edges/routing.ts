@@ -9,7 +9,7 @@ import {
   type EdgeRouting,
   type Side,
 } from '../document/types';
-import { anchorBandOf, type AnchorBand } from '../document/queueGeometry';
+import { anchorBandOf, bandReach, bandSpan, type AnchorBand } from '../document/queueGeometry';
 import { centerOf, clamp } from '../lib/math';
 import { longestRunMidpoint, orthogonalThrough, polylineMidpoint, polylinePath, responseWaypoints, smoothPath, stepPolyline } from './waypoints';
 import { edgeLabelSize, LABEL_PADDING_X, LABEL_PADDING_Y } from './labelLayout';
@@ -68,15 +68,25 @@ export function rectOf(node: DraftNode): Rect {
 
 /** The vertical run a left/right anchor is distributed over — the band when the rect has one. */
 function verticalSpan(rect: Rect): { start: number; length: number } {
-  return rect.anchorBand
-    ? { start: rect.anchorBand.top, length: rect.anchorBand.bottom - rect.anchorBand.top }
-    : { start: rect.y, length: rect.height };
+  return bandSpan(rect, rect.anchorBand, 'left');
+}
+
+/** The horizontal run a top/bottom anchor is distributed over — a glyph's own width when it has one. */
+function horizontalSpan(rect: Rect): { start: number; length: number } {
+  return bandSpan(rect, rect.anchorBand, 'top');
+}
+
+/** Where along a top or bottom side `offset` falls: on its span, and never off what is drawn. */
+function acrossAt(rect: Rect, offset: number): number {
+  const span = horizontalSpan(rect);
+  const reach = bandReach(rect, rect.anchorBand);
+  return clamp(span.start + span.length * offset, reach.min, reach.max);
 }
 
 /** The stretch of a side its anchors are spread along: where it starts and how long it is, on the
  *  axis the side runs along (a tube's or a Data Store's band for its left and right). */
 export function sideSpan(rect: Rect, side: Side): { start: number; length: number } {
-  return side === 'left' || side === 'right' ? verticalSpan(rect) : { start: rect.x, length: rect.width };
+  return bandSpan(rect, rect.anchorBand, side);
 }
 
 /**
@@ -90,9 +100,9 @@ export function anchorPoint(rect: Rect, side: Side, offset = 0.5): { x: number; 
   const t = clamp(offset, 0, 1);
   switch (side) {
     case 'top':
-      return { x: rect.x + rect.width * t, y: rect.anchorBand?.glyphTop ?? rect.y };
+      return { x: acrossAt(rect, t), y: rect.anchorBand?.glyphTop ?? rect.y };
     case 'bottom':
-      return { x: rect.x + rect.width * t, y: rect.y + rect.height };
+      return { x: acrossAt(rect, t), y: rect.y + rect.height };
     case 'left': {
       const span = verticalSpan(rect);
       return { x: rect.anchorBand?.left ?? rect.x, y: span.start + span.length * t };
@@ -149,11 +159,8 @@ export function anchorAt(rect: Rect, point: { x: number; y: number }): EdgeAncho
   const side = SIDES.reduce((nearest, candidate) =>
     distanceToSide[candidate] < distanceToSide[nearest] ? candidate : nearest,
   );
-  const span = verticalSpan(rect);
-  const offset =
-    side === 'top' || side === 'bottom'
-      ? (point.x - rect.x) / rect.width
-      : (point.y - span.start) / span.length;
+  const span = sideSpan(rect, side);
+  const offset = side === 'top' || side === 'bottom' ? (point.x - span.start) / span.length : (point.y - span.start) / span.length;
   return { side, offset: clamp(offset, 0, 1) };
 }
 
@@ -220,7 +227,8 @@ export function anchorOnSide(rect: Rect, side: Side, point: { x: number; y: numb
     const span = verticalSpan(rect);
     return { side, offset: clamp(span.length ? (point.y - span.start) / span.length : 0.5, 0, 1) };
   }
-  return { side, offset: clamp(rect.width ? (point.x - rect.x) / rect.width : 0.5, 0, 1) };
+  const across = horizontalSpan(rect);
+  return { side, offset: clamp(across.length ? (point.x - across.start) / across.length : 0.5, 0, 1) };
 }
 
 export interface RoutedEdge {
@@ -387,7 +395,9 @@ const NEAR_LEVEL_INSET = 14;
  *  `NEAR_LEVEL`, or would push the endpoint out toward a corner of the shape. */
 function levelOnto(rect: Rect, side: Side, coordinate: number, current: number): number {
   if (Math.abs(coordinate - current) > NEAR_LEVEL) return current;
-  const span = isHorizontalSide(side) ? verticalSpan(rect) : { start: rect.x, length: rect.width };
+  // Along a top or bottom side an end may slide as far as what is drawn there reaches, and no further.
+  const reach = bandReach(rect, rect.anchorBand);
+  const span = isHorizontalSide(side) ? verticalSpan(rect) : { start: reach.min, length: reach.max - reach.min };
   const low = span.start + NEAR_LEVEL_INSET;
   const high = span.start + span.length - NEAR_LEVEL_INSET;
   if (low > high || coordinate < low || coordinate > high) return current;
@@ -853,7 +863,7 @@ const MIN_SPINE_BRANCH = 28;
  */
 function laneNudge(rect: Rect, side: Side, lane: number): { x: number; y: number } {
   if (!lane) return { x: 0, y: 0 };
-  const sideLength = isHorizontalSide(side) ? verticalSpan(rect).length : rect.width;
+  const sideLength = sideSpan(rect, side).length;
   const span = Math.sign(lane) * Math.min(Math.abs(lane) * LANE_SPACING, sideLength * 0.35);
   return isHorizontalSide(side) ? { x: 0, y: span } : { x: span, y: 0 };
 }
@@ -876,7 +886,8 @@ function clampToBoundary(
     const span = verticalSpan(rect);
     return { x: point.x, y: clamp(point.y, span.start, span.start + span.length) };
   }
-  return { x: clamp(point.x, rect.x, rect.x + rect.width), y: point.y };
+  const reach = bandReach(rect, rect.anchorBand);
+  return { x: clamp(point.x, reach.min, reach.max), y: point.y };
 }
 
 /**
@@ -2073,7 +2084,7 @@ const PIN_SPREAD = 0.375 * 0.25;
 
 /** A pinned end's nudge: its share of a shared point, kept within `PIN_SPREAD`, plus its reply step. */
 function pinNudge(rect: Rect, side: Side, lane: number, replyStep: number): { x: number; y: number } {
-  const sideLength = isHorizontalSide(side) ? verticalSpan(rect).length : rect.width;
+  const sideLength = sideSpan(rect, side).length;
   const limit = sideLength * PIN_SPREAD;
   const spread = laneNudge(rect, side, lane);
   const reply = laneNudge(rect, side, replyStep);

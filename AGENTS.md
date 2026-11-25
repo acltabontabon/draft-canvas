@@ -103,6 +103,13 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
 - The marks above a shape's top-right corner (technology mark, attachment tab, open-point tab) are
   placed only by `document/markerRail.ts`, in one row. Never position one on its own, and draw each
   from its shared describe function (`describeAttachmentTab`, `describeMarker`) in canvas and export.
+- Where a connector meets a shape is `anchorBandOf` and `bandSpan` in `document/queueGeometry.ts`,
+  read by the router, the handles (`DraftNodeView`) and the layout alike. Never work out a point on
+  a side as a fraction of the box by hand: a glyph's anchors sit on the glyph, its top and bottom
+  ones spread along its reach, and a Service or Component glyph grows into the room its words leave
+  (`dataStoreScale`), so anything that asks for a band passes the shape's `text`, `technology` and
+  `description` with its kind. A shape whose drawing is not its box needs every one of its twelve
+  points on what is drawn.
 - Connector visuals have two renderers: `canvas/DraftEdgeView.tsx` and `edges/describe.ts`.
   Update both for badges, dashes, chips or other visual changes. Continuation and agent previews
   are not exported and reuse the shared ghost routing, dash and marker helpers.

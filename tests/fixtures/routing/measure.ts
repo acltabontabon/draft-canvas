@@ -24,6 +24,7 @@ import { drawnConnectors, type DrawnConnector, type DrawnLine } from './drawn';
 import { flattenPath, rectOf, type Rect, type Side } from '../../../src/edges/routing';
 import { stepPolyline } from '../../../src/edges/waypoints';
 import { endpointPlan } from '../../../src/edges/endpoints';
+import { bandSpan } from '../../../src/document/queueGeometry';
 import { separationPlan } from '../../../src/edges/separation';
 
 interface Point {
@@ -157,10 +158,15 @@ function sideLine(rect: Rect, side: Side): { fixed: number; from: number; to: nu
       return { fixed: band?.left ?? rect.x, from: band?.top ?? rect.y, to: band?.bottom ?? rect.y + rect.height, horizontal: true };
     case 'right':
       return { fixed: band?.right ?? rect.x + rect.width, from: band?.top ?? rect.y, to: band?.bottom ?? rect.y + rect.height, horizontal: true };
-    case 'top':
-      return { fixed: band?.glyphTop ?? rect.y, from: rect.x, to: rect.x + rect.width, horizontal: false };
-    case 'bottom':
-      return { fixed: rect.y + rect.height, from: rect.x, to: rect.x + rect.width, horizontal: false };
+    // The stretch the side's anchors are spread along (`bandSpan`): a glyph's reach, not its box.
+    case 'top': {
+      const span = bandSpan(rect, band, side);
+      return { fixed: band?.glyphTop ?? rect.y, from: span.start, to: span.start + span.length, horizontal: false };
+    }
+    case 'bottom': {
+      const span = bandSpan(rect, band, side);
+      return { fixed: rect.y + rect.height, from: span.start, to: span.start + span.length, horizontal: false };
+    }
   }
 }
 

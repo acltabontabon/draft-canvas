@@ -5,7 +5,7 @@ import { displayNameFor, maxSizeFor } from '../document/factory';
 import { lensNodeTier, nodeTierInPlayback, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
 import { normalizeNoteText } from '../document/noteText';
-import { anchorBandOf } from '../document/queueGeometry';
+import { anchorBandOf, bandSpan } from '../document/queueGeometry';
 import type { DraftNode } from '../document/types';
 import {
   CODE_LAYOUT,
@@ -269,34 +269,40 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       : { ...node, width: effectiveWidth, height: effectiveHeight };
   // Relative to the node box (x, y: 0) — the handles are positioned inside it.
   const handleBand = liveNode
-    ? anchorBandOf({ type: liveNode.type, serviceKind: liveNode.serviceKind, componentKind: liveNode.componentKind, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
+    ? anchorBandOf({ type: liveNode.type, serviceKind: liveNode.serviceKind, componentKind: liveNode.componentKind, text: liveNode.text, technology: liveNode.technology, description: liveNode.description, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
     : undefined;
   // `DraftHandle` is memoized, so each keeps its style object until the band itself moves —
   // twelve fresh objects per node render would re-render every handle every time.
   const bandTop = handleBand?.top;
   const bandBottom = handleBand?.bottom;
   const bandLeft = handleBand?.left;
-  // `right` is set as a distance from the box's right edge, which is what React Flow's own
-  // `right: 0` / `translate(50%)` centring for a right handle is relative to.
-  const bandRightInset = handleBand?.right === undefined ? undefined : effectiveWidth - handleBand.right;
+  const bandRight = handleBand?.right;
   const bandGlyphTop = handleBand?.glyphTop;
+  // Where the top and bottom handles are spread: across the glyph's reach, not the box (`bandSpan`).
+  const across = bandSpan({ x: 0, y: 0, width: effectiveWidth, height: effectiveHeight }, handleBand, 'top');
+  const acrossStart = across.length === effectiveWidth ? undefined : across.start;
+  const acrossLength = across.length;
   const handleStyles = useMemo(
     () =>
       new Map(
         HANDLE_ANCHORS.map((anchor) => {
           const fallback = STATIC_HANDLE_STYLES.get(anchor.id)!;
-          if (anchor.side === 'bottom') return [anchor.id, fallback] as const;
-          if (anchor.side === 'top') {
-            return [anchor.id, bandGlyphTop === undefined ? fallback : { ...fallback, top: `${bandGlyphTop}px` }] as const;
+          if (anchor.side === 'top' || anchor.side === 'bottom') {
+            // The same columns the router lands on, top and bottom.
+            const column = acrossStart === undefined ? fallback : { left: `${acrossStart + acrossLength * anchor.offset}px` };
+            if (anchor.side === 'bottom' || bandGlyphTop === undefined) return [anchor.id, column] as const;
+            return [anchor.id, { ...column, top: `${bandGlyphTop}px` }] as const;
           }
           if (bandTop === undefined || bandBottom === undefined) return [anchor.id, fallback] as const;
           const style: CSSProperties = { top: `${bandTop + (bandBottom - bandTop) * anchor.offset}px` };
           if (anchor.side === 'left' && bandLeft !== undefined) style.left = `${bandLeft}px`;
-          if (anchor.side === 'right' && bandRightInset !== undefined) style.right = `${bandRightInset}px`;
+          // `right` is set as a distance from the box's right edge, which is what React Flow's own
+          // `right: 0` / `translate(50%)` centring for a right handle is relative to.
+          if (anchor.side === 'right' && bandRight !== undefined) style.right = `${effectiveWidth - bandRight}px`;
           return [anchor.id, style] as const;
         }),
       ),
-    [bandTop, bandBottom, bandLeft, bandRightInset, bandGlyphTop],
+    [bandTop, bandBottom, bandLeft, bandRight, bandGlyphTop, effectiveWidth, acrossStart, acrossLength],
   );
 
   /**

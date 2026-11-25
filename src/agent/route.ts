@@ -826,6 +826,12 @@ function roughCost(edge: DraftEdge, nodes: readonly DraftNode[], byId: Map<strin
   }
 }
 
+/** How many times `relaxLayoutAnchors` looks at a whole view to let a group of pins go. */
+const RELEASE_LOOKS = 48;
+/** How much longer a line may be drawn with its pins let go, in pixels: an end that slid along its
+ *  side, never a bend (`BEND_COST` is many times this). */
+const RELEASE_SLACK = 2;
+
 /** A pin the layout kept on a connector it drew, for the receipt: the end, and why. */
 export interface KeptPin {
   id: string;
@@ -849,7 +855,8 @@ function drawnKey(edge: DraftEdge, doc: { nodes: readonly DraftNode[]; edges: re
  * Nothing is guessed about anyone's intent: only connectors this operation drew are touched, and an
  * end the agent placed itself (`requested`, `id:source` or `id:target`) stays pinned. Every connector
  * in `all` is compared as drawn before and after. Authoring may opt into `polish`, which also accepts
- * a substantially simpler automatic picture after checking every route and caption in the view.
+ * a substantially simpler automatic picture after checking every route and caption in the view, and
+ * then lets go of every remaining pin whose line reads no worse without it.
  * Otherwise a created connector whose line would change, or that
  * shares a shape with any connector that would, keeps its layout pins, until nothing changes — and if
  * that can't be shown in time, every layout pin stays. Returns a new edge list (plans are cached by
@@ -933,7 +940,67 @@ export function relaxLayoutAnchors(
     }
   }
   if (!settled) relaxed.clear();
-  const edges = apply();
+  let edges = apply();
+  // What is still pinned is pinned because an automatic end would draw its line a little
+  // differently: a few pixels along the side, usually, where the layout chose a handle and the router
+  // would centre or spread. Most of a drawn diagram was left pinned on that account, and a pinned end
+  // does not follow its shape when a person moves it. Authoring lets those go too, wherever the view
+  // reads no worse for it: nothing through a shape, no new crossing, overlap or detour, no caption
+  // lost, no line longer or more bent than it was, and nobody else's line moved at all. Tried in
+  // groups that halve when one fails, so a large view costs a bounded number of looks.
+  if (options.polish && settled && !pastDeadline()) {
+    const held = (e: DraftEdge) => !e.waypoints?.length && created.has(e.id)
+      && ((Boolean(e.sourceAnchor) && !e.sourceAnchor?.participantId && !requested.has(`${e.id}:source`))
+        || (Boolean(e.targetAnchor) && !e.targetAnchor?.participantId && !requested.has(`${e.id}:target`)));
+    const released = (list: readonly DraftEdge[], ids: ReadonlySet<string>) => list.map((e) => {
+      if (!ids.has(e.id)) return e;
+      const next = { ...e };
+      if (next.sourceAnchor && !next.sourceAnchor.participantId && !requested.has(`${e.id}:source`)) delete next.sourceAnchor;
+      if (next.targetAnchor && !next.targetAnchor.participantId && !requested.has(`${e.id}:target`)) delete next.targetAnchor;
+      return next;
+    });
+    const judge = (list: readonly DraftEdge[]) => {
+      const drawn = othersOf(nodes, list, options.caption, undefined, byId);
+      // The room each caption has along its line: a straighter line is often a shorter one, and
+      // words that fitted on the run they had are cut short on the one that is left.
+      const room = new Map(drawn.filter((e) => e.chip).map((e) => {
+        const edge = list.find((candidate) => candidate.id === e.id);
+        return [e.id, (edge && connectorRoutes(edge, { nodes, edges: list }, 'transient', byId)?.request.labelRoom) || 0] as const;
+      }));
+      return { drawn, room, found: assessRoutes(nodes, list, drawn, byId), keys: snapshot(list) };
+    };
+    let now = judge(edges);
+    const queue: string[][] = [edges.filter(held).map((e) => e.id)];
+    for (let looks = 0; queue.length && looks < RELEASE_LOOKS && !pastDeadline(); looks += 1) {
+      const group = queue.shift()!;
+      if (group.length === 0) continue;
+      const candidate = released(edges, new Set(group));
+      const next = judge(candidate);
+      const costs = new Map(now.drawn.map((e) => [e.id, routeCost(e.points)]));
+      const reads = candidate.every((e) => created.has(e.id) || next.keys.get(e.id) === now.keys.get(e.id))
+        && preservesReadability(now.found, next.found)
+        && next.found.obstruction <= now.found.obstruction && next.found.overlap <= now.found.overlap
+        && next.found.bundled >= now.found.bundled && next.found.crossings <= now.found.crossings
+        && [...next.found.crossed].every((id) => now.found.crossed.has(id))
+        && [...next.found.detours].every((id) => now.found.detours.has(id))
+        && next.drawn.length === now.drawn.length
+        && next.drawn.every((e) => routeCost(e.points) <= (costs.get(e.id) ?? 0) + RELEASE_SLACK)
+        && [...now.room].every(([id, had]) => {
+          const has = next.room.get(id);
+          const needs = next.drawn.find((e) => e.id === id)?.chip?.width ?? 0;
+          // No room at all is a caption carried on a shared trunk, where it has all it needs: it
+          // stays there, or the branch it moves to holds it whole.
+          return has !== undefined && (has >= needs || (had === 0 ? has === 0 : has >= had - 0.5));
+        });
+      if (reads) {
+        edges = candidate;
+        now = next;
+      } else if (group.length > 1) {
+        const half = Math.ceil(group.length / 2);
+        queue.push(group.slice(0, half), group.slice(half));
+      }
+    }
+  }
   const kept: KeptPin[] = [];
   for (const edge of edges) {
     if (!created.has(edge.id) || edge.waypoints?.length) continue;

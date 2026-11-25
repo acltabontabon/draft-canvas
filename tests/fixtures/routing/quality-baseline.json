@@ -575,7 +575,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1419,
+    "cost": 1386,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -624,10 +624,10 @@
     }
   },
   "gallery/04-cycle-retry": {
-    "obstruction": 0,
+    "obstruction": 2,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1695,
+    "cost": 1658,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -653,7 +653,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 2029,
+    "cost": 1996,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -705,7 +705,7 @@
     "obstruction": 1,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1466,
+    "cost": 1393,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -731,7 +731,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 866,
+    "cost": 872,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -809,7 +809,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 2101,
+    "cost": 1919,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -861,7 +861,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1291,
+    "cost": 1284,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -887,7 +887,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 434,
+    "cost": 428,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -913,7 +913,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1358,
+    "cost": 1364,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -939,7 +939,7 @@
     "obstruction": 1,
     "overlap": 0,
     "crossings": 0,
-    "cost": 633,
+    "cost": 639,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -965,7 +965,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 3330,
+    "cost": 3255,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -991,7 +991,7 @@
     "obstruction": 1,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1527,
+    "cost": 1528,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1043,7 +1043,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 3781,
+    "cost": 3568,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1095,7 +1095,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 3,
-    "cost": 17698,
+    "cost": 17559,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1119,9 +1119,9 @@
   },
   "gallery/22-credit-card-batch": {
     "obstruction": 1,
-    "overlap": 34,
-    "crossings": 3,
-    "cost": 16880,
+    "overlap": 611,
+    "crossings": 2,
+    "cost": 16765,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1147,7 +1147,7 @@
     "obstruction": 2,
     "overlap": 0,
     "crossings": 0,
-    "cost": 7273,
+    "cost": 7047,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1173,7 +1173,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 900,
+    "cost": 794,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1199,7 +1199,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 4413,
+    "cost": 4323,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1225,7 +1225,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1070,
+    "cost": 1076,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1277,7 +1277,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 2,
-    "cost": 4529,
+    "cost": 4635,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1303,7 +1303,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 2787,
+    "cost": 2893,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1329,7 +1329,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 312,
+    "cost": 259,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1355,7 +1355,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 15,
-    "cost": 17006,
+    "cost": 16953,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1719,7 +1719,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1154,
+    "cost": 1160,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1745,7 +1745,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 2187,
+    "cost": 2208,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1771,7 +1771,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 2086,
+    "cost": 2127,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1849,7 +1849,7 @@
     "obstruction": 0,
     "overlap": 0,
     "crossings": 0,
-    "cost": 1878,
+    "cost": 1889,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1875,7 +1875,7 @@
     "obstruction": 2,
     "overlap": 0,
     "crossings": 0,
-    "cost": 521,
+    "cost": 480,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -1979,7 +1979,7 @@
     "obstruction": 8,
     "overlap": 0,
     "crossings": 71,
-    "cost": 212877,
+    "cost": 213084,
     "violations": {
       "endpoint": 0,
       "continuity": 0,
@@ -2005,7 +2005,7 @@
     "obstruction": 1,
     "overlap": 0,
     "crossings": 9,
-    "cost": 36717,
+    "cost": 36752,
     "violations": {
       "endpoint": 0,
       "continuity": 0,

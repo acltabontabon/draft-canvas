@@ -916,7 +916,7 @@ describe('live resize', () => {
     expect(geometry(queueShapes)).not.toBe(geometry(databaseShapes));
   });
 
-  it('draws Generic and API as cards and every other Service kind as its own glyph', () => {
+  it('draws Generic, API and External as cards and every other Service kind as its own glyph', () => {
     const ctx = describeContext(LIGHT);
     const drawn = (serviceKind: ServiceKind) => {
       const node = createNode({ type: 'service', x: 0, y: 0, text: 'Orders', serviceKind });
@@ -925,14 +925,26 @@ describe('live resize', () => {
     const flat = (shapes: Shape[]): Shape[] => shapes.flatMap((s) => (s.t === 'group' ? flat(s.children) : [s]));
 
     // A card fills its box: its outline starts at the box's own corner.
-    for (const kind of ['generic', 'api'] as const) {
+    for (const kind of ['generic', 'external'] as const) {
       const { node, shapes } = drawn(kind);
       const outline = flat(shapes).find((s) => s.t === 'rect' || s.t === 'path')!;
       if (outline.t === 'rect') expect(outline.w).toBeCloseTo(node.width - 1.5, 1);
     }
+    // An API fills its box too, between the three operations it holds out and its body: one ball at
+    // each of its left side's connection points, the first of them in use, and the body's far edge
+    // at the box's own.
+    {
+      const { node, shapes } = drawn('api');
+      const balls = flat(shapes).filter((s) => s.t === 'ellipse');
+      expect(balls.map((s) => (s.t === 'ellipse' ? s.cy : 0))).toEqual([0.25, 0.5, 0.75].map((offset) => node.height * offset));
+      for (const ball of balls) if (ball.t === 'ellipse') expect(ball.cx - ball.rx).toBeCloseTo(0.75, 5);
+      expect(new Set(balls.map((s) => (s.t === 'ellipse' ? s.fill : ''))).size).toBe(2);
+      const body = flat(shapes).find((s) => s.t === 'rect')!;
+      if (body.t === 'rect') expect(body.x + body.w).toBeCloseTo(node.width - 0.75, 1);
+    }
 
     // A glyph kind draws nothing as wide as its box, and says its kind under its name.
-    const glyphKinds = SERVICE_KINDS.filter((kind) => kind !== 'generic' && kind !== 'api');
+    const glyphKinds = SERVICE_KINDS.filter((kind) => kind !== 'generic' && kind !== 'api' && kind !== 'external');
     for (const kind of glyphKinds) {
       const { node, shapes } = drawn(kind);
       for (const shape of flat(shapes)) if (shape.t === 'rect') expect(shape.w, kind).toBeLessThan(node.width * 0.6);

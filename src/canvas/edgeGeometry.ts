@@ -18,8 +18,9 @@ import { clamp } from '../lib/math';
 
 export type InternalNode = NonNullable<ReturnType<typeof useInternalNode>>;
 
-/** What decides a shape's anchor band: its type, and for a Service the kind it is drawn as. */
-export type BandKind = Pick<DraftNode, 'type'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind'>;
+/** What decides a shape's anchor band: its type, for a Service or a Component the kind it is drawn
+ *  as, and for one drawn as a glyph the words under it, which the glyph grows around. */
+export type BandKind = Pick<DraftNode, 'type'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind' | 'text' | 'technology' | 'description'>;
 
 /**
  * `kind` opts the rect into its node kind's anchor band (a queue-family node's tube, a glyph's
@@ -38,7 +39,9 @@ export function rectOfInternal(node: InternalNode, kind?: BandKind): Rect | null
     width,
     height,
   };
-  const band = kind ? anchorBandOf({ type: kind.type, serviceKind: kind.serviceKind, componentKind: kind.componentKind, x: rect.x, y: rect.y, width, height }) : undefined;
+  const band = kind
+    ? anchorBandOf({ type: kind.type, serviceKind: kind.serviceKind, componentKind: kind.componentKind, text: kind.text, technology: kind.technology, description: kind.description, x: rect.x, y: rect.y, width, height })
+    : undefined;
   return band ? { ...rect, anchorBand: band } : rect;
 }
 

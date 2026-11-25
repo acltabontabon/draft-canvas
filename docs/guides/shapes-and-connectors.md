@@ -38,12 +38,14 @@ To turn a shape into another, select it and press `⇧` with the new shape's key
 Queue, `⇧D` a Data Store. Its name, connectors, flows and notes stay. **Turn into…** in `⌘K` does the
 same.
 
-Generic and API are cards. Every other Service kind is drawn as what it does, with its name
-underneath: a **Gateway** is one way in, a gate, and three different destinations behind it; a **Load
-Balancer** one address fanning out to identical instances; a **Proxy** two plates, a connection
-ending at one and another leaving the other, forward or reverse; a **Worker** a trace, the short
-span of the request and the long one of the job it started; a **Scheduler** a page of time slots;
-an **External** system a block inside a dashed boundary. Gateway, Load Balancer and Proxy all
+Generic, API and External are cards, with room on every side for the lines that reach them. An
+**API** holds out three operations on stems, one of them in use, and a connector into its side lands
+on one; an **External** system has a dashed outline and an arrow leaving its corner. Every other
+Service kind is drawn as what it does, with its name underneath: a **Gateway** is one way in, a gate,
+and three different destinations behind it; a **Load Balancer** one address fanning out to identical
+instances; a **Proxy** two plates, a connection ending at one and another leaving the other, forward
+or reverse; a **Worker** a trace, the short span of the request and the long one of the job it
+started; a **Scheduler** a page of time slots. Gateway, Load Balancer and Proxy all
 route. A plain **Component** is a card too; a **Module** is a block with two lugs
 through its edge, a **Port** a ball on a stem, and an **Adapter** the cup that ball sits in, with a
 different end on its far side. An **Artifact** is something read,
@@ -53,8 +55,14 @@ shape picker gives one).
 
 ![A plain Component as a card, then a Module, a Port and an Adapter as glyphs; below, a use case using a port that a Postgres adapter implements.](../media/guides/component-kinds.png)
 
+![A load balancer in front of a storefront that calls an Orders API, which charges a payment provider, writes to its database and sends a receipt through an email service.](../media/guides/service-cards.png)
+
 Use **External** for a service you don't own. **Actor frame → Framed** outlines an actor. Drag a
-corner handle to resize; Actor, Queue and Data Store artwork grows with the box.
+corner handle to resize. A card fills its box; an Actor, a Queue, a Data Store and every shape drawn
+as a glyph grow with it, once the box is bigger than the words need. The connection points stay on
+what is drawn: around a card's edge, and on a glyph itself, with the bottom three under its name.
+
+![The twelve connection points of an API, an External system, a Gateway, a Port and a Data Store, at their default size and resized.](../media/guides/connection-points.png)
 
 ## Names, technology and instances
 
