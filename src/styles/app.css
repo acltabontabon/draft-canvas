@@ -5597,6 +5597,24 @@ button.dc-export-stage:focus-visible .dc-export-stage-hint {
   cursor: default;
 }
 
+/* A state the option is in, apart from being chosen (an agent that is already set up): a small tick
+   after its name, or a dot when it needs attention, so it reads on a chosen pill and an unchosen one. */
+.dc-segmented-mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  margin-left: 5px;
+  color: var(--dc-selection);
+}
+
+.dc-segmented-option[data-status='warn'] .dc-segmented-mark {
+  width: 6px;
+  height: 6px;
+  margin-left: 7px;
+  border-radius: 50%;
+  background: var(--dc-prefs-warn, var(--dc-danger));
+}
+
 /* The trough already draws the edge: the chosen pill is a tint in it, not a second outline. */
 .dc-segmented-option:has(input:checked) {
   background: var(--dc-selection-soft);

@@ -59,6 +59,12 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **OpenCode** — **Settings → AI agents** connects OpenCode 1 and 2 in one click, alongside Claude
   Code, Codex, Cursor, Gemini CLI and Junie, and shows how to check the connection.
 
+#### Changed
+
+- **Connecting an agent** — **Settings → AI agents** takes every agent through the same three
+  steps: connect, add the skill, try it. Agents that are already set up are ticked, and the last
+  step says when an agent has connected.
+
 #### Fixed
 
 - **Recovery** — Open a recovery copy as a Quick Draft when the original file is unreadable. A

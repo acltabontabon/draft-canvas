@@ -10,9 +10,12 @@ send diagram content to its AI provider, as it does with code.
 2. Turn on **Allow agent access**.
 3. Under **Allowed folders**, tick the folders the agent may use. Subfolders are included. A folder
    is listed once you have opened it in Draft Canvas.
-4. Under **Connect an agent**, choose your agent and click its button.
-5. Optional: under **Agent skill**, click **Install skill**. It teaches the agent to draw a repository.
-6. Start a new agent session. Keep Draft Canvas running while the agent works.
+4. Under **Connect an agent**, choose your agent. An agent that is already set up has a tick.
+5. **Connect**: click the agent's button.
+6. **Add the skill** (optional): click **Install skill**. It teaches the agent to draw a repository.
+7. **Try it**: start a new agent session and ask it to list your Draft Canvas diagrams. The step
+   says **1 agent connected** once the agent gets through. Keep Draft Canvas running while the
+   agent works.
 
 ![AI agent settings with Add to Codex.](../media/guides/agent-setup-codex.png)
 
@@ -24,7 +27,7 @@ send diagram content to its AI provider, as it does with code.
 | Gemini CLI | **Add to Gemini CLI**; start sessions in a trusted folder |
 | Junie | **Add to Junie** |
 | OpenCode | **Add to OpenCode** (every project); restart OpenCode. See [OpenCode](#opencode) |
-| Other MCP clients | Copy the `mcpServers` entry into the client's configuration |
+| Other MCP clients | Choose **Other** and copy the `mcpServers` entry into the client's configuration |
 
 If Draft Canvas cannot find `claude` or `gemini`, Settings shows a terminal command to run instead.
 To configure by hand, open **Set it up by hand instead** (Cursor: **Copy the config instead**).
@@ -36,8 +39,9 @@ To configure by hand, open **Set it up by hand instead** (Cursor: **Copy the con
 folder). OpenCode 1 and OpenCode 2 both read the entry. OpenCode does not need to be installed
 first. The rest of the file is kept, and clicking again changes nothing.
 
-**Set up** means the file is written, not that OpenCode has connected. To check, run this in your
-project folder:
+**Set up** means the file is written, not that OpenCode has connected. **Try it** says when an
+agent has. To check from OpenCode's side, open **Check from a terminal instead**, or run this in
+your project folder:
 
 ```bash
 opencode mcp list

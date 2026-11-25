@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
 import type { AgentClientSetup, AgentProject, AgentSettings, AgentSkillSetup } from '../../src/desktop/api';
 import {
+  agentOptions,
   claudeCodeCommand,
   clientLine,
   codexConfigToml,
   connectionSummary,
+  connectTitle,
+  firstAgent,
   folderRows,
   geminiCommand,
-  OPENCODE_CHECK,
   opencodeConfigJson,
   skillLine,
   skillTargetOf,
+  tryLine,
 } from '../../src/desktop/ui/settings/agentModel';
 
 const AGENT: AgentSettings = {
@@ -124,7 +127,6 @@ describe('opencodeConfigJson', () => {
     expect(opencodeConfigJson(AGENT.sidecarPath!)).toContain('"/Applications/Draft Canvas.app/Contents/MacOS/draft-canvas-mcp"');
     // OpenCode 1.18 and older stop on `mcp.servers`, so the pasted entry never uses it.
     expect(opencodeConfigJson(windows)).not.toContain('servers');
-    expect(OPENCODE_CHECK).toBe('opencode mcp list');
   });
 });
 
@@ -154,7 +156,7 @@ describe('clientLine', () => {
     });
     // Set up, not connected: the file is all Settings can see.
     expect(clientLine(setup({ client: 'opencode', state: 'ready', location: '~/.config/opencode/opencode.json' }))?.text).toBe(
-      'Set up in ~/.config/opencode/opencode.json. Restart OpenCode to use it.',
+      'Set up in ~/.config/opencode/opencode.json.',
     );
     expect(clientLine(setup({ client: 'opencode', state: 'outdated', configuredCommand: '/old/draft-canvas-mcp' }))).toEqual({
       action: 'Update OpenCode',
@@ -166,16 +168,72 @@ describe('clientLine', () => {
     expect(outdated?.text).toContain('/old/draft-canvas-mcp');
     expect(clientLine(setup({ state: 'ready' }))).toEqual({
       action: null,
-      text: 'Set up in ~/.codex/config.toml. Start a new Codex chat to use it.',
+      text: 'Set up in ~/.codex/config.toml.',
       tone: 'on',
     });
     expect(clientLine(setup({ client: 'gemini', state: 'ready', location: '~/.gemini/settings.json' }))?.text).toBe(
-      'Set up in ~/.gemini/settings.json. Start a new Gemini CLI session in a trusted folder to use it.',
+      'Set up in ~/.gemini/settings.json.',
     );
   });
 
   it('says nothing before the shell has answered', () => {
     expect(clientLine(undefined)).toBeNull();
+  });
+});
+
+describe('agentOptions', () => {
+  const found = (client: AgentClientSetup['client'], state: AgentClientSetup['state']): AgentClientSetup => ({ client, state, automatic: true, location: null, configuredCommand: null });
+
+  it('lists every agent in one order, marking the ones the shell found set up', () => {
+    const options = agentOptions([found('codex', 'ready'), found('opencode', 'outdated'), found('junie', 'not-set-up')]);
+    expect(options.map((option) => option.label)).toEqual(['Claude Code', 'Codex', 'Cursor', 'Gemini CLI', 'Junie', 'OpenCode', 'Other']);
+    expect(options.find((option) => option.value === 'codex')?.status).toEqual({ tone: 'on', label: 'set up' });
+    expect(options.find((option) => option.value === 'opencode')?.status).toEqual({ tone: 'warn', label: 'needs an update' });
+    // Nothing to say about an agent that isn't set up, or one whose configuration the shell never reads.
+    for (const unmarked of ['claude-code', 'cursor', 'junie', 'other']) expect(options.find((option) => option.value === unmarked)?.status).toBeUndefined();
+    // The short pill still names what it is to a screen reader.
+    expect(options.at(-1)?.name).toBe('Other MCP clients');
+  });
+
+  it('opens on the first agent that is set up, and on Claude Code when none is', () => {
+    expect(firstAgent([])).toBe('claude-code');
+    expect(firstAgent([found('codex', 'not-set-up'), found('opencode', 'ready')])).toBe('opencode');
+    expect(firstAgent([found('opencode', 'ready'), found('codex', 'outdated')])).toBe('codex');
+  });
+
+  it('names the first step after the agent', () => {
+    expect(connectTitle('opencode')).toBe('Connect OpenCode');
+    expect(connectTitle('gemini')).toBe('Connect Gemini CLI');
+    expect(connectTitle('other')).toBe('Connect your agent');
+  });
+});
+
+describe('tryLine', () => {
+  const on = { enabled: true, listening: true, connections: 0 };
+
+  it('asks every agent for a first request, after the fresh start that agent needs', () => {
+    expect(tryLine('opencode', on).text).toBe('Restart OpenCode, then ask it to list your Draft Canvas diagrams.');
+    expect(tryLine('codex', on).text).toBe('Start a new Codex chat, then ask it to list your Draft Canvas diagrams.');
+    expect(tryLine('gemini', on).text).toBe('Start a new Gemini CLI session in a trusted folder, then ask it to list your Draft Canvas diagrams.');
+    expect(tryLine('cursor', on).text).toBe('Start a new chat in Cursor, then ask it to list your Draft Canvas diagrams.');
+    expect(tryLine('other', on).text).toBe('Restart your agent, then ask it to list your Draft Canvas diagrams.');
+  });
+
+  it('says whether an agent has connected, which a set-up file alone never shows', () => {
+    expect(tryLine('opencode', on).live).toEqual({ text: 'No agent connected yet.', tone: 'off' });
+    expect(tryLine('opencode', { ...on, connections: 1 }).live).toEqual({ text: '1 agent connected.', tone: 'on' });
+    expect(tryLine('opencode', { ...on, connections: 3 }).live).toEqual({ text: '3 agents connected.', tone: 'on' });
+    expect(tryLine('opencode', { ...on, listening: false }).live).toEqual({ text: 'The connector isn’t ready yet.', tone: 'warn' });
+    expect(tryLine('opencode', { enabled: false, listening: false, connections: 0 }).live).toEqual({
+      text: 'Agent access is off, so nothing can connect. Turn it on above.',
+      tone: 'warn',
+    });
+  });
+
+  it('offers the agent’s own check only where it reports the connection', () => {
+    expect(tryLine('opencode', on).command).toBe('opencode mcp list');
+    expect(tryLine('claude-code', on).command).toBe('claude mcp list');
+    for (const none of ['codex', 'cursor', 'gemini', 'junie', 'other'] as const) expect(tryLine(none, on).command).toBeNull();
   });
 });
 
