@@ -89,23 +89,34 @@ export function serializeError(error: unknown): SerializedError {
   return { code: 'internal', message: 'History could not complete that.' };
 }
 
+type Args<M extends ComputeMethod> = Parameters<(typeof compute)[M]>;
+
 /**
- * The compute methods by name, taken once from `compute`'s own functions. A request names one by
- * string from another thread: looking it up here, never as a property of an object, means a name
- * such as `constructor` or `__proto__` finds nothing to call.
+ * A compute request, by name from another thread. Each method is named in the switch, so no string
+ * is ever used to find something to call: `constructor`, `__proto__` and any other name are refused.
  */
-const COMPUTE_CALLS: ReadonlyMap<string, (...args: unknown[]) => Promise<unknown>> = new Map(
-  Object.entries(compute).map(([name, fn]) => [name, (fn as (...args: unknown[]) => Promise<unknown>).bind(compute)]),
-);
+function runCompute(method: string, args: unknown[]): Promise<unknown> {
+  switch (method) {
+    case 'prepare':
+      return compute.prepare(...(args as Args<'prepare'>));
+    case 'parse':
+      return compute.parse(...(args as Args<'parse'>));
+    case 'diff':
+      return compute.diff(...(args as Args<'diff'>));
+    case 'merge':
+      return compute.merge(...(args as Args<'merge'>));
+    case 'describe':
+      return compute.describe(...(args as Args<'describe'>));
+    default:
+      return Promise.reject(new HistoryError('invalid', 'Unknown history request.'));
+  }
+}
 
 /** Answers one request. `backend` is absent where the shell keeps histories (desktop). */
 export async function handle(request: Request, backend: HistoryBackend | undefined): Promise<unknown> {
   switch (request.family) {
-    case 'compute': {
-      const fn = COMPUTE_CALLS.get(request.method);
-      if (!fn) throw new HistoryError('invalid', 'Unknown history request.');
-      return fn(...request.args);
-    }
+    case 'compute':
+      return runCompute(request.method, request.args);
     case 'backend': {
       if (!backend) throw new HistoryError('unavailable', 'History storage is not in this worker.');
       if (!BACKEND_METHODS.has(request.method)) throw new HistoryError('invalid', 'Unknown history request.');

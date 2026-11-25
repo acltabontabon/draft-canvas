@@ -5,7 +5,7 @@ import { decideIdentity, type KnownHistory } from '../../src/evolution/identity'
 import { operationRecord, recoveryFor, type OperationData } from '../../src/evolution/journal';
 import { branchOf, isSafeRefName } from '../../src/evolution/refs';
 import { formatMessage, parseMessage } from '../../src/evolution/trailers';
-import { handle, type Request } from '../../src/evolution/workerHost';
+import { compute, handle, type Request } from '../../src/evolution/workerHost';
 import { createDocument } from '../../src/document/factory';
 
 const A = 'a'.repeat(40);
@@ -134,5 +134,12 @@ describe('worker requests', () => {
     }
     const prepared = (await handle({ family: 'compute', method: 'prepare', args: [createDocument('Worker')] }, undefined)) as { blobId: string };
     expect(prepared.blobId).toMatch(/^[0-9a-f]{40}$/);
+  });
+
+  it('dispatches every compute method it defines', async () => {
+    for (const method of Object.keys(compute)) {
+      const outcome = await handle({ family: 'compute', method, args: [] } as unknown as Request, undefined).catch((error: unknown) => error);
+      expect((outcome as { code?: string } | undefined)?.code, method).not.toBe('invalid');
+    }
   });
 });
