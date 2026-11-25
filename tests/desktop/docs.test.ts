@@ -189,6 +189,17 @@ describe('the link holds up', () => {
     expect(h.notices.some((notice) => notice.startsWith('payments.svg stayed where your Markdown points'))).toBe(true);
   });
 
+  it('finds a closed diagram’s docs pictures by their source notes', async () => {
+    const handle = h.addFile('payments', withService('Payments', 'Gateway'));
+    h.docsImages.set('payments.archive.svg', noteFor('payments.archive.draftcanvas', follow));
+    h.docsImages.set('payments.docs.svg', noteFor('payments.draftcanvas', follow));
+
+    await h.controller.renameFile(handle, 'billing', h.files.get(handle)!.displayPath);
+
+    expect(h.notices).toEqual([expect.stringMatching(/^payments\.docs\.svg stayed where your Markdown points/)]);
+    expect(h.docsImages.size).toBe(2);
+  });
+
   it('reports a refused write and still saves the diagram', async () => {
     const handle = await openFile('payments', withService('Payments', 'Gateway'));
     await h.controller.publishDocs(follow, 'payments.svg');

@@ -2,6 +2,7 @@ import { mayTakeDown } from '../traffic';
 import { startOutage } from './outage';
 import { PRODUCT } from '../product';
 import { openLink } from '../host/openLink';
+import { fitPadding } from '../lib/fitPadding';
 import { ALL_PRESETS, DEV_PRESETS, PRESET_KEYWORDS, type Preset } from '../lib/presets';
 import { CONCEPT_PRESETS, conceptKeywords } from '../lib/conceptPresets';
 import { sequenceCommands, sequenceFromSelectionCommands, sequenceQuickCommands } from './sequence';
@@ -26,7 +27,7 @@ import {
   type DraftNode,
   type ViewLevel,
 } from '../document/types';
-import { TEXT_ROLE_OPTION_LABELS } from '../lib/nodeKindLabels';
+import { TEXT_ROLE_OPTION_LABELS, NODE_TYPE_LABELS } from '../lib/nodeKindLabels';
 import { requestClipboardRead } from '../lib/clipboardPermission';
 import { effectiveTextRole } from '../nodes/describe';
 import { continuationsFor, materialize } from '../continuation';
@@ -64,6 +65,8 @@ export function warmCopyExports(): void {
 }
 import { readEditableImagePreference } from '../export/exportPreferences';
 import { systemTheme } from '../theme/systemTheme';
+import { deviceHand } from '../theme/deviceHand';
+import { deviceStyle, shapeStartFrom, useStyleStore } from '../store/styleStore';
 import { copyText } from '../ui/collab/clipboard';
 import { focusBounds, focusNodes } from './search';
 import type { GalleryCategory } from '../gallery';
@@ -334,7 +337,7 @@ function presentModeCommands(ctx: CommandContext): Command[] {
       // next guided move would snap the camera straight back.
       run: (inner) => {
         inner.ui.setPresentation({ framing: 'manual' });
-        void inner.camera.fitView({ padding: 0.2, duration: 320 });
+        void inner.camera.fitView({ padding: fitPadding(0.2), duration: 320 });
       },
     },
     {
@@ -569,7 +572,7 @@ export function viewCommands(ctx: CommandContext): Command[] {
       group: 'view',
       keywords: ['zoom', 'center', 'all', 'canvas'],
       shortcut: 'Shift 1',
-      run: (inner) => void inner.camera.fitView({ padding: 0.2, duration: 320 }),
+      run: (inner) => void inner.camera.fitView({ padding: fitPadding(0.2), duration: 320 }),
     },
     ...backOutCommands(ctx),
     {
@@ -668,7 +671,7 @@ function copyExportCommands(): Command[] {
       keywords: ['png', 'clipboard', 'picture', 'screenshot', 'paste'],
       run: (inner) => {
         void clipboard()
-          .then(({ copyImage }) => copyImage(inner.editor.document, { theme: systemTheme(), editable: editable(inner, 'png') }))
+          .then(({ copyImage }) => copyImage(inner.editor.document, { theme: systemTheme(), preset: deviceHand(), deviceStyle: deviceStyle(), editable: editable(inner, 'png') }))
           .then(announce(inner.ui, 'Image'))
           .catch(fail(inner.ui, 'Copy as image'));
       },
@@ -680,7 +683,7 @@ function copyExportCommands(): Command[] {
       keywords: ['svg', 'clipboard', 'vector', 'markup', 'readme'],
       run: (inner) => {
         void clipboard()
-          .then(({ copySvg }) => copySvg(inner.editor.document, { theme: systemTheme(), editable: editable(inner, 'svg') }))
+          .then(({ copySvg }) => copySvg(inner.editor.document, { theme: systemTheme(), preset: deviceHand(), deviceStyle: deviceStyle(), editable: editable(inner, 'svg') }))
           .then(announce(inner.ui, 'SVG'))
           .catch(fail(inner.ui, 'Copy as SVG'));
       },
@@ -999,8 +1002,28 @@ export function canvasCommands(ctx: CommandContext): Command[] {
       id: 'settings',
       title: 'Canvas settings…',
       group: 'canvas',
-      keywords: ['background', 'personality', 'roughness', 'sketch', 'appearance', 'image', 'theme', 'drawing style', 'preferences', 'intent continuation', 'suggestions'],
-      run: (inner) => inner.ui.setSettingsOpen(true),
+      keywords: ['preferences', 'intent continuation', 'suggestions'],
+      // The canvas's settings are a page of Appearance, the panel beside the canvas.
+      run: (inner) => inner.ui.setStylePanelOpen(true, 'canvas'),
+    },
+    {
+      id: 'appearance',
+      title: 'Appearance…',
+      group: 'canvas',
+      keywords: ['style', 'my style', 'drawing style', 'clean', 'draft', 'sketch', 'colours', 'colors', 'palette', 'line weight', 'corners', 'shadow', 'arrowhead', 'customise', 'customize', 'personalise', 'personalize', 'look'],
+      // Beside the canvas, not over it: the diagram is the preview.
+      run: (inner) => inner.ui.setStylePanelOpen(true),
+    },
+    {
+      // The one way a diagram's own look changes outside Settings: asked for by name, one undo step.
+      id: 'style-apply',
+      title: 'Use my style in this diagram',
+      group: 'canvas',
+      keywords: ['appearance', 'restyle', 'look', 'drawing style', 'theme', 'colours', 'colors', 'apply style'],
+      run: (inner) => {
+        inner.editor.setDocumentStyle(deviceStyle());
+        inner.ui.notify('This diagram is now drawn in your style.');
+      },
     },
     {
       id: 'outline',
@@ -1561,6 +1584,36 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       run: (inner) => connectToStage(inner, node),
     });
   }
+  // "Make it yours" from the canvas: the next shape of this type starts like this one. A device
+  // preference, so it changes no diagram and is no undo step.
+  const start = node.type === 'sequence' ? null : shapeStartFrom(node);
+  const typeName = NODE_TYPE_LABELS[node.type];
+  // Only when it would change something: a shape exactly as its type starts has nothing to save.
+  if (start && JSON.stringify(start) !== JSON.stringify(useStyleStore.getState().starts[node.type] ?? null)) {
+    commands.push({
+      id: 'save-shape-default',
+      title: `Save as my default ${typeName}`,
+      group: 'selection',
+      keywords: ['default', 'my style', 'always', 'remember', 'new shapes', 'appearance', 'preset'],
+      run: (inner) => {
+        const was = useStyleStore.getState().starts[node.type] ?? null;
+        useStyleStore.getState().setStart(node.type, start);
+        inner.ui.notify(`New ${typeName} shapes will start like this one.`, 'info', { label: 'Undo', run: () => useStyleStore.getState().setStart(node.type, was) });
+      },
+    });
+  }
+  if (useStyleStore.getState().starts[node.type]) {
+    commands.push({
+      id: 'reset-shape-default',
+      title: `Reset my default ${typeName}`,
+      group: 'selection',
+      keywords: ['default', 'forget', 'built-in', 'new shapes'],
+      run: (inner) => {
+        useStyleStore.getState().setStart(node.type, null);
+        inner.ui.notify(`New ${typeName} shapes start as they come again.`);
+      },
+    });
+  }
   commands.push({
     id: 'edit-text',
     title: isBoundary ? 'Edit caption' : 'Edit text',
@@ -1849,6 +1902,22 @@ function attachCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   return commands;
 }
 
+/** "Take this connection down": both ends stay up and nothing travels between them. Offered where
+ *  an outage could say something, which is the room having anything that runs at all. */
+function cutConnectorCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
+  const { document, outage } = ctx.editor;
+  if (outage?.cut === edge.id) return [];
+  if (!mayTakeDown(document.nodes, edge.source) && !mayTakeDown(document.nodes, edge.target)) return [];
+  return [{
+    id: 'cut-connector',
+    title: 'Take this connection down',
+    group: 'selection',
+    hint: 'What happens if these two cannot reach each other',
+    keywords: ['outage', 'failure', 'what if', 'down', 'partition', 'network', 'unreachable', 'disconnect', 'cut'],
+    run: (inner) => inner.editor.cutConnector(edge.id),
+  }];
+}
+
 export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
   const doc = ctx.editor.document;
   const serviceCall = isServiceInteraction(doc, edge);
@@ -2064,6 +2133,7 @@ export function edgeCommands(ctx: CommandContext, edge: DraftEdge): Command[] {
       addAttachmentCommand({ hostKind: 'edge', edge }, 'code', 'connector'),
     );
   }
+  commands.push(...cutConnectorCommands(ctx, edge));
   // Nowhere left to add it: every flow already has it or is full, and no room for a new one.
   if (flowsAvailable.length === 0 && !canStartFlow) return commands.filter((command) => command.id !== 'edge-add-to-flow');
   return commands;
@@ -2385,6 +2455,8 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'select-contents',
   // A device preference, not a document setting.
   'continuation-toggle',
+  // The person's own styles are theirs on any diagram; the one action that restyles a diagram is not here.
+  'appearance',
   // Copying out of the diagram.
   'copy',
   'export',
@@ -2393,13 +2465,15 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'copy-svg',
   'copy-source',
   'copy-share-link',
-  // The app's own panels and dialogs (Canvas settings hides the document's Background itself).
+  // The app's own panels and dialogs.
   // Collaborate is how a view-only collaborator sees who is here and leaves; following and leaving
   // change only this copy's own view and session, never the document.
   'collaborate',
   'leave-session',
   'follow-presenter',
   'settings',
+  // A style is the reader's own, on their device: choosing one changes no shared diagram.
+  'appearance',
   'outline',
   'shortcuts',
   'open-docs',

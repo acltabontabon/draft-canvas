@@ -35,11 +35,10 @@ import {
   type DepthPath,
 } from '../depth/tree';
 import { getMeasurer } from '../render/text/measure';
-import { describeContext, naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight } from '../nodes/describe';
+import { naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight, sizingContext } from '../nodes/describe';
 import { fitSequences, recoverCappedSequence } from '../nodes/sequenceFit';
 import { liveSequenceFocus, sequenceEditStillThere } from '../sequence/focus';
 import { syncLinks } from '../document/sequenceLinks';
-import { LIGHT } from '../render/theme/tokens';
 import {
   addEdges,
   addNodes,
@@ -59,6 +58,7 @@ import {
   extractFragment,
   freeOriginFor,
   hasAttachmentRoom,
+  isCanvasEmpty,
   moveNodes,
   pasteDocument,
   pasteFragment,
@@ -79,6 +79,7 @@ import {
   sendToBack,
   setParent,
   setSettings,
+  setStyle,
   setTitle,
   setViewport,
   touch,
@@ -178,8 +179,9 @@ import type {
   Side,
   ViewLevel,
 } from '../document/types';
+import type { DocumentStyle } from '../document/style';
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
-import { addInk, INK_ID_PREFIX, inkOf, inkUnionBounds, removeInk, translateInk } from '../document/ink';
+import { addInk, inkOf, inkUnionBounds, reissueInk, removeInk, translateInk } from '../document/ink';
 import { createId } from '../document/ids';
 import { flowFromWalk, tellNext } from '../presentation/walk';
 import { boxForChoice, INK_CHOICE_LABEL, INK_CHOICE_TYPE, type InkShapeChoice } from '../ink/choices';
@@ -266,7 +268,8 @@ export interface FocusState {
 /**
  * An outage walk (`src/traffic/outage.ts`): `active` while the canvas is asking "what if this goes
  * down?", `down` the shape or Boundary taken down (none yet while one is still to be picked), and
- * `whole` whether every instance of a Service drawn with several is down rather than one. What the
+ * `whole` whether every instance of a Service drawn with several is down rather than one. `cut` is
+ * a connector taken down instead of a shape: both its ends stay up and nothing travels it. What the
  * outage does is never stored — `store/outage.ts` derives it from the room on demand — so it can't
  * describe a graph that has since changed. Like Focus: transient, never saved, never in history,
  * never shared with collaborators, and dropped by `resetViewSession` along with everything else
@@ -276,9 +279,10 @@ export interface OutageView {
   active: boolean;
   down: string | null;
   whole: boolean;
+  cut: string | null;
 }
 
-export const OUTAGE_OFF: OutageView = { active: false, down: null, whole: false };
+export const OUTAGE_OFF: OutageView = { active: false, down: null, whole: false, cut: null };
 
 /**
  * An edge counts as focused if it was explicitly added, or if both of its
@@ -795,6 +799,8 @@ export interface EditorStore {
   rename: (title: string) => void;
   /** `coalesceKey` folds a continuous control (a slider drag) into one undo step. */
   updateSettings: (patch: Partial<DraftSettings>, options?: { coalesceKey?: string }) => void;
+  /** Gives the open diagram its own look, or with `undefined` lets it follow this device again. One undo step. */
+  setDocumentStyle: (style: DocumentStyle | undefined, options?: { coalesceKey?: string }) => void;
   persistViewport: (viewport: DraftViewport) => void;
 
   /* History */
@@ -824,6 +830,8 @@ export interface EditorStore {
   /** Takes a shape (or a Boundary and what is in it) down and shows what follows across the room.
    *  `whole` takes every instance of a Service drawn with several, rather than one of them. */
   takeDown: (nodeId: string, whole?: boolean) => void;
+  /** Takes a connector down: its two ends stay up, and nothing travels between them. */
+  cutConnector: (edgeId: string) => void;
   endOutage: () => void;
 
   /* Depth */
@@ -1332,7 +1340,7 @@ export function outermostSelected(nodes: readonly DraftNode[], selectedIds: read
  */
 function namingBlank(state: EditorStore, title: string | undefined): string | undefined {
   if (!title || state.path.length > 0 || (state.document.metadata.title !== DEFAULT_TITLE && state.document.metadata.title !== 'Untitled canvas')) return undefined;
-  return totals(fileOf(state)).nodes === 0 ? title : undefined;
+  return isCanvasEmpty(state.document) ? title : undefined;
 }
 
 function notifyNothingAdded(tooDeep: boolean): void {
@@ -1594,7 +1602,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   liveViewport: null,
 
   setDocument(document, options) {
-    const context = describeContext(LIGHT);
+    const context = sizingContext();
     document = mapRooms(document, (graph) => {
       const nodes = graph.nodes.map((node) => recoverCappedSequence(node, context));
       return nodes.some((node, index) => node !== graph.nodes[index]) ? { ...graph, nodes } : graph;
@@ -1640,7 +1648,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // a renamed title — so it is done here, once, rather than remembered by every action.
     // And a participant that stands for a shape is that shape: renaming either renames both, here,
     // in the same step (`sequenceLinks.ts`).
-    const next = touch(fitSequences(before, linksInStep(before, recipe(before)), () => describeContext(LIGHT)));
+    const next = touch(fitSequences(before, linksInStep(before, recipe(before)), () => sizingContext()));
     // Structural sharing means an operation that changed nothing returns the
     // same object, so no-op commands never create a dead undo step.
     if (next === before || shallowEqualDocument(next, before)) return;
@@ -2958,7 +2966,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Resize', (doc) => {
       // A sequence can be given room, never less than it needs: its text does not shrink to fit.
       const node = doc.nodes.find((candidate) => candidate.id === id);
-      const floor = node?.type === 'sequence' ? naturalSequenceSizeFor(node, describeContext(LIGHT)) : null;
+      const floor = node?.type === 'sequence' ? naturalSequenceSizeFor(node, sizingContext()) : null;
       const held = floor ? { ...box, width: Math.max(box.width, floor.width), height: Math.max(box.height, floor.height) } : box;
       return reconcileAfterResize(updateNode(doc, id, held), id);
     });
@@ -3143,30 +3151,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       x: target.x - fragmentCenter.x + stagger,
       y: target.y - fragmentCenter.y + stagger,
     };
-    // Sketch strokes ride along with the shapes they were copied with, at the same offset.
-    const inkRoom = LIMITS.maxInkStrokes - totals(fileOf(state)).ink;
-    const pastedInk = reissueInk((fragment.ink ?? []).slice(0, Math.max(0, inkRoom)), offset.x, offset.y);
+    const result = pasteFragment(state.document, fragment, offset, { ...totals(fileOf(state)), depth: state.path.length });
     if (fragment.nodes.length === 0) {
-      if (pastedInk.length === 0) {
+      if (result.inkIds.length === 0) {
         useUiStore.getState().notify('This canvas holds as many sketch strokes as it can.', 'error');
         return;
       }
-      state.apply('Paste sketch', (doc) => addInk(doc, pastedInk), { selection: EMPTY_SELECTION });
-      useUiStore.getState().setInkSelection(pastedInk.map((stroke) => stroke.id));
-      set({ pasteRepeat: repeat + 1 });
-      return;
-    }
-    const result = pasteFragment(state.document, fragment, offset, { ...totals(fileOf(state)), depth: state.path.length });
-    if (result.nodeIds.length === 0) {
+      state.apply('Paste sketch', () => result.doc, { selection: EMPTY_SELECTION });
+    } else if (result.nodeIds.length === 0) {
       notifyNothingAdded(result.tooDeep);
       return;
+    } else {
+      // Pasted onto a boundary, the copy joins it, as a shape dropped there does.
+      const homed = reconcileMembershipOp(result.doc, result.nodeIds);
+      state.apply('Paste', () => homed, { selection: { nodes: result.nodeIds, edges: result.edgeIds } });
     }
-    // Pasted onto a boundary, the copy joins it, as a shape dropped there does.
-    const homed = addInk(reconcileMembershipOp(result.doc, result.nodeIds), pastedInk);
-    state.apply('Paste', () => homed, {
-      selection: { nodes: result.nodeIds, edges: result.edgeIds },
-    });
-    if (pastedInk.length > 0) useUiStore.getState().setInkSelection(pastedInk.map((stroke) => stroke.id));
+    if (result.inkIds.length > 0) useUiStore.getState().setInkSelection(result.inkIds);
     set({ pasteRepeat: repeat + 1 });
     if (result.truncated) {
       useUiStore.getState().notify(result.tooDeep
@@ -3713,6 +3713,10 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Change settings', (doc) => setSettings(doc, patch), { coalesceKey: options?.coalesceKey });
   },
 
+  setDocumentStyle(style, options) {
+    get().apply(style === undefined ? 'Remove style' : 'Change style', (doc) => setStyle(doc, style), { coalesceKey: options?.coalesceKey });
+  },
+
   persistViewport(viewport) {
     // Saved, but not an edit: no undo step (nobody wants ⌘Z to undo a scroll), no new document,
     // no `updatedAt`. See `liveViewport`.
@@ -3908,7 +3912,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     set((s) => {
       if (s.mode === 'present' || s.outage.active) return s;
       return {
-        outage: { active: true, down: null, whole: false },
+        outage: { active: true, down: null, whole: false, cut: null },
         focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
       };
     });
@@ -3920,7 +3924,18 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       if (s.outage.down === nodeId && s.outage.whole === whole) return s;
       if (!s.document.nodes.some((node) => node.id === nodeId)) return s;
       return {
-        outage: { active: true, down: nodeId, whole },
+        outage: { active: true, down: nodeId, whole, cut: null },
+        focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
+      };
+    });
+  },
+
+  cutConnector(edgeId) {
+    set((s) => {
+      if (s.mode === 'present' || s.outage.cut === edgeId) return s;
+      if (!s.document.edges.some((edge) => edge.id === edgeId)) return s;
+      return {
+        outage: { active: true, down: null, whole: false, cut: edgeId },
         focus: s.focus.active ? { active: false, nodeIds: [], edgeIds: [] } : s.focus,
       };
     });
@@ -4023,11 +4038,6 @@ function withChosenInk<T extends { ink?: DraftInk[] }>(fragment: T, strokes: Dra
   return strokes.length > 0 ? { ...fragment, ink: strokes } : fragment;
 }
 
-/** Copies of strokes under new ids, moved by `dx`/`dy` — what a paste or duplicate adds. */
-function reissueInk(strokes: readonly DraftInk[], dx: number, dy: number): DraftInk[] {
-  return strokes.map((stroke) => ({ ...stroke, id: createId(INK_ID_PREFIX), x: Math.round((stroke.x + dx) * 10) / 10, y: Math.round((stroke.y + dy) * 10) / 10 }));
-}
-
 function inkAmendKey(nodeId: string): string {
   return `ink:${nodeId}`;
 }
@@ -4082,6 +4092,8 @@ function shallowEqualDocument(a: DraftDocument, b: DraftDocument): boolean {
     // Raising, editing or resolving an open point touches nothing on the canvas, so leaving this out
     // would discard every one of those edits as a write that changed nothing.
     a.openPoints === b.openPoints &&
+    // The diagram's own look changes nothing else in the file either.
+    a.style === b.style &&
     // Saying what a view shows changes nothing else about it, so without this the one edit that
     // only ever changes `level` would be thrown away as a no-op.
     a.level === b.level &&
@@ -4157,12 +4169,12 @@ function growArchitectureToFit(doc: DraftDocument, id: string): DraftDocument {
   const node = doc.nodes.find((n) => n.id === id);
   if (!node) return doc;
   if (node.type === 'group') {
-    const width = Math.min(LIMITS.maxNodeSize, Math.max(node.width, naturalBoundaryWidth(node, describeContext(LIGHT))));
+    const width = Math.min(LIMITS.maxNodeSize, Math.max(node.width, naturalBoundaryWidth(node, sizingContext())));
     return width > node.width ? updateNode(doc, id, { width }) : doc;
   }
   if (!(C4_TEXT_TYPES as readonly string[]).includes(node.type)) return doc;
   if (!node.text?.trim() && !node.technology && !node.description) return doc;
-  const needed = naturalArchitectureSize(node, describeContext(LIGHT), {
+  const needed = naturalArchitectureSize(node, sizingContext(), {
     maxWidth: Math.max(node.width, 640),
     maxHeight: LIMITS.maxNodeSize,
     maxNameLines: Number.POSITIVE_INFINITY,

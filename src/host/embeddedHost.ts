@@ -11,15 +11,6 @@ export type ToHostMessage =
   | { type: 'draft-canvas:save'; saveAs: boolean }
   /** A link the host opens in the system browser. */
   | { type: 'draft-canvas:open-external'; url: string }
-  /**
-   * The canvas's background image as it stands now (base64), for the host to keep beside the file.
-   * It says so again on every change.
-   */
-  | { type: 'draft-canvas:background-write'; mime: string; data: string }
-  /** Likewise: the canvas no longer has a background image. */
-  | { type: 'draft-canvas:background-remove' }
-  /** Likewise: asks for the file's stored image, answered by a `BackgroundMessage` with this `id`. */
-  | { type: 'draft-canvas:background-read'; id: number }
   /** The open document was closed — Home is showing. */
   | { type: 'draft-canvas:closed' }
   /** The answer to a `flush` command, once the app has posted every edit still pending. */
@@ -39,14 +30,6 @@ export interface CommandMessage {
   request?: AgentEditorRequest;
   /** `flush` only: post what has reached the document without blurring the field being typed in. */
   keepFocus?: boolean;
-}
-
-/** The host's answer to `background-read`: the stored image (base64), or none when the file has no image beside it. */
-export interface BackgroundMessage {
-  type: 'draft-canvas:background';
-  id: number;
-  mime?: string;
-  data?: string;
 }
 
 export interface LoadMessage {

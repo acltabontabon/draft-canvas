@@ -140,7 +140,7 @@ test.describe('a coarse pointer', () => {
       page.locator(selector).evaluateAll((elements) =>
         elements.filter((element) => getComputedStyle(element).display !== 'none').map((element) => Math.round(element.getBoundingClientRect().height)),
       );
-    // The status bar: Undo, Redo, zoom out / in and the percentage, Canvas settings, Help.
+    // The status bar: Undo, Redo, zoom out / in and the percentage, Appearance, Help.
     const status = await heights('.dc-status .dc-status-right button');
     expect(status.length).toBeGreaterThanOrEqual(6);
     for (const height of status) expect(height).toBeGreaterThanOrEqual(40);

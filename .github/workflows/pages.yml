@@ -1,24 +1,15 @@
 name: Deploy the web
 
-# Publishes one verified artifact (scripts/assemble-web.mjs) to two hosts:
+# Publishes one verified artifact (scripts/assemble-web.mjs) to Cloudflare:
 #
-#   Cloudflare    https://draftcanvas.dev/         the landing page and docs (dist-web/site)
-#                 https://app.draftcanvas.dev/     the editor (dist-web/app — the same dist/ as always)
-#                 https://www.draftcanvas.dev/     a redirect to the apex
-#                 wss://relay.draftcanvas.dev/     the live-collaboration relay (www/cloudflare/relay.js)
-#   GitHub Pages  https://acltabontabon.com/draft-canvas/   the old front door (dist-web/legacy): a
-#                 moved-house page, old links forwarded, and the editor kept at /editor/ so diagrams
-#                 saved at that origin can be handed to the new one.
+#   https://draftcanvas.dev/         the landing page and docs (dist-web/site)
+#   https://app.draftcanvas.dev/     the editor (dist-web/app — the same dist/ as always)
+#   https://www.draftcanvas.dev/     a redirect to the apex
+#   wss://relay.draftcanvas.dev/     the live-collaboration relay (www/cloudflare/relay.js)
 #
-# Cloudflare deploys first and Pages only after it succeeds, so the old address never points at a
-# new home that is not up yet. Wrangler creates the custom domains' DNS records itself; it needs the
-# CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID secrets (see docs/reference/website.md).
-#
-# The old address: acltabontabon.com belongs to the acltabontabon.github.io repository and GitHub
-# applies a user site's custom domain to every project site of the same account — so this repository
-# needs no CNAME file, and the /draft-canvas/ prefix comes from the repository name. Giving this
-# repository a custom domain of its own would make GitHub redirect the old address away, and with it
-# the only editor that can still read diagrams saved there.
+# Wrangler creates the custom domains' DNS records itself; it needs the CLOUDFLARE_API_TOKEN and
+# CLOUDFLARE_ACCOUNT_ID secrets (see docs/reference/website.md). The old address on GitHub Pages
+# (acltabontabon.com/draft-canvas/) is retired and no longer published; the workflow keeps its name.
 #
 # Releases call this only after verification and desktop acceptance. This is the only workflow that deploys. pages-site.yml calls it rather than building its own
 # copy, so there is exactly one definition of what gets published. On a release tag both halves
@@ -46,8 +37,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -68,7 +57,7 @@ jobs:
           ref: ${{ github.sha }}
           persist-credentials: false
       # The editor half is only ever a release. A site-only push (pages-site.yml) or a run on demand
-      # from a branch would otherwise build main's unreleased editor into /draft-canvas/editor/
+      # from a branch would otherwise build main's unreleased editor into app.draftcanvas.dev
       # and stamp the site's download links with a package.json version that has no installers yet.
       # Off a tag, use the newest stable vX.Y.Z for the editor and this commit for the site and docs.
       - name: Build the editor from the latest release
@@ -263,27 +252,3 @@ jobs:
           for config in $configs; do
             npx --no-install wrangler deploy --config "$config.jsonc"
           done
-
-  deploy:
-    needs: [build, acceptance, cloudflare]
-    # Only once the new home is up: this replaces the old address with the moved-house page.
-    if: ${{ !cancelled() && needs.cloudflare.result == 'success' }}
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
-        with:
-          name: ${{ inputs.artifact-name || format('verified-site-{0}', github.run_id) }}
-      - run: tar -xf verified-web.tar
-      - name: The artifact belongs to the verified source
-        env:
-          EXPECTED_COMMIT: ${{ inputs.verified-commit || github.sha }}
-        run: node -e 'const source=require("./verified-source.json"); if(source.commit !== process.env.EXPECTED_COMMIT) throw new Error("Artifact source does not match verification")'
-      - uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6
-      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5
-        with:
-          path: dist-web/legacy/
-      - id: deploy
-        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5

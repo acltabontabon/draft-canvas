@@ -16,8 +16,8 @@ descriptions themselves are the contract; this is the working knowledge around t
 | Try a change first | `preview_diagram({diagramId, expectedRevision, view?, ops})` | `previewId` |
 | Propose instead of apply | `submit_proposal({requestId, diagramId, expectedRevision, ops, summary, rationale})` | `proposalId` |
 
-- `requestId`: a fresh UUID for every create, update and proposal. Reuse one only to retry the exact
-  same request (the app then answers with the first result instead of applying it twice).
+- `requestId`: a fresh UUID for every separate create, update and proposal. Keep it when retrying
+  the same request. A confirmed input refusal also allows a correction under that id.
 - `view: {inside: ["storefront", "orders"]}` addresses a view by the element ids from the top down.
 - `open: true` on create shows the diagram (only when that loses nothing the person has open).
 
@@ -112,7 +112,11 @@ after ten minutes and is never saved.
 { "op": "setLevel", "level": "container" }
 ```
 
-`null` in `set` clears a field. Ops run in order as one change — one undo step for the person.
+`null` in `set` clears a field. Ops run in order as one change — one undo step for the person —
+and a refusal of any op changes nothing.
+An op takes ids, never labels, and only ids of the view the request addresses (`view.inside`): take
+them from a read. `set` takes different fields for each kind of target (a relationship has no
+`technology`, a flow has a `title`, not a `label`); `help` for `update_diagram` lists them by target.
 A route end is a side (pinned at its middle), `{side, offset}` (pinned exactly, 0–1 along the side) or
 `"auto"` (unpinned: it faces the other shape and follows it). A pin is kept even when the shapes later
 face away; `set.route: null` makes both ends automatic and drops the bends. `read_diagram` with
@@ -124,11 +128,12 @@ relationship.
 
 ## When something is refused
 
-Every refusal carries a `hint` saying what to do; this is the short version.
+Read the message and any `hint` before trying again.
 
 | Code | Meaning | Do |
 | --- | --- | --- |
-| `INVALID_INPUT`, `INVALID_REFERENCE` | A field or an id is wrong; the message names the path | Fix that field and resend with a new `requestId` |
+| `INVALID_INPUT` | A field is wrong. The message names it by path (`/ops/1/set/color`) and says what is accepted there. `details.problems` can list up to 20 problems | Fix those fields and resend. Nothing changed; the same request fails the same way |
+| `INVALID_REFERENCE` | An id is not in the view the request addresses. The message says when it is a label (and whose), or which view holds it | Use the id, or pass that `view`, and resend. Don't change the fields: they were not the problem |
 | `DUPLICATE_ID` | An id is taken (ids are file-wide) | Rename it |
 | `UNSUPPORTED_TYPE` | Unknown element type | Use a listed type, or set `fallbackType` |
 | `DUPLICATE_TITLE` | A diagram with that title exists | Update that one, or ask the person; `allowDuplicateTitle` only on their say-so |
@@ -138,7 +143,7 @@ Every refusal carries a `hint` saying what to do; this is the short version.
 | `LIMIT_EXCEEDED` | Too much in one request | Split it into a create plus updates |
 | `OUT_OF_SCOPE` | Folder not enabled, or an id outside the `scope` you passed | Folder: tell the person which one to tick in Settings → AI agents. Scope: pass only ids from `read_selection`, or leave `scope` out |
 | `BUSY`, `TIMEOUT`, `APP_UNRESPONSIVE` | Nothing was changed | Retry the identical request with the same `requestId`, at most twice |
-| `OUTCOME_UNKNOWN` | The app stopped answering mid-change | `read_diagram` and compare before sending anything again |
+| `OUTCOME_UNKNOWN` | The change may have reached the editor or disk | Check with `list_diagrams` or `read_diagram` before sending anything again |
 | `READ_ONLY` | The diagram is read-only (on disk, or opened read-only) | Don't retry. Tell the person; it changes only once they can edit it |
 | `DOCUMENT_BUSY` | The open diagram changed while the request waited; or the person has unsaved or recovered changes the file on disk disagrees with; or `activate` couldn't open it | Changed while waiting: `read_diagram` and send the change again. Unsaved or recovered changes: ask the person to save or discard, then `read_diagram` and rebuild it. `activate`: leave it out to change the file without opening it |
 | `NOT_FOUND` | No such diagram or view | `list_diagrams` again |
@@ -146,7 +151,7 @@ Every refusal carries a `hint` saying what to do; this is the short version.
 | `SCOPE_TARGET_MISSING` | An id in `scope` is gone since the selection was captured | `read_selection` again |
 | `CURSOR_STALE` | The diagram changed between pages of a paged read | Read again from the first page |
 | `DUPLICATE_FLOW`, `CONTAINMENT_CYCLE` | Moving inside or out would clash with a flow's title, or put a shape inside itself | Rename the flow first, or pick another owner |
-| `REQUEST_ID_MISMATCH` | That `requestId` was used for a different request | Use a fresh UUID for every new change; reuse one only to retry the identical request |
+| `REQUEST_ID_MISMATCH` | That id belongs to another request | Use the original payload to check its outcome. Use a fresh UUID for a separate change |
 | `CANCELLED` | The person stopped the request | Ask before sending it again |
 | `PROPOSAL_ONLY`, `RUN_LIMIT` | In a Nodi run: changes go through review, and only to the run's diagram | Send the same ops with `submit_proposal`; work only on that diagram |
 | `UNSUPPORTED` | The file isn't a diagram Draft Canvas can read | Tell the person; don't overwrite it |

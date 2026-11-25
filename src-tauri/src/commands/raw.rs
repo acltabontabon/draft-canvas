@@ -9,7 +9,7 @@ use tauri::ipc::{InvokeBody, Request};
 
 /// A document tops out at 24 MiB; this is the ceiling on what is even looked at.
 pub const MAX_BODY_BYTES: usize = 25 * 1024 * 1024;
-/// What an export may carry: a PNG up to 100 megapixels, or an SVG with a 16 MB background embedded —
+/// What an export may carry: a PNG up to 100 megapixels, or an SVG of a very large diagram —
 /// not a document, and not bound by a document's limit. It is written to a file the person chose.
 pub const MAX_EXPORT_BYTES: usize = 512 * 1024 * 1024;
 const META_HEADER: &str = "x-meta";

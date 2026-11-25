@@ -59,6 +59,8 @@ import type { SequenceElement } from '../sequence/types';
 import type { AgentEditorReply, AgentEditorRequest } from '../host/agentBridge';
 import { fittedScale, rasterizeSvg } from '../render/png/rasterize';
 import { renderDocumentSvg } from '../render/svg/document';
+import { deviceHand } from '../theme/deviceHand';
+import { deviceStyle } from '../store/styleStore';
 import { loadTechnologyIcons } from '../nodes/technology';
 import { themeFor, type ThemeName } from '../render/theme/tokens';
 import { agentActivity } from './agentActivity';
@@ -195,7 +197,7 @@ async function requestedStarter(args: Record<string, unknown>): Promise<AgentSta
 
 async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<unknown> {
   const { args, context } = event;
-  validateToolInput(event.tool, event.tool !== 'create_diagram' && context.diagramId ? { diagramId: context.diagramId, ...args } : args);
+  validateToolInput(event.tool, event.tool !== 'create_diagram' && context.diagramId ? { diagramId: context.diagramId, ...args } : args, { deferUpdateSet: true });
   switch (event.tool) {
     case 'get_capabilities': {
       const wantsStarters = args.tool === undefined && (typeof args.starter === 'string' || !Array.isArray(args.topics) || args.topics.includes('starters'));
@@ -520,7 +522,7 @@ async function render(host: AgentHost, args: Record<string, unknown>, context: A
 
   const only = renderFocus(view, focus, selected);
   await loadTechnologyIcons(view.nodes);
-  const rendered = renderDocumentSvg(view, { theme, only, ...(focus && typeof focus === 'object' && 'flow' in focus ? { selectedFlowId: String(focus.flow) } : {}), includeBackground: false, idScope: path.length ? `agent-${path.join('.')}` : 'agent' });
+  const rendered = renderDocumentSvg(view, { theme, preset: deviceHand(), deviceStyle: deviceStyle(), only, ...(focus && typeof focus === 'object' && 'flow' in focus ? { selectedFlowId: String(focus.flow) } : {}), includeBackground: false, idScope: path.length ? `agent-${path.join('.')}` : 'agent' });
   const base = { diagramId, title: file.metadata.title, revision, ...(args.previewId ? { previewId: args.previewId, provisional: true } : {}), ...(only ? { focus: [...only] } : {}), ...(path.length ? { view: { path } } : {}) };
   const tooLarge = (what: string, hint: string) =>
     new AgentError('LIMIT_EXCEEDED', `${what} Nothing was rendered.`, { hint, details: { width: rendered.width, height: rendered.height, maxBytes: RENDER_MAX_BYTES } });

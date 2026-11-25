@@ -40,6 +40,29 @@ describe('importing untrusted files', () => {
     expect(result.document.nodes).toHaveLength(1);
   });
 
+  it('opens a file that had a background image, without it and without a word', () => {
+    // Background images are gone: a canvas is its style's. A file from before, at this version or
+    // an earlier one, still opens; the setting and the image it carried inline are simply not read.
+    const background = { enabled: true, fit: 'tile', dim: 0.4, blur: 0.2, imageId: 'bg_1', image: { dataUri: 'data:image/png;base64,iVBORw0KGgo=', width: 4, height: 3 } };
+    for (const version of [CURRENT_VERSION, 20, 5]) {
+      const result = parse({
+        ...base,
+        version,
+        metadata: { id: 'doc1', title: 'Backdrop', createdAt: 1, updatedAt: 2 },
+        nodes: [{ id: 'a', type: 'note', x: 0, y: 0, width: 100, height: 50, z: 0, text: 'A' }],
+        edges: [],
+        viewport: { x: 0, y: 0, zoom: 1 },
+        settings: { showSequence: false, grid: 'lines', background },
+      });
+      expect(result.ok, `v${version}`).toBe(true);
+      if (!result.ok) return;
+      expect(result.document.nodes).toHaveLength(1);
+      expect(result.document.settings).toEqual({ showSequence: false, grid: 'lines' });
+      expect(JSON.stringify(result.document)).not.toContain('iVBORw0KGgo');
+      expect(result.repairs.join(' ')).not.toMatch(/background|image/i);
+    }
+  });
+
   it('never dates a file later than tomorrow, so one cannot sit first in the library for good', () => {
     const before = Date.now();
     const result = parse({ ...base, metadata: { id: 'doc1', title: 'From the future', createdAt: 1e15, updatedAt: 1e15 + 5 }, nodes: [], edges: [] });

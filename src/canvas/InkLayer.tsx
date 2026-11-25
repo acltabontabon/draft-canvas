@@ -1,5 +1,5 @@
 import { memo, useCallback, useEffect, useRef } from 'react';
-import { useStoreApi } from '@xyflow/react';
+import { useReactFlowStoreApi } from '@xyflow/react';
 import { inkOf, inkPaintBounds } from '../document/ink';
 import type { DraftInk } from '../document/types';
 import { inkPaint } from '../render/ink';
@@ -24,7 +24,7 @@ export const InkLayer = memo(function InkLayer({ theme, selectable }: { theme: T
   const ink = useEditorStore((state) => state.document.ink);
   const selection = useUiStore((state) => state.inkSelection);
   const resolving = useUiStore((state) => state.inkResolving);
-  const storeApi = useStoreApi();
+  const { optionsStore, viewportStore } = useReactFlowStoreApi();
   const layerRef = useRef<SVGSVGElement>(null);
   const selected = selection.length > 0 ? new Set(selection) : null;
 
@@ -54,7 +54,7 @@ export const InkLayer = memo(function InkLayer({ theme, selectable }: { theme: T
       const layer = layerRef.current;
       const startX = event.clientX;
       const startY = event.clientY;
-      const zoom = storeApi.getState().transform[2];
+      const zoom = viewportStore.getState().transform[2];
       const moving = new Map<SVGGElement, DraftInk>();
       const byId = new Map(inkOf(editor.document).map((s) => [s.id, s]));
       for (const id of ids) {
@@ -104,7 +104,7 @@ export const InkLayer = memo(function InkLayer({ theme, selectable }: { theme: T
       window.addEventListener('pointercancel', onCancel);
       window.addEventListener('keydown', onKey, true);
     },
-    [storeApi],
+    [viewportStore],
   );
 
   const onStrokeContextMenu = useCallback((event: React.MouseEvent<SVGPathElement>, stroke: DraftInk) => {
@@ -115,11 +115,11 @@ export const InkLayer = memo(function InkLayer({ theme, selectable }: { theme: T
       useEditorStore.getState().setSelection({ nodes: [], edges: [] });
       ui.setInkSelection([stroke.id]);
     }
-    const [tx, ty, zoom] = storeApi.getState().transform;
-    const root = storeApi.getState().domNode?.getBoundingClientRect();
+    const [tx, ty, zoom] = viewportStore.getState().transform;
+    const root = optionsStore.getState().domNode?.getBoundingClientRect();
     const flowPosition = { x: (event.clientX - (root?.left ?? 0) - tx) / zoom, y: (event.clientY - (root?.top ?? 0) - ty) / zoom };
     ui.setContextMenu({ target: { kind: 'ink' }, screenPosition: { x: event.clientX, y: event.clientY }, flowPosition });
-  }, [storeApi]);
+  }, [optionsStore, viewportStore]);
 
   const strokes = ink ?? [];
   return (
@@ -214,19 +214,23 @@ const InkStroke = memo(function InkStroke({
  * it picks — React Flow's marquee only knows its own nodes, so this watches its rectangle.
  */
 function useMarqueeSelection(enabled: boolean): void {
-  const storeApi = useStoreApi();
+  const { optionsStore, viewportStore, selectionStore } = useReactFlowStoreApi();
   useEffect(() => {
     if (!enabled) return;
     let last: { x: number; y: number; width: number; height: number } | null = null;
-    let transform = storeApi.getState().transform;
+    let transform = viewportStore.getState().transform;
     let pending: number | undefined;
-    const unsubscribe = storeApi.subscribe((state) => {
-      const rect = state.userSelectionRect;
-      if (rect && state.userSelectionActive) {
+    // React Flow keeps the rectangle, whether it is live and the camera in three stores, so the
+    // rectangle is read on a change to either of the first two.
+    const settle = () => {
+      const rect = selectionStore.getState().userSelectionRect;
+      if (rect && optionsStore.getState().userSelectionActive) {
         last = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
-        transform = state.transform;
+        transform = viewportStore.getState().transform;
         return;
       }
+      // A release clears the live flag first and the rectangle after it: wait for the rectangle.
+      if (rect) return;
       if (!last) return;
       const box = last;
       last = null;
@@ -242,11 +246,16 @@ function useMarqueeSelection(enabled: boolean): void {
       if (inside.length === 0) return;
       // After React Flow has finished settling its own selection from the same marquee.
       pending = window.setTimeout(() => useUiStore.getState().setInkSelection(inside), 0);
+    };
+    const offRect = selectionStore.subscribe(settle);
+    const offActive = optionsStore.subscribe((state, previous) => {
+      if (state.userSelectionActive !== previous.userSelectionActive) settle();
     });
     return () => {
-      unsubscribe();
+      offRect();
+      offActive();
       // A marquee released as the canvas goes away must not pick strokes in whatever replaced it.
       window.clearTimeout(pending);
     };
-  }, [enabled, storeApi]);
+  }, [enabled, optionsStore, viewportStore, selectionStore]);
 }

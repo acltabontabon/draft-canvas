@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useReactFlow, useStoreApi } from '@xyflow/react';
+import { useReactFlow, useReactFlowStoreApi } from '@xyflow/react';
 import type { FollowState } from '../../../collab/protocol';
 import { pathKey, type DepthPath } from '../../../depth/tree';
 import { motionMs } from '../../../lib/motion';
@@ -59,7 +59,7 @@ function walkTo(to: readonly string[]): void {
  */
 export function useFollowPresenter(path: DepthPath): void {
   const { setViewport, getViewport } = useReactFlow();
-  const storeApi = useStoreApi();
+  const storeApi = useReactFlowStoreApi().viewportStore;
   const guest = useCollabStore((state) => state.role === 'guest');
   const sync = useRef<(arrived: boolean) => void>(() => {});
   /** Set when following itself changes rooms, so the room change that follows isn't taken for the person's own. */

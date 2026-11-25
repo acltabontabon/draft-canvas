@@ -69,9 +69,17 @@ Open **Share → Export…** (`⌘⇧E`):
 
 ## Make it yours
 
-The sliders button at the bottom right opens **Settings → Canvas**: a **Clean**, **Draft** or
-**Sketch** drawing style, next-shape suggestions, and a background image. The first two are device
-preferences; the background is saved with the diagram.
+The palette button at the bottom right opens **Appearance**, beside the canvas (a right-click on
+the canvas offers it too). It is your style, and the canvas's own setting, next-shape suggestions,
+is on its **Canvas** tab: start from
+**Clean**, **Draft** or **Sketch**, then change the line weight, corners, shadows, colours, the canvas
+and its backdrop, arrowheads, or how one kind of shape is drawn. The first change makes it a style of
+your own, kept on this device.
+
+What you change shows on the open diagram as you change it. A new diagram starts with a copy of your
+style and keeps it, so it looks the same for everyone you share it with. A diagram that arrives with
+a different look of its own keeps that look: **Use my style in this diagram**, on the same page or
+in `⌘K`, replaces it, and undo takes it back.
 
 Next: [saving and sharing](saving-and-sharing.md), [starters](examples.md), [system
 levels](depth.md) and [open points](open-points.md).

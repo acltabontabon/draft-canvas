@@ -57,7 +57,9 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   (github.com/acltabontabon/draft-canvas-starters), not app code. `src/gallery/` reads them only
   after the person chooses **Load starters**; `src/gallery/remote.ts` is the only `fetch` in `src/`,
   to that repository only. Every file is checked against `catalog.json`'s SHA-256 and opened with
-  `parseDocument` before it is kept. `tests/starter-files.test.ts` is the quality gate for starter
+  `parseDocument` before it is kept. The gallery's style packs are `.draftstyle` files listed in the
+  same catalog and held to the same rule, opened with `readStyleFile`; `tests/style-packs.test.ts` is
+  their gate, and fails a pack that leaves any shape kind without a look. `tests/starter-files.test.ts` is the quality gate for starter
   files; `tests/fixtures/starters/` is a vendored snapshot (`npm run starters:fixtures`) and
   `tests/fixtures/starters-v1/` the frozen old catalog for routing and performance corpora.
   Browser journeys read their own pinned gallery, `e2e/fixtures/starters/` (`e2e/gallery.ts`): a
@@ -111,6 +113,47 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   `useFlowPlayback` judges against the requested camera. A presenter's pan sets `framing: 'manual'`;
   guided framing stays off until requested again.
 
+### Styles
+
+- How a diagram is drawn is `DraftDocument.style` (`document/style.ts`), root-only and optional. Absent
+  means the diagram is drawn in the style in use on this device; nothing stamps a style on open. Changing it is
+  one undo step through `editorStore.setDocumentStyle`.
+- Renderers read one `ResolvedStyle` (`render/style/resolve.ts`) and nothing else about style: nodes
+  through `DescribeContext.style`, both connector renderers, the markers and every export. Canvas
+  components get it from `canvas/useDiagramStyle.ts`; `renderDocumentSvg` resolves the document's own.
+- A style changes how a shape looks, never its size, anchors, routing or meaning. Anything that
+  measures a shape asks `sizingContext()` in `nodes/describe.ts`, never a styled context.
+- Every style from outside (file, collaborator, profile, pack) goes through `normalizeStyle`, which
+  must stay free of the DOM so it runs in the agent worker. Colours are checked for contrast when
+  resolved (`render/style/scheme.ts`), not in `document/`.
+- A style that names a canvas colour dresses the whole editor: `schemeTheme` works the panels' and
+  hairlines' colours out from the canvas, and `canvas/useEditorDress.ts` puts the theme on
+  `.dc-editor`. Dialogs, menus and Home are outside it and stay the app's. CSS that reads the theme
+  by attribute inside the editor must ask the editor's (`.dc-editor[data-theme]`), not the root's.
+- A style's backdrop (`DocumentStyle.backdrop`) is one drawing repeated behind the diagram: paint only,
+  never selected, routed round or measured. `render/style/backdrop.ts` makes the one tile the canvas
+  (`canvas/StyleBackdrop.tsx`), every export and every preview repeat; do not draw it a second way.
+- Dashes and open arrowheads encode what a connector means (`edges/kindStyle.ts`). A style never
+  offers them, nor anything that would move a route, such as arrowhead size.
+- An SVG becomes a drawing only through `import/svgArt`, which reads the file with its own small
+  reader (`markup.ts`): no `DOMParser`, no document, so it needs no DOM. What is stored is path data and colours (`StyleAsset`); no markup, URL or text is kept,
+  so there is nothing to sanitise later. `render/style/art.ts` places a drawing by scaling its
+  numbers into the box the built-in drawing took, and keeps the shape's own words.
+- How a new shape starts ("Save as my default Service") is a device preference too
+  (`styleStore.starts`): fields put on the shape when `createAt` makes it, never read when one is drawn,
+  so it is no part of a style.
+- A person's own styles are a device preference (`store/styleStore.ts`, IndexedDB
+  `draft-canvas-styles`), never read by a renderer. A new diagram is stamped with a copy
+  (`deviceStyle()`) by whoever creates it. With a diagram open, Appearance is the panel docked beside
+  the canvas (`ui/Editor/StylePanel.tsx`, `uiStore.stylePanelOpen`, transient), never a dialog over it,
+  reached from the status bar, the canvas's right-click and ⌘K, and it holds the canvas's own settings too.
+  While it is open the editor is in its studio state (`.dc-editor[data-studio]`): the tools, Present and
+  Share, the Depth chip and the status bar are hidden, so new chrome must say whether it steps back too:
+  the diagram is the preview. The desktop Settings page is the same `AppearanceSettings`, for Home. Appearance takes the open diagram along with a
+  change only while it is drawn in the style being changed (one coalesced undo step); a diagram with
+  a different style changes only through an explicit "Use my style in this diagram". Settings → Appearance previews with `renderDocumentSvg`, never a drawing of
+  its own.
+
 ### Tidy up
 
 - Tidy up is the gentle cleanup (`agent/tidy.ts`): it never lays a view out again and never moves a
@@ -137,7 +180,16 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   store action through `commands/outage.ts` (one undo step), and "Keep as open point" is `addOpenPoint`.
 - Every way in (status bar, palette, shape menu) goes through `commands/outage.ts`. `OutageLayer` is
   canvas chrome drawn with `canvas/sketchPaths.ts`; product behaviour lives only in
-  `traffic/technology.ts`, as documented defaults matched on an assigned product name.
+  `traffic/technology.ts`, as documented defaults matched on an assigned product name. Every fact
+  there names the vendor page it was read from and the day it was checked; a note that quotes one
+  carries the source (`tests/traffic/technology.test.ts`).
+- What is taken down is a shape, a Boundary or a connector (`OutageTarget`); a connector leaves both
+  ends up and is read by the same rules, never a second set. Its notes say "can't be reached".
+- A flow is read against the outage (`OutageFlow`), and is the only source of order: a step breaks
+  only where its own connector does, and half-done work "has happened" only where a flow puts it
+  before the step that fails. Without one, the note says "if".
+- The list before anything is picked (`traffic/review.ts`) is `outageOf` repeated: no score, no
+  severity, and no sentence a person would not get by taking that one thing down.
 - Agents get the same reading through `read_diagram`'s `outage`, as facts and open questions.
 
 ### Sketches and Smart Ink
@@ -198,8 +250,8 @@ with its reason, in the change that needs it. Pure helpers a hook module shares 
 in a module of their own (`presentation/steps.ts`), never in the hook's file.
 
 `www/` is a separate Vite project with its own lockfile and no shared app dependencies. Web assembly
-copies `dist/` unchanged into `dist-web/app/` (app.draftcanvas.dev) and `dist-web/legacy/editor/` (the
-old address, kept for the diagram handoff). Never set `Cross-Origin-Opener-Policy` on the app. Keep marketing code out of the editor and website
+copies `dist/` unchanged into `dist-web/app/` (app.draftcanvas.dev). Never set
+`Cross-Origin-Opener-Policy` on the app: the diagram handoff from the retired old address needs `window.opener`. Keep marketing code out of the editor and website
 assembly out of the editor's `vite.config.ts`.
 
 ## Conventions and docs

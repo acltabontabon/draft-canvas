@@ -6,14 +6,14 @@ import type { ExplorerSaveResult } from '../../src/desktop/api';
 const saved = { handle: 'h_saved', name: 'Copy', displayPath: '~/Documents/Copy.draftcanvas', stamp: 'saved-stamp' };
 
 describe('the Save As explorer', () => {
-  it('retains the snapshot and sidecar source through replacement confirmation, then resolves the save', async () => {
+  it('retains the snapshot through replacement confirmation, then resolves the save', async () => {
     const store = new DesktopStore();
     const write = vi.fn<(...args: unknown[]) => Promise<ExplorerSaveResult>>()
       .mockResolvedValueOnce({ outcome: 'exists', name: 'Copy.draftcanvas', stamp: 'original' })
       .mockResolvedValueOnce({ outcome: 'saved', saved });
     const bytes = new TextEncoder().encode('snapshot');
     const startIn = { projectHandle: 'project', relPath: 'rooms' };
-    const result = createExplorerSaver({ explorerSaveFile: write }, store)('Copy', bytes, 'source', startIn);
+    const result = createExplorerSaver({ explorerSaveFile: write }, store)('Copy', bytes, startIn);
     const request = store.getSnapshot().explorerSave!;
     expect(store.getSnapshot().explorerMode).toBe('save');
     expect(request.startIn).toEqual(startIn);
@@ -21,7 +21,7 @@ describe('the Save As explorer', () => {
     expect(store.getSnapshot().explorerSave).toBe(request);
     await request.save('session', 'folder', 'Copy', 'original');
     await expect(result).resolves.toEqual(saved);
-    expect(write).toHaveBeenLastCalledWith('session', 'folder', 'Copy', bytes, 'source', 'original');
+    expect(write).toHaveBeenLastCalledWith('session', 'folder', 'Copy', bytes, 'original');
     expect(store.getSnapshot().explorerMode).toBeNull();
     expect(store.getSnapshot().explorerSave).toBeNull();
   });

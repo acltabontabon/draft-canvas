@@ -6,7 +6,7 @@ export type OutageDocument = {
   edges: Array<Record<string, unknown>>;
   viewport: { x: number; y: number; zoom: number };
   settings: { showSequence: boolean; grid: 'dots'; background: { enabled: boolean; fit: 'cover'; dim: number; blur: number } };
-  flows: [];
+  flows: Array<Record<string, unknown>>;
 };
 
 export const node = (id: string, type: string, text: string, x: number, y: number, extra: Record<string, unknown> = {}) => ({
@@ -68,6 +68,20 @@ export function storeDocument(title = 'Online store'): OutageDocument {
     viewport: { x: 0, y: 0, zoom: 1 },
     settings: { showSequence: true, grid: 'dots', background: { enabled: false, fit: 'cover', dim: 0.55, blur: 0 } },
     flows: [],
+  };
+}
+
+const flow = (id: string, title: string, edgeIds: string[]) => ({ id, title, steps: edgeIds.map((edgeId, index) => ({ id: `${id}-${index + 1}`, edgeId })) });
+
+/** The store with the three journeys a shopper's order takes, for what an outage does to each. */
+export function storeWithFlows(): OutageDocument {
+  return {
+    ...storeDocument(),
+    flows: [
+      flow('browse', 'Browse the catalog', ['shopper-storefront', 'storefront-cache', 'storefront-catalog']),
+      flow('order', 'Place an order', ['shopper-storefront', 'storefront-checkout', 'checkout-orders-db', 'checkout-orders']),
+      flow('fulfil', 'Fulfil an order', ['orders-fulfilment', 'fulfilment-payments']),
+    ],
   };
 }
 

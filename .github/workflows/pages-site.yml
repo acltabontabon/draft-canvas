@@ -21,8 +21,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 jobs:
   eligibility:
@@ -36,8 +34,7 @@ jobs:
           sparse-checkout: package.json
           sparse-checkout-cone-mode: false
       # A release-preparation push contains new media but still selects the previous editor.
-      # Pages identifies deployments by the workflow commit: publishing here would occupy the
-      # same identifier the tag needs with different bytes. Let the release own that deployment.
+      # Let the release publish the site and the editor it describes together.
       - id: release
         env:
           GH_TOKEN: ${{ github.token }}

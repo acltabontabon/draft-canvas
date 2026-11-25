@@ -55,7 +55,7 @@ describe('contextMenuCommandsFor — empty canvas', () => {
       'fit',
       // What acts on the whole diagram, now that the header has no ⋯.
       'find-replace',
-      'settings',
+      'appearance',
     ]);
   });
 
@@ -103,7 +103,7 @@ describe('contextMenuCommandsFor — empty canvas', () => {
     useEditorStore.getState().copySelection();
     const entries = pane(stubContext());
     // Paste and Undo, the shapes, selection and view, then the whole diagram.
-    expect(layout(entries)).toEqual(['paste', 'undo', 'sep', 'grid', 'sep', 'select-all', 'fit', 'sep', 'find-replace', 'settings']);
+    expect(layout(entries)).toEqual(['paste', 'undo', 'sep', 'grid', 'sep', 'select-all', 'fit', 'sep', 'find-replace', 'appearance']);
   });
 
   it('an Add command creates the node centered on the exact clicked position, not the tracked pointer', () => {
@@ -323,6 +323,7 @@ describe('contextMenuCommandsFor — an edge', () => {
       'open-point-add',
       'sep',
       'spotlight',
+      'cut-connector',
       'sep',
       'delete',
     ]);

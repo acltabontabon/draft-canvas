@@ -145,7 +145,7 @@ function paneMenu(ctx: CommandContext, flowPosition: { x: number; y: number }): 
     { type: 'grid', label: 'Add here', items: shapes },
     [...pick(canvas, ['select-all']), ...pick(viewCommands(ctx), ['fit', 'outage-start', 'outage-end']), ...pick(canvas, ['tidy', 'arrange'])],
     // What acts on the whole diagram lives with the diagram, now that the header has no ⋯ for it.
-    pick(canvas, ['find-replace', 'settings']),
+    pick(canvas, ['find-replace', 'appearance']),
   ]);
 }
 
@@ -229,6 +229,7 @@ function regularNodeMenu(ctx: CommandContext, node: DraftNode, commands: Command
     pick(commands, ATTACH),
     pick(commands, COPY_AND_ORDER),
     pick(commands, lastGroup),
+    pick(commands, ['save-shape-default', 'reset-shape-default']),
     pick(commands, ['delete', 'delete-keep-lines']),
   ]);
 }
@@ -283,7 +284,7 @@ function edgeMenu(ctx: CommandContext, edge: DraftEdge, commands: Command[]): Co
       'edge-pin-ends',
     ]),
     pick(commands, ATTACH),
-    pick(commands, ['spotlight']),
+    pick(commands, ['spotlight', 'cut-connector']),
     pick(commands, ['delete']),
   ]);
 }

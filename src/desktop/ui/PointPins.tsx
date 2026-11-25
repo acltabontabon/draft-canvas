@@ -1,5 +1,5 @@
 import { useLayoutEffect, useState } from 'react';
-import { useStore as useReactFlowStore } from '@xyflow/react';
+import { useViewportStore as useReactFlowStore } from '@xyflow/react';
 import type { DraftEdge, DraftNode } from '../../document/types';
 import { useEditorStore } from '../../store/editorStore';
 import type { ReplyPoint } from '../companion';

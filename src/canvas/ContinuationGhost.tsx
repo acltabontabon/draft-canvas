@@ -1,4 +1,4 @@
-import { CONNECTOR_STYLE, styledConnectorPath } from '../render/connectorStyle';
+import { styledConnectorPath } from '../render/connectorStyle';
 import { memo, useMemo } from 'react';
 import { categoryOf } from '../document/connectorSemantics';
 import { displayNameFor } from '../document/factory';
@@ -15,7 +15,8 @@ import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { FONTS, cssFont } from '../render/text/fonts';
 import { useEditorStore } from '../store/editorStore';
 import { useUiStore, type ContinuationOffer } from '../store/uiStore';
-import { usePersonality } from '../theme/usePersonality';
+import { useDiagramStyle } from './useDiagramStyle';
+import type { ResolvedStyle } from '../render/style/resolve';
 import { useThemeValue } from '../theme/useTheme';
 import { ghostGraph, ghostRouteFor, ghostRouteInputs, type GhostRoute } from './ghostRoutes';
 import { SvgSurface } from './SvgSurface';
@@ -51,7 +52,7 @@ export const ContinuationGhost = memo(function ContinuationGhost() {
 
 function GhostBody({ offer, anchor }: { offer: ContinuationOffer; anchor: DraftNode }) {
   const theme = useThemeValue();
-  const { preset } = usePersonality();
+  const diagramStyle = useDiagramStyle();
   const showPill = offer.trigger === 'select';
 
   const accept = () => useEditorStore.getState().acceptContinuation(offer);
@@ -113,7 +114,7 @@ function GhostBody({ offer, anchor }: { offer: ContinuationOffer; anchor: DraftN
         })}
       </svg>
       {offer.nodes.map((node) => (
-        <GhostNode key={node.id} node={node} theme={theme} preset={preset} onClick={showPill ? accept : undefined} />
+        <GhostNode key={node.id} node={node} theme={theme} diagramStyle={diagramStyle} onClick={showPill ? accept : undefined} />
       ))}
       {showPill && (
         <div
@@ -162,21 +163,21 @@ function GhostBody({ offer, anchor }: { offer: ContinuationOffer; anchor: DraftN
 export function GhostNode({
   node,
   theme,
-  preset,
+  diagramStyle,
   onClick,
 }: {
   node: DraftNode;
   theme: ReturnType<typeof useThemeValue>;
-  preset: ReturnType<typeof usePersonality>['preset'];
+  diagramStyle: ResolvedStyle;
   onClick?: () => void;
 }) {
   const technologyIcon = useTechnologyIcon(node.technology);
   const shapes = useMemo(() => {
     // Its own clip scope, so a ghost's clip-path ids can never collide with a real node's.
     beginClipScope(`ghost-${node.id}`);
-    return emitDisplayList(describeNode(node, describeContext(theme, preset)));
+    return emitDisplayList(describeNode(node, describeContext(theme, diagramStyle)));
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Artwork can finish loading without a document change.
-  }, [node, theme, preset, technologyIcon]);
+  }, [node, theme, diagramStyle, technologyIcon]);
   return (
     // Position lives on this outer element alone, so it can glide smoothly (`transition:
     // transform`) when a same-identity offer's placement shifts. The mount-in scale/fade
@@ -224,6 +225,7 @@ export const GhostEdge = memo(function GhostEdge({
   removed?: boolean;
 }) {
   const theme = useThemeValue();
+  const { lineWidth } = useDiagramStyle().connector;
   // The same inputs, and the same cache, as the real connector (`edges/edgeRoutes.ts`) — read, never
   // written: `'transient'`, so a preview's routes never push out the ones on screen.
   const routes = useMemo(
@@ -274,7 +276,7 @@ export const GhostEdge = memo(function GhostEdge({
         d={styledConnectorPath(route.d, edge)}
         fill="none"
         stroke={color}
-        strokeWidth={CONNECTOR_STYLE.lineWidth}
+        strokeWidth={lineWidth}
         strokeLinecap="round"
         strokeDasharray={removed ? REMOVED_EDGE_DASH : dashForEdge(edge)?.join(' ')}
         markerEnd={edge.directed ? markerRef(color, markerVariantForEdge(edge)) : undefined}

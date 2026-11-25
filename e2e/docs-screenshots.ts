@@ -1,6 +1,7 @@
 import { openGallery, openStarter } from './library';
 import { createReaderExample } from './reader-example';
-import { storeDocument } from './fixtures/outage';
+import { clickEdge } from './canvas';
+import { storeWithFlows } from './fixtures/outage';
 
 // The guides picture the starters people get today, not the set pinned for the test journeys (`gallery.ts`).
 process.env.STARTERS_SNAPSHOT ??= 'current';
@@ -37,6 +38,7 @@ process.env.STARTERS_SNAPSHOT ??= 'current';
  *   npx tsx e2e/docs-screenshots.ts --sequence-only
  *   npx tsx e2e/docs-screenshots.ts --walk-only
  *   npx tsx e2e/docs-screenshots.ts --layout-only
+ *   npx tsx e2e/docs-screenshots.ts --appearance-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -69,10 +71,13 @@ const CANVAS = '.react-flow__pane';
 const log = (line: string) => process.stdout.write(`${line}\n`);
 
 async function startServer(): Promise<() => Promise<void>> {
+  // On Windows npm is a script, which only a shell can start, and there is no process group to signal.
+  const windows = process.platform === 'win32';
   const child: ChildProcess = spawn('npm', ['run', 'dev', '--', '--port', String(PORT), '--strictPort'], {
     cwd: REPO_ROOT,
     stdio: 'pipe',
-    detached: true,
+    detached: !windows,
+    shell: windows,
     env: { ...process.env, VITE_COLLAB_RELAY: `ws://localhost:${RELAY_PORT}` },
   });
   let exited = false;
@@ -82,7 +87,8 @@ async function startServer(): Promise<() => Promise<void>> {
   const stop = async () => {
     if (child.pid === undefined || exited) return;
     try {
-      process.kill(-child.pid, 'SIGTERM'); // the process group: `npm run dev` wraps vite
+      if (windows) spawn('taskkill', ['/pid', String(child.pid), '/T', '/F'], { stdio: 'ignore' });
+      else process.kill(-child.pid, 'SIGTERM'); // the process group: `npm run dev` wraps vite
     } catch {
       // already gone
     }
@@ -372,7 +378,7 @@ async function outageScreenshots(page: Page) {
   await page.locator('input[type="file"]').setInputFiles({
     name: 'outage-guide.draftcanvas',
     mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(storeDocument())),
+    buffer: Buffer.from(JSON.stringify(storeWithFlows())),
   });
   await expect(page.locator('.dc-editor')).toBeVisible();
   const settled = () => expect(page.locator('.dc-outage-note, .dc-outage-actions').last()).toHaveCSS('opacity', '1', { timeout: 10000 });
@@ -381,6 +387,14 @@ async function outageScreenshots(page: Page) {
     await settled();
   };
   await page.locator('.dc-status-outage').click();
+  await expect(page.locator('.dc-outage-card[data-listing]')).toBeVisible();
+  // Dismissed here, not by `shot`: its click would take the pointer off the row.
+  for (const dismiss of await page.locator('.dc-toast-dismiss').all()) await dismiss.click();
+  await page.locator('.dc-outage-card summary').click();
+  await page.locator('.dc-outage-card ul:not(details ul) button', { hasText: 'Order events' }).hover();
+  await expect(page.locator('.dc-outage-point .dc-sketch-loop')).toHaveCSS('opacity', /0\.9/, { timeout: 10000 });
+  await shot(page, 'outage-review');
+  await page.mouse.move(720, 120);
   await takeDown('payments');
   await shot(page, 'outage-overview');
   const calls = page.locator('button.dc-outage-note', { hasText: 'calls fail' });
@@ -393,8 +407,17 @@ async function outageScreenshots(page: Page) {
   await shot(page, 'outage-fix');
   await takeDown('checkout');
   await shot(page, 'outage-instances');
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="orders-fulfilment"] .dc-edge-line').first());
+  await settled();
+  await page.mouse.move(720, 120);
+  await shot(page, 'outage-connector');
   await takeDown('cache');
+  await page.locator('button.dc-outage-note', { hasText: 'every read falls to' }).click();
   await shot(page, 'outage-cache');
+  await clickEdge(page, page.locator('.react-flow__edge[data-id="checkout-orders"] .dc-edge-line').first());
+  await settled();
+  await page.locator('button.dc-outage-note', { hasText: "can't publish" }).click();
+  await shot(page, 'outage-half-done');
 }
 
 /** Import a real example and follow the same share-link route as a recipient. */
@@ -452,7 +475,7 @@ async function sequenceScreenshots(page: Page) {
     await expect(hint).toContainText(offered);
     if (label === 'POST /orders') await shot(page, 'sequence-next');
     await page.keyboard.press('Tab');
-    await expect(page.locator('input.dc-seq-editor[aria-label="Message"]')).toBeFocused();
+    await expect(page.locator('textarea.dc-seq-editor[aria-label="Message"]')).toBeFocused();
     await page.keyboard.type(label);
     await page.keyboard.press('Enter');
   }
@@ -541,6 +564,81 @@ async function sequenceScreenshots(page: Page) {
   await page.keyboard.press('Shift+Digit1');
   await page.mouse.move(20, 85);
   await shot(page, 'sequence-cross-frame');
+
+  /** A sequence from Mermaid text, pasted: the frames and the reply are then whatever the editor draws. */
+  const pasted = async (name: string, source: string) => {
+    await page.getByRole('button', { name: /Back to your diagrams/ }).click();
+    await page.getByRole('button', { name: START_BUTTON }).first().click();
+    await expect(page.locator('.dc-editor')).toBeVisible();
+    await title.fill(name);
+    await title.blur();
+    await page.evaluate((text) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', text);
+      document.querySelector('.dc-canvas')!.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    }, source);
+    await expect(frames).toHaveCount(1);
+    await page.keyboard.press('F2');
+    await page.keyboard.press('ControlOrMeta+a');
+    await page.keyboard.type(name);
+    await page.keyboard.press('Enter');
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Shift+Digit1');
+    await page.mouse.move(20, 85);
+  };
+
+  // Every kind of frame a checkout meets, each in its own colour, with a condition long enough to wrap.
+  await page.setViewportSize({ width: VIEWPORT.width, height: 900 });
+  await pasted('Pay for an order', `sequenceDiagram
+  participant Web as Storefront
+  participant API as Checkout API
+  participant Pay as Payment provider
+  participant DB as Orders
+  Web->>API: POST /orders
+  loop until the payment settles, or three attempts have been made without success
+    API->>Pay: authorize
+    Pay-->>API: result
+  end
+  alt approved
+    API->>DB: INSERT order
+    DB-->>API: order id
+    opt the shopper asked for a receipt
+      API->>API: queue the receipt
+    end
+    API-->>Web: 201 Created
+  else declined
+    API-->>Web: 402 Payment required
+  end
+  par
+    API->>DB: reserve stock
+  and
+    API->>Pay: capture
+  end
+`);
+  await shot(page, 'sequence-frames');
+  await page.setViewportSize(VIEWPORT);
+
+  // A reply, drawn back to whoever is waiting: photographed with the line still in hand.
+  await pasted('Save an order', `sequenceDiagram
+  participant Web as Storefront
+  participant API as Checkout API
+  participant DB as Orders
+  Web->>API: POST /orders
+  API->>DB: INSERT order
+`);
+  await frames.first().hover({ position: { x: 30, y: 12 } });
+  const lifelines = frames.first().locator('.dc-seq-lifeline');
+  const asked = await box(lifelines.nth(2));
+  const asker = await box(lifelines.nth(1));
+  const at = asked.y + asked.height - 34;
+  await page.mouse.move(asked.x + asked.width / 2, at);
+  await page.mouse.down();
+  await page.mouse.move(asked.x - 40, at + 2, { steps: 6 });
+  await page.mouse.move(asker.x + asker.width / 2 + 30, at + 2, { steps: 10 });
+  await expect(page.locator('.dc-seq-add-target[data-reply="true"]')).toContainText('Reply to Checkout API');
+  await shot(page, 'sequence-reply');
+  await page.mouse.up();
+  await page.keyboard.press('Escape');
 }
 
 /**
@@ -653,6 +751,81 @@ async function layoutScreenshots(page: Page) {
   await shot(page, 'portal-legend-held');
 }
 
+/** Appearance, as a person reaches it: the palette button in the status bar. It opens beside the canvas, not over it. */
+async function openAppearance(page: Page) {
+  await page.getByRole('button', { name: 'Appearance', exact: true }).click();
+  const panel = page.getByRole('complementary', { name: 'Appearance', exact: true });
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+/** A style of one's own, the canvas it is drawn on, the gallery's packs, and a diagram drawn in seven of them. */
+async function appearanceScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1360, height: 860 });
+  await openStarter(page, 'Microservices');
+  // A starter arrives selected; the pictures are of the diagram at rest.
+  await page.locator(CANVAS).click({ position: { x: 40, y: 420 } });
+  await expect(page.locator('.dc-node.selected, .react-flow__node.selected')).toHaveCount(0);
+
+  let panel = await openAppearance(page);
+  // Opening the panel frames the diagram in the canvas it leaves; closing it does not, so the
+  // pictures of the whole canvas ask for that themselves.
+  const frame = async () => {
+    // After the sidebar has gone and the view has gone back to where it was.
+    await page.waitForTimeout(900);
+    await palette(page, 'Fit to view');
+    await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+    await page.waitForTimeout(500);
+  };
+  await shot(page, 'appearance');
+
+  // A canvas of one's own: a colour and a backdrop, seen on the diagram as they are chosen.
+  // Chosen through the control itself, wherever the panel is scrolled to.
+  const pick = (input: HTMLElement) => input.click();
+  const styles = panel.getByRole('group', { name: 'My style' });
+  await panel.getByRole('tab', { name: 'Canvas', exact: true }).click();
+  await panel.getByRole('radiogroup', { name: 'Canvas colour' }).getByRole('radio', { name: 'Midnight', exact: true }).evaluate(pick);
+  await panel.getByRole('radiogroup', { name: 'Brand colour' }).getByRole('radio', { name: 'Amber', exact: true }).evaluate(pick);
+  await panel.getByRole('radiogroup', { name: 'Backdrop' }).getByRole('radio', { name: /^Stars/ }).evaluate(pick);
+  await expect(page.locator('.dc-canvas-backdrop')).toBeVisible();
+  await shot(page, 'appearance-canvas');
+  // The pen: each choice drawn as what it does.
+  await panel.getByRole('tab', { name: 'Drawing', exact: true }).click();
+  await shot(page, 'appearance-drawing');
+  // That made a style of one's own; the pictures after it start from Clean again.
+  await panel.getByRole('tab', { name: 'Styles', exact: true }).click();
+  await panel.getByRole('button', { name: 'Delete style', exact: true }).click();
+  await styles.getByRole('radio', { name: /^Clean/ }).evaluate(pick);
+
+  // The gallery is already loaded (the starter came from it), so its packs are listed.
+  const pack = (name: string) => panel.locator('.dc-prefs-pack', { hasText: name });
+  await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
+
+  for (const [name, file] of [
+    ['High seas', 'style-pack-high-seas'],
+    ['Cyberpunk', 'style-pack-cyberpunk'],
+    ['Arena', 'style-pack-arena'],
+    ['Cute', 'style-pack-cute'],
+    ['Weeb', 'style-pack-weeb'],
+    ['Hardwood', 'style-pack-hardwood'],
+    ['Match Point', 'style-pack-match-point'],
+  ] as const) {
+    await pack(name).getByRole('button', { name: `Add ${name} to my styles`, exact: true }).click();
+    await expect(styles.getByRole('radio', { name: new RegExp(`^${name}`) })).toBeChecked();
+    if (name === 'High seas') {
+      // The pack just added, on the diagram, with the packs it came from still beside it.
+      await panel.getByRole('heading', { name: 'Style packs', exact: true }).evaluate((heading) => heading.scrollIntoView({ block: 'start' }));
+      await shot(page, 'style-packs');
+    }
+    await panel.getByRole('button', { name: 'Close appearance', exact: true }).click();
+    await expect(panel).toBeHidden();
+    await frame();
+    await shot(page, file);
+    panel = await openAppearance(page);
+    await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
+  }
+}
+
 async function readerScreenshots(page: Page) {
   await page.setViewportSize({ width: VIEWPORT.width, height: 760 });
   for (const guided of [true, false]) {
@@ -724,6 +897,11 @@ async function main() {
 
     if (process.argv.includes('--layout-only')) {
       await layoutScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--appearance-only')) {
+      await appearanceScreenshots(page);
       return;
     }
 

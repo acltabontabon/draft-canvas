@@ -6,11 +6,12 @@
  * IndexedDB stores. Rendering libraries are adapted *to* this model, never the
  * other way around, so that upgrading the canvas engine cannot break user files.
  */
+import type { DocumentStyle } from './style';
 
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 31;
+export const CURRENT_VERSION = 32;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -129,11 +130,6 @@ export interface EdgeAnchor {
 
 export const GRID_MODES = ['dots', 'lines', 'none'] as const;
 export type GridMode = (typeof GRID_MODES)[number];
-
-/** How a custom canvas background image fills its anchor rectangle — see
- *  `render/backgroundAnchor.ts` and `canvas/CanvasBackground.tsx`. */
-export const BACKGROUND_FITS = ['cover', 'contain', 'tile'] as const;
-export type BackgroundFit = (typeof BACKGROUND_FITS)[number];
 
 /** Sub-kinds of the developer presets. Purely a labelling convenience — the
  *  base type's silhouette and accent always dominate; see `nodes/describe.ts`. */
@@ -358,7 +354,7 @@ export type ViewLevel = (typeof VIEW_LEVELS)[number];
  *
  * Deliberately the same graph a document carries (nodes, connectors, flows, a camera) and
  * nothing else: a room has no title of its own (it is named by the node that owns it, so a
- * rename can never disagree with it), no settings of its own (one grid, one background per
+ * rename can never disagree with it), no settings of its own (one grid per
  * file), and no id (it is addressed by its owner). Owning the inside rather than pointing at it
  * is what makes the reference unbreakable — deleting or copying a shape takes its rooms with it,
  * and a cycle is impossible by construction.
@@ -956,56 +952,10 @@ export interface Project {
   updatedAt: number;
 }
 
-/**
- * A decorative, canvas-layer backdrop. Presentation knobs only:
- * the image bytes themselves live in a dedicated IndexedDB store, keyed by
- * this document's id (see `storage/IndexedDbRepository.ts`), never inline
- * here — `localStorage`-style inlining would duplicate large binary data
- * across every save. `enabled: true` with no matching stored row (corruption,
- * a duplicate that failed to copy) degrades to "no background shown," never
- * an error — the same repair-don't-reject discipline as the rest of this file.
- */
-export interface BackgroundSettings {
-  enabled: boolean;
-  fit: BackgroundFit;
-  /** Scrim opacity over the image, 0 (none) – 1 (fully obscured). */
-  dim: number;
-  /** 0 (none) – 1 (maximum), mapped to a CSS/SVG blur radius at render time. */
-  blur: number;
-  /**
-   * Which stored image this is. Each chosen image gets its own id, so replacing one is an ordinary
-   * settings change undo can step back through — the previous image's bytes are still there until
-   * the canvas closes. Absent on backgrounds set before this existed: those read the one image
-   * stored under the document's own id.
-   */
-  imageId?: string;
-  /**
-   * The image itself, only ever in a `.draftcanvas` file in transit — see `EmbeddedBackgroundImage`.
-   * Never present on a stored document: the Library strips it on import and puts the bytes in
-   * the image store (`export/background.ts`'s `adoptEmbeddedBackground`).
-   */
-  image?: EmbeddedBackgroundImage;
-}
-
-/**
- * A background image carried inside a `.draftcanvas` file, so a diagram exported with a backdrop
- * arrives with it. The one exception to "the bytes live in their own store": a file has no second
- * store to keep them in. Small images only (`export/background.ts`'s `MAX_EMBEDDED_BACKGROUND_BYTES`);
- * a larger one is left out of the export, and the dialog says so.
- */
-export interface EmbeddedBackgroundImage {
-  /** `data:image/...;base64,...` — what an `<img>` or an SVG `<image>` can show as is. */
-  dataUri: string;
-  /** Natural size in pixels, kept beside the bytes so importing needs no decoder to store it. */
-  width: number;
-  height: number;
-}
-
 export interface DraftSettings {
   /** Whether to show a flow's step badges on its connectors when it's selected for overlay. */
   showSequence: boolean;
   grid: GridMode;
-  background: BackgroundSettings;
 }
 
 /**
@@ -1080,6 +1030,13 @@ export interface DraftDocument {
   openPoints: OpenPoint[];
   /** The canvas's own level, when it has one — same rule as `DraftInside.level`. */
   level?: ViewLevel;
+  /**
+   * How the diagram is drawn (`document/style.ts`), when it carries its own look. Root-only like
+   * `openPoints`: one diagram has one style, in every room. Absent — every file written before v32,
+   * and any diagram nobody has styled — means it follows the drawing hand of whichever device opens
+   * it, exactly as before.
+   */
+  style?: DocumentStyle;
 }
 
 /** Bump when `libraryShapeOf` changes what it records — the only lever for

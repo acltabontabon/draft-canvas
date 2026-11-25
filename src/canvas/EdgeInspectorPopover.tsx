@@ -2,7 +2,7 @@ import { SourceEvidenceDetails } from './SourceEvidenceDetails';
 import { autoSwatch } from './autoSwatch';
 import { memo, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
-import { useInternalNode, useStore } from '@xyflow/react';
+import { useInternalNode, useNodesStore } from '@xyflow/react';
 import {
   ACCENTS,
   CONNECTOR_KINDS,
@@ -161,7 +161,7 @@ export function EdgeInspectorPopover() {
     if (state.selection.edges[0] === quietEdgeId) return null;
     return edgeIndex(state.document.edges).get(state.selection.edges[0]!) ?? null;
   });
-  const measured = useStore((state) =>
+  const measured = useNodesStore((state) =>
     selectedEdge ? state.nodeLookup.has(selectedEdge.source) && state.nodeLookup.has(selectedEdge.target) : false,
   );
   const open = selectedEdge !== null && measured;

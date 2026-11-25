@@ -1,5 +1,4 @@
 import type { DraftDocument } from '../document/types';
-import { resolveExportBackground, withEmbeddedBackground } from './background';
 import { downloadBlob, downloadText } from './download';
 import { renderPngBlob, renderSvgText, type ImageExportOptions, type PngExportOptions } from './image';
 import { LEVELS_EXTENSION, zipEveryLevel, type EveryLevelOptions } from './levels';
@@ -14,12 +13,10 @@ export { exportSourceFile, SOURCE_FORMAT_INFO, SOURCE_FORMATS, sourceFileNameFor
 export { copyImage, copySource, copySvg, type CopyResult } from './clipboard';
 export { collectLevels, LEVELS_EXTENSION } from './levels';
 export { hasRooms } from './rooms';
-export { backgroundTravels } from './background';
 
-/** The document as a `.draftcanvas` file, its background image inside it when one travels (`backgroundTravels`). */
+/** The document as a `.draftcanvas` file. */
 export async function exportProjectFile(document: DraftDocument): Promise<void> {
-  const file = await withEmbeddedBackground(document);
-  await downloadText(serializeDocument(file), fileNameFor(document.metadata.title), FILE_MIME);
+  await downloadText(serializeDocument(document), fileNameFor(document.metadata.title), FILE_MIME);
 }
 
 export async function exportSvgFile(document: DraftDocument, options: ImageExportOptions = {}): Promise<void> {
@@ -34,7 +31,6 @@ export async function exportPngFile(document: DraftDocument, options: PngExportO
 
 /** One image per room — the root and every level below it — in a single ZIP. */
 export async function exportEveryLevel(document: DraftDocument, options: EveryLevelOptions): Promise<void> {
-  const background = await resolveExportBackground(document, options.includeBackground !== false);
-  const bytes = await zipEveryLevel(document, { ...options, background });
+  const bytes = await zipEveryLevel(document, options);
   await downloadBlob(new Blob([bytes], { type: 'application/zip' }), fileNameFor(document.metadata.title, LEVELS_EXTENSION));
 }

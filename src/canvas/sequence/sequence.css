@@ -507,6 +507,102 @@
   }
 }
 
+/* The message being told crosses from its sender to its receiver: a point of light along the arrow,
+   once per step. */
+.dc-seq-signal {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--dc-selection);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dc-selection) 28%, transparent), 0 0 12px var(--dc-selection);
+  pointer-events: none;
+  opacity: 0;
+  animation: dc-seq-travel 620ms var(--dc-ease-in-out, ease-in-out) 60ms both;
+}
+
+@keyframes dc-seq-travel {
+  0% {
+    opacity: 0;
+    transform: translateX(0) scale(0.6);
+  }
+  18% {
+    opacity: 1;
+    transform: translateX(calc(var(--dc-seq-travel) * 0.08)) scale(1);
+  }
+  82% {
+    opacity: 1;
+    transform: translateX(calc(var(--dc-seq-travel) * 0.94)) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(var(--dc-seq-travel)) scale(1.6);
+  }
+}
+
+/* What was just added, seen to arrive (`SequenceOverlay`): a message is swept the way it runs, a
+   frame closes around what it holds in its own colour. Played once; the picture under it is already
+   the finished one. */
+.dc-seq-arrived {
+  position: absolute;
+  z-index: 1;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.dc-seq-arrived[data-what='message'] {
+  background: linear-gradient(90deg, transparent, color-mix(in srgb, var(--dc-selection) 34%, transparent) 45%, color-mix(in srgb, var(--dc-selection) 34%, transparent) 55%, transparent);
+  background-size: 60% 100%;
+  background-repeat: no-repeat;
+  animation: dc-seq-sweep 520ms var(--dc-ease-out, ease-out) both;
+}
+
+.dc-seq-arrived[data-what='message'][data-toward='left'] {
+  animation-direction: reverse;
+}
+
+@keyframes dc-seq-sweep {
+  from {
+    background-position: -150% 0;
+    opacity: 1;
+  }
+  to {
+    background-position: 250% 0;
+    opacity: 0.2;
+  }
+}
+
+.dc-seq-arrived[data-what='frame'] {
+  --dc-seq-arrived: var(--dc-selection);
+  border-radius: 5px;
+  box-shadow: 0 0 0 1.5px var(--dc-seq-arrived), 0 0 0 6px color-mix(in srgb, var(--dc-seq-arrived) 22%, transparent);
+  background: color-mix(in srgb, var(--dc-seq-arrived) 10%, transparent);
+  animation: dc-seq-enclose 560ms var(--dc-ease-out, ease-out) both;
+}
+
+.dc-seq-arrived[data-operator='alt'] { --dc-seq-arrived: var(--dc-accent-violet-chip); }
+.dc-seq-arrived[data-operator='opt'] { --dc-seq-arrived: var(--dc-accent-teal-chip); }
+.dc-seq-arrived[data-operator='loop'] { --dc-seq-arrived: var(--dc-accent-blue-chip); }
+.dc-seq-arrived[data-operator='par'] { --dc-seq-arrived: var(--dc-accent-green-chip); }
+.dc-seq-arrived[data-operator='break'] { --dc-seq-arrived: var(--dc-accent-amber-chip); }
+.dc-seq-arrived[data-operator='critical'] { --dc-seq-arrived: var(--dc-accent-rose-chip); }
+
+@keyframes dc-seq-enclose {
+  from {
+    opacity: 1;
+    transform: scale(1.04);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .dc-node[data-seq-telling='true'] > .dc-node-surface {
     transition: none;
@@ -514,6 +610,11 @@
 
   .dc-seq-now {
     animation: none;
+  }
+
+  .dc-seq-signal,
+  .dc-seq-arrived {
+    display: none;
   }
 }
 
@@ -615,4 +716,53 @@
   align-items: center;
   flex: none;
   gap: 2px;
+}
+
+/* A frame's mark where a frame is chosen (Wrap in…): the strokes and colour its tab is drawn with. */
+.dc-seq-operator-glyph {
+  flex: none;
+  margin-right: 6px;
+  overflow: visible;
+  color: var(--dc-text-muted);
+}
+
+.dc-seq-operator-glyph path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dc-seq-operator-glyph[data-operator='alt'] { color: var(--dc-accent-violet-chip); }
+.dc-seq-operator-glyph[data-operator='opt'] { color: var(--dc-accent-teal-chip); }
+.dc-seq-operator-glyph[data-operator='loop'] { color: var(--dc-accent-blue-chip); }
+.dc-seq-operator-glyph[data-operator='par'] { color: var(--dc-accent-green-chip); }
+.dc-seq-operator-glyph[data-operator='break'] { color: var(--dc-accent-amber-chip); }
+.dc-seq-operator-glyph[data-operator='critical'] { color: var(--dc-accent-rose-chip); }
+
+/* A line being drawn back to whoever is waiting: already the reply it will be, dashed as one is. */
+.dc-seq-draw[data-reply='true'] .dc-seq-draw-line {
+  stroke-dasharray: 5 4;
+}
+
+.dc-seq-add-target[data-reply='true'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  box-shadow: 0 0 0 1px var(--dc-selection);
+}
+
+.dc-seq-add-target[data-reply='true'] kbd {
+  margin-left: 4px;
+  padding: 0 4px;
+  border: 1px solid var(--dc-border);
+  border-radius: 4px;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 11px;
+}
+
+.dc-seq-add-target[data-reply='true'] span {
+  color: var(--dc-text-muted);
 }

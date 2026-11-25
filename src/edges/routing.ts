@@ -1,4 +1,5 @@
-import { Position, getBezierPath, getSmoothStepPath, getStraightPath } from '@xyflow/react';
+import { Position, getBezierPath, getStraightPath } from '@xyflow/react';
+import { getSmoothStepPath } from './smoothStepPath';
 import {
   SIDES,
   type DraftEdge,

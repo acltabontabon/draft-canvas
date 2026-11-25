@@ -44,7 +44,7 @@ const GALLERY: GalleryStarter[] = ARCHITECTURE_STARTERS.map((starter, order) => 
 
 beforeEach(() => {
   useEditorStore.setState({ document: createDocument('Empty'), mode: 'edit' });
-  useGalleryStore.setState({ enabled: true, snapshot: { starters: GALLERY, fetchedAt: Date.now() }, failure: null, status: 'idle', dialog: { open: false } });
+  useGalleryStore.setState({ enabled: true, snapshot: { starters: GALLERY, styles: [], fetchedAt: Date.now() }, failure: null, status: 'idle', dialog: { open: false } });
 });
 
 const renderEmpty = (onAddStarter = vi.fn()) => ({
@@ -110,6 +110,17 @@ describe('EmptyState', () => {
     await userEvent.click(screen.getByRole('button', { name: /Browse the starters gallery/ }));
     expect(useGalleryStore.getState().dialog.open).toBe(true);
     expect(onAddStarter).not.toHaveBeenCalled();
+  });
+
+  it('stays off a canvas with a sketch and no shapes', () => {
+    useEditorStore.setState((state) => ({
+      document: {
+        ...state.document,
+        ink: [{ id: 'k_line', tool: 'pen', color: 'graphite', size: 3, x: 0, y: 0, points: [0, 0, 40, 40] }],
+      },
+    }));
+    const { container } = renderEmpty();
+    expect(container.querySelector('.dc-empty')).toBeNull();
   });
 
   it('offers the bundled example whether or not the gallery is loaded', async () => {

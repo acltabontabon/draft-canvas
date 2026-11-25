@@ -1,7 +1,5 @@
 import {
   DocumentConflictError,
-  backgroundImageKey,
-  isBackgroundImageKeyOf,
   reconcileMetadata,
   sharedMetadataOf,
   summarize,
@@ -21,10 +19,6 @@ export class MemoryRepository implements DraftRepository {
   readonly durable = false;
 
   private readonly documents = new Map<string, DraftDocument>();
-  private readonly backgroundImages = new Map<
-    string,
-    { blob: Blob; width: number; height: number }
-  >();
   private readonly projects = new Map<string, Project>();
 
   async list(): Promise<DraftSummary[]> {
@@ -60,9 +54,6 @@ export class MemoryRepository implements DraftRepository {
 
   async remove(id: string): Promise<void> {
     this.documents.delete(id);
-    for (const key of [...this.backgroundImages.keys()]) {
-      if (isBackgroundImageKeyOf(key, id)) this.backgroundImages.delete(key);
-    }
   }
 
   async rename(id: string, title: string): Promise<void> {
@@ -101,32 +92,5 @@ export class MemoryRepository implements DraftRepository {
 
   async usage(): Promise<{ usage: number; quota: number } | null> {
     return null;
-  }
-
-  async saveBackgroundImage(
-    documentId: string,
-    blob: Blob,
-    dims: { width: number; height: number },
-    imageId?: string,
-  ): Promise<void> {
-    this.backgroundImages.set(backgroundImageKey(documentId, imageId), { blob, ...dims });
-  }
-
-  async loadBackgroundImage(
-    documentId: string,
-    imageId?: string,
-  ): Promise<{ blob: Blob; width: number; height: number } | null> {
-    return this.backgroundImages.get(backgroundImageKey(documentId, imageId)) ?? null;
-  }
-
-  async removeBackgroundImage(documentId: string, imageId?: string): Promise<void> {
-    this.backgroundImages.delete(backgroundImageKey(documentId, imageId));
-  }
-
-  async pruneBackgroundImages(documentId: string, keep: { imageId?: string } | null): Promise<void> {
-    const kept = keep ? backgroundImageKey(documentId, keep.imageId) : null;
-    for (const key of [...this.backgroundImages.keys()]) {
-      if (isBackgroundImageKeyOf(key, documentId) && key !== kept) this.backgroundImages.delete(key);
-    }
   }
 }

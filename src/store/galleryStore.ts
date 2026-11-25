@@ -14,7 +14,7 @@ import {
   type RefreshFailure,
 } from '../gallery';
 import { readPreference, removePreference, writePreference } from '../lib/preferences';
-import { useEditorStore } from './editorStore';
+import { documentLoadCount, useEditorStore } from './editorStore';
 import { useUiStore } from './uiStore';
 
 /**
@@ -58,6 +58,8 @@ export interface GalleryState {
 }
 
 let inFlight: Promise<void> | null = null;
+let refreshController: AbortController | null = null;
+let clearing = Promise.resolve();
 
 export const useGalleryStore = create<GalleryState>()((set, get) => ({
   enabled: readPreference(PREFERENCE) === 'on',
@@ -67,10 +69,18 @@ export const useGalleryStore = create<GalleryState>()((set, get) => ({
   dialog: { open: false },
 
   async load(options = {}) {
+    if (!get().enabled) return;
     if (!get().snapshot) {
-      set({ status: 'loading' });
+      // A refresh may already be on its way ("Load starters" starts one, and the list it opens
+      // calls this): its status and whatever it brings stand. Saying "idle" over it, with nothing
+      // downloaded yet, is what the list read as "couldn't reach GitHub" until the refresh landed.
+      if (!inFlight) set({ status: 'loading' });
+      const pendingClear = clearing;
+      await pendingClear;
       const cached = await loadGallery();
-      set({ snapshot: cached, status: 'idle' });
+      if (pendingClear !== clearing) return;
+      if (!get().snapshot && cached) set({ snapshot: cached });
+      if (!inFlight) set({ status: 'idle' });
     }
     const { enabled, snapshot } = get();
     if (options.refresh === false) return;
@@ -79,31 +89,46 @@ export const useGalleryStore = create<GalleryState>()((set, get) => ({
 
   refresh() {
     if (!get().enabled) return Promise.resolve();
-    inFlight ??= (async () => {
-      set({ status: 'refreshing' });
+    if (inFlight) return inFlight;
+    const controller = new AbortController();
+    refreshController = controller;
+    inFlight = (async () => {
       try {
-        const snapshot = await refreshGallery();
-        set({ snapshot, failure: null });
+        await clearing;
+        controller.signal.throwIfAborted();
+        const snapshot = await refreshGallery(controller.signal);
+        if (!controller.signal.aborted) set({ snapshot, failure: null });
       } catch (error) {
-        set({ failure: error instanceof GalleryRefreshError ? error.reason : 'offline' });
+        if (!controller.signal.aborted) set({ failure: error instanceof GalleryRefreshError ? error.reason : 'offline' });
       } finally {
-        set({ status: 'idle' });
-        inFlight = null;
+        if (refreshController === controller) {
+          refreshController = null;
+          inFlight = null;
+          set({ status: 'idle' });
+        }
       }
     })();
+    set({ status: 'refreshing' });
     return inFlight;
   },
 
   async enable() {
     writePreference(PREFERENCE, 'on');
-    set({ enabled: true });
+    // On and busy in one step: on, idle and empty-handed, even for a moment, is what a list shows
+    // as a failure to reach GitHub.
+    set({ enabled: true, status: 'refreshing', failure: null });
     await get().refresh();
   },
 
   async disable() {
     removePreference(PREFERENCE);
-    set({ enabled: false, snapshot: null, failure: null });
-    await clearGalleryCache();
+    refreshController?.abort();
+    // Wait out any cache writes already started. A later opt-in waits for this deletion in turn.
+    clearing = Promise.all([clearing, inFlight]).then(() => clearGalleryCache());
+    refreshController = null;
+    inFlight = null;
+    set({ enabled: false, status: 'idle', snapshot: null, failure: null });
+    await clearing;
   },
 
   markSeen(starter) {
@@ -124,13 +149,17 @@ export const useGalleryStore = create<GalleryState>()((set, get) => ({
   },
 
   async addToCanvas(id, options = {}) {
+    const loading = documentLoadCount('all');
+    const { path } = useEditorStore.getState();
+    const pendingClear = clearing;
     const starter = get().snapshot?.starters.find((s) => s.id === id);
     const file = starter?.availability === 'ready' ? await starterFile(starter) : null;
+    const editor = useEditorStore.getState();
+    if (pendingClear !== clearing || loading !== documentLoadCount('all') || editor.path !== path) return [];
     if (!starter || !file) {
       useUiStore.getState().notify('That starter isn’t downloaded yet. Refresh the gallery and try again.', 'error');
       return [];
     }
-    const editor = useEditorStore.getState();
     // Added to a blank canvas, the starter is what the canvas began as: it can say when it changes.
     const origin = editor.path.length === 0 && isCanvasEmpty(editor.document) ? { starter: starter.id, sha256: starter.sha256 } : undefined;
     const added = editor.insertStarterDocument(file, starter.name, { origin, title: options.title });
@@ -139,8 +168,10 @@ export const useGalleryStore = create<GalleryState>()((set, get) => ({
   },
 
   async openAsCanvas(id) {
+    const pendingClear = clearing;
     const starter = get().snapshot?.starters.find((s) => s.id === id);
     const file = starter?.availability === 'ready' ? await starterFile(starter) : null;
+    if (pendingClear !== clearing) return false;
     if (!starter || !file) {
       useUiStore.getState().notify('That starter isn’t downloaded yet. Refresh the gallery and try again.', 'error');
       return false;

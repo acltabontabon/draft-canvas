@@ -259,16 +259,13 @@ export interface DesktopApi {
   // Documents. `null` is the user cancelling a dialog, never an error.
   openHandle(handle: Handle): Promise<OpenedDoc>;
   saveDocument(handle: Handle, bytes: Uint8Array, expectedStamp: string | undefined): Promise<SaveResult>;
-  saveAs(suggestedName: string, bytes: Uint8Array, copySidecarFrom?: Handle, startIn?: StartLocation): Promise<SavedAs | null>;
+  saveAs(suggestedName: string, bytes: Uint8Array, startIn?: StartLocation): Promise<SavedAs | null>;
   /** "Rename file…": changes the file's name in place. Never touches the document's own title. */
   renameFile(handle: Handle, newStem: string): Promise<RenamedFile>;
   checkStamp(handle: Handle, stamp: string): Promise<StampCheck>;
   reveal(handle: Handle): Promise<void>;
   exportFile(name: string, filters: FileFilter[], bytes: Uint8Array): Promise<boolean>;
   openExternal(url: string): Promise<void>;
-  sidecarRead(handle: Handle): Promise<{ mime: string; base64: string } | null>;
-  sidecarWrite(handle: Handle, mime: string, base64: string): Promise<void>;
-  sidecarRemove(handle: Handle): Promise<void>;
   /**
    * A file's text for Home to draw its thumbnail from — looking, not opening: nothing goes into
    * Recent. `null` when it can't be looked at (gone, unreadable, too large for a thumbnail).
@@ -319,7 +316,7 @@ export interface DesktopApi {
   // Temporary explorer sessions. Browsing never adds a project or recent file.
   explorerOpen(startIn?: StartLocation): Promise<ExplorerStart>;
   explorerList(session: string, handle: Handle, showHidden: boolean, query: string, offset: number): Promise<ExplorerDirectory>;
-  explorerSaveFile(session: string, handle: Handle, name: string, bytes: Uint8Array, copySidecarFrom?: Handle, expectedStamp?: string): Promise<ExplorerSaveResult>;
+  explorerSaveFile(session: string, handle: Handle, name: string, bytes: Uint8Array, expectedStamp?: string): Promise<ExplorerSaveResult>;
   explorerCreateFolder(session: string, handle: Handle, name: string): Promise<ExplorerLocation>;
   explorerPeek(session: string, handle: Handle): Promise<string | null>;
   explorerAddProject(session: string, handle: Handle): Promise<ProjectInfo>;

@@ -8,7 +8,7 @@ import { RenameFileDialog } from '../RenameFileDialog';
 import { UpdatePanel } from '../Updates';
 import { DesktopExplorer } from '../DesktopExplorer';
 import { AgentSettings } from './AgentSettings';
-import { CanvasSettingsPage } from './CanvasSettingsPage';
+import { AppearanceSettingsPage, CanvasSettingsPage } from './CanvasSettingsPage';
 import { GeneralSettings } from './GeneralSettings';
 import { SupportSettings } from './SupportSettings';
 import { UpdateSettings } from './UpdateSettings';
@@ -44,8 +44,8 @@ function RenameTargetDialog() {
     return <RenameFileDialog currentName={doc.name} onSubmit={(newStem) => controller.renameOpenFile(newStem)} onClose={onClose} />;
   }
   if (renameTarget.kind === 'recent') {
-    const { handle, name } = renameTarget;
-    return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameFile(handle, newStem)} onClose={onClose} />;
+    const { handle, name, displayPath } = renameTarget;
+    return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameFile(handle, newStem, displayPath)} onClose={onClose} />;
   }
   const { project, relPath, name } = renameTarget;
   return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameProjectFile(project, relPath, newStem)} onClose={onClose} />;
@@ -82,6 +82,7 @@ function MoveTargetDialog() {
 /** Every page of Settings, in rail order. */
 const CATEGORIES: readonly [SettingsCategoryEntry<SettingsCategory>, ...SettingsCategoryEntry<SettingsCategory>[]] = [
   { id: 'general', label: 'General', icon: 'sliders', Page: GeneralSettings },
+  { id: 'appearance', label: 'Appearance', icon: 'palette', Page: AppearanceSettingsPage },
   { id: 'canvas', label: 'Canvas', icon: 'pencil', Page: CanvasSettingsPage },
   { id: 'agents', label: 'AI agents', icon: 'agent', Page: AgentSettings },
   { id: 'updates', label: 'Updates', icon: 'refresh', Page: UpdateSettings },

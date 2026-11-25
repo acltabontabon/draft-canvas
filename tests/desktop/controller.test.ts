@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serializeDocument } from '../../src/export/project';
 import { createDocument, createNode } from '../../src/document/factory';
+import { DesktopError } from '../../src/desktop/api';
 import { createHarness, decoder, documentText, type Harness } from './harness';
 
 let h: Harness;
@@ -218,6 +219,28 @@ describe('saving', () => {
     h.edit(edited('Renamed'));
     await h.controller.save();
     expect(h.api.saveDocument.mock.calls[1]![2]).toBe('v1:2');
+  });
+
+  it('leaves another file clean when an earlier save finishes after switching', async () => {
+    vi.useFakeTimers();
+    const first = await openFile('first');
+    h.edit(edited('First edit'));
+    const write = h.api.saveDocument.getMockImplementation()!;
+    let finish!: () => void;
+    h.api.saveDocument.mockImplementationOnce(async (...args) => {
+      await new Promise<void>((resolve) => { finish = resolve; });
+      return write(...args);
+    });
+    const saving = h.controller.save();
+    await vi.advanceTimersByTimeAsync(0);
+    h.answer(1);
+    await openFile('second');
+
+    finish();
+    await saving;
+
+    expect(h.files.get(first)!.text).toBe(edited('First edit'));
+    expect(doc()).toMatchObject({ name: 'second', dirty: false });
   });
 
   it('names the file when it cannot be written', async () => {
@@ -454,6 +477,20 @@ describe('Quick Draft', () => {
     expect(h.store.getSnapshot().recovery).toHaveLength(1);
   });
 
+  it('keeps the draft open when its recovery copy cannot be written', async () => {
+    await h.controller.newQuickDraft();
+    h.edit(edited('Quick Draft'));
+    h.api.recoveryWrite.mockRejectedValueOnce(new DesktopError('DiskFull', 'The disk is full.'));
+
+    await h.controller.returnHome();
+
+    expect(doc()).toEqual({ kind: 'quick', dirty: true });
+    expect(h.errors).toEqual([{ title: 'Couldn’t close the document', message: 'The disk is full.' }]);
+    await h.controller.returnHome();
+    expect(h.recovery.size).toBe(1);
+    expect(doc()).toEqual({ kind: 'none' });
+  });
+
   it('leaves nothing behind when it was never drawn on', async () => {
     await h.controller.newQuickDraft();
     await h.settle();
@@ -635,6 +672,57 @@ describe('a file’s recovery copy', () => {
     expect(h.recovery.size).toBe(1);
   });
 
+  it.each([0, 1500])('recovers an edit made during save cleanup after a %i ms delay', async (delay) => {
+    vi.useFakeTimers();
+    const handle = await openFile();
+    h.edit(edited());
+    await vi.advanceTimersByTimeAsync(1500);
+    const discard = h.api.recoveryDiscard.getMockImplementation()!;
+    let finish!: () => void;
+    h.api.recoveryDiscard.mockImplementationOnce(async (id) => {
+      await new Promise<void>((resolve) => { finish = resolve; });
+      await discard(id);
+    });
+
+    const saving = h.controller.save();
+    await vi.advanceTimersByTimeAsync(0);
+    const later = edited('Payments, later');
+    h.edit(later);
+    await vi.advanceTimersByTimeAsync(delay);
+    finish();
+    await saving;
+    await vi.advanceTimersByTimeAsync(1500);
+
+    expect(doc()).toMatchObject({ dirty: true });
+    expect(h.files.get(handle)!.text).toBe(edited());
+    expect([...h.recovery.values()]).toMatchObject([{ text: later, entry: { origin: { handle, baseStamp: 'v1:2' } } }]);
+  });
+
+  it.each(['invalid JSON', 'NotADocument', 'TooLarge'] as const)('recovers as a draft when the original is %s', async (failure) => {
+    vi.useFakeTimers();
+    const handle = await openFile();
+    h.edit(edited());
+    await vi.advanceTimersByTimeAsync(1500);
+    await h.controller.start();
+    h.link.onMessage({ type: 'draft-canvas:closed' });
+    await h.settle();
+    const [entry] = h.store.getSnapshot().recovery;
+    if (failure === 'invalid JSON') {
+      h.files.get(handle)!.text = '{broken';
+    } else {
+      h.api.openHandle.mockRejectedValueOnce(new DesktopError(failure, 'The original could not be read.'));
+    }
+
+    await h.controller.recover(entry!.id);
+    await h.settle();
+
+    expect(doc()).toEqual({ kind: 'quick', dirty: true });
+    expect(h.loads().at(-1)!.text).toBe(edited());
+    expect(h.recovery.get(entry!.id)?.text).toBe(edited());
+    expect(h.api.saveDocument).not.toHaveBeenCalled();
+    expect(h.errors).toEqual([]);
+  });
+
   it('is offered back when the file is opened again, and comes back as unsaved changes', async () => {
     // What a crash leaves behind: a snapshot in the data folder, and no session that knows of it.
     const crashed = createHarness();
@@ -781,6 +869,20 @@ describe('quitting', () => {
     expect(h.asked).toEqual([]);
     expect(h.recovery.size).toBe(1);
     expect(h.api.quitAck).toHaveBeenCalledWith('ready');
+  });
+
+  it.each(['quit-requested', 'update-requested'] as const)('cancels %s when its Quick Draft cannot be kept', async (type) => {
+    await h.controller.newQuickDraft();
+    h.edit(edited('Quick Draft'));
+    await h.controller.start();
+    h.api.recoveryWrite.mockRejectedValueOnce(new DesktopError('DiskFull', 'The disk is full.'));
+
+    h.hostEvent({ type });
+    await h.settle();
+
+    expect(doc()).toEqual({ kind: 'quick', dirty: true });
+    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['working', 'cancel']);
+    expect(h.errors).toEqual([{ title: 'Couldn’t keep the draft', message: 'The disk is full.' }]);
   });
 
   it('asks about a file with unsaved changes, after keeping a copy of them', async () => {
@@ -932,55 +1034,6 @@ describe.each(['window-focused', 'disk-changed'] as const)('disk reconciliation 
     h.hostEvent({ type: eventType });
     await h.settle();
     expect(h.api.checkStamp).not.toHaveBeenCalled();
-  });
-});
-
-describe('the canvas’s background image', () => {
-  it('is kept beside the file, and only once the file is saved', async () => {
-    const handle = await openFile();
-    h.link.onMessage({ type: 'draft-canvas:background-write', mime: 'image/png', data: 'AAAA' });
-    h.edit(edited());
-    expect(h.api.sidecarWrite).not.toHaveBeenCalled();
-
-    await h.controller.save();
-
-    expect(h.api.sidecarWrite).toHaveBeenCalledWith(handle, 'image/png', 'AAAA');
-  });
-
-  it('is removed from beside the file when the canvas drops it', async () => {
-    const handle = await openFile();
-    h.link.onMessage({ type: 'draft-canvas:background-remove' });
-    h.edit(edited());
-    await h.controller.save();
-    expect(h.api.sidecarRemove).toHaveBeenCalledWith(handle);
-  });
-
-  it('is handed to the app when the file has one', async () => {
-    const handle = await openFile();
-    h.sidecars.set(handle, { mime: 'image/webp', base64: 'BBBB' });
-    h.link.onMessage({ type: 'draft-canvas:background-read', id: 7 });
-    await h.settle();
-    expect(h.delivered).toContainEqual({ type: 'draft-canvas:background', id: 7, mime: 'image/webp', data: 'BBBB' });
-  });
-
-  it('is answered with nothing for a draft that has no file', async () => {
-    await h.controller.newQuickDraft();
-    await h.settle();
-    h.link.onMessage({ type: 'draft-canvas:background-read', id: 3 });
-    await h.settle();
-    expect(h.delivered).toContainEqual({ type: 'draft-canvas:background', id: 3 });
-  });
-
-  it('goes to the new file when a draft is saved for the first time', async () => {
-    await h.controller.newQuickDraft();
-    await h.settle();
-    h.link.onMessage({ type: 'draft-canvas:background-write', mime: 'image/jpeg', data: 'CCCC' });
-    h.edit(edited('Quick Draft'));
-    h.saveAsTo({ name: 'pic', displayPath: '~/pic.draftcanvas' });
-
-    await h.controller.save();
-
-    expect(h.api.sidecarWrite).toHaveBeenCalledWith(expect.any(String), 'image/jpeg', 'CCCC');
   });
 });
 

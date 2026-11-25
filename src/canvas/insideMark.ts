@@ -1,8 +1,7 @@
 import type { Accent, DraftNode } from '../document/types';
 import type { Shape } from '../render/displayList';
-import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import { styleFrom, type StyleInput } from '../render/style/resolve';
 import { roughenPath } from '../render/roughness/roughPath';
-import type { PersonalityPreset } from '../theme/usePersonality';
 
 /** The glyph's drawing box, in its own units (1 unit = 1px at 100%). */
 export const DEPTH_GLYPH_SIZE = 14;
@@ -21,8 +20,8 @@ export interface DepthGlyphPaths {
  * in Clean; in Draft and Sketch drawn in the same hand as the lines around it, scaled down to a
  * glyph so it stays a stack.
  */
-export function depthGlyphPaths(preset: PersonalityPreset, seedId: string): DepthGlyphPaths {
-  const profile = PERSONALITY_PROFILES[preset];
+export function depthGlyphPaths(style: StyleInput, seedId: string): DepthGlyphPaths {
+  const profile = styleFrom(style).hand;
   return {
     layers: [6.5, 4, 1.5].map((y, i) =>
       roughenPath(layer(y), `${seedId}:depth-${i}`, profile.outline * 0.15, profile.bow * 0.08),

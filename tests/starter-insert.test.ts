@@ -86,6 +86,18 @@ describe('insertStarterDocument', () => {
     },
   );
 
+  it('keeps the default name when a sketch is already drawn', () => {
+    store.setState({
+      document: {
+        ...createDocument(),
+        ink: [{ id: 'k_line', tool: 'pen', color: 'graphite', size: 3, x: 0, y: 0, points: [0, 0, 40, 40] }],
+      },
+    });
+    const starter = ARCHITECTURE_STARTERS[0]!;
+    insertStarter(starter, starter.name);
+    expect(store.getState().document.metadata.title).toBe(createDocument().metadata.title);
+  });
+
   it('is one undo step, and redo brings the whole architecture back', () => {
     const created = insertStarter(starterById('microservices')!);
     expect(store.getState().history.past).toHaveLength(1);
@@ -176,6 +188,28 @@ describe('insertStarterDocument', () => {
 
     store.getState().redo();
     expect(store.getState().document.flows).toEqual(flows);
+  });
+
+  it('shares the remaining flow budget between a starter’s rooms and its overview', () => {
+    const inner = createNode({ type: 'service', x: 10, y: 20 });
+    const insideFlow = { ...createFlow({ title: 'Inside' }), steps: [{ id: 'fs_inside', extraNodeIds: [inner.id] }] };
+    const host = {
+      ...createNode({ type: 'service', x: 0, y: 0 }),
+      inside: { nodes: [inner], edges: [], flows: [insideFlow], viewport: { x: 0, y: 0, zoom: 1 } },
+    };
+    const overview = { ...createFlow({ title: 'Overview' }), steps: [{ id: 'fs_outer', extraNodeIds: [host.id] }] };
+    const starter = { ...createDocument(), nodes: [host], flows: [overview] };
+    const existing = Array.from({ length: LIMITS.maxFlows - 1 }, () => createFlow());
+    store.setState((state) => ({ document: { ...state.document, flows: existing } }));
+
+    expect(store.getState().insertStarterDocument(starter, 'Rooms')).toHaveLength(1);
+
+    const reopened = parseDocument(JSON.stringify(store.getState().document));
+    expect(reopened.ok).toBe(true);
+    if (!reopened.ok) return;
+    expect(reopened.repairs).toEqual([]);
+    expect(reopened.document.flows).toEqual(existing);
+    expect(reopened.document.nodes[0]?.inside?.flows.map((flow) => flow.title)).toEqual(['Inside']);
   });
 
   it('inserts the same starter twice with two independent sets of flows', () => {

@@ -16,16 +16,16 @@ import { familyKindOf } from '../document/dataStoreGeometry';
 import { ATTACHMENT_CHIP_GAP, ATTACHMENT_CHIP_HEIGHT, attachmentChipRowWidth, describeAttachmentChips, namedAttachmentChipWidths } from '../edges/attachmentChips';
 import { minSizeFor } from '../document/factory';
 import { messagesOf, sequenceOf } from '../document/sequenceModel';
-import type { Attachment, DraftNode, DraftSequence, SeqParticipant } from '../document/types';
+import type { Accent, Attachment, DraftNode, DraftSequence, SeqItem, SeqOperator, SeqParticipant } from '../document/types';
 import type { DisplayList, Shape, Stroke } from '../render/displayList';
 import { connectorHead, connectorStrokePath } from '../render/connectorStyle';
-import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import type { StyleHead } from '../document/style';
 import { FONTS } from '../render/text/fonts';
 import { layoutText } from '../render/text/layout';
 import type { TextMeasurer } from '../render/text/measure';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { checkSequence } from '../sequence/check';
-import { ATTACHMENT_ROW_INSET, layoutSequence, type LabelLayout, type MessageLayout, type Rect, type SequenceLayout } from '../sequence/layout';
+import { ATTACHMENT_ROW_INSET, layoutSequence, type FragmentLayout, type LabelLayout, type MessageLayout, type Rect, type SequenceLayout } from '../sequence/layout';
 import type { DescribeContext } from './describe';
 import { nodeTechnologyIcon, type TechnologyIconSnapshot } from './technology';
 
@@ -57,6 +57,40 @@ const CROSS = 7;
 const SELF_LOOP = 26;
 const HEAD_MAX_WIDTH = 196;
 const HEAD_MAX_HEIGHT = 132;
+/** Under the last words of a head (a name, or the kind under it) before its lifeline starts. */
+const HEAD_TEXT_CLEAR = 5;
+const NOTE_FOLD = 8;
+
+/**
+ * Each kind of frame has a colour of its own, so a loop is told from a condition before its tab is
+ * read. They are the diagram's own accents at a wash: enough to tell seven kinds apart, never enough
+ * to compete with the messages inside. A reference is not behaviour of its own, so it stays plain.
+ */
+export const OPERATOR_ACCENTS: Record<SeqOperator, Accent> = {
+  alt: 'violet',
+  opt: 'teal',
+  loop: 'blue',
+  par: 'green',
+  break: 'amber',
+  critical: 'rose',
+  ref: 'neutral',
+};
+
+/**
+ * The mark in a frame's tab, drawn in an 11 by 11 square: what the operator does, as a few strokes.
+ * A loop turns back on itself, a condition forks, an optional part is one way that may be skipped,
+ * parallel branches run side by side, a break stops at a wall, a critical section is shielded and a
+ * reference points elsewhere.
+ */
+export const OPERATOR_GLYPHS: Record<SeqOperator, string> = {
+  loop: 'M 9.3 3.6 A 4.2 4.2 0 1 0 9.7 6.4 M 9.8 0.9 V 3.9 H 6.8',
+  alt: 'M 0.8 5.5 H 3.6 L 6.4 2 H 10.2 M 3.6 5.5 L 6.4 9 H 10.2',
+  opt: 'M 5.5 0.9 L 10.1 5.5 L 5.5 10.1 L 0.9 5.5 Z',
+  par: 'M 0.8 3.3 H 10.2 M 0.8 7.7 H 10.2',
+  break: 'M 0.8 5.5 H 6.2 M 3.8 3 L 6.4 5.5 L 3.8 8 M 9.6 1.2 V 9.8',
+  critical: 'M 5.5 0.9 L 9.6 2.4 V 5.4 C 9.6 7.9 7.7 9.5 5.5 10.2 C 3.3 9.5 1.4 7.9 1.4 5.4 V 2.4 Z',
+  ref: 'M 2.2 8.8 L 8.8 2.2 M 4.2 2.2 H 8.8 V 6.8',
+};
 
 /* --------------------------------------------------------------------- heads -- */
 
@@ -113,9 +147,28 @@ function headSize(participant: SeqParticipant, ctx: DescribeContext, kit: Sequen
   // One still waiting for its name stands as wide as the field it is typed in, so the others have
   // already made room and the field covers nobody else's head.
   const width = named ? natural.width : Math.max(natural.width, UNNAMED_HEAD_WIDTH);
-  const size = { width: Math.ceil(width), height: Math.ceil(natural.height) };
+  let size = { width: Math.ceil(width), height: Math.ceil(natural.height) };
+  // A shape drawn as a glyph hangs its name, and the kind under it, below the glyph — past the box
+  // a canvas shape of that size would have, where a lifeline then ran through the words. A head
+  // stands as tall as everything written in it, and a little more. Asked of the renderer, a few
+  // times, because a taller box can move what is drawn in it.
+  for (let pass = 0; pass < 4; pass += 1) {
+    const bottom = textBottom(kit.describe(headNode({ id: 'head' }, base.text === participant.name ? participant : { ...participant, name: 'Name' }, size), ctx).shapes);
+    if (bottom + HEAD_TEXT_CLEAR <= size.height || size.height >= HEAD_MAX_HEIGHT + 40) break;
+    size = { width: size.width, height: Math.ceil(bottom + HEAD_TEXT_CLEAR) };
+  }
   headSizes.set(participant, { icons: ctx.technologyIcons, measurer: ctx.measurer, size });
   return size;
+}
+
+/** The lowest edge of any text in a display list, in its own coordinates. */
+function textBottom(shapes: readonly Shape[], dy = 0): number {
+  let bottom = 0;
+  for (const shape of shapes) {
+    if (shape.t === 'group') bottom = Math.max(bottom, textBottom(shape.children, dy + (shape.translate?.y ?? 0)));
+    else if (shape.t === 'text' && shape.layout.lines.length > 0) bottom = Math.max(bottom, dy + shape.y + shape.layout.height);
+  }
+  return bottom;
 }
 
 /* -------------------------------------------------------------------- layout -- */
@@ -173,8 +226,8 @@ const text = (label: LabelLayout, fill: string, extra: Partial<Extract<Shape, { 
 });
 
 /** An arrowhead with its tip at (`x`, `y`), pointing along `direction`: the connector's own nib, a little smaller. */
-function arrowHead(x: number, y: number, direction: 1 | -1, open: boolean): string {
-  const tokens = connectorHead(open).match(/[A-Za-z]|-?\d+(?:\.\d+)?/g) ?? [];
+function arrowHead(x: number, y: number, direction: 1 | -1, open: boolean, head: StyleHead = 'nib'): string {
+  const tokens = connectorHead(open, head).match(/[A-Za-z]|-?\d+(?:\.\d+)?/g) ?? [];
   const out: string[] = [];
   let first = true;
   for (const token of tokens) {
@@ -213,8 +266,8 @@ function messageNumber(message: MessageLayout, colour: string, ctx: DescribeCont
   ];
 }
 
-export function sequenceArrowShapes(message: MessageLayout, color: string, seed: string, preset: DescribeContext['preset']): Shape[] {
-  const profile = PERSONALITY_PROFILES[preset];
+export function sequenceArrowShapes(message: MessageLayout, color: string, seed: string, style: DescribeContext['style']): Shape[] {
+  const profile = style.hand;
   const open = message.kind === 'async' || message.kind === 'reply' || message.kind === 'create';
   const dashed = message.kind === 'reply' || message.kind === 'create';
   const stroke: Stroke = { color, width: LINE_WIDTH, linecap: 'round', ...(dashed ? { dash: REPLY_DASH } : {}) };
@@ -228,8 +281,8 @@ export function sequenceArrowShapes(message: MessageLayout, color: string, seed:
     shapes.push({ t: 'path', d: connectorStrokePath(d, seed, profile, false), fill: 'none', stroke });
     shapes.push(
       open
-        ? { t: 'path', d: arrowHead(message.x2, message.yEnd, -1, true), fill: 'none', stroke: headStroke }
-        : { t: 'path', d: arrowHead(message.x2, message.yEnd, -1, false), fill: color },
+        ? { t: 'path', d: arrowHead(message.x2, message.yEnd, -1, true, style.connector.head), fill: 'none', stroke: headStroke }
+        : { t: 'path', d: arrowHead(message.x2, message.yEnd, -1, false, style.connector.head), fill: color },
     );
     return shapes;
   }
@@ -242,8 +295,8 @@ export function sequenceArrowShapes(message: MessageLayout, color: string, seed:
   shapes.push({ t: 'path', d: connectorStrokePath(d, seed, profile, false), fill: 'none', stroke });
   shapes.push(
     open
-      ? { t: 'path', d: arrowHead(tip, message.y, direction, true), fill: 'none', stroke: headStroke }
-      : { t: 'path', d: arrowHead(tip, message.y, direction, false), fill: color },
+      ? { t: 'path', d: arrowHead(tip, message.y, direction, true, style.connector.head), fill: 'none', stroke: headStroke }
+      : { t: 'path', d: arrowHead(tip, message.y, direction, false, style.connector.head), fill: color },
   );
   return shapes;
 }
@@ -253,7 +306,7 @@ const crossAt = (x: number, y: number): string =>
 
 /** A fragment's tab: a label with its lower right corner cut, as UML draws it. */
 const tabPath = (tab: Rect, radius: number): string => {
-  const cut = 6;
+  const cut = 7;
   const right = tab.x + tab.w;
   const bottom = tab.y + tab.h;
   return `M ${tab.x} ${tab.y + radius} Q ${tab.x} ${tab.y} ${tab.x + radius} ${tab.y} H ${right} V ${bottom - cut} L ${right - cut} ${bottom} H ${tab.x} Z`;
@@ -267,6 +320,50 @@ function stripLabelRole(shapes: readonly Shape[]): Shape[] {
     const { role: _role, labelWidth: _width, ...rest } = shape;
     return rest;
   });
+}
+
+interface FrameLook {
+  wash: string;
+  washOpacity: number;
+  line: string;
+  lineOpacity: number;
+  tabFill: string;
+  tabText: string;
+  guard: string;
+}
+
+function frameLook(theme: Theme, operator: SeqOperator): FrameLook {
+  const accent = OPERATOR_ACCENTS[operator];
+  if (accent === 'neutral') {
+    return { wash: theme.surface, washOpacity: 0.28, line: theme.borderStrong, lineOpacity: 1, tabFill: theme.surfaceRaised, tabText: theme.textMuted, guard: theme.edgeText };
+  }
+  const palette = accentOf(theme, accent);
+  return { wash: palette.line, washOpacity: theme.name === 'dark' ? 0.07 : 0.06, line: palette.line, lineOpacity: 0.7, tabFill: palette.fill, tabText: palette.text, guard: palette.text };
+}
+
+/** A frame's tab, its branches' words and its conditions: everything of it that is read. */
+function frameWords(frame: FragmentLayout, theme: Theme, patched: (label: LabelLayout, fill: string) => Shape[], branches?: ReadonlySet<string>): Shape[] {
+  const look = frameLook(theme, frame.operator);
+  const stroke: Stroke = { color: look.line, width: 1.1 };
+  const shapes: Shape[] = [
+    { t: 'path', d: tabPath(frame.tab, FRAGMENT_RADIUS), fill: look.tabFill, stroke },
+    {
+      t: 'group',
+      translate: { x: frame.glyph.x, y: frame.glyph.y },
+      children: [{ t: 'path', d: OPERATOR_GLYPHS[frame.operator], fill: 'none', stroke: { color: look.tabText, width: 1.3, linecap: 'round' } }],
+    },
+    text(frame.tabText, look.tabText),
+  ];
+  for (const branch of frame.operands) {
+    if (branches && !branches.has(branch.id)) continue;
+    if (branch.tag) {
+      shapes.push({ t: 'path', d: tabPath(branch.tag.box, 0), fill: look.tabFill, stroke });
+      shapes.push(text(branch.tag.text, look.tabText));
+    }
+    if (branch.guard) shapes.push(...patched(branch.guard, look.guard));
+  }
+  if (frame.label) shapes.push(...patched(frame.label, theme.text));
+  return shapes;
 }
 
 /** Just the frame: what a sequence is outlined by, and what presentation lights. */
@@ -333,16 +430,17 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
 
     // Outermost first, so a frame inside another is drawn over it.
     for (const frame of [...layout.fragments].sort((a, b) => a.depth - b.depth)) {
-      const stroke: Stroke = { color: theme.borderStrong, width: 1.1 };
-      shapes.push(kit.outline(`${node.id}:${frame.id}`, ctx, { ...frame.box, r: FRAGMENT_RADIUS }, { fill: theme.surface, opacity: 0.28 }));
-      shapes.push(kit.outline(`${node.id}:${frame.id}`, ctx, { ...frame.box, r: FRAGMENT_RADIUS }, { fill: 'none', stroke }));
+      const look = frameLook(theme, frame.operator);
+      shapes.push(kit.outline(`${node.id}:${frame.id}`, ctx, { ...frame.box, r: FRAGMENT_RADIUS }, { fill: look.wash, opacity: look.washOpacity }));
+      shapes.push(kit.outline(`${node.id}:${frame.id}`, ctx, { ...frame.box, r: FRAGMENT_RADIUS }, { fill: 'none', stroke: { color: look.line, width: 1.1 }, opacity: look.lineOpacity }));
       for (const branch of frame.operands) {
         if (branch.separatorY === null) continue;
         shapes.push({
           t: 'path',
           d: `M ${frame.box.x} ${branch.separatorY} H ${frame.box.x + frame.box.w}`,
           fill: 'none',
-          stroke: { ...stroke, dash: SEPARATOR_DASH },
+          stroke: { color: look.line, width: 1.1, dash: SEPARATOR_DASH },
+          opacity: look.lineOpacity,
         });
       }
     }
@@ -376,11 +474,32 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
       : [words];
   };
   if (!only) {
-    for (const frame of layout.fragments) {
-      shapes.push({ t: 'path', d: tabPath(frame.tab, FRAGMENT_RADIUS), fill: theme.surfaceRaised, stroke: { color: theme.borderStrong, width: 1.1 } });
-      shapes.push(text(frame.tabText, theme.textMuted));
-      for (const branch of frame.operands) if (branch.guard) shapes.push(...patched(branch.guard, theme.edgeText));
-      if (frame.label) shapes.push(...patched(frame.label, theme.text));
+    for (const frame of layout.fragments) shapes.push(...frameWords(frame, theme, patched));
+  }
+
+  if (only) {
+    // Presenting: the frames the lit messages are in are lit with them — their outline, their tab
+    // and the condition of the branch being told — so "inside the loop" is seen, not only captioned.
+    const frames = new Set<string>();
+    const branches = new Set<string>();
+    const visit = (items: readonly SeqItem[], chain: readonly { frame: string; branch: string }[]) => {
+      for (const item of items) {
+        if (item.t === 'message' && only.has(item.id)) {
+          for (const step of chain) {
+            frames.add(step.frame);
+            branches.add(step.branch);
+          }
+        } else if (item.t === 'fragment') {
+          for (const branch of item.operands) visit(branch.items, [...chain, { frame: item.id, branch: branch.id }]);
+        }
+      }
+    };
+    visit(sequence.items, []);
+    for (const frame of [...layout.fragments].sort((a, b) => a.depth - b.depth)) {
+      if (!frames.has(frame.id)) continue;
+      const look = frameLook(theme, frame.operator);
+      shapes.push(kit.outline(`${node.id}:${frame.id}`, ctx, { ...frame.box, r: FRAGMENT_RADIUS }, { fill: 'none', stroke: { color: look.line, width: 1.1 }, opacity: look.lineOpacity }));
+      shapes.push(...frameWords(frame, theme, (label, fill) => [text(label, fill)], branches));
     }
   }
 
@@ -393,7 +512,7 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
     lit.add(message.from);
     lit.add(message.to);
     const color = lineColor(theme, byId.get(message.from));
-    shapes.push(...sequenceArrowShapes(message, color, `${node.id}:${message.id}`, ctx.preset));
+    shapes.push(...sequenceArrowShapes(message, color, `${node.id}:${message.id}`, ctx.style));
     if (sequence.numberMessages !== false) shapes.push(...messageNumber(message, color, ctx));
     if (message.kind === 'destroy') {
       const x = layout.columns.find((column) => column.id === message.to)?.x ?? message.x2;
@@ -415,7 +534,16 @@ export function describeSequence(node: DraftNode, ctx: DescribeContext, kit: Seq
   if (!only) {
     for (const note of layout.notes) {
       const palette = theme.accents.amber;
-      shapes.push({ t: 'rect', x: note.box.x, y: note.box.y, w: note.box.w, h: note.box.h, r: 4, fill: palette.fill, stroke: { color: palette.line, width: 1 } });
+      const { x, y, w, h } = note.box;
+      const fold = Math.min(NOTE_FOLD, h / 2);
+      // A sheet with its corner turned: the note every diagram draws, and the one on the canvas beside it.
+      shapes.push({
+        t: 'path',
+        d: `M ${x + 3} ${y} H ${x + w - fold} L ${x + w} ${y + fold} V ${y + h - 3} Q ${x + w} ${y + h} ${x + w - 3} ${y + h} H ${x + 3} Q ${x} ${y + h} ${x} ${y + h - 3} V ${y + 3} Q ${x} ${y} ${x + 3} ${y} Z`,
+        fill: palette.fill,
+        stroke: { color: palette.line, width: 1 },
+      });
+      shapes.push({ t: 'path', d: `M ${x + w - fold} ${y} V ${y + fold} H ${x + w}`, fill: 'none', stroke: { color: palette.line, width: 1 } });
       shapes.push(text(note.text, palette.text));
     }
   }

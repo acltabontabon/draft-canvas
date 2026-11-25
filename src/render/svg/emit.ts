@@ -1,3 +1,4 @@
+import type { Theme } from '../theme/tokens';
 import type {
   CodeShape,
   DisplayList,
@@ -79,6 +80,7 @@ function emitPath(shape: PathShape): SvgEl {
   return el('path', {
     d: shape.d,
     fill: shape.fill ?? 'none',
+    'fill-rule': shape.fillRule,
     opacity: shape.opacity,
     filter: shape.shadow ? `url(#${scopedId(SHADOW_FILTER_ID)})` : undefined,
     'marker-end': shape.markerEnd,
@@ -268,7 +270,33 @@ export function emitDisplayList(list: DisplayList): SvgEl[] {
  * — Inkscape, older Illustrator, LibreOffice, ImageMagick, a wiki's sanitiser — draw a shape with
  * no shadow at all, or nothing, when they meet it. Every browser draws the long form the same way.
  */
-export function shadowFilter(color: string): SvgEl {
+/**
+ * The colour a shadow is cast in. A soft one is the theme's own. A deep one is meant to be seen:
+ * the theme's words at a third on a light canvas, and near-black on a dark one, where anything
+ * fainter is lost in the canvas.
+ */
+export function shadowColour(theme: Pick<Theme, 'name' | 'shadow' | 'text'>, depth: 'soft' | 'deep'): string {
+  if (depth === 'soft') return theme.shadow;
+  if (theme.name === 'dark') return 'rgba(0, 0, 0, 0.82)';
+  const channel = (at: number) => parseInt(theme.text.slice(at, at + 2), 16);
+  return `rgba(${channel(1)}, ${channel(3)}, ${channel(5)}, 0.3)`;
+}
+
+export function shadowFilter(color: string, depth: 'soft' | 'deep' = 'soft'): SvgEl {
+  if (depth === 'deep') {
+    // Two shadows, as a thing standing well clear of the sheet casts: a tight one where it meets
+    // the paper and a wide one further out. The region is larger so neither is cut off.
+    return el('filter', { id: scopedId(SHADOW_FILTER_ID), x: '-35%', y: '-35%', width: '170%', height: '200%' }, [
+      el('feGaussianBlur', { in: 'SourceAlpha', stdDeviation: 1.6, result: 'near' }),
+      el('feOffset', { in: 'near', dx: 0, dy: 1.5, result: 'nearOffset' }),
+      el('feGaussianBlur', { in: 'SourceAlpha', stdDeviation: 7, result: 'far' }),
+      el('feOffset', { in: 'far', dx: 0, dy: 8, result: 'farOffset' }),
+      el('feFlood', { 'flood-color': color, 'flood-opacity': 1, result: 'color' }),
+      el('feComposite', { in: 'color', in2: 'nearOffset', operator: 'in', result: 'nearShadow' }),
+      el('feComposite', { in: 'color', in2: 'farOffset', operator: 'in', result: 'farShadow' }),
+      el('feMerge', {}, [el('feMergeNode', { in: 'farShadow' }), el('feMergeNode', { in: 'nearShadow' }), el('feMergeNode', { in: 'SourceGraphic' })]),
+    ]);
+  }
   return el(
     'filter',
     // A soft lift, not an edge: wide enough to read as the shape resting just above the sheet, and

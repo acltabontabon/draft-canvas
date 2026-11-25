@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { connect, create, newCanvas, reopenAfterReload } from './canvas';
+import { connect, create, newCanvas, nextFrames, reopenAfterReload } from './canvas';
 
 /**
  * A sequence on the canvas, driven the way a person drives it: named participants, messages drawn
@@ -14,8 +14,8 @@ const LIFELINE = '.dc-seq-lifeline';
 const FRAME = '.dc-seq-frame';
 const INSPECTOR = '.dc-element-inspector';
 const PARTICIPANT_NAME = 'input.dc-seq-editor[aria-label="Participant name"]';
-const LABEL = 'input.dc-seq-editor[aria-label="Message"]';
-const CONDITION = 'input.dc-seq-editor[aria-label="Condition"]';
+const LABEL = 'textarea.dc-seq-editor[aria-label="Message"]';
+const CONDITION = 'textarea.dc-seq-editor[aria-label="Condition"]';
 const PARTICIPANT_KINDS: Record<string, string> = { Client: 'Actor', Database: 'Data Store' };
 
 async function renameParticipant(page: Page, index: number, name: string, kind?: string) {
@@ -145,10 +145,14 @@ test.describe('Sequence', () => {
     await page.mouse.move(before.x + 60, before.y + 12);
     await page.mouse.down();
     await page.mouse.move(before.x + 160, before.y + 72, { steps: 6 });
+    // The shape follows the pointer a frame behind. Let go before that frame and it stays where the
+    // last one left it: WebKit on a busy runner dropped it halfway there.
+    await nextFrames(page);
     await page.mouse.up();
-    const after = (await node.boundingBox())!;
-    expect(after.x - before.x).toBeGreaterThan(60);
-    expect(after.y - before.y).toBeGreaterThan(30);
+    // Polled: WebKit can still be painting an earlier step of the drag when the button comes up, and
+    // a single read then saw the shape halfway (50px of the 100 it was dragged).
+    await expect.poll(async () => (await node.boundingBox())!.x - before.x).toBeGreaterThan(60);
+    await expect.poll(async () => (await node.boundingBox())!.y - before.y).toBeGreaterThan(30);
     expect(await said(page)).toEqual(['Client to API: GET /orders', 'API to Database: SELECT orders']);
   });
 
@@ -386,6 +390,50 @@ test.describe('Sequence', () => {
     await expect(page.locator(`${SEQUENCE}[data-seq-telling="true"]`)).toHaveCount(0);
     await page.locator(SEQUENCE).hover();
     expect(await said(page)).toEqual(['Client to API: GET /orders', 'API to Database: SELECT orders']);
+  });
+
+  test('a line dragged back to the caller is the reply; once it is answered, the same drag is a call', async ({ page }) => {
+    await newCanvas(page, 'Replies');
+    await newSequence(page, ['Client', 'API']);
+    await draw(page, 0, 1, 'GET /orders');
+
+    // Dragged back: it says what it will be before it is let go, and lands as that call's reply.
+    const from = (await page.locator(LIFELINE).nth(1).boundingBox())!;
+    const to = (await page.locator(LIFELINE).nth(0).boundingBox())!;
+    const y = from.y + from.height - 6;
+    await page.mouse.move(from.x + from.width / 2, y);
+    await page.mouse.down();
+    await page.mouse.move((from.x + to.x) / 2, y + 1, { steps: 5 });
+    await page.mouse.move(to.x + to.width / 2, y, { steps: 5 });
+    await expect(page.locator('.dc-seq-add-target[data-reply="true"]')).toContainText('Reply to Client');
+    await page.mouse.up();
+    await expect(page.locator(LABEL)).toBeFocused();
+    await page.keyboard.type('200 OK');
+    await page.keyboard.press('Enter');
+
+    // Nothing is owed any more, so the same drag is now a call of its own.
+    const again = (await page.locator(LIFELINE).nth(1).boundingBox())!;
+    const low = again.y + again.height - 6;
+    await page.mouse.move(again.x + again.width / 2, low);
+    await page.mouse.down();
+    await page.mouse.move((again.x + to.x) / 2, low + 1, { steps: 5 });
+    await page.mouse.move(to.x + to.width / 2, low, { steps: 5 });
+    await expect(page.locator(LIFELINE).nth(0)).toHaveAttribute('data-endpoint-target', 'true');
+    await expect(page.locator('.dc-seq-add-target[data-reply="true"]')).toHaveCount(0);
+    await page.mouse.up();
+    await expect(page.locator(LABEL)).toBeFocused();
+    await page.keyboard.type('notify');
+    await page.keyboard.press('Enter');
+
+    await page.keyboard.press('Escape');
+    await page.keyboard.press('Escape');
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: /^Export/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Export & share' });
+    await dialog.locator('[data-mode="sequence"]').click();
+    const preview = dialog.getByTestId('export-source-preview');
+    await expect(preview).toContainText('API-->>-Client: 200 OK');
+    await expect(preview).toContainText('API->>+Client: notify');
   });
 
   test('a Mermaid sequence diagram pasted in becomes a sequence that can be edited, and goes back out as text', async ({ page, browserName }) => {

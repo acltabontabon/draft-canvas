@@ -96,10 +96,17 @@ test('global drawing style controls all arrows without per-arrow appearance cont
   const before = await snapshot();
   const cleanPaths = await page.locator('.dc-edge-line').evaluateAll(paths => paths.map(p => p.getAttribute('d')));
   for (const style of ['Sketch', 'Draft', 'Clean']) {
-    await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
-    const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-    await settings.getByRole('radio', { name: new RegExp(`^${style}`) }).check();
-    await settings.getByRole('button', { name: 'Close', exact: true }).click();
+    // Appearance opens beside the canvas, from the palette.
+    await page.keyboard.press('ControlOrMeta+k');
+    await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
+    await page.keyboard.type('Appearance');
+    await expect(page.getByRole('option', { selected: true })).toContainText('Appearance');
+    await page.keyboard.press('Enter');
+    const settings = page.getByRole('complementary', { name: 'Appearance', exact: true });
+    // An imported file carries no style of its own, so it follows the style in use on this device.
+    await settings.locator('.dc-look-card', { has: page.getByText(style, { exact: true }) }).click();
+    await expect(settings.getByRole('group', { name: 'My style' }).getByRole('radio', { name: new RegExp(`^${style}`) })).toBeChecked();
+    await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
     await expect(page.locator(':root')).toHaveAttribute('data-personality', style.toLowerCase());
     const paths = await page.locator('.dc-edge-line').evaluateAll(paths => paths.map(p => p.getAttribute('d')));
     if (style === 'Clean') expect(paths).toEqual(cleanPaths);
@@ -107,6 +114,9 @@ test('global drawing style controls all arrows without per-arrow appearance cont
     await expect(page.locator('.dc-edge-retrace')).toHaveCount(style === 'Sketch' ? 6 : 0);
     expect(await snapshot()).toEqual(before);
   }
+  // The view glides back as the panel leaves: the connector is pressed where it comes to rest.
+  await expect(page.getByRole('complementary', { name: 'Appearance', exact: true })).toBeHidden();
+  await cameraAtRest(page);
   const point = await page.locator('.react-flow__edge[data-id="authorize"] .dc-edge-hit').first().evaluate(element => {
     const path = element as SVGPathElement;
     const at = path.getPointAtLength(path.getTotalLength() * 0.7).matrixTransform(path.getScreenCTM()!);
@@ -116,10 +126,15 @@ test('global drawing style controls all arrows without per-arrow appearance cont
   await expect(page.getByRole('toolbar', { name: 'Connector options' })).toBeVisible();
   await expect(page.getByRole('button', { name: /^Arrow appearance:/ })).toHaveCount(0);
   await expect(page.getByRole('group', { name: 'Connector shape' })).toBeVisible();
-  await page.getByRole('button', { name: 'Canvas settings', exact: true }).click();
-  const settings = page.getByRole('dialog', { name: 'Settings', exact: true });
-  await settings.getByRole('radio', { name: /^Sketch/ }).check();
-  await settings.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.keyboard.press('ControlOrMeta+k');
+  await expect(page.getByRole('dialog', { name: 'Commands' })).toBeVisible();
+  await page.keyboard.type('Appearance');
+  await expect(page.getByRole('option', { selected: true })).toContainText('Appearance');
+  await page.keyboard.press('Enter');
+  const settings = page.getByRole('complementary', { name: 'Appearance', exact: true });
+  await settings.locator('.dc-look-card', { has: page.getByText('Sketch', { exact: true }) }).click();
+  await expect(settings.getByRole('group', { name: 'My style' }).getByRole('radio', { name: /^Sketch/ })).toBeChecked();
+  await settings.getByRole('button', { name: 'Close appearance', exact: true }).click();
   await page.reload();
   await expect(page.locator('.dc-editor')).toBeVisible();
   await expect(page.locator(':root')).toHaveAttribute('data-personality', 'sketch');

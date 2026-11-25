@@ -1,7 +1,8 @@
 /**
  * Starting and steering an outage walk. Every way in — the status bar chip, the palette, a shape's
  * menu — goes through here, so they agree on what a click means: with one shape selected that can
- * be taken down, it is; otherwise the walk opens and waits for the next shape chosen.
+ * be taken down, it is; with one connector selected, that is; otherwise the walk opens and waits for
+ * the next shape or connector chosen.
  *
  * A fix is the person answering a question the walk raised by drawing the answer. Each is one
  * existing store action, so it is an ordinary edit: one undo step, and the walk reads the diagram
@@ -20,9 +21,17 @@ export function outageCandidate(editor: Pick<Editor, 'selection' | 'document'>):
   return only && mayTakeDown(editor.document.nodes, only) ? only : null;
 }
 
+/** The one selected connector, when nothing else is selected with it. */
+export function connectorCandidate(editor: Pick<Editor, 'selection'>): string | null {
+  const { nodes, edges } = editor.selection;
+  return nodes.length === 0 && edges.length === 1 ? edges[0]! : null;
+}
+
 export function startOutage(editor: Editor = useEditorStore.getState()): void {
   const candidate = outageCandidate(editor);
+  const connector = candidate ? null : connectorCandidate(editor);
   if (candidate) editor.takeDown(candidate);
+  else if (connector) editor.cutConnector(connector);
   else editor.startOutage();
 }
 

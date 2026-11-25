@@ -114,6 +114,26 @@ describe('an agent’s quiet save', () => {
     expect(doc()).toMatchObject({ name: 'payments' });
   });
 
+  it('leaves newer edits on screen when an agent was waiting for a file to open', async () => {
+    await openFile();
+    const other = h.addFile('other');
+    const open = h.api.openHandle.getMockImplementation()!;
+    let finish!: () => void;
+    h.api.openHandle.mockImplementationOnce(async (handle) => {
+      await new Promise<void>((resolve) => { finish = resolve; });
+      return open(handle);
+    });
+
+    const opening = host().openQuietly(other);
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    h.edit(edited());
+    finish();
+
+    expect(await opening).toEqual({ opened: false, reason: 'payments has unsaved changes.' });
+    expect(doc()).toMatchObject({ name: 'payments', dirty: true });
+    expect(h.loads()).toHaveLength(1);
+  });
+
   it('stays the save in flight when the save it chained on ends, so a second ⌘S does not write alongside it', async () => {
     const handle = await openFile();
     h.edit(edited('First'));

@@ -13,14 +13,19 @@ import type { Page } from '@playwright/test';
  * `enabled` also records the person's choice to load starters, as "Load starters" does.
  */
 const BASE = 'https://raw.githubusercontent.com/acltabontabon/draft-canvas-starters/main/';
-const root = () => (process.env.STARTERS_SNAPSHOT === 'current' ? join(process.cwd(), 'tests', 'fixtures', 'starters') : join(process.cwd(), 'e2e', 'fixtures', 'starters'));
+const CURRENT = join(process.cwd(), 'tests', 'fixtures', 'starters');
+const root = () => (process.env.STARTERS_SNAPSHOT === 'current' ? CURRENT : join(process.cwd(), 'e2e', 'fixtures', 'starters'));
 
-export async function serveStarterGallery(page: Page, { enabled = true }: { enabled?: boolean } = {}) {
+/**
+ * `current` serves today's gallery whatever the environment says: the style packs are only there,
+ * and a journey that asks for it must not lean on which starters it holds.
+ */
+export async function serveStarterGallery(page: Page, { enabled = true, current = false }: { enabled?: boolean; current?: boolean } = {}) {
   await page.route(`${BASE}**`, async (route) => {
     const path = normalize(new URL(route.request().url()).pathname.slice(new URL(BASE).pathname.length));
     if (path.startsWith('..')) return route.fulfill({ status: 404 });
     try {
-      await route.fulfill({ body: readFileSync(join(root(), path), 'utf8'), headers: { 'access-control-allow-origin': '*', 'content-type': 'text/plain; charset=utf-8' } });
+      await route.fulfill({ body: readFileSync(join(current ? CURRENT : root(), path), 'utf8'), headers: { 'access-control-allow-origin': '*', 'content-type': 'text/plain; charset=utf-8' } });
     } catch {
       await route.fulfill({ status: 404, headers: { 'access-control-allow-origin': '*' } });
     }

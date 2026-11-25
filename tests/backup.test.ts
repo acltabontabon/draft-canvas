@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createDocument, createNode } from '../src/document/factory';
 import { addNodes } from '../src/document/operations';
 import type { DraftDocument } from '../src/document/types';
-import { unzipFiles } from '../src/export/zip';
+import { unzipFiles, zipFiles } from '../src/export/zip';
 import { backupFileName, backupIsStale, buildBackup, describeRestore, restoreBackup, worthBackingUp } from '../src/storage/backup';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
 import { setFileSaver } from '../src/export/download';
@@ -141,26 +141,26 @@ describe('restoreBackup', () => {
     expect((await repository.listProjects())[0]!.name).toBe('Shop (renamed)');
   });
 
-  it('carries background images through the archive, onto a copy too, and never stores them inline', async () => {
+  it('restores a diagram from an older backup that carried a background image, without the image', async () => {
     const repository = new MemoryRepository();
-    const base = documentWith('Backdrop');
-    const document: DraftDocument = { ...base, settings: { ...base.settings, background: { ...base.settings.background, enabled: true, imageId: 'img_1' } } };
+    const document = documentWith('Backdrop');
     await repository.save(document);
-    const pixels = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
-    await repository.saveBackgroundImage(document.metadata.id, new Blob([pixels], { type: 'image/png' }), { width: 4, height: 3 }, 'img_1');
     const { bytes } = await buildBackup(repository);
+    // An archive as an earlier version wrote it: the image inline in the diagram's settings.
+    const files = unzipFiles(bytes);
+    const older = zipFiles(files.map((entry) => {
+      if (!entry.name.endsWith('.draftcanvas')) return entry;
+      const raw = JSON.parse(new TextDecoder().decode(entry.data)) as { settings: Record<string, unknown> };
+      raw.settings.background = { enabled: true, fit: 'cover', dim: 0.5, blur: 0, imageId: 'img_1', image: { dataUri: 'data:image/png;base64,iVBORw0KGgo=', width: 4, height: 3 } };
+      return { name: entry.name, data: JSON.stringify(raw) };
+    }));
 
-    // Into an empty library under its own id, and as a copy beside the original it came from.
     const fresh = new MemoryRepository();
-    await restoreBackup(fresh, bytes);
-    await restoreBackup(repository, bytes);
-    const copyId = (await repository.list()).find((entry) => entry.id !== document.metadata.id)!.id;
-    for (const [target, id] of [[fresh, document.metadata.id], [repository, copyId]] as const) {
-      const image = await target.loadBackgroundImage(id, 'img_1');
-      expect(image).toMatchObject({ width: 4, height: 3 });
-      expect(new Uint8Array(await image!.blob.arrayBuffer())).toEqual(pixels);
-      expect((await target.load(id))!.settings.background.image).toBeUndefined();
-    }
+    const result = await restoreBackup(fresh, older);
+    expect(result.restored).toBe(1);
+    const restored = (await fresh.load(document.metadata.id))!;
+    expect(restored.nodes).toHaveLength(document.nodes.length);
+    expect(restored.settings).toEqual({ showSequence: true, grid: 'dots' });
   });
 
   it('skips what it cannot read and says so, and refuses a file that is not a ZIP', async () => {
@@ -182,9 +182,9 @@ describe('restoreBackup', () => {
     const { serializeDocument } = await import('../src/export/project');
     const files = ['A', 'B', 'C'].map((title) => {
       const document = documentWith(title);
-      const raw = JSON.parse(serializeDocument(document)) as { settings: { background: Record<string, unknown> } };
-      // Hand-damaged: five characters is not valid base64 for `atob`.
-      if (title === 'B') raw.settings.background.image = { dataUri: 'data:image/png;base64,AAAAA', width: 2, height: 2 };
+      const raw = JSON.parse(serializeDocument(document)) as { settings: Record<string, unknown> };
+      // As an older backup held it, and hand-damaged: five characters is not valid base64 for `atob`.
+      if (title === 'B') raw.settings.background = { enabled: true, image: { dataUri: 'data:image/png;base64,AAAAA', width: 2, height: 2 } };
       return { name: `${title}-${document.metadata.id}.draftcanvas`, data: JSON.stringify(raw) };
     });
     const fresh = new MemoryRepository();

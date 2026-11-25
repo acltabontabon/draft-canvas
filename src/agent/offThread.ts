@@ -123,9 +123,16 @@ let turn: Promise<unknown> = Promise.resolve();
  * still waiting its turn never starts.
  */
 export function runOffThread(job: Job, progress?: (progress: Progress) => void, signal?: AbortSignal): Promise<JobResult> {
+  if (signal?.aborted) return Promise.reject(cancelled());
   const run = turn.then(() => runNow(job, progress, signal));
   turn = run.catch(() => undefined);
-  return run;
+  if (!signal) return run;
+  // Cancel the caller's wait immediately. The queue still waits for the running job, then skips this one.
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(cancelled());
+    signal.addEventListener('abort', abort, { once: true });
+    void run.then(resolve, reject).then(() => signal.removeEventListener('abort', abort));
+  });
 }
 
 async function runNow(job: Job, progress?: (progress: Progress) => void, signal?: AbortSignal): Promise<JobResult> {
@@ -164,8 +171,9 @@ async function runNow(job: Job, progress?: (progress: Progress) => void, signal?
       pending.delete(id);
       reject(error);
     }
+  }).finally(() => {
+    if (stopOnAbort) signal?.removeEventListener('abort', stopOnAbort);
   });
-  if (stopOnAbort) signal?.removeEventListener('abort', stopOnAbort);
   // Cancelled while it ran (or while a stopped worker's job was about to start over): not a timeout,
   // not a retry.
   if (signal?.aborted) throw cancelled();

@@ -19,6 +19,7 @@ import { EdgeInspectorPopover } from '../../canvas/EdgeInspectorPopover';
 import { ElementInspectorPopover } from '../../canvas/ElementInspectorPopover';
 import { canvasBounds, canvasCenter } from '../../canvas/canvasFrame';
 import type { DraftNode, DraftViewport } from '../../document/types';
+import { fitPadding } from '../../lib/fitPadding';
 import { loadFailureNotice } from '../../lib/staleChunk';
 import { presetForShortcut, type Preset } from '../../lib/presets';
 import { isConvertibleType, type ConvertibleType } from '../../document/convert';
@@ -46,6 +47,7 @@ import { centerOf, overlapArea } from '../../lib/math';
 import { logDiagnostic } from '../../lib/diagnostics';
 import { flowFitViewNodes, hasSomethingToFit, lensFlow, roomFor, useEditorStore, viewLevel } from '../../store/editorStore';
 import { pointer, pointerFlow, useUiStore, type ContextMenuTarget } from '../../store/uiStore';
+import { shapeStartFields } from '../../store/styleStore';
 import { useCollabStore } from '../../store/collabStore';
 import { END_MESSAGES } from '../collab/collabCopy';
 import { PresenceDock } from '../collab/PresenceDock';
@@ -58,6 +60,8 @@ import { useThemeValue } from '../../theme/useTheme';
 import { backOut, lookInside } from '../../commands/depthNavigation';
 import { OpenPointsPanel } from './OpenPointsPanel';
 import { OutlinePanel } from './OutlinePanel';
+import { StylePanel } from './StylePanel';
+import { useEditorDress } from '../../canvas/useEditorDress';
 import { createNudgeCoalescer } from './nudgeCoalescer';
 import { useSelectionAnnouncements } from './useSelectionAnnouncements';
 import { OpenPointPopover } from '../../canvas/OpenPointPopover';
@@ -73,7 +77,6 @@ import { ArrangeBar } from './ArrangeBar';
 import { LayoutBusyBar } from './LayoutBusyBar';
 import { FlowLensIndicator } from './FlowLensIndicator';
 import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
-import { CanvasSettingsDialog } from './CanvasSettingsDialog';
 import { CommandPalette } from './CommandPalette';
 import { ContinuationAnnouncer } from './ContinuationAnnouncer';
 import { Inspector } from './Inspector';
@@ -271,8 +274,15 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       // Every caller hands the top-left a default 176×68 shape centred on the point would have
       // (`point - 88,34`); centred by its own size instead, a Junction lands under the cursor rather
       // than beside it, and a Boundary or code card doesn't hang off below and to the right.
+      // How this person's shapes of this type start ("Save as my default Service"), unless the
+      // shape was picked by a name of its own, which already says what it is.
+      const mine = preset.start || preset.technology ? {} : shapeStartFields(preset.type);
       const { width, height } =
-        size ?? defaultSizeFor(preset.type, preset.technology ? technologyStart(preset.type, preset.technology).serviceKind : preset.start?.serviceKind);
+        size ??
+        defaultSizeFor(
+          preset.type,
+          preset.technology ? technologyStart(preset.type, preset.technology).serviceKind : (preset.start?.serviceKind ?? mine.serviceKind ?? mine.componentKind),
+        );
       // Placed onto a connector: made and put into its middle as one undo step.
       const editor = useEditorStore.getState();
       const startSequence = autoEdit && preset.type === 'sequence';
@@ -285,8 +295,10 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         width: size?.width,
         height: size?.height,
         text: preset.text,
-        accent: preset.accent,
-        noteKind: preset.noteKind,
+        ...mine,
+        // A preset that names its own colour or kind keeps it.
+        ...(preset.accent ? { accent: preset.accent } : {}),
+        ...(preset.noteKind ? { noteKind: preset.noteKind } : {}),
         language: preset.language,
         code,
         // Picked by one of its names ("load balancer" in the shape picker): it arrives as that kind.
@@ -633,6 +645,12 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     [setQuickConnect],
   );
 
+  const studio = useUiStore((state) => state.stylePanelOpen) && mode !== 'present';
+  const restyleBeat = useUiStore((state) => state.restyleBeat);
+  // The whole editor wears the open diagram's colours, not the canvas alone.
+  const editorRoot = useRef<HTMLDivElement>(null);
+  useEditorDress(editorRoot);
+
   if (readOnly && !readOnly.collaborative) return (
     <SharedReader session={session} playback={playback}>
       <ErrorBoundary key={canvasInstanceKey} message="This diagram could not be rendered." actions={[{ label: 'Reload canvas', onClick: () => setCanvasInstanceKey((key) => key + 1) }]}>
@@ -645,8 +663,12 @@ function EditorScreen({ session }: { session: DocumentSession }) {
 
   return (
     <div
+      ref={editorRoot}
       className="dc-editor"
       data-mode={mode}
+      // Appearance is open: the rest of the editor steps back, so the diagram and the panel are all there is.
+      data-studio={studio ? '' : undefined}
+      data-restyled={restyleBeat ?? undefined}
       data-tracing={tracing || undefined}
       data-walk={(presenting && playback.derived) || undefined}
       data-armed={armed ? 'true' : undefined}
@@ -808,6 +830,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
         {/* Docked to the right of the canvas, outside it: `canvasFrame.ts` measures the canvas column, so
             every "is it on screen" and "stay clear of the edge" check already accounts for the panel. */}
         {!presenting && <OutlinePanel buildCommandContext={buildCommandContext} />}
+        {!presenting && <StylePanel />}
       </div>
 
       <div style={{ display: 'contents' }} inert={sessionOver}>
@@ -845,7 +868,6 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           </Suspense>
         </PanelBoundary>
       )}
-      <CanvasSettingsDialog />
       <ClipboardPermissionDialog />
       <CommandPalette createAt={createAt} createAtPointer={createAtPointer} playback={playback} onPresent={onPresent} />
 
@@ -1345,7 +1367,7 @@ export function useKeyboard({
         // walkthrough's own O (overview) and R (re-centre) are the camera keys there.
         if (presenting) return;
         event.preventDefault();
-        if (hasSomethingToFit(state)) void fitView({ padding: 0.2, duration: motionMs(320), nodes: flowFitViewNodes(state) });
+        if (hasSomethingToFit(state)) void fitView({ padding: fitPadding(0.2), duration: motionMs(320), nodes: flowFitViewNodes(state) });
         return;
       }
 

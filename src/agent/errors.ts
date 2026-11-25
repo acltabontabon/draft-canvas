@@ -49,7 +49,7 @@ export class AgentError extends Error {
     super(message);
     this.name = 'AgentError';
     this.code = code;
-    this.hint = extra.hint;
+    this.hint = extra.hint ?? REFUSAL_HINTS[code];
     this.retryable = extra.retryable;
     const details = { ...(extra.details ?? {}), ...(extra.path !== undefined ? { path: extra.path } : {}) };
     this.details = Object.keys(details).length ? details : undefined;
@@ -72,6 +72,21 @@ export function toAgentError(error: unknown): AgentErrorJson {
   if (error instanceof AgentError) return error.toJSON();
   return { code: 'INTERNAL', message: 'Draft Canvas hit an unexpected problem handling this request.' };
 }
+
+/**
+ * What to do about a refused request, by the code of its first problem. Each of these was refused
+ * before anything changed, and would be refused again unchanged: an agent told only what was wrong
+ * (a Junie run) sent variations of the same mistake until its action limit.
+ */
+const REFUSED = 'Nothing was changed. ';
+const REFUSAL_HINTS: Partial<Record<AgentErrorCode, string>> = {
+  INVALID_INPUT: `${REFUSED}Correct each field named in the error and send the request again. get_capabilities({tool}) has the full schema.`,
+  INVALID_REFERENCE: `${REFUSED}Correct the named reference. For an existing diagram, read_diagram gives ids and view paths. For new content, use its declared id. In a batch, add it before referring to it.`,
+  UNSUPPORTED_TYPE: `${REFUSED}Use a listed type (get_capabilities topics: ["types"]) and send again.`,
+  DUPLICATE_ID: `${REFUSED}Ids are unique across the file. Choose another id for new content, then resend.`,
+  CONTAINMENT_CYCLE: `${REFUSED}Choose a parent outside the element's own contents, then resend.`,
+  LIMIT_EXCEEDED: `${REFUSED}Adjust the request to the limit in the message, then resend.`,
+};
 
 /** Collects problems found while checking a request, so one reply lists them all (up to a bound). */
 export class Problems {

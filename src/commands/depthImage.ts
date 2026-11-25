@@ -2,9 +2,11 @@ import type { DraftDocument, DraftViewport } from '../document/types';
 import { loadTechnologyIcons } from '../nodes/technology';
 import { renderDocumentSvg, type ExportOptions } from '../render/svg/document';
 import type { ThemeName } from '../render/theme/tokens';
-import type { PersonalityPreset } from '../theme/usePersonality';
+import { resolveStyle } from '../render/style/resolve';
+import { deviceHand } from '../theme/deviceHand';
+import { deviceStyle } from '../store/styleStore';
 
-export type RoomImageOptions = Pick<ExportOptions, 'theme' | 'preset' | 'selectedFlowId'>;
+export type RoomImageOptions = Pick<ExportOptions, 'theme' | 'preset' | 'deviceStyle' | 'selectedFlowId'>;
 
 /** Two decoded cameras cover the usual in/out pair without retaining a visited-room gallery. */
 const pictures = new Map<string, Promise<HTMLImageElement>>();
@@ -27,8 +29,9 @@ export async function createRoomImage(
 ): Promise<HTMLImageElement> {
   const root = document.documentElement;
   const theme: ThemeName = root.dataset.theme === 'light' ? 'light' : 'dark';
-  const personality = root.dataset.personality;
-  const preset: PersonalityPreset = personality === 'draft' || personality === 'sketch' ? personality : 'clean';
+  const preset = deviceHand();
+  // What the canvas itself is drawn in when the diagram has no style of its own.
+  const mine = deviceStyle();
   if (fileId !== room.metadata.id) {
     clearRoomImages();
     fileId = room.metadata.id;
@@ -43,11 +46,13 @@ export async function createRoomImage(
     [Math.round(camera.x * 100) / 100, Math.round(camera.y * 100) / 100, Math.round(camera.zoom * 1_000_000) / 1_000_000],
     pane.width, pane.height,
     options.theme ?? theme, options.preset ?? preset, options.selectedFlowId,
+    // A style is the same object until it changes, so its key stands for all of it.
+    resolveStyle(room.style ?? mine, options.preset ?? preset).key,
   ]);
   let prepared = pictures.get(key);
   const reused = prepared !== undefined;
   if (!prepared) {
-    prepared = prepareImage(room, camera, pane, { theme, preset, ...options });
+    prepared = prepareImage(room, camera, pane, { theme, preset, deviceStyle: mine, ...options });
     pictures.set(key, prepared);
     if (pictures.size > 2) pictures.delete(pictures.keys().next().value!);
     void prepared.catch(() => {

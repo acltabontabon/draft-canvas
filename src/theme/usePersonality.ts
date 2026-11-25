@@ -1,8 +1,9 @@
 import { createContext, useContext } from 'react';
+import { HAND_PRESETS, type HandPreset } from '../document/style';
 
-/** Clean is today's exact appearance, byte-for-byte unchanged. */
-export const PERSONALITY_PRESETS = ['clean', 'draft', 'sketch'] as const;
-export type PersonalityPreset = (typeof PERSONALITY_PRESETS)[number];
+/** The drawing hand this device prefers. A diagram that carries no style of its own follows it. */
+export const PERSONALITY_PRESETS = HAND_PRESETS;
+export type PersonalityPreset = HandPreset;
 
 export interface PersonalityContextValue {
   preset: PersonalityPreset;

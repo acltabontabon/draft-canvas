@@ -687,6 +687,14 @@ mod tests {
             "30",
             "9a54a666275be815b5faa05f8b6f7d8c00723e8275fe5474a9eff068bdb67dea",
         ),
+        (
+            "31",
+            "f4552c10a60bac6faefc6f843cbfa73955cb4d96c232e661fca05972732888f9",
+        ),
+        (
+            "32",
+            "00b2ffb90ba5a817340ca1242239109c7d3c5ac50a5091dcaef725e70c02e9d1",
+        ),
     ];
 
     #[test]

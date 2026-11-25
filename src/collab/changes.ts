@@ -17,6 +17,7 @@
  * conflict.
  */
 import type { DraftEdge, DraftFlow, DraftInk, DraftNode, DraftSettings, OpenPoint, ViewLevel } from '../document/types';
+import type { DocumentStyle } from '../document/style';
 
 /** The id of the node that owns a room, or `''` for the document itself. */
 export type RoomId = string;
@@ -46,6 +47,8 @@ export type Change =
   | { kind: 'move'; target: 'node' | 'edge' | 'flow' | 'ink'; id: string; room: RoomId }
   | { kind: 'title'; value: string }
   | { kind: 'settings'; value: DraftSettings }
+  /** The diagram's own look, whole: a style is small, changes rarely, and means nothing in halves. `null` takes it away. */
+  | { kind: 'style'; value: DocumentStyle | null }
   | { kind: 'level'; room: RoomId; value: ViewLevel | null }
   /**
    * The order of one collection in one room, when it is not simply "what was there, then what was
@@ -75,6 +78,8 @@ export function keyOf(change: Change): string {
       return 'title';
     case 'settings':
       return 'settings';
+    case 'style':
+      return 'style';
     case 'level':
       return `level:${change.room}`;
     case 'order':

@@ -8,13 +8,8 @@ import { bundleNames, docsBundle } from '../src/export/docs/bundle';
 import { unzipFiles } from '../src/export/zip';
 import { renderDocumentSvg } from '../src/render/svg/document';
 
-// No icon fetches and no stored background in a unit test: the picture is the renderer's alone.
+// No icon fetches in a unit test: the picture is the renderer's alone.
 vi.mock('../src/nodes/technology', async (original) => ({ ...(await original<object>()), loadTechnologyIcons: vi.fn(async () => {}) }));
-vi.mock('../src/export/background', async (original) => ({
-  ...(await original<object>()),
-  resolveExportBackground: vi.fn(async () => undefined),
-  withEmbeddedBackground: vi.fn(async (document: DraftDocument) => document),
-}));
 
 const decoder = new TextDecoder();
 

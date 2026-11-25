@@ -2,14 +2,12 @@ import { defineConfig, devices } from '@playwright/test';
 
 /**
  * The assembled web deploy, served the way it is hosted: the site and the editor each at the root
- * of an origin of their own (ports PORT and PORT+1), and the old front door under /draft-canvas/
- * (PORT+2) — see scripts/serve-web.mjs.
+ * of an origin of their own (ports PORT and PORT+1) — see scripts/serve-web.mjs.
  *
  * None of this is visible to the other two suites. `playwright.config.ts` runs against `vite dev`
  * at the root, and `playwright.dist.config.ts` serves `dist/` at the root — so neither can catch a
- * relative URL that is wrong by one directory, a marketing bundle that leaked into the editor, or
- * a legacy editor link that stopped being forwarded. Those are exactly the failures that only
- * appear in production, which is why this config exists.
+ * relative URL that is wrong by one directory or a marketing bundle that leaked into the editor.
+ * Those are exactly the failures that only appear in production, which is why this config exists.
  */
 // A preview server left running from an earlier build (`reuseExistingServer`) serves the site as it
 // stood then, and the suite would quietly pass or fail against stale files. `DC_WEB_PORT=4199` puts

@@ -2,7 +2,7 @@ import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../re
 import type { DraftEdge, DraftNode, OpenPoint } from '../document/types';
 import { MARKER_SIZE, describeMarker, type OccupiedRect } from '../openPoints/marker';
 import type { Shape, TextAlign } from '../render/displayList';
-import { PERSONALITY_PROFILES } from '../render/roughness/presets';
+import { builtinStyle, type ResolvedStyle } from '../render/style/resolve';
 import { sketchArrowPath } from '../render/roughness/roughArrow';
 import { markerRef, originRef } from '../render/svg/markers';
 import type { Theme } from '../render/theme/tokens';
@@ -83,8 +83,9 @@ export interface EdgeDescribeContext {
   sharedLabel?: { draws: boolean; x: number; y: number; side: Side };
   /** How far the reply's label moves to keep clear of a neighbour's (`edges/replyLabels.ts`). */
   replyShift?: { x: number; y: number };
-  /** Intentional Roughness. Defaults to `'clean'` at call sites
-   *  that construct this object directly without a preset. */
+  /** How the diagram is drawn. Wins over `preset` when both are given. */
+  style?: ResolvedStyle;
+  /** A built-in drawing hand by name, for callers with no resolved style. Defaults to `'clean'`. */
   preset?: PersonalityPreset;
   /**
    * The unresolved open points about this connector, when an export keeps them (`ExportOptions.
@@ -247,14 +248,14 @@ const PORTAL_PADDING_Y = 2;
  * marks are not drawn — the label rides in the leaving stub's words, and there is no line to hang
  * the rest on.
  */
-function describePortal(edge: DraftEdge, nodes: Map<string, DraftNode>, route: RoutedEdge, color: string, ctx: EdgeDescribeContext): DescribedEdge {
+function describePortal(edge: DraftEdge, nodes: Map<string, DraftNode>, route: RoutedEdge, color: string, ctx: EdgeDescribeContext, lineWidth: number): DescribedEdge {
   const source = nodes.get(edge.source);
   const target = nodes.get(edge.target);
   // The same seats the canvas gives them (`portalPlan.ts`), from the same shapes and connectors.
   const slots = source && target ? ctx.portalSlots?.(edge.id) : undefined;
   const ends = slots && source && target ? { source: slotPoint(rectOf(source), slots.source), target: slotPoint(rectOf(target), slots.target) } : route;
   const portal = portalOf(ends, edge, { source: portalName(source), target: portalName(target) });
-  const stroke = { color, width: CONNECTOR_STYLE.lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
+  const stroke = { color, width: lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
   const ring = (at: { x: number; y: number }): Shape => ({
     t: 'ellipse',
     cx: at.x,
@@ -318,16 +319,18 @@ export function describeEdge(
   const recoveryParts = compensationLabelParts(edge);
   const recoveryChipSide = recoveryParts && (labelSide === 'top' || labelSide === 'bottom') ? 'bottom' : labelSide;
 
-  const color = resolveEdgeColor(edge, nodes.get(edge.source), ctx.theme);
-  if (edge.portal) return describePortal(edge, nodes, route, color, ctx);
+  const style = ctx.style ?? builtinStyle(ctx.preset ?? 'clean');
+  const { lineWidth, head } = style.connector;
+  const color = resolveEdgeColor(edge, nodes.get(edge.source), ctx.theme, style.connector.colour);
+  if (edge.portal) return describePortal(edge, nodes, route, color, ctx, lineWidth);
 
   // Geometry (`route`, `labelX`/`labelY`/every overlay below) always reads
   // from the unperturbed `route` object — only the drawn stroke wobbles, so
   // label placement, direction, and attachment points stay exactly as legible
   // as Clean at every preset, and topology/routing never changes.
-  const profile = PERSONALITY_PROFILES[ctx.preset ?? 'clean'];
+  const profile = style.hand;
   const styledPath = styledConnectorPath(route.d, edge);
-  const strokeBase = { color, width: CONNECTOR_STYLE.lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
+  const strokeBase = { color, width: lineWidth, linecap: 'round' as const, dash: dashForEdge(edge) };
   const variant = markerVariantForEdge(edge);
   // A bundle's members each draw the whole shared trunk, so they must wobble
   // it identically or it frays into a rope — see `strokeSeed`.
@@ -374,6 +377,7 @@ export function describeEdge(
               arrowSeed(edge.id, ctx.spine),
               profile.arrowJitter,
               variant,
+              head,
             ),
             fill: variant === 'closed' ? color : 'none',
             stroke: variant === 'open' ? { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' } : undefined,
@@ -409,7 +413,7 @@ export function describeEdge(
           t: 'path',
           d: responseD,
           fill: 'none',
-          stroke: { color, width: Math.max(1.1, CONNECTOR_STYLE.lineWidth * 0.6), linecap: 'round', dash: RESPONSE_DASH },
+          stroke: { color, width: Math.max(1.1, lineWidth * 0.6), linecap: 'round', dash: RESPONSE_DASH },
           markerEnd: edge.directed && !responseHandDrawnArrow ? markerRef(color, 'open') : undefined,
           opacity: 0.8,
         },
@@ -423,6 +427,7 @@ export function describeEdge(
                   `${edge.id}:response-head`,
                   profile.arrowJitter,
                   'open',
+                  head,
                 ),
                 fill: 'none',
                 stroke: { color, width: CONNECTOR_STYLE.openArrowWidth, linecap: 'round' },

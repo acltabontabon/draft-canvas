@@ -53,7 +53,7 @@ const SPECS = {
   export: { title: 'Export', commandId: 'export' },
   arrange: { title: 'Arrange diagram', commandId: 'arrange' },
   findReplace: { title: 'Find and replace…', commandId: 'find-replace' },
-  settings: { title: 'Canvas settings', commandId: 'settings' },
+  settings: { title: 'Appearance', commandId: 'appearance', description: 'Your style, the canvas and its settings, beside the diagram.' },
   help: { title: 'Documentation', commandId: 'open-docs', description: 'The guides and reference, in a new tab.' },
   shortcuts: { title: 'Keyboard shortcuts', commandId: 'shortcuts' },
   about: { title: 'About Draft Canvas', commandId: 'about' },

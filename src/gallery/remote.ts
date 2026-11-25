@@ -9,7 +9,7 @@
 import { GALLERY_BASE, REQUEST_TIMEOUT_MS } from './source';
 
 /** A path inside the gallery repository: lowercase segments, never `..`, never absolute. */
-const SAFE_PATH = /^(?:[a-z0-9][a-z0-9._-]*\/)*[a-z0-9][a-z0-9._-]*\.(?:json|draftcanvas)$/;
+const SAFE_PATH = /^(?:[a-z0-9][a-z0-9._-]*\/)*[a-z0-9][a-z0-9._-]*\.(?:json|draftcanvas|draftstyle)$/;
 
 export class GalleryRequestError extends Error {
   readonly reason: 'offline' | 'not-found' | 'too-large' | 'refused';
@@ -22,11 +22,15 @@ export class GalleryRequestError extends Error {
 }
 
 /** Reads one gallery file as text, refusing anything over `maxBytes`. */
-export async function readGalleryFile(path: string, maxBytes: number): Promise<string> {
+export async function readGalleryFile(path: string, maxBytes: number, signal?: AbortSignal): Promise<string> {
   if (!SAFE_PATH.test(path) || path.includes('..')) throw new GalleryRequestError('refused');
-  let response: Response;
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (signal?.aborted) abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  const timeout = setTimeout(abort, REQUEST_TIMEOUT_MS);
   try {
-    response = await fetch(GALLERY_BASE + path, {
+    const response = await fetch(GALLERY_BASE + path, {
       method: 'GET',
       mode: 'cors',
       credentials: 'omit',
@@ -34,16 +38,20 @@ export async function readGalleryFile(path: string, maxBytes: number): Promise<s
       // GitHub caches raw files for a few minutes; ask it to check rather than answer from the
       // browser's own cache, so Refresh means refresh.
       cache: 'no-cache',
-      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+      signal: controller.signal,
     });
-  } catch {
+    if (response.status === 404) throw new GalleryRequestError('not-found');
+    if (!response.ok) throw new GalleryRequestError('offline');
+    const declared = Number(response.headers.get('content-length'));
+    if (Number.isFinite(declared) && declared > maxBytes) throw new GalleryRequestError('too-large');
+    const text = await response.text();
+    if (new TextEncoder().encode(text).length > maxBytes) throw new GalleryRequestError('too-large');
+    return text;
+  } catch (error) {
+    if (error instanceof GalleryRequestError) throw error;
     throw new GalleryRequestError('offline');
+  } finally {
+    clearTimeout(timeout);
+    signal?.removeEventListener('abort', abort);
   }
-  if (response.status === 404) throw new GalleryRequestError('not-found');
-  if (!response.ok) throw new GalleryRequestError('offline');
-  const declared = Number(response.headers.get('content-length'));
-  if (Number.isFinite(declared) && declared > maxBytes) throw new GalleryRequestError('too-large');
-  const text = await response.text();
-  if (new TextEncoder().encode(text).length > maxBytes) throw new GalleryRequestError('too-large');
-  return text;
 }

@@ -21,7 +21,6 @@ import {
   ACTOR_KINDS,
   ACTOR_FRAMES,
   ARTIFACT_KINDS,
-  BACKGROUND_FITS,
   BOUNDARY_PRESETS,
   CODE_LANGUAGES,
   COMPONENT_KINDS,
@@ -48,7 +47,6 @@ import {
   type ActorKind,
   type ActorFrame,
   type ArtifactKind,
-  type BackgroundFit,
   type BoundaryPreset,
   type CodeLanguage,
   type ComponentKind,
@@ -65,7 +63,6 @@ import {
   type EdgeAnchor,
   type EdgeRouting,
   type EdgeSemantic,
-  type EmbeddedBackgroundImage,
   type GridMode,
   type QueueKind,
   type RouteMode,
@@ -86,6 +83,7 @@ import { isRecord } from '../lib/isRecord';
 import { normalizeOpenPointText, normalizeTargets, OPEN_POINT_ID_PREFIX } from './openPoints';
 import { normalizeSequence } from './validateSequence';
 import { INK_ID_PREFIX, parseInkStroke } from './ink';
+import { normalizeStyle } from './style';
 
 export type NormalizeResult =
   | { ok: true; document: DraftDocument; repairs: string[] }
@@ -148,27 +146,6 @@ function parseWaypoints(value: unknown): DraftPoint[] | undefined {
     });
   }
   return points.length > 0 ? points : undefined;
-}
-
-/**
- * `settings.background.image`, when a file carries its backdrop inline (see
- * `EmbeddedBackgroundImage`). Anything but a base64 image data URI of an allowed size, with a
- * sensible natural size beside it, is dropped — "no image travelled" is the same state the file
- * would be in had the export left it out, and the canvas shows no background rather than failing.
- */
-function parseEmbeddedBackground(value: unknown): EmbeddedBackgroundImage | undefined {
-  if (!isRecord(value) || typeof value.dataUri !== 'string') return undefined;
-  // Strict base64 (whole four-character groups, padding only at the end): `atob` throws on
-  // anything looser such as "AAAAA" or "QQ=", and a damaged image must be dropped here rather than
-  // crash whoever decodes it later (a backup restore aborted on one).
-  const match = /^data:image\/[a-z0-9.+-]+;base64,((?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)$/i.exec(value.dataUri);
-  if (!match) return undefined;
-  // Decoded size, from the payload's length: three bytes for every four characters.
-  if (Math.floor((match[1]!.length * 3) / 4) > LIMITS.maxEmbeddedBackgroundBytes) return undefined;
-  const width = positiveIntOptional(value.width, 1, LIMITS.maxNodeSize);
-  const height = positiveIntOptional(value.height, 1, LIMITS.maxNodeSize);
-  if (width === undefined || height === undefined) return undefined;
-  return { dataUri: value.dataUri, width, height };
 }
 
 /** A starter id and a SHA-256, or nothing: anything else in `metadata.origin` is dropped. */
@@ -1029,7 +1006,6 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
 
   const viewportRaw = isRecord(raw.viewport) ? raw.viewport : {};
   const settingsRaw = isRecord(raw.settings) ? raw.settings : {};
-  const backgroundRaw = isRecord(settingsRaw.background) ? settingsRaw.background : {};
 
   const document: DraftDocument = {
     format: DRAFT_FORMAT,
@@ -1052,17 +1028,6 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     settings: {
       showSequence: settingsRaw.showSequence !== false,
       grid: oneOf<GridMode>(settingsRaw.grid, GRID_MODES, 'dots'),
-      background: {
-        enabled: backgroundRaw.enabled === true,
-        fit: oneOf<BackgroundFit>(backgroundRaw.fit, BACKGROUND_FITS, 'cover'),
-        dim: clamp(finite(backgroundRaw.dim, 0.55), 0, 1),
-        blur: clamp(finite(backgroundRaw.blur, 0), 0, 1),
-        ...(safeId(backgroundRaw.imageId) ? { imageId: safeId(backgroundRaw.imageId)! } : {}),
-        ...(() => {
-          const image = parseEmbeddedBackground(backgroundRaw.image);
-          return image === undefined ? {} : { image };
-        })(),
-      },
     },
     flows,
     ...(ink.length > 0 ? { ink } : {}),
@@ -1072,6 +1037,14 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     ...(() => {
       const level = oneOfOptional<ViewLevel>(raw.level, VIEW_LEVELS);
       return level === undefined ? {} : { level };
+    })(),
+    // The file's own look, read at the root only: a room is drawn the way its file is. Absent stays
+    // absent, which is what keeps an unstyled diagram following the device that opens it.
+    ...(() => {
+      if (!isRoot) return {};
+      const { style, repairs: styleRepairs } = normalizeStyle(raw.style);
+      repairs.push(...styleRepairs);
+      return style === undefined ? {} : { style };
     })(),
   };
 

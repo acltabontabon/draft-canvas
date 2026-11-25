@@ -1,4 +1,5 @@
 import { useUiStore } from '../store/uiStore';
+import { deviceStyle } from '../store/styleStore';
 import { isSharedEditing } from '../store/collabStore';
 import { createDocument } from '../document/factory';
 import { DEFAULT_TITLE } from '../document/sanitize';
@@ -14,7 +15,7 @@ import { dispatchCollabLanEvent, lanRelayOf } from './collabLan';
 import type { LanRelay } from '../collab/lan';
 import { confirmWrite, takeWrite, type AgentWrite } from './agentWrites';
 import { DocsPublisher } from './docs';
-import { readMarker, type DocsSettings } from '../export/docs/marker';
+import type { DocsSettings } from '../export/docs/marker';
 import { picturesOf } from '../export/docs/names';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isRecord } from '../lib/isRecord';
@@ -33,7 +34,6 @@ import {
   type CodeFolder,
   type CodeGrant,
   type DesktopApi,
-  type DocsImage,
   type DocsPublished,
   type DocsStatus,
   type MarkdownFile,
@@ -136,24 +136,6 @@ const encoder = new TextEncoder();
 /** `~/docs/Payments.draftcanvas` → `Payments`, whichever separator the platform shows. */
 function fileStem(displayPath: string): string {
   return displayPath.slice(Math.max(displayPath.lastIndexOf('/'), displayPath.lastIndexOf('\\')) + 1).replace(/\.draftcanvas$/i, '');
-}
-
-/** `~/docs/Payments.draftcanvas` → `~/docs`: the folder part of a shown path. */
-function parentOf(displayPath: string): string {
-  return displayPath.slice(0, Math.max(displayPath.lastIndexOf('/'), displayPath.lastIndexOf('\\'), 0));
-}
-
-/**
- * The diagram a listing of pictures belongs to, when the file isn't the open one: the source a
- * picture's note names, if the picture is named after it. Empty when none is.
- */
-function stemOfPictures(images: readonly DocsImage[]): string {
-  for (const image of images) {
-    const source = image.svg ? readMarker(image.svg)?.source : undefined;
-    const stem = source?.replace(/\.draftcanvas$/i, '');
-    if (stem && image.name.toLowerCase().startsWith(`${stem.toLowerCase()}.`)) return stem;
-  }
-  return '';
 }
 
 /** A room's text without its camera — the document's own `viewport` and, recursively, each room's. */
@@ -280,6 +262,11 @@ function describe(error: unknown): string {
  * the snapshots of unsaved changes — lives in the app's data folder, where a crash or a restart
  * leaves it for Home to offer back.
  */
+/** A new diagram with a copy of the style in use, so it keeps its look whoever opens it later. */
+function styled(document: DraftDocument): DraftDocument {
+  return document.style ? document : { ...document, style: deviceStyle() };
+}
+
 export class DesktopController {
   private readonly api: DesktopApi;
   private readonly docs: DocsPublisher;
@@ -298,7 +285,6 @@ export class DesktopController {
   private expectBaseline = true;
   /** A Quick Draft with anything in it: one left untouched has nothing worth keeping. */
   private edited = false;
-  private pendingBackground: { write: { mime: string; base64: string } } | { remove: true } | null = null;
   private snapshotTimer: unknown = null;
   private snapshotFirstAt: number | null = null;
   /** The recovery id this run wrote a copy of the open file's unsaved changes under, until it is
@@ -457,7 +443,7 @@ export class DesktopController {
     }
     const written = confirmWrite(event.id, event.displayPath, event.stamp);
     // The shell has written it, so its picture can follow; drawn from the text the agent's write held.
-    if (written && handle) void this.docs.refresh(handle, fileStem(event.displayPath), written.after, false);
+    if (written && handle) void this.docs.refresh(handle, fileStem(event.displayPath), written.after);
     const updated = () => this.ui.notify(`An AI agent updated “${written?.title || 'a diagram'}”.`, show);
     if (!written?.activate || !handle) return updated();
     // `activate`, carried out now that the change is in the file. Still without a question: when
@@ -546,6 +532,10 @@ export class DesktopController {
     }
     const leaving = this.session;
     if (leaving.kind === 'quick' || leaving.kind === 'pending') await this.discard(leaving.id);
+    // The person can edit or start sharing while the shell reads the target and its recovery list.
+    await this.flushApp();
+    const latestRefusal = this.quietOpenRefusal();
+    if (latestRefusal) return { opened: false, reason: latestRefusal };
     this.session = {
       kind: 'file',
       handle: opened.handle,
@@ -587,17 +577,7 @@ export class DesktopController {
         return { saved: false, reason: describe(error) };
       }
       if (result.outcome !== 'saved') return { saved: false, reason: 'The file changed on disk since it was opened.' };
-      session.stamp = result.stamp;
-      this.savedText = text;
-      await this.applyBackground(session.handle);
-      void this.docs.refresh(session.handle, session.name, text);
-      // See `saveNow`: edits made while this ran keep their snapshot.
-      if (this.latestText === text) {
-        await this.discard(session.recoveryId);
-        this.clearSnapshotTimer();
-      }
-      this.outside = null;
-      this.publish();
+      await this.finishSave(session, result.stamp, text);
       return { saved: true };
     };
     const waitFor = this.saving;
@@ -663,15 +643,6 @@ export class DesktopController {
       case 'draft-canvas:open-external':
         void this.api.openExternal(message.url).catch((error: unknown) => logDiagnostic(error, { operation: 'desktop-open-external' }));
         return;
-      case 'draft-canvas:background-write':
-        this.pendingBackground = { write: { mime: message.mime, base64: message.data } };
-        return;
-      case 'draft-canvas:background-remove':
-        this.pendingBackground = { remove: true };
-        return;
-      case 'draft-canvas:background-read':
-        void this.replyBackground(message.id);
-        return;
       case 'draft-canvas:flushed':
         this.flushes.get(message.id)?.();
         return;
@@ -702,18 +673,6 @@ export class DesktopController {
     this.latestText = info.text;
     if (this.expectBaseline) this.savedText = info.text;
     this.publish();
-  }
-
-  private async replyBackground(id: number): Promise<void> {
-    let image: { mime: string; base64: string } | null = null;
-    if (this.session.kind === 'file') {
-      try {
-        image = await this.api.sidecarRead(this.session.handle);
-      } catch (error) {
-        logDiagnostic(error, { operation: 'desktop-background-read' });
-      }
-    }
-    this.link.deliver({ type: 'draft-canvas:background', id, ...(image ? { mime: image.mime, data: image.base64 } : {}) });
   }
 
   // ─── Document state ─────────────────────────────────────────────────────────────────
@@ -768,7 +727,6 @@ export class DesktopController {
     this.expectBaseline = options.baseline;
     this.savedText = null;
     this.latestText = null;
-    this.pendingBackground = null;
     this.outside = null;
     this.snapshotFirstAt = null;
     this.clearSnapshotTimer();
@@ -821,6 +779,7 @@ export class DesktopController {
   private async switchTo(opened: OpenedDoc, recovered?: RecoveryEntry, settled = false): Promise<boolean> {
     const parsed = deserializeDocument(opened.text);
     if (!parsed.ok) {
+      if (recovered) return this.recoverAsDraft(recovered);
       await this.api.showError(`Draft Canvas couldn’t open ${opened.name}.draftcanvas`, parsed.error);
       return false;
     }
@@ -948,7 +907,7 @@ export class DesktopController {
     this.store.getSnapshot().explorerSave?.cancel();
     await this.swap('Couldn’t start a Quick Draft', async () => {
       if (!(await this.settleBeforeLeaving())) return;
-      const document = starter === 'example' ? exampleCanvas() : starter ?? createDocument(QUICK_DRAFT_TITLE);
+      const document = styled(starter === 'example' ? exampleCanvas() : starter ?? createDocument(QUICK_DRAFT_TITLE));
       if (starter === 'example') useUiStore.getState().setExampleDocumentId(document.metadata.id);
       this.session = { kind: 'quick', id: `q_${uuid()}` };
       this.edited = false;
@@ -962,7 +921,7 @@ export class DesktopController {
     this.store.getSnapshot().explorerSave?.cancel();
     await this.swap('Couldn’t create the canvas', async () => {
       if (!(await this.settleBeforeLeaving())) return;
-      const blank = encoder.encode(serializeDocument(createDocument()));
+      const blank = encoder.encode(serializeDocument(styled(createDocument())));
       const saved = await this.api.saveAs(DEFAULT_TITLE, blank);
       if (!saved) {
         // Whatever was open stays open; its snapshot was settled above and is only rewritten on the next edit.
@@ -984,7 +943,7 @@ export class DesktopController {
   async newCanvasIn(project: Handle, relPath = ''): Promise<void> {
     await this.swap('Couldn’t create the canvas', async () => {
       if (!(await this.settleBeforeLeaving())) return;
-      const document = createDocument();
+      const document = styled(createDocument());
       this.session = { kind: 'pending', id: `q_${uuid()}`, project, relPath };
       this.edited = false;
       this.load(serializeDocument(document), document.metadata.title, { baseline: true });
@@ -1001,22 +960,32 @@ export class DesktopController {
         try {
           opened = await this.api.openHandle(entry.origin.handle);
         } catch (error) {
-          // The file is gone or unreadable: the work is still worth having, as a draft of its own.
-          if (!(error instanceof DesktopError) || !['NotFound', 'InvalidHandle', 'PermissionDenied'].includes(error.kind)) throw error;
+          if (!(error instanceof DesktopError)) throw error;
         }
         if (opened) {
           await this.switchTo(opened, entry);
           return;
         }
       }
-      if (!(await this.settleBeforeLeaving())) return;
-      const text = await this.api.recoveryRead(entry.id);
-      this.session = { kind: 'quick', id: entry.id };
-      this.edited = true;
-      this.load(text, QUICK_DRAFT_TITLE, { baseline: true });
-      this.publish();
-      void this.refreshRecovery();
+      await this.recoverAsDraft(entry);
     });
+  }
+
+  /** The saved file may be gone, unreadable or invalid. The recovery copy can still stand on its own. */
+  private async recoverAsDraft(entry: RecoveryEntry): Promise<boolean> {
+    const text = await this.api.recoveryRead(entry.id);
+    const parsed = deserializeDocument(text);
+    if (!parsed.ok) {
+      await this.api.showError('Couldn’t recover the draft', parsed.error);
+      return false;
+    }
+    if (!(await this.settleBeforeLeaving())) return false;
+    this.session = { kind: 'quick', id: entry.id };
+    this.edited = true;
+    this.load(text, QUICK_DRAFT_TITLE, { baseline: true });
+    this.publish();
+    void this.refreshRecovery();
+    return true;
   }
 
   async discardRecovery(id: string): Promise<void> {
@@ -1088,20 +1057,25 @@ export class DesktopController {
         result = await this.api.saveDocument(session.handle, bytes, undefined);
       }
       if (result.outcome !== 'saved') return;
-      session.stamp = result.stamp;
-      this.savedText = text;
-      await this.applyBackground(session.handle);
-      void this.docs.refresh(session.handle, session.name, text);
-      // Only when nothing was edited while the save ran: those edits keep the file dirty, and their
-      // recovery snapshot (already written, or on its timer) is all that stands between them and a
-      // crash before the next keystroke.
-      if (this.latestText === text) {
-        await this.discard(session.recoveryId);
-        this.clearSnapshotTimer();
-      }
-      this.outside = null;
-      this.publish();
+      await this.finishSave(session, result.stamp, text);
     });
+  }
+
+  private async finishSave(session: Extract<Session, { kind: 'file' }>, stamp: string, text: string): Promise<void> {
+    session.stamp = stamp;
+    void this.docs.refresh(session.handle, session.name, text);
+    if (this.session !== session) return;
+    this.savedText = text;
+    if (!this.dirty) {
+      this.clearSnapshotTimer();
+      this.snapshotFirstAt = null;
+      await this.discard(session.recoveryId);
+      if (this.session !== session) return;
+      // A new edit's timer may have already fired while the discard was pending.
+      if (this.dirty && this.snapshotTimer === null) this.scheduleSnapshot();
+    }
+    this.outside = null;
+    this.publish();
   }
 
   // ─── Use in docs ────────────────────────────────────────────────────────────────────
@@ -1174,7 +1148,6 @@ export class DesktopController {
     const saved = await this.api.saveAs(
       this.suggestedName(text),
       encoder.encode(text),
-      session.kind === 'file' && !this.pendingBackground ? session.handle : undefined,
       session.kind === 'pending' ? { projectHandle: session.project, relPath: session.relPath } : undefined,
     );
     if (saved && this.session === session) await this.becomeFile(saved, text);
@@ -1212,7 +1185,6 @@ export class DesktopController {
       readOnly: false,
       recoveryId: `f_${uuid()}`,
     };
-    await this.applyBackground(saved.handle);
     this.savedText = text;
     void this.docs.refresh(saved.handle, saved.name, text);
     // A chooser can stay open while an agent or another app event updates the diagram. Only the
@@ -1227,21 +1199,6 @@ export class DesktopController {
     this.publish();
     void this.refreshRecents();
     void this.refreshRecovery();
-  }
-
-  /** The image is the shell's to keep beside the file, and only a save moves it there. */
-  private async applyBackground(handle: Handle): Promise<void> {
-    const pending = this.pendingBackground;
-    if (!pending) return;
-    this.pendingBackground = null;
-    try {
-      if ('write' in pending) await this.api.sidecarWrite(handle, pending.write.mime, pending.write.base64);
-      else await this.api.sidecarRemove(handle);
-    } catch (error) {
-      // The file itself is saved; only its picture isn't, and the canvas still shows it this session.
-      logDiagnostic(error, { operation: 'desktop-background-save' });
-      this.ui.notify('Saved, but the background image couldn’t be saved beside the file.');
-    }
   }
 
   private suggestedName(text: string): string {
@@ -1328,7 +1285,8 @@ export class DesktopController {
   /** "Rename file…" from Find a Diagram, for a file that's only ever been scanned, not opened. */
   async renameProjectFile(project: Handle, relPath: string, newStem: string): Promise<RenamedFile> {
     const handle = await this.api.projectGrantFile(project, relPath);
-    const renamed = await this.renameFile(handle, newStem);
+    const source = this.projects.find((candidate) => candidate.info.handle === project);
+    const renamed = await this.renameFile(handle, newStem, source ? `${source.info.displayPath}/${relPath}` : relPath);
     // The project's listing still names the old file — and opening that tile would look for a path
     // that's gone. Listed again before the dialog closes, so the tile it returns to is the new one.
     await this.scanProjects([project], { again: true });
@@ -1337,8 +1295,8 @@ export class DesktopController {
 
   /** "Rename file…": changes a file's name in place. `handle` need not be the open document's — Find a
    * Diagram can rename any file it has a handle for, open or not. */
-  async renameFile(handle: Handle, newStem: string): Promise<RenamedFile> {
-    return this.relocate(handle, () => this.api.renameFile(handle, newStem));
+  async renameFile(handle: Handle, newStem: string, fromPath?: string): Promise<RenamedFile> {
+    return this.relocate(handle, () => this.api.renameFile(handle, newStem), fromPath);
   }
 
   /** "Move to Project…" from the menu, for the file that's open right now. */
@@ -1361,7 +1319,7 @@ export class DesktopController {
    * the answer that takes the next free name.
    */
   async moveFile(handle: Handle, fromPath: string, project: Handle, { keepBoth = false }: { keepBoth?: boolean } = {}): Promise<MovedFile> {
-    const moved = await this.relocate(handle, () => this.api.projectMoveFile(handle, project, keepBoth));
+    const moved = await this.relocate(handle, () => this.api.projectMoveFile(handle, project, keepBoth), fromPath);
     const left = this.projects.filter(
       (candidate) => candidate.status === 'ready' && [`${candidate.info.displayPath}/`, `${candidate.info.displayPath}\\`].some((root) => fromPath.startsWith(root)),
     );
@@ -1382,7 +1340,7 @@ export class DesktopController {
    * so a delayed write can never recreate the file at its old path. Application state — the open
    * session's handle, name and path — is only ever touched after the filesystem change has succeeded.
    */
-  private async relocate<T extends { handle: Handle; name: string; displayPath: string }>(handle: Handle, change: () => Promise<T>): Promise<T> {
+  private async relocate<T extends { handle: Handle; name: string; displayPath: string }>(handle: Handle, change: () => Promise<T>, fromPath?: string): Promise<T> {
     // `this.renaming` must be set before anything here awaits, in the same tick this is called on —
     // otherwise a `save()` issued right after this returns could run its own "wait for a rename"
     // check before this has had a chance to record that one is starting.
@@ -1392,11 +1350,12 @@ export class DesktopController {
       // Docs pictures keep their place: the Markdown points at them there. Looked at before the move
       // so the person can be told the link ended, rather than finding out from a stale README.
       const before = this.session.kind === 'file' && this.session.handle === handle ? this.session : null;
-      const status = await this.api.docsStatus(handle).catch(() => null);
+      const location = before?.displayPath ?? fromPath;
+      const name = before?.name ?? (location ? fileStem(location) : null);
+      const status = name ? await this.api.docsStatus(handle).catch(() => null) : null;
       const changed = await change();
-      // Whichever diagram the shell found pictures for under the old name; their notes name it.
-      const pictures = status ? picturesOf(status.images, before?.name ?? stemOfPictures(status.images)) : [];
-      const sameFile = before !== null && before.name === changed.name && parentOf(before.displayPath) === parentOf(changed.displayPath);
+      const pictures = status && name ? picturesOf(status.images, name) : [];
+      const sameFile = changed.displayPath === location || (changed.handle === handle && changed.name === name);
       if (pictures.length > 0 && !sameFile) {
         const first = pictures[0]!.name;
         const what = pictures.length === 1 ? `${first} stayed` : `${first} and ${pictures.length - 1} more ${pictures.length === 2 ? 'picture' : 'pictures'} stayed`;
@@ -1434,7 +1393,7 @@ export class DesktopController {
     const session = this.session;
     if (session.kind === 'none') return true;
     if (session.kind === 'quick' || session.kind === 'pending') {
-      if (this.edited) await this.snapshotNow();
+      if (this.edited) await this.snapshotNow(true);
       else await this.discard(session.id);
       return true;
     }
@@ -1472,7 +1431,6 @@ export class DesktopController {
     this.savedText = null;
     this.latestText = null;
     this.edited = false;
-    this.pendingBackground = null;
     this.clearSnapshotTimer();
     this.publish();
     void this.refreshRecents();
@@ -1508,18 +1466,18 @@ export class DesktopController {
   }
 
   /** Writes the working copy into the app's data folder. The user's file is never touched here. */
-  private snapshotNow(): Promise<void> {
+  private snapshotNow(required = false): Promise<void> {
     this.clearSnapshotTimer();
     this.snapshotFirstAt = null;
     // One write at a time, each reading the text when its turn comes. Two could finish in either
     // order on the app's blocking threads: a timer's write still in flight at quit landed after
     // quit's newer one, and the recovery copy lost the last edits.
-    const write = this.snapshotWrites.then(() => this.writeSnapshot());
+    const write = this.snapshotWrites.then(() => this.writeSnapshot(required));
     this.snapshotWrites = write.catch(() => undefined);
     return write;
   }
 
-  private async writeSnapshot(): Promise<void> {
+  private async writeSnapshot(required: boolean): Promise<void> {
     if (this.renaming) await this.renaming;
     const session = this.session;
     const id = this.recoveryId;
@@ -1539,7 +1497,8 @@ export class DesktopController {
         if (this.session === session && !this.dirty) await this.discardCleanSnapshot();
       }
     } catch (error) {
-      // Losing a snapshot costs only what a crash would have cost; it must not interrupt the drawing.
+      // Background snapshots must not interrupt drawing. Before leaving a draft, the copy is required.
+      if (required) throw error;
       logDiagnostic(error, { operation: 'desktop-snapshot' });
     }
   }
@@ -1578,7 +1537,13 @@ export class DesktopController {
       const session = this.session;
       if (session.kind === 'none') return void (await this.api.quitAck('ready'));
       if (session.kind === 'quick' || session.kind === 'pending') {
-        if (this.edited) await this.snapshotNow();
+        try {
+          if (this.edited) await this.snapshotNow(true);
+        } catch (error) {
+          await this.api.quitAck('cancel');
+          await this.api.showError('Couldn’t keep the draft', describe(error)).catch(() => {});
+          return;
+        }
         return void (await this.api.quitAck('ready'));
       }
       if (this.dirty) await this.snapshotNow();

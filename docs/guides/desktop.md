@@ -37,6 +37,7 @@ Choose **Quick Draft** on Home (`⌘N`) and start drawing; no name or folder nee
 | Rename, revert, find on disk | **File → Rename File…**, **Revert to Saved…**, **Reveal in Finder** / **File Explorer** |
 
 - The file changes only when you save. Unsaved work has a recovery copy, and closing asks first.
+- If the original file can’t be opened, its recovery copy opens as a Quick Draft from Home.
 - A diagram published for docs keeps its SVG beside it updated on save; see
   [Diagrams in your docs](diagrams-in-docs.md#on-the-desktop).
 - If another app changes the file, it reloads when you have no unsaved edits; otherwise Draft Canvas
@@ -56,7 +57,7 @@ current folder. **Find a diagram** (`⌘F` on Home) searches projects, recent fi
 
 To move a diagram to another project, point at its tile on Home or in **Find a diagram** and choose
 **Move to a project**, or drag the tile onto a project's name above the grid. For the open diagram,
-use **File → Move to Project…**. It lands in the project's top folder with its background image. If
+use **File → Move to Project…**. It lands in the project's top folder. If
 the project already has a diagram with that name, Draft Canvas asks first; **Keep both** numbers the
 moved one, and nothing is replaced.
 
@@ -85,8 +86,9 @@ them is installed; click it or press `⌘J`. See
 
 ## Settings
 
-**Settings…** (`⌘,`) has five pages: **General** (closing the window), **Canvas** (drawing style,
-next-shape suggestions and the open diagram's background), **AI agents**, **Updates** and **Support**
+**Settings…** (`⌘,`) has six pages: **General** (closing the window), **Appearance** (your style, and
+using it in the open diagram), **Canvas** (next-shape suggestions),
+**AI agents**, **Updates** and **Support**
 (a diagnostic report with no diagram content or file paths, never sent automatically).
 **Canvas Settings…** in the menu bar and the sliders button in the status bar open it at **Canvas**.
 Licences are under **About Draft Canvas**.

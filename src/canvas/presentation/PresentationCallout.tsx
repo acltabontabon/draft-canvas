@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, type AnimationEvent, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
-import { useInternalNode, useStoreApi } from '@xyflow/react';
+import { useInternalNode, useReactFlowStoreApi } from '@xyflow/react';
 import { displayNameFor } from '../../document/factory';
 import type { Attachment, DraftNode } from '../../document/types';
 import {
@@ -99,7 +99,7 @@ export function PresentationCallout({
   variant?: 'present' | 'peek';
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const storeApi = useStoreApi();
+  const { optionsStore, viewportStore, nodesStore } = useReactFlowStoreApi();
   const theme = useThemeValue();
   const document = useEditorStore((state) => state.document);
   const edge = subject.hostKind === 'edge' ? edgeIndex(document.edges).get(subject.hostId) : undefined;
@@ -150,7 +150,9 @@ export function PresentationCallout({
   // mounted yet (its row renders in another component's commit) is looked for again next frame.
   const markerRef = useRef<{ box: Box; measured: boolean; below?: boolean } | null>(null);
   useLayoutEffect(() => {
-    const { domNode: root, transform, nodeLookup } = storeApi.getState();
+    const { domNode: root } = optionsStore.getState();
+    const { transform } = viewportStore.getState();
+    const { nodeLookup } = nodesStore.getState();
     markerRef.current = null;
     chromeRef.current = null;
     if (!root) return;
@@ -185,7 +187,7 @@ export function PresentationCallout({
         }),
       ),
     };
-  }, [document, storeApi, source, target, hostInternal, anchor]);
+  }, [document, optionsStore, viewportStore, nodesStore, source, target, hostInternal, anchor]);
 
   // The tallest a docked callout may be and still clear the flow bar. Only ever tightens while this
   // callout lives: capping shrinks its measured size, and a cap that lifted again as a result would
@@ -200,7 +202,8 @@ export function PresentationCallout({
     const { root, size } = frame;
     if (root.height > rootHeightRef.current + 1) roomRef.current = Number.POSITIVE_INFINITY;
     rootHeightRef.current = root.height;
-    const { transform, domNode } = storeApi.getState();
+    const { transform } = viewportStore.getState();
+    const { domNode } = optionsStore.getState();
     const [tx, ty, zoom] = transform;
     // Flow → screen is one affine map; `flowToScreenPosition` per corner, per box, per frame adds up.
     const toScreen = (box: Box): Box => ({

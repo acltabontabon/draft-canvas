@@ -15,7 +15,7 @@ import { CURRENT_VERSION } from '../document/types';
 import { parseDocument } from '../document/validate';
 import { CLOSE_GRACE_MS, GONE_MS, HEARTBEAT_MS, HOLD_RETRY_MS, REAL_CLOCK, RESYNC_RETRY_MS, SILENT_MS, type Clock } from './clock';
 import type { Change } from './changes';
-import { diffFile, wireSettings } from './diff';
+import { diffFile } from './diff';
 import {
   encode,
   exceedsMessageLimit,
@@ -97,18 +97,6 @@ const RESEND_RATE_BYTES = 768 * 1024;
 const MAX_HELD = 4096;
 const MAX_HELD_BYTES = 2 * MAX_MESSAGE_BYTES;
 
-/**
- * A fresh copy of the owner's file, held to what a change may carry: a file's checks, and no embedded
- * background image — which no change ever carries, and which would otherwise surface only later, in
- * this person's editable copy or an export of it.
- */
-function readSnapshot(snapshot: unknown): ReturnType<typeof parseDocument> {
-  const parsed = parseDocument(snapshot);
-  if (!parsed.ok) return parsed;
-  const settings = wireSettings(parsed.document.settings);
-  return settings === parsed.document.settings ? parsed : { ...parsed, document: { ...parsed.document, settings } };
-}
-
 function resendOf(message: Resend): Resend {
   return message.handled === undefined || message.epoch === undefined ? {} : { handled: message.handled, epoch: message.epoch };
 }
@@ -148,6 +136,7 @@ export class GuestSession {
   /** The epoch of the last fresh copy taken in, for every patch sent after it (`Resend`); `null` from an older owner. */
   private epoch: number | null = null;
   private ended = false;
+  private status: GuestStatus | null = null;
   private readonly env: GuestEnvironment;
   private readonly events: GuestEvents;
   private readonly clock: Clock;
@@ -193,21 +182,23 @@ export class GuestSession {
     this.lastHeard = this.clock.now();
     const offMessage = transport.onMessage((text) => {
       if (exceedsMessageLimit(text)) return this.finish('too-large');
-      this.lastHeard = this.clock.now();
       const message = readHostMessage(parseWire(text));
-      if (message) this.receive(message, utf8Bytes(text));
+      if (!message) return;
+      this.lastHeard = this.clock.now();
+      this.receive(message, utf8Bytes(text));
+      // A stalled connection can start delivering again without a transport state change.
+      if (!this.ended && this.transport === transport && this.welcomed && transport.state === 'open') this.setStatus('live');
     });
     const offState = transport.onState((state) => {
       if (this.transport !== transport || this.ended) return;
-      if (state === 'closed') this.events.status('reconnecting');
-      else if (state === 'degraded') this.events.status('reconnecting');
-      else if (state === 'open' && this.replica) this.events.status('live');
+      if (state === 'closed' || state === 'degraded') this.setStatus('reconnecting');
+      else if (state === 'open' && this.welcomed) this.setStatus('live');
     });
     this.release = () => {
       offMessage();
       offState();
     };
-    this.events.status(this.replica ? 'reconnecting' : 'joining');
+    this.setStatus(this.replica ? 'reconnecting' : 'joining');
     const hello: HelloMessage = {
       t: 'hello',
       v: PROTOCOL_VERSION,
@@ -409,7 +400,7 @@ export class GuestSession {
     // Anyone who was in the session knows its id: only the owner can answer a proof with one of its own.
     if (this.expectProof && !(message.proof !== undefined && this.ownerProof !== null && sameSecret(message.proof, this.ownerProof))) return this.refuseLink();
     if (message.v !== PROTOCOL_VERSION) return this.finish('version');
-    const parsed = readSnapshot(message.snapshot);
+    const parsed = parseDocument(message.snapshot);
     if (!parsed.ok) return this.finish('protocol');
     this.welcomed = true;
     this.sessionId = message.session;
@@ -457,7 +448,7 @@ export class GuestSession {
     }
     this.events.joined(message.peer, message.role, message.peers.find((peer) => peer.id === message.peer)?.color);
     this.events.peers(message.peers.filter((peer) => peer.id !== message.peer).map((peer) => ({ ...peer, link: 'live' as const })));
-    this.events.status('live');
+    this.setStatus('live');
     this.events.unconfirmed(this.replica!.pending.length);
   }
 
@@ -472,7 +463,7 @@ export class GuestSession {
     this.transport = null;
     this.expectProof = false;
     transport?.close('unauthorized');
-    this.events.status('reconnecting');
+    this.setStatus('reconnecting');
     this.events.refusedLink?.();
   }
 
@@ -483,7 +474,7 @@ export class GuestSession {
     this.localChanged();
     const replica = this.replica;
     if (message.t === 'snapshot') {
-      const parsed = readSnapshot(message.snapshot);
+      const parsed = parseDocument(message.snapshot);
       if (!parsed.ok || !replica) return this.finish('protocol');
       replica.reset(parsed.document, message.seq);
       this.awaitingSnapshot = false;
@@ -567,9 +558,9 @@ export class GuestSession {
       const silent = this.clock.now() - this.lastHeard;
       if (silent > GONE_MS) {
         this.transport?.close('timeout');
-        this.events.status('reconnecting');
+        this.setStatus('reconnecting');
       } else if (silent > SILENT_MS) {
-        this.events.status('reconnecting');
+        this.setStatus('reconnecting');
       }
       this.pingCount += 1;
       this.send({ t: 'ping', n: this.pingCount });
@@ -594,7 +585,13 @@ export class GuestSession {
     this.heldOut = false;
     this.restorePending = false;
     this.clearOutbox();
-    this.events.status('ended', reason);
+    this.setStatus('ended', reason);
+  }
+
+  private setStatus(status: GuestStatus, reason?: EndReason): void {
+    if (this.status === status) return;
+    this.status = status;
+    this.events.status(status, reason);
   }
 
   private send(message: GuestMessage, priority: 'commit' | 'presence' = 'commit'): void {
