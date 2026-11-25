@@ -552,6 +552,12 @@ pub fn refused_key(name: &str) -> Option<&'static str> {
         return Some("it names a program for Git to run or moves the working tree");
     }
     match section {
+        // Git 2.50+ runs `hook.<name>.command` on `hook.<name>.event` whatever `core.hooksPath` says.
+        "hook" => return Some("it configures a hook command"),
+        // `http.curloptResolve`, `http.sslVerify`, `http.sslCAInfo`, `http.proxy`, `http.extraHeader`
+        // and every `http.<url>.*` can send a checked https address, and the credentials for it,
+        // somewhere else. A `-c` override doesn't beat `http.<url>.*`, so the whole section is refused.
+        "http" => return Some("it changes where and how Git connects over HTTPS"),
         "credential" => return Some("it configures credentials"),
         "filter" => return Some("it defines a content filter"),
         "include" | "includeif" => return Some("it includes other configuration"),
@@ -563,7 +569,13 @@ pub fn refused_key(name: &str) -> Option<&'static str> {
         }
         "merge" if has_sub && last == "driver" => return Some("it names a merge driver"),
         "gpg" if has_sub && last == "program" => return Some("it names a signing program"),
-        "remote" if has_sub && matches!(last, "uploadpack" | "receivepack" | "vcs" | "mirror") => {
+        "remote"
+            if has_sub
+                && matches!(
+                    last,
+                    "uploadpack" | "receivepack" | "vcs" | "mirror" | "proxy"
+                ) =>
+        {
             return Some("it changes how Git talks to a remote")
         }
         _ => {}
@@ -572,6 +584,14 @@ pub fn refused_key(name: &str) -> Option<&'static str> {
         return Some("it names a helper program");
     }
     None
+}
+
+/// `<name>` of a `hook.<name>.<key>` configuration key, when it is one `-c` can name back safely.
+pub fn hook_name(key: &str) -> Option<String> {
+    let rest = key.trim().strip_prefix("hook.")?;
+    let (name, _) = rest.rsplit_once('.')?;
+    let ok = !name.is_empty() && !name.contains('=') && !name.chars().any(char::is_control);
+    ok.then(|| name.to_string())
 }
 
 /// Keys whose value Draft Canvas overrides on every run anyway: reported, not refused.
@@ -642,6 +662,9 @@ pub struct Git {
     /// Harmless transport settings from the system configuration that a fresh `git` would have read
     /// (`http.sslBackend`, `http.sslCAInfo` on Windows), since system configuration is off.
     system: Vec<String>,
+    /// Names of config-based hooks (`hook.<name>.*`) in the person's global and system configuration:
+    /// every run disables each one (`hook.<name>.enabled=false`, its events reset).
+    config_hooks: Vec<String>,
     hooks: PathBuf,
     cwd: PathBuf,
     #[cfg(test)]
@@ -681,6 +704,7 @@ impl Git {
             version: String::new(),
             helpers: Vec::new(),
             system: Vec::new(),
+            config_hooks: Vec::new(),
             hooks,
             cwd,
             #[cfg(test)]
@@ -712,6 +736,7 @@ impl Git {
         git.version = version;
         git.helpers = git.read_helpers();
         git.system = git.read_system_transport();
+        git.config_hooks = git.read_config_hooks();
         Ok(git)
     }
 
@@ -840,6 +865,42 @@ impl Git {
         out
     }
 
+    /// The names of config-based hooks the person's global and system configuration define.
+    fn read_config_hooks(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for (scope, system) in [("--system", true), ("--global", false)] {
+            let Ok(found) = self.bare_run(
+                &args![
+                    "config",
+                    scope,
+                    "--name-only",
+                    "-z",
+                    "--get-regexp",
+                    r"^hook\."
+                ],
+                system,
+            ) else {
+                continue;
+            };
+            if !found.ok() {
+                continue;
+            }
+            for key in found.stdout.split(|b| *b == 0) {
+                if let Some(name) = hook_name(&String::from_utf8_lossy(key)) {
+                    if !out.contains(&name) {
+                        out.push(name);
+                    }
+                }
+            }
+        }
+        out
+    }
+
+    #[cfg(test)]
+    pub(super) fn add_config_hook_for_tests(&mut self, name: &str) {
+        self.config_hooks.push(name.to_string());
+    }
+
     fn read_system_transport(&self) -> Vec<String> {
         let mut out = Vec::new();
         let get = |key: &str| -> Option<String> {
@@ -925,6 +986,10 @@ impl Git {
         }
         config.extend(rest.iter().map(OsString::from));
         config.extend(self.system.iter().map(OsString::from));
+        for name in &self.config_hooks {
+            config.push(format!("hook.{name}.enabled=false").into());
+            config.push(format!("hook.{name}.event=").into());
+        }
         for entry in config {
             command.arg("-c").arg(entry);
         }

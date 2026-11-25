@@ -212,7 +212,13 @@ fn found(root: &Path, git_dir: PathBuf, common: PathBuf, file: &Path) -> Result<
     })
 }
 
+/// A small regular file's text. Anything else (a FIFO, a device, a directory, a link) is not read:
+/// opening a FIFO would block for ever.
 fn read_small(path: &Path) -> Option<String> {
+    let meta = fs::symlink_metadata(path).ok()?;
+    if !meta.is_file() || meta.len() > 4096 {
+        return None;
+    }
     let mut text = String::new();
     fs::File::open(path)
         .ok()?
@@ -993,17 +999,27 @@ pub fn commit_current(
         "draft-canvas: commit diagram",
     )?;
     let cacheinfo = format!("{mode},{blob},{}", repo.rel_path);
+    // `--add`: a diagram that was untracked has no index entry to replace.
     let indexed = git.run(
         &repo.place(),
-        &args!["update-index", "--cacheinfo", &cacheinfo],
+        &args!["update-index", "--add", "--cacheinfo", &cacheinfo],
         None,
         LOCAL_TIMEOUT,
         OUTPUT_CAP,
-    )?;
-    if !indexed.ok() {
+    );
+    if !indexed.as_ref().is_ok_and(|out| out.ok()) {
+        let index_state = if info.path_untracked {
+            "Git's index doesn't list it yet, so `git status` shows it as deleted and your next commit would remove it"
+        } else {
+            "Git's index still holds the version from before, so `git status` shows the diagram as changed back"
+        };
         return Err(HistoryError::new(
             Code::Unavailable,
-            "The commit was made, but Git's index couldn't be updated, so the diagram may show as changed until you stage it.",
+            format!(
+                "The commit {} is on {branch} with the diagram, but {index_state}. Your other staged changes are untouched. Stage {} (git add) to put things right.",
+                &commit[..12],
+                repo.rel_path
+            ),
         )
         .with_reason("index-not-updated"));
     }
@@ -1012,6 +1028,19 @@ pub fn commit_current(
         oid: commit,
         changed: true,
     })
+}
+
+/// Only the diagram's own publish branch, or the branch HEAD is on, may be pushed from here.
+fn require_pushable(git: &Git, repo: &ProjectRepo, branch: &str) -> Result<()> {
+    if branch == publish_branch_name(&repo.rel_path)
+        || head_branch(git, repo)?.as_deref() == Some(branch)
+    {
+        return Ok(());
+    }
+    Err(HistoryError::invalid(
+        "Draft Canvas pushes only this diagram's own branch or the branch you're on.",
+    )
+    .with_reason("not-publishable"))
 }
 
 fn checked_branch(git: &Git, repo: &ProjectRepo, branch: &str) -> Result<(String, String)> {
@@ -1031,6 +1060,7 @@ fn checked_branch(git: &Git, repo: &ProjectRepo, branch: &str) -> Result<(String
 /// counted and listed, so commits other than the diagram's show before anything is published.
 pub fn push_preview(git: &Git, repo: &ProjectRepo, branch: &str) -> Result<ProjectPushPreview> {
     require_scan(git, repo)?;
+    require_pushable(git, repo, branch)?;
     checked_effective_urls(git, &repo.place(), true)?;
     let (name, local) = checked_branch(git, repo, branch)?;
     let remote = resolve(
@@ -1097,6 +1127,7 @@ pub fn push_preview(git: &Git, repo: &ProjectRepo, branch: &str) -> Result<Proje
 /// Pushes exactly `refs/heads/<branch>` to the same name on the existing `origin`. Never forced.
 pub fn push(git: &Git, repo: &ProjectRepo, branch: &str) -> Result<()> {
     require_scan(git, repo)?;
+    require_pushable(git, repo, branch)?;
     checked_effective_urls(git, &repo.place(), true)?;
     let (name, _) = checked_branch(git, repo, branch)?;
     let out = git.network(

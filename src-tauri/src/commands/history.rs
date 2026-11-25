@@ -398,9 +398,14 @@ pub async fn history_push(
     repo: String,
     refs: Vec<String>,
 ) -> Result<Vec<remote::PushedRef>, AppError> {
-    run_blocking(&app, move |_, state| {
+    run_blocking(&app, move |app, state| {
         let git = remote::require_git(&state.history)?;
-        Ok(remote::push(&state.history, &git, &repo, &refs)?)
+        // The first publish to an address is confirmed in a native dialog the page can't answer.
+        let confirm = |title: &str, message: &str| {
+            let buttons = ["Publish".to_string(), "Cancel".to_string()];
+            matches!(crate::dialogs::ask(app, title, message, &buttons), Ok(0))
+        };
+        Ok(remote::push(&state.history, &git, &repo, &refs, &confirm)?)
     })
     .await
 }

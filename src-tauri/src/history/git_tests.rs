@@ -159,6 +159,17 @@ fn dangerous_configuration_keys_are_recognised() {
         "uploadpack.packobjectshook",
         "url.https://evil.example/.insteadof",
         "url.ssh://evil/.pushinsteadof",
+        "hook.x.command",
+        "hook.x.event",
+        "hook.linter.enabled",
+        "http.curloptresolve",
+        "http.sslverify",
+        "http.sslcainfo",
+        "http.proxy",
+        "http.extraheader",
+        "http.cookiefile",
+        "http.https://github.com/.sslverify",
+        "remote.origin.proxy",
         "sendemail.smtp.helper",
     ] {
         assert!(refused_key(key).is_some(), "{key} was allowed");
@@ -172,6 +183,7 @@ fn dangerous_configuration_keys_are_recognised() {
         "core.hookspath",
         "core.fsmonitor",
         "remote.origin.url",
+        "remote.origin.pushurl",
         "remote.origin.fetch",
         "branch.main.remote",
         "branch.main.merge",
@@ -510,6 +522,10 @@ fn install_hooks(dir: &Path, marker: &Path) {
             fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
         }
     }
+}
+
+fn yes(_: &str, _: &str) -> bool {
+    true
 }
 
 fn reason(result: Result<impl std::fmt::Debug>) -> &'static str {
@@ -996,7 +1012,7 @@ fn no_hook_ever_runs_when_publishing_or_pushing() {
     install_hooks(&managed_remote.join("hooks"), &served);
     install_hooks(&history.root().join("h1.git").join("hooks"), &marker);
     remote::remote_set(&history, &git, "h1", &file_url(&managed_remote)).unwrap();
-    remote::push(&history, &git, "h1", &["refs/heads/main".to_string()]).unwrap();
+    remote::push(&history, &git, "h1", &["refs/heads/main".to_string()], &yes).unwrap();
     remote::fetch(&history, &git, "h1").unwrap();
     assert!(
         !marker.exists(),
@@ -1098,7 +1114,8 @@ fn a_history_round_trips_through_a_remote_and_never_overwrites_it() {
             &history,
             &git,
             "alpha",
-            &refs(&["refs/heads/archive/x"])
+            &refs(&["refs/heads/archive/x"]),
+            &yes,
         )),
         "not-publishable"
     );
@@ -1132,6 +1149,7 @@ fn a_history_round_trips_through_a_remote_and_never_overwrites_it() {
             "refs/heads/alt/a1",
             "refs/tags/milestone/m1",
         ]),
+        &yes,
     )
     .unwrap();
     assert_eq!(pushed.len(), 3);
@@ -1196,7 +1214,8 @@ fn a_history_round_trips_through_a_remote_and_never_overwrites_it() {
             &history,
             &git,
             "beta",
-            &refs(&["refs/heads/main"])
+            &refs(&["refs/heads/main"]),
+            &yes,
         )),
         "rejected-non-fast-forward"
     );
@@ -1264,4 +1283,369 @@ fn fetching_from_an_empty_remote_finds_nothing_to_take() {
     remote::remote_set(&history, &git, "gamma", &file_url(&remote_dir)).unwrap();
     let fetched = remote::fetch(&history, &git, "gamma").unwrap();
     assert!(fetched.refs.is_empty() && fetched.branches.is_empty());
+}
+
+// --- Regressions from the security review -------------------------------------------------------
+
+fn no(_: &str, _: &str) -> bool {
+    false
+}
+
+#[test]
+fn config_based_hooks_are_refused_and_never_run() {
+    let Some(sb) = sandbox() else { return };
+    let mut git = sb.git("run");
+    let (root, file) = sb.project("p");
+    let repo = sb.repo(&file);
+    let head = sb.sh(&root, &["rev-parse", "HEAD"]);
+    let marker = sb.dir.path().join("config-hook.txt");
+    let command = format!(
+        "echo ran >> \"{}\"",
+        marker.to_string_lossy().replace('\\', "/")
+    );
+    for event in ["reference-transaction", "post-index-change", "post-commit"] {
+        sb.sh(&root, &["config", "--add", "hook.x.event", event]);
+    }
+    sb.sh(&root, &["config", "hook.x.command", &command]);
+    fs::write(&file, "{\"v\":2}\n").unwrap();
+    let refused = project::inspect(&git, &repo)
+        .unwrap()
+        .config_refused
+        .unwrap();
+    assert!(refused.starts_with("hook.x."), "{refused}");
+    assert_eq!(
+        reason(project::publish_branch(&git, &repo, "Publish")),
+        "config-refused"
+    );
+    assert_eq!(
+        reason(project::commit_current(&git, &repo, "Commit", &head)),
+        "config-refused"
+    );
+    assert!(!marker.exists(), "a config-based hook ran");
+    assert_eq!(sb.sh(&root, &["rev-parse", "HEAD"]), head);
+
+    // A config-based hook from the person's own global or system configuration is switched off on
+    // every run: the same `-c` overrides, proved here on a hook the runner is told about.
+    git.add_config_hook_for_tests("x");
+    let place = super::gitcli::Place::Project {
+        git_dir: &repo.git_dir,
+        work_tree: &repo.root,
+    };
+    git.local(
+        &place,
+        &super::gitcli::args!["update-ref", "refs/heads/probe", &head],
+        None,
+    )
+    .unwrap();
+    git.local(
+        &place,
+        &super::gitcli::args!["update-index", "--add", "README.md"],
+        None,
+    )
+    .unwrap();
+    assert!(!marker.exists(), "a disabled config-based hook ran");
+}
+
+#[test]
+fn repository_http_and_proxy_settings_are_refused() {
+    let Some(sb) = sandbox() else { return };
+    let git = sb.git("run");
+    let (root, file) = sb.project("p");
+    let remote_dir = sb.bare("remote.git");
+    sb.sh(&root, &["remote", "add", "origin", &file_url(&remote_dir)]);
+    let repo = sb.repo(&file);
+    fs::write(&file, "{\"v\":2}\n").unwrap();
+    let branch = project::publish_branch(&git, &repo, "Publish")
+        .unwrap()
+        .branch;
+    for (key, value) in [
+        ("http.curloptResolve", "github.com:443:203.0.113.7"),
+        ("http.sslVerify", "false"),
+        ("http.sslCAInfo", "ca.pem"),
+        ("http.proxy", "http://203.0.113.7:3128"),
+        ("http.extraHeader", "X-Steal: 1"),
+        ("http.cookieFile", "cookies.txt"),
+        ("http.https://github.com/.sslVerify", "false"),
+        ("remote.origin.proxy", "http://203.0.113.7:3128"),
+    ] {
+        sb.sh(&root, &["config", key, value]);
+        assert!(
+            project::inspect(&git, &repo)
+                .unwrap()
+                .config_refused
+                .is_some(),
+            "{key}"
+        );
+        assert_eq!(
+            reason(project::push_preview(&git, &repo, &branch)),
+            "config-refused",
+            "{key}"
+        );
+        assert_eq!(
+            reason(project::push(&git, &repo, &branch)),
+            "config-refused",
+            "{key}"
+        );
+        assert_eq!(
+            reason(project::publish_branch(&git, &repo, "Again")),
+            "config-refused",
+            "{key}"
+        );
+        sb.sh(&root, &["config", "--unset-all", key]);
+    }
+    project::push(&git, &repo, &branch).unwrap();
+}
+
+#[test]
+fn only_the_diagrams_branch_or_the_current_branch_is_pushed_from_a_project() {
+    let Some(sb) = sandbox() else { return };
+    let git = sb.git("run");
+    let (root, file) = sb.project("p");
+    let remote_dir = sb.bare("remote.git");
+    sb.sh(&root, &["remote", "add", "origin", &file_url(&remote_dir)]);
+    sb.sh(&root, &["branch", "other"]);
+    let repo = sb.repo(&file);
+    assert_eq!(
+        reason(project::push_preview(&git, &repo, "other")),
+        "not-publishable"
+    );
+    assert_eq!(
+        reason(project::push(&git, &repo, "other")),
+        "not-publishable"
+    );
+    let out = sb.sh_out(
+        &remote_dir,
+        &["rev-parse", "--verify", "-q", "refs/heads/other"],
+        None,
+    );
+    assert!(!out.status.success(), "another branch was pushed");
+    project::push(&git, &repo, "main").unwrap();
+    fs::write(&file, "{\"v\":2}\n").unwrap();
+    let published = project::publish_branch(&git, &repo, "Publish").unwrap();
+    project::push(&git, &repo, &published.branch).unwrap();
+}
+
+#[test]
+fn committing_a_previously_untracked_diagram_adds_it_to_the_index() {
+    let Some(sb) = sandbox() else { return };
+    let git = sb.git("run");
+    let (root, _) = sb.project("p");
+    fs::write(root.join("docs/new.draftcanvas"), "{\"new\":true}\n").unwrap();
+    let file = dunce::canonicalize(root.join("docs/new.draftcanvas")).unwrap();
+    let repo = sb.repo(&file);
+    let info = project::inspect(&git, &repo).unwrap();
+    assert!(info.path_untracked);
+    let head = info.head_oid.unwrap();
+    let done = project::commit_current(&git, &repo, "Add the diagram", &head).unwrap();
+    assert!(done.changed);
+    assert_eq!(
+        sb.sh(&root, &["ls-files", "--", "docs/new.draftcanvas"]),
+        "docs/new.draftcanvas"
+    );
+    assert_eq!(
+        sb.sh(
+            &root,
+            &["status", "--porcelain", "--", "docs/new.draftcanvas"]
+        ),
+        ""
+    );
+    assert_eq!(
+        sb.sh(&root, &["show", "HEAD:docs/new.draftcanvas"]),
+        "{\"new\":true}"
+    );
+
+    // If the index can't be written after the branch moved, the error says exactly where things are.
+    fs::write(root.join("docs/second.draftcanvas"), "{}\n").unwrap();
+    let file = dunce::canonicalize(root.join("docs/second.draftcanvas")).unwrap();
+    let repo = sb.repo(&file);
+    let head = sb.sh(&root, &["rev-parse", "HEAD"]);
+    fs::write(root.join(".git/index.lock"), "").unwrap();
+    let err = project::commit_current(&git, &repo, "Second", &head).unwrap_err();
+    fs::remove_file(root.join(".git/index.lock")).unwrap();
+    assert_eq!(err.reason, Some("index-not-updated"), "{}", err.message);
+    let moved = sb.sh(&root, &["rev-parse", "HEAD"]);
+    assert_ne!(moved, head);
+    assert!(err.message.contains(&moved[..12]), "{}", err.message);
+    assert!(
+        err.message.contains("main") && err.message.contains("docs/second.draftcanvas"),
+        "{}",
+        err.message
+    );
+    assert!(err.message.contains("deleted"), "{}", err.message);
+}
+
+#[test]
+fn a_git_file_pointing_at_something_other_than_a_file_never_blocks() {
+    let Some(sb) = sandbox() else { return };
+    let root = sb.path("p");
+    let fake = sb.path("fake-gitdir");
+    // A `commondir` that is a folder (and, on Unix, a FIFO, which a plain open would wait on for ever).
+    fs::create_dir_all(fake.join("commondir")).unwrap();
+    fs::write(root.join(".git"), format!("gitdir: {}\n", fake.display())).unwrap();
+    fs::write(root.join("x.draftcanvas"), "{}").unwrap();
+    let file = dunce::canonicalize(root.join("x.draftcanvas")).unwrap();
+    assert_eq!(
+        project::discover_below(&file, None).unwrap_err().reason,
+        Some("submodule")
+    );
+    #[cfg(unix)]
+    {
+        fs::remove_dir(fake.join("commondir")).unwrap();
+        let made = Command::new("mkfifo")
+            .arg(fake.join("commondir"))
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let (tx, rx) = std::sync::mpsc::channel();
+        let probe = file.clone();
+        std::thread::spawn(move || {
+            let found = project::discover_below(&probe, None);
+            let _ = tx.send(found.map(|_| ()).map_err(|e| e.reason));
+        });
+        let result = rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("discovery blocked on a FIFO");
+        assert_eq!(result, Err(Some("submodule")));
+    }
+}
+
+#[test]
+fn the_first_publish_to_an_address_is_confirmed_natively_and_remembered() {
+    let Some(sb) = sandbox() else { return };
+    let history = History::new(sb.path("history"));
+    history.set_git(sb.git("run"));
+    let git = history.git().unwrap();
+    let first = sb.bare("first.git");
+    let second = sb.bare("second.git");
+    history.create(&history_meta("delta")).unwrap();
+    let repo = history.open_writable("delta").unwrap();
+    let one = snapshot(&repo, "{\"v\":1}", &[], 100);
+    move_ref(&repo, "refs/heads/main", None, &one);
+    let main = vec!["refs/heads/main".to_string()];
+    remote::remote_set(&history, &git, "delta", &file_url(&first)).unwrap();
+
+    // Declined: nothing leaves, nothing is remembered.
+    assert_eq!(
+        reason(remote::push(&history, &git, "delta", &main, &no)),
+        "not-confirmed"
+    );
+    let landed = |dir: &Path| {
+        sb.sh_out(
+            dir,
+            &["rev-parse", "--verify", "-q", "refs/heads/main"],
+            None,
+        )
+        .status
+        .success()
+    };
+    assert!(!landed(&first));
+
+    let asked = std::cell::RefCell::new(Vec::<String>::new());
+    let ask = |_: &str, message: &str| {
+        asked.borrow_mut().push(message.to_string());
+        true
+    };
+    remote::push(&history, &git, "delta", &main, &ask).unwrap();
+    assert!(landed(&first));
+    assert_eq!(asked.borrow().len(), 1);
+    let message = asked.borrow()[0].clone();
+    assert!(
+        message.contains(&file_url(&first)) && message.contains("main"),
+        "{message}"
+    );
+    // Confirmed once for this address: not asked again.
+    let two = snapshot(&repo, "{\"v\":2}", &[&one], 200);
+    move_ref(&repo, "refs/heads/main", Some(&one), &two);
+    remote::push(&history, &git, "delta", &main, &no).unwrap();
+    // A new address (all a compromised page could change) is asked about again.
+    remote::remote_set(&history, &git, "delta", &file_url(&second)).unwrap();
+    assert_eq!(
+        reason(remote::push(&history, &git, "delta", &main, &no)),
+        "not-confirmed"
+    );
+    assert!(!landed(&second));
+    remote::push(&history, &git, "delta", &main, &ask).unwrap();
+    assert_eq!(asked.borrow().len(), 2);
+    // Removing the remote forgets every confirmation.
+    remote::remote_remove(&history, &git, "delta").unwrap();
+    remote::remote_set(&history, &git, "delta", &file_url(&second)).unwrap();
+    assert_eq!(
+        reason(remote::push(&history, &git, "delta", &main, &no)),
+        "not-confirmed"
+    );
+}
+
+#[test]
+fn a_remote_with_too_many_branches_is_refused_and_cleaned_up() {
+    let Some(sb) = sandbox() else { return };
+    let history = History::new(sb.path("history"));
+    history.set_git(sb.git("run"));
+    let git = history.git().unwrap();
+    let remote_dir = sb.bare("remote.git");
+    history.create(&history_meta("eps")).unwrap();
+    let repo = history.open_writable("eps").unwrap();
+    let one = snapshot(&repo, "{\"v\":1}", &[], 100);
+    move_ref(&repo, "refs/heads/main", None, &one);
+    remote::remote_set(&history, &git, "eps", &file_url(&remote_dir)).unwrap();
+    let main = vec!["refs/heads/main".to_string()];
+    remote::push(&history, &git, "eps", &main, &yes).unwrap();
+    // A plain branch on the remote: Git's own `refs/heads/*` mapping would copy it, unchecked, into
+    // refs/remotes/origin/ during a fetch.
+    sb.sh(&remote_dir, &["update-ref", "refs/heads/unchecked", &one]);
+
+    let branches = |verb: &str| {
+        let mut script = String::new();
+        for i in 0..=limits::MAX_BUNDLE_REFS {
+            match verb {
+                "create" => script.push_str(&format!("create refs/heads/alt/b{i:05} {one}\n")),
+                _ => script.push_str(&format!("delete refs/heads/alt/b{i:05}\n")),
+            }
+        }
+        let out = sb.sh_out(
+            &remote_dir,
+            &["update-ref", "--stdin"],
+            Some(script.as_bytes()),
+        );
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    };
+    branches("create");
+    sb.sh(&remote_dir, &["pack-refs", "--all"]);
+
+    let err = remote::fetch(&history, &git, "eps").unwrap_err();
+    assert_eq!(err.reason, Some("too-many-branches"), "{}", err.message);
+    let repo = history.open_writable("eps").unwrap();
+    assert!(
+        repo.list_refs("refs/draft-canvas").unwrap().is_empty(),
+        "the holding namespace was left full"
+    );
+    let tracking: Vec<String> = repo
+        .list_refs("refs/remotes/origin")
+        .unwrap()
+        .into_iter()
+        .map(|r| r.name)
+        .collect();
+    assert_eq!(
+        tracking,
+        vec!["refs/remotes/origin/main"],
+        "Git wrote remote-tracking branches itself"
+    );
+    // Nothing is wedged: previews still work, and a remote back within bounds fetches again.
+    remote::push_preview(&history, "eps", &main).unwrap();
+    branches("delete");
+    let fetched = remote::fetch(&history, &git, "eps").unwrap();
+    assert_eq!(fetched.refs.len(), 1);
+
+    // Removing the remote takes everything fetched for it, the holding namespace included.
+    let repo = history.open_writable("eps").unwrap();
+    let id = super::parse_oid(&one).unwrap();
+    repo.set_tracking_ref("refs/draft-canvas/incoming/main", None, Some(id))
+        .unwrap();
+    remote::remote_remove(&history, &git, "eps").unwrap();
+    let repo = history.open_writable("eps").unwrap();
+    assert!(repo.list_refs("refs/draft-canvas").unwrap().is_empty());
+    assert!(repo.list_refs("refs/remotes").unwrap().is_empty());
 }

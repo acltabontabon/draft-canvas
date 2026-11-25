@@ -209,10 +209,15 @@ pub fn remote_set(history: &History, git: &Git, repo_id: &str, url: &str) -> Res
 pub fn remote_remove(history: &History, git: &Git, repo_id: &str) -> Result<()> {
     let dir = history.managed_dir(repo_id)?;
     check_config(git, &dir)?;
-    if configured_url(git, &dir)?.is_none() {
-        return Ok(());
+    if configured_url(git, &dir)?.is_some() {
+        git.local(&place(&dir), &args!["remote", "remove", ORIGIN], None)?;
     }
-    git.local(&place(&dir), &args!["remote", "remove", ORIGIN], None)?;
+    // Whatever `git remote remove` knew to remove, nothing fetched for this remote stays behind,
+    // and a later remote must be confirmed again.
+    let repo = history.open_writable(repo_id)?;
+    repo.clear_refs(INCOMING)?;
+    repo.clear_refs(TRACKING)?;
+    repo.forget_destinations()?;
     Ok(())
 }
 
@@ -231,18 +236,18 @@ pub fn fetch(history: &History, git: &Git, repo_id: &str) -> Result<FetchOutcome
     let at = place(&dir);
     checked_effective_urls(git, &at, false)?;
     // The holding namespace starts empty, so afterwards it is exactly what the remote has.
-    {
-        let repo = history.open_writable(repo_id)?;
-        for (name, id) in repo.refs_raw(INCOMING)? {
-            repo.set_tracking_ref(&name, Some(id), None)?;
-        }
-    }
+    history.open_writable(repo_id)?.clear_refs(INCOMING)?;
     let fetch_args = |with_main: bool| {
         let mut a = Vec::from(args![
             "fetch",
             "--no-tags",
+            // One line per fetched branch otherwise: a remote with many would overrun the output cap.
+            "--quiet",
             "--no-write-fetch-head",
             "--no-recurse-submodules",
+            // `git remote add` configured `+refs/heads/*:refs/remotes/origin/*`; without this Git
+            // would also write every fetched tip, unchecked, straight into `refs/remotes/origin/`.
+            "--refmap=",
             ORIGIN,
         ]);
         if with_main {
@@ -261,8 +266,26 @@ pub fn fetch(history: &History, git: &Git, repo_id: &str) -> Result<FetchOutcome
     }
 
     let repo = history.open_writable(repo_id)?;
-    let incoming = repo.refs_raw(INCOMING)?;
-    let tracking = repo.refs_raw(TRACKING)?;
+    let incoming = match repo.refs_raw(INCOMING) {
+        Ok(incoming) => incoming,
+        Err(e) if e.code == Code::TooLarge => {
+            repo.clear_refs(INCOMING)?;
+            return Err(HistoryError::too_large(
+                "The remote has more branches than Draft Canvas reads, so nothing was taken from it.",
+            )
+            .with_reason("too-many-branches"));
+        }
+        Err(e) => return Err(e),
+    };
+    let tracking = match repo.refs_raw(TRACKING) {
+        Ok(tracking) => tracking,
+        Err(e) if e.code == Code::TooLarge => {
+            // Left by an older fetch: start remote-tracking over from what is accepted now.
+            repo.clear_refs(TRACKING)?;
+            Vec::new()
+        }
+        Err(e) => return Err(e),
+    };
     let mut checked: HashSet<ObjectId> = HashSet::new();
     let mut accepted: BTreeMap<String, ObjectId> = BTreeMap::new();
     let mut refused = 0usize;
@@ -496,18 +519,61 @@ pub(super) fn push_result(out: &Output) -> Result<Vec<(String, bool)>> {
 
 /// Publishes `refs`, each to the same name on `origin`, never forced. Remote-tracking branches
 /// follow what was published.
+/// The native question the first publish to an address asks: the address and what would go there.
+pub fn confirmation_message(destinations: &[String], refs: &[String]) -> (String, String) {
+    let names: Vec<&str> = refs
+        .iter()
+        .map(|r| {
+            r.strip_prefix("refs/heads/")
+                .or_else(|| r.strip_prefix("refs/tags/"))
+                .unwrap_or(r)
+        })
+        .collect();
+    let message = format!(
+        "Publish this diagram's history to {}?\n\nWhat will be sent: {}, with every earlier revision they contain.\n\nDraft Canvas asks once for each place a history is published to.",
+        destinations.join(" and "),
+        names.join(", ")
+    );
+    ("Publish diagram history".to_string(), message)
+}
+
+/// Publishes `refs`, each to the same name on `origin`, never forced. Remote-tracking branches
+/// follow what was published. The first publish to an address this history hasn't been confirmed
+/// for asks the person natively (`confirm(title, message)`, answered by the shell, never the
+/// page); a yes is remembered for this history beside its `repo.json`.
 pub fn push(
     history: &History,
     git: &Git,
     repo_id: &str,
     refs: &[String],
+    confirm: &dyn Fn(&str, &str) -> bool,
 ) -> Result<Vec<PushedRef>> {
     let refs = checked_refs(refs)?;
     let dir = history.managed_dir(repo_id)?;
     check_config(git, &dir)?;
     let at = place(&dir);
-    checked_effective_urls(git, &at, true)?;
+    let urls = checked_effective_urls(git, &at, true)?;
     let repo = history.open_writable(repo_id)?;
+    let confirmed = repo.confirmed_destinations();
+    let new: Vec<String> = urls
+        .iter()
+        .filter(|u| !confirmed.contains(u))
+        .cloned()
+        .collect();
+    if !new.is_empty() {
+        let names: Vec<String> = refs.iter().map(|(name, _)| name.clone()).collect();
+        let (title, message) = confirmation_message(&new, &names);
+        if !confirm(&title, &message) {
+            return Err(HistoryError::new(
+                Code::Conflict,
+                "Nothing was published: you didn't confirm the destination.",
+            )
+            .with_reason("not-confirmed"));
+        }
+        for url in &new {
+            repo.confirm_destination(url)?;
+        }
+    }
     let mut locals = Vec::new();
     for (name, _) in &refs {
         let local = repo

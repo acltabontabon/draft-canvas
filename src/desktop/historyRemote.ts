@@ -57,7 +57,11 @@ export type RemoteRefusalReason =
   | 'no-remote'
   | 'not-publishable'
   | 'config-refused'
-  | 'invalid-remote-history';
+  | 'invalid-remote-history'
+  // The remote sent more branches than Draft Canvas reads; nothing was taken.
+  | 'too-many-branches'
+  // The first publish to an address was declined in the shell's native confirmation.
+  | 'not-confirmed';
 
 /** Why publishing into a project repository was refused (`project.rs`). */
 export type ProjectRefusalReason =

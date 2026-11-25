@@ -31,6 +31,8 @@ use std::time::{Duration, SystemTime};
 const META_FILE: &str = "draft-canvas/repo.json";
 const JOURNAL_DIR: &str = "draft-canvas/journal";
 const LOCK_FILE: &str = "draft-canvas/write.lock";
+/// Remote addresses the person confirmed natively for publishing (`Repo::confirmed_destinations`).
+const DESTINATIONS_FILE: &str = "draft-canvas/push-destinations.json";
 /// A staging repository (an import being checked) is `.staging-<id>.git`; the page names it
 /// `.staging-<id>`, which no repository id can be.
 const STAGING_PREFIX: &str = ".staging-";
@@ -1317,6 +1319,89 @@ impl Repo {
         }
         out.sort();
         Ok(out)
+    }
+
+    /// Removes every ref under `prefix` (the incoming or remote-tracking namespace only), however
+    /// many a remote sent: `refs_raw` stops at a cap, and a namespace it can't list must still be
+    /// emptied or every later fetch would stop at it. Returns how many were removed.
+    pub(super) fn clear_refs(&self, prefix: &str) -> Result<usize> {
+        self.require_writable()?;
+        if prefix != "refs/remotes/origin/" && prefix != "refs/draft-canvas/incoming/" {
+            return Err(HistoryError::invalid("Not a remote-tracking ref."));
+        }
+        let unreadable =
+            |_| HistoryError::corrupt("The branches of this history could not be read.");
+        let mut names = Vec::new();
+        {
+            let platform = self.repo.references().map_err(unreadable)?;
+            for reference in platform.prefixed(prefix).map_err(unreadable)? {
+                let Ok(reference) = reference else { continue };
+                if reference.name().as_bstr().starts_with(prefix.as_bytes()) {
+                    names.push(reference.name().to_owned());
+                }
+            }
+        }
+        let count = names.len();
+        let _writer = self.write_lock()?;
+        for chunk in names.chunks(1000) {
+            let edits = chunk.iter().map(|name| RefEdit {
+                change: Change::Delete {
+                    expected: PreviousValue::Any,
+                    log: RefLog::AndReference,
+                },
+                name: name.clone(),
+                deref: false,
+            });
+            self.repo.edit_references_as(edits, None).map_err(|_| {
+                HistoryError::conflict("Remote-tracking branches changed while they were removed.")
+            })?;
+        }
+        Ok(count)
+    }
+
+    fn destinations_path(&self) -> PathBuf {
+        self.dir.join(DESTINATIONS_FILE)
+    }
+
+    /// Remote addresses the person confirmed, natively, that this history may be published to.
+    /// Kept beside `repo.json`, never in it: the page writes `repo.json`, and must not be able to
+    /// confirm a destination itself.
+    pub(super) fn confirmed_destinations(&self) -> Vec<String> {
+        read_json_file(&self.destinations_path(), limits::MAX_JSON_BYTES)
+            .ok()
+            .and_then(|v| {
+                v.get("confirmed")?.as_array().map(|list| {
+                    list.iter()
+                        .filter_map(|u| u.as_str().map(str::to_string))
+                        .collect()
+                })
+            })
+            .unwrap_or_default()
+    }
+
+    pub(super) fn confirm_destination(&self, url: &str) -> Result<()> {
+        self.require_writable()?;
+        let mut list = self.confirmed_destinations();
+        if list.iter().any(|u| u == url) {
+            return Ok(());
+        }
+        list.push(url.to_string());
+        // Bounded: the oldest confirmation goes first.
+        if list.len() > 32 {
+            list.remove(0);
+        }
+        write_json(
+            &self.destinations_path(),
+            &serde_json::json!({ "confirmed": list }),
+        )
+    }
+
+    pub(super) fn forget_destinations(&self) -> Result<()> {
+        self.require_writable()?;
+        match fs::remove_file(self.destinations_path()) {
+            Err(e) if e.kind() != io::ErrorKind::NotFound => Err(HistoryError::io(&e, Verb::Save)),
+            _ => Ok(()),
+        }
     }
 
     /// Sets or deletes a remote-tracking or incoming ref, by compare-and-swap against `expected`.
