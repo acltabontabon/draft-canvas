@@ -5,7 +5,7 @@ import { displayNameFor, maxSizeFor } from '../document/factory';
 import { lensNodeTier, nodeTierInPlayback, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
 import { normalizeNoteText } from '../document/noteText';
-import { anchorBandOf, bandSpan } from '../document/queueGeometry';
+import { anchorBandOf, bandSpan, bandWords } from '../document/queueGeometry';
 import type { DraftNode } from '../document/types';
 import {
   CODE_LAYOUT,
@@ -269,7 +269,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       : { ...node, width: effectiveWidth, height: effectiveHeight };
   // Relative to the node box (x, y: 0) — the handles are positioned inside it.
   const handleBand = liveNode
-    ? anchorBandOf({ type: liveNode.type, serviceKind: liveNode.serviceKind, componentKind: liveNode.componentKind, text: liveNode.text, technology: liveNode.technology, description: liveNode.description, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
+    ? anchorBandOf({ ...bandWords(liveNode), type: liveNode.type, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
     : undefined;
   // `DraftHandle` is memoized, so each keeps its style object until the band itself moves —
   // twelve fresh objects per node render would re-render every handle every time.

@@ -5,7 +5,7 @@
  * neither of these is itself a component.
  */
 import type { useInternalNode } from '@xyflow/react';
-import { anchorBandOf } from '../document/queueGeometry';
+import { anchorBandOf, bandWords } from '../document/queueGeometry';
 import type { DraftEdge, DraftNode, Side } from '../document/types';
 import { visibleEdges } from '../document/compensation';
 import { connectorRouteInputs } from '../edges/connectorRoutes';
@@ -20,7 +20,7 @@ export type InternalNode = NonNullable<ReturnType<typeof useInternalNode>>;
 
 /** What decides a shape's anchor band: its type, for a Service or a Component the kind it is drawn
  *  as, and for one drawn as a glyph the words under it, which the glyph grows around. */
-export type BandKind = Pick<DraftNode, 'type'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind' | 'text' | 'technology' | 'description'>;
+export type BandKind = Pick<DraftNode, 'type'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind' | 'databaseKind' | 'artifactKind' | 'text' | 'technology' | 'description'>;
 
 /**
  * `kind` opts the rect into its node kind's anchor band (a queue-family node's tube, a glyph's
@@ -39,9 +39,7 @@ export function rectOfInternal(node: InternalNode, kind?: BandKind): Rect | null
     width,
     height,
   };
-  const band = kind
-    ? anchorBandOf({ type: kind.type, serviceKind: kind.serviceKind, componentKind: kind.componentKind, text: kind.text, technology: kind.technology, description: kind.description, x: rect.x, y: rect.y, width, height })
-    : undefined;
+  const band = kind ? anchorBandOf({ ...bandWords(kind), type: kind.type, x: rect.x, y: rect.y, width, height }) : undefined;
   return band ? { ...rect, anchorBand: band } : rect;
 }
 

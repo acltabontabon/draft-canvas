@@ -524,13 +524,15 @@ describe('v10 to v11 migration: BFF Service kind removal', () => {
     expect(result.document.nodes[0]).toMatchObject({
       type: 'service',
       serviceKind: 'api',
-      x: 10,
-      y: 20,
-      width: 140,
-      height: 70,
       text: 'Web BFF',
       accent: 'teal',
     });
+    // An API has since become a glyph (v33): the card grew to hold one, around the same middle.
+    const api = result.document.nodes[0]!;
+    expect(api).toMatchObject({ width: 120, height: 114 });
+    expect(api.x + api.width / 2).toBe(80);
+    const band = anchorBandOf(api)!;
+    expect(Math.abs((band.top + band.bottom) / 2 - 55)).toBeLessThanOrEqual(1);
   });
 
   it('leaves non-bff services and other node types untouched', () => {
@@ -1087,6 +1089,23 @@ describe('v32 to v33 migration: an External system is a card again, and glyph pi
     expect(at('far')).toBeCloseTo(rect.anchorBand!.left!, 0);
     // A box no wider than its glyph's reach spreads its anchors as it always did.
     expect(doc.edges.find((e) => e.id === 'same')!.targetAnchor).toEqual({ side: 'top', offset: 0.25 });
+  });
+
+  it('grows an API card into a glyph around the same middle, and keeps its side pins level', () => {
+    const doc = open(
+      [
+        { id: 'a', type: 'service', x: 0, y: 100, width: 176, height: 68, z: 0, text: 'Orders' },
+        { id: 'api', type: 'service', serviceKind: 'api', x: 400, y: 100, width: 176, height: 68, z: 0, text: 'Orders API' },
+      ],
+      [edge('call', 'a', 'api', { sourceAnchor: { side: 'right', offset: 0.25 }, targetAnchor: { side: 'left', offset: 0.25 } })],
+    );
+    const api = doc.nodes.find((n) => n.id === 'api')!;
+    expect(api).toMatchObject({ width: 120, height: 114 });
+    expect(api.x + api.width / 2).toBe(488);
+    const rect = rectOf(api);
+    // The card's middle was at 134, and its quarter at 117: the glyph's middle and the pin are there.
+    expect(Math.abs((rect.anchorBand!.top + rect.anchorBand!.bottom) / 2 - 134)).toBeLessThanOrEqual(1);
+    expect(anchorPoint(rect, 'left', doc.edges[0]!.targetAnchor!.offset).y).toBeCloseTo(117, 0);
   });
 
   it('reaches an External system inside a room', () => {

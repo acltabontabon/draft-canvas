@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 31,
+  "version": 33,
   "metadata": {
     "id": "starter-music-streaming",
     "title": "Music streaming service",
@@ -147,7 +147,7 @@
       "id": "desktop",
       "type": "service",
       "x": 242,
-      "y": 765,
+      "y": 767,
       "width": 176,
       "height": 83,
       "z": 0,
@@ -177,7 +177,7 @@
       "id": "j-api",
       "type": "ellipse",
       "x": 542,
-      "y": 788,
+      "y": 790,
       "width": 36,
       "height": 36,
       "z": 0
@@ -186,7 +186,7 @@
       "id": "gateway",
       "type": "service",
       "x": 680,
-      "y": 767,
+      "y": 769,
       "width": 240,
       "height": 126,
       "z": 0,
@@ -202,9 +202,9 @@
       "id": "playlists",
       "type": "service",
       "x": 1032,
-      "y": 236,
+      "y": 252,
       "width": 176,
-      "height": 109,
+      "height": 143,
       "z": 0,
       "parentId": "library",
       "text": "Playlists",
@@ -243,9 +243,9 @@
       "id": "search",
       "type": "service",
       "x": 1032,
-      "y": 429,
+      "y": 442,
       "width": 176,
-      "height": 103,
+      "height": 143,
       "z": 0,
       "parentId": "library",
       "text": "Search",
@@ -258,7 +258,7 @@
       "id": "index",
       "type": "database",
       "x": 1400,
-      "y": 409,
+      "y": 441,
       "width": 120,
       "height": 143,
       "z": 0,
@@ -273,9 +273,9 @@
       "id": "audio",
       "type": "service",
       "x": 1032,
-      "y": 776,
+      "y": 769,
       "width": 176,
-      "height": 109,
+      "height": 143,
       "z": 0,
       "parentId": "listening",
       "text": "Audio API",
@@ -330,9 +330,9 @@
       "id": "recs",
       "type": "service",
       "x": 1372,
-      "y": 1148,
+      "y": 1164,
       "width": 176,
-      "height": 109,
+      "height": 143,
       "z": 0,
       "parentId": "personal",
       "text": "Recommendations",
@@ -632,9 +632,9 @@
       "id": "cdn",
       "type": "service",
       "x": 220,
-      "y": 1139,
+      "y": 1135,
       "width": 220,
-      "height": 126,
+      "height": 86,
       "z": 0,
       "text": "Audio CDN",
       "description": "Caches audio files close to listeners.",
@@ -718,9 +718,9 @@
             "id": "i.api",
             "type": "service",
             "x": 302,
-            "y": 77.5,
+            "y": 90,
             "width": 176,
-            "height": 103,
+            "height": 143,
             "z": 0,
             "text": "Release API",
             "description": "Takes DDEX releases and their audio.",
@@ -838,7 +838,7 @@
             "semantic": "writes",
             "sourceAnchor": {
               "side": "right",
-              "offset": 0.25
+              "offset": 0.0292
             },
             "targetAnchor": {
               "side": "left",
@@ -857,7 +857,7 @@
             "kind": "event",
             "sourceAnchor": {
               "side": "right",
-              "offset": 0.75
+              "offset": 0.9758
             },
             "targetAnchor": {
               "side": "left",
@@ -903,7 +903,7 @@
             "semantic": "writes",
             "sourceAnchor": {
               "side": "bottom",
-              "offset": 0.75
+              "offset": 0.7915
             },
             "targetAnchor": {
               "side": "bottom",
@@ -1254,11 +1254,11 @@
       "semantic": "routes",
       "sourceAnchor": {
         "side": "top",
-        "offset": 0.3
+        "offset": 0.2085
       },
       "targetAnchor": {
         "side": "left",
-        "offset": 0.5
+        "offset": 0.4933
       },
       "semanticsOrigin": "explicit"
     },
@@ -1272,11 +1272,11 @@
       "semantic": "routes",
       "sourceAnchor": {
         "side": "top",
-        "offset": 0.7
+        "offset": 0.7915
       },
       "targetAnchor": {
         "side": "left",
-        "offset": 0.5
+        "offset": 0.4933
       },
       "semanticsOrigin": "explicit"
     },
@@ -1425,7 +1425,7 @@
       "portal": true,
       "sourceAnchor": {
         "side": "bottom",
-        "offset": 0.2
+        "offset": 0.2085
       },
       "semanticsOrigin": "inferred"
     },
@@ -1516,13 +1516,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {

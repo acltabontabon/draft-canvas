@@ -3,7 +3,10 @@ import { dataStoreGlyphBounds, dataStoreScale } from '../src/document/dataStoreG
 import { createNode } from '../src/document/factory';
 import { anchorBandOf, bandSpan } from '../src/document/queueGeometry';
 import type { DraftNode } from '../src/document/types';
-import { anchorPoint, ANCHOR_OFFSETS, rectOf } from '../src/edges/routing';
+import { anchorPoint, ANCHOR_OFFSETS, rectOf, snappedAnchorForDrop } from '../src/edges/routing';
+import { describeNode, sizingContext } from '../src/nodes/describe';
+import type { Shape } from '../src/render/displayList';
+import { getMeasurer } from '../src/render/text/measure';
 
 /**
  * A shape drawn as a glyph takes its connectors on the glyph: its twelve connection points sit on
@@ -55,19 +58,47 @@ describe('where a glyph takes its connectors', () => {
     }
   });
 
-  it('leaves a card\'s on its box: Generic, API and External', () => {
-    for (const serviceKind of ['generic', 'api', 'external'] as const) expect(anchorBandOf(shape({ serviceKind }))).toBeUndefined();
+  it('leaves a card\'s on its box: Generic and External', () => {
+    for (const serviceKind of ['generic', 'external'] as const) expect(anchorBandOf(shape({ serviceKind }))).toBeUndefined();
+  });
+
+  it('puts an API\'s three left anchors on the three operations it holds out', () => {
+    const api = shape({ serviceKind: 'api', text: 'Orders API' });
+    const rect = rectOf(api);
+    const drawn = describeNode(api, { ...sizingContext(), measurer: getMeasurer() });
+    const balls: { cx: number; cy: number; rx: number }[] = [];
+    const visit = (list: readonly Shape[], dx: number, dy: number, k: number) => {
+      for (const s of list) {
+        if (s.t === 'group') visit(s.children, dx + (s.translate?.x ?? 0) * k, dy + (s.translate?.y ?? 0) * k, k * (s.scale ?? 1));
+        else if (s.t === 'ellipse') balls.push({ cx: dx + s.cx * k, cy: dy + s.cy * k, rx: s.rx * k });
+      }
+    };
+    visit(drawn.shapes, 0, 0, 1);
+    expect(balls).toHaveLength(3);
+    ANCHOR_OFFSETS.forEach((offset) => {
+      const at = anchorPoint(rect, 'left', offset);
+      const nearest = balls.reduce((a, b) => (Math.abs(b.cy + api.y - at.y) < Math.abs(a.cy + api.y - at.y) ? b : a));
+      // On the ball: within its height, at its outer edge.
+      expect(Math.abs(nearest.cy + api.y - at.y)).toBeLessThan(nearest.rx);
+      expect(Math.abs(nearest.cx - nearest.rx + api.x - at.x)).toBeLessThan(2);
+    });
   });
 });
 
 describe('a glyph in a box made bigger', () => {
-  it('grows from the first pixels of room, where it waited for a box 250 by 200', () => {
+  const foot = (node: DraftNode) => {
+    // From the foot of the glyph to the foot of the box, less the words: what is left under them.
+    const band = anchorBandOf(node)!;
+    return node.y + node.height - band.bottom;
+  };
+
+  it('fills the box, where a Service glyph waited for one 250 by 200', () => {
     const start = shape({ serviceKind: 'load-balancer', text: 'Edge' });
     const base = dataStoreScale(start);
     expect(base).toBeCloseTo(114 / 88, 5);
-    const sizes = [{ width: 150, height: 150 }, { width: 180, height: 180 }, { width: 240, height: 230 }];
+    const sizes = [{ width: 170, height: 170 }, { width: 210, height: 210 }, { width: 260, height: 250 }];
     const scales = sizes.map((size) => dataStoreScale({ ...start, ...size }));
-    expect(scales[0]).toBeGreaterThan(base);
+    expect(scales[0]).toBeGreaterThan(base * 1.5);
     expect(scales[1]).toBeGreaterThan(scales[0]!);
     expect(scales[2]).toBeGreaterThan(scales[1]!);
     // Its connection points go with it.
@@ -76,17 +107,55 @@ describe('a glyph in a box made bigger', () => {
     expect(bigger.right! - bigger.left!).toBeGreaterThan(was.right! - was.left!);
   });
 
-  it('stays the size it was in a box that is only as big as its words need', () => {
-    const base = 114 / 88;
-    // Wider for a long name, taller for a description: no room to spare, so nothing changes.
-    expect(dataStoreScale(shape({ serviceKind: 'worker', text: 'Nightly Reconciliation Worker' }, { width: 220, height: 114 }))).toBeCloseTo(base, 5);
-    expect(
-      dataStoreScale(shape({ serviceKind: 'worker', text: 'Worker', description: 'Reads the queue, charges the card, writes the ledger and retries what failed, with a backoff that doubles.' }, { width: 200, height: 190 })),
-    ).toBeCloseTo(base, 5);
+  it('leaves under the name what a default box leaves, however tall or narrow the box', () => {
+    // What made the bottom connection points hang a hand's width below the name.
+    const usual = foot(shape({ serviceKind: 'gateway', text: 'Gateway' }));
+    for (const size of [{ width: 210, height: 210 }, { width: 150, height: 260 }, { width: 300, height: 180 }, { width: 400, height: 400 }]) {
+      for (const node of [shape({ serviceKind: 'gateway', text: 'Gateway' }, size), shape({ type: 'component', componentKind: 'module', text: 'Module' }, size), shape({ type: 'component', componentKind: 'port', text: 'Port' }, size)]) {
+        expect(foot(node), `${node.componentKind ?? node.serviceKind} ${size.width}x${size.height}`).toBeCloseTo(usual, 3);
+      }
+    }
+    // A plain Data Store has no kind under its name: in a bigger box that room closes up too.
+    const store = shape({ type: 'database', text: 'Orders DB' }, { width: 170, height: 180 });
+    expect(foot(store) - 18.9).toBeLessThan(usual + 6);
   });
 
-  it('leaves a Data Store, which always grew with its box, exactly as it was', () => {
-    const store = { ...createNode({ type: 'database', x: 0, y: 0 }), width: 180, height: 176 };
-    expect(dataStoreScale(store)).toBeCloseTo(2, 5);
+  it('stays exactly as it was in a box that is only about as big as its words need', () => {
+    const base = 114 / 88;
+    // Wider for a long name, taller for a description, or a line to spare: nothing changes.
+    for (const node of [
+      shape({ serviceKind: 'worker', text: 'Nightly Reconciliation Worker' }, { width: 220, height: 114 }),
+      shape({ serviceKind: 'worker', text: 'Worker', description: 'Reads the queue.' }, { width: 200, height: 143 }),
+      shape({ serviceKind: 'worker', text: 'Worker', technology: 'Go' }, { width: 176, height: 128 }),
+    ]) {
+      expect(dataStoreScale(node)).toBeCloseTo(base, 5);
+      expect(anchorBandOf(node)!.top - node.y).toBeCloseTo(9 * base, 5);
+    }
+  });
+
+  it('grows a Data Store past the scale its box alone gave it', () => {
+    const store = { ...createNode({ type: 'database', x: 0, y: 0, text: 'Orders' }), width: 180, height: 176 };
+    expect(dataStoreScale(store)).toBeGreaterThan(2);
+  });
+});
+
+describe('a connector dropped near a glyph', () => {
+  // A described Adapter: a box much wider and taller than the glyph at the top of it.
+  const adapter = shape({ type: 'component', componentKind: 'adapter', text: 'Adapter', description: 'Speaks SQL to the orders database on behalf of the core.' }, { width: 190, height: 180 });
+  const rect = rectOf(adapter);
+  const band = anchorBandOf(adapter)!;
+  const middle = (band.top + band.bottom) / 2;
+
+  it('takes the side of the glyph it was dropped on, not the nearest side of the box', () => {
+    // Just outside the middle of the glyph's left edge: nearer the box's top than the box's left.
+    expect(snappedAnchorForDrop(rect, { x: band.left! - 4, y: middle })).toEqual({ side: 'left', offset: 0.5 });
+    expect(snappedAnchorForDrop(rect, { x: band.right! + 4, y: middle })).toEqual({ side: 'right', offset: 0.5 });
+    expect(snappedAnchorForDrop(rect, { x: band.left! - 4, y: band.top + (band.bottom - band.top) * 0.25 })).toEqual({ side: 'left', offset: 0.25 });
+    expect(snappedAnchorForDrop(rect, { x: adapter.x + adapter.width / 2, y: band.top - 4 })).toEqual({ side: 'top', offset: 0.5 });
+    expect(snappedAnchorForDrop(rect, { x: adapter.x + adapter.width / 2, y: adapter.y + adapter.height - 3 })).toEqual({ side: 'bottom', offset: 0.5 });
+  });
+
+  it('stays automatic for a drop on the middle of the glyph', () => {
+    expect(snappedAnchorForDrop(rect, { x: adapter.x + adapter.width / 2, y: middle })).toBeUndefined();
   });
 });

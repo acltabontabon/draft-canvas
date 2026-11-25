@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 31,
+  "version": 33,
   "metadata": {
     "id": "starter-saga-orchestration",
     "title": "Saga – Orchestration",
@@ -26,9 +26,9 @@
       "id": "trips",
       "type": "service",
       "x": 732,
-      "y": 69,
+      "y": 82,
       "width": 176,
-      "height": 103,
+      "height": 143,
       "z": 0,
       "text": "Trips API",
       "description": "Takes a trip request and starts its booking workflow.",
@@ -73,10 +73,10 @@
           {
             "id": "o.trips",
             "type": "service",
-            "x": 230,
-            "y": 0,
-            "width": 176,
-            "height": 68,
+            "x": 258,
+            "y": -5,
+            "width": 120,
+            "height": 128,
             "z": 0,
             "text": "Trips API",
             "technology": "Go",
@@ -139,10 +139,10 @@
           {
             "id": "o.flights-svc",
             "type": "service",
-            "x": 0,
-            "y": 572,
-            "width": 176,
-            "height": 68,
+            "x": 12,
+            "y": 567,
+            "width": 153,
+            "height": 128,
             "z": 0,
             "text": "Flights Service",
             "technology": "Spring Boot 3",
@@ -152,10 +152,10 @@
           {
             "id": "o.hotels-svc",
             "type": "service",
-            "x": 230,
-            "y": 572,
-            "width": 176,
-            "height": 68,
+            "x": 246,
+            "y": 567,
+            "width": 145,
+            "height": 128,
             "z": 0,
             "text": "Hotels Service",
             "technology": "Kotlin",
@@ -165,10 +165,10 @@
           {
             "id": "o.payments-svc",
             "type": "service",
-            "x": 460,
-            "y": 572,
-            "width": 176,
-            "height": 68,
+            "x": 467,
+            "y": 567,
+            "width": 162,
+            "height": 128,
             "z": 0,
             "text": "Payments Service",
             "technology": "Go",
@@ -302,9 +302,9 @@
       "id": "flights",
       "type": "service",
       "x": 1152,
-      "y": 377,
+      "y": 382,
       "width": 176,
-      "height": 87,
+      "height": 143,
       "z": 0,
       "text": "Flights Service",
       "description": "Holds seats on a flight.",
@@ -316,7 +316,7 @@
       "id": "flights-db",
       "type": "database",
       "x": 1540,
-      "y": 349,
+      "y": 381,
       "width": 120,
       "height": 143,
       "z": 0,
@@ -329,10 +329,10 @@
     {
       "id": "hotels",
       "type": "service",
-      "x": 312,
-      "y": 377,
+      "x": 264,
+      "y": 382,
       "width": 176,
-      "height": 87,
+      "height": 143,
       "z": 0,
       "text": "Hotels Service",
       "description": "Reserves hotel rooms.",
@@ -343,8 +343,8 @@
     {
       "id": "hotels-db",
       "type": "database",
-      "x": -30,
-      "y": 350,
+      "x": -78,
+      "y": 374,
       "width": 140,
       "height": 140,
       "z": 0,
@@ -358,9 +358,9 @@
       "id": "payments",
       "type": "service",
       "x": 732,
-      "y": 677,
+      "y": 682,
       "width": 176,
-      "height": 87,
+      "height": 143,
       "z": 0,
       "text": "Payments Service",
       "description": "Charges the trip total.",
@@ -372,9 +372,9 @@
       "id": "stripe",
       "type": "service",
       "x": 1180,
-      "y": 657,
+      "y": 653,
       "width": 120,
-      "height": 126,
+      "height": 86,
       "z": 0,
       "text": "Stripe",
       "description": "Charges cards.",
@@ -574,7 +574,7 @@
       },
       "targetAnchor": {
         "side": "left",
-        "offset": 0.2062
+        "offset": 0.0235
       },
       "semanticsOrigin": "explicit"
     },
@@ -592,7 +592,7 @@
       },
       "targetAnchor": {
         "side": "right",
-        "offset": 0.2062
+        "offset": 0.0235
       },
       "semanticsOrigin": "explicit"
     },
@@ -624,7 +624,7 @@
       },
       "targetAnchor": {
         "side": "left",
-        "offset": 0.7938
+        "offset": 0.9631
       },
       "semanticsOrigin": "explicit",
       "attachments": [
@@ -656,7 +656,7 @@
       },
       "targetAnchor": {
         "side": "right",
-        "offset": 0.7938
+        "offset": 0.9631
       },
       "semanticsOrigin": "explicit",
       "attachments": [
@@ -707,13 +707,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {

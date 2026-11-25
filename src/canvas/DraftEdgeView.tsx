@@ -411,6 +411,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const targetTechnology = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.technology);
   const sourceDescription = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.description);
   const targetDescription = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.description);
+  const sourceDatabaseKind = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.databaseKind);
+  const targetDatabaseKind = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.databaseKind);
+  const sourceArtifactKind = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.artifactKind);
+  const targetArtifactKind = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.artifactKind);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
   /** A dragged, unconnected shape would go into the middle of this connector on drop. Tinted like
    *  an attach target, with no landing dot: the shape lands where it is, not at the label point. */
@@ -564,8 +568,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
   if (!edge || !sourceNode || !targetNode) return null;
 
-  const sourceRect = rectOfInternal(sourceNode, sourceType && { type: sourceType, serviceKind: sourceServiceKind, componentKind: sourceComponentKind, text: sourceText, technology: sourceTechnology, description: sourceDescription });
-  const targetRect = rectOfInternal(targetNode, targetType && { type: targetType, serviceKind: targetServiceKind, componentKind: targetComponentKind, text: targetText, technology: targetTechnology, description: targetDescription });
+  const sourceRect = rectOfInternal(sourceNode, sourceType && { type: sourceType, serviceKind: sourceServiceKind, componentKind: sourceComponentKind, databaseKind: sourceDatabaseKind, artifactKind: sourceArtifactKind, text: sourceText, technology: sourceTechnology, description: sourceDescription });
+  const targetRect = rectOfInternal(targetNode, targetType && { type: targetType, serviceKind: targetServiceKind, componentKind: targetComponentKind, databaseKind: targetDatabaseKind, artifactKind: targetArtifactKind, text: targetText, technology: targetTechnology, description: targetDescription });
   if (!sourceRect || !targetRect) return null;
 
   // While an endpoint is being dragged, the path tracks the live pointer
@@ -605,6 +609,10 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     targetTechnology,
     sourceDescription,
     targetDescription,
+    sourceDatabaseKind,
+    targetDatabaseKind,
+    sourceArtifactKind,
+    targetArtifactKind,
     dragOverride,
     bendPreview,
     committedSource,

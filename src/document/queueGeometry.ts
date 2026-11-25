@@ -1,4 +1,4 @@
-import { artifactGlyphBounds, dataStoreGlyphBounds, isGlyphShape } from './dataStoreGeometry';
+import { artifactGlyphBounds, dataStoreGlyphBounds, glyphHeadroom, isGlyphShape } from './dataStoreGeometry';
 import type { DraftNode, Side } from './types';
 
 /**
@@ -48,7 +48,7 @@ export interface AnchorBand {
  * unaffected: it leaves below the captions rather than through them.
  */
 export function anchorBandOf(
-  node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind' | 'text' | 'technology' | 'description'>,
+  node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'> & Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind' | 'databaseKind' | 'artifactKind' | 'text' | 'technology' | 'description'>,
 ): AnchorBand | undefined {
   if (node.type === 'queue') {
     const span = queueTubeSpan(node.height, node.width);
@@ -60,7 +60,7 @@ export function anchorBandOf(
   }
   if (node.type === 'database' || isGlyphShape(node)) {
     const glyph = dataStoreGlyphBounds(node);
-    return { top: glyph.top, bottom: glyph.bottom, left: glyph.left, right: glyph.right, glyphTop: glyph.top };
+    return { top: glyph.top, bottom: glyph.bottom, left: glyph.left, right: glyph.right, glyphTop: glyph.top + glyphHeadroom(node) };
   }
   if (node.type === 'artifact') {
     const glyph = artifactGlyphBounds(node);
@@ -105,4 +105,24 @@ export function bandSpan(
  *  one, so an end nudged or straightened along the side never leaves what is drawn. */
 export function bandReach(box: { x: number; width: number }, band: AnchorBand | undefined): { min: number; max: number } {
   return { min: band?.left ?? box.x, max: band?.right ?? box.x + box.width };
+}
+
+/**
+ * What of a shape decides where its glyph stands, beside its box: the kind it is drawn as and the
+ * words under it. Anything that builds a box to ask `anchorBandOf` about, from a live size or a
+ * shape not made yet, takes these from the shape whole, so the handles, the lines and the drawing
+ * are asked about the same thing.
+ */
+export function bandWords(
+  shape: Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind' | 'databaseKind' | 'artifactKind' | 'text' | 'technology' | 'description'>,
+): Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind' | 'databaseKind' | 'artifactKind' | 'text' | 'technology' | 'description'> {
+  return {
+    serviceKind: shape.serviceKind,
+    componentKind: shape.componentKind,
+    databaseKind: shape.databaseKind,
+    artifactKind: shape.artifactKind,
+    text: shape.text,
+    technology: shape.technology,
+    description: shape.description,
+  };
 }

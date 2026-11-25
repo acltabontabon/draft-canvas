@@ -12,6 +12,7 @@
  * route or caption would run over a shape, tries the other side pairs in a fixed order.
  */
 
+import { anchorBandOf } from '../document/queueGeometry';
 import { isCollapsedCompensation, visibleEdges } from '../document/compensation';
 import { crossingsBetween, isDetour, runsOf } from './routeMetrics';
 import type { DraftEdge, DraftNode, Side } from '../document/types';
@@ -319,6 +320,22 @@ function endsOf(edge: DraftEdge, byId: Map<string, DraftNode>): Set<string> {
   return ends;
 }
 
+/**
+ * What of a shape a caption can cover: its box, or for a shape drawn as a glyph, the glyph and the
+ * words under it. The box of a glyph is wider than the glyph, and a connector crosses that margin to
+ * reach it; a caption set there, beside the glyph, is over nothing. Counted as covering the shape,
+ * it failed every described glyph a labelled connector reached, with nowhere else to put the words.
+ */
+function drawnParts(node: DraftNode): Box[] {
+  const band = anchorBandOf(node);
+  if (band?.left === undefined || band.right === undefined) return [node];
+  const top = band.glyphTop ?? band.top;
+  return [
+    { x: band.left, y: top, width: band.right - band.left, height: band.bottom - top },
+    { x: node.x, y: band.bottom, width: node.width, height: node.y + node.height - band.bottom },
+  ];
+}
+
 export interface RouteProblem {
   kind: 'through-node' | 'through-title' | 'label-over-node' | 'label-collision' | 'label-crossed' | 'shared-run' | 'through-boundary';
   /** The shape (for `through-title`, the boundary), or (for a collision) the other connector, in the way. */
@@ -344,7 +361,7 @@ export function routeProblem(
 /** Judge an already drawn route so whole-view checks do not route it a second time. */
 function problemOf(edge: DraftEdge, drawn: Drawn, nodes: readonly DraftNode[], others: readonly Other[] | undefined, nodeMap: Map<string, DraftNode>): RouteProblem | undefined {
   if (drawn.chip) {
-    const covered = nodes.find((n) => n.type !== 'group' && overlaps(drawn.chip!, inset(n, CAPTION_INSET)));
+    const covered = nodes.find((n) => n.type !== 'group' && drawnParts(n).some((part) => overlaps(drawn.chip!, inset(part, CAPTION_INSET))));
     if (covered) return { kind: 'label-over-node', node: covered.id };
     const clash = others?.find((o) => o.id !== edge.id && o.chip && !captionsTogether({ ...drawn, id: edge.id }, o) && overlaps(drawn.chip!, o.chip));
     if (clash) return { kind: 'label-collision', node: clash.id };

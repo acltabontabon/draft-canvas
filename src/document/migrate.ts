@@ -764,6 +764,57 @@ function migrateExternalToCard(doc: Record<string, unknown>): Record<string, unk
   return { ...doc, nodes, ...(edges === doc.edges ? {} : { edges }) };
 }
 
+/**
+ * v33 draws an API as a glyph with its name underneath (a body holding out three operations), where
+ * it was a card with a notch in its side. The move v30 made for a Worker and a Gateway, made the
+ * same way: the box grows to hold the glyph above the words, with the glyph's middle where the
+ * card's middle was.
+ *
+ * A pin on the card's left or right named a fraction of the card's height, and the glyph's side is
+ * shorter. Each keeps the height it was drawn at (or the glyph's corner, from a card taller than the
+ * glyph), so a line pinned level with its neighbour is still level with it.
+ */
+function migrateApiToGlyph(doc: Record<string, unknown>): Record<string, unknown> {
+  const isApi = (node: Record<string, unknown>) => node.type === 'service' && node.serviceKind === 'api';
+  const grown = cardsToGlyphs(doc, isApi);
+  if (!Array.isArray(doc.nodes) || !Array.isArray(grown.nodes) || !Array.isArray(doc.edges)) return grown;
+  const repin = new Map<unknown, (offset: number) => number>();
+  doc.nodes.forEach((raw, index) => {
+    const after = (grown.nodes as unknown[])[index];
+    if (!raw || typeof raw !== 'object' || !after || typeof after !== 'object' || after === raw) return;
+    const card = raw as Record<string, unknown>;
+    const box = after as Record<string, unknown>;
+    if (!isApi(card)) return;
+    const { y, height } = card;
+    const { y: top, width: wide, height: tall } = box;
+    if (typeof y !== 'number' || typeof height !== 'number' || typeof top !== 'number' || typeof wide !== 'number' || typeof tall !== 'number') return;
+    const scale = Math.min(114 / 88, Math.max(1, Math.min(wide / 90, tall / 88)));
+    const band = { top: top + 9 * scale, height: 42 * scale };
+    repin.set(card.id, (offset) => Math.round(Math.min(1, Math.max(0, (y + offset * height - band.top) / band.height)) * 10000) / 10000);
+  });
+  if (repin.size === 0) return grown;
+  const moved = (anchor: unknown, end: unknown): unknown => {
+    const at = repin.get(end);
+    if (!at || !anchor || typeof anchor !== 'object') return anchor;
+    const { side, offset } = anchor as Record<string, unknown>;
+    if ((side !== 'left' && side !== 'right') || typeof offset !== 'number' || !Number.isFinite(offset)) return anchor;
+    return { ...anchor, offset: at(offset) };
+  };
+  return {
+    ...grown,
+    edges: doc.edges.map((raw) => {
+      if (!raw || typeof raw !== 'object') return raw;
+      const edge = raw as Record<string, unknown>;
+      if (!repin.has(edge.source) && !repin.has(edge.target)) return raw;
+      return {
+        ...edge,
+        ...(edge.sourceAnchor ? { sourceAnchor: moved(edge.sourceAnchor, edge.source) } : {}),
+        ...(edge.targetAnchor ? { targetAnchor: moved(edge.targetAnchor, edge.target) } : {}),
+      };
+    }),
+  };
+}
+
 /** How wide each glyph is drawn at its normal size, as `dataStoreGeometry.ts` had it at v33. */
 function glyphUnitWidth(node: Record<string, unknown>): number | undefined {
   if (node.type === 'database') return 54;
@@ -771,7 +822,7 @@ function glyphUnitWidth(node: Record<string, unknown>): number | undefined {
   if (node.type === 'service') {
     const kind = node.serviceKind;
     if (kind === 'scheduler') return 44;
-    return kind === 'load-balancer' || kind === 'proxy' || kind === 'gateway' || kind === 'worker' ? 54 : undefined;
+    return kind === 'api' || kind === 'load-balancer' || kind === 'proxy' || kind === 'gateway' || kind === 'worker' ? 54 : undefined;
   }
   if (node.type === 'component') {
     const kind = node.componentKind;
@@ -893,9 +944,10 @@ const MIGRATIONS: Record<number, Migration> = {
   // what it always did, and Junctions that merely share a label are never linked by a guess. The
   // version moves so an older build refuses the file rather than unlinking every group on save.
   32: (document) => document,
-  // An External system stops being a glyph (`migrateExternalToCard`), and the pins on the top and
-  // bottom of the shapes that still are one stay where they were drawn (`keepGlyphPins`).
-  33: everyRoom((graph) => keepGlyphPins(migrateExternalToCard(graph))),
+  // An External system stops being a glyph (`migrateExternalToCard`), an API becomes one
+  // (`migrateApiToGlyph`), and the pins on the top and bottom of every shape that is one stay where
+  // they were drawn (`keepGlyphPins`).
+  33: everyRoom((graph) => keepGlyphPins(migrateApiToGlyph(migrateExternalToCard(graph)))),
 };
 
 export class UnsupportedVersionError extends Error {

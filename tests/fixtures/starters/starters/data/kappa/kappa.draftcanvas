@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 31,
+  "version": 33,
   "metadata": {
     "id": "starter-kappa",
     "title": "Kappa",
@@ -52,9 +52,9 @@
       "id": "gateway",
       "type": "service",
       "x": 12,
-      "y": 346,
+      "y": 359,
       "width": 176,
-      "height": 103,
+      "height": 143,
       "z": 0,
       "text": "Card Gateway",
       "description": "Authorizes card payments for merchants.",
@@ -66,9 +66,9 @@
       "id": "network",
       "type": "service",
       "x": -20,
-      "y": 504,
+      "y": 524,
       "width": 240,
-      "height": 126,
+      "height": 86,
       "z": 0,
       "text": "Card Network",
       "description": "Sends chargebacks filed by cardholders.",
@@ -405,9 +405,9 @@
       "id": "api",
       "type": "service",
       "x": 1512,
-      "y": 394,
+      "y": 407,
       "width": 176,
-      "height": 103,
+      "height": 143,
       "z": 0,
       "parentId": "fraud",
       "text": "Risk API",
@@ -574,13 +574,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {

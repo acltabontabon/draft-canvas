@@ -115,10 +115,10 @@
       "featured": true,
       "order": 30,
       "path": "starters/architectures/microservices/microservices.draftcanvas",
-      "sha256": "bb830afec29f06cb03d7ff3fd93c0360ab0c5a125b4ad0b3a91bc0023f45cbb8",
-      "bytes": 22387,
-      "formatVersion": 28,
-      "updated": "2026-11-21"
+      "sha256": "0d376763a98b0844635a3460e34593861d318e3e427327e13b31e7ce521c0a35",
+      "bytes": 22286,
+      "formatVersion": 33,
+      "updated": "2026-11-26"
     },
     {
       "id": "event-driven",
@@ -366,10 +366,10 @@
       "featured": false,
       "order": 90,
       "path": "starters/data/kappa/kappa.draftcanvas",
-      "sha256": "30946fb9e1f1e649d3715d081361d478e8e52546d78ae70eb2e9b4a1deeec85d",
-      "bytes": 17495,
-      "formatVersion": 31,
-      "updated": "2026-11-21"
+      "sha256": "9829f85c2b561f94a3b29288a8de059710bb703e029b825fbe3cbdd4891e9994",
+      "bytes": 17386,
+      "formatVersion": 33,
+      "updated": "2026-11-26"
     },
     {
       "id": "cdc",
@@ -451,10 +451,10 @@
       "featured": false,
       "order": 110,
       "path": "starters/patterns/saga-orchestration/saga-orchestration.draftcanvas",
-      "sha256": "5418b38e4647db38f237f99672ab41a59e02c8e5be36d771d7cf0c4158d9969f",
-      "bytes": 21732,
-      "formatVersion": 31,
-      "updated": "2026-11-21"
+      "sha256": "fe2cdefca876c9a61fbb13c76747d987860e9afc45fc7f85d8da8c570b5bdc68",
+      "bytes": 21632,
+      "formatVersion": 33,
+      "updated": "2026-11-26"
     },
     {
       "id": "saga-choreography",
@@ -617,10 +617,10 @@
       "featured": true,
       "order": 110,
       "path": "starters/examples/music-streaming/music-streaming.draftcanvas",
-      "sha256": "f8aa23288d37caea71364308abdd50c5b13652ba87e98b2378c1e326e2798c58",
-      "bytes": 46255,
-      "formatVersion": 31,
-      "updated": "2026-11-21"
+      "sha256": "b4fdc63ccdbcc1c00def0c3aca5c72644c9a0170b33e86562172d806db5fd74c",
+      "bytes": 46165,
+      "formatVersion": 33,
+      "updated": "2026-11-26"
     },
     {
       "id": "ride-hailing",
@@ -659,10 +659,10 @@
       "featured": false,
       "order": 120,
       "path": "starters/examples/ride-hailing/ride-hailing.draftcanvas",
-      "sha256": "9ed20b60f29b2e365be2e753e62aaa35b735766ea69eeed054e06f9a4e1ad723",
-      "bytes": 52289,
-      "formatVersion": 31,
-      "updated": "2026-11-21"
+      "sha256": "b20d71f509e5903bfe41c17f7e7289dea96ce390bab069a75d2355e42ce5d5ef",
+      "bytes": 52181,
+      "formatVersion": 33,
+      "updated": "2026-11-26"
     },
     {
       "id": "food-delivery",

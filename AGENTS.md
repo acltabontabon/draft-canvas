@@ -107,9 +107,11 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   read by the router, the handles (`DraftNodeView`) and the layout alike. Never work out a point on
   a side as a fraction of the box by hand: a glyph's anchors sit on the glyph, its top and bottom
   ones spread along its reach, and a Service or Component glyph grows into the room its words leave
-  (`dataStoreScale`), so anything that asks for a band passes the shape's `text`, `technology` and
-  `description` with its kind. A shape whose drawing is not its box needs every one of its twelve
-  points on what is drawn.
+  (`standingOf` in `document/dataStoreGeometry.ts`: grown to fill the box, then lowered so the
+  bottom points stay under its name), so anything that asks for a band passes what `bandWords`
+  takes from the shape. `nodes/describe.ts` hands that geometry its line counts
+  (`setWordsMeasure`); do not measure text anywhere else in `document/`. A shape whose drawing is
+  not its box needs every one of its twelve points on what is drawn.
 - Connector visuals have two renderers: `canvas/DraftEdgeView.tsx` and `edges/describe.ts`.
   Update both for badges, dashes, chips or other visual changes. Continuation and agent previews
   are not exported and reuse the shared ghost routing, dash and marker helpers.

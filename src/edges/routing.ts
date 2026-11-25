@@ -150,11 +150,16 @@ export function chooseSides(source: Rect, target: Rect): { source: Side; target:
  * distance-per-side comparison whether the point is within bounds or not.
  */
 export function anchorAt(rect: Rect, point: { x: number; y: number }): EdgeAnchor {
+  // Measured to where each side's anchors are, which for a shape drawn as a glyph is the glyph and
+  // not its box. Against the box, a drop on the middle of a glyph's left edge was nearer the box's
+  // top (the glyph stands at the top of it) than its left (the glyph is narrower than it), and the
+  // connector took the top's first point, up at the corner.
+  const band = rect.anchorBand;
   const distanceToSide: Record<Side, number> = {
-    top: point.y - rect.y,
-    right: rect.x + rect.width - point.x,
+    top: point.y - (band?.glyphTop ?? rect.y),
+    right: (band?.right ?? rect.x + rect.width) - point.x,
     bottom: rect.y + rect.height - point.y,
-    left: point.x - rect.x,
+    left: point.x - (band?.left ?? rect.x),
   };
   const side = SIDES.reduce((nearest, candidate) =>
     distanceToSide[candidate] < distanceToSide[nearest] ? candidate : nearest,
@@ -185,9 +190,14 @@ const CENTER_DROP_TOLERANCE = 0.35;
  * would have chosen.
  */
 export function anchorForDrop(rect: Rect, point: { x: number; y: number }): EdgeAnchor | undefined {
-  const center = centerOf(rect);
-  const dx = Math.abs(point.x - center.x) / (rect.width / 2);
-  const dy = Math.abs(point.y - center.y) / (rect.height / 2);
+  // "Dead centre" of a glyph is the middle of the glyph, not of the box its name hangs in.
+  const band = rect.anchorBand;
+  const body = band?.left !== undefined && band.right !== undefined
+    ? { x: band.left, y: band.glyphTop ?? band.top, width: band.right - band.left, height: band.bottom - (band.glyphTop ?? band.top) }
+    : rect;
+  const center = centerOf(body);
+  const dx = Math.abs(point.x - center.x) / (body.width / 2);
+  const dy = Math.abs(point.y - center.y) / (body.height / 2);
   if (Math.max(dx, dy) <= CENTER_DROP_TOLERANCE) return undefined;
   return anchorAt(rect, point);
 }

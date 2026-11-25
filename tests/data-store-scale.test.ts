@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { dataStoreGlyphBounds, dataStoreScale } from '../src/document/dataStoreGeometry';
+import { dataStoreGlyphBounds, dataStoreGlyphTop, dataStoreScale } from '../src/document/dataStoreGeometry';
 import { createNode } from '../src/document/factory';
 import { anchorPoint, rectOf } from '../src/edges/routing';
 import { describeContext, describeNode } from '../src/nodes/describe';
@@ -24,12 +24,13 @@ describe('dataStoreScale', () => {
   });
 
   it('grows with spare space while reserving room for its caption', () => {
-    expect(dataStoreScale({ width: 296, height: 176 })).toBe(2);
-    expect(dataStoreScale({ width: 400, height: 290 })).toBeCloseTo(204 / 42);
-    expect(dataStoreScale({ width: 120, height: 114 })).toBeCloseTo(114 / 88);
-    // Stretching just one axis does not trigger the denser resized treatment.
-    expect(dataStoreScale({ width: 400, height: 88 })).toBe(1);
-    expect(dataStoreScale({ width: 90, height: 400 })).toBe(1);
+    // Past the scale the box alone gave it (2, and 204 / 42): into all the room its name leaves.
+    expect(dataStoreScale(store(296, 176))).toBeGreaterThan(2);
+    expect(dataStoreScale(store(400, 290))).toBeGreaterThanOrEqual(204 / 42);
+    expect(dataStoreScale(store(120, 114))).toBeCloseTo(114 / 88);
+    // Stretching just one axis leaves nothing for the glyph to grow into.
+    expect(dataStoreScale(store(400, 88))).toBe(1);
+    expect(dataStoreScale(store(90, 400))).toBe(1);
   });
 });
 
@@ -42,8 +43,12 @@ describe('a Data Store drawn bigger', () => {
   it('draws its glyph as one scaled group, with strokes that keep their weight', () => {
     const shapes = describeNode(store(296, 176), ctx).shapes;
     const group = shapes.find((shape) => shape.t === 'group');
-    const scale = dataStoreScale({ width: 296, height: 176 });
-    expect(group).toMatchObject({ t: 'group', scale, translate: { x: -148, y: 0 } });
+    const big = store(296, 176);
+    const scale = dataStoreScale(big);
+    expect(group).toMatchObject({ t: 'group', scale });
+    const { translate } = group as Extract<typeof group, { t: 'group' }>;
+    expect(translate!.x).toBeCloseTo(148 * (1 - scale));
+    expect(translate!.y).toBeCloseTo(dataStoreGlyphTop(big) - 9 * scale);
     const outline = (group as Extract<typeof group, { t: 'group' }>).children.find((child) => child.t === 'path');
     expect(outline).toMatchObject({ stroke: { width: 1.5 / scale } });
     const svg = serialize(emitShape(group!)[0]!);
@@ -54,27 +59,29 @@ describe('a Data Store drawn bigger', () => {
     const label = (height: number, width: number) =>
       describeNode(store(width, height), ctx).shapes.find((shape) => shape.t === 'text') as { y: number };
     expect(label(88, 148).y).toBeLessThan(label(176, 296).y);
-    expect(label(176, 296).y).toBeGreaterThanOrEqual(9 + 42 * dataStoreScale({ width: 296, height: 176 }));
+    expect(label(176, 296).y).toBeGreaterThanOrEqual(9 + 42 * dataStoreScale(store(296, 176)));
   });
 
   it('lands its connectors on the bigger glyph', () => {
     const big = store(296, 176);
     const scale = dataStoreScale(big);
     const bounds = dataStoreGlyphBounds(big);
-    expect(bounds.top).toBe(18);
-    expect(bounds.bottom).toBeCloseTo(51 * scale);
+    expect(bounds.top).toBeCloseTo(dataStoreGlyphTop(big));
+    expect(bounds.bottom).toBeCloseTo(bounds.top + 42 * scale);
     expect(bounds.left).toBeCloseTo(148 - 54 * scale / 2);
     expect(bounds.right).toBeCloseTo(148 + 54 * scale / 2);
+    // What is left under the name is what a default box leaves: the bottom points stay under it.
+    expect(176 - bounds.bottom).toBeLessThan(40);
     const rect = rectOf(big);
     expect(anchorPoint(rect, 'left')).toEqual({ x: bounds.left, y: (bounds.top + bounds.bottom) / 2 });
     expect(anchorPoint(rect, 'right')).toEqual({ x: bounds.right, y: (bounds.top + bounds.bottom) / 2 });
-    expect(anchorPoint(rect, 'top')).toEqual({ x: 148, y: 18 });
+    expect(anchorPoint(rect, 'top')).toEqual({ x: 148, y: bounds.top });
   });
 
   it('scales every kind, not just the cylinder', () => {
     for (const databaseKind of ['generic', 'sql', 'nosql', 'cache', 'file-system', 'object-storage', 'search-index', 'table'] as const) {
       const shapes = describeNode(store(296, 176, { databaseKind }), ctx).shapes;
-      expect(shapes.find((shape) => shape.t === 'group'), databaseKind).toMatchObject({ scale: dataStoreScale({ width: 296, height: 176 }) });
+      expect(shapes.find((shape) => shape.t === 'group'), databaseKind).toMatchObject({ scale: dataStoreScale(store(296, 176, { databaseKind })) });
     }
   });
 
@@ -83,7 +90,8 @@ describe('a Data Store drawn bigger', () => {
     const glyph = dataStoreGlyphBounds(big);
     const label = describeNode(big, ctx).shapes.find((shape) => shape.t === 'text' && shape.role === 'label');
     expect(glyph.right - glyph.left).toBeGreaterThan(big.width * 0.7);
-    expect(glyph.top).toBeLessThan(28);
+    // What the width cannot use goes above the glyph: under the name there is what a default box has.
+    expect(big.height - glyph.bottom).toBeLessThan(44);
     expect(label?.t === 'text' && label.y).toBeGreaterThan(glyph.bottom);
     expect(label?.t === 'text' && label.y + label.layout.height).toBeLessThan(big.height);
   });

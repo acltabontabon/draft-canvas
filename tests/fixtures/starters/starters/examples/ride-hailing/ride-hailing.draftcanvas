@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 31,
+  "version": 33,
   "metadata": {
     "id": "starter-ride-hailing",
     "title": "Ride-hailing platform",
@@ -189,7 +189,7 @@
       "id": "j-api",
       "type": "ellipse",
       "x": 542,
-      "y": 678,
+      "y": 703,
       "width": 36,
       "height": 36,
       "z": 0
@@ -214,7 +214,7 @@
       "id": "gateway",
       "type": "service",
       "x": 680,
-      "y": 657,
+      "y": 682,
       "width": 240,
       "height": 126,
       "z": 0,
@@ -276,9 +276,9 @@
       "id": "trips",
       "type": "service",
       "x": 1032,
-      "y": 659,
+      "y": 682,
       "width": 176,
-      "height": 123,
+      "height": 143,
       "z": 0,
       "parentId": "trips-d",
       "text": "Trips",
@@ -497,7 +497,7 @@
             "kind": "event",
             "sourceAnchor": {
               "side": "bottom",
-              "offset": 0.75
+              "offset": 0.7915
             },
             "targetAnchor": {
               "side": "bottom",
@@ -627,9 +627,9 @@
       "id": "dispatch",
       "type": "service",
       "x": 1712,
-      "y": 666,
+      "y": 682,
       "width": 176,
-      "height": 109,
+      "height": 143,
       "z": 0,
       "parentId": "market",
       "text": "Dispatch",
@@ -653,10 +653,10 @@
           {
             "id": "d.trips",
             "type": "service",
-            "x": 0,
-            "y": 173,
-            "width": 176,
-            "height": 68,
+            "x": 28,
+            "y": 168,
+            "width": 120,
+            "height": 128,
             "z": 0,
             "text": "Trips",
             "technology": "Spring Boot",
@@ -719,10 +719,10 @@
           {
             "id": "d.eta",
             "type": "service",
-            "x": 1070,
-            "y": 173,
-            "width": 176,
-            "height": 68,
+            "x": 1098,
+            "y": 168,
+            "width": 120,
+            "height": 128,
             "z": 0,
             "text": "ETA Model",
             "technology": "PyTorch",
@@ -889,9 +889,9 @@
       "id": "eta",
       "type": "service",
       "x": 2052,
-      "y": 666,
+      "y": 682,
       "width": 176,
-      "height": 109,
+      "height": 143,
       "z": 0,
       "parentId": "market",
       "text": "ETA Model",
@@ -905,9 +905,9 @@
       "id": "maps",
       "type": "service",
       "x": 2370,
-      "y": 657,
+      "y": 653,
       "width": 220,
-      "height": 126,
+      "height": 86,
       "z": 0,
       "text": "Maps & Routing",
       "description": "Roads, routes and traffic.",
@@ -919,9 +919,9 @@
       "id": "payments",
       "type": "service",
       "x": 1372,
-      "y": 949,
+      "y": 962,
       "width": 176,
-      "height": 103,
+      "height": 143,
       "z": 0,
       "parentId": "pay-d",
       "text": "Payments",
@@ -974,9 +974,9 @@
       "id": "adyen",
       "type": "service",
       "x": 2350,
-      "y": 937,
+      "y": 933,
       "width": 260,
-      "height": 126,
+      "height": 86,
       "z": 0,
       "text": "Card & Payout Provider",
       "description": "Holds and charges cards, sends bank payouts.",
@@ -1003,9 +1003,9 @@
       "id": "fcm",
       "type": "service",
       "x": 450,
-      "y": 1187,
+      "y": 1183,
       "width": 220,
-      "height": 126,
+      "height": 86,
       "z": 0,
       "text": "Push Service",
       "description": "Delivers push notifications to phones.",
@@ -1462,11 +1462,11 @@
       "hasResponse": true,
       "sourceAnchor": {
         "side": "right",
-        "offset": 0.8
+        "offset": 1
       },
       "targetAnchor": {
         "side": "top",
-        "offset": 0.62
+        "offset": 0.676
       },
       "semanticsOrigin": "explicit"
     },
@@ -1485,11 +1485,11 @@
       "compensationDescription": "When the rider cancels before pickup, the fare hold is released.",
       "sourceAnchor": {
         "side": "right",
-        "offset": 0.97
+        "offset": 1
       },
       "targetAnchor": {
         "side": "top",
-        "offset": 0.85
+        "offset": 0.7915
       },
       "semanticsOrigin": "explicit",
       "attachments": [
@@ -1613,13 +1613,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {

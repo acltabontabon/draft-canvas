@@ -42,12 +42,14 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   separate Settings dialog is gone.
 - **Help menu** — **Watch the film** is no longer in it.
 - **Background images are gone** — A diagram's canvas is now part of its style: choose a canvas colour and a backdrop in **Appearance**. A diagram that had a background image opens without it.
-- **API** — An API is drawn as what it offers: a body holding out three operations, one of them
-  in use. A connector into its side lands on one. <!-- highlight -->
+- **API** — An API is drawn as what it offers, like the other Service kinds: a body holding out
+  three operations, one of them in use, with its name underneath. A connector into its side lands
+  on an operation. A saved API keeps its place and its lines. <!-- highlight -->
 - **External** — An External system is a card again, with a dashed outline and an arrow leaving
   its corner, so it resizes like any card. Saved diagrams keep their lines where they were.
-- **Resizing a glyph** — A Load Balancer, Gateway, Proxy, Worker, Scheduler, Module, Port or
-  Adapter grows as soon as you drag it larger than its words need.
+- **Resizing a glyph** — A Data Store, an Artifact, a Load Balancer, Gateway, Proxy, Worker,
+  Scheduler, API, Module, Port or Adapter fills the box you drag it to. The drawing grows as far
+  as the box lets it and the bottom connection points stay right under its name.
 - **Diagrams drawn by an agent** — More connector ends are left automatic, so they follow their
   shapes when you move them. An end stays pinned only where the line would read worse without it.
 - **Arrange** — A cleanup that may turn the diagram tries the other direction with its own choice
@@ -58,6 +60,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Connection points** — The points on a Data Store, an Artifact and every shape drawn as a
   glyph sit on the drawing at any size, and move with it when you resize. On a box made wider for
   its words they used to stand in the air beside it. <!-- highlight -->
+- **Connecting to a glyph** — Dropping a connector on the middle of a glyph's side attaches it
+  there. It used to jump to the corner point above.
 - **Load starters** — Loading the gallery no longer says it couldn’t reach GitHub for a moment
   before the starters arrive.
 - **Room copies** — Pasting and duplicating count the sketches and flows inside rooms toward the
