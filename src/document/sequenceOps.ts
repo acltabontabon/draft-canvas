@@ -815,7 +815,11 @@ export function duplicateItem(sequence: DraftSequence, id: string): { sequence: 
  * conditions, notes — each with the length it is held to. What find-and-replace reaches. The same
  * sequence back when `change` altered nothing.
  */
-export function mapSequenceText(sequence: DraftSequence, change: (text: string, max: number) => string): DraftSequence {
+export function mapSequenceText(
+  sequence: DraftSequence,
+  change: (text: string, max: number) => string,
+  changeAttachments: (attachments: Attachment[] | undefined) => Attachment[] | undefined,
+): DraftSequence {
   let touched = false;
   const swap = (text: string | undefined, max: number): string | undefined => {
     if (!text) return text;
@@ -835,7 +839,9 @@ export function mapSequenceText(sequence: DraftSequence, change: (text: string, 
     rewriteItems(list, (item) => {
       if (item.t === 'message') {
         const label = swap(item.label, LIMITS.maxLabelLength) ?? '';
-        return label === item.label ? item : { ...item, label };
+        const attachments = changeAttachments(item.attachments);
+        if (label === item.label && attachments === item.attachments) return item;
+        return { ...item, label, ...(attachments ? { attachments } : {}) };
       }
       if (item.t === 'note') {
         const text = swap(item.text, LIMITS.maxSequenceNoteLength) ?? '';
@@ -861,7 +867,7 @@ export function mapSequenceText(sequence: DraftSequence, change: (text: string, 
       return next;
     });
   const items = mapItems(sequence.items);
-  if (!touched) return sequence;
+  if (!touched && items === sequence.items) return sequence;
   const next: DraftSequence = { ...sequence, participants, items };
   if (groups) next.groups = groups;
   return next;

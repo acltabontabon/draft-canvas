@@ -88,6 +88,27 @@ describe('copying rooms with sketches near the file limit', () => {
     expect(document.nodes[0]?.inside?.ink).toHaveLength(1);
     expect(document.ink).toEqual(existing);
   });
+
+  it('pastes a mixed fragment into an empty room only when its shape fits', () => {
+    const service = createNode({ id: 'n_api', type: 'service', x: 0, y: 0 });
+    const component = createNode({ type: 'component', x: 0, y: 0 });
+    reset([service, ...Array.from({ length: LIMITS.maxNodes - 1 }, (_, i) => ({ ...component, id: `n_${i}` }))]);
+    store.setState({ clipboard: { nodes: [component], edges: [], ink: [ink] } });
+    expect(store.getState().enterInside(service.id)).toBe(true);
+    const before = store.getState();
+
+    store.getState().paste();
+    expect(store.getState().document).toBe(before.document);
+    expect(store.getState().history).toBe(before.history);
+
+    store.getState().exitTo(0);
+    store.getState().setSelection({ nodes: ['n_0'], edges: [] });
+    store.getState().deleteSelection();
+    expect(store.getState().enterInside(service.id)).toBe(true);
+    store.getState().paste();
+    expect(fileOf(store.getState()).nodes[0]?.inside?.nodes).toHaveLength(1);
+    expect(fileOf(store.getState()).nodes[0]?.inside?.ink).toHaveLength(1);
+  });
 });
 
 describe('drawing and erasing', () => {
@@ -185,6 +206,62 @@ describe('copying sketches', () => {
     store.getState().paste();
     expect(store.getState().document.nodes).toHaveLength(3);
     expect(strokes()).toBe(2);
+  });
+
+  it('duplicates a pasted shape and sketch together and selects only the copies', () => {
+    const source = draw(c.ellipse(88, 34, 130, 70, c.hand(2))[0]!);
+    store.getState().setSelection({ nodes: ['n_api'], edges: [] });
+    useUiStore.getState().setInkSelection([source.id]);
+    store.getState().copySelection();
+    store.getState().paste();
+    const before = store.getState().document;
+    const pasted = inkOf(before).at(-1)!;
+    const history = store.getState().history.past.length;
+
+    store.getState().duplicateSelection();
+
+    const duplicate = inkOf(store.getState().document).at(-1)!;
+    expect(duplicate).toMatchObject({ x: pasted.x + 24, y: pasted.y + 24 });
+    expect(duplicate.id).not.toBe(pasted.id);
+    expect(useUiStore.getState().inkSelection).toEqual([duplicate.id]);
+    expect(store.getState().history.past).toHaveLength(history + 1);
+    store.getState().deleteSelection();
+    expect(store.getState().document.nodes).toEqual(before.nodes);
+    expect(inkOf(store.getState().document)).toEqual(inkOf(before));
+  });
+
+  it('leaves an existing sketch alone when a shape-only paste is deleted', () => {
+    store.getState().setSelection({ nodes: ['n_api'], edges: [] });
+    store.getState().copySelection();
+    const source = draw(c.line({ x: 0, y: 200 }, { x: 300, y: 200 }, c.hand(1))[0]!);
+    store.getState().setSelection({ nodes: [], edges: [] });
+    useUiStore.getState().setInkSelection([source.id]);
+
+    store.getState().paste();
+    store.getState().deleteSelection();
+
+    expect(nodeIds()).toEqual(['n_api', 'n_db']);
+    expect(inkOf(store.getState().document)).toEqual([source]);
+  });
+
+  it('refuses to paste a sketch into an empty room and keeps it available for a populated room', () => {
+    const source = draw(c.line({ x: 0, y: 200 }, { x: 300, y: 200 }, c.hand(1))[0]!);
+    useUiStore.getState().setInkSelection([source.id]);
+    store.getState().copySelection();
+    expect(store.getState().enterInside('n_api')).toBe(true);
+    const before = store.getState();
+
+    store.getState().paste();
+
+    expect(store.getState().document).toBe(before.document);
+    expect(store.getState().history).toBe(before.history);
+    expect(store.getState().pasteRepeat).toBe(before.pasteRepeat);
+    expect(useUiStore.getState().inkSelection).toEqual([]);
+    store.getState().addNode({ type: 'component', x: 0, y: 0 });
+    store.getState().paste();
+    store.getState().exitTo(0);
+    expect(store.getState().enterInside('n_api')).toBe(true);
+    expect(strokes()).toBe(1);
   });
 });
 

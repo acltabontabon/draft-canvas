@@ -1837,12 +1837,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   drawInk(stroke) {
     const state = get();
-    // A room exists only while it holds a shape (`depth/tree.ts`); a sketch alone in an empty one
-    // would vanish on the way out. Say so instead of keeping a stroke that would be lost.
-    if (state.path.length > 0 && state.document.nodes.length === 0) {
-      useUiStore.getState().notify('Sketches sit over a view’s shapes — add a shape here first.');
-      return false;
-    }
+    if (!canKeepSketches(state)) return false;
     if (totals(fileOf(state)).ink >= LIMITS.maxInkStrokes) {
       useUiStore.getState().notify('This canvas holds as many sketch strokes as it can. Erase some to draw more.', 'error');
       return false;
@@ -3121,9 +3116,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   duplicateSelection() {
     const state = get();
+    const strokes = chosenInk(state.document);
     if (state.selection.nodes.length === 0) {
       // Chosen sketch strokes duplicate beside themselves, like shapes do.
-      const strokes = chosenInk(state.document);
       if (strokes.length === 0) return;
       const copies = reissueInk(strokes, 24, 24);
       if (totals(fileOf(state)).ink + copies.length > LIMITS.maxInkStrokes) return;
@@ -3131,7 +3126,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       useUiStore.getState().setInkSelection(copies.map((stroke) => stroke.id));
       return;
     }
-    const fragment = extractFragment(state.document, state.selection.nodes);
+    const fragment = withChosenInk(extractFragment(state.document, state.selection.nodes), strokes);
     const result = pasteFragment(state.document, fragment, { x: 24, y: 24 }, { ...totals(fileOf(state)), depth: state.path.length });
     if (result.nodeIds.length === 0) {
       notifyNothingAdded(result.tooDeep);
@@ -3140,6 +3135,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Duplicate', () => result.doc, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
+    useUiStore.getState().setInkSelection(result.inkIds);
     if (result.truncated) {
       useUiStore.getState().notify(result.tooDeep
           ? 'Duplicated the first part — the rest holds shapes nested deeper than a canvas goes.'
@@ -3208,6 +3204,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     const fragment = state.clipboard;
     if (!fragment || (fragment.nodes.length === 0 && !fragment.ink?.length)) return;
+    if (fragment.nodes.length === 0 && !canKeepSketches(state)) return;
     const inkBox = fragment.ink?.length ? inkUnionBounds(fragment.ink) : null;
     const bounds = boundsOf([...fragment.nodes, ...(inkBox ? [inkBox] : [])]);
     const fragmentCenter = bounds ? centerOf(bounds) : { x: 0, y: 0 };
@@ -3241,7 +3238,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       const homed = reconcileMembershipOp(result.doc, result.nodeIds);
       state.apply('Paste', () => homed, { selection: { nodes: result.nodeIds, edges: result.edgeIds } });
     }
-    if (result.inkIds.length > 0) useUiStore.getState().setInkSelection(result.inkIds);
+    useUiStore.getState().setInkSelection(result.inkIds);
     set({ pasteRepeat: repeat + 1 });
     if (result.truncated) {
       useUiStore.getState().notify(result.tooDeep
@@ -4107,6 +4104,13 @@ function sameIdList(a: readonly string[], b: readonly string[]): boolean {
 function chosenInk(document: DraftDocument): DraftInk[] {
   const chosen = new Set(useUiStore.getState().inkSelection);
   return chosen.size === 0 ? [] : inkOf(document).filter((stroke) => chosen.has(stroke.id));
+}
+
+/** A nested room with no shapes is omitted from the file, along with any ink drawn or pasted there. */
+function canKeepSketches(state: EditorStore): boolean {
+  if (state.path.length === 0 || state.document.nodes.length > 0) return true;
+  useUiStore.getState().notify('Sketches sit over a view’s shapes — add a shape here first.');
+  return false;
 }
 
 function withChosenInk<T extends { ink?: DraftInk[] }>(fragment: T, strokes: DraftInk[]): T {

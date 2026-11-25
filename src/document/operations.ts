@@ -1998,7 +1998,7 @@ export function replaceLabels<T extends Labelled>(doc: T, find: string, replace:
     const text = swap(node.text, LIMITS.maxTextLength);
     const list = attachments(node.attachments);
     // A sequence's names, messages, conditions and notes are labels too.
-    const sequence = node.sequence ? mapSequenceText(node.sequence, (words, max) => swap(words, max) ?? words) : undefined;
+    const sequence = node.sequence ? mapSequenceText(node.sequence, (words, max) => swap(words, max) ?? words, attachments) : undefined;
     if (text === node.text && list === node.attachments && sequence === node.sequence) return node;
     changed = true;
     return {
