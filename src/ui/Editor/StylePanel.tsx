@@ -120,15 +120,28 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
     // mid-way frames the diagram for a canvas wider than the one it ends in. The canvas itself says
     // when: a timer alone ran ahead of it in WebKit, which reports a resize a frame or two later.
     const canvas = document.querySelector('.dc-canvas');
+    const sizeOf = () => {
+      const box = canvas?.getBoundingClientRect();
+      return box ? `${Math.round(box.width)}x${Math.round(box.height)}` : '';
+    };
+    // The canvas as it was before the panel took its room. A fit at this size frames the diagram for
+    // the wider canvas, which is where the camera already is: nothing moves, and the diagram ends up
+    // under the panel. A ResizeObserver reports this size first, and in WebKit the real resize can come
+    // after the fallback timer has run.
+    const opened = sizeOf();
+    let fittedAt: string | null = null;
     let quiet = 0;
-    let done = false;
     const fit = () => {
-      if (done) return;
-      done = true;
+      const now = sizeOf();
+      // Framed for the canvas that is left: done. Framed only for the canvas as it was, because a timer
+      // ran ahead of the resize: once more for the size it settled at, unless the person has moved the
+      // view since.
+      if (fittedAt !== null && (fittedAt !== opened || now === opened || camera.current.moved)) return;
       // Closed before the canvas settled: the view is on its way back, and is not framed over.
       if (!useUiStore.getState().stylePanelOpen) return;
       const state = useEditorStore.getState();
       if (!hasSomethingToFit(state)) return;
+      fittedAt = now;
       void fitView({ padding: fitPadding(0.2), duration: motionMs(360), maxZoom: getZoom(), nodes: flowFitViewNodes(state) });
     };
     // A wheel over the canvas, or a drag that starts on its empty pane, is the person moving the
@@ -142,7 +155,8 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
     const observer =
       canvas && typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
-            if (done) return;
+            // Its first report is the size it already had: the canvas has not given up any room yet.
+            if (fittedAt === null && sizeOf() === opened) return;
             window.clearTimeout(quiet);
             quiet = window.setTimeout(fit, 120);
           })
