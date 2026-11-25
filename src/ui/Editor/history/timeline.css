@@ -19,30 +19,46 @@
   pointer-events: none;
 }
 
+/*
+ * Centred by margins, with no transform or backdrop-filter of its own once it has risen: either
+ * makes the bar the containing block of its fixed-position menus (the alternatives menu), which
+ * then opened measured from the bar instead of the window, off-screen. The frosted glass is the
+ * ::before layer's.
+ */
 .dc-timeline {
   position: absolute;
-  left: 50%;
+  left: 0;
+  right: 0;
   bottom: 10px;
   z-index: var(--dc-z-bar);
   display: flex;
   flex-direction: column;
   width: min(1120px, calc(100% - 24px));
+  margin-inline: auto;
   padding: 5px 6px 5px 8px;
   border: 1px solid var(--dc-border);
   border-radius: 14px;
-  background: color-mix(in srgb, var(--dc-surface-raised) 92%, transparent);
   box-shadow: var(--dc-shadow-panel);
-  backdrop-filter: blur(10px) saturate(1.1);
   color: var(--dc-text);
-  transform: translateX(-50%);
   /* Rises once the status bar has started to sink: one movement, not two at once. */
   animation: dc-timeline-rise 380ms 90ms var(--dc-ease-out) backwards;
+}
+
+.dc-timeline::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--dc-surface-raised) 92%, transparent);
+  backdrop-filter: blur(10px) saturate(1.1);
+  pointer-events: none;
 }
 
 @keyframes dc-timeline-rise {
   from {
     opacity: 0;
-    transform: translate(-50%, 22px) scale(0.985);
+    transform: translateY(22px) scale(0.985);
   }
 }
 
