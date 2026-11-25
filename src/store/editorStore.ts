@@ -1432,7 +1432,9 @@ function recorded(
  */
 function editingLocked(): boolean {
   const ui = useUiStore.getState();
-  return Boolean(ui.readOnly || ui.flowTrace);
+  // The history lens shows a past revision over the live diagram: an edit made "on" it would land on
+  // the hidden live diagram instead, so none is taken while it is open (one guard, not one per tool).
+  return Boolean(ui.readOnly || ui.flowTrace || ui.historyLens);
 }
 
 /** The selection without anything `document` no longer holds — checked by id, not by count: a remote

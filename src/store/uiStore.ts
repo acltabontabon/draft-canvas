@@ -481,6 +481,12 @@ export interface UiStore {
    */
   /** `collaborative`: a collaborator's copy in a live session (view-only, or a session that ended), not a share link. */
   readOnly: { sharedTitle: string; collaborative?: true } | null;
+  /**
+   * A past revision is on screen in the history lens (`canvas/HistoryLens.tsx`): the live diagram is
+   * hidden and takes no edits from here until the lens closes. Changes from elsewhere (a
+   * collaborator, an agent) still land on the live diagram underneath. Transient.
+   */
+  historyLens: boolean;
   toasts: Toast[];
   quickConnect: QuickConnectState | null;
   contextMenu: ContextMenuState | null;
@@ -835,6 +841,7 @@ export interface UiStore {
   clearFitRequest: (id: number) => void;
   setExportOpen: (open: boolean) => void;
   setReadOnly: (readOnly: UiStore['readOnly']) => void;
+  setHistoryLens: (open: boolean) => void;
   setAboutOpen: (open: boolean) => void;
   setDiagnosticsOpen: (open: boolean) => void;
   setCollabOpen: (open: boolean) => void;
@@ -1055,6 +1062,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   collabOpen: false,
   joinInvite: null,
   readOnly: null,
+  historyLens: false,
   toasts: [],
   quickConnect: null,
   contextMenu: null,
@@ -1156,6 +1164,7 @@ export const useUiStore = create<UiStore>((set, get) => ({
   clearFitRequest: (id) => set((state) => (state.fitRequestId === id ? { fitRequestId: 0 } : state)),
   setExportOpen: (exportOpen) => set({ exportOpen, ...(!exportOpen ? { shareFromHere: false } : {}) }),
   setReadOnly: (readOnly) => set({ readOnly }),
+  setHistoryLens: (historyLens) => set({ historyLens }),
   setAboutOpen: (aboutOpen) => set({ aboutOpen }),
   setDiagnosticsOpen: (diagnosticsOpen) => set({ diagnosticsOpen }),
   setCollabOpen: (collabOpen) => set({ collabOpen }),

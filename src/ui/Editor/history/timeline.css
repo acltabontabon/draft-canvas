@@ -1,0 +1,376 @@
+/* The timeline: a quiet strip along the foot of the canvas, over it rather than beside it, so the
+   canvas keeps its width. It recedes like the editor's other bars and wears the same tokens. */
+.dc-timeline {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: var(--dc-z-bar);
+  width: min(980px, calc(100% - 32px));
+  transform: translateX(-50%);
+  padding: 8px 10px 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-lg);
+  background: color-mix(in srgb, var(--dc-surface-raised) 94%, transparent);
+  box-shadow: var(--dc-shadow-panel);
+  backdrop-filter: blur(8px);
+  color: var(--dc-text);
+  animation: dc-history-rise var(--dc-dur-slow) var(--dc-ease-out);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-timeline {
+    animation: none;
+  }
+}
+
+.dc-timeline-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.dc-timeline-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+.dc-timeline-alt {
+  color: var(--dc-text-muted);
+  font-weight: 500;
+}
+
+.dc-timeline-controls {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.dc-timeline-speed,
+.dc-timeline-room {
+  height: 26px;
+  font-size: 12px;
+}
+
+.dc-timeline-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.dc-timeline-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  color: var(--dc-text-faint);
+}
+
+.dc-timeline-search input {
+  width: 140px;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.dc-timeline-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.dc-timeline-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dc-timeline-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dc-timeline-chip[data-on='true'] {
+  border-color: var(--dc-selection);
+  color: var(--dc-text);
+  background: var(--dc-selection-soft);
+}
+
+.dc-timeline-chip:has(input:focus-visible) {
+  outline: 2px solid var(--dc-selection);
+}
+
+.dc-timeline-track {
+  display: flex;
+  align-items: flex-end;
+  gap: 14px;
+  margin-top: 8px;
+  padding: 18px 4px 4px;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.dc-timeline-session {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--dc-border);
+}
+
+.dc-timeline-session-label {
+  display: flex;
+  flex-direction: column;
+  max-width: 220px;
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.dc-timeline-session-when {
+  color: var(--dc-text-faint);
+}
+
+.dc-timeline-session-summary {
+  overflow: hidden;
+  color: var(--dc-text-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-timeline-marks {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 18px;
+}
+
+/* A revision: a small round mark, like the step marks of a presented flow. */
+.dc-timeline-mark {
+  position: relative;
+  width: 11px;
+  height: 11px;
+  padding: 0;
+  border: 1.5px solid var(--dc-text-faint);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  cursor: pointer;
+  transition:
+    transform var(--dc-dur-fast) var(--dc-ease-out),
+    border-color var(--dc-dur-fast) var(--dc-ease-out),
+    background var(--dc-dur-fast);
+}
+
+.dc-timeline-mark:hover {
+  transform: scale(1.25);
+  border-color: var(--dc-text-muted);
+}
+
+.dc-timeline-mark[aria-current='true'] {
+  border-color: var(--dc-selection);
+  background: var(--dc-selection);
+  transform: scale(1.3);
+}
+
+.dc-timeline-mark:focus-visible,
+.dc-timeline-live:focus-visible,
+.dc-timeline-more:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+/* Who made it, by shape as well as colour: an agent's revision is a diamond, a restore or merge a ring. */
+.dc-timeline-mark[data-kind='agent'] {
+  border-radius: 2px;
+  transform: rotate(45deg) scale(0.85);
+}
+
+.dc-timeline-mark[data-kind='restore'],
+.dc-timeline-mark[data-kind='merge'] {
+  box-shadow:
+    0 0 0 2px var(--dc-surface-raised),
+    0 0 0 3px var(--dc-text-faint);
+}
+
+.dc-timeline-mark[data-milestone='true'] {
+  border-color: var(--dc-caution);
+}
+
+.dc-timeline-mark-flag {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0 5px;
+  border-radius: var(--dc-radius-xs);
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+  font-size: 10px;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+.dc-timeline-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  height: 24px;
+  padding: 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dc-timeline-live[aria-current='true'] {
+  border-color: var(--dc-selection);
+  color: var(--dc-text);
+}
+
+.dc-timeline-live-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-selection);
+}
+
+/* Changes since the last revision: the Live mark breathes, slowly, never a badge. */
+.dc-timeline-live-dot[data-pending='true'] {
+  animation: dc-history-turn 2.4s var(--dc-ease-in-out) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-timeline-live-dot[data-pending='true'] {
+    animation: none;
+  }
+}
+
+.dc-timeline-more {
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.dc-timeline-empty {
+  align-self: center;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+.dc-timeline-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--dc-border);
+}
+
+.dc-timeline-detail-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+.dc-timeline-detail-summary {
+  font-weight: 600;
+}
+
+.dc-timeline-detail-meta {
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+.dc-timeline-milestone-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dc-caution);
+  font-size: 12px;
+}
+
+.dc-timeline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.dc-timeline-git {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  flex-basis: 100%;
+  margin: 4px 0 0;
+  font-size: 12px;
+}
+
+.dc-timeline-git dt {
+  color: var(--dc-text-faint);
+}
+
+.dc-timeline-git dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dc-timeline-git code {
+  font-family: var(--dc-mono);
+  font-size: 11px;
+}
+
+.dc-timeline-git ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.dc-timeline-milestone-form {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.dc-timeline-milestone-form input {
+  height: 26px;
+}
+
+/* The studio state steps the editor's chrome back; history's steps back with it. */
+.dc-editor[data-studio] .dc-timeline,
+.dc-editor[data-studio] .dc-history-status {
+  display: none;
+}

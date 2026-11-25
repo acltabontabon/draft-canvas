@@ -77,6 +77,7 @@ import { SharedReader } from './SharedReader';
 import { FocusIndicator } from './FocusIndicator';
 import { TidyBar } from './TidyBar';
 import { ArrangeBar } from './ArrangeBar';
+import { Timeline } from './history/Timeline';
 import { LayoutBusyBar } from './LayoutBusyBar';
 import { FlowLensIndicator } from './FlowLensIndicator';
 import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
@@ -826,6 +827,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           <LayoutBusyBar />
           <TidyBar />
           <ArrangeBar />
+          {!presenting && <Timeline />}
           {!presenting && !tracing && <FlowLensIndicator />}
           <DepthStack />
           <DepthAnnouncer />

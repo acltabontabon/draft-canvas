@@ -13,6 +13,7 @@ import { copyIdOf, type CopyKey } from '../../evolution/identity';
 import { copyLock } from '../../evolution/locks';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { fileOf, isInteracting, useEditorStore } from '../editorStore';
+import { useUiStore } from '../uiStore';
 import { browserHistoryBackend, historyCompute, historyWorkerComputesOnly } from './client';
 import { useEvolutionStore } from './evolutionStore';
 import { HistoryService, type Attribution } from './service';
@@ -125,6 +126,8 @@ export async function attachHistory(key: CopyKey, options: { readOnly?: boolean 
   const documentId = useEditorStore.getState().document.metadata.id;
   listen(documentId);
   watchVisibility();
+  // A lens open on the previous diagram's history closes with it.
+  useUiStore.getState().setHistoryLens(false);
   await historyService().attach(key, options);
 }
 

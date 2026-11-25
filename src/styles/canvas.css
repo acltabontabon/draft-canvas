@@ -7683,3 +7683,32 @@ g[data-ink-erasing='true'] .dc-ink-stroke {
 .dc-diagram-theme {
   display: contents;
 }
+
+/* The history lens (`HistoryLens.tsx`): a past revision drawn where the live diagram is. The live
+   layers stay mounted, still receiving changes from elsewhere, but out of sight and out of reach. */
+.react-flow:has(.dc-history-lens) .react-flow__nodes,
+.react-flow:has(.dc-history-lens) .react-flow__edges,
+.react-flow:has(.dc-history-lens) .react-flow__edgelabel-renderer,
+.react-flow:has(.dc-history-lens) .dc-ink-layer,
+.react-flow:has(.dc-history-lens) .dc-presence,
+.react-flow:has(.dc-history-lens) .dc-departures {
+  /* Not `visibility`: React Flow sets `visibility: visible` on every node it has measured. */
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dc-history-lens {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+.dc-history-lens-scene {
+  position: absolute;
+}
+
+.dc-history-lens-scene > svg {
+  display: block;
+  overflow: visible;
+}

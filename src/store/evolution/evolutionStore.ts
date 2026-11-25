@@ -9,7 +9,10 @@
  * - **published** — revisions are on a remote: `remote` (desktop only).
  */
 import { create } from 'zustand';
+import type { DepthPath } from '../../depth/tree';
+import type { DraftDocument } from '../../document/types';
 import type { Oid } from '../../evolution/contracts';
+import type { Revision, RevisionQuery } from '../../evolution/timeline';
 
 export type CaptureState =
   /** History is off for this diagram, or for the device. */
@@ -60,6 +63,42 @@ export interface EvolutionState {
   detailsOpen: boolean;
   /** Settings → History is open (the web shows it; the desktop forwards it to its Settings). */
   settingsOpen: boolean;
+  timeline: TimelineState;
+  /** A past revision on screen in place of the live diagram, privately and read-only. */
+  lens: LensState | null;
+  playback: PlaybackState;
+}
+
+export interface TimelineState {
+  revisions: Revision[];
+  loading: boolean;
+  error: string | null;
+  /** More, older revisions exist than are loaded. */
+  more: boolean;
+  query: RevisionQuery;
+}
+
+export interface LensState {
+  /** The revision shown; `'live'` while the lens is easing back to the live diagram before it closes. */
+  oid: Oid | 'live';
+  /** The whole file of that revision (its history content). */
+  file: DraftDocument;
+  /** What was on screen before this, for the transition between them. */
+  previous: DraftDocument | null;
+  /** The room shown, inside the revision. */
+  path: DepthPath;
+  /** Increases with every change of what is shown: a transition belongs to one value of it. */
+  step: number;
+  /** A room or Junction the revision does not have, when navigation asked for one. */
+  missing: string | null;
+}
+
+export interface PlaybackState {
+  playing: boolean;
+  /** Revisions per second, roughly: 0.5, 1 or 2. */
+  speed: 0.5 | 1 | 2;
+  /** Move the camera to what changed. */
+  focus: boolean;
 }
 
 export const INITIAL_EVOLUTION: EvolutionState = {
@@ -78,6 +117,9 @@ export const INITIAL_EVOLUTION: EvolutionState = {
   timelineOpen: false,
   detailsOpen: false,
   settingsOpen: false,
+  timeline: { revisions: [], loading: false, error: null, more: false, query: {} },
+  lens: null,
+  playback: { playing: false, speed: 1, focus: true },
 };
 
 export const useEvolutionStore = create<EvolutionState>(() => INITIAL_EVOLUTION);

@@ -36,6 +36,7 @@ import { canCreateInside, hasInside, ownerAt, totals } from '../depth/tree';
 import { backOut, lookInside } from './depthNavigation';
 import { inheritedLevel, LEVEL_HINTS, LEVEL_LABELS } from '../depth/level';
 import { WALK_OF_DIAGRAM, walkOfSelection } from '../presentation/walk';
+import { historyCommands } from './evolution';
 import { fileOf, fileWithLiveViewport, outermostSelected, ownsData, useEditorStore, viewLevel } from '../store/editorStore';
 import { pointer, pointerFlow, type UiStore } from '../store/uiStore';
 import { hostKind } from '../host/hostInfo';
@@ -611,6 +612,7 @@ export function viewCommands(ctx: CommandContext): Command[] {
     });
   }
   commands.push(...trailCommands(ctx));
+  commands.push(...historyCommands());
   if (ctx.editor.focus.active) {
     commands.push({
       id: 'focus-exit',
