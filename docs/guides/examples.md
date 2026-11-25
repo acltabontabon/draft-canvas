@@ -14,6 +14,7 @@ Starters are off until you ask. On a blank canvas, choose **Browse the starters 
 
 Loading reads the repository from GitHub; nothing about your diagrams is sent. The gallery is then
 kept on this device and works offline.
+**Stop loading starters** stops an active refresh and removes the downloaded gallery.
 
 **Try an example** works without the gallery: the Order processing example ships with the app.
 

@@ -58,6 +58,7 @@ import {
   extractFragment,
   freeOriginFor,
   hasAttachmentRoom,
+  isCanvasEmpty,
   moveNodes,
   pasteDocument,
   pasteFragment,
@@ -180,7 +181,7 @@ import type {
 } from '../document/types';
 import type { DocumentStyle } from '../document/style';
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
-import { addInk, INK_ID_PREFIX, inkOf, inkUnionBounds, removeInk, translateInk } from '../document/ink';
+import { addInk, inkOf, inkUnionBounds, reissueInk, removeInk, translateInk } from '../document/ink';
 import { createId } from '../document/ids';
 import { flowFromWalk, tellNext } from '../presentation/walk';
 import { boxForChoice, INK_CHOICE_LABEL, INK_CHOICE_TYPE, type InkShapeChoice } from '../ink/choices';
@@ -1339,7 +1340,7 @@ export function outermostSelected(nodes: readonly DraftNode[], selectedIds: read
  */
 function namingBlank(state: EditorStore, title: string | undefined): string | undefined {
   if (!title || state.path.length > 0 || (state.document.metadata.title !== DEFAULT_TITLE && state.document.metadata.title !== 'Untitled canvas')) return undefined;
-  return totals(fileOf(state)).nodes === 0 ? title : undefined;
+  return isCanvasEmpty(state.document) ? title : undefined;
 }
 
 function notifyNothingAdded(tooDeep: boolean): void {
@@ -3150,30 +3151,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       x: target.x - fragmentCenter.x + stagger,
       y: target.y - fragmentCenter.y + stagger,
     };
-    // Sketch strokes ride along with the shapes they were copied with, at the same offset.
-    const inkRoom = LIMITS.maxInkStrokes - totals(fileOf(state)).ink;
-    const pastedInk = reissueInk((fragment.ink ?? []).slice(0, Math.max(0, inkRoom)), offset.x, offset.y);
+    const result = pasteFragment(state.document, fragment, offset, { ...totals(fileOf(state)), depth: state.path.length });
     if (fragment.nodes.length === 0) {
-      if (pastedInk.length === 0) {
+      if (result.inkIds.length === 0) {
         useUiStore.getState().notify('This canvas holds as many sketch strokes as it can.', 'error');
         return;
       }
-      state.apply('Paste sketch', (doc) => addInk(doc, pastedInk), { selection: EMPTY_SELECTION });
-      useUiStore.getState().setInkSelection(pastedInk.map((stroke) => stroke.id));
-      set({ pasteRepeat: repeat + 1 });
-      return;
-    }
-    const result = pasteFragment(state.document, fragment, offset, { ...totals(fileOf(state)), depth: state.path.length });
-    if (result.nodeIds.length === 0) {
+      state.apply('Paste sketch', () => result.doc, { selection: EMPTY_SELECTION });
+    } else if (result.nodeIds.length === 0) {
       notifyNothingAdded(result.tooDeep);
       return;
+    } else {
+      // Pasted onto a boundary, the copy joins it, as a shape dropped there does.
+      const homed = reconcileMembershipOp(result.doc, result.nodeIds);
+      state.apply('Paste', () => homed, { selection: { nodes: result.nodeIds, edges: result.edgeIds } });
     }
-    // Pasted onto a boundary, the copy joins it, as a shape dropped there does.
-    const homed = addInk(reconcileMembershipOp(result.doc, result.nodeIds), pastedInk);
-    state.apply('Paste', () => homed, {
-      selection: { nodes: result.nodeIds, edges: result.edgeIds },
-    });
-    if (pastedInk.length > 0) useUiStore.getState().setInkSelection(pastedInk.map((stroke) => stroke.id));
+    if (result.inkIds.length > 0) useUiStore.getState().setInkSelection(result.inkIds);
     set({ pasteRepeat: repeat + 1 });
     if (result.truncated) {
       useUiStore.getState().notify(result.tooDeep
@@ -4043,11 +4036,6 @@ function chosenInk(document: DraftDocument): DraftInk[] {
 
 function withChosenInk<T extends { ink?: DraftInk[] }>(fragment: T, strokes: DraftInk[]): T {
   return strokes.length > 0 ? { ...fragment, ink: strokes } : fragment;
-}
-
-/** Copies of strokes under new ids, moved by `dx`/`dy` — what a paste or duplicate adds. */
-function reissueInk(strokes: readonly DraftInk[], dx: number, dy: number): DraftInk[] {
-  return strokes.map((stroke) => ({ ...stroke, id: createId(INK_ID_PREFIX), x: Math.round((stroke.x + dx) * 10) / 10, y: Math.round((stroke.y + dy) * 10) / 10 }));
 }
 
 function inkAmendKey(nodeId: string): string {

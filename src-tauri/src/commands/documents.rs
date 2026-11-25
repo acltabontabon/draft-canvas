@@ -212,9 +212,10 @@ fn rename_file_now(
     // is the one that swaps it in for whatever session was using the old one.
     let new_handle = state.grant_file(&target)?;
     let new_grant = state.file(&new_handle)?;
-    state
+    // A Recent entry is best-effort. The caller still needs the new handle after a successful rename.
+    let _ = state
         .recents
-        .rename(&grant.path, &new_grant.path, &new_grant.name)?;
+        .rename(&grant.path, &new_grant.path, &new_grant.name);
     Ok(RenamedFile {
         handle: new_handle,
         display_path: display_path(&new_grant.path),
@@ -619,6 +620,21 @@ mod tests {
         // Still the older (second) entry, not bumped to the front by the rename.
         assert_eq!(items[1].name, "renamed");
         assert!(items[1].path.ends_with("renamed.draftcanvas"));
+    }
+
+    #[test]
+    fn returns_the_renamed_file_even_when_recents_are_unreadable() {
+        let (dir, state) = test_state();
+        let old = doc(&dir, "plan.draftcanvas", "{}");
+        let handle = state.grant_file(&old).unwrap();
+        fs::create_dir_all(dir.path().join("config/recents.json")).unwrap();
+
+        let renamed = rename_file_now(&state, &handle, "roadmap").unwrap();
+
+        assert!(!old.exists());
+        let new_path = state.file(&renamed.handle).unwrap().path;
+        assert!(new_path.ends_with("roadmap.draftcanvas"));
+        assert_eq!(fs::read_to_string(new_path).unwrap(), "{}");
     }
 
     #[test]

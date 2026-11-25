@@ -1,5 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-import { create, newCanvas } from './canvas';
+import { create, newCanvas, nextFrames } from './canvas';
 import { serveStarterGallery } from './gallery';
 
 /** The open file's own style, as the store holds it. */
@@ -36,6 +36,27 @@ async function show(settings: Locator, tab: 'Styles' | 'Canvas' | 'Drawing') {
   await settings.getByRole('tab', { name: tab, exact: true }).click();
   await expect(settings.getByRole('tab', { name: tab, exact: true })).toHaveAttribute('aria-selected', 'true');
 }
+
+test('Appearance tabs share one tab stop and switch with the arrow keys', async ({ page }) => {
+  await newCanvas(page, 'Keyboard appearance');
+  const settings = await openAppearance(page);
+  await settings.getByRole('button', { name: 'Close appearance' }).focus();
+  await page.keyboard.press('Tab');
+  await expect(settings.getByRole('tab', { name: 'Styles', selected: true })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(settings.getByRole('tab', { name: 'Canvas', selected: true })).toBeFocused();
+  await expect(settings.getByRole('tabpanel', { name: 'Canvas' })).toBeVisible();
+  await expect(settings.getByRole('tab', { name: 'Styles' })).toHaveAttribute('tabindex', '-1');
+  await expect(settings.getByRole('tab', { name: 'Drawing' })).toHaveAttribute('tabindex', '-1');
+  await page.keyboard.press('End');
+  await expect(settings.getByRole('tab', { name: 'Drawing', selected: true })).toBeFocused();
+  await page.keyboard.press('ArrowRight');
+  await expect(settings.getByRole('tab', { name: 'Styles', selected: true })).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(settings.getByRole('tab', { name: 'Drawing', selected: true })).toBeFocused();
+  await page.keyboard.press('Home');
+  await expect(settings.getByRole('tab', { name: 'Styles', selected: true })).toBeFocused();
+});
 
 test('a style is made beside the canvas, kept on this device, and the open diagram follows it', async ({ page }) => {
   await newCanvas(page, 'My style');
@@ -142,6 +163,33 @@ test('the diagram is framed again in the canvas the panel leaves it', async ({ p
   await expect(panel).toBeHidden();
   await page.waitForTimeout(900);
   expect(Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right))))).toBeLessThan(edge);
+});
+
+test('closing Appearance after changing rooms keeps the current room in view', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await newCanvas(page, 'Appearance across rooms');
+  await create(page, 'Service', { x: 300, y: 240 });
+  await page.keyboard.press('ControlOrMeta+ArrowDown');
+  await expect(page.getByText('What runs inside Service?', { exact: true })).toBeVisible();
+  await create(page, 'Data Store', { x: 650, y: 260 });
+  await page.keyboard.press('ControlOrMeta+ArrowUp');
+  const room = page.locator('.dc-room');
+  await expect(room).toHaveCount(0);
+  await nextFrames(page);
+
+  const viewport = () => page.locator('.react-flow__viewport').evaluate((element) => (element as HTMLElement).style.transform);
+  const rootCamera = await viewport();
+  const settings = await openAppearance(page);
+  await expect.poll(viewport).not.toBe(rootCamera);
+  const panelCamera = await viewport();
+  await page.keyboard.press('ControlOrMeta+ArrowDown');
+  await expect(room).toBeVisible();
+  await expect.poll(viewport).not.toBe(panelCamera);
+  const roomCamera = await viewport();
+  await settings.getByRole('button', { name: 'Close appearance' }).click();
+  await expect(settings).toBeHidden();
+  await nextFrames(page);
+  expect(await viewport()).toBe(roomCamera);
 });
 
 test('a style’s colours dress the whole editor, and leave the app outside it alone', async ({ page }) => {

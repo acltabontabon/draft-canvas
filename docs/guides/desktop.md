@@ -37,6 +37,7 @@ Choose **Quick Draft** on Home (`⌘N`) and start drawing; no name or folder nee
 | Rename, revert, find on disk | **File → Rename File…**, **Revert to Saved…**, **Reveal in Finder** / **File Explorer** |
 
 - The file changes only when you save. Unsaved work has a recovery copy, and closing asks first.
+- If the original file can’t be opened, its recovery copy opens as a Quick Draft from Home.
 - A diagram published for docs keeps its SVG beside it updated on save; see
   [Diagrams in your docs](diagrams-in-docs.md#on-the-desktop).
 - If another app changes the file, it reloads when you have no unsaved edits; otherwise Draft Canvas

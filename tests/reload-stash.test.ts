@@ -22,6 +22,13 @@ describe('reloadStash', () => {
     expect(takeReloadStash('d_stash')).toEqual({ document: expect.objectContaining({ metadata: expect.objectContaining({ title: 'Second' }) }) });
   });
 
+  it('tolerates browsers that block access to session storage', () => {
+    vi.spyOn(window, 'sessionStorage', 'get').mockImplementation(() => {
+      throw new DOMException('Storage is blocked', 'SecurityError');
+    });
+    expect(() => stashForReload(at('Edited'))).not.toThrow();
+  });
+
   it('never pairs a new document with the context of an older stash when the second write fails', () => {
     stashForReload(at('First'), { base: { title: 'Old base' }, stamp: 's_old', conflict: true });
     const setItem = Storage.prototype.setItem;

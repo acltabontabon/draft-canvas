@@ -428,15 +428,10 @@ export class IndexedDbRepository implements DraftRepository {
     const stamp = cameraOnly ? known! : createId('s');
     // Before the first `await`, so a page leaving straight after starting this write can stash it.
     this.writingStamps.set(id, stamp);
-    // One readwrite transaction, and every request in it queued before the first `await`. The flush a
-    // closing tab fires from `pagehide` gets no further than the task it started in: requests already
-    // queued still commit, but a callback never runs — so a write that waited for its own read of the
-    // row never happened, and the last few seconds of edits were gone on every refresh. The read goes
-    // first (requests run in order, so it sees the row as it was), the write right behind it, and the
-    // read's answer then either aborts the write (another tab's content) or lays the merged metadata
-    // over it. A tab that unloads before the answer arrives has written unmerged, unchecked — a
-    // rename made elsewhere is caught by the next save, and a content change made elsewhere within
-    // those milliseconds is the one case this trades for never losing the edits.
+    // Queue content edits behind the read before the first await so a closing page has a chance to
+    // keep them. The answer aborts a conflicting write or merges metadata within the transaction.
+    // A camera position can wait for that answer: closing during a pan must never replace another
+    // tab's content or change when the Library says its diagram was edited.
     const tx = this.db.transaction(['documents', 'bodies'], 'readwrite');
     const documents = tx.objectStore('documents');
     const bodies = tx.objectStore('bodies');
@@ -452,27 +447,30 @@ export class IndexedDbRepository implements DraftRepository {
       requests.push(result);
       return result;
     };
-    let written = document;
     try {
       const read = base || checked ? documents.get(id) : Promise.resolve(undefined);
       requests.push(read);
-      const first = write(document);
+      const first = cameraOnly ? undefined : write(document);
       const before = await read;
       const conflict = conflictIn(before);
       if (conflict) {
-        tx.abort();
-        await Promise.allSettled([first, tx.done]);
-        if (cameraOnly) return;
+        if (cameraOnly) {
+          await tx.done;
+          return;
+        }
         throw new DocumentConflictError(conflict);
       }
-      if (base && before) {
-        written = reconcileMetadata(document, base, before);
-        if (written !== document) await write(written);
+      const reconciled = base && before ? reconcileMetadata(document, base, before) : document;
+      if (cameraOnly && before) {
+        const { createdAt, updatedAt } = before;
+        await write({ ...reconciled, metadata: { ...reconciled.metadata, createdAt, updatedAt } });
+      } else if (reconciled !== document) {
+        await write(reconciled);
       }
       await Promise.all([first, tx.done]);
       this.stamps.set(id, stamp);
       requestPersistenceOnce();
-      if (written !== document) return sharedMetadataOf(written.metadata);
+      if (reconciled !== document) return sharedMetadataOf(reconciled.metadata);
       return;
     } catch (error) {
       try { tx.abort(); } catch { /* A failed transaction may already have aborted. */ }

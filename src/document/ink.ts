@@ -10,6 +10,7 @@
 import { clamp, isFiniteNumber } from '../lib/math';
 import { isRecord } from '../lib/isRecord';
 import { LIMITS } from './limits';
+import { createId } from './ids';
 import { INK_COLORS, INK_TOOLS, type DraftDocument, type DraftInk, type InkColor, type InkTool } from './types';
 
 export const INK_ID_PREFIX = 'k';
@@ -34,6 +35,16 @@ export function withInk<T extends { ink?: DraftInk[] }>(doc: T, ink: readonly Dr
 /** Rounds a coordinate to the tenth of a unit strokes are stored at. */
 export function inkRound(value: number): number {
   return Math.round(value * 10) / 10;
+}
+
+/** Copies strokes with fresh ids, optionally shifting them to where their shapes landed. */
+export function reissueInk(strokes: readonly DraftInk[], dx = 0, dy = 0): DraftInk[] {
+  return strokes.map((stroke) => ({
+    ...stroke,
+    id: createId(INK_ID_PREFIX),
+    x: inkRound(clampCoordinate(stroke.x + dx)),
+    y: inkRound(clampCoordinate(stroke.y + dy)),
+  }));
 }
 
 export function addInk(doc: DraftDocument, strokes: readonly DraftInk[]): DraftDocument {

@@ -44,8 +44,8 @@ function RenameTargetDialog() {
     return <RenameFileDialog currentName={doc.name} onSubmit={(newStem) => controller.renameOpenFile(newStem)} onClose={onClose} />;
   }
   if (renameTarget.kind === 'recent') {
-    const { handle, name } = renameTarget;
-    return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameFile(handle, newStem)} onClose={onClose} />;
+    const { handle, name, displayPath } = renameTarget;
+    return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameFile(handle, newStem, displayPath)} onClose={onClose} />;
   }
   const { project, relPath, name } = renameTarget;
   return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameProjectFile(project, relPath, newStem)} onClose={onClose} />;
