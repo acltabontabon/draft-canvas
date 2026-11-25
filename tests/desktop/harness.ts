@@ -1,4 +1,7 @@
 import { vi } from 'vitest';
+// History's in-thread compute (no Worker under jsdom) is imported lazily; loaded up front so a
+// capture still settling when a short test ends never asks for a module after teardown.
+import '../../src/evolution/workerHost';
 import { createDocument } from '../../src/document/factory';
 import { serializeDocument } from '../../src/export/project';
 import type { CommandMessage, ToHostMessage } from '../../src/host/embeddedHost';

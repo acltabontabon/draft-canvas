@@ -1,7 +1,7 @@
 import { useUiStore } from '../store/uiStore';
 import { deviceStyle } from '../store/styleStore';
 import { isSharedEditing } from '../store/collabStore';
-import { attachHistory, rebindHistoryCopy } from '../store/evolution/bridge';
+import { attachHistory, noteExternalChange, rebindHistoryCopy } from '../store/evolution/bridge';
 import type { CopyKey } from '../evolution/identity';
 import { createDocument } from '../document/factory';
 import { DEFAULT_TITLE } from '../document/sanitize';
@@ -338,6 +338,11 @@ export class DesktopController {
   /** Which working copy is open, for Canvas Evolution. */
   historyCopyKey(): CopyKey | null {
     return historyKeyOf(this.session);
+  }
+
+  /** The saved file open now, for committing it into its project repository. */
+  historyFile(): { handle: Handle; name: string } | null {
+    return this.session.kind === 'file' ? { handle: this.session.handle, name: this.session.name } : null;
   }
 
   async start(): Promise<void> {
@@ -1289,6 +1294,8 @@ export class DesktopController {
     this.edited = false;
     this.load(opened.text, opened.name, { baseline: true });
     this.publish();
+    // A change noticed on disk (a pull, another editor) is recorded as one revision from outside.
+    if (onlyIfCurrent) noteExternalChange();
     return true;
   }
 

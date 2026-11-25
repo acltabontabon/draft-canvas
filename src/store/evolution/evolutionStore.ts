@@ -82,7 +82,8 @@ export interface EvolutionState {
 export interface MergeSession {
   opId: string;
   /** The branch being brought in, and the one it is brought into. */
-  source: { altId: string | null; name: string };
+  /** `remote`: the published copy of that alternative, as last fetched (desktop remotes). */
+  source: { altId: string | null; name: string; remote?: boolean };
   into: { altId: string | null; name: string };
   ours: Oid;
   theirs: Oid;

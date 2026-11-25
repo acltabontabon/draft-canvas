@@ -22,7 +22,7 @@ export function MergeBar({ session }: { session: MergeSession }) {
     <div className="dc-compare-bar dc-merge-bar">
       <div className="dc-compare-bar-row">
         <span className="dc-compare-bar-what">
-          Bringing “{session.source.name}” into {into}
+          Bringing {session.source.name} into {into}
           <span className="dc-timeline-detail-meta">
             {session.result.combined} combined{conflicts.length > 0 ? ` · ${open === 0 ? 'all decided' : `${open} to decide`}` : ''}
           </span>
@@ -87,7 +87,7 @@ function ConflictRow({ conflict, session }: { conflict: Conflict; session: Merge
         value={choice ?? ('' as never)}
         options={[
           { value: 'ours', label: 'Keep this' },
-          { value: 'theirs', label: `Take “${session.source.name}”` },
+          { value: 'theirs', label: `Take ${session.source.name}` },
         ]}
         onChange={(side) => void chooseConflict(conflict.id, side)}
       />

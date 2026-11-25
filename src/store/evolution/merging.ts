@@ -17,7 +17,7 @@ import { HistoryError, type Oid } from '../../evolution/contracts';
 import { randomId } from '../../evolution/hash';
 import { operationRecord } from '../../evolution/journal';
 import { virtualBase, type Side } from '../../evolution/merge';
-import { branchOf, mergeSessionRef } from '../../evolution/refs';
+import { branchOf, mergeSessionRef, remoteBranchOf } from '../../evolution/refs';
 import { formatMessage } from '../../evolution/trailers';
 import { isSharedEditing } from '../collabStore';
 import { fileOf, isInteracting, useEditorStore } from '../editorStore';
@@ -35,6 +35,14 @@ function nameOf(altId: string | null): string {
   return historyService().context()?.meta?.alternatives.find((alt) => alt.altId === altId)?.name ?? 'Alternative';
 }
 
+function sourceName(altId: string | null, remote: boolean): string {
+  return remote ? `the published ${altId === null ? 'main architecture' : `“${nameOf(altId)}”`}` : `“${nameOf(altId)}”`;
+}
+
+function sourceRef(altId: string | null, remote: boolean): string {
+  return remote ? remoteBranchOf(branchOf(altId)) : branchOf(altId);
+}
+
 function refused(message: string): Outcome {
   return { ok: false, message };
 }
@@ -50,7 +58,7 @@ async function preview(session: MergeSession): Promise<void> {
     merge: session,
     compare: {
       base: { oid: session.ours, label: session.into.name, file: session.oursFile },
-      target: { oid: 'merge', label: `With “${session.source.name}”`, file: session.result.candidate },
+      target: { oid: 'merge', label: `With ${session.source.name}`, file: session.result.candidate },
       diff,
       mode: 'overlay',
       side: 'after',
@@ -62,8 +70,11 @@ async function preview(session: MergeSession): Promise<void> {
   useUiStore.getState().setHistoryLens(true);
 }
 
-/** Brings the alternative `source` into the one being worked on. */
-export async function startMerge(source: string | null, resume?: { opId: string; choices: Record<string, Side> }): Promise<Outcome> {
+/**
+ * Brings the alternative `source` into the one being worked on — or, with `remote`, the published
+ * copy of `source` as this device last fetched it, by exactly the same rules.
+ */
+export async function startMerge(source: string | null, resume?: { opId: string; choices: Record<string, Side> }, remote = false): Promise<Outcome> {
   if (isSharedEditing()) return refused('Merging during a live session would change everyone’s diagram at once. End the session first.');
   try {
     const service = historyService();
@@ -73,15 +84,15 @@ export async function startMerge(source: string | null, resume?: { opId: string;
     if (isInteracting()) throw new HistoryError('locked', 'Finish what you are dragging first.');
     const store = context.store;
     const into = context.binding?.altId ?? null;
-    if (into === source) return refused('That is the architecture you are on.');
+    if (into === source && !remote) return refused('That is the architecture you are on.');
     const ours = context.tip;
-    const theirs = await store.readRef(branchOf(source));
+    const theirs = await store.readRef(sourceRef(source, remote));
     if (!ours || !theirs) return refused('Both need at least one revision to be merged.');
-    if (ours === theirs || (await store.isAncestor(theirs, ours))) return { ok: true, message: `Everything in “${nameOf(source)}” is already here.` };
+    if (ours === theirs || (await store.isAncestor(theirs, ours))) return { ok: true, message: `Everything in ${sourceName(source, remote)} is already here.` };
 
     const live = fileOf(useEditorStore.getState());
     const compute = historyCompute();
-    if (await store.isAncestor(ours, theirs)) return fastForward(theirs, source);
+    if (await store.isAncestor(ours, theirs)) return fastForward(theirs, sourceName(source, remote));
 
     const bases = await store.mergeBases(ours, theirs);
     if (bases.length === 0) return refused('These two have no history in common, so they cannot be merged.');
@@ -106,7 +117,7 @@ export async function startMerge(source: string | null, resume?: { opId: string;
     const opId = resume?.opId ?? randomId('m');
     const session: MergeSession = {
       opId,
-      source: { altId: source, name: nameOf(source) },
+      source: { altId: source, name: sourceName(source, remote), ...(remote ? { remote } : {}) },
       into: { altId: into, name: nameOf(into) },
       ours,
       theirs,
@@ -121,7 +132,7 @@ export async function startMerge(source: string | null, resume?: { opId: string;
     if (!resume) {
       // Kept until finished or cancelled: the decisions survive a restart, and the objects a ref.
       await store.updateRef({ ref: mergeSessionRef(opId, 'theirs'), expected: null, next: theirs });
-      await store.journalPut({ opId, kind: SESSION, step: 'prepared', at: Date.now(), data: { source, ours, theirs, choices } });
+      await store.journalPut({ opId, kind: SESSION, step: 'prepared', at: Date.now(), data: { source, remote, ours, theirs, choices } });
     }
     await preview(session);
     return { ok: true };
@@ -131,7 +142,7 @@ export async function startMerge(source: string | null, resume?: { opId: string;
 }
 
 /** The other branch is simply further along: adopt its revision as this one's tip. */
-async function fastForward(theirs: Oid, source: string | null): Promise<Outcome> {
+async function fastForward(theirs: Oid, name: string): Promise<Outcome> {
   const service = historyService();
   const context = service.context()!;
   const store = context.store!;
@@ -151,7 +162,7 @@ async function fastForward(theirs: Oid, source: string | null): Promise<Outcome>
   }
   await store.journalPut(operationRecord(opId, 'fast-forward', 'pointer-moved', data, Date.now()));
   closeLens();
-  if (!useEditorStore.getState().applyToFile(`Bring in “${nameOf(source)}”`, () => target, expectedRevision)) {
+  if (!useEditorStore.getState().applyToFile(`Bring in ${name}`, () => target, expectedRevision)) {
     useEvolutionStore.setState({ unfinished: { opId, kind: 'fast-forward', reason: 'The diagram changed while bringing that in. Its revisions are in history; nothing on the canvas was replaced.' } });
     await service.adopt(context.token, { tip: theirs });
     return refused('The diagram changed meanwhile, so nothing on the canvas was replaced.');
@@ -159,7 +170,7 @@ async function fastForward(theirs: Oid, source: string | null): Promise<Outcome>
   await store.journalDelete(opId);
   await service.adopt(context.token, { tip: theirs });
   void loadTimeline();
-  return { ok: true, message: `Brought in “${nameOf(source)}”. It was simply ahead, so no merge was needed.` };
+  return { ok: true, message: `Brought in ${name}. It was simply ahead, so no merge was needed.` };
 }
 
 /** Chooses a side for one conflict, and works the result out again. */
@@ -180,7 +191,7 @@ async function applyChoice(id: string, side: Side): Promise<void> {
   const next = { ...session, choices, result };
   await preview(next);
   const store = historyService().store;
-  await store?.journalPut({ opId: session.opId, kind: SESSION, step: 'prepared', at: Date.now(), data: { source: session.source.altId, ours: session.ours, theirs: session.theirs, choices } }).catch(() => undefined);
+  await store?.journalPut({ opId: session.opId, kind: SESSION, step: 'prepared', at: Date.now(), data: { source: session.source.altId, remote: session.source.remote ?? false, ours: session.ours, theirs: session.theirs, choices } }).catch(() => undefined);
 }
 
 /** Every conflict has a choice. */
@@ -201,7 +212,7 @@ export async function finishMerge(): Promise<Outcome> {
     const ref = branchOf(session.into.altId);
     const compute = historyCompute();
     const live = fileOf(useEditorStore.getState());
-    const [ourTip, theirTip, now] = await Promise.all([store.readRef(ref), store.readRef(branchOf(session.source.altId)), compute.prepare(live)]);
+    const [ourTip, theirTip, now] = await Promise.all([store.readRef(ref), store.readRef(sourceRef(session.source.altId, session.source.remote ?? false)), compute.prepare(live)]);
     if (ourTip !== session.ours || theirTip !== session.theirs || now.blobId !== session.oursBlob) {
       return refused('Something changed since this merge began. Start it again to include the latest of both.');
     }
@@ -215,7 +226,7 @@ export async function finishMerge(): Promise<Outcome> {
       author: signature,
       committer: signature,
       message: formatMessage({
-        summary: `Merge “${session.source.name}” into ${session.into.name === 'Main architecture' ? 'the main architecture' : `“${session.into.name}”`}`,
+        summary: `Merge ${session.source.name} into ${session.into.name === 'Main architecture' ? 'the main architecture' : `“${session.into.name}”`}`,
         body: described.body,
         trailers: { initiator: 'merge', documentId: live.metadata.id, categories: described.categories, ...(session.into.altId ? { alternative: session.into.altId } : {}) },
       }),
@@ -224,13 +235,13 @@ export async function finishMerge(): Promise<Outcome> {
     await store.journalPut(operationRecord(session.opId, 'merge', 'prepared', data, Date.now()));
     const moved = await store.updateRef({ ref, expected: session.ours, next: commit });
     if (!moved.ok) {
-      await store.journalPut({ opId: session.opId, kind: SESSION, step: 'prepared', at: Date.now(), data: { source: session.source.altId, ours: session.ours, theirs: session.theirs, choices: session.choices } });
+      await store.journalPut({ opId: session.opId, kind: SESSION, step: 'prepared', at: Date.now(), data: { source: session.source.altId, remote: session.source.remote ?? false, ours: session.ours, theirs: session.theirs, choices: session.choices } });
       return refused('History changed elsewhere meanwhile; start the merge again.');
     }
     await store.journalPut(operationRecord(session.opId, 'merge', 'pointer-moved', data, Date.now()));
     useEvolutionStore.setState({ merge: null, compare: null });
     closeLens();
-    if (!useEditorStore.getState().applyToFile(`Merge “${session.source.name}”`, () => merged, session.revision)) {
+    if (!useEditorStore.getState().applyToFile(`Merge ${session.source.name}`, () => merged, session.revision)) {
       useEvolutionStore.setState({ unfinished: { opId: session.opId, kind: 'merge', reason: 'The diagram changed while merging. The merge is in history; nothing on the canvas was replaced.' } });
       await service.adopt(context.token, { tip: commit });
       return refused('The diagram changed meanwhile, so nothing on the canvas was replaced.');
@@ -239,7 +250,7 @@ export async function finishMerge(): Promise<Outcome> {
     await store.updateRef({ ref: mergeSessionRef(session.opId, 'theirs'), expected: session.theirs, next: null });
     await service.adopt(context.token, { tip: commit });
     void loadTimeline();
-    return { ok: true, message: `Merged “${session.source.name}”. Undo takes the canvas back; both histories are kept.` };
+    return { ok: true, message: `Merged ${session.source.name}. Undo takes the canvas back; both histories are kept.` };
   } catch (error) {
     return refused(error instanceof Error ? error.message : 'The merge could not be finished.');
   }
@@ -262,11 +273,11 @@ export async function resumeMergeSessions(): Promise<void> {
   if (!store) return;
   const session = (await store.journalList()).find((record) => record.kind === SESSION);
   if (!session) return;
-  const data = session.data as { source: string | null; ours: Oid; choices: Record<string, Side> };
+  const data = session.data as { source: string | null; remote?: boolean; ours: Oid; choices: Record<string, Side> };
   if (data.ours !== historyService().context()?.tip) {
     // This architecture moved on since: the old session's decisions no longer apply.
     await store.journalDelete(session.opId);
     return;
   }
-  await startMerge(data.source, { opId: session.opId, choices: data.choices ?? {} });
+  await startMerge(data.source, { opId: session.opId, choices: data.choices ?? {} }, data.remote === true);
 }

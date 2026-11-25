@@ -107,7 +107,8 @@ function ConfirmAction({ label, confirmLabel, warning, onConfirm, disabled }: { 
   );
 }
 
-export function HistorySettings() {
+/** `children`: sections only one platform has (the desktop's publishing), placed before Storage. */
+export function HistorySettings({ children }: { children?: ReactNode } = {}) {
   const [enabled, setEnabled] = useState(historyEnabled);
   const [usage, setUsage] = useState<number | null>(null);
   const [message, setMessage] = useState<string | null>(null);
@@ -249,6 +250,8 @@ export function HistorySettings() {
           </p>
         )}
       </SettingsSection>
+
+      {children}
 
       <SettingsSection title="Storage">
         <SettingRow

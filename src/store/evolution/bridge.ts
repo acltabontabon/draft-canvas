@@ -273,6 +273,15 @@ export function noteAgentCommit(agent: string): void {
 }
 
 /** "Capture now" from the status, the palette or a lifecycle edge. */
+/**
+ * The file changed outside the app and was reloaded: what is on disk now becomes its own revision,
+ * marked as coming from outside (`initiator: external`), not as the person's own drawing.
+ */
+export function noteExternalChange(): void {
+  service?.noteEdit();
+  service?.requestCapture('external');
+}
+
 export function captureNow(): void {
   service?.requestCapture('manual');
 }

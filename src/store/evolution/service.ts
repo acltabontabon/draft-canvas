@@ -484,6 +484,16 @@ export class HistoryService {
     }
   }
 
+  /** Replaces part of this history's `repo.json` (its remote settings, say). `null` when there is none to change. */
+  async updateMeta(change: (meta: RepoMeta) => RepoMeta): Promise<RepoMeta | null> {
+    const session = this.session;
+    if (!session?.store || !session.meta || session.readOnly) return null;
+    const meta = change(session.meta);
+    await session.store.writeMeta(meta);
+    if (this.session === session) session.meta = meta;
+    return meta;
+  }
+
   get paused(): boolean {
     return this.session?.paused === true;
   }

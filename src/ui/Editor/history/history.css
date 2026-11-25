@@ -180,3 +180,20 @@
 .dc-history-note .dc-button + .dc-button {
   margin-left: 6px;
 }
+
+.dc-history-remote-url {
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.dc-history-publish-subjects {
+  flex-basis: 100%;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}

@@ -11,6 +11,7 @@ import { desktopStore } from './store';
 import { createExplorerSaver } from './saveExplorer';
 import { createTauriApi } from './tauri/api';
 import { installDesktopHistory } from './history';
+import { installRemoteHistory } from './remoteHistory';
 import { setDesktopController } from './useDesktop';
 
 /** Exports go through the shell's Save dialog. Cancelling it rejects the way the export dialog expects a cancel to. */
@@ -84,6 +85,7 @@ export async function bootDesktop(): Promise<void> {
     const controller = new DesktopController({ api, link, store: desktopStore, ui });
     // History is kept by the shell here, for whatever working copy the controller has open.
     installDesktopHistory(api, () => controller.historyCopyKey());
+    installRemoteHistory(api, () => controller.historyFile());
     setDesktopController(controller);
     registerDesktopHost({ channel, returnHome: () => void controller.returnHome() });
     setFileSaver(fileSaverFor(api));
