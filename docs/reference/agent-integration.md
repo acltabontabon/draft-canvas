@@ -203,9 +203,15 @@ the same `link`, and give both the same short label.
   `set: {link: null}`.
 - `read_diagram` returns each junction's `link`, and `linkedJunctions: [{link, label, places:
   [{id, view}]}]` for every group with a member on the page: where each is drawn, by view path.
+  `query` finds junctions by their link as well as their label.
+- A group reads as one label, as it does for a person:
+  - Junctions sharing a `link` in one create or `add` need the same label (`INVALID_INPUT` otherwise).
+  - `set.label` on any junction of a group renames every member, in every view. The receipt says
+    how many others changed, and a review or proposal lists each with its view.
+  - A junction joining an existing group (`add` with `link`, or `set.link` alone) takes the
+    group's label, with an advisory when that replaced its own.
+- `rename_element` renames a linked group by its label when no architecture shape carries that label.
 - A link adds no relationship. Flows, semantics and outage reads follow drawn relationships only.
-- `label` is each junction's own. Set the same label on every junction of a group; the editor does
-  this for a person, who renames the group in one step.
 - `link` on any other element type is `UNSUPPORTED`.
 
 **Source evidence.** Elements and relationships take up to 8 `evidence` entries:

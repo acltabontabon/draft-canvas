@@ -27,7 +27,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   places. Select one and choose **Add link**, then click where the flow continues. Rest
   the pointer on a linked Junction to see where it goes, and press `G` to travel there; with
   several places you pick one. `⇧G` brings you back to the exact view you left. It works while
-  presenting, and `⌘K` finds each place by name. <!-- highlight -->
+  presenting, and `⌘K` finds each place by name. Agents connected over MCP can create, link and
+  rename them too, and the Draft Canvas skill uses them for lines that would cross the whole map.
+  <!-- highlight -->
 - **File format 33** — Junctions keep their link (`link`). Diagrams saved by this version do not
   open in older versions. Junctions that only share a label are not linked for you.
 

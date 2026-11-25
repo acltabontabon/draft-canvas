@@ -39,6 +39,7 @@ signals that point to each one.
 | An API key, token or private key a service is handed | `secret` | `Vault` |
 | A TLS/mTLS certificate or CA a service presents or trusts | `certificate` | `X.509` |
 | Any other file that matters to the story (an image, a schema, an export) | `file` | `OpenAPI` |
+| The point where a path leaves this part of the diagram to carry on elsewhere ("continues at A") | `junction` with a `link` | |
 
 Redis is the usual trap: used with `GET/SET/EXPIRE` in front of another store it is a `cache`; when it
 is the only place the data lives (a cart, sessions kept nowhere else) it is the store itself — a

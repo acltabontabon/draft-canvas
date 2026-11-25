@@ -222,6 +222,9 @@ The reasoning behind these rules is in [Architecture](docs/reference/architectur
   through `canvas/junctionPreview.ts`, which keeps a bounded number and drops one when its room changes.
 - Copies follow `regroupCopiedJunctions` in `document/operations.ts`: a group copied together gets a
   new link, a Junction copied alone keeps its own.
+- Agents keep the same rules through `settleJunctionLabels` (`junctions/groups.ts`), run once after an
+  update's ops: a label set on a linked junction is the group's, in every view; a junction joining a
+  group takes its label. A change that reaches other views is listed by `diffForReview` with its view.
 
 ### Live collaboration
 

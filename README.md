@@ -23,6 +23,7 @@ Free, open source, and your diagrams stay on your device.
 - **C4-aware.** System Context, Containers, Components, and nested views.
 - **Tech-aware shapes.** Services, APIs, workers, stores, queues, actors, and boundaries.
 - **Presentation flows.** Trace and present happy or failure paths.
+- **Linked junctions.** Continue a path elsewhere instead of drawing a line across the diagram, and jump between the two ends.
 - **Sequence diagrams.** Lifelines, replies, conditions and loops that lay themselves out, beside the architecture.
 - **Bring your own agent.** Connect Claude Code, Codex, Cursor, OpenCode, or any MCP client.
 - **Live collaboration.** Share, manage access, and follow presentations.
@@ -90,7 +91,11 @@ agent session and ask:
    > Don’t turn dependencies or concurrent effects into an invented execution order. Inspect every
    > view and fix readability before finishing; tell me the scope and any unresolved questions.
 
-Ask again to refresh the same diagram when the code changes.
+Ask again to refresh the same diagram when the code changes. On a large map, ask it to keep long
+lines out of the way:
+
+   > Where a connection would cross the whole diagram, or a flow carries on in another view, end it
+   > at a junction and continue from a linked junction with the same label instead of drawing the line.
 
 ---
 

@@ -800,6 +800,7 @@ const compactElement: Schema = {
   type: 'object', properties: {
     id: { type: 'string' }, type: { type: 'string', description: 'E.g. person, service, database, queue, component; get_capabilities lists all types.' },
     label: { type: 'string' }, description: { type: 'string' }, technology: { type: 'string' }, group: { type: 'string' },
+    link: { type: 'string', description: 'Junction group id' },
     inside: briefObject('Nested room: nodes, relationships, groups, flows, notes; at most 3 levels.'),
   }, required: ['id', 'type', 'label'],
 };

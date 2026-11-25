@@ -1333,3 +1333,83 @@ describe('local intents pin the Send revision without a model read', () => {
     expect(fileOf(useEditorStore.getState()).nodes.find(n => n.id === 'api')!.description).toBe('My description');
   });
 });
+
+/**
+ * Linked junctions as an agent reaches them through the app: the same request path an MCP call takes
+ * (`rename_element` arrives as an update with `rename`), against the real store and the shell.
+ */
+describe('linked junctions through agent requests', () => {
+  const junctionsText = () =>
+    compose(
+      {
+        title: 'Hand-off',
+        nodes: [
+          { id: 'checkout', type: 'service', label: 'Checkout' },
+          { id: 'out', type: 'junction', label: 'Hand-off', link: 'handoff' },
+          { id: 'orders', type: 'service', label: 'Orders', inside: { nodes: [{ id: 'in', type: 'junction', label: 'Hand-off', link: 'handoff' }, { id: 'rules', type: 'component', label: 'Rules' }], relationships: [{ id: 'enters', from: 'in', to: 'rules' }] } },
+        ],
+        relationships: [{ id: 'leaves', from: 'checkout', to: 'out' }],
+      },
+      'd_handoff00001',
+    ).text;
+  const context = (handle: string) => ({ handle, open: true, diagramId: 'd_handoff00001' });
+  const groupLabels = () => {
+    const file = fileOf(useEditorStore.getState());
+    const inside = file.nodes.find((n) => n.id === 'orders')!.inside!.nodes;
+    return [file.nodes.find((n) => n.id === 'out')!.text, inside.find((n) => n.id === 'in')!.text];
+  };
+
+  async function openHandoff() {
+    const handle = h.addFile('Hand-off', junctionsText());
+    await h.controller.openHandle(handle);
+    await h.settle();
+    return handle;
+  }
+
+  it('reads each junction’s link and every place its group is drawn', async () => {
+    const handle = await openHandoff();
+    const out = await request('read_diagram', { diagramId: 'd_handoff00001' }, context(handle));
+    expect(out.ok).toBe(true);
+    expect(out.value!.elements).toEqual(expect.arrayContaining([expect.objectContaining({ id: 'out', type: 'junction', link: 'handoff' })]));
+    expect(out.value!.linkedJunctions).toEqual([{ link: 'handoff', label: 'Hand-off', places: [{ id: 'out', view: [] }, { id: 'in', view: ['orders'] }] }]);
+  });
+
+  it('renames a group by its label in one request, in every view, as one undo step, and saves', async () => {
+    const handle = await openHandoff();
+    const out = await request('update_diagram', { requestId: 'rename-group', diagramId: 'd_handoff00001', rename: { from: 'Hand-off', to: 'Settle' } }, context(handle));
+    expect(out.ok, JSON.stringify(out.error)).toBe(true);
+    expect(out.value).toMatchObject({ applied: true, persisted: true, state: 'saved' });
+    expect(out.value!.advisories).toEqual(expect.arrayContaining([expect.stringContaining('Junction group "handoff" reads "Settle" everywhere it is drawn')]));
+    expect(groupLabels()).toEqual(['Settle', 'Settle']);
+    expect(h.files.get(handle)!.text.match(/"Settle"/g)).toHaveLength(2);
+    useEditorStore.getState().undo();
+    expect(groupLabels()).toEqual(['Hand-off', 'Hand-off']);
+  });
+
+  it('adds a counterpart that takes the group’s label, and links an existing junction into it', async () => {
+    const handle = await openHandoff();
+    const added = await request('update_diagram', {
+      requestId: 'add-third', diagramId: 'd_handoff00001', expectedRevision: currentRevision(),
+      ops: [{ op: 'add', nodes: [{ id: 'third', type: 'junction', label: 'A', link: 'handoff' }], relationships: [{ id: 'to-third', from: 'checkout', to: 'third' }] }],
+    }, context(handle));
+    expect(added.ok, JSON.stringify(added.error)).toBe(true);
+    expect(fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'third')).toMatchObject({ type: 'ellipse', link: 'handoff', text: 'Hand-off' });
+    expect(added.value!.advisories).toEqual(expect.arrayContaining([expect.stringContaining('Junction "third" joined group "handoff"')]));
+
+    const unlinked = await request('update_diagram', { requestId: 'unlink', diagramId: 'd_handoff00001', expectedRevision: currentRevision(), ops: [{ op: 'update', id: 'third', set: { link: null } }] }, context(handle));
+    expect(unlinked.ok).toBe(true);
+    expect('link' in fileOf(useEditorStore.getState()).nodes.find((n) => n.id === 'third')!).toBe(false);
+  });
+
+  it('renames a group in a diagram that is not open, in every view of the file it writes', async () => {
+    await openOrders();
+    const other = h.addFile('Hand-off', junctionsText());
+    const file = h.files.get(other)!;
+    const out = await request('update_diagram', { requestId: 'closed-rename', diagramId: 'd_handoff00001', expectedRevision: 'f:1', ops: [{ op: 'update', id: 'out', set: { label: 'Settle' } }] }, { handle: other, open: false, text: file.text, stamp: `v1:${file.version}`, displayPath: file.displayPath, diagramId: 'd_handoff00001' });
+    expect(out.ok, JSON.stringify(out.error)).toBe(true);
+    const written = deserializeDocument(String((out.value!.write as { text: string }).text));
+    if (!written.ok) throw new Error(written.error);
+    expect(written.document.nodes.find((n) => n.id === 'out')!.text).toBe('Settle');
+    expect(written.document.nodes.find((n) => n.id === 'orders')!.inside!.nodes.find((n) => n.id === 'in')!.text).toBe('Settle');
+  });
+});

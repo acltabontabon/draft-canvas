@@ -403,6 +403,12 @@ function readAttachments(r: Reader, value: unknown, path: string): AttachmentSpe
 export interface RoomContext {
   /** Every id already in use in the file, and every one this request has claimed so far. */
   taken: Set<string>;
+  /**
+   * The label each junction `link` was first given in this request, and where: junctions sharing a
+   * link are one point, so one request that labels them differently contradicts itself. Shared with
+   * the rooms nested inside, since a group may span them.
+   */
+  junctionLabels?: Map<string, { label: string; at: string }>;
   /** Elements, groups and relationships already in the room being edited (updates only), and its
    *  flows (each with the flow it is a variant of, if any). */
   existing?: {
@@ -484,6 +490,14 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const technology = r.text(item.technology, `${at}/technology`, AGENT_LIMITS.technologyLength, { singleLine: true });
     const replicas = readReplicas(r, item.replicas, `${at}/replicas`, shape?.type);
     const link = readLink(r, item.link, `${at}/link`, shape?.type);
+    if (link && label) {
+      const labels = (ctx.junctionLabels ??= new Map());
+      const first = labels.get(link);
+      if (!first) labels.set(link, { label: label.trim(), at });
+      else if (first.label !== label.trim()) {
+        r.problems.add('INVALID_INPUT', `${at}/label`, `junctions with link "${link}" are one point and read as one label: ${first.at} says "${first.label}", this one "${label.trim()}"`);
+      }
+    }
     const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
     const group = typeof item.group === 'string' ? item.group : undefined;
     if (group !== undefined && !groupIds.has(group)) r.problems.add('INVALID_REFERENCE', `${at}/group`, `no group "${group}" in this view`);
@@ -500,7 +514,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
       } else if (insideRaw && ctx.depth + 1 > AGENT_LIMITS.insideDepth) {
         r.problems.add('LIMIT_EXCEEDED', insideAt, `inside views nest at most ${AGENT_LIMITS.insideDepth} deep`);
       } else if (insideRaw) {
-        inside = readRoom(r, insideRaw, insideAt, { taken: ctx.taken, depth: ctx.depth + 1, fallbackType: ctx.fallbackType });
+        inside = readRoom(r, insideRaw, insideAt, { taken: ctx.taken, depth: ctx.depth + 1, fallbackType: ctx.fallbackType, junctionLabels: (ctx.junctionLabels ??= new Map()) });
         if (inside.nodes.length === 0) {
           r.problems.add('INVALID_INPUT', `${insideAt}/nodes`, 'an inside view needs at least one element');
           inside = undefined;

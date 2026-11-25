@@ -110,6 +110,10 @@ after ten minutes and is never saved.
 { "op": "moveInside", "owner": "orders", "ids": ["pricing", "repo"] }
 { "op": "moveOutside", "ids": ["pricing"] }
 { "op": "setLevel", "level": "container" }
+{ "op": "add", "nodes": [{ "id": "a-out", "type": "junction", "label": "A", "link": "payment-handoff" }], "relationships": [{ "id": "to-a", "from": "orders", "to": "a-out" }] }
+{ "op": "update", "id": "loose-a", "set": { "link": "payment-handoff" } }
+{ "op": "update", "id": "a-out", "set": { "label": "Settle" } }
+{ "op": "update", "id": "a-in", "set": { "link": null } }
 ```
 
 `null` in `set` clears a field. Ops run in order as one change — one undo step for the person —
@@ -125,6 +129,21 @@ face away; `set.route: null` makes both ends automatic and drops the bends. `rea
 A new element is placed beside what it connects to; existing ones never move unless you arrange
 or `set.place` them. A flow's steps keep their captions and highlights when `set.steps` keeps their
 relationship.
+
+## Linked junctions
+
+Junctions with the same `link` (a name you choose, up to 64 characters) are one point drawn in
+several places, in one view or across inside views. A request that ends a path at one and starts it
+again at another may be sent to each view separately; the link joins them.
+
+- A group reads as one label. In one request, junctions sharing a link need the same label.
+  `set.label` on any of them renames all of them, in every view, and the receipt says how many.
+  One that joins an existing group (an `add` with `link`, or `set.link`) takes the group's label.
+- `read_diagram` returns each junction's `link`, and `linkedJunctions: [{link, label, places:
+  [{id, view}]}]` for every group on the page. `query` finds junctions by their link too.
+- `rename_element` renames a linked group by its label when no other shape carries that label.
+- `link` on anything but a junction is refused. A link adds no relationship; draw the lines to and
+  from each junction as usual.
 
 ## When something is refused
 

@@ -250,10 +250,76 @@ export function unlinkJunctions(file: DraftDocument, ids: readonly string[]): Dr
   return patchJunctions(file, (node) => (wanted.has(node.id) && node.link ? { link: undefined } : null));
 }
 
+/** Writes one label on the Junctions named, wherever they are, growing each to hold it. */
+export function labelJunctions(file: DraftDocument, ids: readonly string[], label: string): DraftDocument {
+  const wanted = new Set(ids);
+  const clean = cleanJunctionLabel(label);
+  return patchJunctions(file, (node) => (wanted.has(node.id) ? labelled(node, clean) : null));
+}
+
 /** Renames a group: the new label on every member, in every room. An empty label clears it. */
 export function renameJunctionGroup(file: DraftDocument, link: string, label: string): DraftDocument {
   const clean = cleanJunctionLabel(label);
   return patchJunctions(file, (node) => (node.link === link ? labelled(node, clean) : null));
+}
+
+/** What `settleJunctionLabels` did, for whoever made the edit to be told. */
+export interface SettledJunctions {
+  file: DraftDocument;
+  /** Groups whose label was written on their other members: the label, and how many it changed. */
+  renamed: Array<{ link: string; label: string; changed: number }>;
+  /** Junctions that joined a group and took the label it already had in place of their own. */
+  adopted: Array<{ id: string; link: string; label: string; was: string }>;
+}
+
+/**
+ * Keeps a group reading as one label after a batch of edits made one Junction at a time — what an
+ * agent's request is. The rules a person gets from the editor, stated for edits that arrive as data:
+ *
+ * - **A label set on a Junction in a group is the group's**: `relabelled` (in the order the edits
+ *   were made, so the last word wins) is written on every member, in every room.
+ * - **A Junction that joins a group takes the group's label**, when the group already has members
+ *   that were not just joining it. A group made entirely by this batch keeps the labels it was given.
+ *
+ * `before` is the file the batch started from; anything whose link is new or different since then
+ * has joined. Returns the same file when nothing needed settling.
+ */
+export function settleJunctionLabels(before: DraftDocument, after: DraftDocument, relabelled: readonly string[]): SettledJunctions {
+  const was = junctionIndex(before).byId;
+  const now = junctionIndex(after);
+  const renames = new Map<string, string>();
+  for (const id of relabelled) {
+    const node = now.byId.get(id)?.node;
+    if (node?.link) renames.set(node.link, node.text ?? '');
+  }
+  const joining = new Map<string, string[]>();
+  for (const [id, member] of now.byId) {
+    const link = member.node.link;
+    if (!link || renames.has(link) || was.get(id)?.node.link === link) continue;
+    const list = joining.get(link);
+    if (list) list.push(id);
+    else joining.set(link, [id]);
+  }
+  let file = after;
+  const adopted: SettledJunctions['adopted'] = [];
+  for (const [link, ids] of joining) {
+    const newcomers = new Set(ids);
+    const label = groupLabel((now.groups.get(link) ?? NO_MEMBERS).filter((member) => !newcomers.has(member.node.id)));
+    if (!label) continue;
+    const differ = ids.filter((id) => (now.byId.get(id)?.node.text ?? '').trim() !== label);
+    if (differ.length === 0) continue;
+    for (const id of differ) adopted.push({ id, link, label, was: now.byId.get(id)?.node.text ?? '' });
+    file = labelJunctions(file, differ, label);
+  }
+  const renamed: SettledJunctions['renamed'] = [];
+  for (const [link, label] of renames) {
+    const clean = cleanJunctionLabel(label);
+    const changed = membersOf(file, link).filter((member) => (member.node.text ?? '') !== clean).length;
+    if (changed === 0) continue;
+    renamed.push({ link, label: clean, changed });
+    file = renameJunctionGroup(file, link, clean);
+  }
+  return { file, renamed, adopted };
 }
 
 /** A group that could be joined: its link, what it reads as, and how many places it is drawn in. */

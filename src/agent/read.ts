@@ -112,15 +112,15 @@ export function readLookup(file: DraftDocument, args: Record<string, unknown>, r
   const query = args.query.trim().toLowerCase();
   const matches: Record<string, unknown>[] = [];
   let total = 0;
-  const add = (id: string, label: string, type: string, path: DepthPath) => {
-    if (!id.toLowerCase().includes(query) && !label.toLowerCase().includes(query)) return;
+  const add = (id: string, label: string, type: string, path: DepthPath, link?: string) => {
+    if (!id.toLowerCase().includes(query) && !label.toLowerCase().includes(query) && !link?.toLowerCase().includes(query)) return;
     total += 1;
     if (matches.length === 20) return;
     const shown = truncated(label, 200);
-    matches.push({ id, label: shown.text, type, view: { inside: [...path] }, ...(shown.truncated ? { labelTruncated: true } : {}) });
+    matches.push({ id, label: shown.text, type, view: { inside: [...path] }, ...(link ? { link } : {}), ...(shown.truncated ? { labelTruncated: true } : {}) });
   };
   for (const room of roomsOf(file)) {
-    for (const node of room.graph.nodes) add(node.id, node.text ?? '', typeWordOf(node), room.path);
+    for (const node of room.graph.nodes) add(node.id, node.text ?? '', typeWordOf(node), room.path, node.link);
     for (const edge of room.graph.edges) add(edge.id, edge.label ?? '', 'relationship', room.path);
     for (const flow of room.graph.flows) add(flow.id, flow.title, 'flow', room.path);
   }
@@ -158,7 +158,7 @@ export function readEdit(file: DraftDocument, args: Record<string, unknown>, rev
     const view = { inside: [...room.path] };
     const nodes = new Map(room.graph.nodes.map(node => [node.id, node]));
     for (const node of room.graph.nodes) {
-      if (contains(node.id, node.text ?? '')) add(() => ({ id: node.id, type: typeWordOf(node), ...text(node.text ?? ''), view, ...(hasInside(node) ? { inside: true } : {}) }));
+      if (contains(node.id, node.text ?? '', node.link ?? '')) add(() => ({ id: node.id, type: typeWordOf(node), ...text(node.text ?? ''), view, ...(node.link ? { link: node.link } : {}), ...(hasInside(node) ? { inside: true } : {}) }));
     }
     for (const edge of room.graph.edges) {
       const fromLabel = nodes.get(edge.source)?.text ?? '';

@@ -405,6 +405,7 @@ def check(request: dict, repo: str | None) -> Report:
     for view in views:
         check_view(view, r, repo, request, is_top=view.depth == 0, primary=primary)
     check_depth(views, r)
+    check_junction_links(views, r)
     return r
 
 
@@ -432,6 +433,37 @@ def check_depth(views: list[View], r: Report):
             if inner and not any(w.flows for w in inner):
                 r.warn(inner[0].path, 'the container view has no flow — the main request path belongs here, first in its flows')
 
+
+def check_junction_links(views: list[View], r: Report):
+    """Linked junctions: one point drawn in several places, so one label, on junctions only, and a
+    counterpart somewhere in the request (the app accepts a lone one, but in a new diagram it leads nowhere)."""
+    groups: dict[str, list[tuple[str, str]]] = {}
+    for view in views:
+        for n in view.nodes:
+            if 'link' not in n:
+                continue
+            where = f'{view.path} element {n.get("id")}'
+            link = n.get('link')
+            if normalized_type(n.get('type')) != 'junction':
+                r.error(where, 'link belongs to a junction; the app refuses it on anything else')
+                continue
+            if not isinstance(link, str) or not link.strip() or len(link.strip()) > 64 or CONTROL.search(link):
+                r.error(where, 'link must be a name of 1 to 64 characters')
+                continue
+            label = n.get('label').strip() if isinstance(n.get('label'), str) else ''
+            groups.setdefault(link.strip(), []).append((where, label))
+    for link, members in groups.items():
+        labels = sorted({label for _, label in members})
+        if len(labels) > 1:
+            r.error(
+                members[0][0],
+                f'junctions with link "{link}" are one point and read as one label; they say {", ".join(repr(x) for x in labels)}',
+            )
+        if len(members) == 1:
+            r.warn(members[0][0], f'only one junction has link "{link}" — add the one where the path continues, or drop link')
+
+
+CONTROL = re.compile('[\x00-\x1f\x7f]')
 
 ALL_NODE_IDS: set[str] = set()
 

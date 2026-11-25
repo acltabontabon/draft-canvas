@@ -434,6 +434,10 @@
               "group": {
                 "type": "string"
               },
+              "link": {
+                "type": "string",
+                "description": "Junction group id"
+              },
               "inside": {
                 "type": "object",
                 "description": "Nested room: nodes, relationships, groups, flows, notes; at most 3 levels."
