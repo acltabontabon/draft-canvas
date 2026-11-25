@@ -58,6 +58,15 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Fixed
 
+- **Copying sketches** - Duplicating a selection copies its shapes and strokes together. After a
+  paste or duplicate, Delete removes only the copies. Pasting a sketch into an empty nested room
+  now asks you to add a shape first, so the sketch cannot disappear when you leave.
+- **Find and replace** - Notes attached to sequence messages are counted and updated, including
+  messages inside a fragment.
+- **Mermaid sequences** - Literal entity codes such as `#lt;` survive export and import in
+  participant names and message text.
+- **Structurizr export** - Shapes and relationships inside a person’s room are preserved when
+  the DSL places that person at the top of the model.
 - **Connection points** — The points on a Data Store, an Artifact and every shape drawn as a
   glyph sit on the drawing at any size, and move with it when you resize. On a box made wider for
   its words they used to stand in the air beside it. <!-- highlight -->
