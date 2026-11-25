@@ -27,6 +27,7 @@ interface AppErrorPayload {
   kind: AppErrorKind;
   message: string;
   path?: string;
+  reason?: string;
 }
 
 function isAppError(value: unknown): value is AppErrorPayload {
@@ -34,7 +35,7 @@ function isAppError(value: unknown): value is AppErrorPayload {
 }
 
 function asDesktopError(error: unknown): DesktopError {
-  if (isAppError(error)) return new DesktopError(error.kind, error.message, error.path);
+  if (isAppError(error)) return new DesktopError(error.kind, error.message, error.path, error.reason);
   return new DesktopError('Io', typeof error === 'string' && error ? error : 'Something unexpected went wrong.');
 }
 
@@ -150,6 +151,17 @@ export function createTauriApi(): DesktopApi {
     historyBindingPut: (binding) => call('history_binding_put', { binding }),
     historyBindingDelete: (copyId) => call('history_binding_delete', { copyId }),
     historyBindingList: () => call('history_binding_list'),
+    historyGitStatus: () => call('history_git_status'),
+    historyRemoteSet: (repo, url) => call('history_remote_set', { repo, url }),
+    historyRemoteRemove: (repo) => call('history_remote_remove', { repo }),
+    historyFetch: (repo) => call('history_fetch', { repo }),
+    historyPushPreview: (repo, refs) => call('history_push_preview', { repo, refs }),
+    historyPush: (repo, refs) => call('history_push', { repo, refs }),
+    historyProjectRepo: (handle) => call('history_project_repo', { handle }),
+    historyProjectPublishBranch: (handle, message) => call('history_project_publish_branch', { handle, message }),
+    historyProjectCommitCurrent: (handle, message, expectedHead) => call('history_project_commit_current', { handle, message, expectedHead }),
+    historyProjectPushPreview: (handle, branch) => call('history_project_push_preview', { handle, branch }),
+    historyProjectPush: (handle, branch) => call('history_project_push', { handle, branch }),
 
     settingsSet: (patch) => call<DesktopSettings>('settings_set', { patch }),
     ask: (title, message, buttons) => call('ask', { title, message, buttons }),

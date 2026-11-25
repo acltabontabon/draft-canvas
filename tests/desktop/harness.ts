@@ -486,6 +486,17 @@ export function createHarness() {
     historyBindingPut: vi.fn(noHistory),
     historyBindingDelete: vi.fn(noHistory),
     historyBindingList: vi.fn(async () => []),
+    historyGitStatus: vi.fn(async () => ({ available: false, version: null, reason: 'This harness runs no Git.' })),
+    historyRemoteSet: vi.fn(noHistory),
+    historyRemoteRemove: vi.fn(noHistory),
+    historyFetch: vi.fn(noHistory),
+    historyPushPreview: vi.fn(noHistory),
+    historyPush: vi.fn(noHistory),
+    historyProjectRepo: vi.fn(async () => null),
+    historyProjectPublishBranch: vi.fn(noHistory),
+    historyProjectCommitCurrent: vi.fn(noHistory),
+    historyProjectPushPreview: vi.fn(noHistory),
+    historyProjectPush: vi.fn(noHistory),
   } satisfies DesktopApi;
 
   const link: HostLink = {

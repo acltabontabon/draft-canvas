@@ -1,6 +1,7 @@
 //! The repositories themselves: where they live, how they are created, imported and removed
 //! (`History`), and the `VersionStore` operations on one of them (`Repo`).
 
+use super::gitcli::{Git, Unavailable};
 use super::objects::{
     commit_bytes, diagram_blob_of, parse_commit, parse_tag, tag_bytes, tag_target, tree_bytes,
 };
@@ -24,7 +25,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime};
 
 const META_FILE: &str = "draft-canvas/repo.json";
@@ -58,6 +59,9 @@ pub struct History {
     /// checked and claimed in one step. The single-instance app is the only writer of this folder.
     dirs: Mutex<()>,
     pub(super) bindings_guard: Mutex<()>,
+    /// The person's `git`, found on first use (`gitcli.rs`). Only a found one is kept: installing Git
+    /// while the app runs takes effect on the next remote action.
+    git: Mutex<Option<Arc<Git>>>,
 }
 
 impl History {
@@ -66,11 +70,35 @@ impl History {
             root,
             dirs: Mutex::new(()),
             bindings_guard: Mutex::new(()),
+            git: Mutex::new(None),
         }
     }
 
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// The person's `git`, resolved once it is found. Its empty hooks folder and working directory
+    /// live under the history folder, never in a repository.
+    pub fn git(&self) -> std::result::Result<Arc<Git>, Unavailable> {
+        let mut slot = lock(&self.git);
+        if let Some(git) = slot.as_ref() {
+            return Ok(git.clone());
+        }
+        let git = Arc::new(Git::discover(&self.root.join(".git-run"))?);
+        *slot = Some(git.clone());
+        Ok(git)
+    }
+
+    #[cfg(test)]
+    pub(super) fn set_git(&self, git: Git) {
+        *lock(&self.git) = Some(Arc::new(git));
+    }
+
+    /// The bare repository folder of a history, after checking it opens and may be written.
+    pub fn managed_dir(&self, repo_id: &str) -> Result<PathBuf> {
+        let repo = self.open_writable(repo_id)?;
+        Ok(repo.dir.clone())
     }
 
     fn ensure_root(&self) -> Result<()> {
@@ -1259,6 +1287,162 @@ impl Repo {
             writer.add(kind, &data)?;
         }
         writer.finish()
+    }
+}
+
+/// What fetching and publishing need beyond the `VersionStore` contract (`remote.rs`).
+impl Repo {
+    /// Every ref under `prefix` (ending in `/`), whatever its name: a remote may send names Draft
+    /// Canvas would never write, and those must still be found to be removed.
+    pub(super) fn refs_raw(&self, prefix: &str) -> Result<Vec<(String, ObjectId)>> {
+        let unreadable =
+            |_| HistoryError::corrupt("The branches of this history could not be read.");
+        let platform = self.repo.references().map_err(unreadable)?;
+        let iter = platform.prefixed(prefix).map_err(unreadable)?;
+        let mut out = Vec::new();
+        for reference in iter {
+            let Ok(reference) = reference else { continue };
+            let name = String::from_utf8_lossy(reference.name().as_bstr()).into_owned();
+            if !name.starts_with(prefix) {
+                continue;
+            }
+            if let Some(id) = reference.target().try_id() {
+                out.push((name, id.to_owned()));
+            }
+            if out.len() > limits::MAX_BUNDLE_REFS {
+                return Err(HistoryError::too_large(
+                    "The remote has more branches than Draft Canvas reads.",
+                ));
+            }
+        }
+        out.sort();
+        Ok(out)
+    }
+
+    /// Sets or deletes a remote-tracking or incoming ref, by compare-and-swap against `expected`.
+    /// Only those two namespaces: everything else moves through `update_ref`.
+    pub(super) fn set_tracking_ref(
+        &self,
+        name: &str,
+        expected: Option<ObjectId>,
+        next: Option<ObjectId>,
+    ) -> Result<()> {
+        self.require_writable()?;
+        if !(name.starts_with("refs/remotes/origin/")
+            || name.starts_with("refs/draft-canvas/incoming/"))
+        {
+            return Err(HistoryError::invalid("Not a remote-tracking ref."));
+        }
+        let previous = match expected {
+            Some(id) => PreviousValue::MustExistAndMatch(Target::Object(id)),
+            None => PreviousValue::MustNotExist,
+        };
+        let change = match next {
+            None if expected.is_none() => return Ok(()),
+            None => Change::Delete {
+                expected: previous,
+                log: RefLog::AndReference,
+            },
+            Some(id) => {
+                if !self.repo.has_object(id) {
+                    return Err(HistoryError::not_found(
+                        "That revision is not in this history.",
+                    ));
+                }
+                Change::Update {
+                    log: no_log(),
+                    expected: previous,
+                    new: Target::Object(id),
+                }
+            }
+        };
+        let name = FullName::try_from(name)
+            .map_err(|_| HistoryError::invalid("Not a remote-tracking ref."))?;
+        let _writer = self.write_lock()?;
+        self.repo
+            .edit_references_as(
+                [RefEdit {
+                    change,
+                    name,
+                    deref: false,
+                }],
+                None,
+            )
+            .map_err(|_| {
+                HistoryError::conflict("A remote-tracking branch changed while it was updated.")
+            })?;
+        Ok(())
+    }
+
+    /// The commit a ref value names: itself, or an annotated tag's target.
+    pub(super) fn peel_to_commit(&self, id: ObjectId) -> Result<ObjectId> {
+        let (kind, data) = self.read_object(id, limits::MAX_COMMIT_BYTES)?;
+        match kind {
+            Kind::Commit => Ok(id),
+            Kind::Tag => {
+                let target = tag_target(&data)
+                    .ok_or_else(|| HistoryError::corrupt("A milestone could not be read."))?;
+                let (kind, _) = self.read_object(target, limits::MAX_COMMIT_BYTES)?;
+                if kind == Kind::Commit {
+                    Ok(target)
+                } else {
+                    Err(HistoryError::corrupt(
+                        "A milestone does not name a revision.",
+                    ))
+                }
+            }
+            _ => Err(HistoryError::corrupt("That is not a revision.")),
+        }
+    }
+
+    /// Whether every commit `tip` reaches is a diagram revision: a commit whose tree is exactly
+    /// `100644 blob diagram.draftcanvas`, the blob no larger than history reads. Commits in
+    /// `checked` are known good and not walked again; the walk is bounded. Missing objects, other
+    /// kinds and other trees all make the tip unacceptable.
+    pub(super) fn is_diagram_history(
+        &self,
+        tip: ObjectId,
+        checked: &mut HashSet<ObjectId>,
+    ) -> bool {
+        let mut stack = vec![tip];
+        let mut visited: HashSet<ObjectId> = HashSet::new();
+        while let Some(id) = stack.pop() {
+            if checked.contains(&id) || !visited.insert(id) {
+                continue;
+            }
+            if visited.len() > limits::MAX_WALK {
+                return false;
+            }
+            let Ok((Kind::Commit, data)) = self.read_object(id, limits::MAX_COMMIT_BYTES) else {
+                return false;
+            };
+            let Ok(commit) = parse_commit(&id.to_string(), &data) else {
+                return false;
+            };
+            let Ok(tree) = parse_oid(&commit.tree) else {
+                return false;
+            };
+            let Ok((Kind::Tree, tree_data)) = self.read_object(tree, 1024) else {
+                return false;
+            };
+            let Some(blob) = diagram_blob_of(&tree_data) else {
+                return false;
+            };
+            match self.repo.try_find_header(blob) {
+                Ok(Some(header))
+                    if header.kind() == Kind::Blob
+                        && header.size() <= limits::MAX_BLOB_BYTES as u64 => {}
+                _ => return false,
+            }
+            for parent in &commit.parents {
+                match parse_oid(parent) {
+                    Ok(parent) => stack.push(parent),
+                    Err(_) => return false,
+                }
+            }
+        }
+        checked.extend(visited);
+        true
     }
 }
 

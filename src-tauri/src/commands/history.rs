@@ -8,10 +8,12 @@
 use super::raw::{raw_request, raw_request_up_to};
 use super::run_blocking;
 use crate::errors::AppError;
+use crate::history::gitcli::Git;
 use crate::history::{
     limits, Binding, CommitRecord, LogQuery, MaintainOutcome, RefEntry, RefUpdate, RefUpdateResult,
     RepoUsage, SnapshotHead, TagRecord, TagWrite,
 };
+use crate::history::{project, remote, HistoryError};
 use serde::Deserialize;
 use serde_json::Value;
 use std::time::SystemTime;
@@ -336,4 +338,164 @@ pub async fn history_binding_delete(app: AppHandle, copy_id: String) -> Result<(
 #[tauri::command]
 pub async fn history_binding_list(app: AppHandle) -> Result<Vec<Binding>, AppError> {
     run_blocking(&app, |_, state| Ok(state.history.binding_list()?)).await
+}
+
+// Remotes and project repositories (`history/remote.rs`, `history/project.rs`): the person's own
+// `git`, hardened (`history/gitcli.rs`), run only on these explicit requests. A project repository
+// is reached only through the handle of a diagram the page already has open.
+
+#[tauri::command]
+pub async fn history_git_status(app: AppHandle) -> Result<remote::GitStatus, AppError> {
+    run_blocking(&app, |_, state| Ok(remote::git_status(&state.history))).await
+}
+
+#[tauri::command]
+pub async fn history_remote_set(
+    app: AppHandle,
+    repo: String,
+    url: String,
+) -> Result<String, AppError> {
+    run_blocking(&app, move |_, state| {
+        let git = remote::require_git(&state.history)?;
+        Ok(remote::remote_set(&state.history, &git, &repo, &url)?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_remote_remove(app: AppHandle, repo: String) -> Result<(), AppError> {
+    run_blocking(&app, move |_, state| {
+        let git = remote::require_git(&state.history)?;
+        Ok(remote::remote_remove(&state.history, &git, &repo)?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_fetch(app: AppHandle, repo: String) -> Result<remote::FetchOutcome, AppError> {
+    run_blocking(&app, move |_, state| {
+        let git = remote::require_git(&state.history)?;
+        Ok(remote::fetch(&state.history, &git, &repo)?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_push_preview(
+    app: AppHandle,
+    repo: String,
+    refs: Vec<String>,
+) -> Result<Vec<remote::PushPreview>, AppError> {
+    run_blocking(&app, move |_, state| {
+        Ok(remote::push_preview(&state.history, &repo, &refs)?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_push(
+    app: AppHandle,
+    repo: String,
+    refs: Vec<String>,
+) -> Result<Vec<remote::PushedRef>, AppError> {
+    run_blocking(&app, move |_, state| {
+        let git = remote::require_git(&state.history)?;
+        Ok(remote::push(&state.history, &git, &repo, &refs)?)
+    })
+    .await
+}
+
+/// The repository holding the file a handle names, and Git for it; `None` when it is in none.
+fn project_of(
+    state: &crate::state::AppState,
+    handle: &str,
+) -> Result<Option<(std::sync::Arc<Git>, project::ProjectRepo)>, AppError> {
+    let file = state.file(handle)?.path;
+    let Some(repo) = project::discover(&file)? else {
+        return Ok(None);
+    };
+    let git = remote::require_git(&state.history)?;
+    Ok(Some((git, repo)))
+}
+
+fn require_project(
+    state: &crate::state::AppState,
+    handle: &str,
+) -> Result<(std::sync::Arc<Git>, project::ProjectRepo), AppError> {
+    project_of(state, handle)?.ok_or_else(|| {
+        AppError::from(
+            HistoryError::not_found("This diagram isn't inside a Git repository.")
+                .with_reason("not-in-repo"),
+        )
+    })
+}
+
+#[tauri::command]
+pub async fn history_project_repo(
+    app: AppHandle,
+    handle: String,
+) -> Result<Option<project::ProjectRepoInfo>, AppError> {
+    run_blocking(&app, move |_, state| match project_of(state, &handle)? {
+        Some((git, repo)) => Ok(Some(project::inspect(&git, &repo)?)),
+        None => Ok(None),
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_project_publish_branch(
+    app: AppHandle,
+    handle: String,
+    message: String,
+) -> Result<project::Published, AppError> {
+    run_blocking(&app, move |_, state| {
+        let (git, repo) = require_project(state, &handle)?;
+        Ok(project::publish_branch(&git, &repo, &message)?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_project_commit_current(
+    app: AppHandle,
+    handle: String,
+    message: String,
+    expected_head: String,
+) -> Result<project::Published, AppError> {
+    run_blocking(&app, move |_, state| {
+        let (git, repo) = require_project(state, &handle)?;
+        Ok(project::commit_current(
+            &git,
+            &repo,
+            &message,
+            &expected_head,
+        )?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_project_push_preview(
+    app: AppHandle,
+    handle: String,
+    branch: String,
+) -> Result<project::ProjectPushPreview, AppError> {
+    run_blocking(&app, move |_, state| {
+        let (git, repo) = require_project(state, &handle)?;
+        Ok(project::push_preview(&git, &repo, &branch)?)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn history_project_push(
+    app: AppHandle,
+    handle: String,
+    branch: String,
+) -> Result<(), AppError> {
+    run_blocking(&app, move |_, state| {
+        let (git, repo) = require_project(state, &handle)?;
+        Ok(project::push(&git, &repo, &branch)?)
+    })
+    .await
 }

@@ -36,6 +36,10 @@ pub struct AppError {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// A finer reason the page may act on where the kind alone is not enough: a diagram history's
+    /// Git failures and publishing refusals (`history/gitcli.rs`, `history/project.rs`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// What Draft Canvas was doing when the disk objected, so the sentence can say "save" or "open".
@@ -88,6 +92,7 @@ impl AppError {
             kind,
             message: message.into(),
             path: None,
+            reason: None,
         }
     }
 

@@ -16,8 +16,13 @@
 //! programs, and repositories are opened isolated from the person's Git configuration.
 
 pub mod bindings;
+#[cfg(test)]
+mod git_tests;
+pub mod gitcli;
 mod objects;
 pub mod pack;
+pub mod project;
+pub mod remote;
 pub mod store;
 #[cfg(test)]
 mod tests;
@@ -75,6 +80,9 @@ pub enum Code {
 pub struct HistoryError {
     pub code: Code,
     pub message: String,
+    /// Finer than `code`, for the page to act on: which Git failure (`gitcli::Failure`) or which
+    /// precondition of publishing refused (`project.rs`).
+    pub reason: Option<&'static str>,
 }
 
 pub type Result<T> = std::result::Result<T, HistoryError>;
@@ -84,7 +92,13 @@ impl HistoryError {
         Self {
             code,
             message: message.into(),
+            reason: None,
         }
+    }
+
+    pub fn with_reason(mut self, reason: &'static str) -> Self {
+        self.reason = Some(reason);
+        self
     }
 
     pub fn invalid(message: impl Into<String>) -> Self {
@@ -136,7 +150,9 @@ impl From<HistoryError> for AppError {
             Code::Invalid => ErrorKind::Invalid,
             Code::TooLarge => ErrorKind::TooLarge,
         };
-        AppError::new(kind, err.message)
+        let mut app = AppError::new(kind, err.message);
+        app.reason = err.reason.map(str::to_string);
+        app
     }
 }
 

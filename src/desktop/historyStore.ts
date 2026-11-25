@@ -44,6 +44,11 @@ const CODES: Record<AppErrorKind, HistoryError['code']> = {
   Io: 'unavailable',
 };
 
+/** The `HistoryError` code a shell refusal of this kind becomes. */
+export function historyCodeOf(kind: AppErrorKind): HistoryError['code'] {
+  return CODES[kind] ?? 'unavailable';
+}
+
 async function translated<T>(work: Promise<T>): Promise<T> {
   try {
     return await work;
