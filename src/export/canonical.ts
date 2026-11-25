@@ -86,6 +86,7 @@ const NODE_KEYS = [
   'inside',
   'sequence',
   'held',
+  'link',
 ] as const satisfies KeysOf<DraftNode>;
 const SEQUENCE_KEYS = ['participants', 'groups', 'items', 'numberMessages'] as const satisfies KeysOf<DraftSequence>;
 const SEQ_PARTICIPANT_KEYS = [

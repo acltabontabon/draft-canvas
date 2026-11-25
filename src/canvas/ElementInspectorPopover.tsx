@@ -7,6 +7,7 @@ import { LIMITS } from '../document/limits';
 import { createPortal } from 'react-dom';
 import { useInternalNode, useNodesStore, useReactFlow } from '@xyflow/react';
 import { nodeCommands, primaryCommandsFor } from '../commands/registry';
+import { junctionPeerCount } from '../store/junctions';
 import { menuLabelOf } from '../commands/contextMenu';
 import { DepthGlyph } from './DepthGlyph';
 import { useDiagramStyle } from './useDiagramStyle';
@@ -138,6 +139,8 @@ const QUICK_ACTION_HINTS: Record<string, string> = {
   'add-data-store': 'Add a data store this service writes to',
   'add-routed-service': 'Add a service this gateway routes to',
   ungroup: 'Dissolve this boundary, keeping its contents',
+  'junction-follow': 'Go where this junction continues',
+  'junction-add-counterpart': 'Add a linked junction: click where this one continues',
 };
 
 /** Must match this component's own `dc-element-inspector-*` CSS animation duration. */
@@ -539,10 +542,12 @@ const ElementInspectorRow = memo(function ElementInspectorRow({
   // via `useInternalNode`), and recomputing/rebuilding this list on every one of those frames is
   // exactly the wasted work to avoid; none of `type`/`queueKind`/`deliveryRole`/`hasDlqEdge` change
   // just because the node moved.
+  // A Junction's own actions follow its group: one place to go, several to choose from, or none yet.
+  const linkPeers = useEditorStore((state) => junctionPeerCount(state, node.link));
   const primaryCommands = useMemo(
     () => primaryCommandsFor(buildCommandContext(), node),
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-    [node.id, node.type, node.queueKind, node.deliveryRole, hasDlqEdge, node.inside],
+    [node.id, node.type, node.queueKind, node.deliveryRole, hasDlqEdge, node.inside, node.link, linkPeers],
   );
 
   const typeControl = ((): {

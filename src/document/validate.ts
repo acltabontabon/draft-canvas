@@ -505,6 +505,12 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
       node.annotation = true;
     }
     if (candidate.held === true) node.held = true;
+    if (type === 'ellipse') {
+      // Read on its own, never against the other Junctions: a shared session checks one node at a
+      // time (`collab/sanitize.ts`), and a group of one is a Junction waiting for its counterpart.
+      const link = safeId(candidate.link);
+      if (link) node.link = link;
+    }
     if (type === 'text') {
       const textRole = oneOfOptional<TextRole>(candidate.textRole, TEXT_ROLES);
       if (textRole !== undefined) node.textRole = textRole;

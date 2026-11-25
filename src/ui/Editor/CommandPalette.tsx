@@ -4,6 +4,7 @@ import { rank, type RankedEntry } from '../../commands/fuzzy';
 import { commandsFor, warmCopyExports } from '../../commands/registry';
 import { frequencyBonus, recentIds, recordUse } from '../../commands/history';
 import { JUMP_LIMIT, JUMP_RANK_PENALTY, jumpCommands } from '../../commands/search';
+import { junctionJumpCommands } from '../../commands/junctions';
 import {
   GROUP_LABELS,
   isStage,
@@ -100,11 +101,15 @@ function CommandPaletteBody({ createAt, createAtPointer, playback, onPresent }: 
   // Jump rows answer a typed query only, so browsing never builds them.
   const searching = query.trim().length > 0;
   // Not while presenting: a jump selected the shape and left a guided flow (or its room) behind,
-  // where the palette otherwise offers only presentation commands.
-  const jumps = useMemo<Entry[] | null>(
-    () => (stage || !searching || mode === 'present' ? null : jumpCommands(document, { file: fileOf({ document, path, outer }), path })),
-    [stage, searching, mode, document, path, outer],
-  );
+  // where the palette otherwise offers only presentation commands. Linked Junctions are the
+  // exception: following one is how a presenter moves to where the story continues, and it
+  // selects nothing.
+  const jumps = useMemo<Entry[] | null>(() => {
+    if (stage || !searching) return null;
+    const file = fileOf({ document, path, outer });
+    const junctions = junctionJumpCommands(file);
+    return mode === 'present' ? junctions : [...jumpCommands(document, { file, path }), ...junctions];
+  }, [stage, searching, mode, document, path, outer]);
 
   const rows = useMemo<RankedEntry<Entry>[]>(() => {
     if (stage) return rank(query, stage.options);

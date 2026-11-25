@@ -175,6 +175,15 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
   its own four corners as well as its extent, so a leaning one still reads.
   Strokes are kept as ink first, so a conversion is one undo step that undo reverses to them; a
   later choice amends that step (`HistoryEntry.amendKey`). Recognition loads on first use.
+- **Linked junctions** (`junctions/`) are Junctions that share `DraftNode.link`, an opaque group
+  id on the Junctions themselves. There is no table of groups, so membership cannot dangle or
+  disagree with a copy, an undo or a collaborator's edit; a group of one is a Junction waiting for a
+  counterpart. The label is each member's own text, which a group rename writes on all of them. A
+  link adds no connector: routing, flows, outage walks, semantics and exports never read it.
+  Travelling is pure arithmetic handed to the camera: `destination.ts` picks a bounded context (the
+  shapes a Junction is wired to, one step on), `journey.ts` chooses where to stop (the current zoom
+  when it reads well) and how to get there (a pan, or one `interpolateZoom` flight timed by the
+  path's length), and `trail.ts` is the back/forward history. None of it is saved, undone or shared.
 - **View levels** change how rooms are shown, not the tree.
 
 ## Persistence and the storage boundary

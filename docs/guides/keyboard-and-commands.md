@@ -38,6 +38,8 @@ drop a connector on empty canvas still lists them first.
 | --- | --- |
 | `⌥` + arrow | Select the nearest shape in that direction |
 | `⌥⇧→` / `⌥⇧←` | Follow an outgoing / incoming connector |
+| `G` | Go where the selected [linked junction](shapes-and-connectors.md#linked-junctions) continues; with several places, list them |
+| `⇧G` / `⌥G` | Back to where you followed a junction from / forward again |
 | Arrow / `Shift` + arrow | Nudge the selection 1 / 10 units |
 | Hold `⌥` while dragging or resizing | Turn off [snapping](shapes-and-connectors.md#line-things-up) |
 | Hold `Shift` and rest on a shape | Light up everything its data comes from and feeds |

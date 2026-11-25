@@ -69,6 +69,7 @@ import { deviceHand } from '../theme/deviceHand';
 import { deviceStyle, shapeStartFrom, useStyleStore } from '../store/styleStore';
 import { copyText } from '../ui/collab/clipboard';
 import { focusBounds, focusNodes } from './search';
+import { junctionCommands, junctionSelectionCommands, trailCommands } from './junctions';
 import type { GalleryCategory } from '../gallery';
 import { useGalleryStore } from '../store/galleryStore';
 import type { Command, CommandContext, CommandGroup, CommandOption, CommandStage } from './types';
@@ -349,6 +350,8 @@ function presentModeCommands(ctx: CommandContext): Command[] {
       run: (inner) => inner.editor.setMode('edit'),
     },
   );
+  // A presenter who followed a Junction to where the story continues can come back the same way.
+  commands.push(...trailCommands(ctx));
   return commands;
 }
 
@@ -607,6 +610,7 @@ export function viewCommands(ctx: CommandContext): Command[] {
       run: (inner) => focusNodes(inner, inner.editor.selection.nodes),
     });
   }
+  commands.push(...trailCommands(ctx));
   if (ctx.editor.focus.active) {
     commands.push({
       id: 'focus-exit',
@@ -1563,6 +1567,8 @@ export function primaryCommandsFor(ctx: CommandContext, node: DraftNode): Comman
   }
   if (node.type === 'group') return [boundaryUngroupCommand()];
   if (node.type === 'sequence') return sequenceQuickCommands(node).filter((command) => command.primary);
+  // Where it continues, and the way to give it somewhere to continue.
+  if (node.type === 'ellipse') return junctionCommands(ctx, node).filter((command) => command.primary);
   return inside;
 }
 
@@ -1614,11 +1620,14 @@ export function nodeCommands(ctx: CommandContext, node: DraftNode): Command[] {
       },
     });
   }
+  commands.push(...junctionCommands(ctx, node));
   commands.push({
     id: 'edit-text',
-    title: isBoundary ? 'Edit caption' : 'Edit text',
+    // A linked Junction's label is its group's: the same words in every place it is drawn.
+    title: isBoundary ? 'Edit caption' : node.type === 'ellipse' && node.link ? 'Rename junction' : 'Edit text',
     group: 'selection',
     keywords: ['rename', 'label', 'name'],
+    ...(node.type === 'ellipse' && node.link ? { hint: 'Everywhere it is linked' } : {}),
     shortcut: 'Enter',
     run: (inner) => inner.ui.requestEdit(node.id),
   });
@@ -2314,7 +2323,7 @@ function selectionCommands(ctx: CommandContext): Command[] {
     const edge = document.edges.find((entry) => entry.id === edges[0]);
     return edge ? edgeCommands(ctx, edge) : [];
   }
-  if (nodes.length + edges.length >= 2) return [...multiCommands(ctx), ...sequenceFromSelectionCommands(ctx)];
+  if (nodes.length + edges.length >= 2) return [...junctionSelectionCommands(ctx), ...multiCommands(ctx), ...sequenceFromSelectionCommands(ctx)];
   return [];
 }
 
@@ -2449,6 +2458,10 @@ const READ_SAFE_COMMANDS: ReadonlySet<string> = new Set([
   'back-out',
   'back-out-all',
   'look-inside',
+  // Following a Junction, and the way back, move the camera and nothing else.
+  'junction-follow',
+  'junction-back',
+  'junction-forward',
   'spotlight',
   'focus-exit',
   'select-all',

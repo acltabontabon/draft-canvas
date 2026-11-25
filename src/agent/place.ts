@@ -123,6 +123,7 @@ function elementFor(spec: NodeSpec, ctx: DescribeContext, parentId?: string): Dr
     ...(spec.technology ? { technology: spec.technology } : {}),
     ...(shape.kindOrigin ? { kindOrigin: shape.kindOrigin } : {}),
     ...(spec.color ? { accent: spec.color } : {}),
+    ...(spec.link ? { link: spec.link } : {}),
     ...(parentId ? { parentId } : {}),
   });
   if (spec.evidence?.length) node.evidence = spec.evidence;

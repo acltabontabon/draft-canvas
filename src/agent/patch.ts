@@ -67,7 +67,7 @@ import {
   AGENT_LIMITS,
   extrasOf,
   readDeliveryAttempts,
-  readReplicas,
+  readLink, readReplicas,
   readEvidence,
   readHighlight,
   readLabelStyle,
@@ -89,10 +89,14 @@ import { moveInside, moveOutside } from './restructure';
 import { newFindings, REVIEW_LIMIT, reviewView } from './review';
 import { technologyAdvice } from './advice';
 import { OP_FIELDS, SET_FIELDS, suggestedField } from './fields';
+
 import { validateUpdateSet } from './contract';
 import { GROUP_KINDS, LINE_STYLE_NAMES, LINE_STYLES, NOTE_FORM_NAMES, NOTE_KIND_NAMES, resolveType, suggestTypes } from './vocabulary';
 import { applyRoutes, readPlace, readRoute, type PlaceSpec, type RouteSpec } from './placement';
 import { applyPlaces } from './placeExplicit';
+
+/** Every field `set` takes on anything: a name here is a real field, of this target or another. */
+const EVERY_SET_FIELD: ReadonlySet<string> = new Set(Object.values(SET_FIELDS).flat());
 
 export interface PatchResult {
   file: DraftDocument;
@@ -523,7 +527,7 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const fields: readonly string[] = SET_FIELDS[target];
     for (const key of Object.keys(set)) {
       if (fields.includes(key)) continue;
-      const meant = suggestedField(key, fields);
+      const meant = suggestedField(key, fields, EVERY_SET_FIELD);
       const suggestion = meant ? `; use ${meant}` : '';
       problems.add('INVALID_INPUT', `${at}/set/${key}`, `not a field of ${SET_TARGET_NAMES[target]} ("${id}")${suggestion}; it takes ${fields.join(', ')}`);
     }
@@ -923,6 +927,11 @@ function updateOne(
       const replicas = readReplicas(r, set.replicas, `${at}/replicas`, node.type);
       if (replicas === null) patch.replicas = undefined;
       else if (replicas !== undefined) patch.replicas = replicas;
+    }
+    if (set.link !== undefined) {
+      const link = readLink(r, set.link, `${at}/link`, node.type);
+      if (link === null) patch.link = undefined;
+      else if (link !== undefined) patch.link = link;
     }
     if (clear('color')) patch.accent = undefined;
     else if (set.color !== undefined) {

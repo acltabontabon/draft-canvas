@@ -38,6 +38,7 @@ import { accentOf } from '../render/theme/tokens';
 import { lensFlow, useEditorStore } from '../store/editorStore';
 import { PresentationPointer } from './presentation/PresentationPointer';
 import { edgeIndex, nodeIndex, selectSequenceMessage, sequenceNodes } from '../store/selectors';
+import { placeCounterpart } from '../commands/junctions';
 import { pointer, useUiStore } from '../store/uiStore';
 import { useThemeValue } from '../theme/useTheme';
 import { DiagramTheme } from './DiagramTheme';
@@ -422,6 +423,8 @@ export interface CanvasProps {
     flowPosition: { x: number; y: number },
     screenPosition: { x: number; y: number },
   ) => void;
+  /** Called when a linked Junction is clicked while presenting: go where it continues. */
+  onFollowJunction?: (nodeId: string) => void;
 }
 
 /** What starts a gesture without moving the camera yet: in Present every plain click is one. */
@@ -434,7 +437,7 @@ function presenterMovedCamera(event: Event | null): void {
   if (ui.presentation.framing !== 'manual') ui.setPresentation({ framing: 'manual' });
 }
 
-const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu }: CanvasProps) {
+const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, onEmptyCanvasMenu, onFollowJunction }: CanvasProps) {
   const document = useEditorStore((state) => state.document);
   const displayEdges = useEditorStore((state) => visibleEdgesForPlayback(state.document, state.flowPlayback));
   const selection = useEditorStore((state) => state.selection);
@@ -571,6 +574,15 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       event.preventDefault();
       event.stopPropagation();
       finishRecoveryConnect(node.id);
+    } else if (editable && useUiStore.getState().junctionPlacing) {
+      // On a shape too: a boundary covers the pane, and "inside this section" is where a
+      // counterpart usually goes. The click places it; it does not select what it landed on.
+      placeCounterpart(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+    } else if (useEditorStore.getState().mode === 'present' && nodeIndex(useEditorStore.getState().document.nodes).get(node.id)?.link) {
+      // Nothing is selectable while presenting, so a click on a linked Junction can mean only one
+      // thing: go where it continues (or show the places, when there are several). Any other shape
+      // is left to what a click on it already meant.
+      onFollowJunction?.(node.id);
     } else if (sharedReadOnly) selectSharedNode(event, node);
     // During an outage walk a plain click on something that runs takes it down: the walk is for
     // trying one shape after another. A modified click still only selects.
@@ -589,12 +601,13 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) });
     }
-  }, [editable, finishRecoveryConnect, onCreateAt, screenToFlowPosition, sharedReadOnly]);
+  }, [editable, finishRecoveryConnect, onCreateAt, onFollowJunction, screenToFlowPosition, sharedReadOnly]);
   useContinuation(editable);
 
   // The Pencil: drawing claims the pointer only while it is in hand on an editable canvas.
   const pencil = useUiStore((state) => state.pencil);
   const armedShape = useUiStore((state) => state.armed !== null);
+  const placingJunction = useUiStore((state) => editable && state.junctionPlacing !== null);
   const drawing = editable && pencil !== null && !outageActive;
   useInkInput(paneRef, drawing);
 
@@ -2012,6 +2025,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
     (event: React.MouseEvent) => {
       // A click on empty canvas puts chosen sketch strokes down, as it does shapes.
       useUiStore.getState().setInkSelection([]);
+      // A linked Junction in hand is put down where the click lands (`commands/junctions.ts`).
+      if (editable && useUiStore.getState().junctionPlacing) {
+        placeCounterpart(screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+        return;
+      }
       if (!editable || !useUiStore.getState().armed) return;
       const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
       onCreateAt?.({ x: Math.round(position.x - 88), y: Math.round(position.y - 34) });
@@ -2322,6 +2340,7 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
       data-outage={outageActive ? 'on' : undefined}
       data-connect-cancelled={connectionCancelled ? 'true' : undefined}
       data-pencil={drawing ? pencil : undefined}
+      data-junction-placing={placingJunction ? 'true' : undefined}
       data-recovery-connecting={recoveryConnect ? 'true' : undefined}
       style={
         explainActive

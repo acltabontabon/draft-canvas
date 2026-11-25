@@ -23,6 +23,13 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   every shape, its own colours, its own line and its own backdrop: Professional, Geek, Arena, High
   seas, High fantasy, Cyberpunk, Cute, Weeb, Hardwood and Match Point.
 - **Styles as files** — Export a style as a `.draftstyle` file and import it on another device.
+- **Linked junctions** — Two or more Junctions can be one continuation point drawn in different
+  places. Select one and choose **Add link**, then click where the flow continues. Rest
+  the pointer on a linked Junction to see where it goes, and press `G` to travel there; with
+  several places you pick one. `⇧G` brings you back to the exact view you left. It works while
+  presenting, and `⌘K` finds each place by name. <!-- highlight -->
+- **File format 33** — Junctions keep their link (`link`). Diagrams saved by this version do not
+  open in older versions. Junctions that only share a label are not linked for you.
 
 #### Changed
 

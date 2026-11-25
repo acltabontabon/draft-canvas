@@ -6,6 +6,7 @@ import { ANY_CANDIDATE, dismissalKey } from '../continuation/dismissal';
 import type { DismissalKey, MaterializedContinuation } from '../continuation';
 import type { DraftDocument, DraftEdge, DraftInk, DraftNode, InkColor, OpenPointTarget } from '../document/types';
 import type { InkShapeChoice } from '../ink/choices';
+import { EMPTY_TRAIL, type Trail } from '../junctions/trail';
 import type { Box } from '../ink/geometry';
 import type { CaptionCorner } from '../presentation/framing';
 import type { ExportMode } from '../export/exportTypes';
@@ -13,6 +14,18 @@ import type { PresentationReveal } from '../presentation/presentationAttachments
 import { readPreference, writePreference } from '../lib/preferences';
 import { PRODUCT } from '../product';
 import { markLastSeenRelease, readLastSeenRelease } from '../releases/seen';
+
+/**
+ * The linked places of one Junction, shown beside it (`canvas/JunctionPeek.tsx`).
+ *
+ * `hover`: the pointer rested on it; the card goes when the pointer leaves both. `ask`: somebody
+ * asked for it (the Go key on a Junction with several counterparts, the menu, a click while
+ * presenting); it stays until dismissed and takes the keyboard.
+ */
+export interface JunctionPeekState {
+  id: string;
+  by: 'hover' | 'ask';
+}
 
 export type NewCanvasRequest = { kind: 'example' } | { kind: 'canvas'; document: DraftDocument };
 
@@ -653,6 +666,22 @@ export interface UiStore {
    * one-shot request into memoized views that have no imperative API.
    */
   jumpFlashId: string | null;
+  /** The Junction whose linked places are showing. Transient: never saved, undone or exported. */
+  junctionPeek: JunctionPeekState | null;
+  /**
+   * A counterpart waiting to be put down: the next click on the canvas places a Junction linked to
+   * this one. Kept apart from `armed` because it has to outlast a move to another room, which is
+   * exactly where a counterpart is often wanted. Transient.
+   */
+  junctionPlacing: { sourceId: string } | null;
+  /**
+   * The group whose other members are pointed out on the canvas while one of them is selected or
+   * its linked places are showing. One string, so each Junction's selector is one comparison.
+   */
+  junctionPeerLink: string | null;
+  /** Where following Junctions has led, for Back and Forward (`junctions/trail.ts`). Session-local:
+   *  never saved, undone or shared, and it never touches the document. */
+  junctionTrail: Trail;
   /**
    * The parts Nodi's reply points at while the person hovers that point, ringed on the canvas like a
    * jump until they look away. Transient: never saved, undone or exported. A set, so each node's and
@@ -880,6 +909,10 @@ export interface UiStore {
   requestExportSelection: (requested: boolean) => void;
   setJumpFlashId: (id: string | null) => void;
   setPointedIds: (ids: ReadonlySet<string> | null) => void;
+  setJunctionPeek: (peek: JunctionPeekState | null) => void;
+  setJunctionPlacing: (placing: { sourceId: string } | null) => void;
+  setJunctionPeerLink: (link: string | null) => void;
+  setJunctionTrail: (trail: Trail) => void;
   setTraceIds: (ids: ReadonlySet<string> | null) => void;
   setMakeRoom: (makeRoom: UiStore['makeRoom']) => void;
   setLegendShown: (shown: boolean) => void;
@@ -992,7 +1025,14 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setFlowTrace: (flowTrace) => set({ flowTrace }),
   armed: null,
   pencil: null,
-  setPencil: (pencil) => set((state) => ({ pencil, armed: pencil ? null : state.armed, makeRoom: pencil ? null : state.makeRoom, spliceArmedEdgeTarget: pencil ? null : state.spliceArmedEdgeTarget })),
+  setPencil: (pencil) =>
+    set((state) => ({
+      pencil,
+      armed: pencil ? null : state.armed,
+      makeRoom: pencil ? null : state.makeRoom,
+      spliceArmedEdgeTarget: pencil ? null : state.spliceArmedEdgeTarget,
+      junctionPlacing: pencil ? null : state.junctionPlacing,
+    })),
   inkPrefs: readInkPrefs(),
   setInkPrefs: (patch) =>
     set((state) => {
@@ -1065,6 +1105,10 @@ export const useUiStore = create<UiStore>((set, get) => ({
   commandPaletteQuery: '',
   exportSelectionRequested: false,
   jumpFlashId: null,
+  junctionPeek: null,
+  junctionPlacing: null,
+  junctionPeerLink: null,
+  junctionTrail: EMPTY_TRAIL,
   pointedIds: null,
   traceIds: null,
   makeRoom: null,
@@ -1098,7 +1142,14 @@ export const useUiStore = create<UiStore>((set, get) => ({
 
   // A connector a placed shape would have gone into is not one any more once the tool changes.
   // Picking up a shape tool puts the Pencil down; putting a shape tool down (`null`) leaves it be.
-  arm: (armed) => set((state) => ({ armed, spliceArmedEdgeTarget: null, pencil: armed ? null : state.pencil, makeRoom: armed ? null : state.makeRoom })),
+  arm: (armed) =>
+    set((state) => ({
+      armed,
+      spliceArmedEdgeTarget: null,
+      pencil: armed ? null : state.pencil,
+      makeRoom: armed ? null : state.makeRoom,
+      junctionPlacing: armed ? null : state.junctionPlacing,
+    })),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
   setFindReplaceOpen: (findReplaceOpen) => set({ findReplaceOpen }),
   requestFit: () => set((state) => ({ fitRequestId: state.fitRequestId + 1 })),
@@ -1279,6 +1330,13 @@ export const useUiStore = create<UiStore>((set, get) => ({
   setJumpFlashId: (jumpFlashId) =>
     set((state) => (state.jumpFlashId === jumpFlashId ? state : { jumpFlashId })),
   setPointedIds: (pointedIds) => set((state) => (state.pointedIds === pointedIds ? state : { pointedIds })),
+  setJunctionPeek: (junctionPeek) =>
+    set((state) => (state.junctionPeek?.id === junctionPeek?.id && state.junctionPeek?.by === junctionPeek?.by ? state : { junctionPeek })),
+  setJunctionPlacing: (junctionPlacing) =>
+    // One tool in hand at a time: placing a counterpart puts down the shape tool and the pencil.
+    set((state) => (junctionPlacing ? { junctionPlacing, armed: null, pencil: null, junctionPeek: null } : state.junctionPlacing ? { junctionPlacing } : state)),
+  setJunctionPeerLink: (junctionPeerLink) => set((state) => (state.junctionPeerLink === junctionPeerLink ? state : { junctionPeerLink })),
+  setJunctionTrail: (junctionTrail) => set({ junctionTrail }),
   setTraceIds: (traceIds) => set((state) => (state.traceIds === traceIds ? state : { traceIds })),
   setLegendShown: (legendShown) => {
     writePreference(LEGEND_PREFERENCE, legendShown ? 'on' : 'off');

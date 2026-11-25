@@ -744,6 +744,10 @@ const MIGRATIONS: Record<number, Migration> = {
   // did, the opening device's own drawing hand. Root-only, so not wrapped in `everyRoom`. The
   // version moves so an older build refuses a styled file rather than dropping its look on save.
   31: (document) => document,
+  // Optional `link` on Junctions: the group a Junction continues in. A diagram without one means
+  // what it always did, and Junctions that merely share a label are never linked by a guess. The
+  // version moves so an older build refuses the file rather than unlinking every group on save.
+  32: (document) => document,
 };
 
 export class UnsupportedVersionError extends Error {

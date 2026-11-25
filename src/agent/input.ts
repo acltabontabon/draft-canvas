@@ -70,6 +70,8 @@ export const AGENT_LIMITS = {
   deliveryAttempts: { min: 1, max: 50 },
   /** A Service's `replicas`: one instance up to the document's own cap. */
   replicas: { min: 1, max: LIMITS.maxReplicas },
+  /** A Junction's `link`: the name of its group. Short: it is an identifier, never shown. */
+  linkLength: 64,
   insideDepth: LIMITS.maxInsideDepth,
 } as const;
 
@@ -94,6 +96,8 @@ export interface NodeSpec {
   technology?: string;
   /** Services only; 2 or more (one instance is the default and isn't stored). */
   replicas?: number;
+  /** Junctions only: the group it continues in (`DraftNode.link`). */
+  link?: string;
   group?: string;
   color?: Accent;
   attachments?: AttachmentSpec[];
@@ -479,6 +483,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
     const description = r.text(item.description, `${at}/description`, AGENT_LIMITS.descriptionLength);
     const technology = r.text(item.technology, `${at}/technology`, AGENT_LIMITS.technologyLength, { singleLine: true });
     const replicas = readReplicas(r, item.replicas, `${at}/replicas`, shape?.type);
+    const link = readLink(r, item.link, `${at}/link`, shape?.type);
     const color = r.oneOf(item.color, `${at}/color`, ACCENTS);
     const group = typeof item.group === 'string' ? item.group : undefined;
     if (group !== undefined && !groupIds.has(group)) r.problems.add('INVALID_REFERENCE', `${at}/group`, `no group "${group}" in this view`);
@@ -511,6 +516,7 @@ export function readRoom(r: Reader, raw: Json, path: string, ctx: RoomContext): 
         ...(description ? { description } : {}),
         ...(technology ? { technology } : {}),
         ...(replicas ? { replicas } : {}),
+        ...(link ? { link } : {}),
         ...(group ? { group } : {}),
         ...(color ? { color } : {}),
         ...(attachments ? { attachments } : {}),
@@ -853,6 +859,30 @@ export function readReplicas(r: Reader, value: unknown, at: string, type: string
   }
   return value >= 2 ? value : null;
 }
+
+/**
+ * A Junction's group: every junction in the file with the same `link` is the same continuation
+ * point drawn in another place. A name the agent chooses ("payment-handoff"), kept as given; `null`
+ * takes the junction out of its group. Refused on any other shape.
+ */
+export function readLink(r: Reader, value: unknown, at: string, type: string | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const link = typeof value === 'string' ? value.trim() : '';
+  // No control characters: it is stored as an id (`document/validate.ts`).
+  if (!link || link.length > AGENT_LIMITS.linkLength || CONTROL_CHARACTER.test(link)) {
+    r.problems.add('INVALID_INPUT', at, `must be a name of 1 to ${AGENT_LIMITS.linkLength} characters`);
+    return undefined;
+  }
+  if (type !== undefined && type !== 'ellipse') {
+    r.problems.add('UNSUPPORTED', at, 'link belongs to a junction');
+    return undefined;
+  }
+  return link;
+}
+
+// oxlint-disable-next-line no-control-regex -- control characters are exactly what is refused.
+const CONTROL_CHARACTER = /[\u0000-\u001f\u007f]/;
 
 /** How many delivery attempts come before a dead-letter route is taken; `null` clears it. */
 export function readDeliveryAttempts(r: Reader, value: unknown, at: string): number | null | undefined {

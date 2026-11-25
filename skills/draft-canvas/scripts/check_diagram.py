@@ -235,6 +235,7 @@ ELEMENT_FIELDS = {
     'description',
     'technology',
     'replicas',
+    'link',
     'group',
     'color',
     'attachments',

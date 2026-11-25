@@ -8,7 +8,7 @@ import { cancelSmartInk, flushSmartInk } from '../../canvas/inkSession';
 import { StarterUpdateBanner } from './StarterUpdateBanner';
 import { StartersDialog } from '../Gallery/StartersDialog';
 import { FlowTraceBar } from './FlowTraceBar';
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react';
 import { ReactFlowProvider, useReactFlow } from '@xyflow/react';
 import { AttachmentPopover } from '../../canvas/AttachmentPopover';
 import { PresentationCalloutLayer } from '../../canvas/presentation/PresentationCalloutLayer';
@@ -38,6 +38,9 @@ import { pathKey } from '../../depth/tree';
 import { boundsOf, placeNear } from '../../document/operations';
 import { naturalCodeSize, describeContext } from '../../nodes/describe';
 import { isActivatableTarget, isEditableTarget, isInOwnKeyboardRegion, isTextChord } from '../../lib/isEditableTarget';
+import { followJunction, junctionKey, type JunctionKeyAction } from '../../commands/junctions';
+import { JunctionPeek } from '../../canvas/JunctionPeek';
+import { JunctionPlacing, JunctionTrail } from './JunctionTrail';
 import { handleSequenceKey } from '../../canvas/sequence/sequenceKeys';
 import { sequenceActions, sequenceSeatAt } from '../../store/sequenceActions';
 import { isLinkable } from '../../document/sequenceLinks';
@@ -548,7 +551,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     void setViewport(going.viewport, { duration: motionMs(320) });
   }, [mode, setViewport]);
 
-  useKeyboard({ createAtPointer, onPresent, playback });
+  // Filled in below, once the command context exists: the keyboard is wired before it.
+  const junctionKeys = useRef<(action: JunctionKeyAction) => boolean>(() => false);
+  useKeyboard({ createAtPointer, onPresent, playback, junctionKeys });
   useSelectionAnnouncements();
 
   // A file or flowchart text dropped onto the canvas. The browser's default for a dropped file is
@@ -581,6 +586,9 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   }, [session]);
 
   const buildCommandContext = useCommandContext({ createAt, createAtPointer, playback, onPresent });
+  useEffect(() => {
+    junctionKeys.current = (action) => junctionKey(buildCommandContext(), action);
+  }, [buildCommandContext]);
 
   // The empty canvas's starter row runs the palette's own command rather than calling the store
   // itself, so the two entry points can never drift apart — the same discipline the right-click
@@ -626,6 +634,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   );
 
   const presenting = mode === 'present';
+  const junctionPlacesOpen = useUiStore((state) => state.junctionPeek?.by === 'ask');
   const chromeReceded = useUiStore((state) => state.presentation.idle);
 
   // Stable, so the memoized `Canvas` (and React Flow under it) skips renders the editor makes for
@@ -636,6 +645,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
     },
     [armed, createAt],
   );
+  const onFollowJunction = useCallback((nodeId: string) => void followJunction(buildCommandContext(), nodeId), [buildCommandContext]);
   const onQuickConnectMenu = useCallback<NonNullable<CanvasProps['onQuickConnectMenu']>>(
     (source, flowPosition, screenPosition, center, fanIn) => setQuickConnect({ source, flowPosition, screenPosition, center, ...(fanIn?.length ? { fanIn } : {}) }),
     [setQuickConnect],
@@ -747,6 +757,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
               onCreateAt={onCanvasCreateAt}
               onQuickConnectMenu={onQuickConnectMenu}
               onEmptyCanvasMenu={onEmptyCanvasMenu}
+              onFollowJunction={onFollowJunction}
             />
           </ErrorBoundary>
           {quickConnect && (
@@ -773,12 +784,18 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           {/* In every mode: while presenting it opens read-only, so a presenter can show what is still
               open here without any editing surface appearing over the story. */}
           <OpenPointPopover />
+          {/* Where a linked Junction continues, the way back, and a counterpart being placed. In every
+              mode that can follow one: reading and presenting travel exactly as editing does. */}
+          {!tracing && <JunctionPeek buildCommandContext={buildCommandContext} />}
+          {!tracing && <JunctionTrail buildCommandContext={buildCommandContext} />}
+          {!presenting && !tracing && !readOnly && <JunctionPlacing />}
           {/* A right-click selects what it lands on, which would also raise that element's inspector
               right under the menu; an open point's popover sits beside the same element — one
               floating surface at a time. */}
           {/* A view-only collaborator gets no editing surface: the store refuses every change they make. */}
           {!presenting && !tracing && !walkingOutage && !contextMenu && !openPointPopoverOpen && !readOnly && <EdgeInspectorPopover />}
-          {!presenting && !tracing && !walkingOutage && !contextMenu && !openPointPopoverOpen && !readOnly && (
+          {/* …and a Junction's places, asked for, are that one surface: its inspector steps aside. */}
+          {!presenting && !tracing && !walkingOutage && !contextMenu && !openPointPopoverOpen && !junctionPlacesOpen && !readOnly && (
             <ElementInspectorPopover buildCommandContext={buildCommandContext} />
           )}
           {!presenting && !tracing && <ExampleBanner onPresent={onPresent} />}
@@ -904,10 +921,13 @@ export function useKeyboard({
   createAtPointer,
   onPresent,
   playback,
+  junctionKeys,
 }: {
   createAtPointer: (preset: Preset) => void;
   onPresent: (flowId?: string) => void;
   playback: ReturnType<typeof useFlowPlayback>;
+  /** Follows the selected Junction, or steps along where following has led. False when there is nothing to do. */
+  junctionKeys?: RefObject<(action: JunctionKeyAction) => boolean>;
 }) {
   const setExportOpen = useUiStore((state) => state.setExportOpen);
   const setShortcutsOpen = useUiStore((state) => state.setShortcutsOpen);
@@ -1170,6 +1190,16 @@ export function useKeyboard({
       // offers present-only commands, so the keyboard must not be the one way to edit.
       const presenting = state.mode === 'present';
 
+      // G follows the selected Junction to where it continues; ⇧G and ⌥G go back and forward along
+      // that trail. Ahead of everything a presentation turns away: a presenter follows one too, and
+      // comes back the same way. By `event.code`: ⌥G types © on a Mac.
+      if (event.code === 'KeyG' && !meta && !event.repeat && !(!focusIsOnCanvas() && keyboardFocusIsOnControl())) {
+        if (junctionKeys?.current(event.shiftKey ? 'back' : event.altKey ? 'forward' : 'follow')) {
+          event.preventDefault();
+          return;
+        }
+      }
+
       // Something selected inside a sequence takes its keys first: Delete is then that message, not
       // the sequence; an arrow moves it, not the whole shape. See `sequenceKeys.ts`.
       if (!presenting && !playback.active && useUiStore.getState().readOnly === null && handleSequenceKey(event)) return;
@@ -1393,6 +1423,11 @@ export function useKeyboard({
           }
           // Mid endpoint drag, Escape cancels that drag (the handle's own listener) — and only that.
           if (useUiStore.getState().reconnectDragActive) return;
+          // A linked Junction in hand is put away, and nothing else: Escape backs out one thing.
+          if (useUiStore.getState().junctionPlacing) {
+            useUiStore.getState().setJunctionPlacing(null);
+            return;
+          }
           arm(null);
           // The Pencil goes down first: Escape is how you get back to selecting.
           if (useUiStore.getState().pencil) {
@@ -1675,6 +1710,7 @@ export function useKeyboard({
   }, [
     arm,
     createAtPointer,
+    junctionKeys,
     onPresent,
     openContextMenuFromKeyboard,
     openQuickConnectFromKeyboard,

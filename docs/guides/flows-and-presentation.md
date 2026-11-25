@@ -96,6 +96,10 @@ ones included, and unrelated boundaries stay subdued.
 
 Pan and zoom freely; `R` hands the camera back. For a long step, choose **Read full step details**.
 
+Click a [linked junction](shapes-and-connectors.md#linked-junctions) to travel to where the flow
+continues, or pick the place when there are several. `⇧G` and the bar at the top left bring you
+back. The presentation carries on from the step it was on, and `R` returns the camera to it.
+
 A [sequence](sequence-diagrams.md) presents the same way, one message at a time: select it and
 choose **Present this sequence**.
 
