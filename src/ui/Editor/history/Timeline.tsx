@@ -185,7 +185,7 @@ export function Timeline() {
 
   return (
     <div className="dc-timeline" role="region" aria-label="Timeline" onKeyDown={onKeyDown}>
-      <div className="dc-timeline-head">
+      <div className="dc-timeline-row">
         <span className="dc-timeline-title-slot">
           <AlternativeSwitcher />
         </span>
@@ -205,6 +205,31 @@ export function Timeline() {
             )}
           </Tooltip>
           <Tooltip content={{ title: 'Newer', shortcut: '→' }}>{(tip) => <Button variant="quiet" icon="forward" aria-label="Newer revision" onClick={() => void stepRevision(1)} {...tip} />}</Tooltip>
+        </div>
+        <div ref={track} className="dc-timeline-track" role="listbox" aria-label="Revisions, oldest to newest" aria-orientation="horizontal">
+          {timeline.more && !filtering && (
+            <button type="button" className="dc-timeline-more" onClick={() => void loadTimeline(true)}>
+              Earlier
+            </button>
+          )}
+          {sessions.map((session) => (
+            <div key={session.id} className="dc-timeline-session" role="group" aria-label={`Session ending ${new Date(session.end).toLocaleString()}`}>
+              <SessionLabel session={session} />
+              <div className="dc-timeline-marks">
+                {[...session.revisions].reverse().map((revision) => (
+                  <RevisionMark key={revision.oid} revision={revision} current={lens?.oid === revision.oid || compare?.base.oid === revision.oid} />
+                ))}
+              </div>
+            </div>
+          ))}
+          {timeline.revisions.length === 0 && (
+            <span className="dc-timeline-empty">{timeline.loading ? 'Reading history…' : (timeline.error ?? 'The first revision is added a moment after you change something.')}</span>
+          )}
+          {filtering && shown.length === 0 && timeline.revisions.length > 0 && <span className="dc-timeline-empty">No revision matches.</span>}
+          <button type="button" role="option" className="dc-timeline-live" aria-selected={atLive} aria-current={atLive ? 'true' : undefined} onClick={showLive}>
+            <span className="dc-timeline-live-dot" data-pending={capture.kind === 'pending' || capture.kind === 'capturing' ? 'true' : undefined} />
+            Live
+          </button>
         </div>
         <div className="dc-timeline-tools">
           <Tooltip content={{ title: 'Find a revision' }}>
@@ -236,37 +261,11 @@ export function Timeline() {
         </div>
       )}
 
-      <div ref={track} className="dc-timeline-track" role="listbox" aria-label="Revisions, oldest to newest" aria-orientation="horizontal">
-        {timeline.more && !filtering && (
-          <button type="button" className="dc-timeline-more" onClick={() => void loadTimeline(true)}>
-            Earlier
-          </button>
-        )}
-        {sessions.map((session) => (
-          <div key={session.id} className="dc-timeline-session" role="group" aria-label={`Session ending ${new Date(session.end).toLocaleString()}`}>
-            <SessionLabel session={session} />
-            <div className="dc-timeline-marks">
-              {[...session.revisions].reverse().map((revision) => (
-                <RevisionMark key={revision.oid} revision={revision} current={lens?.oid === revision.oid || compare?.base.oid === revision.oid} />
-              ))}
-            </div>
-          </div>
-        ))}
-        {timeline.revisions.length === 0 && (
-          <span className="dc-timeline-empty">{timeline.loading ? 'Reading history…' : (timeline.error ?? 'The first revision is added a moment after you change something.')}</span>
-        )}
-        {filtering && shown.length === 0 && timeline.revisions.length > 0 && <span className="dc-timeline-empty">No revision matches.</span>}
-        <button type="button" role="option" className="dc-timeline-live" aria-selected={atLive} aria-current={atLive ? 'true' : undefined} onClick={showLive}>
-          <span className="dc-timeline-live-dot" data-pending={capture.kind === 'pending' || capture.kind === 'capturing' ? 'true' : undefined} />
-          Live
-        </button>
-      </div>
-
       {compare && <CompareBar compare={compare} />}
       {!compare && selected && lens && (
         <div className="dc-timeline-detail">
           <div className="dc-timeline-detail-text">
-            <span className="dc-timeline-detail-summary">
+            <span className="dc-timeline-detail-summary" title={selected.summary}>
               {selected.summary}
               {selected.milestones.map((milestone) => (
                 <span key={milestone.id} className="dc-timeline-milestone-tag">

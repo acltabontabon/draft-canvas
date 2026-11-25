@@ -1,195 +1,238 @@
-/* The timeline: a quiet strip along the foot of the canvas, over it rather than beside it, so the
-   canvas keeps its width. It recedes like the editor's other bars and wears the same tokens. */
+/* The timeline (`Timeline.tsx`): history's one surface on the canvas. It docks where the status bar
+   is — the bar sinks away as the strip rises into its place, and comes back when the strip leaves —
+   so opening history adds nothing to the screen, it changes what the foot of the editor shows.
+   One compact row; a second, slimmer line only when a revision is chosen or something is compared. */
+
+/* ── The choreography ─────────────────────────────────────────────────────────────────────── */
+
+.dc-status {
+  transition:
+    margin-bottom 300ms var(--dc-ease-in-out),
+    opacity 200ms var(--dc-ease-out),
+    transform 300ms var(--dc-ease-in-out);
+}
+
+.dc-editor[data-timeline] .dc-status {
+  margin-bottom: calc(-1 * var(--dc-status-height) - 1px);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
 .dc-timeline {
   position: absolute;
   left: 50%;
-  bottom: 14px;
+  bottom: 10px;
   z-index: var(--dc-z-bar);
-  width: min(980px, calc(100% - 32px));
-  transform: translateX(-50%);
-  padding: 8px 10px 10px;
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, calc(100% - 24px));
+  padding: 5px 6px 5px 8px;
   border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-lg);
-  background: color-mix(in srgb, var(--dc-surface-raised) 94%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--dc-surface-raised) 92%, transparent);
   box-shadow: var(--dc-shadow-panel);
-  backdrop-filter: blur(8px);
+  backdrop-filter: blur(10px) saturate(1.1);
   color: var(--dc-text);
-  animation: dc-history-rise var(--dc-dur-slow) var(--dc-ease-out);
+  transform: translateX(-50%);
+  /* Rises once the status bar has started to sink: one movement, not two at once. */
+  animation: dc-timeline-rise 380ms 90ms var(--dc-ease-out) backwards;
+}
+
+@keyframes dc-timeline-rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 22px) scale(0.985);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .dc-status {
+    transition: none;
+  }
   .dc-timeline {
     animation: none;
   }
 }
 
-.dc-timeline-head {
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
+/* ── The row ──────────────────────────────────────────────────────────────────────────────── */
+
+.dc-timeline-row {
+  display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  min-height: 40px;
 }
 
-.dc-timeline-title {
+.dc-timeline-title-slot {
+  flex-shrink: 0;
+  max-width: 190px;
+  min-width: 0;
+}
+
+button.dc-timeline-title {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-width: 0;
-  overflow: hidden;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dc-radius-pill);
+  background: transparent;
   color: var(--dc-text-muted);
+  font: inherit;
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.01em;
-  text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: pointer;
 }
 
-/* Step, play, step: the one group the eye should find first, centred like a player's. */
+button.dc-timeline-title:hover,
+button.dc-timeline-title[aria-expanded='true'] {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+button.dc-timeline-title:focus-visible {
+  outline: 2px solid var(--dc-selection);
+}
+
+.dc-timeline-title-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .dc-timeline-transport {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
-  gap: 2px;
+  gap: 1px;
+  padding: 2px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
+}
+
+.dc-timeline-transport .dc-button[data-icon-only='true'] {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--dc-radius-pill);
 }
 
 .dc-timeline-play[data-icon-only='true'] {
-  width: 30px;
-  height: 30px;
-  border-radius: var(--dc-radius-pill);
-  background: var(--dc-surface);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
 }
 
 .dc-timeline-tools {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
-  justify-content: flex-end;
-  gap: 2px;
+  gap: 1px;
 }
 
-.dc-timeline-room {
-  height: 26px;
-  font-size: 12px;
-}
-
-.dc-timeline-find {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.dc-timeline-search {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+.dc-timeline-tools .dc-button[data-icon-only='true'] {
+  width: 28px;
   height: 28px;
-  padding: 0 10px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-pill);
-  background: var(--dc-surface);
-  color: var(--dc-text-faint);
 }
 
-.dc-timeline-search:focus-within {
-  border-color: var(--dc-selection);
-}
-
-.dc-timeline-search input {
-  width: 200px;
-  border: 0;
-  background: transparent;
-  color: var(--dc-text);
-  font: inherit;
-  font-size: 12px;
-  outline: none;
-}
-
-.dc-timeline-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.dc-timeline-chip {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  height: 22px;
-  padding: 0 8px;
-  border: 1px solid var(--dc-border);
-  border-radius: var(--dc-radius-pill);
-  color: var(--dc-text-muted);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.dc-timeline-chip input {
-  position: absolute;
-  opacity: 0;
-  pointer-events: none;
-}
-
-.dc-timeline-chip[data-on='true'] {
-  border-color: var(--dc-selection);
-  color: var(--dc-text);
-  background: var(--dc-selection-soft);
-}
-
-.dc-timeline-chip:has(input:focus-visible) {
-  outline: 2px solid var(--dc-selection);
-}
+/* ── The track: sessions of revisions, ending in Live ─────────────────────────────────────── */
 
 .dc-timeline-track {
+  position: relative;
   display: flex;
+  flex: 1;
   align-items: flex-end;
-  gap: 14px;
-  margin-top: 8px;
-  padding: 18px 4px 4px;
+  gap: 16px;
+  min-width: 0;
+  padding: 2px 10px 3px;
   overflow-x: auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+  /* The ends fade into the strip, so a long history reads as continuing past the edges. */
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+}
+
+.dc-timeline-track::-webkit-scrollbar {
+  display: none;
 }
 
 .dc-timeline-session {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 3px;
   flex-shrink: 0;
-  padding-left: 10px;
-  border-left: 1px solid var(--dc-border);
 }
 
 .dc-timeline-session-label {
   display: flex;
-  flex-direction: column;
+  gap: 6px;
   max-width: 220px;
-  font-size: 11px;
-  line-height: 1.3;
+  overflow: hidden;
+  color: var(--dc-text-faint);
+  font-size: 10.5px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+button.dc-timeline-session-label {
+  margin: 0 -4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--dc-radius-xs);
+  background: transparent;
+  font: inherit;
+  font-size: 10.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.dc-timeline-session-label:hover:not(:disabled) {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text-muted);
+}
+
+button.dc-timeline-session-label:focus-visible {
+  outline: 2px solid var(--dc-selection);
+}
+
+button.dc-timeline-session-label:disabled {
+  cursor: default;
 }
 
 .dc-timeline-session-when {
-  color: var(--dc-text-faint);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .dc-timeline-session-summary {
   overflow: hidden;
-  color: var(--dc-text-muted);
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
+/* The marks sit on a hairline, the way a flow's steps do: one line through the session. */
 .dc-timeline-marks {
+  position: relative;
   display: flex;
+  align-self: flex-start;
   align-items: center;
-  gap: 5px;
-  height: 18px;
+  gap: 6px;
+  height: 14px;
 }
 
-/* A revision: a small round mark, like the step marks of a presented flow. */
+.dc-timeline-marks::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  height: 1px;
+  background: var(--dc-border-strong);
+}
+
 .dc-timeline-mark {
   position: relative;
-  width: 11px;
-  height: 11px;
+  width: 10px;
+  height: 10px;
   padding: 0;
   border: 1.5px solid var(--dc-text-faint);
   border-radius: var(--dc-radius-pill);
@@ -202,14 +245,15 @@
 }
 
 .dc-timeline-mark:hover {
-  transform: scale(1.25);
+  transform: scale(1.3);
   border-color: var(--dc-text-muted);
 }
 
 .dc-timeline-mark[aria-current='true'] {
   border-color: var(--dc-selection);
   background: var(--dc-selection);
-  transform: scale(1.3);
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px var(--dc-selection-soft);
 }
 
 .dc-timeline-mark:focus-visible,
@@ -236,45 +280,33 @@
   border-color: var(--dc-caution);
 }
 
-.dc-timeline-mark-flag {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 0 5px;
-  border-radius: var(--dc-radius-xs);
-  background: var(--dc-surface);
-  color: var(--dc-text-muted);
-  font-size: 10px;
-  white-space: nowrap;
-  pointer-events: none;
-}
-
 .dc-timeline-live {
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
   flex-shrink: 0;
+  align-items: center;
+  align-self: center;
+  gap: 6px;
   height: 24px;
+  margin-left: auto;
   padding: 0 10px;
   border: 1px solid var(--dc-border);
   border-radius: var(--dc-radius-pill);
   background: transparent;
   color: var(--dc-text-muted);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   font-weight: 600;
   cursor: pointer;
 }
 
 .dc-timeline-live[aria-current='true'] {
-  border-color: var(--dc-selection);
+  border-color: color-mix(in srgb, var(--dc-selection) 60%, var(--dc-border));
   color: var(--dc-text);
 }
 
 .dc-timeline-live-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: var(--dc-radius-pill);
   background: var(--dc-selection);
 }
@@ -292,51 +324,166 @@
 
 .dc-timeline-more {
   flex-shrink: 0;
+  align-self: center;
   border: 0;
   background: transparent;
-  color: var(--dc-text-muted);
+  color: var(--dc-text-faint);
   font: inherit;
-  font-size: 12px;
+  font-size: 11.5px;
   cursor: pointer;
+}
+
+.dc-timeline-more:hover {
+  color: var(--dc-text-muted);
 }
 
 .dc-timeline-empty {
   align-self: center;
   color: var(--dc-text-faint);
   font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ── Second lines: finding, a chosen revision, a comparison ───────────────────────────────── */
+
+.dc-timeline-find,
+.dc-timeline-detail,
+.dc-compare-bar {
+  margin: 4px 0 0;
+  padding: 6px 2px 2px;
+  border-top: 1px solid var(--dc-border);
+  animation: dc-timeline-unfold 220ms var(--dc-ease-out);
+}
+
+@keyframes dc-timeline-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-timeline-find,
+  .dc-timeline-detail,
+  .dc-compare-bar {
+    animation: none;
+  }
+}
+
+.dc-timeline-find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-timeline-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
+  color: var(--dc-text-faint);
+}
+
+.dc-timeline-search:focus-within {
+  border-color: var(--dc-selection);
+}
+
+.dc-timeline-search input {
+  width: 190px;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.dc-timeline-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dc-timeline-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.dc-timeline-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dc-timeline-chip[data-on='true'] {
+  border-color: var(--dc-selection);
+  color: var(--dc-text);
+  background: var(--dc-selection-soft);
+}
+
+.dc-timeline-chip:has(input:focus-visible) {
+  outline: 2px solid var(--dc-selection);
 }
 
 .dc-timeline-detail {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 8px 12px;
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--dc-border);
+  gap: 4px 10px;
 }
 
 .dc-timeline-detail-text {
   display: flex;
-  flex-direction: column;
-  flex: 1 1 260px;
+  flex: 1 1 240px;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
+  padding-left: 6px;
 }
 
 .dc-timeline-detail-summary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12.5px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dc-timeline-detail-meta {
+  flex-shrink: 0;
   color: var(--dc-text-faint);
-  font-size: 12px;
+  font-size: 11.5px;
+  white-space: nowrap;
 }
 
 .dc-timeline-milestone-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  padding: 0 7px;
+  border-radius: var(--dc-radius-pill);
+  background: color-mix(in srgb, var(--dc-caution) 18%, transparent);
   color: var(--dc-caution);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dc-timeline-room {
+  height: 26px;
   font-size: 12px;
 }
 
@@ -344,7 +491,20 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
+}
+
+.dc-timeline-actions .dc-button:not([data-icon-only='true']) {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.dc-timeline-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
 }
 
 .dc-timeline-git {
@@ -352,7 +512,7 @@
   grid-template-columns: auto 1fr;
   gap: 2px 10px;
   flex-basis: 100%;
-  margin: 4px 0 0;
+  margin: 4px 0 0 6px;
   font-size: 12px;
 }
 
@@ -377,51 +537,17 @@
 
 .dc-timeline-milestone-form {
   display: inline-flex;
+  flex-basis: 100%;
   align-items: center;
   gap: 6px;
+  padding-left: 6px;
 }
 
 .dc-timeline-milestone-form input {
   height: 26px;
 }
 
-/* The studio state steps the editor's chrome back; history's steps back with it. */
-.dc-editor[data-studio] .dc-timeline,
-.dc-editor[data-studio] .dc-history-status {
-  display: none;
-}
-
-/* A session's label is a quiet button: it compares the session's start with its end. */
-button.dc-timeline-session-label {
-  padding: 2px 6px;
-  margin: -2px -6px;
-  border: 0;
-  border-radius: var(--dc-radius-sm);
-  background: transparent;
-  font: inherit;
-  font-size: 11px;
-  text-align: left;
-  cursor: pointer;
-}
-
-button.dc-timeline-session-label:hover:not(:disabled) {
-  background: var(--dc-surface-hover);
-}
-
-button.dc-timeline-session-label:focus-visible {
-  outline: 2px solid var(--dc-selection);
-}
-
-button.dc-timeline-session-label:disabled {
-  cursor: default;
-}
-
-/* Comparing: one calm row, the list of changes only when asked for. */
-.dc-compare-bar {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px solid var(--dc-border);
-}
+/* ── Comparing ─────────────────────────────────────────────────────────────────────────────── */
 
 .dc-compare-bar-row {
   display: flex;
@@ -436,6 +562,8 @@ button.dc-timeline-session-label:disabled {
   align-items: center;
   gap: 6px;
   min-width: 0;
+  padding-left: 6px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 
@@ -451,7 +579,7 @@ button.dc-timeline-session-label:disabled {
   flex-direction: column;
   align-items: flex-start;
   gap: 6px;
-  margin-top: 8px;
+  margin-top: 6px;
 }
 
 .dc-compare-list {
@@ -459,19 +587,26 @@ button.dc-timeline-session-label:disabled {
   flex-direction: column;
   gap: 1px;
   width: 100%;
-  max-height: 150px;
+  max-height: 140px;
   margin: 0;
   padding: 0;
   overflow-y: auto;
   list-style: none;
 }
 
-.dc-compare-item {
+.dc-compare-list li {
   display: flex;
   align-items: center;
+  gap: 4px;
+}
+
+.dc-compare-item {
+  display: flex;
+  flex: 1;
+  align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 4px 6px;
+  min-width: 0;
+  padding: 3px 6px;
   border: 0;
   border-radius: var(--dc-radius-sm);
   background: transparent;
@@ -493,13 +628,14 @@ button.dc-timeline-session-label:disabled {
 
 .dc-compare-item-glyph {
   display: grid;
-  place-items: center;
   flex-shrink: 0;
-  width: 16px;
-  height: 16px;
+  place-items: center;
+  width: 15px;
+  height: 15px;
   border-radius: var(--dc-radius-pill);
   background: var(--dc-caution);
   color: var(--dc-canvas);
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -518,56 +654,9 @@ button.dc-timeline-session-label:disabled {
 }
 
 .dc-compare-item-what {
-  margin-left: auto;
   flex-shrink: 0;
+  margin-left: auto;
   color: var(--dc-text-faint);
-}
-
-/* The title is the alternatives switcher: the name of the architecture on screen. */
-.dc-timeline-title-slot {
-  min-width: 0;
-}
-
-button.dc-timeline-title {
-  max-width: 100%;
-  height: 26px;
-  padding: 0 8px;
-  margin-left: -4px;
-  border: 0;
-  border-radius: var(--dc-radius-pill);
-  background: transparent;
-  font: inherit;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-button.dc-timeline-title:hover,
-button.dc-timeline-title[aria-expanded='true'] {
-  background: var(--dc-surface-hover);
-  color: var(--dc-text);
-}
-
-button.dc-timeline-title:focus-visible {
-  outline: 2px solid var(--dc-selection);
-}
-
-.dc-timeline-title-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.dc-timeline-confirm {
-  display: inline-flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px;
-}
-
-.dc-compare-list li {
-  display: flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .dc-compare-bring {
@@ -588,7 +677,8 @@ button.dc-timeline-title:focus-visible {
   }
 }
 
-/* Alternatives: naming one, and the short list of them. */
+/* ── Alternatives: naming one, and the short list of them ────────────────────────────────── */
+
 .dc-alt-form {
   display: flex;
   flex-direction: column;
@@ -646,4 +736,18 @@ button.dc-timeline-title:focus-visible {
   display: flex;
   flex: 1;
   gap: 6px;
+}
+
+/* The studio state steps the editor's chrome back; history's steps back with it. */
+.dc-editor[data-studio] .dc-timeline,
+.dc-editor[data-studio] .dc-history-status {
+  display: none;
+}
+
+/* Narrow canvases: the session words give way first, then the title's name. */
+@media (max-width: 720px) {
+  .dc-timeline-session-summary,
+  .dc-timeline-title-name {
+    display: none;
+  }
 }

@@ -78,6 +78,7 @@ import { FocusIndicator } from './FocusIndicator';
 import { TidyBar } from './TidyBar';
 import { ArrangeBar } from './ArrangeBar';
 import { Timeline } from './history/Timeline';
+import { useEvolutionStore } from '../../store/evolution/evolutionStore';
 import { LayoutBusyBar } from './LayoutBusyBar';
 import { FlowLensIndicator } from './FlowLensIndicator';
 import { dragCarriesImport, importDroppedFile, insertMermaidText, looksLikeMermaid } from './importIntoEditor';
@@ -657,6 +658,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
   );
 
   const studio = useUiStore((state) => state.stylePanelOpen) && mode !== 'present';
+  const timelineOpen = useEvolutionStore((state) => state.timelineOpen);
   const restyleBeat = useUiStore((state) => state.restyleBeat);
   // The whole editor wears the open diagram's colours, not the canvas alone.
   const editorRoot = useRef<HTMLDivElement>(null);
@@ -685,6 +687,8 @@ function EditorScreen({ session }: { session: DocumentSession }) {
       data-armed={armed ? 'true' : undefined}
       data-reconnecting={reconnecting ? 'true' : undefined}
       data-session-ended={sessionOver ? 'true' : undefined}
+      // The timeline is open: it takes the status bar's place at the foot of the editor.
+      data-timeline={timelineOpen && !presenting ? '' : undefined}
     >
       {!presenting && (
         <div style={{ display: 'contents' }} inert={tracing || sessionOver}>
