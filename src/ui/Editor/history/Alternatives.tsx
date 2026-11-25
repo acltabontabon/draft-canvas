@@ -7,6 +7,7 @@ import { compareVersions } from '../../../store/evolution/compare';
 import { useEvolutionStore } from '../../../store/evolution/evolutionStore';
 import { reportOutcome as report } from '../../../commands/evolution';
 import { archiveAlternative, createAlternative, renameAlternative, switchAlternative } from '../../../store/evolution/operations';
+import { startMerge } from '../../../store/evolution/merging';
 import { Button } from '../../common/Button';
 import { Icon } from '../../common/Icon';
 import { Modal } from '../../common/Modal';
@@ -33,6 +34,9 @@ export function AlternativeSwitcher() {
     ...alternatives
       .filter((alt) => !alt.archived)
       .map((alt) => ({ id: alt.altId, label: alt.name, ...(alt.altId === altId ? { icon: 'check' as const } : {}), onSelect: () => void switchAlternative(alt.altId).then(report) })),
+    ...[{ altId: null as string | null, name: 'Main architecture', archived: false }, ...alternatives]
+      .filter((alt) => !alt.archived && alt.altId !== altId)
+      .map((alt) => ({ id: `merge-${alt.altId ?? 'main'}`, label: `Bring in “${alt.name}”…`, detail: 'Combine its changes with this one', onSelect: () => void startMerge(alt.altId).then(report) })),
     { id: 'new', label: 'Explore an alternative…', detail: 'Try another direction; this one stays as it is', onSelect: () => setNaming(true) },
     ...(alternatives.length > 0 ? [{ id: 'manage', label: 'Manage alternatives…', onSelect: () => setManaging(true) }] : []),
   ];

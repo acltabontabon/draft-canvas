@@ -13,6 +13,7 @@ import type { DepthPath } from '../../depth/tree';
 import type { DraftDocument } from '../../document/types';
 import type { Oid } from '../../evolution/contracts';
 import type { SemanticDiff } from '../../evolution/diff';
+import type { MergeResult, Side } from '../../evolution/merge';
 import type { Revision, RevisionQuery } from '../../evolution/timeline';
 
 export type CaptureState =
@@ -70,11 +71,31 @@ export interface EvolutionState {
   playback: PlaybackState;
   /** Two versions compared on the canvas, while the person looks. */
   compare: CompareState | null;
+  /** A merge being reviewed: transient here, durable in the journal until finished or cancelled. */
+  merge: MergeSession | null;
+}
+
+export interface MergeSession {
+  opId: string;
+  /** The branch being brought in, and the one it is brought into. */
+  source: { altId: string | null; name: string };
+  into: { altId: string | null; name: string };
+  ours: Oid;
+  theirs: Oid;
+  /** What both started from: a merge base, or several folded into one. */
+  base: DraftDocument;
+  oursFile: DraftDocument;
+  theirsFile: DraftDocument;
+  result: MergeResult;
+  choices: Record<string, Side>;
+  /** The live diagram's generation when the merge began: finishing checks it has not moved. */
+  revision: number;
+  oursBlob: string;
 }
 
 export interface CompareSide {
-  /** A revision, or `'now'`: the live diagram as it was when the comparison began. */
-  oid: Oid | 'now';
+  /** A revision, `'now'` (the live diagram as it was when the comparison began), or `'merge'` (a merge's result). */
+  oid: Oid | 'now' | 'merge';
   label: string;
   file: DraftDocument;
 }
@@ -146,6 +167,7 @@ export const INITIAL_EVOLUTION: EvolutionState = {
   lens: null,
   playback: { playing: false, speed: 1, focus: true },
   compare: null,
+  merge: null,
 };
 
 export const useEvolutionStore = create<EvolutionState>(() => INITIAL_EVOLUTION);

@@ -154,3 +154,58 @@ describe('recovering an interrupted operation', { timeout: 30_000 }, () => {
     expect(fileOf(useEditorStore.getState()).nodes.map((node) => node.id)).toEqual(['n_api']);
   });
 });
+
+describe('merging alternatives', { timeout: 60_000 }, () => {
+  it('combines two directions into a real merge, keeping both histories', async () => {
+    const { startMerge, finishMerge } = await import('../../src/store/evolution/merging');
+    await start();
+    await createAlternative('Event-driven');
+    const altId = useEvolutionStore.getState().altId!;
+    await edit((file) => addNodes(file, [createNode({ type: 'queue', x: 300, y: 0, id: 'n_q', text: 'Events' })]));
+    const altTip = await tipOf(branchOf(altId));
+    await switchAlternative(null);
+    await edit((file) => addNodes(file, [createNode({ type: 'database', x: 0, y: 300, id: 'n_db', text: 'Ledger' })]));
+    const mainTip = await tipOf();
+    const started = await startMerge(altId);
+    expect(started.ok).toBe(true);
+    const session = useEvolutionStore.getState().merge!;
+    expect(session.result.conflicts).toEqual([]);
+    const finished = await finishMerge();
+    expect(finished.ok).toBe(true);
+    expect(fileOf(useEditorStore.getState()).nodes.map((node) => node.id).sort()).toEqual(['n_api', 'n_db', 'n_q']);
+    const merge = await historyService().store!.readCommit(await tipOf());
+    expect(merge.parents).toEqual([mainTip, altTip]);
+    expect(parseMessage(merge.message).trailers.initiator).toBe('merge');
+  });
+
+  it('waits for a choice on each difference, and follows it', async () => {
+    const { startMerge, finishMerge, chooseConflict } = await import('../../src/store/evolution/merging');
+    await start();
+    await createAlternative('Renamed');
+    const altId = useEvolutionStore.getState().altId!;
+    await edit((file) => updateNode(file, 'n_api', { text: 'Edge Gateway' }));
+    await switchAlternative(null);
+    await edit((file) => updateNode(file, 'n_api', { text: 'Public API' }));
+    await startMerge(altId);
+    const conflict = useEvolutionStore.getState().merge!.result.conflicts[0]!;
+    expect(conflict).toMatchObject({ kind: 'both-changed', key: 'node:n_api' });
+    expect((await finishMerge()).ok).toBe(false);
+    await chooseConflict(conflict.id, 'theirs');
+    expect((await finishMerge()).ok).toBe(true);
+    expect(fileOf(useEditorStore.getState()).nodes[0]!.text).toBe('Edge Gateway');
+  });
+
+  it('fast-forwards when the other is simply ahead, without a merge revision', async () => {
+    const { startMerge } = await import('../../src/store/evolution/merging');
+    await start();
+    await createAlternative('Ahead');
+    const altId = useEvolutionStore.getState().altId!;
+    await edit((file) => addNodes(file, [createNode({ type: 'queue', x: 300, y: 0, id: 'n_q', text: 'Events' })]));
+    const altTip = await tipOf(branchOf(altId));
+    await switchAlternative(null);
+    const outcome = await startMerge(altId);
+    expect(outcome.ok).toBe(true);
+    expect(await tipOf()).toBe(altTip);
+    expect(fileOf(useEditorStore.getState()).nodes.map((node) => node.id).sort()).toEqual(['n_api', 'n_q']);
+  });
+});

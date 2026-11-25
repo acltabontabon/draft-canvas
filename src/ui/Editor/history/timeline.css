@@ -751,3 +751,22 @@ button.dc-timeline-session-label:disabled {
     display: none;
   }
 }
+
+/* Merging: one row per difference, its choice beside it. */
+.dc-merge-list {
+  margin-top: 6px;
+}
+
+.dc-merge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-merge-row .dc-segmented {
+  flex-shrink: 0;
+}
+
+.dc-merge-row[data-decided='true'] .dc-compare-item-glyph {
+  background: var(--dc-selection);
+}

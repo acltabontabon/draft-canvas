@@ -154,7 +154,11 @@ export async function attachHistory(key: CopyKey, options: { readOnly?: boolean 
   useUiStore.getState().setHistoryLens(false);
   await historyService().attach(key, options);
   // Anything a crash left half done for this copy is finished, dropped or asked about (ADR-3).
-  void import('./operations').then((operations) => operations.recoverOperations()).catch(() => undefined);
+  void import('./operations')
+    .then((operations) => operations.recoverOperations())
+    .then(() => import('./merging'))
+    .then((merging) => merging.resumeMergeSessions())
+    .catch(() => undefined);
 }
 
 let watchingVisibility = false;

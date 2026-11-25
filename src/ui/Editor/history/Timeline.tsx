@@ -14,6 +14,7 @@ import { Icon } from '../../common/Icon';
 import { Tooltip } from '../../common/Tooltip';
 import { AlternativeSwitcher } from './Alternatives';
 import { CompareBar } from './CompareBar';
+import { MergeBar } from './MergeBar';
 import { MenuButton } from './MenuButton';
 import { RevisionActions } from './RevisionActions';
 import './history.css';
@@ -77,9 +78,10 @@ function SessionLabel({ session }: { session: Session }) {
 }
 
 export function Timeline() {
-  const { open, timeline, lens, playback, capture, changes, compare } = useEvolutionStore(
+  const { open, timeline, lens, playback, capture, changes, compare, merge } = useEvolutionStore(
     useShallow((state) => ({
       compare: state.compare,
+      merge: state.merge,
       open: state.timelineOpen,
       timeline: state.timeline,
       lens: state.lens,
@@ -158,7 +160,7 @@ export function Timeline() {
       },
       End: showLive,
       ' ': () => void togglePlay(),
-      Escape: () => (compare ? endCompare() : lens ? showLive() : setTimelineOpen(false)),
+      Escape: () => (merge ? undefined : compare ? endCompare() : lens ? showLive() : setTimelineOpen(false)),
     };
     const run = keys[event.key];
     if (!run) return;
@@ -261,7 +263,7 @@ export function Timeline() {
         </div>
       )}
 
-      {compare && <CompareBar compare={compare} />}
+      {merge ? <MergeBar session={merge} /> : compare && <CompareBar compare={compare} />}
       {!compare && selected && lens && (
         <div className="dc-timeline-detail">
           <div className="dc-timeline-detail-text">
