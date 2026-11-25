@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 29,
+  "version": 33,
   "metadata": {
     "id": "starter-saga-choreography",
     "title": "Saga – Choreography",
@@ -12,7 +12,7 @@
       "id": "customer",
       "type": "actor",
       "x": -70,
-      "y": 141,
+      "y": 173,
       "width": 140,
       "height": 118,
       "z": 0,
@@ -25,10 +25,10 @@
     {
       "id": "order",
       "type": "service",
-      "x": 242,
-      "y": 149,
-      "width": 176,
-      "height": 103,
+      "x": 190,
+      "y": 161,
+      "width": 280,
+      "height": 142,
       "z": 0,
       "text": "Order Service",
       "description": "Takes orders and follows their fate from events.",
@@ -92,9 +92,9 @@
       "id": "payment-db",
       "type": "database",
       "x": 1070,
-      "y": -111,
+      "y": -116,
       "width": 120,
-      "height": 143,
+      "height": 153,
       "z": 0,
       "text": "Payments DB",
       "description": "Authorizations and refunds.",
@@ -106,9 +106,9 @@
       "id": "adyen",
       "type": "service",
       "x": 1392,
-      "y": 143,
+      "y": 151,
       "width": 176,
-      "height": 115,
+      "height": 99,
       "z": 0,
       "text": "Adyen",
       "description": "Authorizes cards and refunds them.",
@@ -134,9 +134,9 @@
       "id": "kitchen",
       "type": "service",
       "x": 1042,
-      "y": 759,
+      "y": 751,
       "width": 176,
-      "height": 83,
+      "height": 98,
       "z": 0,
       "text": "Kitchen Service",
       "description": "Sends tickets to restaurants and records their answer.",
@@ -210,7 +210,7 @@
       "id": "title",
       "type": "text",
       "x": -70,
-      "y": -269,
+      "y": -274,
       "width": 1100,
       "height": 110,
       "z": 0,
@@ -486,13 +486,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {

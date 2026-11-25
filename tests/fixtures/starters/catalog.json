@@ -1,7 +1,7 @@
 {
   "$schema": "./catalog.schema.json",
   "schema": 1,
-  "updated": "2026-11-23",
+  "updated": "2026-11-25",
   "starters": [
     {
       "id": "monolith",
@@ -37,10 +37,10 @@
       "featured": true,
       "order": 10,
       "path": "starters/architectures/monolith/monolith.draftcanvas",
-      "sha256": "3bf419391b5f146ee2fa10cf5cfd90243f5b9e26d9476c911064025500c46678",
-      "bytes": 15980,
-      "formatVersion": 28,
-      "updated": "2026-11-21"
+      "sha256": "2f12927d8ab356c166414d4b6dd2900cb8131d9b1242dd2f6dd601e2d9687dee",
+      "bytes": 16096,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "modular-monolith",
@@ -76,10 +76,10 @@
       "featured": false,
       "order": 20,
       "path": "starters/architectures/modular-monolith/modular-monolith.draftcanvas",
-      "sha256": "c865dfbeb48e7fdb9290dcbcd8965e56b2eeff606e5feae595ce86e5c9d21cbf",
-      "bytes": 17418,
-      "formatVersion": 31,
-      "updated": "2026-11-21"
+      "sha256": "d93aa4fc6eaaa5dc94f5988037a3d9d8fc3b7392f73e161d5bd64cef113b6c53",
+      "bytes": 17306,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "microservices",
@@ -115,10 +115,10 @@
       "featured": true,
       "order": 30,
       "path": "starters/architectures/microservices/microservices.draftcanvas",
-      "sha256": "0d376763a98b0844635a3460e34593861d318e3e427327e13b31e7ce521c0a35",
-      "bytes": 22286,
+      "sha256": "05971e630284e3fabae1c81c1ae9653ce6b5f73f055067cb0efc4e995a957aac",
+      "bytes": 22302,
       "formatVersion": 33,
-      "updated": "2026-11-26"
+      "updated": "2026-11-25"
     },
     {
       "id": "event-driven",
@@ -160,10 +160,10 @@
       "featured": true,
       "order": 40,
       "path": "starters/architectures/event-driven/event-driven.draftcanvas",
-      "sha256": "7bfaf2a8d8be7a722e29c57f337de4a2687f1e6d4d47009e82a2a53aa2616538",
-      "bytes": 21321,
-      "formatVersion": 28,
-      "updated": "2026-11-21"
+      "sha256": "991f7f4ef6ea0e8d66c0887d6d43961515943d05df49259425f5954634fce1f9",
+      "bytes": 21217,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "hexagonal",
@@ -201,10 +201,10 @@
       "featured": false,
       "order": 50,
       "path": "starters/architectures/hexagonal/hexagonal.draftcanvas",
-      "sha256": "1960f6e44c8f38fe75a446a70c43d6b238aae425919a9e0801ee251fce013459",
-      "bytes": 19969,
-      "formatVersion": 29,
-      "updated": "2026-11-21"
+      "sha256": "956cdd09063b9d3d86c7ab2fe55de1d8a4c19c60771617a280ff0bb9b9d7aee4",
+      "bytes": 19864,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "bff",
@@ -242,10 +242,10 @@
       "featured": false,
       "order": 60,
       "path": "starters/architectures/bff/bff.draftcanvas",
-      "sha256": "3ec3a0c7f476eac767bc391a30f64151f8024dc4062a67515f8973d9a71af349",
-      "bytes": 22305,
-      "formatVersion": 29,
-      "updated": "2026-11-21"
+      "sha256": "d9418b1d4eee25918c69e57911c29fa77b76e76e8f90bc7528e57daa9bcb16bc",
+      "bytes": 22187,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "cqrs",
@@ -282,10 +282,10 @@
       "featured": false,
       "order": 70,
       "path": "starters/architectures/cqrs/cqrs.draftcanvas",
-      "sha256": "6c2ab8f1c1715777b3410a6ee58aa4a0d0fa3698c319d96fe5077727a68cdf07",
-      "bytes": 19398,
-      "formatVersion": 28,
-      "updated": "2026-11-21"
+      "sha256": "51c9d04b5f9516f63ada04ec2f63b87a567e118d3162b0fbfa5056aa15bc21ff",
+      "bytes": 19279,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "medallion",
@@ -324,10 +324,10 @@
       "featured": false,
       "order": 80,
       "path": "starters/data/medallion/medallion.draftcanvas",
-      "sha256": "c3e12e04cde3aaded7dcf87531ff2e72afa6b15ce178e7a6e8727f7422d8460d",
-      "bytes": 12934,
-      "formatVersion": 28,
-      "updated": "2026-11-21"
+      "sha256": "4304d39bb16a4fafd026ee1ac64c726132ac66031445e1da68c95888e124aa78",
+      "bytes": 12829,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "kappa",
@@ -366,10 +366,10 @@
       "featured": false,
       "order": 90,
       "path": "starters/data/kappa/kappa.draftcanvas",
-      "sha256": "9829f85c2b561f94a3b29288a8de059710bb703e029b825fbe3cbdd4891e9994",
-      "bytes": 17386,
+      "sha256": "1029f7302906378edc24ee8ab0ca547eca8acf69bf1179b0c31abeee4156ecad",
+      "bytes": 17387,
       "formatVersion": 33,
-      "updated": "2026-11-26"
+      "updated": "2026-11-25"
     },
     {
       "id": "cdc",
@@ -408,10 +408,10 @@
       "featured": false,
       "order": 100,
       "path": "starters/data/cdc/cdc.draftcanvas",
-      "sha256": "7cb11907948fa732e789218d1ff7b77ad125c62619e571e461086c685ab68ca1",
-      "bytes": 14318,
-      "formatVersion": 31,
-      "updated": "2026-11-21"
+      "sha256": "c74a9e678bfff62bd51b869d8533785a11f20a07bf79a208b5a1e3702d53c182",
+      "bytes": 14212,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "saga-orchestration",
@@ -451,10 +451,10 @@
       "featured": false,
       "order": 110,
       "path": "starters/patterns/saga-orchestration/saga-orchestration.draftcanvas",
-      "sha256": "fe2cdefca876c9a61fbb13c76747d987860e9afc45fc7f85d8da8c570b5bdc68",
+      "sha256": "6204318c045e1c2268abcbcddc18b0da448e1f146e097e2b86af47cc1fd64e89",
       "bytes": 21632,
       "formatVersion": 33,
-      "updated": "2026-11-26"
+      "updated": "2026-11-25"
     },
     {
       "id": "saga-choreography",
@@ -492,10 +492,10 @@
       "featured": false,
       "order": 120,
       "path": "starters/patterns/saga-choreography/saga-choreography.draftcanvas",
-      "sha256": "ec246c3efd1a03782fac5f777713a482c58a983ed7c45471b4a479004af2172e",
-      "bytes": 14759,
-      "formatVersion": 29,
-      "updated": "2026-11-21"
+      "sha256": "fe8ebac9ffe0d3fbb82d975479f747fc07aa67d4461fb1926f3efdf4c79b20ed",
+      "bytes": 14650,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "transactional-outbox",
@@ -534,10 +534,10 @@
       "featured": false,
       "order": 130,
       "path": "starters/patterns/transactional-outbox/transactional-outbox.draftcanvas",
-      "sha256": "79a635202bbc89281c7366ea9b30d71d4140c850ecdb3e2e61488138d09f54eb",
-      "bytes": 17508,
-      "formatVersion": 28,
-      "updated": "2026-11-21"
+      "sha256": "cc7745fd4685f2eb04247e9327850e3b11353d8f814aba2e8b29c9e78035edf4",
+      "bytes": 17400,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "video-streaming",
@@ -576,10 +576,10 @@
       "featured": true,
       "order": 100,
       "path": "starters/examples/video-streaming/video-streaming.draftcanvas",
-      "sha256": "2919e399f5df593e4000e4efe766f1a338d14eaa1676cc71e9b829afd55c4552",
-      "bytes": 48471,
-      "formatVersion": 29,
-      "updated": "2026-11-21"
+      "sha256": "712a0c2c7dc732338378f760a23d8aa97ca672dbd4e2271459b2c78032e196a5",
+      "bytes": 48677,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "music-streaming",
@@ -617,10 +617,10 @@
       "featured": true,
       "order": 110,
       "path": "starters/examples/music-streaming/music-streaming.draftcanvas",
-      "sha256": "b4fdc63ccdbcc1c00def0c3aca5c72644c9a0170b33e86562172d806db5fd74c",
-      "bytes": 46165,
+      "sha256": "aeebdba0398d1594c35a79c2d329c2299618546ea3ea7950c1045ada53c15f99",
+      "bytes": 45943,
       "formatVersion": 33,
-      "updated": "2026-11-26"
+      "updated": "2026-11-25"
     },
     {
       "id": "ride-hailing",
@@ -659,10 +659,10 @@
       "featured": false,
       "order": 120,
       "path": "starters/examples/ride-hailing/ride-hailing.draftcanvas",
-      "sha256": "b20d71f509e5903bfe41c17f7e7289dea96ce390bab069a75d2355e42ce5d5ef",
+      "sha256": "543b2ece0a671fa07cc73d9533ee1a968291ab57aeb12a5b43d6fde332a7ef60",
       "bytes": 52181,
       "formatVersion": 33,
-      "updated": "2026-11-26"
+      "updated": "2026-11-25"
     },
     {
       "id": "food-delivery",
@@ -700,10 +700,10 @@
       "featured": false,
       "order": 130,
       "path": "starters/examples/food-delivery/food-delivery.draftcanvas",
-      "sha256": "90a0606457fbbf1528a4643594e376aa627218a82012273d7eeb361c132482cc",
-      "bytes": 55668,
-      "formatVersion": 29,
-      "updated": "2026-11-21"
+      "sha256": "584790e78d9454e1e84026c6c90ca9a1baf9ef5a836a25f9ec320b4e1ca8b028",
+      "bytes": 55011,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     },
     {
       "id": "order-processing",
@@ -737,10 +737,10 @@
       "featured": false,
       "order": 140,
       "path": "starters/examples/order-processing/order-processing.draftcanvas",
-      "sha256": "a24d033188dca779e7ec261116d1eac0898aeb87f8d17eb68c84aae4f269949a",
-      "bytes": 18651,
-      "formatVersion": 28,
-      "updated": "2026-11-21"
+      "sha256": "f0bc0662ab0dc620a0942d79afa83636e06e9e0489aa2cceda22e5121fbbd58e",
+      "bytes": 18551,
+      "formatVersion": 33,
+      "updated": "2026-11-25"
     }
   ],
   "styles": [

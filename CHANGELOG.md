@@ -60,6 +60,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Connection points** — The points on a Data Store, an Artifact and every shape drawn as a
   glyph sit on the drawing at any size, and move with it when you resize. On a box made wider for
   its words they used to stand in the air beside it. <!-- highlight -->
+- **Technology logos** — A glyph's technology logo sits off its top-right corner, clear of the
+  connectors into its side. Arrowheads used to be drawn through it.
 - **Connecting to a glyph** — Dropping a connector on the middle of a glyph's side attaches it
   there. It used to jump to the corner point above.
 - **Load starters** — Loading the gallery no longer says it couldn’t reach GitHub for a moment
