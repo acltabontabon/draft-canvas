@@ -124,7 +124,12 @@ Durability:
   index or working-tree changes, whatever the folder holds (`desktop/history.ts`).
 - **Publishing is a separate, explicit action.** Copying revisions to a remote, or into a project's
   own repository, happens only when the person asks, never as a side effect of capture, and never
-  holds up capture or the working copy. Its mechanics are specified with the desktop remote feature.
+  holds up capture or the working copy. On the desktop it runs the person's own `git`, hardened as
+  [Running Git](evolution-security.md#running-git-for-remotes-and-project-repositories-desktop)
+  describes. Remote revisions come in through the same merge as alternatives (`startMerge` with
+  `remote`). Committing into a project goes to the diagram's own branch by default
+  (`src-tauri/src/history/project.rs`), and the page drives both through `desktop/remoteHistory.ts`.
+  A file changed on disk and reloaded is recorded as a revision with `initiator: external`.
 
 ### ADR-6: one content model
 
@@ -327,6 +332,8 @@ snapshot. The benchmark checks the medium workload against budgets in its header
 | `tests/evolution/service.test.ts` | End-to-end capture on a real backend, no-op after undo, a switch mid-capture, identity questions |
 | `tests/evolution/timeline.test.ts` | Session grouping, search, milestone parsing, revision framing |
 | `tests/evolution/operations.test.ts` | Restore and Bring back as one undo step, alternatives, interrupted-operation recovery, merging and fast-forward, the agent history tool |
+| `tests/desktop/remote-history.test.ts` | Remote settings kept in the history, nothing sent on connect, the first publish confirmed, milestones-only publishing, offline state |
+| `src-tauri/src/history/git_tests.rs` | The hardened Git runner against real Git: refused repository settings, hooks never run, holding-area fetch, isolated and guarded project commits, push previews |
 | `tests/evolution/merge.test.ts` | Merge units, conflict kinds, validation conflicts, one-sided changes kept (seeded) |
 | `tests/evolution/faults.test.ts` | Full storage, a ref move that failed after objects were written, racing writers, damaged revisions |
 | `e2e/history.spec.ts` | Background recording across a reload, the lens leaving the live diagram alone, compare and restore in the browser |

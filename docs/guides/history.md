@@ -39,6 +39,8 @@ history is waiting.
 Open it from the clock's details (**Open timeline**) or run **Show the timeline** from `⌘K`. It
 docks at the foot of the editor, where the status bar was, and closes with its **×** or `Esc`.
 
+![The timeline docked at the foot of the editor, its first revision shown on the canvas.](../media/guides/history-timeline.png)
+
 - **Revisions** run oldest to newest, grouped into editing sessions. A session ends after 20 minutes
   without a revision. Each session is labelled with when it ended and its net change, start to end:
   a shape added and removed again within it is not mentioned. **Earlier** loads older revisions.
@@ -103,6 +105,10 @@ is compared and how:
   it, even in another view. **Structure only** keeps what was added, removed, connected, grouped or
   linked, and hides changes that only touch text, layout, style or details.
 
+![A revision compared with now: added shapes marked +, the renamed one marked •, and the list of changes open.](../media/guides/history-compare.png)
+
+![The same comparison side by side: the revision on the left, the diagram now on the right.](../media/guides/history-side-by-side.png)
+
 When you compare a revision with now, **Bring back** beside a removed or changed element restores
 just that element from the revision, with any connectors it needs. The rest of the diagram stays as
 it is, and it is one undo step.
@@ -153,6 +159,8 @@ you are on.
   both sides moved the same shape differently, one removed what the other changed, or the combination
   would leave something broken, such as a connector to a removed shape. Click a difference to see it,
   then choose **Keep this** or **Take “X”**.
+
+![Bringing an alternative into the main architecture: one change combined, and one difference to decide, a shape both sides renamed.](../media/guides/history-alternatives.png)
 
 **Merge** is enabled once every difference is decided. It records a merge revision that keeps both
 histories, and it is one undo step. **Cancel** leaves both architectures as they were. If either
@@ -254,4 +262,55 @@ Locks) cannot keep history safe, so history is off there and the clock says so.
 
 ## Publishing and project repositories (desktop)
 
-<!-- remotes: filled in with the desktop remote feature -->
+The desktop app can use Git installed on your computer (2.38 or later) for two optional things.
+Both are in **Settings → History**, and neither runs until you press its button. Draft Canvas uses
+your own Git sign-in (your credential manager or SSH key) and never stores a password.
+
+### Publish history
+
+Publishing copies a diagram's history to a Git repository of your own, on GitHub, GitLab or any Git
+server, as a backup or to share it.
+
+1. Enter the repository's `https://` or SSH address and choose **Connect**. Connecting sends
+   nothing.
+2. Choose **Publish…**. The first publish to an address shows where it goes, which branches and how
+   many revisions, and asks you to confirm. The desktop app asks again in its own window.
+3. Choose when to publish from then on:
+   - **When I publish** (the default)
+   - **Shortly after each revision**
+   - **Only milestones**, which publishes your named milestones and every revision they need
+
+The main architecture is always published, along with the alternative you are on. Tick any other
+alternatives you want published too. Archived alternatives are never published.
+
+**Fetch** checks what the remote has without changing your diagram. If it has revisions this device
+doesn't, **Bring in remote revisions…** brings them in the same way as
+[bringing in an alternative](#bring-one-alternative-into-another). When this device has nothing
+new, it simply moves forward. Otherwise you review a merge.
+
+Publishing is never forced. If the remote has moved on, fetch and bring its revisions in first.
+**Disconnect** forgets the address and leaves whatever was published where it is.
+
+### Commit the diagram to its project
+
+When a saved diagram lives inside a Git repository, next to your code, you can commit it there.
+This commits the file as saved, not its history. Unsaved changes are not included.
+
+- **Commit to draft-canvas/…** commits to a branch of the diagram's own. Your current branch, your
+  staged changes and your working files are left exactly as they are. Merge that branch yourself, or
+  open a pull request.
+- **Commit to** your current branch commits the file there as one new commit. Anything else you
+  staged stays staged. Draft Canvas refuses, and says why, when any of these is true:
+  - HEAD is detached.
+  - A merge, rebase or similar is in progress.
+  - The diagram has staged changes of its own.
+  - The repository requires signed commits.
+  - Git would convert the file on commit.
+  - The branch moved since you looked.
+- **Push…** pushes the diagram's own branch to `origin`. It first shows every commit that would be
+  published, your own included.
+
+Draft Canvas will not run Git in a repository whose settings would run a program, such as hooks,
+filters, credential helpers or included config files. The page says which setting stopped it.
+[Canvas Evolution security](../reference/evolution-security.md#running-git-for-remotes-and-project-repositories-desktop)
+explains how Git is run.

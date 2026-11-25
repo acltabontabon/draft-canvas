@@ -263,7 +263,7 @@ function PublishPreview({ plan, busy, onCancel, onPublish }: { plan: PublishPlan
         {current
           ? ': already up to date.'
           : `: ${branches.length > 0 ? `${plural(branches.length, 'branch', 'branches')} with ${plural(outgoing, 'new revision')}` : ''}${branches.length > 0 && milestones.length > 0 ? ' and ' : ''}${milestones.length > 0 ? plural(milestones.length, 'milestone') : ''}${milestones.length > 0 && branches.length === 0 ? ', with every revision they need' : ''}.`}
-        {plan.refs.some((ref) => !ref.fastForward && !ref.upToDate) && ' The remote has revisions this device does not; fetch and bring them in first.'}
+        {plan.refs.some((ref) => !ref.fastForward && !ref.upToDate) && ' The remote has revisions this device does not: Fetch and bring them in first.'}
       </span>
       {branches.flatMap((ref) => ref.subjects.slice(0, 3)).length > 0 && (
         <ul className="dc-history-publish-subjects">
