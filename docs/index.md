@@ -42,5 +42,3 @@ first diagram.
 | Document | Covers |
 | --- | --- |
 | [Privacy and security](reference/privacy.md) | Local storage, data protection, vulnerability reporting |
-| [Canvas Evolution](reference/evolution.md) | How diagram history is built: Git backends, identity, recovery |
-| [Canvas Evolution security](reference/evolution-security.md) | Threat model for history, bundles and remotes |
