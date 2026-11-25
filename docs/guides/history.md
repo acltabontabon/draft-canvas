@@ -176,6 +176,10 @@ outside Draft Canvas, or a file saved with **Save As**), the clock asks **Contin
 
 Draft Canvas never decides this for you, and records nothing until you answer.
 
+**Duplicate** in the library makes a copy with no history. When the original has some, a note
+offers **Copy its history too**: the copy then gets its own history, holding every revision,
+alternative and milestone of the original, and the two record separately from then on.
+
 ## Agents and history
 
 On the desktop, a [connected agent](connect-an-ai-agent.md) can ask about the open diagram's history

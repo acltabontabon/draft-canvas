@@ -1042,6 +1042,19 @@ export function useDocumentSession(): DocumentSession {
         }
         const clone = cloneDocumentAsNew(source, titleWithSuffix(source.metadata.title, ' copy'));
         await repository.save(clone);
+        // A duplicate starts without history; when the original has one, it can be copied too.
+        void import('./evolution/bridge').then(async (history) => {
+          const from = { kind: 'library' as const, documentId: id };
+          if (!(await history.hasHistory(from).catch(() => false))) return;
+          notify(`“${clone.metadata.title}” starts with no history.`, 'info', {
+            label: 'Copy its history too',
+            run: () =>
+              void history
+                .duplicateHistory(from, { kind: 'library', documentId: clone.metadata.id }, { documentId: clone.metadata.id, title: clone.metadata.title })
+                .then((copied) => notify(copied ? 'History copied. The two diagrams now record separately.' : 'There was no history to copy.'))
+                .catch(() => notify('The history could not be copied.', 'error')),
+          });
+        });
       } catch (error) {
         logDiagnostic(error, { operation: 'duplicate-document', documentId: id });
         notify(storageFailureNotice('duplicate that diagram', error), 'error');

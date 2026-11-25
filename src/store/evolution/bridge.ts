@@ -10,6 +10,7 @@ import { DEFAULT_SCHEDULE, type SchedulerConfig } from '../../evolution/schedule
 import type { HistoryBackend } from '../../evolution/backend';
 import { HistoryError, type Signature } from '../../evolution/contracts';
 import { copyIdOf, type CopyKey } from '../../evolution/identity';
+import { randomId } from '../../evolution/hash';
 import { copyLock } from '../../evolution/locks';
 import { readPreference, writePreference } from '../../lib/preferences';
 import { useCollabStore } from '../collabStore';
@@ -117,6 +118,43 @@ export async function rebindHistoryCopy(from: CopyKey, to: CopyKey): Promise<voi
   await backend.putBinding({ ...binding, copyId: toId, at: Date.now() });
   await backend.deleteBinding(fromId);
   if (useEvolutionStore.getState().copyId === fromId) await attachHistory(to);
+}
+
+/**
+ * "Duplicate with history": the copy gets a history of its own — every revision, alternative and
+ * milestone of the original, copied through a standard bundle into a new repository that records
+ * where it came from (`lineage`). The two never share a branch afterwards. Returns whether the
+ * original had any history to copy.
+ */
+export async function duplicateHistory(from: CopyKey, to: CopyKey, copy: { documentId: string; title: string }): Promise<boolean> {
+  const backend = backendFactory();
+  const source = await backend.binding(copyIdOf(from));
+  if (!source) return false;
+  const store = await backend.open(source.repoId);
+  if (!store) return false;
+  const refs = [...(await store.listRefs('refs/heads')), ...(await store.listRefs('refs/tags/milestone'))];
+  const main = refs.find((entry) => entry.ref === 'refs/heads/main');
+  if (!main) return false;
+  const original = await store.meta();
+  const bytes = await backend.exportBundle(source.repoId, refs);
+  const repoId = randomId('r');
+  const imported = await backend.importBundle(bytes, {
+    repoId,
+    documentId: copy.documentId,
+    title: copy.title,
+    createdAt: Date.now(),
+    alternatives: original.alternatives,
+    lineage: { repoId: source.repoId, oid: main.oid },
+  });
+  const created = await backend.open(imported.repoId);
+  if (created) await created.writeMeta({ ...(await created.meta()), documentId: copy.documentId, title: copy.title, alternatives: original.alternatives, lineage: { repoId: source.repoId, oid: main.oid } });
+  await backend.putBinding({ copyId: copyIdOf(to), repoId: imported.repoId, altId: source.altId, documentId: copy.documentId, lastSeen: null, at: Date.now() });
+  return true;
+}
+
+/** Whether a working copy has history on this device. */
+export async function hasHistory(key: CopyKey): Promise<boolean> {
+  return (await backendFactory().binding(copyIdOf(key))) !== undefined;
 }
 
 /** Collaboration reports who contributed to what will be captured (`collabBridge.ts`). */

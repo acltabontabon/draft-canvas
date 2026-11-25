@@ -6,7 +6,8 @@ import { blobId } from '../../src/evolution/hash';
 import { operationRecord } from '../../src/evolution/journal';
 import { branchOf, MAIN_REF } from '../../src/evolution/refs';
 import { parseMessage } from '../../src/evolution/trailers';
-import { attachHistory, detachHistory, historyService } from '../../src/store/evolution/bridge';
+import { attachHistory, detachHistory, duplicateHistory, hasHistory, historyService } from '../../src/store/evolution/bridge';
+import { cloneDocumentAsNew } from '../../src/document/factory';
 import { useEvolutionStore } from '../../src/store/evolution/evolutionStore';
 import { createAlternative, recoverOperations, restoreElements, restoreRevision, switchAlternative } from '../../src/store/evolution/operations';
 import { fileOf, useEditorStore } from '../../src/store/editorStore';
@@ -247,5 +248,37 @@ describe('the agent history tool', { timeout: 60_000 }, () => {
     await historyTool({ diagramId: doc.metadata.id, action: 'suggest_milestone', name: 'Reviewed' });
     expect(useEvolutionStore.getState().milestoneSuggestion).toMatchObject({ name: 'Reviewed' });
     expect(await historyService().store!.listTags('refs/tags/milestone')).toEqual([]);
+  });
+});
+
+describe('duplicating with history', { timeout: 30_000 }, () => {
+  it('gives the copy a history of its own that records where it came from', async () => {
+    const doc = await start();
+    await edit((file) => addNodes(file, [createNode({ type: 'database', x: 0, y: 200, id: 'n_db', text: 'PostgreSQL' })]));
+    const tip = await tipOf();
+    const sourceRepo = historyService().store!.repoId;
+    const clone = cloneDocumentAsNew(fileOf(useEditorStore.getState()), 'Ops copy');
+    const from = { kind: 'library' as const, documentId: doc.metadata.id };
+    const to = { kind: 'library' as const, documentId: clone.metadata.id };
+    expect(await hasHistory(to)).toBe(false);
+    expect(await duplicateHistory(from, to, { documentId: clone.metadata.id, title: 'Ops copy' })).toBe(true);
+    await detachHistory();
+
+    useEditorStore.getState().setDocument(clone);
+    await attachHistory(to);
+    const store = historyService().store!;
+    expect(store.repoId).not.toBe(sourceRepo);
+    expect(await store.readRef(MAIN_REF)).toBe(tip);
+    expect((await store.log({ from: [tip], limit: 10 })).length).toBe(2);
+    expect(await store.meta()).toMatchObject({ documentId: clone.metadata.id, title: 'Ops copy', lineage: { repoId: sourceRepo, oid: tip } });
+
+    // The two now record separately.
+    await edit((file) => updateNode(file, 'n_api', { text: 'Edge' }));
+    expect(await store.readRef(MAIN_REF)).not.toBe(tip);
+  });
+
+  it('copies nothing when the original has no history', async () => {
+    const from = { kind: 'library' as const, documentId: 'never-recorded' };
+    expect(await duplicateHistory(from, { kind: 'library', documentId: 'other' }, { documentId: 'other', title: 'x' })).toBe(false);
   });
 });
