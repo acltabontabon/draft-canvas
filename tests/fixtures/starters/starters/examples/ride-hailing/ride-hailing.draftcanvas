@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 33,
+  "version": 34,
   "metadata": {
     "id": "starter-ride-hailing",
     "title": "Ride-hailing platform",
@@ -1021,6 +1021,31 @@
       "databaseKind": "table"
     },
     {
+      "id": "j.offer.out",
+      "type": "ellipse",
+      "x": 482,
+      "y": 1152,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "offer"
+    },
+    {
+      "id": "j.offer.in",
+      "type": "ellipse",
+      "x": 312,
+      "y": 532,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "apps",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "offer"
+    },
+    {
       "id": "surge-card",
       "type": "text",
       "x": 1835,
@@ -1396,8 +1421,6 @@
       "directed": true,
       "routing": "smoothstep",
       "semantic": "grpc",
-      "response": "matched",
-      "hasResponse": true,
       "sourceAnchor": {
         "side": "right",
         "offset": 0.16
@@ -1458,15 +1481,13 @@
       "directed": true,
       "routing": "smoothstep",
       "semantic": "grpc",
-      "response": "held",
-      "hasResponse": true,
       "sourceAnchor": {
         "side": "right",
         "offset": 0.58
       },
       "targetAnchor": {
         "side": "top",
-        "offset": 0.8
+        "offset": 0.65
       },
       "semanticsOrigin": "explicit"
     },
@@ -1489,7 +1510,7 @@
       },
       "targetAnchor": {
         "side": "top",
-        "offset": 0.375
+        "offset": 0.3
       },
       "semanticsOrigin": "explicit",
       "attachments": [
@@ -1565,13 +1586,33 @@
     {
       "id": "offer",
       "source": "fcm",
-      "target": "driver-app",
+      "target": "j.offer.out",
       "label": "Ride offer",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "calls",
-      "portal": true,
-      "semanticsOrigin": "inferred"
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "offer.in",
+      "source": "j.offer.in",
+      "target": "driver-app",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      }
     },
     {
       "id": "land",
@@ -1684,6 +1725,11 @@
           "id": "f.request.s13",
           "edgeId": "offer",
           "caption": "The driver has 15 seconds to accept."
+        },
+        {
+          "id": "f.request.s14",
+          "edgeId": "offer.in",
+          "caption": "The offer appears in the driver's app."
         }
       ],
       "accent": "teal"

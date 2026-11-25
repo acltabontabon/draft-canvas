@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 33,
+  "version": 34,
   "metadata": {
     "id": "starter-music-streaming",
     "title": "Music streaming service",
@@ -24,9 +24,9 @@
       "id": "cloud",
       "type": "group",
       "x": 616,
-      "y": 41,
+      "y": -18,
       "width": 1826,
-      "height": 1475,
+      "height": 1534,
       "z": -2,
       "text": "Earshot cloud",
       "textOrigin": "explicit",
@@ -49,9 +49,9 @@
       "id": "library",
       "type": "group",
       "x": 1008,
-      "y": 121,
-      "width": 664,
-      "height": 463,
+      "y": 62,
+      "width": 672,
+      "height": 522,
       "z": -1,
       "parentId": "cloud",
       "text": "Library",
@@ -64,7 +64,7 @@
       "type": "group",
       "x": 1008,
       "y": 679,
-      "width": 664,
+      "width": 672,
       "height": 274,
       "z": -1,
       "parentId": "cloud",
@@ -78,7 +78,7 @@
       "type": "group",
       "x": 1008,
       "y": 1051,
-      "width": 664,
+      "width": 672,
       "height": 254,
       "z": -1,
       "parentId": "cloud",
@@ -90,10 +90,10 @@
     {
       "id": "insights",
       "type": "group",
-      "x": 1738,
-      "y": 121,
+      "x": 1746,
+      "y": 62,
       "width": 692,
-      "height": 1162,
+      "height": 1230,
       "z": -1,
       "parentId": "cloud",
       "text": "Insights & royalties",
@@ -201,10 +201,10 @@
     {
       "id": "playlists",
       "type": "service",
-      "x": 1090,
-      "y": 212,
-      "width": 180,
-      "height": 157,
+      "x": 1040,
+      "y": 219,
+      "width": 280,
+      "height": 142,
       "z": 0,
       "parentId": "library",
       "text": "Playlists",
@@ -977,6 +977,58 @@
       }
     },
     {
+      "id": "j.publish.out",
+      "type": "ellipse",
+      "x": 992,
+      "y": 1392,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "cloud",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "publish"
+    },
+    {
+      "id": "j.publish.in",
+      "type": "ellipse",
+      "x": 1612,
+      "y": 431,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "library",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "publish"
+    },
+    {
+      "id": "j.mix.out",
+      "type": "ellipse",
+      "x": 2042,
+      "y": 240,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "insights",
+      "text": "B",
+      "textOrigin": "explicit",
+      "link": "mix"
+    },
+    {
+      "id": "j.mix.in",
+      "type": "ellipse",
+      "x": 1162,
+      "y": 142,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "library",
+      "text": "B",
+      "textOrigin": "explicit",
+      "link": "mix"
+    },
+    {
       "id": "counts",
       "type": "text",
       "x": 1895,
@@ -1008,7 +1060,7 @@
       "id": "title",
       "type": "text",
       "x": 0,
-      "y": -117,
+      "y": -176,
       "width": 1100,
       "height": 110,
       "z": 0,
@@ -1419,17 +1471,33 @@
     {
       "id": "mix",
       "source": "weekly",
-      "target": "playlists",
+      "target": "j.mix.out",
       "label": "Weekly mixes",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "triggers",
-      "portal": true,
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "mix.in",
+      "source": "j.mix.in",
+      "target": "playlists",
+      "directed": true,
+      "routing": "smoothstep",
       "sourceAnchor": {
         "side": "bottom",
-        "offset": 0.2
+        "offset": 0.5
       },
-      "semanticsOrigin": "inferred"
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
     },
     {
       "id": "count",
@@ -1498,17 +1566,33 @@
     {
       "id": "publish",
       "source": "ingestion",
-      "target": "index",
+      "target": "j.publish.out",
       "label": "New tracks",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "indexes",
-      "portal": true,
-      "targetAnchor": {
+      "sourceAnchor": {
         "side": "right",
         "offset": 0.5
       },
-      "semanticsOrigin": "explicit"
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "publish.in",
+      "source": "j.publish.in",
+      "target": "index",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      }
     }
   ],
   "viewport": {
@@ -1661,6 +1745,11 @@
           "id": "f.weekly.s2",
           "edgeId": "mix",
           "caption": "600M personal playlists are written before Monday morning."
+        },
+        {
+          "id": "f.weekly.s3",
+          "edgeId": "mix.in",
+          "caption": "Playlists stores each listener's new mix."
         }
       ],
       "accent": "green"
@@ -1710,6 +1799,11 @@
           "id": "f.release.s4",
           "edgeId": "publish",
           "caption": "On release day the tracks become searchable."
+        },
+        {
+          "id": "f.release.s5",
+          "edgeId": "publish.in",
+          "caption": "The Track Index takes the new tracks."
         }
       ],
       "accent": "violet"

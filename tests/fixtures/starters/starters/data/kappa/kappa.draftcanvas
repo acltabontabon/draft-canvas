@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 33,
+  "version": 34,
   "metadata": {
     "id": "starter-kappa",
     "title": "Kappa",
@@ -60,7 +60,7 @@
       "description": "Authorizes card payments for merchants.",
       "technology": "Go",
       "textOrigin": "explicit",
-      "serviceKind": "api"
+      "serviceKind": "gateway"
     },
     {
       "id": "network",
@@ -417,6 +417,31 @@
       "serviceKind": "api"
     },
     {
+      "id": "j.score.out",
+      "type": "ellipse",
+      "x": 2,
+      "y": 252,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "score"
+    },
+    {
+      "id": "j.score.in",
+      "type": "ellipse",
+      "x": 1582,
+      "y": 282,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "fraud",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "score"
+    },
+    {
       "id": "title",
       "type": "text",
       "x": -100,
@@ -566,23 +591,17 @@
     {
       "id": "score",
       "source": "gateway",
-      "target": "api",
+      "target": "j.score.out",
       "label": "GET /risk/{card}",
       "directed": true,
-      "routing": "smoothstep",
-      "semantic": "http",
-      "portal": true,
-      "response": "0.82",
-      "hasResponse": true,
-      "sourceAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "targetAnchor": {
-        "side": "top",
-        "offset": 0.5
-      },
-      "semanticsOrigin": "explicit"
+      "routing": "smoothstep"
+    },
+    {
+      "id": "score.in",
+      "source": "j.score.in",
+      "target": "api",
+      "directed": true,
+      "routing": "smoothstep"
     }
   ],
   "viewport": {
@@ -606,21 +625,26 @@
         },
         {
           "id": "score-payment.s2",
+          "edgeId": "score.in",
+          "caption": "The Risk API answers from the live view."
+        },
+        {
+          "id": "score-payment.s3",
           "edgeId": "serve",
           "caption": "The Risk API reads the card's latest score from risk_v7."
         },
         {
-          "id": "score-payment.s3",
+          "id": "score-payment.s4",
           "edgeId": "publish",
           "caption": "The authorization is appended to the log, whatever the decision."
         },
         {
-          "id": "score-payment.s4",
+          "id": "score-payment.s5",
           "edgeId": "consume-live",
           "caption": "The live job reads it within a second, in order per card."
         },
         {
-          "id": "score-payment.s5",
+          "id": "score-payment.s6",
           "edgeId": "write-live",
           "caption": "The card's new score replaces the old one in the view."
         }

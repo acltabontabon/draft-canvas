@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 33,
+  "version": 34,
   "metadata": {
     "id": "starter-transactional-outbox",
     "title": "Transactional Outbox",
@@ -24,7 +24,7 @@
       "id": "holder",
       "type": "actor",
       "x": -140,
-      "y": 232,
+      "y": 265,
       "width": 120,
       "height": 152,
       "z": 0,
@@ -38,7 +38,7 @@
       "id": "api",
       "type": "service",
       "x": 120,
-      "y": 230,
+      "y": 263,
       "width": 200,
       "height": 157,
       "z": 0,

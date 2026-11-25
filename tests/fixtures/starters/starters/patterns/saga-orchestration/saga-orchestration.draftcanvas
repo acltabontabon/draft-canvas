@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 33,
+  "version": 34,
   "metadata": {
     "id": "starter-saga-orchestration",
     "title": "Saga – Orchestration",
@@ -620,7 +620,7 @@
       "compensationProtocol": "http",
       "sourceAnchor": {
         "side": "right",
-        "offset": 0.68
+        "offset": 0.5789
       },
       "targetAnchor": {
         "side": "left",
@@ -652,7 +652,7 @@
       "compensationProtocol": "http",
       "sourceAnchor": {
         "side": "left",
-        "offset": 0.68
+        "offset": 0.5789
       },
       "targetAnchor": {
         "side": "right",

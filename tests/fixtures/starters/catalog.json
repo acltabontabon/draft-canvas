@@ -37,9 +37,9 @@
       "featured": true,
       "order": 10,
       "path": "starters/architectures/monolith/monolith.draftcanvas",
-      "sha256": "7ddba5057035fc3808e2851e69d59937ff1ec98800eddc8e4e64cfb75cb3855a",
+      "sha256": "a6d7e864e042a2874081e45b70e7f9ac42c9b587dbc12e5283888f5d61751968",
       "bytes": 16087,
-      "formatVersion": 33,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -76,9 +76,9 @@
       "featured": false,
       "order": 20,
       "path": "starters/architectures/modular-monolith/modular-monolith.draftcanvas",
-      "sha256": "d93aa4fc6eaaa5dc94f5988037a3d9d8fc3b7392f73e161d5bd64cef113b6c53",
+      "sha256": "239f0daa101806013fa2fbf6130c0f5ca0b505c9f1411277a9748c3337979d49",
       "bytes": 17306,
-      "formatVersion": 33,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -115,9 +115,9 @@
       "featured": true,
       "order": 30,
       "path": "starters/architectures/microservices/microservices.draftcanvas",
-      "sha256": "05971e630284e3fabae1c81c1ae9653ce6b5f73f055067cb0efc4e995a957aac",
+      "sha256": "98e78f366be277a3b5e98fe9bb3d43747070dcaba9afee0e8a5000c89f20ece0",
       "bytes": 22302,
-      "formatVersion": 33,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -160,9 +160,9 @@
       "featured": true,
       "order": 40,
       "path": "starters/architectures/event-driven/event-driven.draftcanvas",
-      "sha256": "e1e743b1a668ebcc1a19ad2db37cccdd78a01b50589f7cf7a0cb4bc75d855ee2",
+      "sha256": "298d71ee5e9618964f6626c68f6e2a8e2a6e5e1053b48fb84b115061882b914f",
       "bytes": 21215,
-      "formatVersion": 33,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -201,9 +201,9 @@
       "featured": false,
       "order": 50,
       "path": "starters/architectures/hexagonal/hexagonal.draftcanvas",
-      "sha256": "e9db3b7ac657fdc7eff8da6c96c0e7cc5a6b0868c3d5045d582975b5aa7dfcd9",
+      "sha256": "5008ae3d4ce9504a8093839ac4944d216bee76e24abfbc7576d94a7f1b8c631d",
       "bytes": 20175,
-      "formatVersion": 33,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -242,9 +242,9 @@
       "featured": false,
       "order": 60,
       "path": "starters/architectures/bff/bff.draftcanvas",
-      "sha256": "929f6544a00c36c446cdaf24d4a23cc7e354323b9111331c18f9155640255614",
-      "bytes": 22501,
-      "formatVersion": 33,
+      "sha256": "813f69cfe2a090aa668ca88d860cdb2784ff092a1c36a9a7e7f9c0bddda8187c",
+      "bytes": 23657,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -282,9 +282,9 @@
       "featured": false,
       "order": 70,
       "path": "starters/architectures/cqrs/cqrs.draftcanvas",
-      "sha256": "967322b4f1d7864a14a7cd6b47ccac21557e67c26881e1b6be096c129c77e857",
+      "sha256": "506c300d738543df7c0ac89f117b9c4800e492a5ea7cc32713c9e99e67b63b64",
       "bytes": 19284,
-      "formatVersion": 33,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -324,9 +324,9 @@
       "featured": false,
       "order": 80,
       "path": "starters/data/medallion/medallion.draftcanvas",
-      "sha256": "48fb9d18389948492d3f52206215ea90b51267242172c49de132491118aeea72",
+      "sha256": "f6ee8ba76cf36dfa08f23d8c16e4802573e61b8746e98a1103904dee07210330",
       "bytes": 12836,
-      "formatVersion": 33,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -366,9 +366,9 @@
       "featured": false,
       "order": 90,
       "path": "starters/data/kappa/kappa.draftcanvas",
-      "sha256": "68a328b2d9a249bf5b4ff0cd2c026cae3d2e88a86d6da7e0a839c13c92e5244c",
-      "bytes": 17700,
-      "formatVersion": 33,
+      "sha256": "29e1a7ebe97728a983e780f2bb075484fe21dc0b2264d2be7c200d14b4bd8461",
+      "bytes": 18186,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -408,9 +408,9 @@
       "featured": false,
       "order": 100,
       "path": "starters/data/cdc/cdc.draftcanvas",
-      "sha256": "c74a9e678bfff62bd51b869d8533785a11f20a07bf79a208b5a1e3702d53c182",
+      "sha256": "28ad1a2aed74c43c703c2ef12f16cb32d50729cd61cd194adb7d71d882322744",
       "bytes": 14212,
-      "formatVersion": 33,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -451,9 +451,9 @@
       "featured": false,
       "order": 110,
       "path": "starters/patterns/saga-orchestration/saga-orchestration.draftcanvas",
-      "sha256": "6204318c045e1c2268abcbcddc18b0da448e1f146e097e2b86af47cc1fd64e89",
-      "bytes": 21632,
-      "formatVersion": 33,
+      "sha256": "f17fac8582e8b993347d03134de3cca406033c996e7a3a54b095d2e45fcdbdcf",
+      "bytes": 21636,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -492,9 +492,9 @@
       "featured": false,
       "order": 120,
       "path": "starters/patterns/saga-choreography/saga-choreography.draftcanvas",
-      "sha256": "fe8ebac9ffe0d3fbb82d975479f747fc07aa67d4461fb1926f3efdf4c79b20ed",
-      "bytes": 14650,
-      "formatVersion": 33,
+      "sha256": "c49ff7038aa481efb6b62f220cdb3115d8c036512dc0523ab7cfb913bd9e60db",
+      "bytes": 15382,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -534,9 +534,9 @@
       "featured": false,
       "order": 130,
       "path": "starters/patterns/transactional-outbox/transactional-outbox.draftcanvas",
-      "sha256": "3e45e16c52c16fa6d9fdb0d11e062a3b7405279b6a555b82971ae2dc316ece19",
+      "sha256": "c59100dfd5b4597439f52114d26d095c46953f64740df4b6ecebf24e40037efc",
       "bytes": 17402,
-      "formatVersion": 33,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -576,9 +576,9 @@
       "featured": true,
       "order": 100,
       "path": "starters/examples/video-streaming/video-streaming.draftcanvas",
-      "sha256": "e20296ce151127f9b58eebb99b7fa28c552743603c0d0af0407198d9dbbbc3a2",
-      "bytes": 48912,
-      "formatVersion": 33,
+      "sha256": "29e7fda1a99966ac7abeea54d839a7ce76ff732376f1a5f6c3f728fb9df6bf64",
+      "bytes": 51927,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -617,9 +617,9 @@
       "featured": true,
       "order": 110,
       "path": "starters/examples/music-streaming/music-streaming.draftcanvas",
-      "sha256": "eac1a53a0cac41ca7d0ca12f5b7b7d2ded3a18ca81c9755d3d09ca836a12809f",
-      "bytes": 46164,
-      "formatVersion": 33,
+      "sha256": "a9f67c06307a85a7c9b0351a54dd6738c91ddb853e7329bb6695927c3ac76878",
+      "bytes": 48069,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -659,9 +659,9 @@
       "featured": false,
       "order": 120,
       "path": "starters/examples/ride-hailing/ride-hailing.draftcanvas",
-      "sha256": "c12563b9eae4fcd61095e925fb4fab51a386133957be5f9b96f356bbe6f09c52",
-      "bytes": 52182,
-      "formatVersion": 33,
+      "sha256": "757e51bffbd6ce39b54f09686c54b8d8a0a88337beb9df1a5ab2a036d50c9a12",
+      "bytes": 53076,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -700,9 +700,9 @@
       "featured": false,
       "order": 130,
       "path": "starters/examples/food-delivery/food-delivery.draftcanvas",
-      "sha256": "bf6e8968ccb8571b8a0aa8e64729b80f8f5ac2e5abd7aa50046d9a508caf27f2",
-      "bytes": 55400,
-      "formatVersion": 33,
+      "sha256": "e7ef2161203bf2deacf78febdb47b73d22a85358afafd2e712e8bf4e2361e48e",
+      "bytes": 59239,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     },
     {
@@ -737,9 +737,9 @@
       "featured": false,
       "order": 140,
       "path": "starters/examples/order-processing/order-processing.draftcanvas",
-      "sha256": "f0bc0662ab0dc620a0942d79afa83636e06e9e0489aa2cceda22e5121fbbd58e",
+      "sha256": "4e8f165d6079c35b0ba5c965335c7a711fca6636bae1019da9bcdc82252bd1ef",
       "bytes": 18551,
-      "formatVersion": 33,
+      "formatVersion": 34,
       "updated": "2026-11-25"
     }
   ],

@@ -30,8 +30,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
   presenting, and `⌘K` finds each place by name. Agents connected over MCP can create, link and
   rename them too, and the Draft Canvas skill uses them for lines that would cross the whole map.
   <!-- highlight -->
-- **File format 33** — Junctions keep their link (`link`). Diagrams saved by this version do not
-  open in older versions. Junctions that only share a label are not linked for you.
+- **File format 34** — Junctions keep their link (`link`), and an API and an External system are
+  saved as they are now drawn. Diagrams saved by this version do not open in older versions.
+  Junctions that only share a label are not linked for you.
 
 #### Changed
 

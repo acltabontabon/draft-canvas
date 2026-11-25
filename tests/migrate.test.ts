@@ -527,7 +527,7 @@ describe('v10 to v11 migration: BFF Service kind removal', () => {
       text: 'Web BFF',
       accent: 'teal',
     });
-    // An API has since become a glyph (v33): the card grew to hold one, around the same middle.
+    // An API has since become a glyph (v34): the card grew to hold one, around the same middle.
     const api = result.document.nodes[0]!;
     expect(api).toMatchObject({ width: 120, height: 114 });
     expect(api.x + api.width / 2).toBe(80);
@@ -1020,7 +1020,7 @@ describe('v30 to v31 migration: Module, Adapter and Port become glyphs', () => {
   });
 });
 
-describe('v32 to v33 migration: an External system is a card again, and glyph pins stay put', () => {
+describe('v33 to v34 migration: an External system is a card again, and glyph pins stay put', () => {
   const v32 = (nodes: unknown[], edges: unknown[] = []) => ({
     format: DRAFT_FORMAT,
     version: 32,

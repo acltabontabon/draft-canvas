@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 33,
+  "version": 34,
   "metadata": {
     "id": "starter-saga-choreography",
     "title": "Saga – Choreography",
@@ -205,6 +205,30 @@
       "technology": "FastAPI",
       "textOrigin": "explicit",
       "serviceKind": "generic"
+    },
+    {
+      "id": "j.to-cancel.out",
+      "type": "ellipse",
+      "x": 847,
+      "y": 436,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "to-cancel"
+    },
+    {
+      "id": "j.to-cancel.in",
+      "type": "ellipse",
+      "x": 347,
+      "y": 382,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "to-cancel"
     },
     {
       "id": "title",
@@ -461,22 +485,27 @@
     {
       "id": "to-cancel",
       "source": "payments-events",
-      "target": "order",
+      "target": "j.to-cancel.out",
       "label": "PaymentRefunded",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "deliversTo",
-      "portal": true,
       "kind": "failure",
+      "semanticsOrigin": "explicit"
+    },
+    {
+      "id": "to-cancel.in",
+      "source": "j.to-cancel.in",
+      "target": "order",
+      "directed": true,
+      "routing": "smoothstep",
       "sourceAnchor": {
-        "side": "left",
+        "side": "top",
         "offset": 0.5
       },
       "targetAnchor": {
         "side": "bottom",
         "offset": 0.85
-      },
-      "semanticsOrigin": "explicit"
+      }
     }
   ],
   "viewport": {
@@ -579,6 +608,11 @@
           "id": "rejected.s4",
           "edgeId": "to-cancel",
           "caption": "Order Service reacts: the order is CANCELLED and the customer told."
+        },
+        {
+          "id": "rejected.s5",
+          "edgeId": "to-cancel.in",
+          "caption": "Order Service hears that the payment was refunded."
         }
       ],
       "accent": "rose",

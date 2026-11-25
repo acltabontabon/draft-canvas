@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 33,
+  "version": 34,
   "metadata": {
     "id": "starter-bff",
     "title": "Backend for Frontend",
@@ -12,7 +12,7 @@
       "id": "web-team",
       "type": "group",
       "x": 420,
-      "y": 54,
+      "y": -6,
       "width": 652,
       "height": 249,
       "z": -1,
@@ -24,9 +24,9 @@
       "id": "mobile-team",
       "type": "group",
       "x": 420,
-      "y": 334,
+      "y": 280,
       "width": 652,
-      "height": 249,
+      "height": 353,
       "z": -1,
       "text": "Mobile experience",
       "textOrigin": "explicit",
@@ -47,7 +47,7 @@
       "id": "tv-team",
       "type": "group",
       "x": 420,
-      "y": 614,
+      "y": 724,
       "width": 652,
       "height": 249,
       "z": -1,
@@ -59,9 +59,9 @@
       "id": "platform",
       "type": "group",
       "x": 1288,
-      "y": 57,
+      "y": -3,
       "width": 344,
-      "height": 790,
+      "height": 960,
       "z": -1,
       "text": "Streaming platform",
       "textOrigin": "explicit",
@@ -82,7 +82,7 @@
       "id": "viewer",
       "type": "actor",
       "x": 0,
-      "y": 421,
+      "y": 439,
       "width": 140,
       "height": 118,
       "z": 0,
@@ -96,7 +96,7 @@
       "id": "web",
       "type": "service",
       "x": 452,
-      "y": 126,
+      "y": 66,
       "width": 176,
       "height": 83,
       "z": 0,
@@ -111,7 +111,7 @@
       "id": "mobile",
       "type": "service",
       "x": 452,
-      "y": 406,
+      "y": 456,
       "width": 176,
       "height": 83,
       "z": 0,
@@ -126,7 +126,7 @@
       "id": "tv",
       "type": "service",
       "x": 452,
-      "y": 686,
+      "y": 796,
       "width": 176,
       "height": 83,
       "z": 0,
@@ -141,7 +141,7 @@
       "id": "web-bff",
       "type": "service",
       "x": 770,
-      "y": 129,
+      "y": 69,
       "width": 260,
       "height": 142,
       "z": 0,
@@ -157,7 +157,7 @@
       "id": "mobile-bff",
       "type": "service",
       "x": 760,
-      "y": 409,
+      "y": 459,
       "width": 280,
       "height": 142,
       "z": 0,
@@ -422,7 +422,7 @@
       "id": "tv-bff",
       "type": "service",
       "x": 760,
-      "y": 689,
+      "y": 799,
       "width": 280,
       "height": 142,
       "z": 0,
@@ -447,7 +447,7 @@
       "id": "profiles",
       "type": "service",
       "x": 1320,
-      "y": 129,
+      "y": 69,
       "width": 280,
       "height": 142,
       "z": 0,
@@ -462,7 +462,7 @@
       "id": "catalog",
       "type": "service",
       "x": 1320,
-      "y": 409,
+      "y": 459,
       "width": 280,
       "height": 142,
       "z": 0,
@@ -478,7 +478,7 @@
       "id": "playback",
       "type": "service",
       "x": 1320,
-      "y": 689,
+      "y": 799,
       "width": 280,
       "height": 126,
       "z": 0,
@@ -490,10 +490,36 @@
       "serviceKind": "api"
     },
     {
+      "id": "j.mobile-profiles.out",
+      "type": "ellipse",
+      "x": 882,
+      "y": 352,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "mobile-team",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "mobile-profiles"
+    },
+    {
+      "id": "j.mobile-profiles.in",
+      "type": "ellipse",
+      "x": 1442,
+      "y": 312,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "platform",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "mobile-profiles"
+    },
+    {
       "id": "title",
       "type": "text",
       "x": 0,
-      "y": -112,
+      "y": -172,
       "width": 1100,
       "height": 110,
       "z": 0,
@@ -640,11 +666,11 @@
       "waypoints": [
         {
           "x": 1240,
-          "y": 181.46
+          "y": 121.46000000000001
         },
         {
           "x": 1240,
-          "y": 436.98
+          "y": 486.98
         }
       ],
       "semanticsOrigin": "explicit"
@@ -652,12 +678,10 @@
     {
       "id": "mobile-profiles",
       "source": "mobile-bff",
-      "target": "profiles",
+      "target": "j.mobile-profiles.out",
       "label": "Watch history",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "http",
-      "portal": true,
       "sourceAnchor": {
         "side": "top",
         "offset": 0.5
@@ -666,7 +690,6 @@
         "side": "bottom",
         "offset": 0.5
       },
-      "semanticsOrigin": "explicit",
       "attachments": [
         {
           "id": "n.timeout",
@@ -677,6 +700,21 @@
           "height": 158.25
         }
       ]
+    },
+    {
+      "id": "mobile-profiles.in",
+      "source": "j.mobile-profiles.in",
+      "target": "profiles",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "top",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      }
     },
     {
       "id": "mobile-catalog",
@@ -715,11 +753,11 @@
       "waypoints": [
         {
           "x": 1240,
-          "y": 714.26
+          "y": 824.26
         },
         {
           "x": 1240,
-          "y": 458.74
+          "y": 508.74
         }
       ],
       "semanticsOrigin": "explicit"
@@ -776,6 +814,11 @@
         },
         {
           "id": "mobile-home.s4",
+          "edgeId": "mobile-profiles.in",
+          "caption": "Profiles returns the watch history, or times out."
+        },
+        {
+          "id": "mobile-home.s5",
           "edgeId": "mobile-catalog",
           "caption": "Titles come in one batch; only the fields the screen shows go back."
         }
@@ -855,6 +898,11 @@
         },
         {
           "id": "profiles-down.s3",
+          "edgeId": "mobile-profiles.in",
+          "caption": "Profiles returns the watch history, or times out."
+        },
+        {
+          "id": "profiles-down.s4",
           "edgeId": "mobile-catalog",
           "caption": "The screen ships without 'Continue watching' instead of failing whole."
         }

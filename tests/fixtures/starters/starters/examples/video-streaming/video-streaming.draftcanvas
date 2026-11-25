@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 33,
+  "version": 34,
   "metadata": {
     "id": "starter-video-streaming",
     "title": "Video streaming platform",
@@ -24,9 +24,9 @@
       "id": "cloud",
       "type": "group",
       "x": 636,
-      "y": -93,
-      "width": 1788,
-      "height": 1127,
+      "y": -167,
+      "width": 1791,
+      "height": 1201,
       "z": -2,
       "text": "Reelwave cloud",
       "textOrigin": "explicit",
@@ -49,9 +49,9 @@
       "id": "discovery",
       "type": "group",
       "x": 1368,
-      "y": -41,
-      "width": 1024,
-      "height": 503,
+      "y": -115,
+      "width": 1027,
+      "height": 577,
       "z": -1,
       "parentId": "cloud",
       "text": "Discovery",
@@ -78,7 +78,7 @@
       "type": "group",
       "x": 1368,
       "y": 492,
-      "width": 1024,
+      "width": 1027,
       "height": 510,
       "z": -1,
       "parentId": "cloud",
@@ -998,10 +998,87 @@
       ]
     },
     {
+      "id": "j.resume.out",
+      "type": "ellipse",
+      "x": 1687,
+      "y": 150,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "discovery",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "resume"
+    },
+    {
+      "id": "j.resume.in",
+      "type": "ellipse",
+      "x": 2327,
+      "y": 573,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "data",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "resume"
+    },
+    {
+      "id": "j.launch.out",
+      "type": "ellipse",
+      "x": 312,
+      "y": 1302,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "text": "B",
+      "textOrigin": "explicit",
+      "link": "launch"
+    },
+    {
+      "id": "j.launch.in",
+      "type": "ellipse",
+      "x": 1892,
+      "y": 198,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "discovery",
+      "text": "B",
+      "textOrigin": "explicit",
+      "link": "launch"
+    },
+    {
+      "id": "j.publish-model.out",
+      "type": "ellipse",
+      "x": 2082,
+      "y": 830,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "data",
+      "text": "C",
+      "textOrigin": "explicit",
+      "link": "publish-model"
+    },
+    {
+      "id": "j.publish-model.in",
+      "type": "ellipse",
+      "x": 2232,
+      "y": -63,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "discovery",
+      "text": "C",
+      "textOrigin": "explicit",
+      "link": "publish-model"
+    },
+    {
       "id": "slo",
       "type": "text",
       "x": 640,
-      "y": -41,
+      "y": -115,
       "width": 330,
       "height": 172,
       "z": 0,
@@ -1028,7 +1105,7 @@
       "id": "title",
       "type": "text",
       "x": -97,
-      "y": -251,
+      "y": -325,
       "width": 1000,
       "height": 110,
       "z": 0,
@@ -1039,7 +1116,7 @@
     {
       "id": "seq-play",
       "type": "sequence",
-      "x": 1449,
+      "x": 1452,
       "y": 1114,
       "width": 975,
       "height": 840,
@@ -1319,8 +1396,6 @@
       "directed": true,
       "routing": "smoothstep",
       "semantic": "grpc",
-      "response": "rows",
-      "hasResponse": true,
       "sourceAnchor": {
         "side": "top",
         "offset": 0.75
@@ -1345,7 +1420,6 @@
       "directed": true,
       "routing": "smoothstep",
       "semantic": "grpc",
-      "hasResponse": true,
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.75
@@ -1364,13 +1438,33 @@
     {
       "id": "resume",
       "source": "graph",
-      "target": "history",
+      "target": "j.resume.out",
       "label": "Continue Watching",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "reads",
-      "portal": true,
-      "semanticsOrigin": "explicit"
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "resume.in",
+      "source": "j.resume.in",
+      "target": "history",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      }
     },
     {
       "id": "licence",
@@ -1458,13 +1552,33 @@
     {
       "id": "publish-model",
       "source": "training",
-      "target": "features",
+      "target": "j.publish-model.out",
       "label": "New features",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "writes",
-      "portal": true,
-      "semanticsOrigin": "explicit"
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "publish-model.in",
+      "source": "j.publish-model.in",
+      "target": "features",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
     },
     {
       "id": "segments",
@@ -1535,17 +1649,33 @@
     {
       "id": "launch",
       "source": "pipeline",
-      "target": "catalog",
+      "target": "j.launch.out",
       "label": "Title ready",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "http",
-      "portal": true,
       "sourceAnchor": {
         "side": "bottom",
         "offset": 0.5
       },
-      "semanticsOrigin": "explicit"
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "launch.in",
+      "source": "j.launch.in",
+      "target": "catalog",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "bottom",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
     }
   ],
   "viewport": {
@@ -1669,6 +1799,11 @@
           "id": "f.browse.s7",
           "edgeId": "resume",
           "caption": "Continue Watching comes from the viewing history."
+        },
+        {
+          "id": "f.browse.s8",
+          "edgeId": "resume.in",
+          "caption": "Viewing History returns where each title stopped."
         }
       ],
       "accent": "blue"
@@ -1699,6 +1834,11 @@
         },
         {
           "id": "f.launch.s5",
+          "edgeId": "launch.in",
+          "caption": "The Catalog marks the title as available."
+        },
+        {
+          "id": "f.launch.s6",
           "edgeId": "find",
           "caption": "It is indexed, so viewers can find it by name."
         }
@@ -1723,6 +1863,11 @@
           "id": "f.learn.s3",
           "edgeId": "publish-model",
           "caption": "Fresh features go live without a deploy."
+        },
+        {
+          "id": "f.learn.s4",
+          "edgeId": "publish-model.in",
+          "caption": "The Feature Store serves the new features."
         }
       ],
       "accent": "green"

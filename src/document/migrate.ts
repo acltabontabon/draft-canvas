@@ -692,7 +692,7 @@ function cardsToGlyphs(doc: Record<string, unknown>, formerCard: (node: Record<s
 /** The least a card is high (a Service's default), and what a glyph box held over a card's: the
  *  glyph above the name, less the room a card keeps for its tag. Less is given back from a box with
  *  a technology or a description, whose words sit in a padded block in a card. Measured against the
- *  renderer at v33 and frozen here. */
+ *  renderer at v34 and frozen here. */
 const CARD_HEIGHT = 68;
 const GLYPH_OVER_CARD = { plain: 68, detailed: 40 } as const;
 
@@ -709,7 +709,7 @@ function externalGlyph(width: number, height: number): { top: number; height: nu
 }
 
 /**
- * v33 draws an External system as a card again: the family's box with a dashed outline and its
+ * v34 draws an External system as a card again: the family's box with a dashed outline and its
  * name inside, where v30 had made it a glyph with the name underneath. The reverse of that move,
  * for the same reason it was made the way it was: the box gives back the height the glyph took, and
  * is placed so the card's middle is where the glyph's middle was. That is where a connector into
@@ -765,7 +765,7 @@ function migrateExternalToCard(doc: Record<string, unknown>): Record<string, unk
 }
 
 /**
- * v33 draws an API as a glyph with its name underneath (a body holding out three operations), where
+ * v34 draws an API as a glyph with its name underneath (a body holding out three operations), where
  * it was a card with a notch in its side. The move v30 made for a Worker and a Gateway, made the
  * same way: the box grows to hold the glyph above the words, with the glyph's middle where the
  * card's middle was.
@@ -815,7 +815,7 @@ function migrateApiToGlyph(doc: Record<string, unknown>): Record<string, unknown
   };
 }
 
-/** How wide each glyph is drawn at its normal size, as `dataStoreGeometry.ts` had it at v33. */
+/** How wide each glyph is drawn at its normal size, as `dataStoreGeometry.ts` had it at v34. */
 function glyphUnitWidth(node: Record<string, unknown>): number | undefined {
   if (node.type === 'database') return 54;
   if (node.type === 'artifact') return 36;
@@ -832,7 +832,7 @@ function glyphUnitWidth(node: Record<string, unknown>): number | undefined {
 }
 
 /**
- * v33 spreads the top and bottom anchors of a shape drawn as a glyph along the glyph's reach (as
+ * v34 spreads the top and bottom anchors of a shape drawn as a glyph along the glyph's reach (as
  * much wider than the glyph as a default box is), where they were spread along its whole box. A pin there names a
  * fraction of that stretch, so on a box wider than the reach the same fraction is now a different
  * place. Each such pin is given the fraction that keeps it where it was drawn, or at the glyph's
