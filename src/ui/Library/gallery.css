@@ -29,12 +29,6 @@
   color: inherit;
 }
 
-.dc-gallery-subtitle {
-  margin: 13px 0 0;
-  color: var(--dc-text-muted);
-  font-size: 13px;
-}
-
 .dc-gallery-heading > .dc-button {
   flex-shrink: 0;
   height: 42px;
