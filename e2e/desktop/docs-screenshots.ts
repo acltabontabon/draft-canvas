@@ -75,6 +75,9 @@ async function openOrders(browser: Browser): Promise<Page> {
   page.on('pageerror', (error) => process.stderr.write(`${error.stack ?? error.message}\n`));
   await page.clock.setFixedTime(new Date('2026-10-24T06:00:00Z'));
   await page.addInitScript({ content: NAME_SHIM });
+  // The mock shell keeps no diagram history, which the status bar would report as "History
+  // unavailable" in every Nodi picture; these pictures are not about history, so it is off.
+  await page.addInitScript(() => localStorage.setItem('draft-canvas.history', 'off'));
   await installMockShell(page);
   await page.goto(BASE_URL);
   const text = await page.evaluate(async (orders) => {
