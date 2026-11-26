@@ -201,7 +201,7 @@ describe('a drawing in a style', () => {
   });
 
   it('is counted against what one style may carry', () => {
-    const d = `M0 0${'L10 10'.repeat(1000)}`;
+    const d = `M0 0${'L10 10'.repeat(1300)}`;
     const assets = Array.from({ length: STYLE_LIMITS.maxAssets + 6 }, (_, index) => ({ id: `a${String(index).padStart(9, '0')}`, w: 24, h: 24, paths: [{ d, fill: 'line' }] }));
     const shapes = Object.fromEntries(STYLE_SHAPE_KEYS.filter((key) => artSlotOf(key.split(':')[0] as never, key.split(':')[1]) !== null).map((key, index) => [key, { art: assets[index % assets.length]!.id }]));
     const { style, repairs } = normalizeStyle({ v: 1, hand: { base: 'clean' }, shapes, assets });
@@ -209,6 +209,22 @@ describe('a drawing in a style', () => {
     expect(kept.length).toBeLessThanOrEqual(STYLE_LIMITS.maxAssets);
     expect(kept.reduce((sum, asset) => sum + asset.paths[0]!.d.length, 0)).toBeLessThanOrEqual(STYLE_LIMITS.maxAssetsChars);
     expect(repairs.some((repair) => repair.includes('custom drawing'))).toBe(true);
+  });
+
+  it('counts only what something draws, so replacing a drawing near the limit keeps the new one', () => {
+    // The old drawing, about to be unused, once took the room the new one needed: both were lost.
+    const d = `M0 0${'L10 10'.repeat(1300)}`;
+    const big = (id: string) => ({ id, w: 24, h: 24, paths: [{ d, fill: 'line' as const }] });
+    const slots = STYLE_SHAPE_KEYS.filter((key) => key !== 'database' && artSlotOf(key.split(':')[0] as never, key.split(':')[1]) !== null);
+    const room = Math.floor(STYLE_LIMITS.maxAssetsChars / d.length) - 1;
+    expect(slots.length).toBeGreaterThanOrEqual(room);
+    const others = slots.slice(0, room).map((key, index) => [key, big(`a${String(index).padStart(9, '0')}`)] as const);
+    const old = big('a000000old');
+    const replacement = big('a000000new');
+    const shapes = { ...Object.fromEntries(others.map(([key, asset]) => [key, { art: asset.id }])), database: { art: replacement.id } };
+    const { style } = normalizeStyle({ v: 1, hand: { base: 'clean' }, shapes, assets: [...others.map(([, asset]) => asset), old, replacement] });
+    expect(style?.shapes?.database?.art).toBe(replacement.id);
+    expect(style?.assets?.some((asset) => asset.id === old.id)).toBe(false);
   });
 });
 

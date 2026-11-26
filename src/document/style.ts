@@ -465,13 +465,23 @@ export function normalizeStyle(raw: unknown): NormalizedStyle {
     if (light || dark) style.schemes = { ...(light ? { light } : {}), ...(dark ? { dark } : {}) };
   }
 
-  // Drawings first: a shape may only name one that survived.
+  // Drawings first: a shape may only name one that survived. Only drawings something names count
+  // toward the limits: replacing a shape's drawing near the limit once dropped the new one (the old
+  // one still took its room), and then the old one too as unused, losing both.
+  const named = new Set<string>();
+  if (isRecord(raw.shapes)) {
+    for (const entry of Object.values(raw.shapes)) {
+      if (isRecord(entry) && entry.builtin !== true && typeof entry.art === 'string') named.add(entry.art);
+    }
+  }
+  if (isRecord(raw.backdrop) && typeof raw.backdrop.art === 'string') named.add(raw.backdrop.art);
   const assets: StyleAsset[] = [];
   if (Array.isArray(raw.assets)) {
     let dropped = 0;
     let chars = 0;
     const seen = new Set<string>();
     for (const candidate of raw.assets) {
+      if (!isRecord(candidate) || typeof candidate.id !== 'string' || !named.has(candidate.id)) continue;
       const asset = assets.length < STYLE_LIMITS.maxAssets ? normalizeAsset(candidate) : null;
       const size = asset ? asset.paths.reduce((sum, path) => sum + path.d.length, 0) : 0;
       if (!asset || seen.has(asset.id) || chars + size > STYLE_LIMITS.maxAssetsChars) {

@@ -17,6 +17,7 @@ import { LANGUAGE_LABELS } from '../render/code/highlight';
 import type { PersonalityProfile } from '../render/roughness/presets';
 import { CORNER_SCALE, styleFrom, type ResolvedShape, type ResolvedStyle, type StyleInput } from '../render/style/resolve';
 import { restyle } from '../render/style/restyle';
+import { CONTRAST } from '../render/style/scheme';
 import { artShapes, drawnBounds, isWords } from '../render/style/art';
 import { artSlotOf, shapeKindOf } from '../document/style';
 import { BOUNDARY_HEADER_HEIGHT } from '../document/boundaryHeader';
@@ -30,6 +31,7 @@ import { FONTS, LINE_HEIGHTS, TEXT_SIZES, type FontSpec } from '../render/text/f
 import { baselineOf, fitLabel, layoutRichText, layoutText, type RichBox, type RichRun, type TextLayout } from '../render/text/layout';
 import type { CalloutKind } from '../render/text/markdown';
 import { getMeasurer, type TextMeasurer } from '../render/text/measure';
+import { contrast } from '../lib/colour';
 import { clamp } from '../lib/math';
 import { nodeTechnologyIcon, technologyIconSnapshot, technologyMarkBounds, TECHNOLOGY_MARK_SIZE, type TechnologyIconSnapshot } from './technology';
 import { NOTE_ACCENTS, NOTE_LABELS } from './noteKinds';
@@ -301,6 +303,16 @@ function c4Reserve(node: DraftNode): number {
   const tech = node.technology ? FONTS.nodeTechnology.size * LINE_HEIGHTS.label : 0;
   const body = node.description ? FONTS.nodeDescription.size * LINE_HEIGHTS.label : 0;
   return C4_NAME_GAP + tech + (tech && body ? C4_PART_GAP : 0) + body;
+}
+
+/**
+ * The colour of a name written under a drawing, on the canvas rather than on the shape's fill: the
+ * accent's own word colour where it reads there, else the canvas's words. An accent's words are
+ * checked against its fill; on a canvas of middling tone (a style's own blue or grey) they once
+ * stood at 2:1 under every Data Store, Queue, Actor and glyph Service.
+ */
+function nameOnCanvas(palette: AccentPalette, ctx: DescribeContext): string {
+  return contrast(palette.text, ctx.theme.canvas) >= CONTRAST.text ? palette.text : ctx.theme.text;
 }
 
 /**
@@ -1424,7 +1436,7 @@ function glyphCaption(
 ): Shape[] {
   const top = glyphTop + DS_GLYPH_HEIGHT * scale + DS_CAPTION_GAP;
   if (kindLabel) {
-    return pinnedCaption(node, ctx, { top, kindLabel, nameColor: palette.text });
+    return pinnedCaption(node, ctx, { top, kindLabel, nameColor: nameOnCanvas(palette, ctx) });
   }
   const text = node.text ?? '';
   if (!text.trim()) return [];
@@ -1440,7 +1452,7 @@ function glyphCaption(
   const detailTop = top + layout.height + C4_NAME_GAP;
   const detail = c4Detail(node, ctx, maxWidth, node.height - 4 - detailTop);
   return [
-    { t: 'text', x: node.width / 2, y: top, layout, font, fill: palette.text, align: 'middle', role: 'label', labelWidth: maxWidth },
+    { t: 'text', x: node.width / 2, y: top, layout, font, fill: nameOnCanvas(palette, ctx), align: 'middle', role: 'label', labelWidth: maxWidth },
     ...(detail ? detail.place(node.width / 2, detailTop, 'middle') : []),
   ];
 }
@@ -2117,7 +2129,7 @@ function queue(node: DraftNode, ctx: DescribeContext): Shape[] {
 
   // Keep the caption close to the tube as both move inside a taller box.
   const top = span.bottom + 1.25;
-  shapes.push(...pinnedCaption(node, ctx, { top, kindLabel, nameColor: palette.text }));
+  shapes.push(...pinnedCaption(node, ctx, { top, kindLabel, nameColor: nameOnCanvas(palette, ctx) }));
 
   return shapes;
 }
@@ -2567,7 +2579,7 @@ function actor(node: DraftNode, ctx: DescribeContext): Shape[] {
       y: top,
       layout,
       font,
-      fill: palette.text,
+      fill: nameOnCanvas(palette, ctx),
       align: 'middle',
       role: 'label',
       labelWidth: maxWidth,

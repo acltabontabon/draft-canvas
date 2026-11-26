@@ -15,6 +15,7 @@ import type { Shape } from '../src/render/displayList';
 import { PERSONALITY_PROFILES } from '../src/render/roughness/presets';
 import { PLAIN_SHAPE, builtinStyle, resolveStyle } from '../src/render/style/resolve';
 import { restyle } from '../src/render/style/restyle';
+import { schemesForCanvas } from '../src/render/style/palettes';
 import { CONTRAST, pinnedTheme, schemeTheme } from '../src/render/style/scheme';
 import { renderDocumentSvg } from '../src/render/svg/document';
 import { shadowColour } from '../src/render/svg/emit';
@@ -198,6 +199,16 @@ describe('a style’s colours', () => {
     const faint = schemeTheme(LIGHT, { ...parchment, accents: { teal: { fill: '#ffffff', line: '#2f6f66', text: '#f4f4f4', chip: '#2f6f66' } } });
     expect(faint.canvas).toBe('#f6e7c8');
     expect(faint.accents.teal).toBe(LIGHT.accents.teal);
+    // A glyph writes its name on the canvas: on a canvas of middling tone, in the canvas's own words
+    // when the accent's would not read there (they once stood at 2:1 under every Data Store).
+    const grey = resolveStyle(style({ schemes: schemesForCanvas('#808080') }));
+    const paper = grey.theme('light');
+    const store = describeNode(createNode({ id: 'db', type: 'database', x: 0, y: 0, text: 'Orders', accent: 'teal' }), describeContext(paper, grey));
+    const name = store.shapes.find((shape) => shape.t === 'text' && shape.role === 'label');
+    expect(name?.t === 'text' ? contrast(name.fill, paper.canvas) : 0).toBeGreaterThanOrEqual(CONTRAST.text);
+    // Code keeps the theme's colours, so a code block's paper must keep the theme's tone.
+    expect(schemeTheme(LIGHT, { ...parchment, codeBg: '#000000' }).codeBg).toBe(LIGHT.codeBg);
+    expect(schemeTheme(LIGHT, { ...parchment, codeBg: '#fff8ea' }).codeBg).toBe('#fff8ea');
   });
 
   it('always clear the floors once resolved', () => {
