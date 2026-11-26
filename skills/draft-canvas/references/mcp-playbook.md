@@ -183,6 +183,15 @@ When the person asks to *review* a change against the diagram ("what does this P
 architecturally? don't apply it"), send the ops through `submit_proposal` with a `summary`, a
 `rationale`, `assumptions` and `openQuestions`. Draft Canvas shows it for them to accept or reject;
 don't wait for the decision. `ops: []` with a summary is a valid "no architectural impact" answer.
+Later, `get_proposal` says whether it was decided or the diagram moved since (`stale`): check it
+before sending the same change again.
+
+## History
+
+For "what changed since…" or "when did this appear", use `diagram_history` on the open diagram:
+`list` (with `query`), then `compare` two revisions or one against `live`. `read` is refused until
+the person allows it in Settings → History: ask, don't retry. Restore and merge are previews only;
+send the person to the timeline, and never rebuild a past revision with `update_diagram`.
 
 ## Sequences
 
