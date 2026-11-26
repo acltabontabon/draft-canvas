@@ -6,158 +6,96 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+## [1.22.0] - 2026-11-26
+
+Every version of your diagram, in a style of your own.
+
+Each diagram now keeps its history in standard Git on your own device: scrub back, compare,
+restore and try alternatives. A style gives a diagram its own hand, colours and shapes, saved with
+it, and linked junctions carry a line on wherever it continues.
+
 ### Shared
 
 #### Added
 
-- **History** — Every diagram keeps its history as you work. When you pause, a revision is added
-  in standard Git on your own device, and nothing is uploaded. Click the clock in the status bar
-  and choose **Open timeline** to scrub back through it, play it forward, and see the diagram as it
-  was. Name a revision as a milestone. <!-- highlight -->
-- **Compare and restore** — Compare any two versions, or a version and now, laid over each other
-  or side by side, with every change listed. Restore a whole revision, or bring back just the
-  shapes you pick. Either way it is one undo step and a new revision, and nothing earlier is lost.
+- **History** — Every diagram keeps its history as you work, in standard Git on your own device,
+  and nothing is uploaded. Scrub back through the timeline, compare any two versions, and restore
+  a whole revision or just the shapes you pick. Nothing earlier is lost. <!-- highlight -->
 - **Alternatives** — Try another direction as an alternative, switch between them, and bring one
-  into another. When both changed the same thing, you choose which side to keep, on the canvas.
-- **History, your way** — **Settings → History** sets how often revisions are added, the name
-  they carry, and whether a diagram records at all. You can export a diagram's history as a Git
-  bundle, import one, or remove it. **Duplicate** offers to copy the history too. In a live session
-  only the host records, and each revision credits only the people whose changes it holds.
-- **Agents and history** — Connected agents can list and compare revisions and preview a restore
-  or merge with the `diagram_history` tool. Restoring and merging stay yours. Reading a past
-  revision in full needs your permission in Settings.
-
-- **A style of your own** — **Appearance** (the palette button at the bottom right, a right-click
-  on the canvas, or `⌘K`) opens beside the canvas and fits the diagram
-  to what is left, so every choice is seen on your diagram as you make it. Pick a style from the
-  gallery, then change the drawing hand, line weight, corners, colours, connectors and the look of
-  any shape, with a picture of your own for a shape if you like. The style is saved in the diagram,
-  so it looks the same for everyone. <!-- highlight -->
-- **Your canvas, your brand** — Pick any canvas colour and a brand colour, and print a backdrop on
-  the canvas: a built-in pattern or your own SVG, repeated edge to edge. The whole editor wears
-  the style, its bars and panels included.
-- **Style packs** — Ten illustrated styles from the starters gallery, each with a drawing for
-  every shape, its own colours, its own line and its own backdrop: Professional, Geek, Arena, High
-  seas, High fantasy, Cyberpunk, Cute, Weeb, Hardwood and Match Point.
-- **Styles as files** — Export a style as a `.draftstyle` file and import it on another device.
-- **Linked junctions** — Two or more Junctions can be one continuation point drawn in different
-  places. Select one and choose **Add link**, then click where the flow continues. Rest
-  the pointer on a linked Junction to see where it goes, and press `G` to travel there; with
-  several places you pick one. `⇧G` brings you back to the exact view you left. It works while
-  presenting, and `⌘K` finds each place by name. Agents connected over MCP can create, link and
-  rename them too, and the Draft Canvas skill uses them for lines that would cross the whole map.
+  into another. Where both changed the same thing, you choose on the canvas.
+- **Revisions, your way** — Choose how often revisions are added or turn recording off, and
+  export or import a diagram's history as a Git bundle. Agents can compare revisions; restoring
+  stays yours.
+- **A style of your own** — **Appearance** opens beside the canvas, so every choice shows on your
+  diagram: the drawing hand, lines, corners, colours, shadows and the look of any shape, even a
+  picture of your own. The style is saved in the diagram, so it looks the same for everyone.
   <!-- highlight -->
-- **File format 34** — Junctions keep their link (`link`), and an API and an External system are
-  saved as they are now drawn. Diagrams saved by this version do not open in older versions.
-  Junctions that only share a label are not linked for you.
+- **Canvas and backdrop** — Pick any canvas colour and a brand colour, and repeat a built-in
+  pattern or your own SVG behind the diagram. The whole editor wears the style.
+- **Style packs** — Ten illustrated styles from the starters gallery, each with a drawing for every
+  shape, its own colours and its own backdrop. Export a style as a `.draftstyle` file to take it to
+  another device.
+- **Linked junctions** — Two or more Junctions can be one continuation point drawn in different
+  places. Rest the pointer on one to see where it goes, press `G` to travel there and `⇧G` to come
+  back, even while presenting. Agents can create and link them too. <!-- highlight -->
+- **File format 34** — Junctions keep their link, and APIs and External systems are saved as they
+  are now drawn. Diagrams saved by this version do not open in older versions.
 
 #### Changed
 
-- **A quieter status bar** — The undo and redo buttons are gone from the status bar. `⌘Z`, `⇧⌘Z`
-  and the menus still undo and redo. On the web, a small lock means your diagram is saved and a soft
-  dot means a save is on its way. Words show only when something needs you. The timeline docks
-  where the status bar was while it is open.
-- **A calm place to style** — While Appearance is open the tools, Present and Share and the status
-  bar step back, leaving the diagram and the panel. **Done** brings them back.
-- **Shadows** — Off, Soft or Deep: Deep lifts shapes off the canvas, on dark canvases too.
-- **Canvas settings** — Next-shape suggestions moved to the **Canvas** tab of Appearance; the web's
-  separate Settings dialog is gone.
-- **Help menu** — **Watch the film** is no longer in it.
-- **Background images are gone** — A diagram's canvas is now part of its style: choose a canvas colour and a backdrop in **Appearance**. A diagram that had a background image opens without it.
-- **API** — An API is drawn as what it offers, like the other Service kinds: a body holding out
-  three operations, one of them in use, with its name underneath. A connector into its side lands
-  on an operation. A saved API keeps its place and its lines. <!-- highlight -->
-- **External** — An External system is a card again, with a dashed outline and an arrow leaving
-  its corner, so it resizes like any card. Saved diagrams keep their lines where they were.
-- **Resizing a glyph** — A Data Store, an Artifact, a Load Balancer, Gateway, Proxy, Worker,
-  Scheduler, API, Module, Port or Adapter fills the box you drag it to. The drawing grows as far
-  as the box lets it and the bottom connection points stay right under its name.
+- **API and External, redrawn** — An API is a body holding out three operations, and a connector
+  into its side lands on one. An External system is a dashed card again and resizes like one.
+  Saved diagrams keep their lines. <!-- highlight -->
+- **Glyphs** — A Data Store, Load Balancer or any other glyph fills the box you drag it to. Its
+  connection points sit on the drawing at any size, and a connector dropped mid-side stays there.
+- **A quieter status bar** — The undo and redo buttons are gone; `⌘Z` and `⇧⌘Z` still work. On the
+  web a small lock means your diagram is saved, and words show only when something needs you.
+- **A calm place to style** — While Appearance is open, the tools and the status bar step back.
+  Canvas settings live there now, and the web's separate Settings dialog is gone.
 - **Diagrams drawn by an agent** — More connector ends are left automatic, so they follow their
-  shapes when you move them. An end stays pinned only where the line would read worse without it.
-- **Arrange** — A cleanup that may turn the diagram tries the other direction with its own choice
-  of shared lines, and turns when that reads clearly better.
+  shapes when you move them.
+- **Arrange** — A cleanup that may turn the diagram tries the other direction too, and turns only
+  when that reads clearly better.
+
+#### Removed
+
+- **Background images** — A diagram's canvas is now part of its style. A diagram that had a
+  background image opens without it, and the image is removed from your device.
 
 #### Fixed
 
-- **Copying sketches** - Duplicating a selection copies its shapes and strokes together. After a
-  paste or duplicate, Delete removes only the copies. Pasting a sketch into an empty nested room
-  now asks you to add a shape first, so the sketch cannot disappear when you leave.
-- **Find and replace** - Notes attached to sequence messages are counted and updated, including
-  messages inside a fragment.
-- **Mermaid sequences** - Literal entity codes such as `#lt;` survive export and import in
-  participant names and message text.
-- **Structurizr export** - Shapes and relationships inside a person’s room are preserved when
-  the DSL places that person at the top of the model.
-- **Connection points** — The points on a Data Store, an Artifact and every shape drawn as a
-  glyph sit on the drawing at any size, and move with it when you resize. On a box made wider for
-  its words they used to stand in the air beside it. <!-- highlight -->
-- **Technology logos** — A glyph's technology logo sits off its top-right corner, clear of the
-  connectors into its side. Arrowheads used to be drawn through it.
-- **Connecting to a glyph** — Dropping a connector on the middle of a glyph's side attaches it
-  there. It used to jump to the corner point above.
-- **Replies on a glyph** — A reply line is drawn beside its request on a glyph's short side, on
-  whichever side has room. The two used to be drawn as one line with an arrowhead at each end.
-- **Load starters** — Loading the gallery no longer says it couldn’t reach GitHub for a moment
-  before the starters arrive.
-- **Room copies** — Pasting and duplicating count the sketches and flows inside rooms toward the
-  diagram’s limits, so the file reopens with everything that was pasted.
-- **Appearance** — Use the arrow keys to switch tabs. When you enter a room while Appearance is
-  open, closing the panel keeps that room in view.
-- **Live collaboration** — The reconnecting notice clears when the existing connection starts
-  receiving again.
-- **Starter downloads** — Clearing the gallery stops an active download. A starter loaded after
-  you switch diagrams stays out of the new diagram.
-- **Sketch-only diagrams** — Drawing your first stroke clears the empty canvas prompt, and adding
-  a starter to a sketch keeps the existing title.
-- **Arrange and Tidy up** — Cancel responds immediately while the layout is waiting for the worker.
-- **Reduced motion** — Arrange previews, proposal jumps, and finding a collaborator respect the
-  system’s reduced-motion setting.
+- **Sketches and copies** — Duplicating copies shapes and their strokes together, and pasted rooms
+  count toward the diagram's limits, so the file reopens with everything that was pasted.
+- **Sequences and export** — Find and replace reaches notes on sequence messages, Mermaid keeps
+  codes such as `#lt;`, and Structurizr export keeps what is inside a person's room.
+- **Smaller fixes** — The gallery no longer flashes a GitHub error before the starters load,
+  Cancel in Arrange responds at once, and previews respect reduced motion.
 
 ### Desktop
 
 #### Added
 
-- **Publish history** — **Settings → History** copies a diagram's history to a Git repository of
-  your own, on GitHub, GitLab or any Git server. Your Git sign-in is used, the first publish to an
-  address is shown and confirmed first, and nothing is ever force-pushed. Fetch to see what the
-  remote has, and bring its revisions in the same way as an alternative.
-- **Commit a diagram to its project** — A saved diagram inside a Git repository can be committed
-  there. By default it goes to a branch of its own, and your current branch, staged changes and
-  working files are left alone. You can also commit it to your current branch, which Draft Canvas
-  refuses whenever that could surprise you. A push shows every commit it would publish first.
-  Draft Canvas will not run Git in a repository whose settings would run a program.
-- **History follows your files** — History follows a file you rename or move in the app, and a
-  Quick Draft you save. A file changed outside the app and reloaded is recorded as a revision of
-  its own.
-- **OpenCode** — **Settings → AI agents** connects OpenCode 1 and 2 in one click, alongside Claude
-  Code, Codex, Cursor, Gemini CLI and Junie, and shows how to check the connection.
-- **Sort your diagrams** — Every list in **Find a diagram** shows the most recently edited first,
-  or sorts by **Name** instead. The choice is remembered.
-
-#### Changed
-
-- **Connecting an agent** — **Settings → AI agents** takes every agent through the same three
-  steps: connect, add the skill, try it. Agents that are already set up are ticked, and the last
-  step says when an agent has connected.
+- **Publish your history** — Copy a diagram's history to a Git repository of your own, on GitHub,
+  GitLab or any Git server, with your own sign-in and never a force-push. A diagram inside a
+  project can be committed there, on a branch of its own by default. <!-- highlight -->
+- **Moves and renames** — A diagram's history follows a file you rename or move in the app and a
+  Quick Draft you save, and a change made outside the app becomes a revision of its own.
+- **Connect any agent** — **Settings → AI agents** connects OpenCode in one click, alongside Claude
+  Code, Codex, Cursor, Gemini CLI and Junie, and takes every agent through the same three steps.
+- **Sort your diagrams** — **Find a diagram** lists the most recently edited first, or sorts by
+  name. The choice is remembered.
 
 #### Fixed
 
-- **Recovery** — Open a recovery copy as a Quick Draft when the original file is unreadable. A
-  save preserves recovery for edits still in progress, and closing a Quick Draft waits for its
-  recovery copy to be written.
-- **Opening through an agent** — An agent’s request to open another diagram respects edits and
-  live sessions that start while the file is being read.
-- **Moving or renaming files** — A file still switches to its new location if the Recent files list
-  can’t update. Draft Canvas warns when a linked SVG uses the old filename, even for a closed file.
+- **Recovery and moves** — A recovery copy opens as a Quick Draft when the original is unreadable,
+  and a moved or renamed file switches to its new place even if Recent files can't update.
 
 ### Web
 
 #### Fixed
 
-- **Autosave** — A failed attempt to keep your copy offers retry and recovery controls. Moving the
-  camera leaves Library edit dates intact.
-- **The website film** — Playback keeps your mute choice across chapters and leaves keyboard focus
-  where you put it. Browser video controls are available when scripting is disabled.
+- **Autosave** — A failed save offers retry and recovery, and moving the camera no longer changes
+  a diagram's edit date in the Library.
 
 ## [1.21.1] - 2026-11-23
 
@@ -3048,7 +2986,8 @@ pre-release milestone; this is the one meant for real use.
 - Fully local and private by design — no accounts, no cloud sync, nothing you draw ever leaves
   your device. Documents are encrypted at rest in your browser.
 
-[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.1...main
+[Unreleased]: https://github.com/acltabontabon/draft-canvas/compare/v1.22.0...main
+[1.22.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.1...v1.22.0
 [1.21.1]: https://github.com/acltabontabon/draft-canvas/compare/v1.21.0...v1.21.1
 [1.21.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.20.0...v1.21.0
 [1.20.0]: https://github.com/acltabontabon/draft-canvas/compare/v1.19.0...v1.20.0

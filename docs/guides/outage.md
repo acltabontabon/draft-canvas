@@ -14,7 +14,8 @@ happens, it asks you instead of guessing.
 Once the canvas has a runtime connector (a service calling a service, reading or writing a data
 store, publishing to or consuming from a queue), any of these starts it:
 
-- Right-click a Service, Queue, Data Store or Boundary and choose **Take down**.
+- Right-click a Service, Queue or Data Store and choose **Take down**, or a Boundary and choose
+  **Take everything inside down**.
 - Right-click a connector and choose **Take this connection down**.
 - Select one of them and click **Outage** in the status bar, or run **Take down** from `⌘K`.
 - Click **Outage** with nothing selected, then pick from the list or click what to take down.

@@ -8,7 +8,7 @@ Free, open source, and your diagrams stay on your device.
 
 <!-- release-badges:start -->
 <p align="center">
-<a href="https://github.com/acltabontabon/draft-canvas/releases/tag/v1.21.1"><img alt="Release v1.21.1" src="https://img.shields.io/badge/release-v1.21.1-0b6e65?style=flat-square"></a>
+<a href="https://github.com/acltabontabon/draft-canvas/releases/tag/v1.22.0"><img alt="Release v1.22.0" src="https://img.shields.io/badge/release-v1.22.0-0b6e65?style=flat-square"></a>
 <a href="https://github.com/acltabontabon/draft-canvas/actions/workflows/ci.yml?query=branch%3Amain"><img alt="CI status on main" src="https://img.shields.io/github/actions/workflow/status/acltabontabon/draft-canvas/ci.yml?branch=main&label=CI&style=flat-square"></a>
 <a href="https://github.com/acltabontabon/draft-canvas/blob/main/LICENSE"><img alt="Licence: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-555?style=flat-square"></a>
 <a href="https://github.com/acltabontabon/draft-canvas/releases/latest"><img alt="Runs on web, macOS and Windows" src="https://img.shields.io/badge/runs%20on-web%20%C2%B7%20macOS%20%C2%B7%20Windows-555?style=flat-square"></a>

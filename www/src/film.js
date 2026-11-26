@@ -92,7 +92,7 @@ export function setUpFilm() {
 
   const paint = () => {
     const t = film.currentTime;
-    const total = film.duration || 108.4;
+    const total = film.duration || 122.7;
     let current = 0;
     steps.forEach((step, index) => {
       const next = steps[index + 1]?.at ?? total;
