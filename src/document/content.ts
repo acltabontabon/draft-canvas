@@ -83,16 +83,20 @@ export function withLiveBookkeeping(historical: DraftDocument, live: DraftDocume
       return { ...node, inside: { ...node.inside, viewport, nodes: apply(node.inside.nodes, key) } };
     });
   };
+  // Where the file lives and what it began as are the working copy's too, absent included: a
+  // revision recorded while the diagram was in a project once moved it back there on restore.
+  const { projectId: _projectId, origin: _origin, ...past } = historical.metadata;
   return {
     ...historical,
     // Identity is the working copy's, never the revision's: a copy made "with history" keeps its own
     // id even when it restores a revision recorded before it was copied.
     metadata: {
-      ...historical.metadata,
+      ...past,
       id: live.metadata.id,
       createdAt: live.metadata.createdAt,
       updatedAt: live.metadata.updatedAt,
       ...(live.metadata.projectId === undefined ? {} : { projectId: live.metadata.projectId }),
+      ...(live.metadata.origin === undefined ? {} : { origin: live.metadata.origin }),
     },
     viewport: live.viewport,
     nodes: apply(historical.nodes, ''),

@@ -78,7 +78,31 @@ export function formatMessage(message: RevisionMessage): string {
   if (t.lineage && isOid(t.lineage.oid)) trailers.push(`${KEY.lineage}: ${clean(t.lineage.repoId, 64)}@${t.lineage.oid}`);
   lines.push('', ...trailers);
   const text = `${lines.join('\n')}\n`;
-  return text.length <= HISTORY_LIMITS.maxMessageBytes ? text : `${text.slice(0, HISTORY_LIMITS.maxMessageBytes - 1)}\n`;
+  return utf8Length(text) <= HISTORY_LIMITS.maxMessageBytes ? text : `${withinBytes(text, HISTORY_LIMITS.maxMessageBytes - 1)}\n`;
+}
+
+// The limit is in UTF-8 bytes, as the desktop store checks it (`history/objects.rs`). It was once
+// measured in UTF-16 units here: a message of CJK names or labels passed this check, was refused by
+// the desktop on every capture and retried with backoff forever — and the cut could split a
+// surrogate pair. Measured and cut in bytes now, only ever between whole code points.
+const utf8 = new TextEncoder();
+
+function utf8Length(text: string): number {
+  return utf8.encode(text).length;
+}
+
+/** The longest start of `text`, in whole code points, that fits in `max` UTF-8 bytes. */
+function withinBytes(text: string, max: number): string {
+  let bytes = 0;
+  let end = 0;
+  for (const char of text) {
+    const code = char.codePointAt(0)!;
+    const size = code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+    if (bytes + size > max) break;
+    bytes += size;
+    end += char.length;
+  }
+  return text.slice(0, end);
 }
 
 function unique(values: string[]): string[] {
@@ -91,7 +115,7 @@ function unique(values: string[]): string[] {
  * cleaned again and anything malformed is dropped.
  */
 export function parseMessage(text: string): RevisionMessage {
-  const normalized = text.length > HISTORY_LIMITS.maxMessageBytes ? text.slice(0, HISTORY_LIMITS.maxMessageBytes) : text;
+  const normalized = text.length > HISTORY_LIMITS.maxMessageBytes ? withinBytes(text, HISTORY_LIMITS.maxMessageBytes) : text;
   const paragraphs = normalized.replace(/\r\n/g, '\n').trimEnd().split(/\n{2,}/);
   const summary = clean(paragraphs[0]?.split('\n')[0] ?? '', 120) || 'Untitled revision';
   const last = paragraphs.length > 1 ? paragraphs[paragraphs.length - 1]! : '';

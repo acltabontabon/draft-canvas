@@ -130,7 +130,7 @@ export function merge(base: DraftDocument, ours: DraftDocument, theirs: DraftDoc
   const yours = byKey(diffFile(base, theirs));
   const baseIndex = indexOf(base);
   const conflicts: Conflict[] = [];
-  const out: Change[] = [];
+  let out: Change[] = [];
   let combined = 0;
 
   const choose = (conflict: Conflict, take: { ours: Change[]; theirs: Change[]; base: Change[] }) => {
@@ -258,9 +258,26 @@ export function merge(base: DraftDocument, ours: DraftDocument, theirs: DraftDoc
   }
 
   // The combination, applied to the ancestor and checked whole.
-  const applied = applyChanges(base, out);
-  const repaired = repairReferences(applied);
-  conflicts.push(...combinationConflicts(applied, repaired, mine, yours));
+  let applied = applyChanges(base, out);
+  let repaired = repairReferences(applied);
+  // A combination conflict is decided like any other: the chosen side's version of the element and
+  // of what it refers to. Past bug: the choice was never read, so "Keep this" on a connector to a
+  // shape the other side removed still dropped the connector, and Merge committed the drop.
+  // Settling can uncover a new loss (a restored shape's boundary was removed too), so it repeats,
+  // bounded; each conflict is settled once, in the pass that found it.
+  const sides = { ours: { file: ours, changes: mine }, theirs: { file: theirs, changes: yours }, base: { file: base, changes: new Map<string, Change[]>() } };
+  const listed = new Set<string>();
+  for (let pass = 0; pass < 8; pass += 1) {
+    const found = combinationConflicts(applied, repaired, mine, yours).filter((conflict) => !listed.has(conflict.id));
+    if (found.length === 0) break;
+    for (const conflict of found) {
+      listed.add(conflict.id);
+      conflicts.push(conflict);
+      out = settle(out, conflict.key, applied, sides[choices.get(conflict.id) ?? 'ours']);
+    }
+    applied = applyChanges(base, out);
+    repaired = repairReferences(applied);
+  }
   const normalized = normalizeDocument(JSON.parse(JSON.stringify(repaired)));
   const candidate = normalized.ok ? normalized.document : repaired;
   if (normalized.ok && normalized.repairs.length > 0) {
@@ -295,6 +312,62 @@ function combinationConflicts(applied: DraftDocument, repaired: DraftDocument, m
   lost<DraftEdge>('edge', before.edges, after.edges);
   lost<DraftNode>('node', before.nodes, after.nodes);
   return out;
+}
+
+interface SideOf {
+  file: DraftDocument;
+  changes: Map<string, Change[]>;
+}
+
+/**
+ * Resolves one combination conflict toward `side`: its references (a connector's ends, a shape's
+ * boundary) become that side's, and whatever they lead to that the combination broke (removed, in
+ * another view, or re-parented into a loop) is restored as that side has it. If that side has no such
+ * element, it goes. Everything else the other side did to the element itself is kept.
+ */
+function settle(out: Change[], key: string, applied: DraftDocument, side: SideOf): Change[] {
+  const [kind, id] = key.split(':') as ['node' | 'edge', string];
+  const now = indexOf(applied);
+  const chosen = indexOf(side.file);
+  let next = out;
+  const take = (k: string) => {
+    next = [...next.filter((change) => keyOf(change) !== k), ...(side.changes.get(k) ?? [])];
+  };
+  const fields = kind === 'edge' ? EDGE_UNITS.ends! : NODE_UNITS.containment!;
+  const current = (kind === 'edge' ? now.edges : now.nodes).get(id);
+  const wanted = (kind === 'edge' ? chosen.edges : chosen.nodes).get(id);
+  if (!wanted || !current) {
+    take(key);
+    return next;
+  }
+  const own = (kind === 'node' ? nodeValue(current.value as DraftNode) : current.value) as unknown as Record<string, unknown>;
+  const refs = wanted.value as unknown as Record<string, unknown>;
+  if (!sameValue(pick(own, fields), pick(refs, fields))) {
+    const value: Record<string, unknown> = { ...own };
+    for (const field of fields) delete value[field];
+    Object.assign(value, pick(refs, fields));
+    next = [...next.filter((change) => keyOf(change) !== key || change.kind === 'move'), { kind, id, room: current.room, value } as Change];
+  }
+  if (kind === 'edge') {
+    const edge = wanted.value as DraftEdge;
+    for (const end of [edge.source, edge.target]) {
+      if (now.nodes.get(end)?.room !== current.room) take(`node:${end}`);
+    }
+  } else {
+    // The chosen side's chain of boundaries is valid in its own file; restore any link of it the
+    // combination changed. Bounded by that chain, and by `seen` against a file that is not valid.
+    const seen = new Set<string>([id]);
+    let parent = (wanted.value as DraftNode).parentId;
+    while (parent && !seen.has(parent)) {
+      seen.add(parent);
+      const there = chosen.nodes.get(parent);
+      const here = now.nodes.get(parent);
+      if (!there) break;
+      if (!here || here.room !== there.room || here.value.parentId !== there.value.parentId) take(`node:${parent}`);
+      parent = there.value.parentId;
+    }
+  }
+  return next;
 }
 
 /** Boundaries that, combined, would sit inside themselves. */

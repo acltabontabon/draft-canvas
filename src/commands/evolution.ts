@@ -7,6 +7,7 @@ import type { Command } from './types';
 import { useUiStore } from '../store/uiStore';
 import { useEvolutionStore } from '../store/evolution/evolutionStore';
 import { closeLens, loadTimeline } from '../store/evolution/historyView';
+import { clearCompare } from '../store/evolution/compare';
 
 /** Whether history is recording or readable for the open diagram. */
 export function historyAvailable(): boolean {
@@ -18,7 +19,13 @@ export function historyAvailable(): boolean {
 export function setTimelineOpen(open: boolean): void {
   useEvolutionStore.setState({ timelineOpen: open, detailsOpen: false });
   if (open) void loadTimeline();
-  else closeLens();
+  else {
+    // A comparison is drawn over the lens: closing only the lens once left it behind, and the
+    // timeline reopened on a Compare bar for nothing on the canvas. A merge is left as it is: it is
+    // journaled to be resumed, and only its own bar finishes or cancels it.
+    if (!useEvolutionStore.getState().merge) clearCompare();
+    closeLens();
+  }
 }
 
 export function toggleTimeline(): void {

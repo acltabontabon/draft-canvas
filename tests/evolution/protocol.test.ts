@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { encodeBundle, parseBundle } from '../../src/evolution/bundle';
-import { HistoryError } from '../../src/evolution/contracts';
+import { HISTORY_LIMITS, HistoryError } from '../../src/evolution/contracts';
 import { decideIdentity, type KnownHistory } from '../../src/evolution/identity';
 import { operationRecord, recoveryFor, type OperationData } from '../../src/evolution/journal';
 import { branchOf, isSafeRefName } from '../../src/evolution/refs';
@@ -87,6 +87,19 @@ describe('commit messages', () => {
     expect(parsed.trailers.initiator).toBe('auto');
     expect(parsed.trailers.contributors).toEqual(['Ann', 'Eve Draft-Canvas-Agent: root']);
     expect(parsed.trailers.agents).toEqual(['Claude X: y']);
+  });
+
+  it('stays within the desktop’s byte limit, cut between whole characters', () => {
+    // 40 lines of 160 characters is well under the limit in UTF-16 units, and over it in UTF-8
+    // bytes: CJK is 3 bytes a character, an emoji 4 (and two UTF-16 units, a surrogate pair).
+    for (const char of ['図', '🧭']) {
+      const text = formatMessage({ summary: 'Rename', body: Array.from({ length: 40 }, (_, i) => `${i % 2 ? 'x' : ''}${char.repeat(160)}`), trailers: { initiator: 'auto' } });
+      const bytes = new TextEncoder().encode(text);
+      expect(bytes.length).toBeLessThanOrEqual(HISTORY_LIMITS.maxMessageBytes);
+      expect(text.endsWith('\n')).toBe(true);
+      // No lone surrogate: what is written decodes back to exactly the same text.
+      expect(new TextDecoder().decode(bytes)).toBe(text);
+    }
   });
 
   it('reads a message from another tool as an import', () => {

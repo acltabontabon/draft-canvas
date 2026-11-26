@@ -367,6 +367,9 @@ export class HistoryService {
     if (snapshot.metadata.id !== session.documentId) return;
     if (this.deps.editor.recordable && !this.deps.editor.recordable()) return;
     session.schedule = step(session.schedule, { kind: 'started', at: this.deps.clock.now(), generation });
+    // The label the next capture was asked for when this one began: one asked for while this one
+    // runs (an outside change arriving mid-capture) is that next capture's, and survives this one.
+    const asked = session.initiator;
     this.setCapture(session, { kind: 'capturing' });
     try {
       const prepared = await this.deps.compute.prepare(snapshot);
@@ -424,7 +427,9 @@ export class HistoryService {
       session.tip = oid;
       session.tipBlob = prepared.blobId;
       session.tipDocument = content;
-      session.initiator = 'auto';
+      // Reset unconditionally, this once relabelled the reloaded outside change as `auto` whenever it
+      // landed while the capture of the person's own edits was still being written.
+      if (session.initiator === asked) session.initiator = 'auto';
       session.agents.clear();
       if (session.binding) {
         session.binding = { ...session.binding, lastSeen: oid, at };

@@ -8,6 +8,7 @@
 import { applyChanges } from '../../collab/apply';
 import { keyOf, type Change } from '../../collab/changes';
 import { diffFile } from '../../collab/diff';
+import { elementsOf, indexOf } from '../../collab/fileIndex';
 import { repairReferences } from '../../collab/repair';
 import { historyContent, withLiveBookkeeping } from '../../document/content';
 import type { DraftDocument } from '../../document/types';
@@ -122,18 +123,44 @@ export async function restoreElements(oid: Oid, chosen: ElementChange[]): Promis
     const all = diffFile(live, historical);
     const wanted = new Set(chosen.map((change) => `${change.kind}:${change.id}`));
     const nodes = new Set(chosen.filter((change) => change.kind === 'node').map((change) => change.id));
-    const existing = new Set<string>();
-    const collect = (list: DraftDocument['nodes']) => {
+    const now = indexOf(live);
+    const existing = now.nodes;
+    // A shape brought back from removal brings its rooms with it. A node's change never carries its
+    // `inside` (`nodeValue`); what was in its room arrives as separate changes keyed by the room, so
+    // picking only the shape once restored a Service as an empty box while saying it was restored.
+    // Only a shape that is gone brings its inside back: one that is still here keeps its room as it
+    // is now, and an element that was moved out of the room before it went stays where it is.
+    const rooms = new Set<string>();
+    const roomsOf = (list: DraftDocument['nodes']) => {
       for (const node of list) {
-        existing.add(node.id);
-        if (node.inside) collect(node.inside.nodes);
+        if (!node.inside) continue;
+        rooms.add(node.id);
+        roomsOf(node.inside.nodes);
       }
     };
-    collect(live.nodes);
+    const then = indexOf(historical);
+    for (const id of nodes) {
+      const node = then.nodes.get(id)?.value;
+      if (node && !existing.has(id)) roomsOf([node]);
+    }
+    const inRestoredRoom = (change: Change): boolean => {
+      switch (change.kind) {
+        case 'node':
+        case 'edge':
+        case 'flow':
+        case 'ink':
+          return rooms.has(change.room) && !elementsOf(now, change.kind).has(change.id);
+        case 'level':
+        case 'order':
+          return rooms.has(change.room);
+        default:
+          return false;
+      }
+    };
     const picked: Change[] = [];
     for (const change of all) {
       const key = keyOf(change);
-      if (wanted.has(key)) {
+      if (wanted.has(key) || inRestoredRoom(change)) {
         picked.push(change);
         continue;
       }

@@ -185,14 +185,23 @@ export function historyService(): HistoryService {
   return service;
 }
 
+/**
+ * While an outside change is on its way into the editor (`noteExternalChange`): the load count it
+ * was reported at. The first load after it is that change, and the one labelled `external`.
+ */
+let externalAfterLoad: number | null = null;
+
 function listen(documentId: string): void {
   unsubscribe?.();
+  externalAfterLoad = null;
   let loads = documentLoadCount('all');
   unsubscribe = useEditorStore.subscribe((state, previous) => {
     if (state.revision === previous.revision) return;
+    const loaded = documentLoadCount('all');
+    const external = externalAfterLoad !== null && loaded > externalAfterLoad;
+    if (external) externalAfterLoad = null;
     // Another file opened in this window under the same id (a duplicate made outside the app): the
     // shell's working copy changed, so history follows it rather than the id.
-    const loaded = documentLoadCount('all');
     if (loaded !== loads) {
       loads = loaded;
       const key = hostCopyKey();
@@ -203,6 +212,7 @@ function listen(documentId: string): void {
     }
     if (state.document.metadata.id !== documentId) return;
     historyService().noteEdit();
+    if (external) historyService().requestCapture('external');
   });
 }
 
@@ -254,7 +264,13 @@ export async function detachHistoryFor(documentId: string): Promise<void> {
 async function detachNow(): Promise<void> {
   unsubscribe?.();
   unsubscribe = null;
+  externalAfterLoad = null;
   await service?.detach();
+  // Detaching took the lens away (the evolution store is reset), so the edit lock it held goes too.
+  // Only `attachHistory` once cleared it, and a guest's or share link's copy never attaches: a past
+  // revision on screen as the person joined a session left the canvas refusing every edit, with
+  // nothing on screen saying why. Not when a lens is up again: it belongs to a diagram opened since.
+  if (!useEvolutionStore.getState().lens) useUiStore.getState().setHistoryLens(false);
 }
 
 /**
@@ -272,16 +288,24 @@ export function noteAgentCommit(agent: string): void {
   }, historySchedule().agentQuietMs);
 }
 
-/** "Capture now" from the status, the palette or a lifecycle edge. */
 /**
  * The file changed outside the app and was reloaded: what is on disk now becomes its own revision,
  * marked as coming from outside (`initiator: external`), not as the person's own drawing.
+ *
+ * The shell has only posted the reload when it calls this; the editor takes it in later (the host
+ * hook awaits a save and an open first). Capturing at once snapshotted the diagram from before the
+ * reload, so edits of the person's own not yet recorded went in labelled `external`, and the outside
+ * change after them as `auto`. Now what the editor holds is recorded first under its own label, and
+ * the `external` capture waits for the load that brings the change in (`listen`).
  */
 export function noteExternalChange(): void {
-  service?.noteEdit();
-  service?.requestCapture('external');
+  const history = service;
+  if (!history) return;
+  history.requestCapture('auto');
+  externalAfterLoad = documentLoadCount('all');
 }
 
+/** "Capture now" from the status, the palette or a lifecycle edge. */
 export function captureNow(): void {
   service?.requestCapture('manual');
 }

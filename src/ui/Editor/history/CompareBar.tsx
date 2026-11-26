@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { ROOT_ROOM } from '../../../collab/changes';
 import type { ElementChange } from '../../../evolution/diff';
-import { endCompare, focusChange, setCompare, visibleChanges } from '../../../store/evolution/compare';
+import { compareVersions, endCompare, focusChange, setCompare, visibleChanges } from '../../../store/evolution/compare';
 import { restoreElements } from '../../../store/evolution/operations';
 import { reportOutcome as report } from '../../../commands/evolution';
 import type { CompareState } from '../../../store/evolution/evolutionStore';
+import type { Oid } from '../../../evolution/contracts';
 import { Button } from '../../common/Button';
 import { SegmentedControl } from '../../common/SegmentedControl';
 
@@ -22,6 +23,14 @@ function counts(changes: ElementChange[]): string {
   const changed = changes.length - added - removed;
   const parts = [added && `${added} added`, removed && `${removed} removed`, changed && `${changed} changed`].filter(Boolean);
   return parts.length > 0 ? parts.join(' · ') : 'No differences';
+}
+
+/** Brings one change back, then compares again: "Now" is the diagram as it was when the
+ *  comparison began, so a shape just brought back was still listed, and drawn, as removed. */
+async function bringBack(from: Oid, change: ElementChange): Promise<void> {
+  const outcome = await restoreElements(from, [change]);
+  report(outcome);
+  if (outcome.ok) await compareVersions(from, 'now');
 }
 
 export function CompareBar({ compare }: { compare: CompareState }) {
@@ -90,7 +99,7 @@ export function CompareBar({ compare }: { compare: CompareState }) {
                   </span>
                 </button>
                 {from && change.change !== 'added' && (
-                  <Button variant="quiet" className="dc-compare-bring" onClick={() => void restoreElements(from, [change]).then(report)}>
+                  <Button variant="quiet" className="dc-compare-bring" onClick={() => void bringBack(from, change)}>
                     Bring back
                   </Button>
                 )}

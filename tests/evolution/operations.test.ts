@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
-import { createDocument, createNode } from '../../src/document/factory';
+import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import { addNodes, updateNode } from '../../src/document/operations';
 import { historyText } from '../../src/evolution/snapshot';
 import { blobId } from '../../src/evolution/hash';
@@ -94,6 +94,55 @@ describe('restoring', { timeout: 30_000 }, () => {
     expect(now.nodes.map((node) => node.id).sort()).toEqual(['n_api', 'n_db']);
     // The rest of the diagram is as it was: the rename stays.
     expect(now.nodes.find((node) => node.id === 'n_api')!.text).toBe('Edge');
+  });
+
+  const viewport = { x: 0, y: 0, zoom: 1 };
+  /** A Service with a room: two shapes and a connector, ink, and a room inside one of them. */
+  function serviceWithRoom() {
+    const deep = { ...createNode({ type: 'service', x: 0, y: 0, id: 'n_worker', text: 'Worker' }), inside: { nodes: [createNode({ type: 'database', x: 0, y: 0, id: 'n_deep', text: 'Cache' })], edges: [], flows: [], viewport } };
+    const inner = [createNode({ type: 'service', x: 0, y: 0, id: 'n_inner', text: 'Handler' }), deep];
+    const stroke = { id: 'i_mark', tool: 'pen' as const, color: 'red' as const, size: 2, x: 0, y: 0, points: [0, 0, 10, 10] };
+    return {
+      ...createNode({ type: 'service', x: 300, y: 0, id: 'n_svc', text: 'Orders' }),
+      inside: { nodes: inner, edges: [createEdge({ id: 'e_inner', source: 'n_inner', target: 'n_worker' })], flows: [], ink: [stroke], viewport },
+    };
+  }
+
+  it('brings back a removed shape with everything inside it', async () => {
+    await start();
+    await edit((file) => addNodes(file, [serviceWithRoom()]));
+    const withRoom = await tipOf();
+    await edit((file) => ({ ...file, nodes: file.nodes.filter((node) => node.id !== 'n_svc') }));
+    const before = readHistoryText(await historyService().store!.readSnapshot(withRoom)).document;
+    const svc = semanticDiff(historyContent(fileOf(useEditorStore.getState())), before).elements.find((change) => change.id === 'n_svc')!;
+    const outcome = await restoreElements(withRoom, [svc]);
+    expect(outcome.ok).toBe(true);
+    // It came back whole once, as a bare box with no room: the room's contents were separate changes
+    // the restore never picked.
+    const restored = fileOf(useEditorStore.getState()).nodes.find((node) => node.id === 'n_svc')!;
+    expect(restored.inside?.nodes.map((node) => node.id)).toEqual(['n_inner', 'n_worker']);
+    expect(restored.inside?.edges.map((edge) => edge.id)).toEqual(['e_inner']);
+    expect(restored.inside?.ink?.map((stroke) => stroke.id)).toEqual(['i_mark']);
+    expect(restored.inside?.nodes.find((node) => node.id === 'n_worker')!.inside?.nodes.map((node) => node.id)).toEqual(['n_deep']);
+    useEditorStore.getState().undo();
+    expect(fileOf(useEditorStore.getState()).nodes.map((node) => node.id)).toEqual(['n_api']);
+  });
+
+  it('restoring a shape that is still here leaves its room as it is now', async () => {
+    await start();
+    await edit((file) => addNodes(file, [serviceWithRoom()]));
+    const withRoom = await tipOf();
+    await edit((file) => ({
+      ...file,
+      nodes: file.nodes.map((node) => (node.id === 'n_svc' ? { ...node, text: 'Checkout', inside: { ...node.inside!, nodes: node.inside!.nodes.map((inner) => (inner.id === 'n_inner' ? { ...inner, text: 'Renamed' } : inner)) } } : node)),
+    }));
+    const before = readHistoryText(await historyService().store!.readSnapshot(withRoom)).document;
+    const svc = semanticDiff(historyContent(fileOf(useEditorStore.getState())), before).elements.find((change) => change.id === 'n_svc')!;
+    const outcome = await restoreElements(withRoom, [svc]);
+    expect(outcome.ok).toBe(true);
+    const now = fileOf(useEditorStore.getState()).nodes.find((node) => node.id === 'n_svc')!;
+    expect(now.text).toBe('Orders');
+    expect(now.inside!.nodes.find((node) => node.id === 'n_inner')!.text).toBe('Renamed');
   });
 });
 

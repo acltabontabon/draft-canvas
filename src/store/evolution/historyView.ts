@@ -12,7 +12,7 @@ import type { DraftDocument } from '../../document/types';
 import { HistoryError, type Oid } from '../../evolution/contracts';
 import { randomId } from '../../evolution/hash';
 import { branchOf, milestoneRef, MILESTONE_PREFIX } from '../../evolution/refs';
-import { milestoneMessage, toMilestone, toRevision, type Milestone, type Revision } from '../../evolution/timeline';
+import { matches, milestoneMessage, toMilestone, toRevision, type Milestone, type Revision } from '../../evolution/timeline';
 import { fileOf, useEditorStore } from '../editorStore';
 import { useUiStore } from '../uiStore';
 import { historyCompute } from './client';
@@ -20,6 +20,8 @@ import { historyService, historySignature } from './bridge';
 import { useEvolutionStore } from './evolutionStore';
 
 const PAGE = 200;
+/** How far back a search for an agent reads: past the timeline's pages, never without end. */
+const SEARCH_DEPTH = 5000;
 const CACHE_LIMIT = 16;
 
 /** Parsed revisions by id, least recently used first. Bounded: scrubbing a long history never holds them all. */
@@ -89,6 +91,23 @@ export async function loadTimeline(more = false): Promise<void> {
   } catch (error) {
     useEvolutionStore.setState((s) => ({ timeline: { ...s.timeline, loading: false, error: error instanceof Error ? error.message : 'History could not be read.' } }));
   }
+}
+
+/**
+ * Up to `limit` revisions of the current alternative that match `text`, searched past the pages the
+ * timeline has loaded (to `SEARCH_DEPTH` revisions back), without changing what it shows.
+ */
+export async function searchRevisions(text: string, limit: number): Promise<Revision[]> {
+  const store = historyService().store;
+  if (!store) return [];
+  const tip = await store.readRef(branchOf(historyService().binding?.altId ?? null));
+  if (!tip) return [];
+  const marks = await milestones();
+  const commits = await store.log({ from: [tip], limit: SEARCH_DEPTH, hide: [] });
+  return commits
+    .map((commit) => toRevision(commit, marks))
+    .filter((revision) => matches(revision, { text }))
+    .slice(0, limit);
 }
 
 function setLens(file: DraftDocument, oid: Oid | 'live', path: DepthPath): void {

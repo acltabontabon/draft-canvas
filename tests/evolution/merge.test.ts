@@ -87,6 +87,42 @@ describe('the semantic merge', () => {
     expect(result.conflicts.map((conflict) => [conflict.kind, conflict.key])).toEqual([['combination', 'edge:e2']]);
   });
 
+  // Past bug: a combination conflict offered "Keep this / Take X", but the candidate was always
+  // `repairReferences`' output, so keeping the new connector still dropped it on Merge.
+  it('follows the choice on a connector to a shape the other side removed', () => {
+    const b = base();
+    const ours = addEdges(b, [createEdge({ id: 'e2', source: 'b', target: 'c' })]);
+    const theirs = { ...b, nodes: b.nodes.filter((n) => n.id !== 'c') };
+    const unresolved = merge(b, ours, theirs);
+    const conflict = unresolved.conflicts.find((c) => c.kind === 'combination')!;
+    expect(conflict.key).toBe('edge:e2');
+    const kept = merge(b, ours, theirs, new Map([[conflict.id, 'ours']]));
+    expect(indexOf(kept.candidate).edges.has('e2')).toBe(true);
+    expect(ids(kept.candidate)).toEqual(['a', 'b', 'c']);
+    expect(kept.conflicts.map((c) => c.id)).toContain(conflict.id);
+    const dropped = merge(b, ours, theirs, new Map([[conflict.id, 'theirs']]));
+    expect(indexOf(dropped.candidate).edges.has('e2')).toBe(false);
+    expect(ids(dropped.candidate)).toEqual(['a', 'b']);
+    // The same, with the sides the other way round.
+    const swapped = merge(b, theirs, ours, new Map([[conflict.id, 'theirs']]));
+    expect(indexOf(swapped.candidate).edges.has('e2')).toBe(true);
+    expect(ids(swapped.candidate)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps the other side’s own edits to a connector it keeps', () => {
+    const b = base();
+    const ours = { ...b, edges: b.edges.map((edge) => (edge.id === 'e1' ? { ...edge, target: 'c' } : edge)) };
+    const theirs = updateEdge({ ...b, nodes: b.nodes.filter((n) => n.id !== 'c') }, 'e1', { label: 'calls' });
+    const result = merge(b, ours, theirs);
+    const conflict = result.conflicts.find((c) => c.kind === 'combination')!;
+    expect(conflict.key).toBe('edge:e1');
+    const kept = merge(b, ours, theirs, new Map([[conflict.id, 'ours']]));
+    expect(indexOf(kept.candidate).edges.get('e1')?.value).toMatchObject({ source: 'a', target: 'c', label: 'calls' });
+    const theirsWay = merge(b, ours, theirs, new Map([[conflict.id, 'theirs']]));
+    expect(indexOf(theirsWay.candidate).edges.get('e1')?.value).toMatchObject({ source: 'a', target: 'b', label: 'calls' });
+    expect(ids(theirsWay.candidate)).toEqual(['a', 'b']);
+  });
+
   it('asks when both added different things under one identity', () => {
     const b = base();
     const ours = addNodes(b, [createNode({ type: 'queue', x: 0, y: 0, id: 'x', text: 'One' })]);
@@ -99,8 +135,13 @@ describe('the semantic merge', () => {
     b = addNodes(b, [createNode({ type: 'group', x: -50, y: -50, width: 800, height: 600, id: 'g1', text: 'One' }), createNode({ type: 'group', x: 900, y: 0, width: 300, height: 300, id: 'g2', text: 'Two' })]);
     const ours = updateNode(b, 'g1', { parentId: 'g2' });
     const theirs = updateNode(b, 'g2', { parentId: 'g1' });
-    const kinds = merge(b, ours, theirs).conflicts.map((conflict) => conflict.kind);
-    expect(kinds).toContain('combination');
+    const result = merge(b, ours, theirs);
+    expect(result.conflicts.map((conflict) => conflict.kind)).toContain('combination');
+    const conflict = result.conflicts.find((c) => c.kind === 'combination')!;
+    const oursWay = merge(b, ours, theirs, new Map([[conflict.id, 'ours']])).candidate;
+    expect([node(oursWay, 'g1')!.parentId, node(oursWay, 'g2')!.parentId]).toEqual(['g2', undefined]);
+    const theirsWay = merge(b, ours, theirs, new Map([[conflict.id, 'theirs']])).candidate;
+    expect([node(theirsWay, 'g1')!.parentId, node(theirsWay, 'g2')!.parentId]).toEqual([undefined, 'g1']);
   });
 
   it('keeps every change only one side made (seeded)', () => {
@@ -116,6 +157,25 @@ describe('the semantic merge', () => {
       const theirsKeys = new Set(diffFile(b, theirs).map(keyOf));
       const candidateIndex = indexOf(result.candidate);
       const conflicted = new Set(result.conflicts.map((conflict) => conflict.key));
+      // A combination conflict also decides what its element refers to: a connector's ends, a
+      // shape's boundaries. Resolved toward a side, those are that side's, removal or not.
+      for (const conflict of result.conflicts) {
+        if (conflict.kind !== 'combination') continue;
+        const [kind, id] = conflict.key.split(':');
+        for (const side of [b, ours, theirs]) {
+          const index = indexOf(side);
+          if (kind === 'edge') {
+            const edge = index.edges.get(id!)?.value;
+            if (edge) for (const end of [edge.source, edge.target]) conflicted.add(`node:${end}`);
+          } else {
+            const seen = new Set<string>();
+            for (let parent = index.nodes.get(id!)?.value.parentId; parent && !seen.has(parent); parent = index.nodes.get(parent)?.value.parentId) {
+              seen.add(parent);
+              conflicted.add(`node:${parent}`);
+            }
+          }
+        }
+      }
       for (const [side, keys, other] of [
         [ours, oursKeys, theirsKeys],
         [theirs, theirsKeys, oursKeys],

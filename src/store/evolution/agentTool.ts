@@ -16,13 +16,12 @@ import { historyContent } from '../../document/content';
 import type { Oid } from '../../evolution/contracts';
 import type { ElementChange, SemanticDiff } from '../../evolution/diff';
 import { branchOf } from '../../evolution/refs';
-import { matches } from '../../evolution/timeline';
 import { readPreference } from '../../lib/preferences';
 import { fileOf, useEditorStore } from '../editorStore';
 import { HISTORY_PREFS, historyService } from './bridge';
 import { historyCompute } from './client';
 import { useEvolutionStore } from './evolutionStore';
-import { loadTimeline, snapshotOf } from './historyView';
+import { loadTimeline, searchRevisions, snapshotOf } from './historyView';
 
 export class HistoryToolError extends Error {
   readonly code: 'NOT_ACTIVE' | 'NO_HISTORY' | 'NOT_ALLOWED' | 'NOT_FOUND' | 'INVALID';
@@ -62,7 +61,9 @@ function known(oid: string): Oid {
 export async function historyTool(args: HistoryToolArgs): Promise<Record<string, unknown>> {
   const service = historyService();
   const context = service.context();
-  if (!context || useEditorStore.getState().document.metadata.id !== args.diagramId) {
+  // The history attached must be this diagram's too: it is attached after a newly opened diagram
+  // loads, and a call in between once read the previous diagram's history.
+  if (!context || useEditorStore.getState().document.metadata.id !== args.diagramId || service.documentId !== args.diagramId) {
     throw new HistoryToolError('NOT_ACTIVE', 'That diagram is not open, so its history is not available.');
   }
   const store = context.store;
@@ -84,12 +85,15 @@ export async function historyTool(args: HistoryToolArgs): Promise<Record<string,
       };
     }
     case 'list': {
-      await loadTimeline();
       const limit = Math.min(args.limit ?? 30, 100);
-      const revisions = useEvolutionStore
-        .getState()
-        .timeline.revisions.filter((revision) => matches(revision, { text: args.query }))
-        .slice(0, limit)
+      // A search reads past the timeline's loaded pages: it once found only the newest ones.
+      let found;
+      if (args.query?.trim()) found = await searchRevisions(args.query, limit);
+      else {
+        await loadTimeline();
+        found = useEvolutionStore.getState().timeline.revisions.slice(0, limit);
+      }
+      const revisions = found
         .map((revision) => ({ revision: revision.oid, at: new Date(revision.at).toISOString(), summary: revision.summary, categories: revision.categories, initiator: revision.initiator, milestones: revision.milestones.map((m) => m.name) }));
       return { ...base, revisions };
     }

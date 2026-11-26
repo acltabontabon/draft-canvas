@@ -50,6 +50,14 @@ describe('the history content model', () => {
     expect(restored.nodes).toBe(old.nodes);
   });
 
+  it('keeps the live project on restore, even when the live file has none', () => {
+    const old = { ...base(), metadata: { ...base().metadata, projectId: 'p_then' } };
+    const live = base();
+    expect(withLiveBookkeeping(old, live).metadata.projectId).toBeUndefined();
+    const moved = { ...live, metadata: { ...live.metadata, projectId: 'p_now' } };
+    expect(withLiveBookkeeping(old, moved).metadata.projectId).toBe('p_now');
+  });
+
   it('gives Git’s own blob id', async () => {
     // `printf 'hello\n' | git hash-object --stdin`
     expect(await blobId('hello\n')).toBe('ce013625030ba8dba906f756967f9e9ca394464a');
