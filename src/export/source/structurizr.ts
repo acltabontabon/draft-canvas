@@ -146,13 +146,8 @@ export function structurizrSource(document: DraftDocument): string {
         }
         const alias = aliases.get(node.id)!;
         const kind = kindAt(node, depth);
-        if (kind === 'person' && depth !== 'softwareSystem') {
-          // Identifiers are flat, so its relationships still resolve from where it is hoisted to.
-          model.people.push(`${INDENT.repeat(2)}${alias} = ${declaration(node, kind)}`);
-          continue;
-        }
         const inside = roomByOwner.get(node.id);
-        const below = kind === 'person' ? undefined : BELOW[kind];
+        const below = BELOW[kind];
         if (inside && below) {
           model.lines.push(`${INDENT.repeat(level)}${alias} = ${declaration(node, kind)} {`);
           if (kind === 'softwareSystem') model.systems.push(alias);
@@ -160,7 +155,12 @@ export function structurizrSource(document: DraftDocument): string {
           emitRoom(inside, below, level + 1);
           model.lines.push(`${INDENT.repeat(level)}}`);
         } else {
-          model.lines.push(`${INDENT.repeat(level)}${alias} = ${declaration(node, kind)}`);
+          if (kind === 'person' && depth !== 'softwareSystem') {
+            // Hoist only the person. Its room still belongs at the enclosing model depth.
+            model.people.push(`${INDENT.repeat(2)}${alias} = ${declaration(node, kind)}`);
+          } else {
+            model.lines.push(`${INDENT.repeat(level)}${alias} = ${declaration(node, kind)}`);
+          }
           if (inside) {
             // A room below a component (or a person) has no level in the DSL to live at; its shapes
             // join this one as siblings rather than vanish.

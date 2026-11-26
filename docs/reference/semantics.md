@@ -166,6 +166,11 @@ resolves to `junction`, with the unrestricted vocabulary.
 Sequence export flattens `A → Junction → B` into one message (`resolveJunctionEndpoint`). The
 Junction is a participant only when its side is ambiguous or dangling.
 
+A **link** between Junctions (`DraftNode.link`) is not a connector and is never looked through.
+`Service → (A)` in one place and `(A) → Database` in another are two separate ends: nothing is
+inferred across the pair, no flow steps over it, an outage walk stops at each Junction, and sequence
+export treats them as two dangling Junctions. A link is for travelling between the two places.
+
 ## Sequence Diagram interaction kinds
 
 Each Sequence Diagram message is `sync`, `async` or `response` (`InteractionKind` in

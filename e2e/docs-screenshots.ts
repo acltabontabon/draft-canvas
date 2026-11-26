@@ -2,6 +2,7 @@ import { openGallery, openStarter } from './library';
 import { createReaderExample } from './reader-example';
 import { clickEdge } from './canvas';
 import { storeWithFlows } from './fixtures/outage';
+import { paymentsDocument } from './fixtures/junctions';
 
 // The guides picture the starters people get today, not the set pinned for the test journeys (`gallery.ts`).
 process.env.STARTERS_SNAPSHOT ??= 'current';
@@ -39,6 +40,8 @@ process.env.STARTERS_SNAPSHOT ??= 'current';
  *   npx tsx e2e/docs-screenshots.ts --walk-only
  *   npx tsx e2e/docs-screenshots.ts --layout-only
  *   npx tsx e2e/docs-screenshots.ts --appearance-only
+ *   npx tsx e2e/docs-screenshots.ts --junctions-only
+ *   npx tsx e2e/docs-screenshots.ts --history-only
  *
  * The guides' own set is what you get with no arguments, unchanged.
  */
@@ -418,6 +421,181 @@ async function outageScreenshots(page: Page) {
   await settled();
   await page.locator('button.dc-outage-note', { hasText: "can't publish" }).click();
   await shot(page, 'outage-half-done');
+}
+
+/**
+ * Linked Junctions, on a payment drawn in far-apart parts: resting on one shows where it continues,
+ * the Go key lists the places when there are several, and following one arrives at the place with a
+ * way back. Driven through the pointer and the keyboard, as the guide describes it.
+ */
+async function junctionScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1440, height: 860 });
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'payments.draftcanvas',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(paymentsDocument())),
+  });
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  const junction = (id: string) => page.locator(`.react-flow__node[data-id="${id}"]`);
+  const card = page.locator('.dc-junction-peek');
+  for (const dismiss of await page.locator('.dc-toast-dismiss').all()) await dismiss.click();
+
+  // The first part of the flow, at a size its names read at, wherever the import left the camera.
+  await junction('orders').click();
+  await page.keyboard.press('Control+k');
+  await page.keyboard.type('Fit selection');
+  await page.keyboard.press('Enter');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(600);
+
+  // Resting on a Junction that continues in one place.
+  const b = await box(junction('b-initiation'));
+  await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2);
+  await expect(card).toBeVisible();
+  await expect(card.locator('.dc-junction-picture svg')).toBeVisible();
+  await shot(page, 'junction-peek');
+  await page.mouse.move(40, 420);
+  await expect(card).toHaveCount(0);
+
+  // Asked of one that continues in several.
+  await junction('a-initiation').click();
+  await page.keyboard.press('g');
+  await expect(card.getByRole('option')).toHaveCount(3);
+  await page.keyboard.press('ArrowDown');
+  await expect(card.locator('.dc-junction-picture')).toContainText('Reconciliation');
+  await shot(page, 'junction-places');
+
+  // Followed: the place it continues, and the way back.
+  await page.keyboard.press('Enter');
+  await expect(junction('ledger')).toBeInViewport({ ratio: 1 });
+  await expect(page.getByRole('navigation', { name: 'Junction history' })).toBeVisible();
+  await page.mouse.move(720, 760);
+  await shot(page, 'junction-arrived');
+}
+
+/**
+ * Diagram history, on an architecture that grows over a few recorded revisions: a past revision in
+ * the timeline's lens, that revision compared with now (overlay, then side by side), and the
+ * alternatives an architecture can branch into and bring back together. Recording waits 5 s here
+ * instead of 30 (the `history-idle` preference, set before the app loads), so each step is a
+ * revision of its own, as in `e2e/history.spec.ts`.
+ */
+async function historyScreenshots(page: Page) {
+  await page.setViewportSize({ width: 1200, height: 760 });
+  const clock = page.locator('.dc-history-chip');
+  const timeline = page.getByRole('region', { name: 'Timeline' });
+  // A change shows as waiting within a moment, and stays waiting for the whole idle wait.
+  const recorded = async () => {
+    await page.waitForTimeout(1000);
+    await expect(clock).toHaveAttribute('aria-label', /Every change is in this diagram’s history/, { timeout: 20_000 });
+  };
+  const rename = async (from: string, to: string) => {
+    await page.locator('.dc-node', { hasText: from }).dblclick();
+    const editor = page.locator('.dc-node-editor');
+    await editor.fill(to);
+    await editor.press('Enter');
+    await expect(editor).toBeHidden();
+    await page.mouse.click(1100, 120);
+  };
+
+  await page.getByRole('button', { name: START_BUTTON }).first().click();
+  await expect(page.locator('.dc-editor')).toBeVisible();
+  const title = page.getByLabel('Diagram title');
+  await title.fill('Checkout');
+  await title.blur();
+
+  // The first sketch: a request's way in and where its order is kept.
+  await drop(page, 's', { x: 170, y: 170 }, 'API Gateway');
+  await page.keyboard.press('Escape');
+  await drop(page, 's', { x: 500, y: 170 }, 'Order Service');
+  await page.keyboard.press('Escape');
+  await drop(page, 'd', { x: 830, y: 170 }, 'PostgreSQL');
+  await page.keyboard.press('Escape');
+  await connectNodes(page, 0, 1);
+  await connectNodes(page, 1, 2);
+  await page.mouse.click(1100, 120);
+  await recorded();
+
+  // Then the order's events, and billing listening to them: a revision each, and a rename.
+  await drop(page, 'q', { x: 500, y: 340 }, 'Order events');
+  await page.keyboard.press('Escape');
+  await connectNodes(page, 1, 3, false);
+  await page.mouse.click(1100, 120);
+  await recorded();
+  await drop(page, 's', { x: 830, y: 340 }, 'Billing');
+  await page.keyboard.press('Escape');
+  await connectNodes(page, 3, 4);
+  await page.mouse.click(1100, 120);
+  await recorded();
+  await rename('Order Service', 'Orders');
+  await recorded();
+
+  // The timeline, from the clock's details, and the first sketch shown in its lens.
+  await clock.click();
+  await page.getByRole('button', { name: 'Open timeline' }).click();
+  await expect(timeline).toBeVisible();
+  await expect(page.locator('.dc-editor')).toHaveAttribute('data-timeline', '');
+  const marks = page.locator('.dc-timeline-mark');
+  await expect(marks).toHaveCount(4, { timeout: 20_000 });
+  await marks.first().click();
+  await expect(page.locator('.dc-history-lens')).toHaveCount(1);
+  await page.mouse.move(1100, 120);
+  await shot(page, 'history-timeline');
+
+  // That sketch against now: every difference marked, then listed.
+  const count = page.locator('.dc-compare-bar-row').getByRole('button', { name: /^\d+ added/ });
+  await page.getByRole('button', { name: 'Compare with now' }).click();
+  await expect(page.locator('.dc-compare-mark[data-mark="added"]')).not.toHaveCount(0);
+  await count.click();
+  await expect(page.getByRole('list', { name: 'Changes' })).toBeVisible();
+  await page.mouse.move(1100, 120);
+  await shot(page, 'history-compare');
+  await count.click();
+  await page.getByRole('radiogroup', { name: 'Show' }).getByText('Side by side').click();
+  // Both halves share one camera: drawn smaller, each version fits its own half.
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await palette(page, 'Fit to view');
+  for (let i = 0; i < 3; i += 1) {
+    await palette(page, 'Zoom out');
+    await page.waitForTimeout(300); // each step from where the last one finished
+  }
+  // The fit leaves each version a little left of its half's middle; a nudge right centres them.
+  await page.mouse.move(600, 300);
+  await page.mouse.wheel(-280, 0);
+  await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
+  await page.mouse.move(1100, 120);
+  await shot(page, 'history-side-by-side');
+  await palette(page, 'Zoom to 100%');
+  await page.getByRole('button', { name: 'Stop comparing' }).click();
+  await page.getByRole('option', { name: /^Live/ }).click();
+  await expect(page.locator('.dc-history-lens')).toHaveCount(0, { timeout: 5_000 });
+
+  // An alternative, with one change of its own, then back on the main architecture.
+  const switcher = page.locator('.dc-timeline-title');
+  // The alternatives menu, from the timeline's title.
+  const choose = async (name: string | RegExp) => {
+    await switcher.click();
+    await page.getByRole('menu', { name: 'Alternatives' }).getByRole('menuitem', { name }).click();
+  };
+  await choose(/^Explore an alternative/);
+  await page.getByRole('dialog').getByPlaceholder('e.g. Event-driven payments').fill('Billing as a worker');
+  await page.getByRole('dialog').getByRole('button', { name: 'Explore', exact: true }).click();
+  await expect(switcher).toContainText('Billing as a worker');
+  await rename('Billing', 'Billing worker');
+  await recorded();
+  await choose(/^Main architecture/);
+  await expect(switcher).toContainText('Main architecture');
+  await expect(page.locator('.dc-node', { hasText: 'Billing worker' })).toHaveCount(0);
+
+  // Meanwhile the same shape renamed on main: bringing the alternative in asks which name to keep.
+  await rename('Billing', 'Invoicing');
+  await recorded();
+  await choose(/^Bring in/);
+  await expect(page.getByRole('list', { name: 'Differences to decide' })).toBeVisible();
+  await page.locator('.dc-merge-row .dc-compare-item').first().click();
+  await page.mouse.move(1100, 120);
+  await shot(page, 'history-alternatives');
+  await page.locator('.dc-merge-bar').getByRole('button', { name: 'Cancel' }).click();
 }
 
 /** Import a real example and follow the same share-link route as a recipient. */
@@ -873,7 +1051,14 @@ async function main() {
       acceptDownloads: true,
     });
     const page = await context.newPage();
+    // History records after 5 s of quiet instead of 30, so its pictures need no long waits.
+    if (process.argv.includes('--history-only')) await page.addInitScript(() => localStorage.setItem('draft-canvas.history-idle', '5'));
     await page.goto(URL);
+
+    if (process.argv.includes('--history-only')) {
+      await historyScreenshots(page);
+      return;
+    }
 
     if (process.argv.includes('--reader-only')) {
       await readerScreenshots(page);
@@ -882,6 +1067,11 @@ async function main() {
 
     if (process.argv.includes('--outage-only')) {
       await outageScreenshots(page);
+      return;
+    }
+
+    if (process.argv.includes('--junctions-only')) {
+      await junctionScreenshots(page);
       return;
     }
 

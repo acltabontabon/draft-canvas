@@ -140,9 +140,9 @@ test.describe('a coarse pointer', () => {
       page.locator(selector).evaluateAll((elements) =>
         elements.filter((element) => getComputedStyle(element).display !== 'none').map((element) => Math.round(element.getBoundingClientRect().height)),
       );
-    // The status bar: Undo, Redo, zoom out / in and the percentage, Appearance, Help.
+    // The status bar: zoom out / in and the percentage, Appearance, Help.
     const status = await heights('.dc-status .dc-status-right button');
-    expect(status.length).toBeGreaterThanOrEqual(6);
+    expect(status.length).toBeGreaterThanOrEqual(4);
     for (const height of status) expect(height).toBeGreaterThanOrEqual(40);
 
     // The selected shape's popover: every control in its row.
@@ -168,8 +168,8 @@ test('a mouse keeps the compact chrome at any width', async ({ page }) => {
   expect(await page.evaluate(() => matchMedia('(pointer: coarse)').matches)).toBe(false);
   await create(page, 'Service', { x: 200, y: 300 });
   await page.locator('.dc-node').first().click();
-  const undo = page.getByRole('button', { name: 'Undo' });
-  expect((await undo.boundingBox())!.height).toBeLessThan(36);
+  const zoomIn = page.getByRole('button', { name: 'Zoom in' });
+  expect((await zoomIn.boundingBox())!.height).toBeLessThan(36);
 });
 
 test('the Add to canvas picker scrolls in a short window, and the keyboard’s row is always in view', async ({ page }) => {

@@ -11,7 +11,7 @@ import type { DocumentStyle } from './style';
 export const DRAFT_FORMAT = 'draft-canvas' as const;
 
 /** Bump when the on-disk shape changes, and add a migration in `migrate.ts`. */
-export const CURRENT_VERSION = 32;
+export const CURRENT_VERSION = 34;
 
 export type DraftFormat = typeof DRAFT_FORMAT;
 
@@ -506,6 +506,19 @@ export interface DraftNode {
    * in an export: it is a note to the layout, not part of the diagram.
    */
   held?: boolean;
+  /**
+   * `ellipse` (Junction) only. The logical group this Junction belongs to: every Junction in the
+   * file carrying the same value is the same continuation point drawn in another place ("continues
+   * at A"), and the editor travels between them (`src/junctions/`). An opaque id, never the label:
+   * two groups may both read "A" and stay apart, and renaming one changes no membership. The label
+   * is each member's own `text`, which a group rename writes on all of them.
+   *
+   * A link is not a connector. Nothing is routed, inferred or walked through it: flows, outage
+   * walks, semantics and sequence export read the drawn connectors only. Absent is a plain
+   * Junction, which is every Junction saved before v33; a group of one is a Junction still waiting
+   * for its counterpart, never an error.
+   */
+  link?: string;
 }
 
 /**

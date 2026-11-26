@@ -1,0 +1,199 @@
+/* Canvas Evolution's chrome: the history glyph in the status bar and its details. It wears the
+   editor's own tokens and recedes like the save label beside it; only states that ask something of
+   the person (a question, a pause) take colour and weight. */
+
+.dc-history-status {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.dc-history-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text-faint);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  position: relative;
+  transition: color var(--dc-dur) var(--dc-ease-out), background var(--dc-dur) var(--dc-ease-out);
+}
+
+.dc-history-chip:hover,
+.dc-history-chip[aria-expanded='true'] {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text-muted);
+}
+
+.dc-history-chip:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 1px;
+}
+
+.dc-history-status[data-tone='attention'] .dc-history-chip {
+  color: var(--dc-caution);
+  font-weight: 600;
+}
+
+.dc-history-status[data-tone='danger'] .dc-history-chip {
+  color: var(--dc-danger);
+  font-weight: 600;
+}
+
+/* Changes not yet in history: a small dot, never a word — it is the normal state while drawing. */
+.dc-history-chip-dot {
+  position: absolute;
+  top: 3px;
+  right: 3px;
+  width: 5px;
+  height: 5px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-text-faint);
+}
+
+.dc-history-status[data-capture='capturing'] .dc-history-chip svg {
+  animation: dc-history-turn 1.2s var(--dc-ease-in-out) infinite;
+}
+
+@keyframes dc-history-turn {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-history-status[data-capture='capturing'] .dc-history-chip svg {
+    animation: none;
+  }
+}
+
+.dc-history-details {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: var(--dc-z-popover);
+  width: 300px;
+  padding: 12px 14px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius);
+  background: var(--dc-surface-raised);
+  box-shadow: var(--dc-shadow-panel);
+  color: var(--dc-text);
+  white-space: normal;
+  animation: dc-history-rise var(--dc-dur-slow) var(--dc-ease-out);
+}
+
+@keyframes dc-history-rise {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-history-details {
+    animation: none;
+  }
+}
+
+.dc-history-details-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.dc-history-details-alt {
+  color: var(--dc-text-muted);
+  font-weight: 500;
+}
+
+.dc-history-details-line {
+  margin: 0 0 4px;
+  color: var(--dc-text-muted);
+  line-height: 1.45;
+}
+
+.dc-history-details-meta {
+  margin: 0 0 4px;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+}
+
+.dc-history-details-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.dc-history-note {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--dc-radius-sm);
+  background: var(--dc-surface);
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.dc-history-note p {
+  margin: 0 0 6px;
+}
+
+/* Settings → History. */
+.dc-history-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.dc-history-confirm {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  flex-basis: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-sm);
+}
+
+/* Something unfinished waits for an answer: the dot takes the caution colour. */
+.dc-history-chip-dot[data-attention='true'] {
+  background: var(--dc-caution);
+}
+
+.dc-history-note .dc-button + .dc-button {
+  margin-left: 6px;
+}
+
+.dc-history-remote-url {
+  display: inline-block;
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.dc-history-publish-subjects {
+  flex-basis: 100%;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--dc-text-muted);
+  font-size: 12px;
+}

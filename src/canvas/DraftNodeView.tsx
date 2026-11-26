@@ -5,7 +5,7 @@ import { displayNameFor, maxSizeFor } from '../document/factory';
 import { lensNodeTier, nodeTierInPlayback, type ExplainTier } from '../document/flow';
 import { stepContextOf } from '../presentation/stepContext';
 import { normalizeNoteText } from '../document/noteText';
-import { anchorBandOf } from '../document/queueGeometry';
+import { anchorBandOf, bandSpan, bandWords } from '../document/queueGeometry';
 import type { DraftNode } from '../document/types';
 import {
   CODE_LAYOUT,
@@ -25,7 +25,7 @@ import { SequenceOverlay } from './sequence/SequenceOverlay';
 import { SequenceStepLayer } from './sequence/SequenceStepLayer';
 import { activeTextEditor, handleMarkdownKey } from './textEditor';
 import { nodeReading } from '../nodes/readings';
-import { HANDLE_ANCHORS } from '../edges/routing';
+import { HANDLE_ANCHORS, handleAnchorsOf } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { useSettle } from './useContinuation';
 import { DragCapsule } from './DragCapsule';
@@ -37,6 +37,7 @@ import type { Shape } from '../render/displayList';
 import { isNodeFocused, lensFlow, useEditorStore, type EditorStore } from '../store/editorStore';
 import { accentOf, type Theme } from '../render/theme/tokens';
 import { selectNode } from '../store/selectors';
+import { junctionPeerCount } from '../store/junctions';
 import { useUiStore } from '../store/uiStore';
 import { useDiagramStyle } from './useDiagramStyle';
 import { useThemeValue } from '../theme/useTheme';
@@ -123,6 +124,11 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
   // Identity-stable out of a per-document index (`unresolvedIndex`), so this costs every node one
   // map lookup per store update and re-renders only the nodes whose own points changed.
   const openPoints = useEditorStore((state) => unresolvedOpenPointsFor(state.document.openPoints, { kind: 'node', id }));
+  // A linked Junction (`DraftNode.link`): how many other places its group is drawn in, and whether
+  // its group is the one being pointed out. Two lookups each, and constant for every other shape
+  // (`store/junctions.ts`). Canvas chrome only: an export draws the Junction and its label.
+  const linkPeers = useEditorStore((state) => junctionPeerCount(state, node?.link));
+  const linkPointed = useUiStore((state) => state.junctionPeerLink !== null && state.junctionPeerLink === node?.link);
 
   const [editing, setEditing] = useState(false);
   const editorRef = useRef<HTMLTextAreaElement | null>(null);
@@ -263,34 +269,40 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       : { ...node, width: effectiveWidth, height: effectiveHeight };
   // Relative to the node box (x, y: 0) — the handles are positioned inside it.
   const handleBand = liveNode
-    ? anchorBandOf({ type: liveNode.type, serviceKind: liveNode.serviceKind, componentKind: liveNode.componentKind, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
+    ? anchorBandOf({ ...bandWords(liveNode), type: liveNode.type, x: 0, y: 0, width: effectiveWidth, height: effectiveHeight })
     : undefined;
   // `DraftHandle` is memoized, so each keeps its style object until the band itself moves —
   // twelve fresh objects per node render would re-render every handle every time.
   const bandTop = handleBand?.top;
   const bandBottom = handleBand?.bottom;
   const bandLeft = handleBand?.left;
-  // `right` is set as a distance from the box's right edge, which is what React Flow's own
-  // `right: 0` / `translate(50%)` centring for a right handle is relative to.
-  const bandRightInset = handleBand?.right === undefined ? undefined : effectiveWidth - handleBand.right;
+  const bandRight = handleBand?.right;
   const bandGlyphTop = handleBand?.glyphTop;
+  // Where the top and bottom handles are spread: across the glyph's reach, not the box (`bandSpan`).
+  const across = bandSpan({ x: 0, y: 0, width: effectiveWidth, height: effectiveHeight }, handleBand, 'top');
+  const acrossStart = across.length === effectiveWidth ? undefined : across.start;
+  const acrossLength = across.length;
   const handleStyles = useMemo(
     () =>
       new Map(
         HANDLE_ANCHORS.map((anchor) => {
           const fallback = STATIC_HANDLE_STYLES.get(anchor.id)!;
-          if (anchor.side === 'bottom') return [anchor.id, fallback] as const;
-          if (anchor.side === 'top') {
-            return [anchor.id, bandGlyphTop === undefined ? fallback : { ...fallback, top: `${bandGlyphTop}px` }] as const;
+          if (anchor.side === 'top' || anchor.side === 'bottom') {
+            // The same columns the router lands on, top and bottom.
+            const column = acrossStart === undefined ? fallback : { left: `${acrossStart + acrossLength * anchor.offset}px` };
+            if (anchor.side === 'bottom' || bandGlyphTop === undefined) return [anchor.id, column] as const;
+            return [anchor.id, { ...column, top: `${bandGlyphTop}px` }] as const;
           }
           if (bandTop === undefined || bandBottom === undefined) return [anchor.id, fallback] as const;
           const style: CSSProperties = { top: `${bandTop + (bandBottom - bandTop) * anchor.offset}px` };
           if (anchor.side === 'left' && bandLeft !== undefined) style.left = `${bandLeft}px`;
-          if (anchor.side === 'right' && bandRightInset !== undefined) style.right = `${bandRightInset}px`;
+          // `right` is set as a distance from the box's right edge, which is what React Flow's own
+          // `right: 0` / `translate(50%)` centring for a right handle is relative to.
+          if (anchor.side === 'right' && bandRight !== undefined) style.right = `${effectiveWidth - bandRight}px`;
           return [anchor.id, style] as const;
         }),
       ),
-    [bandTop, bandBottom, bandLeft, bandRightInset, bandGlyphTop],
+    [bandTop, bandBottom, bandLeft, bandRight, bandGlyphTop, effectiveWidth, acrossStart, acrossLength],
   );
 
   /**
@@ -505,6 +517,8 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
       data-pointed={pointed ? 'true' : undefined}
       data-traced={traced ? 'true' : undefined}
       data-held={node.held ? 'true' : undefined}
+      data-link={node.link ? (linkPeers > 0 ? 'linked' : 'waiting') : undefined}
+      data-link-pointed={node.link && linkPointed ? 'true' : undefined}
       data-settle={settling ? 'true' : undefined}
       data-arriving={arriving && !settling ? 'true' : undefined}
       data-changed={changed ? 'true' : undefined}
@@ -539,6 +553,19 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
           shape's own name rather than a separate thing to find: "has an inside" is a fact about
           this shape, like its kind. */}
       {insideCount > 0 && <span className="dc-sr-only">, has an inside, {count(insideCount, 'shape')}</span>}
+      {node.link && (
+        <>
+          <span className="dc-sr-only">{linkPeers > 0 ? `, continues in ${count(linkPeers, 'other place')}` : ', not linked to another junction yet'}</span>
+          {/* The link, as the canvas shows it: a ring around the Junction, whole when it leads
+              somewhere and dashed while it waits, with how many places when there are several. */}
+          <span className="dc-junction-link" aria-hidden="true" />
+          {linkPeers > 1 && (
+            <span className="dc-junction-count" aria-hidden="true">
+              {linkPeers}
+            </span>
+          )}
+        </>
+      )}
       {!readOnly && (
         <NodeResizer
           isVisible={Boolean(selected) && !sequenceEditing}
@@ -788,7 +815,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         The dot starts the drawing gesture; after the drop an automatic end
         may move to another point or side as the shapes move.
       */}
-      {(node.type === 'ellipse' ? HANDLE_ANCHORS.filter((anchor) => anchor.offset === 0.5) : HANDLE_ANCHORS).map(
+      {handleAnchorsOf(node.type).map(
         (anchor) => (
           <DraftHandle
             key={anchor.id}

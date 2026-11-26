@@ -125,16 +125,104 @@ export function codexConfigToml(sidecarPath: string): string {
   return `[mcp_servers.draft-canvas]\ncommand = ${JSON.stringify(sidecarPath)}\ntool_timeout_sec = ${CODEX_TOOL_TIMEOUT_SECS}\n`;
 }
 
-const CLIENT_NAMES: Record<AgentClient, string> = { codex: 'Codex', 'claude-code': 'Claude Code', gemini: 'Gemini CLI', junie: 'Junie' };
+/** What "Add to OpenCode" writes, for pasting by hand into the global `opencode.json` or a project's own.
+ *  Servers sit directly under `mcp`, the layout OpenCode 1 and 2 both read; `mcp.servers` is OpenCode 2 only. */
+export function opencodeConfigJson(sidecarPath: string): string {
+  return JSON.stringify({ mcp: { 'draft-canvas': { type: 'local', command: [sidecarPath], enabled: true } } }, null, 2);
+}
+
+/** Every agent Settings can connect: the ones the shell sets up itself, Cursor (its own link does it) and
+ *  any other MCP client (set up by hand). */
+export type AgentChoice = AgentClient | 'cursor' | 'other';
+
+const CLIENT_NAMES: Record<AgentChoice, string> = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  cursor: 'Cursor',
+  gemini: 'Gemini CLI',
+  junie: 'Junie',
+  opencode: 'OpenCode',
+  other: 'Other',
+};
+
+export interface AgentOption {
+  value: AgentChoice;
+  label: string;
+  /** The full name, where the pill's is shortened. */
+  name?: string;
+  /** Where the agent's setup stands, shown on its pill: set up, or set up for another copy. */
+  status?: { tone: 'on' | 'warn'; label: string };
+}
+
+/** The agents to choose from, each marked with what the shell found in its configuration, so what is
+ *  already set up is seen without opening every one. Cursor and other clients keep their own
+ *  configuration out of the shell's sight, and carry no mark. */
+export function agentOptions(setups: readonly AgentClientSetup[]): AgentOption[] {
+  const order: AgentChoice[] = ['claude-code', 'codex', 'cursor', 'gemini', 'junie', 'opencode', 'other'];
+  return order.map((value) => {
+    const state = setups.find((setup) => setup.client === value)?.state;
+    const option: AgentOption = { value, label: CLIENT_NAMES[value] };
+    if (value === 'other') option.name = 'Other MCP clients';
+    if (state === 'ready') option.status = { tone: 'on', label: 'set up' };
+    if (state === 'outdated') option.status = { tone: 'warn', label: 'needs an update' };
+    return option;
+  });
+}
+
+/** The agent Settings opens on: the first one already set up, so a returning person lands on what they
+ *  use; Claude Code when nothing is. */
+export function firstAgent(setups: readonly AgentClientSetup[]): AgentChoice {
+  return agentOptions(setups).find((option) => option.status)?.value ?? 'claude-code';
+}
+
+/** What the first step is called: connecting this agent. */
+export function connectTitle(client: AgentChoice): string {
+  return client === 'other' ? 'Connect your agent' : `Connect ${CLIENT_NAMES[client]}`;
+}
 
 /** How a client picks up a new server: each reads its MCP configuration as a session starts. Gemini CLI
- *  turns every server off, its user-level ones too, in a folder the person hasn't trusted. */
-const RESTART: Record<AgentClient, string> = {
-  codex: 'Start a new Codex chat to use it.',
-  'claude-code': 'Start a new Claude Code session to use it.',
-  gemini: 'Start a new Gemini CLI session in a trusted folder to use it.',
-  junie: 'Start a new Junie session to use it.',
+ *  turns every server off, its user-level ones too, in a folder the person hasn't trusted. OpenCode 1
+ *  reads its configuration once, as it starts. */
+const FRESH_START: Record<AgentChoice, string> = {
+  'claude-code': 'Start a new Claude Code session',
+  codex: 'Start a new Codex chat',
+  cursor: 'Start a new chat in Cursor',
+  gemini: 'Start a new Gemini CLI session in a trusted folder',
+  junie: 'Start a new Junie session',
+  opencode: 'Restart OpenCode',
+  other: 'Restart your agent',
 };
+
+/** The agent's own command that starts each server and says whether it connected, where it has one that
+ *  was checked to say so. It reads everything the agent does: a project's own configuration can override
+ *  the entry Settings wrote, out of this app's sight. */
+const CHECK_COMMANDS: Partial<Record<AgentChoice, string>> = {
+  'claude-code': 'claude mcp list',
+  opencode: 'opencode mcp list',
+};
+
+export interface TryLine {
+  /** What to do in the agent, in a sentence. */
+  text: string;
+  /** Whether an agent is connected right now: the app's own count, the same for every agent. */
+  live: { text: string; tone: FactTone };
+  /** A terminal command that reports the connection from the agent's side, when it has one. */
+  command: string | null;
+}
+
+/** The last step, the same for every agent: "set up" is what a configuration file says, and only an
+ *  agent reaching Draft Canvas shows that it worked. The connector opens its connection on the agent's
+ *  first request, so the step asks for one. */
+export function tryLine(client: AgentChoice, agent: Pick<AgentSettings, 'enabled' | 'listening' | 'connections'>): TryLine {
+  const live: TryLine['live'] = !agent.enabled
+    ? { text: 'Agent access is off, so nothing can connect. Turn it on above.', tone: 'warn' }
+    : !agent.listening
+      ? { text: 'The connector isn’t ready yet.', tone: 'warn' }
+      : agent.connections === 0
+        ? { text: 'No agent connected yet.', tone: 'off' }
+        : { text: agent.connections === 1 ? '1 agent connected.' : `${agent.connections} agents connected.`, tone: 'on' };
+  return { text: `${FRESH_START[client]}, then ask it to list your Draft Canvas diagrams.`, live, command: CHECK_COMMANDS[client] ?? null };
+}
 
 /** What the one-click button does, before it's done. */
 function addText(client: AgentClient, where: string): string {
@@ -147,6 +235,8 @@ function addText(client: AgentClient, where: string): string {
       return 'Runs gemini mcp add for you, so every project can use Draft Canvas.';
     case 'junie':
       return `Adds Draft Canvas to Junie’s MCP servers${where} — Junie in JetBrains IDEs and the Junie CLI both use it.`;
+    case 'opencode':
+      return `Adds Draft Canvas to OpenCode’s MCP servers${where}, for every project.`;
   }
 }
 
@@ -163,24 +253,26 @@ export function clientLine(setup: AgentClientSetup | undefined): ClientLine | nu
   if (!setup) return null;
   const name = CLIENT_NAMES[setup.client];
   const where = setup.location ? ` in ${setup.location}` : '';
-  if (setup.state === 'ready') return { action: null, text: `Set up${where}. ${RESTART[setup.client]}`, tone: 'on' };
+  // What comes next (a fresh session, a first request) is the last step's to say: `tryLine`.
+  if (setup.state === 'ready') return { action: null, text: `Set up${where}.`, tone: 'on' };
   if (setup.state === 'outdated') {
     return {
       action: `Update ${name}`,
-      text: `${name} is set up for a different copy of Draft Canvas${setup.configuredCommand ? ` (${setup.configuredCommand})` : ''}, or has it turned off.`,
+      // OpenCode reads two files in two layouts, so its entry can also be there twice, or be another server by that name.
+      text: `${name} is set up for a different copy of Draft Canvas${setup.configuredCommand ? ` (${setup.configuredCommand})` : ''}, ${setup.client === 'opencode' ? 'has it turned off, or has more than one entry for it' : 'or has it turned off'}.`,
       tone: 'warn',
     };
   }
   return { action: `Add to ${name}`, text: addText(setup.client, where), tone: null };
 }
 
-/** Which skills folder a client in Settings reads: Claude Code its own; Codex, Cursor, Gemini CLI, Junie
- *  and other agents the shared `~/.agents/skills` (`src-tauri/src/agent/skill.rs`). */
-export function skillTargetOf(client: AgentClient | 'cursor' | 'other'): AgentSkillTarget {
+/** Which skills folder a client in Settings reads: Claude Code its own; Codex, Cursor, Gemini CLI, Junie,
+ *  OpenCode and other agents the shared `~/.agents/skills` (`src-tauri/src/agent/skill.rs`). */
+export function skillTargetOf(client: AgentChoice): AgentSkillTarget {
   return client === 'claude-code' ? 'claude-code' : 'agents';
 }
 
-const SKILL_READERS: Record<AgentSkillTarget, string> = { 'claude-code': 'Claude Code', agents: 'Codex, Cursor, Gemini CLI and Junie' };
+const SKILL_READERS: Record<AgentSkillTarget, string> = { 'claude-code': 'Claude Code', agents: 'Codex, Cursor, Gemini CLI, Junie and OpenCode' };
 
 export interface SkillLine {
   /** The main button's label, or null when there's nothing to do. */

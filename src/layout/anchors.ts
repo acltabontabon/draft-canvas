@@ -115,8 +115,11 @@ function corridorClear(source: Rect, target: Rect, rects: Map<string, Rect>, edg
   return horizontal ? Math.abs(a.y - b.y) <= Math.max(source.height, target.height) : Math.abs(a.x - b.x) <= Math.max(source.width, target.width);
 }
 
-/** A shape's box, and for a queue or Data Store the band its left/right connectors land on. */
-export type AnchorRect = Rect & { bandTop?: number; bandBottom?: number };
+/** A shape's box, and for a queue or Data Store the band its left/right connectors land on.
+ *  `bandLeft`/`bandRight`: the stretch its top and bottom connectors are spread along, when that is
+ *  not the box's whole width (`bandSpan`). */
+/** `middleOnly`: the shape has just the middle point of each side (a Junction, `middlePointsOnly`). */
+export type AnchorRect = Rect & { bandTop?: number; bandBottom?: number; bandLeft?: number; bandRight?: number; middleOnly?: boolean };
 
 const HANDLES = [0.25, 0.5, 0.75];
 const OPPOSITE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
@@ -124,7 +127,7 @@ const OPPOSITE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'righ
 const TWIN_SPAN = 60;
 
 function spanOf(rect: AnchorRect, direction: Direction): number {
-  if (direction === 'down') return rect.width;
+  if (direction === 'down') return rect.bandLeft !== undefined && rect.bandRight !== undefined ? rect.bandRight - rect.bandLeft : rect.width;
   return rect.bandTop !== undefined && rect.bandBottom !== undefined ? rect.bandBottom - rect.bandTop : rect.height;
 }
 /** How much straighter a line must get before a lone connector leaves the middle of its side. */
@@ -138,8 +141,9 @@ const CENTRE_PREFERENCE = 6;
  */
 function alignedOffsets(own: AnchorRect, side: Side, others: Rect[], barred: (index: number, offset: number) => boolean = () => false): number[] | undefined {
   const horizontal = side === 'top' || side === 'bottom';
-  const start = horizontal ? own.x : (own.bandTop ?? own.y);
-  const span = horizontal ? own.width : (own.bandBottom ?? own.y + own.height) - start;
+  // A glyph's top and bottom anchors are spread across the glyph, not its box (`bandSpan`).
+  const start = horizontal ? (own.bandLeft ?? own.x) : (own.bandTop ?? own.y);
+  const span = (horizontal ? (own.bandRight ?? own.x + own.width) : (own.bandBottom ?? own.y + own.height)) - start;
   const at = (offset: number) => start + offset * span;
   const target = (r: AnchorRect) => (horizontal ? r.x + r.width / 2 : r.bandTop !== undefined && r.bandBottom !== undefined ? (r.bandTop + r.bandBottom) / 2 : r.y + r.height / 2);
   const n = others.length;
@@ -197,7 +201,10 @@ type Barred = (entry: SideEntry, offset: number) => boolean;
 
 /** Where along `side` of `own` a handle sits, on the axis across it (y for left/right). */
 function handleAt(own: AnchorRect, side: Side, offset: number): number {
-  if (side === 'top' || side === 'bottom') return own.x + offset * own.width;
+  if (side === 'top' || side === 'bottom') {
+    const left = own.bandLeft ?? own.x;
+    return left + offset * ((own.bandRight ?? own.x + own.width) - left);
+  }
   const start = own.bandTop ?? own.y;
   return start + offset * ((own.bandBottom ?? own.y + own.height) - start);
 }
@@ -483,7 +490,7 @@ export function assignAnchors(
     const titles = side === 'top' && own ? options.titles?.get(node) : undefined;
     const barred: Barred = (entry, offset) => {
       if (!titles || !own) return false;
-      const x = own.x + offset * own.width;
+      const x = handleAt(own, side, offset);
       return titles.some((title) => !title.inside.has(entry.otherId) && x > title.from - TITLE_CLEAR && x < title.to + TITLE_CLEAR);
     };
     const pinnedEntries = list.filter((e) => e.pinnedOffset !== undefined);
@@ -555,12 +562,16 @@ export function assignAnchors(
     });
   }
   const out = new Map<string, Anchors>();
+  // A Junction has only the middle of each side: spreading several ends over its side gave them
+  // 0.25 and 0.75, handles it does not render ("left@2"), and those connectors were not drawn.
+  const offsetAt = (id: string, end: 'source' | 'target', node: string) =>
+    (rects.get(node) as AnchorRect | undefined)?.middleOnly ? 0.5 : (offsets.get(`${id}\u0000${end}`) ?? 0.5);
   for (const edge of edges) {
     const chosen = sides.get(edge.id);
     if (!chosen) continue;
     out.set(edge.id, {
-      sourceAnchor: { side: chosen.source, offset: offsets.get(`${edge.id}\u0000source`) ?? 0.5 },
-      targetAnchor: { side: chosen.target, offset: offsets.get(`${edge.id}\u0000target`) ?? 0.5 },
+      sourceAnchor: { side: chosen.source, offset: offsetAt(edge.id, 'source', edge.source) },
+      targetAnchor: { side: chosen.target, offset: offsetAt(edge.id, 'target', edge.target) },
     });
   }
   return out;

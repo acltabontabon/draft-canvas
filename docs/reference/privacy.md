@@ -36,6 +36,7 @@ Web diagrams stay in this browser profile and do not sync.
 | IndexedDB `draft-canvas-keys` | Key for legacy encrypted records, read-only |
 | IndexedDB `draft-canvas-starters` | Downloaded starters gallery and its style packs, when you load it; never your diagrams |
 | IndexedDB `draft-canvas-styles` | The styles you made in Settings → Appearance; never your diagrams |
+| IndexedDB `draft-canvas-history` | Each diagram's history, as Git objects, including content later deleted from the diagram (see [Diagram history](../guides/history.md#privacy)) |
 | Cache Storage | Offline app files, never diagrams |
 | localStorage | Short preferences, such as theme, export choices and live-session name |
 | sessionStorage | Unsaved edits held across a reload, removed once restored |
@@ -49,7 +50,9 @@ Web diagrams stay in this browser profile and do not sync.
 
 - Diagrams are `.draftcanvas` files where you save them.
 - The app's data folder holds recent files, settings and recovery copies, removed once saved or
-  discarded.
+  discarded, and each diagram's history (`history/`) until you remove it in Settings → History.
+  Removing a history deletes its revisions from this device only; exported or published copies are
+  not affected.
 - It reads only files and folders you pick, plus folders you allow for agents. **Use in docs**
   writes its pictures beside the saved diagram and adds one line to a Markdown file you choose.
 
@@ -145,6 +148,11 @@ history per diagram (see [Connect an AI agent](../guides/connect-an-ai-agent.md#
 A run's working folder holds only its connector configuration and is removed when the run ends. Nodi
 reads no code unless you allow it in the chat, and then only one project folder, read-only and
 without secret files.
+
+Agents can read summaries of the open diagram's history and preview a restore or merge. Reading a past
+revision in full, which can include content since removed from the diagram, is off unless you turn on
+**Let agents read past revisions in full** in Settings → History (see
+[Diagram history](../guides/history.md#agents-and-history)).
 
 ### Desktop and agent boundaries
 

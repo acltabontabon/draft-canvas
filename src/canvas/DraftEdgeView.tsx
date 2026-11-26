@@ -3,6 +3,7 @@ import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../re
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
+import { anchorOnShape } from '../document/queueGeometry';
 import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
 import { useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
@@ -403,6 +404,18 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const targetServiceKind = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.serviceKind);
   const sourceComponentKind = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.componentKind);
   const targetComponentKind = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.componentKind);
+  // And its words: a glyph grows into the room they leave (`dataStoreScale`), so they decide where
+  // its edges are. Each its own selector, a string the store already holds: nothing is built here.
+  const sourceText = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.text);
+  const targetText = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.text);
+  const sourceTechnology = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.technology);
+  const targetTechnology = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.technology);
+  const sourceDescription = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.description);
+  const targetDescription = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.description);
+  const sourceDatabaseKind = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.databaseKind);
+  const targetDatabaseKind = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.databaseKind);
+  const sourceArtifactKind = useEditorStore((state) => selectNode(state.document, edge?.source ?? '')?.artifactKind);
+  const targetArtifactKind = useEditorStore((state) => selectNode(state.document, edge?.target ?? '')?.artifactKind);
   const attachTarget = useUiStore((state) => state.attachArmedEdgeTarget === id);
   /** A dragged, unconnected shape would go into the middle of this connector on drop. Tinted like
    *  an attach target, with no landing dot: the shape lands where it is, not at the label point. */
@@ -556,8 +569,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
 
   if (!edge || !sourceNode || !targetNode) return null;
 
-  const sourceRect = rectOfInternal(sourceNode, sourceType && { type: sourceType, serviceKind: sourceServiceKind, componentKind: sourceComponentKind });
-  const targetRect = rectOfInternal(targetNode, targetType && { type: targetType, serviceKind: targetServiceKind, componentKind: targetComponentKind });
+  const sourceRect = rectOfInternal(sourceNode, sourceType && { type: sourceType, serviceKind: sourceServiceKind, componentKind: sourceComponentKind, databaseKind: sourceDatabaseKind, artifactKind: sourceArtifactKind, text: sourceText, technology: sourceTechnology, description: sourceDescription });
+  const targetRect = rectOfInternal(targetNode, targetType && { type: targetType, serviceKind: targetServiceKind, componentKind: targetComponentKind, databaseKind: targetDatabaseKind, artifactKind: targetArtifactKind, text: targetText, technology: targetTechnology, description: targetDescription });
   if (!sourceRect || !targetRect) return null;
 
   // While an endpoint is being dragged, the path tracks the live pointer
@@ -591,6 +604,16 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     targetServiceKind,
     sourceComponentKind,
     targetComponentKind,
+    sourceText,
+    targetText,
+    sourceTechnology,
+    targetTechnology,
+    sourceDescription,
+    targetDescription,
+    sourceDatabaseKind,
+    targetDatabaseKind,
+    sourceArtifactKind,
+    targetArtifactKind,
     dragOverride,
     bendPreview,
     committedSource,
@@ -1616,7 +1639,7 @@ export function EdgeEndpointHandle({
       const edge = document.edges.find((item) => item.id === edgeId);
       const node = candidate && edge && !reconnectProblem(document, edge, endpoint, candidate.id) ? candidate : undefined;
       const hoverId = node?.id ?? null;
-      const handleId = node ? handleIdForAnchor(snappedAnchorForDrop(rectOf(node), point)) ?? null : null;
+      const handleId = node ? handleIdForAnchor(snappedAnchorForDrop(rectOf(node), point), node.type) ?? null : null;
       const hoverKey = hoverId ? `${hoverId}:${handleId ?? ''}` : null;
       if (hoverKey !== lastHover.current) {
         lastHover.current = hoverKey;
@@ -1639,7 +1662,9 @@ export function EdgeEndpointHandle({
       const node = findDropNode(point);
       if (!node) return; // Empty canvas: leave the connection exactly as it was.
       // A deliberate side drop is a pin; a body-center drop keeps smart attachment.
-      const anchor = snappedAnchorForDrop(rectOf(node), point);
+      // Only a point the shape has: a Junction takes the middle of the side it was dropped on.
+      const dropped = snappedAnchorForDrop(rectOf(node), point);
+      const anchor = dropped && anchorOnShape(node.type, dropped);
       useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, anchor?.side, anchor?.offset);
     },
     [edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],

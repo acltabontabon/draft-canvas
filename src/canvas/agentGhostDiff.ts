@@ -54,6 +54,8 @@ function nodeChanged(before: DraftNode, after: DraftNode): boolean {
     before.componentKind !== after.componentKind ||
     before.noteKind !== after.noteKind ||
     before.boundaryPreset !== after.boundaryPreset ||
+    // A Junction linked or unlinked reads as "modified" in the text list; it needs a ghost to point at.
+    before.link !== after.link ||
     before.code !== after.code ||
     before.language !== after.language ||
     // Styling can change the artwork without changing its box (for example, aligning a multiline

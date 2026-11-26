@@ -9,6 +9,7 @@ pub mod companion;
 pub mod docs;
 pub mod documents;
 pub mod explorer;
+pub mod history;
 pub mod host;
 pub mod peek;
 pub mod projects;

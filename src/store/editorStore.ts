@@ -34,6 +34,7 @@ import {
   withCamerasOf,
   type DepthPath,
 } from '../depth/tree';
+import { junctionOf, linkJunctions as linkJunctionsIn, renameJunctionGroup as renameJunctionGroupIn, unlinkJunctions as unlinkJunctionsIn } from '../junctions/groups';
 import { getMeasurer } from '../render/text/measure';
 import { naturalArchitectureSize, naturalBoundaryWidth, naturalNoteHeight, naturalSequenceSizeFor, naturalTextHeight, sizingContext } from '../nodes/describe';
 import { fitSequences, recoverCappedSequence } from '../nodes/sequenceFit';
@@ -58,6 +59,7 @@ import {
   extractFragment,
   freeOriginFor,
   hasAttachmentRoom,
+  isCanvasEmpty,
   moveNodes,
   pasteDocument,
   pasteFragment,
@@ -180,7 +182,7 @@ import type {
 } from '../document/types';
 import type { DocumentStyle } from '../document/style';
 import { ACTOR_KINDS, C4_TEXT_TYPES } from '../document/types';
-import { addInk, INK_ID_PREFIX, inkOf, inkUnionBounds, removeInk, translateInk } from '../document/ink';
+import { addInk, inkOf, inkUnionBounds, reissueInk, removeInk, translateInk } from '../document/ink';
 import { createId } from '../document/ids';
 import { flowFromWalk, tellNext } from '../presentation/walk';
 import { boxForChoice, INK_CHOICE_LABEL, INK_CHOICE_TYPE, type InkShapeChoice } from '../ink/choices';
@@ -644,6 +646,22 @@ export interface EditorStore {
    *  already appears to branch, and re-points that bundle's members through
    *  it — the deliberate step from automatic routing to explicit control. */
   convertBundleToJunction: (edgeId: string) => void;
+  /**
+   * Puts Junctions into one group (`DraftNode.link`, `src/junctions/`), wherever in the file they
+   * are — one undo step. `into` names a group to join; without it the first that already has one
+   * decides, or a new group is made. The group's link, or `null` when nothing changed.
+   */
+  linkJunctions: (ids: readonly string[], into?: string) => string | null;
+  /** Takes Junctions out of their groups, keeping each shape, its label and its connectors. */
+  unlinkJunctions: (ids: readonly string[]) => boolean;
+  /** Renames a group: the label on every member, in every room, as one undo step. */
+  renameJunctionGroup: (link: string, label: string) => boolean;
+  /**
+   * Adds a counterpart of a Junction to the room on screen, centred on `center` and selected: the
+   * same label, colour and size, in the same group. A Junction that had no group yet gets one in the
+   * same undo step. `null` when the Junction is gone or the file is full.
+   */
+  addJunctionCounterpart: (sourceId: string, center: { x: number; y: number }) => DraftNode | null;
   setEdgeInteractionMode: (id: string, mode: 'sync' | 'async') => void;
   toggleEdgeAsync: (id: string) => void;
   /** Sets (or clears) a connector's flow-behaviour kind — see `ConnectorKind`. */
@@ -1217,6 +1235,8 @@ function resetViewSession(): Pick<EditorStore, 'selection' | 'flowPlayback' | 'e
     depthPlateFocusId: null,
     // Anchored to an element of the canvas being left.
     openPointPopover: null,
+    junctionPeek: null,
+    junctionPeerLink: null,
     // Strokes and a drawing's offer belong to the room being left.
     inkSelection: [],
     inkSuggestion: null,
@@ -1339,7 +1359,7 @@ export function outermostSelected(nodes: readonly DraftNode[], selectedIds: read
  */
 function namingBlank(state: EditorStore, title: string | undefined): string | undefined {
   if (!title || state.path.length > 0 || (state.document.metadata.title !== DEFAULT_TITLE && state.document.metadata.title !== 'Untitled canvas')) return undefined;
-  return totals(fileOf(state)).nodes === 0 ? title : undefined;
+  return isCanvasEmpty(state.document) ? title : undefined;
 }
 
 function notifyNothingAdded(tooDeep: boolean): void {
@@ -1412,7 +1432,9 @@ function recorded(
  */
 function editingLocked(): boolean {
   const ui = useUiStore.getState();
-  return Boolean(ui.readOnly || ui.flowTrace);
+  // The history lens shows a past revision over the live diagram: an edit made "on" it would land on
+  // the hidden live diagram instead, so none is taken while it is open (one guard, not one per tool).
+  return Boolean(ui.readOnly || ui.flowTrace || ui.historyLens);
 }
 
 /** The selection without anything `document` no longer holds — checked by id, not by count: a remote
@@ -1817,12 +1839,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   drawInk(stroke) {
     const state = get();
-    // A room exists only while it holds a shape (`depth/tree.ts`); a sketch alone in an empty one
-    // would vanish on the way out. Say so instead of keeping a stroke that would be lost.
-    if (state.path.length > 0 && state.document.nodes.length === 0) {
-      useUiStore.getState().notify('Sketches sit over a view’s shapes — add a shape here first.');
-      return false;
-    }
+    if (!canKeepSketches(state)) return false;
     if (totals(fileOf(state)).ink >= LIMITS.maxInkStrokes) {
       useUiStore.getState().notify('This canvas holds as many sketch strokes as it can. Erase some to draw more.', 'error');
       return false;
@@ -2187,6 +2204,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   updateNodeText(id, rawText, options) {
     // Held to what a load keeps (`parseDocument`), so a save never holds text the next open trims.
     const text = rawText.slice(0, LIMITS.maxTextLength);
+    // A linked Junction's label is its group's: typed on one, it is the same words on every one,
+    // in every room, as one undo step (`junctions/groups.ts`).
+    const junction = get().document.nodes.find((n) => n.id === id);
+    if (junction?.type === 'ellipse' && junction.link) {
+      get().renameJunctionGroup(junction.link, text);
+      return;
+    }
     // A manual edit is permanent intent from this point on, even if the typed value happens to
     // match a subtype's own default (e.g. renaming an API to literally "API") — see
     // `DraftNode.textOrigin`'s doc comment. `updateNodeById`'s Service auto-relabeling never
@@ -2935,6 +2959,55 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     get().apply('Move', (doc) => moveNodes(doc, positions));
   },
 
+  linkJunctions(ids, into) {
+    let link: string | null = null;
+    const changed = get().applyToFile(ids.length > 1 ? 'Link junctions' : 'Link junction', (file) => {
+      const result = linkJunctionsIn(file, ids, into);
+      link = result.link;
+      return result.file;
+    });
+    return changed ? link : null;
+  },
+
+  unlinkJunctions(ids) {
+    return get().applyToFile(ids.length > 1 ? 'Unlink junctions' : 'Unlink junction', (file) => unlinkJunctionsIn(file, ids));
+  },
+
+  renameJunctionGroup(link, label) {
+    return get().applyToFile('Rename junction group', (file) => renameJunctionGroupIn(file, link, label));
+  },
+
+  addJunctionCounterpart(sourceId, center) {
+    if (!roomFor(1, 0)) return null;
+    const state = get();
+    let made: DraftNode | null = null;
+    const changed = state.applyToFile('Add linked junction', (file) => {
+      // The source first: one that had no group yet starts it, and takes the next free letter.
+      const linked = linkJunctionsIn(file, [sourceId]);
+      const source = junctionOf(linked.file, sourceId)?.node;
+      if (!source?.link) return file;
+      const room = viewOf(linked.file, state.path);
+      if (!room) return file;
+      const node = createNode({
+        type: 'ellipse',
+        x: Math.round(center.x - source.width / 2),
+        y: Math.round(center.y - source.height / 2),
+        width: source.width,
+        height: source.height,
+        text: source.text ?? '',
+        link: source.link,
+        ...(source.accent !== undefined ? { accent: source.accent } : {}),
+      });
+      made = node;
+      return embed(linked.file, state.path, reconcileMembershipOp(addNodes(room, [node]), [node.id]));
+    });
+    const node = made as DraftNode | null;
+    if (!changed || !node) return null;
+    // Selected where it landed, like any shape just made — `applyToFile` keeps the old selection.
+    if (get().document.nodes.some((other) => other.id === node.id)) set({ selection: { nodes: [node.id], edges: [] } });
+    return node;
+  },
+
   holdSelection(held) {
     const { selection, apply } = get();
     const ids = new Set(selection.nodes);
@@ -3045,9 +3118,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
 
   duplicateSelection() {
     const state = get();
+    const strokes = chosenInk(state.document);
     if (state.selection.nodes.length === 0) {
       // Chosen sketch strokes duplicate beside themselves, like shapes do.
-      const strokes = chosenInk(state.document);
       if (strokes.length === 0) return;
       const copies = reissueInk(strokes, 24, 24);
       if (totals(fileOf(state)).ink + copies.length > LIMITS.maxInkStrokes) return;
@@ -3055,7 +3128,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       useUiStore.getState().setInkSelection(copies.map((stroke) => stroke.id));
       return;
     }
-    const fragment = extractFragment(state.document, state.selection.nodes);
+    const fragment = withChosenInk(extractFragment(state.document, state.selection.nodes), strokes);
     const result = pasteFragment(state.document, fragment, { x: 24, y: 24 }, { ...totals(fileOf(state)), depth: state.path.length });
     if (result.nodeIds.length === 0) {
       notifyNothingAdded(result.tooDeep);
@@ -3064,6 +3137,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     state.apply('Duplicate', () => result.doc, {
       selection: { nodes: result.nodeIds, edges: result.edgeIds },
     });
+    useUiStore.getState().setInkSelection(result.inkIds);
     if (result.truncated) {
       useUiStore.getState().notify(result.tooDeep
           ? 'Duplicated the first part — the rest holds shapes nested deeper than a canvas goes.'
@@ -3132,6 +3206,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     const state = get();
     const fragment = state.clipboard;
     if (!fragment || (fragment.nodes.length === 0 && !fragment.ink?.length)) return;
+    if (fragment.nodes.length === 0 && !canKeepSketches(state)) return;
     const inkBox = fragment.ink?.length ? inkUnionBounds(fragment.ink) : null;
     const bounds = boundsOf([...fragment.nodes, ...(inkBox ? [inkBox] : [])]);
     const fragmentCenter = bounds ? centerOf(bounds) : { x: 0, y: 0 };
@@ -3150,30 +3225,22 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       x: target.x - fragmentCenter.x + stagger,
       y: target.y - fragmentCenter.y + stagger,
     };
-    // Sketch strokes ride along with the shapes they were copied with, at the same offset.
-    const inkRoom = LIMITS.maxInkStrokes - totals(fileOf(state)).ink;
-    const pastedInk = reissueInk((fragment.ink ?? []).slice(0, Math.max(0, inkRoom)), offset.x, offset.y);
+    const result = pasteFragment(state.document, fragment, offset, { ...totals(fileOf(state)), depth: state.path.length });
     if (fragment.nodes.length === 0) {
-      if (pastedInk.length === 0) {
+      if (result.inkIds.length === 0) {
         useUiStore.getState().notify('This canvas holds as many sketch strokes as it can.', 'error');
         return;
       }
-      state.apply('Paste sketch', (doc) => addInk(doc, pastedInk), { selection: EMPTY_SELECTION });
-      useUiStore.getState().setInkSelection(pastedInk.map((stroke) => stroke.id));
-      set({ pasteRepeat: repeat + 1 });
-      return;
-    }
-    const result = pasteFragment(state.document, fragment, offset, { ...totals(fileOf(state)), depth: state.path.length });
-    if (result.nodeIds.length === 0) {
+      state.apply('Paste sketch', () => result.doc, { selection: EMPTY_SELECTION });
+    } else if (result.nodeIds.length === 0) {
       notifyNothingAdded(result.tooDeep);
       return;
+    } else {
+      // Pasted onto a boundary, the copy joins it, as a shape dropped there does.
+      const homed = reconcileMembershipOp(result.doc, result.nodeIds);
+      state.apply('Paste', () => homed, { selection: { nodes: result.nodeIds, edges: result.edgeIds } });
     }
-    // Pasted onto a boundary, the copy joins it, as a shape dropped there does.
-    const homed = addInk(reconcileMembershipOp(result.doc, result.nodeIds), pastedInk);
-    state.apply('Paste', () => homed, {
-      selection: { nodes: result.nodeIds, edges: result.edgeIds },
-    });
-    if (pastedInk.length > 0) useUiStore.getState().setInkSelection(pastedInk.map((stroke) => stroke.id));
+    useUiStore.getState().setInkSelection(result.inkIds);
     set({ pasteRepeat: repeat + 1 });
     if (result.truncated) {
       useUiStore.getState().notify(result.tooDeep
@@ -4041,13 +4108,15 @@ function chosenInk(document: DraftDocument): DraftInk[] {
   return chosen.size === 0 ? [] : inkOf(document).filter((stroke) => chosen.has(stroke.id));
 }
 
-function withChosenInk<T extends { ink?: DraftInk[] }>(fragment: T, strokes: DraftInk[]): T {
-  return strokes.length > 0 ? { ...fragment, ink: strokes } : fragment;
+/** A nested room with no shapes is omitted from the file, along with any ink drawn or pasted there. */
+function canKeepSketches(state: EditorStore): boolean {
+  if (state.path.length === 0 || state.document.nodes.length > 0) return true;
+  useUiStore.getState().notify('Sketches sit over a view’s shapes — add a shape here first.');
+  return false;
 }
 
-/** Copies of strokes under new ids, moved by `dx`/`dy` — what a paste or duplicate adds. */
-function reissueInk(strokes: readonly DraftInk[], dx: number, dy: number): DraftInk[] {
-  return strokes.map((stroke) => ({ ...stroke, id: createId(INK_ID_PREFIX), x: Math.round((stroke.x + dx) * 10) / 10, y: Math.round((stroke.y + dy) * 10) / 10 }));
+function withChosenInk<T extends { ink?: DraftInk[] }>(fragment: T, strokes: DraftInk[]): T {
+  return strokes.length > 0 ? { ...fragment, ink: strokes } : fragment;
 }
 
 function inkAmendKey(nodeId: string): string {

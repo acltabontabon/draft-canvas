@@ -180,8 +180,12 @@ describe('explicit placement on update', () => {
     const api = node(file, 'api');
     const note = node(file, 'n');
     const { file: next, quality } = applyUpdate(file, [], [{ op: 'update', id: 'api', set: { place: { x: api.x + 200, y: api.y + 300 } } }], undefined);
-    expect([node(next, 'api').x, node(next, 'api').y]).toEqual([api.x + 200, api.y + 300]);
-    expect([node(next, 'n').x, node(next, 'n').y]).toEqual([note.x + 200, note.y + 300]);
+    // A glyph is stood where its connectors run straight, which is not on a whole pixel; a move is.
+    expect(node(next, 'api').x).toBe(api.x + 200);
+    expect(Math.abs(node(next, 'api').y - (api.y + 300))).toBeLessThan(1);
+    // The note stands level with the API's glyph, which is not on a whole pixel; a move lands on one.
+    expect(node(next, 'n').x).toBe(note.x + 200);
+    expect(Math.abs(node(next, 'n').y - (note.y + 300))).toBeLessThan(1);
     expect(quality.errors).toEqual([]);
   });
 

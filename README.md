@@ -6,6 +6,16 @@ Tech-aware shapes, C4 views, sequence diagrams, flows you can present, live coll
 Free, open source, and your diagrams stay on your device.
 </p>
 
+<!-- release-badges:start -->
+<p align="center">
+<a href="https://github.com/acltabontabon/draft-canvas/releases/tag/v1.22.0"><img alt="Release v1.22.0" src="https://img.shields.io/badge/release-v1.22.0-0b6e65?style=flat-square"></a>
+<a href="https://github.com/acltabontabon/draft-canvas/actions/workflows/ci.yml?query=branch%3Amain"><img alt="CI status on main" src="https://img.shields.io/github/actions/workflow/status/acltabontabon/draft-canvas/ci.yml?branch=main&label=CI&style=flat-square"></a>
+<a href="https://github.com/acltabontabon/draft-canvas/blob/main/LICENSE"><img alt="Licence: Apache 2.0" src="https://img.shields.io/badge/license-Apache--2.0-555?style=flat-square"></a>
+<a href="https://github.com/acltabontabon/draft-canvas/releases/latest"><img alt="Runs on web, macOS and Windows" src="https://img.shields.io/badge/runs%20on-web%20%C2%B7%20macOS%20%C2%B7%20Windows-555?style=flat-square"></a>
+<a href="https://app.draftcanvas.dev/"><img alt="Open the editor in your browser" src="https://img.shields.io/badge/try%20it-app.draftcanvas.dev-555?style=flat-square"></a>
+</p>
+<!-- release-badges:end -->
+
 <img width="100%" alt="Draft Canvas in action: sketch an architecture, present a request flow, explore inside a service, and share the diagram." src="docs/media/demo.gif">
 
 ## What it can do
@@ -13,8 +23,9 @@ Free, open source, and your diagrams stay on your device.
 - **C4-aware.** System Context, Containers, Components, and nested views.
 - **Tech-aware shapes.** Services, APIs, workers, stores, queues, actors, and boundaries.
 - **Presentation flows.** Trace and present happy or failure paths.
+- **Linked junctions.** Continue a path elsewhere instead of drawing a line across the diagram, and jump between the two ends.
 - **Sequence diagrams.** Lifelines, replies, conditions and loops that lay themselves out, beside the architecture.
-- **Bring your own agent.** Connect Claude Code, Codex, Cursor, or any MCP client.
+- **Bring your own agent.** Connect Claude Code, Codex, Cursor, OpenCode, or any MCP client.
 - **Live collaboration.** Share, manage access, and follow presentations.
 - **Context for decisions.** Notes, code, sources, and open questions.
 - **Import and export.** Import Mermaid and editable files; export images, editable files, Mermaid, PlantUML, Structurizr, and draw.io.
@@ -80,7 +91,11 @@ agent session and ask:
    > Don’t turn dependencies or concurrent effects into an invented execution order. Inspect every
    > view and fix readability before finishing; tell me the scope and any unresolved questions.
 
-Ask again to refresh the same diagram when the code changes.
+Ask again to refresh the same diagram when the code changes. On a large map, ask it to keep long
+lines out of the way:
+
+   > Where a connection would cross the whole diagram, or a flow carries on in another view, end it
+   > at a junction and continue from a linked junction with the same label instead of drawing the line.
 
 ---
 

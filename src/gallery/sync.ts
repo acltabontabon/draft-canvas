@@ -109,10 +109,10 @@ export async function loadGallery(): Promise<GallerySnapshot | null> {
 }
 
 /** Reads the catalog and any changed starters from GitHub, keeps them, and returns the result. */
-export async function refreshGallery(): Promise<GallerySnapshot> {
+export async function refreshGallery(signal?: AbortSignal): Promise<GallerySnapshot> {
   let text: string;
   try {
-    text = await readGalleryFile('catalog.json', MAX_CATALOG_BYTES);
+    text = await readGalleryFile('catalog.json', MAX_CATALOG_BYTES, signal);
   } catch (error) {
     throw new GalleryRefreshError(error instanceof GalleryRequestError && error.reason === 'too-large' ? 'invalid' : 'offline');
   }
@@ -126,8 +126,9 @@ export async function refreshGallery(): Promise<GallerySnapshot> {
   const queue = [...wanted];
   const worker = async () => {
     for (let entry = queue.shift(); entry; entry = queue.shift()) {
+      if (signal?.aborted) return;
       try {
-        const body = await readGalleryFile(entry.path, Math.min(MAX_STARTER_BYTES, entry.bytes + 1024));
+        const body = await readGalleryFile(entry.path, Math.min(MAX_STARTER_BYTES, entry.bytes + 1024), signal);
         if ((await sha256Hex(body)) !== entry.sha256) continue;
         if (!parseDocument(body).ok) continue;
         await writeFile(entry.sha256, body);
@@ -141,8 +142,9 @@ export async function refreshGallery(): Promise<GallerySnapshot> {
   const packs = (catalog.styles ?? []).filter((entry) => !held.has(entry.sha256));
   const packWorker = async () => {
     for (let entry = packs.shift(); entry; entry = packs.shift()) {
+      if (signal?.aborted) return;
       try {
-        const body = await readGalleryFile(entry.path, Math.min(MAX_STYLE_PACK_BYTES, entry.bytes + 1024));
+        const body = await readGalleryFile(entry.path, Math.min(MAX_STYLE_PACK_BYTES, entry.bytes + 1024), signal);
         if ((await sha256Hex(body)) !== entry.sha256) continue;
         if (!readStyleFile(body).ok) continue;
         await writeFile(entry.sha256, body);
@@ -153,6 +155,7 @@ export async function refreshGallery(): Promise<GallerySnapshot> {
     }
   };
   await Promise.all([worker(), worker(), worker(), worker(), packWorker(), packWorker()]);
+  signal?.throwIfAborted();
 
   const fetchedAt = Date.now();
   await writeCachedGallery({ catalog, fetchedAt });

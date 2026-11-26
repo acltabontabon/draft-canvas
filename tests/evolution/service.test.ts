@@ -1,0 +1,191 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { createDocument, createNode } from '../../src/document/factory';
+import { addNodes, updateNode } from '../../src/document/operations';
+import type { DraftDocument } from '../../src/document/types';
+import { BrowserBackend, MemoryState } from '../../src/evolution/browser/backend';
+import { KvFs, MemoryKv } from '../../src/evolution/browser/kvfs';
+import { MAIN_REF } from '../../src/evolution/refs';
+import { DEFAULT_SCHEDULE } from '../../src/evolution/scheduler';
+import { parseMessage } from '../../src/evolution/trailers';
+import { compute } from '../../src/evolution/workerHost';
+import { processLocks } from '../../src/evolution/locks';
+import { INITIAL_EVOLUTION, useEvolutionStore } from '../../src/store/evolution/evolutionStore';
+import { HistoryService, type Clock } from '../../src/store/evolution/service';
+
+class ManualClock implements Clock {
+  time = 1_700_000_000_000;
+  private timers: { at: number; run: () => void; id: number }[] = [];
+  private nextId = 1;
+  now() {
+    return this.time;
+  }
+  setTimeout(run: () => void, ms: number) {
+    const id = this.nextId++;
+    this.timers.push({ at: this.time + ms, run, id });
+    return id;
+  }
+  clearTimeout(handle: unknown) {
+    this.timers = this.timers.filter((timer) => timer.id !== handle);
+  }
+  async advance(ms: number) {
+    const end = this.time + ms;
+    for (;;) {
+      this.timers.sort((a, b) => a.at - b.at);
+      const next = this.timers[0];
+      if (!next || next.at > end) break;
+      this.timers.shift();
+      this.time = next.at;
+      next.run();
+      await settle(4);
+    }
+    this.time = end;
+    await settle();
+  }
+}
+
+async function settle(rounds = 50) {
+  for (let i = 0; i < rounds; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+function harness(initial: DraftDocument) {
+  let file = initial;
+  let generation = 1;
+  let gesture = false;
+  const clock = new ManualClock();
+  const backend = new BrowserBackend(new KvFs(new MemoryKv()), new MemoryState(), processLocks());
+  const service = new HistoryService({
+    backend: () => backend,
+    compute,
+    editor: { file: () => file, generation: () => generation, atBoundary: () => !gesture },
+    clock,
+    schedule: () => DEFAULT_SCHEDULE,
+    enabled: () => true,
+    signature: (at) => ({ name: 'Tester', email: 'tester@draftcanvas.invalid', timestamp: Math.floor(at / 1000), timezoneOffset: 0 }),
+    holdCopy: async () => () => {},
+    firstUseSeen: () => true,
+  });
+  return {
+    service,
+    backend,
+    clock,
+    edit(next: DraftDocument) {
+      file = next;
+      generation += 1;
+      service.noteEdit();
+    },
+    load(next: DraftDocument) {
+      file = next;
+      generation += 1;
+    },
+    set gesture(held: boolean) {
+      gesture = held;
+    },
+    get file() {
+      return file;
+    },
+  };
+}
+
+async function revisions(backend: BrowserBackend) {
+  const [meta] = await backend.list();
+  if (!meta) return [];
+  const store = (await backend.open(meta.repoId))!;
+  const tip = await store.readRef(MAIN_REF);
+  return tip ? store.log({ from: [tip], limit: 100 }) : [];
+}
+
+const doc = () => addNodes(createDocument('Payments'), [createNode({ type: 'service', x: 0, y: 0, id: 'n_api', text: 'API Gateway' })]);
+
+beforeEach(() => useEvolutionStore.setState(INITIAL_EVOLUTION));
+
+describe('the history service', { timeout: 30_000 }, () => {
+  it('records a new diagram’s first revision after the idle period, with no Git step by the person', async () => {
+    const h = harness(doc());
+    await h.service.attach({ kind: 'library', documentId: h.file.metadata.id });
+    await settle();
+    expect(useEvolutionStore.getState().capture.kind).toBe('pending');
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    const log = await revisions(h.backend);
+    expect(log).toHaveLength(1);
+    expect(parseMessage(log[0]!.message).summary).toBe('Add API Gateway');
+    expect(useEvolutionStore.getState().capture.kind).toBe('up-to-date');
+  });
+
+  it('records nothing for an edit undone before capture, and records an edit after it', async () => {
+    const h = harness(doc());
+    await h.service.attach({ kind: 'library', documentId: h.file.metadata.id });
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    const before = h.file;
+    h.edit(updateNode(before, 'n_api', { x: 50 }));
+    h.edit({ ...before, metadata: { ...before.metadata, updatedAt: before.metadata.updatedAt + 99 } });
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    expect(await revisions(h.backend)).toHaveLength(1);
+    h.edit(updateNode(before, 'n_api', { text: 'Gateway' }));
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    const log = await revisions(h.backend);
+    expect(log).toHaveLength(2);
+    expect(parseMessage(log[0]!.message).summary).toBe('Edit the text of Gateway');
+  });
+
+  it('ignores camera moves', async () => {
+    const h = harness(doc());
+    await h.service.attach({ kind: 'library', documentId: h.file.metadata.id });
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    h.edit({ ...h.file, viewport: { x: 400, y: 10, zoom: 0.5 } });
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    expect(await revisions(h.backend)).toHaveLength(1);
+  });
+
+  it('waits for a held gesture to end', async () => {
+    const h = harness(doc());
+    await h.service.attach({ kind: 'library', documentId: h.file.metadata.id });
+    h.gesture = true;
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 5_000);
+    expect(await revisions(h.backend)).toHaveLength(0);
+    h.gesture = false;
+    await h.clock.advance(1_000);
+    expect(await revisions(h.backend)).toHaveLength(1);
+  });
+
+  it('resumes a bound copy after a restart without recording anything new', async () => {
+    const h = harness(doc());
+    await h.service.attach({ kind: 'library', documentId: h.file.metadata.id });
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    await h.service.detach();
+    const again = new HistoryService({ ...(h.service as unknown as { deps: ConstructorParameters<typeof HistoryService>[0] }).deps });
+    await again.attach({ kind: 'library', documentId: h.file.metadata.id });
+    await settle();
+    expect(useEvolutionStore.getState().capture.kind).toBe('up-to-date');
+    expect(useEvolutionStore.getState().tip).toBe((await revisions(h.backend))[0]!.oid);
+  });
+
+  it('finishes a capture into the history it began with when another diagram opens meanwhile', async () => {
+    const h = harness(doc());
+    await h.service.attach({ kind: 'library', documentId: h.file.metadata.id });
+    h.service.requestCapture('manual');
+    // Open another diagram while the first capture is still running.
+    const other = createDocument('Other');
+    h.load(other);
+    await h.service.attach({ kind: 'library', documentId: other.metadata.id });
+    await settle();
+    const metas = await h.backend.list();
+    expect(metas.map((meta) => meta.title)).toEqual(['Payments']);
+    expect(useEvolutionStore.getState().copyId).toBe(`lib_${other.metadata.id}`);
+  });
+
+  it('asks before continuing another copy’s history, and starts fresh when told to', async () => {
+    const h = harness(doc());
+    await h.service.attach({ kind: 'library', documentId: h.file.metadata.id });
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    // The same file opened as another working copy (a duplicate made outside the app).
+    await h.service.attach({ kind: 'draft', recoveryId: 'q_copy' });
+    await settle();
+    expect(useEvolutionStore.getState().capture).toMatchObject({ kind: 'identity', relation: 'copy', title: 'Payments' });
+    h.edit(updateNode(h.file, 'n_api', { x: 9 }));
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    expect(await h.backend.list()).toHaveLength(1);
+    await h.service.answerIdentity(false);
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    expect(await h.backend.list()).toHaveLength(2);
+  });
+});

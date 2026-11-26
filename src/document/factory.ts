@@ -291,6 +291,8 @@ export interface CreateNodeInput {
   technology?: string;
   /** With a kind the technology implied (`technologyStart`), so a later technology may move it. */
   kindOrigin?: 'technology';
+  /** Junctions only: the group it joins (`DraftNode.link`). */
+  link?: string;
 }
 
 export function createNode(input: CreateNodeInput): DraftNode {
@@ -334,6 +336,7 @@ export function createNode(input: CreateNodeInput): DraftNode {
   if (input.type === 'component') node.componentKind = input.componentKind ?? 'generic';
   if (input.type === 'artifact') node.artifactKind = input.artifactKind ?? 'file';
   if (input.type === 'sequence') node.sequence = { participants: [], items: [] };
+  if (input.type === 'ellipse' && input.link) node.link = input.link;
   if (input.deliveryRole) node.deliveryRole = input.deliveryRole;
   if ((C4_TEXT_TYPES as readonly DraftNodeType[]).includes(input.type)) {
     if (input.description?.trim()) node.description = input.description.trim();

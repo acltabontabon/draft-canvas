@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 28,
+  "version": 34,
   "metadata": {
     "id": "starter-monolith",
     "title": "Monolith",
@@ -11,10 +11,10 @@
     {
       "id": "system",
       "type": "group",
-      "x": 260,
-      "y": -393,
-      "width": 1042,
-      "height": 767,
+      "x": 258,
+      "y": -451,
+      "width": 1044,
+      "height": 843,
       "z": -1,
       "text": "Clinic system",
       "textOrigin": "explicit",
@@ -38,9 +38,9 @@
       "id": "staff",
       "type": "actor",
       "x": -70,
-      "y": 91,
+      "y": 83,
       "width": 140,
-      "height": 118,
+      "height": 134,
       "z": 0,
       "text": "Front Desk",
       "description": "Checks patients in and runs the day's schedule.",
@@ -51,10 +51,10 @@
     {
       "id": "lb",
       "type": "service",
-      "x": 292,
-      "y": -57,
-      "width": 176,
-      "height": 115,
+      "x": 290,
+      "y": -78,
+      "width": 180,
+      "height": 157,
       "z": 0,
       "parentId": "system",
       "text": "Load Balancer",
@@ -94,9 +94,9 @@
             "id": "c.lb",
             "type": "service",
             "x": 0,
-            "y": 158,
-            "width": 176,
-            "height": 68,
+            "y": 196,
+            "width": 120,
+            "height": 120,
             "z": 0,
             "text": "Load Balancer",
             "technology": "NGINX",
@@ -106,10 +106,10 @@
           {
             "id": "c.views",
             "type": "component",
-            "x": 271,
-            "y": 152,
+            "x": 215,
+            "y": 194.86363636363637,
             "width": 152,
-            "height": 80,
+            "height": 95,
             "z": 0,
             "text": "Booking Views",
             "description": "Renders slots and takes the booking form.",
@@ -120,10 +120,10 @@
           {
             "id": "c.scheduling",
             "type": "component",
-            "x": 565,
-            "y": 142.5,
-            "width": 152,
-            "height": 99,
+            "x": 509,
+            "y": 196,
+            "width": 160,
+            "height": 142,
             "z": 0,
             "text": "Scheduling",
             "description": "Finds free slots and books them.",
@@ -134,10 +134,10 @@
           {
             "id": "c.patients",
             "type": "component",
-            "x": 871,
+            "x": 823,
             "y": 0,
-            "width": 152,
-            "height": 99,
+            "width": 160,
+            "height": 142,
             "z": 0,
             "text": "Patients",
             "description": "Keeps patient records and consent.",
@@ -148,10 +148,10 @@
           {
             "id": "c.notify",
             "type": "component",
-            "x": 871,
-            "y": 321,
-            "width": 152,
-            "height": 99,
+            "x": 823,
+            "y": 364,
+            "width": 160,
+            "height": 142,
             "z": 0,
             "text": "Notifications",
             "description": "Sends confirmations and reminders.",
@@ -162,8 +162,8 @@
           {
             "id": "c.db",
             "type": "database",
-            "x": 887,
-            "y": 153.13636363636363,
+            "x": 843,
+            "y": 196,
             "width": 120,
             "height": 114,
             "z": 0,
@@ -175,8 +175,8 @@
           {
             "id": "c.vonage",
             "type": "service",
-            "x": 1129,
-            "y": 294.75,
+            "x": 1089,
+            "y": 338.2613636363637,
             "width": 176,
             "height": 68,
             "z": 0,
@@ -215,12 +215,12 @@
             "routing": "smoothstep",
             "semantic": "uses",
             "sourceAnchor": {
-              "side": "right",
-              "offset": 0.25
+              "side": "top",
+              "offset": 0.5
             },
             "targetAnchor": {
               "side": "left",
-              "offset": 0.75
+              "offset": 0.5
             },
             "semanticsOrigin": "explicit"
           },
@@ -232,6 +232,14 @@
             "directed": true,
             "routing": "smoothstep",
             "semantic": "readsWrites",
+            "sourceAnchor": {
+              "side": "right",
+              "offset": 0.5
+            },
+            "targetAnchor": {
+              "side": "left",
+              "offset": 0.5
+            },
             "semanticsOrigin": "explicit"
           },
           {
@@ -243,8 +251,8 @@
             "routing": "smoothstep",
             "semantic": "uses",
             "sourceAnchor": {
-              "side": "right",
-              "offset": 0.75
+              "side": "bottom",
+              "offset": 0.5
             },
             "targetAnchor": {
               "side": "left",
@@ -322,9 +330,9 @@
       "id": "db",
       "type": "database",
       "x": 1100,
-      "y": -42,
+      "y": -45,
       "width": 120,
-      "height": 174,
+      "height": 180,
       "z": 0,
       "parentId": "system",
       "text": "Clinic DB",
@@ -347,9 +355,9 @@
       "id": "cache",
       "type": "database",
       "x": 620,
-      "y": -341,
+      "y": -399,
       "width": 280,
-      "height": 143,
+      "height": 179,
       "z": 0,
       "parentId": "system",
       "text": "Session Cache",
@@ -362,9 +370,9 @@
       "id": "sms-provider",
       "type": "service",
       "x": 672,
-      "y": 483,
+      "y": 491,
       "width": 176,
-      "height": 115,
+      "height": 99,
       "z": 0,
       "text": "Vonage",
       "description": "Delivers confirmation and reminder texts.",
@@ -376,9 +384,9 @@
       "id": "files",
       "type": "database",
       "x": 1050,
-      "y": 199,
+      "y": 181,
       "width": 220,
-      "height": 143,
+      "height": 179,
       "z": 0,
       "parentId": "system",
       "text": "Documents",
@@ -391,7 +399,7 @@
       "id": "title",
       "type": "text",
       "x": -70,
-      "y": -551,
+      "y": -609,
       "width": 1000,
       "height": 110,
       "z": 0,
@@ -510,13 +518,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {

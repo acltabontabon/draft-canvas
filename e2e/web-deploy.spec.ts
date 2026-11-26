@@ -121,13 +121,42 @@ test('when the film ends, the screen points back to the ways in', async ({ page 
   const film = page.locator('#film video');
   // It starts by itself here: the room is the whole view.
   await expect.poll(() => film.evaluate((video: HTMLVideoElement) => !video.paused && video.readyState > 0)).toBe(true);
+  const footerLink = page.getByRole('navigation', { name: 'Resources' }).getByRole('link', { name: 'Docs', exact: true });
+  await footerLink.evaluate((link) => (link as HTMLElement).focus({ preventScroll: true }));
   await film.evaluate((video: HTMLVideoElement) => { video.currentTime = video.duration - 0.2; });
   const end = page.locator('#film .film-end');
   await expect(end).toBeVisible({ timeout: 15_000 });
+  await expect(footerLink).toBeFocused();
   await expect(end.getByRole('link', { name: 'Back to top' })).toHaveAttribute('href', '#features');
   await end.getByRole('button', { name: 'Watch again' }).click();
   await expect(end).toBeHidden();
   await expect.poll(() => film.evaluate((video: HTMLVideoElement) => !video.paused && video.currentTime < 5)).toBe(true);
+});
+
+test('the film keeps the viewer’s sound choice when jumping to a chapter', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto(`${SITE}#film`);
+  const film = page.locator('#film video');
+  await page.getByRole('button', { name: 'Turn the sound off' }).click();
+  await page.getByRole('button', { name: 'Technology, 0:31' }).click();
+  await expect.poll(() => film.evaluate((video: HTMLVideoElement) => !video.paused && video.currentTime >= 31)).toBe(true);
+  await expect(page.getByRole('button', { name: 'Turn the sound on' })).toBeVisible();
+  expect(await film.evaluate((video: HTMLVideoElement) => video.muted && video.textTracks[0]?.mode === 'showing')).toBe(true);
+});
+
+test.describe('the landing page with scripting disabled', () => {
+  test.use({ javaScriptEnabled: false });
+
+  test('the film has browser controls and the downloads are available inline', async ({ page }) => {
+    await page.goto(SITE);
+    await expect(page.locator('#film video')).toHaveAttribute('controls', '');
+    await expect(page.locator('#film .film-toggle')).toBeHidden();
+    await page.getByRole('link', { name: 'Download desktop app' }).first().click();
+    await expect(page).toHaveURL(`${SITE}#download`);
+    await expect(page.locator('#targets a')).toHaveCount(3);
+    await expect(page.locator('#targets a').first()).toBeVisible();
+    await expect(page.locator('#download [data-close]')).toBeHidden();
+  });
 });
 
 test('the two bundles stay apart', async ({ page }) => {

@@ -202,6 +202,20 @@ describe('Structurizr DSL', () => {
     expect(text).toMatch(/Shop = softwareSystem "Shop" \{\n\s+Web = container "Web"\n\s+\}/);
     expect(text).toContain('Customer -> Web "browses"');
   });
+
+  it('keeps the contents of a room when its owner is hoisted to model level', () => {
+    const customer = createNode({ type: 'actor', x: 0, y: 0, text: 'Customer' });
+    const app = createNode({ type: 'service', x: 0, y: 0, text: 'App' });
+    const store = createNode({ type: 'database', x: 200, y: 0, text: 'Store' });
+    const document = { ...createDocument('Shop'), level: 'container' as const, nodes: [customer] };
+    customer.inside = { nodes: [app, store], edges: [createEdge({ source: app.id, target: store.id, label: 'reads' })], flows: [], viewport: document.viewport };
+
+    const text = structurizrSource(document);
+    expect(text).toMatch(/model \{\n\s+Customer = person "Customer"\n\s+System = softwareSystem "Shop" \{/);
+    expect(text).toContain('App = container "App"');
+    expect(text).toContain('Store = container "Store"');
+    expect(text).toContain('App -> Store "reads"');
+  });
 });
 
 describe('relationships every architecture format states', () => {

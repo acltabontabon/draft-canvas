@@ -124,7 +124,7 @@ code** (also **Attach note to message** and **Attach code to message** in `⌘K`
 note or code card, drag it onto the arrow and release when **Attach to message** appears. Click a
 chip below the arrow to reopen its card. Cards stay with the message as you move it, and can be
 reordered, deleted or detached onto the canvas. While presenting, the current message's chips open
-its cards.
+its cards. **Find and replace** includes notes attached to messages anywhere in the sequence.
 
 ![A code card attached to a checkout message.](../media/guides/sequence-attachment.png)
 

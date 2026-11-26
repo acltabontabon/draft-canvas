@@ -1,0 +1,788 @@
+/* The timeline (`Timeline.tsx`): history's one surface on the canvas. It docks where the status bar
+   is — the bar sinks away as the strip rises into its place, and comes back when the strip leaves —
+   so opening history adds nothing to the screen, it changes what the foot of the editor shows.
+   One compact row; a second, slimmer line only when a revision is chosen or something is compared. */
+
+/* ── The choreography ─────────────────────────────────────────────────────────────────────── */
+
+.dc-status {
+  transition:
+    margin-bottom 300ms var(--dc-ease-in-out),
+    opacity 200ms var(--dc-ease-out),
+    transform 300ms var(--dc-ease-in-out);
+}
+
+.dc-editor[data-timeline] .dc-status {
+  margin-bottom: calc(-1 * var(--dc-status-height) - 1px);
+  opacity: 0;
+  transform: translateY(10px);
+  pointer-events: none;
+}
+
+/*
+ * Centred by margins, with no transform or backdrop-filter of its own once it has risen: either
+ * makes the bar the containing block of its fixed-position menus (the alternatives menu), which
+ * then opened measured from the bar instead of the window, off-screen. The frosted glass is the
+ * ::before layer's.
+ */
+.dc-timeline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 10px;
+  z-index: var(--dc-z-bar);
+  display: flex;
+  flex-direction: column;
+  width: min(1120px, calc(100% - 24px));
+  margin-inline: auto;
+  padding: 5px 6px 5px 8px;
+  border: 1px solid var(--dc-border);
+  border-radius: 14px;
+  box-shadow: var(--dc-shadow-panel);
+  color: var(--dc-text);
+  /* Rises once the status bar has started to sink: one movement, not two at once. */
+  animation: dc-timeline-rise 380ms 90ms var(--dc-ease-out) backwards;
+}
+
+.dc-timeline::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--dc-surface-raised) 92%, transparent);
+  backdrop-filter: blur(10px) saturate(1.1);
+  pointer-events: none;
+}
+
+@keyframes dc-timeline-rise {
+  from {
+    opacity: 0;
+    transform: translateY(22px) scale(0.985);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-status {
+    transition: none;
+  }
+  .dc-timeline {
+    animation: none;
+  }
+}
+
+/* ── The row ──────────────────────────────────────────────────────────────────────────────── */
+
+.dc-timeline-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+}
+
+.dc-timeline-title-slot {
+  flex-shrink: 0;
+  max-width: 190px;
+  min-width: 0;
+}
+
+button.dc-timeline-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--dc-radius-pill);
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+button.dc-timeline-title:hover,
+button.dc-timeline-title[aria-expanded='true'] {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text);
+}
+
+button.dc-timeline-title:focus-visible {
+  outline: 2px solid var(--dc-selection);
+}
+
+.dc-timeline-title-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dc-timeline-transport {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
+}
+
+.dc-timeline-transport .dc-button[data-icon-only='true'] {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--dc-radius-pill);
+}
+
+.dc-timeline-play[data-icon-only='true'] {
+  background: var(--dc-surface-raised);
+  color: var(--dc-text);
+}
+
+.dc-timeline-tools {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 1px;
+}
+
+.dc-timeline-tools .dc-button[data-icon-only='true'] {
+  width: 28px;
+  height: 28px;
+}
+
+/* ── The track: sessions of revisions, ending in Live ─────────────────────────────────────── */
+
+.dc-timeline-track {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: flex-end;
+  gap: 16px;
+  min-width: 0;
+  padding: 2px 10px 3px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  /* The ends fade into the strip, so a long history reads as continuing past the edges. */
+  mask-image: linear-gradient(to right, transparent, #000 12px, #000 calc(100% - 12px), transparent);
+}
+
+.dc-timeline-track::-webkit-scrollbar {
+  display: none;
+}
+
+.dc-timeline-session {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.dc-timeline-session-label {
+  display: flex;
+  gap: 6px;
+  max-width: 220px;
+  overflow: hidden;
+  color: var(--dc-text-faint);
+  font-size: 10.5px;
+  line-height: 14px;
+  white-space: nowrap;
+}
+
+button.dc-timeline-session-label {
+  margin: 0 -4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--dc-radius-xs);
+  background: transparent;
+  font: inherit;
+  font-size: 10.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+button.dc-timeline-session-label:hover:not(:disabled) {
+  background: var(--dc-surface-hover);
+  color: var(--dc-text-muted);
+}
+
+button.dc-timeline-session-label:focus-visible {
+  outline: 2px solid var(--dc-selection);
+}
+
+button.dc-timeline-session-label:disabled {
+  cursor: default;
+}
+
+.dc-timeline-session-when {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.dc-timeline-session-summary {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* The marks sit on a hairline, the way a flow's steps do: one line through the session. */
+.dc-timeline-marks {
+  position: relative;
+  display: flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  height: 14px;
+}
+
+.dc-timeline-marks::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  top: 50%;
+  height: 1px;
+  background: var(--dc-border-strong);
+}
+
+.dc-timeline-mark {
+  position: relative;
+  width: 10px;
+  height: 10px;
+  padding: 0;
+  border: 1.5px solid var(--dc-text-faint);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  cursor: pointer;
+  transition:
+    transform var(--dc-dur-fast) var(--dc-ease-out),
+    border-color var(--dc-dur-fast) var(--dc-ease-out),
+    background var(--dc-dur-fast);
+}
+
+.dc-timeline-mark:hover {
+  transform: scale(1.3);
+  border-color: var(--dc-text-muted);
+}
+
+.dc-timeline-mark[aria-current='true'] {
+  border-color: var(--dc-selection);
+  background: var(--dc-selection);
+  transform: scale(1.35);
+  box-shadow: 0 0 0 4px var(--dc-selection-soft);
+}
+
+.dc-timeline-mark:focus-visible,
+.dc-timeline-live:focus-visible,
+.dc-timeline-more:focus-visible {
+  outline: 2px solid var(--dc-selection);
+  outline-offset: 2px;
+}
+
+/* Who made it, by shape as well as colour: an agent's revision is a diamond, a restore or merge a ring. */
+.dc-timeline-mark[data-kind='agent'] {
+  border-radius: 2px;
+  transform: rotate(45deg) scale(0.85);
+}
+
+.dc-timeline-mark[data-kind='restore'],
+.dc-timeline-mark[data-kind='merge'] {
+  box-shadow:
+    0 0 0 2px var(--dc-surface-raised),
+    0 0 0 3px var(--dc-text-faint);
+}
+
+.dc-timeline-mark[data-milestone='true'] {
+  border-color: var(--dc-caution);
+}
+
+.dc-timeline-live {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  align-self: center;
+  gap: 6px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: transparent;
+  color: var(--dc-text-muted);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.dc-timeline-live[aria-current='true'] {
+  border-color: color-mix(in srgb, var(--dc-selection) 60%, var(--dc-border));
+  color: var(--dc-text);
+}
+
+.dc-timeline-live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-selection);
+}
+
+/* Changes since the last revision: the Live mark breathes, slowly, never a badge. */
+.dc-timeline-live-dot[data-pending='true'] {
+  animation: dc-history-turn 2.4s var(--dc-ease-in-out) infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-timeline-live-dot[data-pending='true'] {
+    animation: none;
+  }
+}
+
+.dc-timeline-more {
+  flex-shrink: 0;
+  align-self: center;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text-faint);
+  font: inherit;
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.dc-timeline-more:hover {
+  color: var(--dc-text-muted);
+}
+
+.dc-timeline-empty {
+  align-self: center;
+  color: var(--dc-text-faint);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+/* ── Second lines: finding, a chosen revision, a comparison ───────────────────────────────── */
+
+.dc-timeline-find,
+.dc-timeline-detail,
+.dc-compare-bar {
+  margin: 4px 0 0;
+  padding: 6px 2px 2px;
+  border-top: 1px solid var(--dc-border);
+  animation: dc-timeline-unfold 220ms var(--dc-ease-out);
+}
+
+@keyframes dc-timeline-unfold {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-timeline-find,
+  .dc-timeline-detail,
+  .dc-compare-bar {
+    animation: none;
+  }
+}
+
+.dc-timeline-find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-timeline-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface);
+  color: var(--dc-text-faint);
+}
+
+.dc-timeline-search:focus-within {
+  border-color: var(--dc-selection);
+}
+
+.dc-timeline-search input {
+  width: 190px;
+  border: 0;
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  outline: none;
+}
+
+.dc-timeline-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.dc-timeline-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px;
+  border: 1px solid var(--dc-border);
+  border-radius: var(--dc-radius-pill);
+  color: var(--dc-text-muted);
+  font-size: 11.5px;
+  cursor: pointer;
+}
+
+.dc-timeline-chip input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.dc-timeline-chip[data-on='true'] {
+  border-color: var(--dc-selection);
+  color: var(--dc-text);
+  background: var(--dc-selection-soft);
+}
+
+.dc-timeline-chip:has(input:focus-visible) {
+  outline: 2px solid var(--dc-selection);
+}
+
+.dc-timeline-detail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+}
+
+.dc-timeline-detail-text {
+  display: flex;
+  flex: 1 1 240px;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding-left: 6px;
+}
+
+.dc-timeline-detail-summary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-timeline-detail-meta {
+  flex-shrink: 0;
+  color: var(--dc-text-faint);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+
+.dc-timeline-milestone-tag {
+  padding: 0 7px;
+  border-radius: var(--dc-radius-pill);
+  background: color-mix(in srgb, var(--dc-caution) 18%, transparent);
+  color: var(--dc-caution);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.dc-timeline-room {
+  height: 26px;
+  font-size: 12px;
+}
+
+.dc-timeline-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px;
+}
+
+.dc-timeline-actions .dc-button:not([data-icon-only='true']) {
+  height: 26px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
+.dc-timeline-confirm {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.dc-timeline-git {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  flex-basis: 100%;
+  margin: 4px 0 0 6px;
+  font-size: 12px;
+}
+
+.dc-timeline-git dt {
+  color: var(--dc-text-faint);
+}
+
+.dc-timeline-git dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.dc-timeline-git code {
+  font-family: var(--dc-mono);
+  font-size: 11px;
+}
+
+.dc-timeline-git ul {
+  margin: 0;
+  padding-left: 16px;
+}
+
+.dc-timeline-milestone-form {
+  display: inline-flex;
+  flex-basis: 100%;
+  align-items: center;
+  gap: 6px;
+  padding-left: 6px;
+}
+
+.dc-timeline-milestone-form input {
+  height: 26px;
+}
+
+/* ── Comparing ─────────────────────────────────────────────────────────────────────────────── */
+
+.dc-compare-bar-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-compare-bar-what {
+  display: inline-flex;
+  flex: 1 1 200px;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.dc-compare-bar-side {
+  overflow: hidden;
+  max-width: 220px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-compare-list-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.dc-compare-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  max-height: 140px;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.dc-compare-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.dc-compare-item {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 3px 6px;
+  border: 0;
+  border-radius: var(--dc-radius-sm);
+  background: transparent;
+  color: var(--dc-text);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.dc-compare-item:hover,
+.dc-compare-item[aria-current='true'] {
+  background: var(--dc-surface-hover);
+}
+
+.dc-compare-item:focus-visible {
+  outline: 2px solid var(--dc-selection);
+}
+
+.dc-compare-item-glyph {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 15px;
+  height: 15px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-caution);
+  color: var(--dc-canvas);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dc-compare-item[data-change='added'] .dc-compare-item-glyph {
+  background: var(--dc-selection);
+}
+
+.dc-compare-item[data-change='removed'] .dc-compare-item-glyph {
+  background: var(--dc-danger);
+}
+
+.dc-compare-item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-compare-item-what {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--dc-text-faint);
+}
+
+.dc-compare-bring {
+  flex-shrink: 0;
+  height: 24px;
+  font-size: 12px;
+  opacity: 0;
+}
+
+.dc-compare-list li:hover .dc-compare-bring,
+.dc-compare-bring:focus-visible {
+  opacity: 1;
+}
+
+@media (pointer: coarse) {
+  .dc-compare-bring {
+    opacity: 1;
+  }
+}
+
+/* ── Alternatives: naming one, and the short list of them ────────────────────────────────── */
+
+.dc-alt-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.dc-alt-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.dc-alt-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-alt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--dc-border);
+}
+
+.dc-alt-row[data-archived='true'] {
+  opacity: 0.65;
+}
+
+.dc-alt-name {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  font-weight: 600;
+}
+
+.dc-alt-meta {
+  color: var(--dc-text-faint);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.dc-alt-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 2px;
+}
+
+.dc-alt-rename {
+  display: flex;
+  flex: 1;
+  gap: 6px;
+}
+
+/* The studio state steps the editor's chrome back; history's steps back with it. */
+.dc-editor[data-studio] .dc-timeline,
+.dc-editor[data-studio] .dc-history-status {
+  display: none;
+}
+
+/* Narrow canvases: the session words give way first, then the title's name. */
+@media (max-width: 720px) {
+  .dc-timeline-session-summary,
+  .dc-timeline-title-name {
+    display: none;
+  }
+}
+
+/* Merging: one row per difference, its choice beside it. */
+.dc-merge-list {
+  margin-top: 6px;
+}
+
+.dc-merge-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dc-merge-row .dc-segmented {
+  flex-shrink: 0;
+}
+
+.dc-merge-row[data-decided='true'] .dc-compare-item-glyph {
+  background: var(--dc-selection);
+}

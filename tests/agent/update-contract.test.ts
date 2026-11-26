@@ -192,7 +192,7 @@ describe('a refused update names the real mistake', () => {
       ['order', { technology: 'HTTPS' }, /^\/ops\/0\/set\/technology: not a field of a relationship \("order"\); it takes label, semantic, kind, .*route$/],
       ['checkout', { label: 'Checkout flow' }, /^\/ops\/0\/set\/label: not a field of a flow \("checkout"\); use title; it takes title, color, steps, variantOf$/],
       ['platform', { description: 'Everything we run' }, /not a field of a group \("platform"\); it takes label, kind, group, color, place$/],
-      ['api', { kind: 'async' }, /not a field of an element \("api"\); it takes label, type, description, technology, replicas, color, group, evidence, place$/],
+      ['api', { kind: 'async' }, /not a field of an element \("api"\); it takes label, type, description, technology, replicas, link, color, group, evidence, place$/],
       ['region', { color: 'rose' }, /not a field of an attachment \("region"\); it takes label, text, kind, code, language, about, attach$/],
     ];
     for (const [id, set, message] of cases) {

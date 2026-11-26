@@ -23,7 +23,7 @@ export interface UseCommandContextParams {
  * whatever is true the instant it runs, not whatever was true when the menu opened.
  */
 export function useCommandContext({ createAt, createAtPointer, playback, onPresent }: UseCommandContextParams): () => CommandContext {
-  const { fitView, zoomIn, zoomOut, zoomTo, screenToFlowPosition, setViewport } = useReactFlow();
+  const { fitView, zoomIn, zoomOut, zoomTo, screenToFlowPosition, setViewport, getViewport } = useReactFlow();
   // Selected separately, as `useFlowPlayback` does: an object literal from a store selector is a
   // new identity every time and would re-render forever.
   const viewWidth = useViewportStore((state) => state.width);
@@ -45,6 +45,9 @@ export function useCommandContext({ createAt, createAtPointer, playback, onPrese
           zoomTo: (zoomLevel, options) => zoomTo(zoomLevel, calm(options)),
           screenToFlowPosition,
           setViewport: (viewport, options) => setViewport(viewport, calm(options)),
+          // Where the camera really is: a jump is never persisted (`persistViewport` hears only
+          // gestures), so the store's own viewport can be a move or two behind.
+          getViewport,
           viewWidth,
           viewHeight,
         },
@@ -58,6 +61,7 @@ export function useCommandContext({ createAt, createAtPointer, playback, onPrese
       createAt,
       createAtPointer,
       fitView,
+      getViewport,
       onPresent,
       playback,
       screenToFlowPosition,
@@ -71,7 +75,14 @@ export function useCommandContext({ createAt, createAtPointer, playback, onPrese
   );
 }
 
-/** A camera move's options with its duration dropped to an instant jump under reduced motion. */
+/**
+ * A camera move's options with its duration dropped to an instant jump under reduced motion.
+ *
+ * One millisecond, not zero, where a move was asked for: React Flow starts no transition for a
+ * zero duration, and only a transition replaces one still in flight — the previous move would carry
+ * on over the jump (the same reason `useFollowPresenter` never passes zero).
+ */
 function calm<T extends { duration?: number }>(options: T | undefined): T | undefined {
-  return options?.duration === undefined ? options : { ...options, duration: motionMs(options.duration) };
+  if (options?.duration === undefined) return options;
+  return { ...options, duration: options.duration > 0 ? Math.max(1, motionMs(options.duration)) : 0 };
 }

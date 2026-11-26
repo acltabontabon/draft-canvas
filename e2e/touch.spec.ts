@@ -29,8 +29,10 @@ async function nodeCenter(page: Page) {
 
 /**
  * Holds a finger still at a point. Chromium gets a real touch through CDP; WebKit, which Playwright
- * cannot drive with raw touches, gets the pointer events a held finger produces, dispatched at the
- * element under the point — the same events the editor listens for.
+ * cannot drive with raw touches, gets the pointer events a held finger produces — the same events the
+ * editor listens for. All of them go to the element the finger came down on: a touch pointer is
+ * captured by its first target, so the release and its click never land on whatever opened under
+ * the finger meanwhile (the context menu a long-press shows — whose row it used to click).
  */
 async function hold(page: Page, browserName: string, at: { x: number; y: number }, ms: number) {
   if (browserName === 'chromium') {
@@ -44,6 +46,7 @@ async function hold(page: Page, browserName: string, at: { x: number; y: number 
   await page.evaluate(
     ([x, y]) => {
       const target = document.elementFromPoint(x, y)!;
+      (window as unknown as { __heldTarget?: Element }).__heldTarget = target;
       const init = { bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true, pointerId: 7, button: 0, clientX: x, clientY: y };
       target.dispatchEvent(new PointerEvent('pointerdown', init));
     },
@@ -52,7 +55,9 @@ async function hold(page: Page, browserName: string, at: { x: number; y: number 
   await page.waitForTimeout(ms);
   await page.evaluate(
     ([x, y]) => {
-      const target = document.elementFromPoint(x, y)!;
+      const held = window as unknown as { __heldTarget?: Element };
+      const target = held.__heldTarget ?? document.elementFromPoint(x, y)!;
+      delete held.__heldTarget;
       const init = { bubbles: true, cancelable: true, pointerType: 'touch', isPrimary: true, pointerId: 7, button: 0, clientX: x, clientY: y };
       target.dispatchEvent(new PointerEvent('pointerup', init));
       target.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, button: 0, clientX: x, clientY: y }));

@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 31,
+  "version": 34,
   "metadata": {
     "id": "starter-music-streaming",
     "title": "Music streaming service",
@@ -24,9 +24,9 @@
       "id": "cloud",
       "type": "group",
       "x": 616,
-      "y": 59,
-      "width": 1766,
-      "height": 1457,
+      "y": -18,
+      "width": 1826,
+      "height": 1534,
       "z": -2,
       "text": "Earshot cloud",
       "textOrigin": "explicit",
@@ -36,9 +36,9 @@
       "id": "edge-d",
       "type": "group",
       "x": 648,
-      "y": 687,
+      "y": 679,
       "width": 304,
-      "height": 256,
+      "height": 274,
       "z": -1,
       "parentId": "cloud",
       "text": "Edge",
@@ -48,10 +48,10 @@
     {
       "id": "library",
       "type": "group",
-      "x": 1000,
-      "y": 139,
-      "width": 612,
-      "height": 445,
+      "x": 1008,
+      "y": 62,
+      "width": 672,
+      "height": 522,
       "z": -1,
       "parentId": "cloud",
       "text": "Library",
@@ -62,10 +62,10 @@
     {
       "id": "listening",
       "type": "group",
-      "x": 1000,
-      "y": 687,
-      "width": 612,
-      "height": 256,
+      "x": 1008,
+      "y": 679,
+      "width": 672,
+      "height": 274,
       "z": -1,
       "parentId": "cloud",
       "text": "Listening",
@@ -76,10 +76,10 @@
     {
       "id": "personal",
       "type": "group",
-      "x": 1000,
-      "y": 1055,
-      "width": 612,
-      "height": 246,
+      "x": 1008,
+      "y": 1051,
+      "width": 672,
+      "height": 254,
       "z": -1,
       "parentId": "cloud",
       "text": "Personalization",
@@ -90,10 +90,10 @@
     {
       "id": "insights",
       "type": "group",
-      "x": 1678,
-      "y": 139,
+      "x": 1746,
+      "y": 62,
       "width": 692,
-      "height": 1162,
+      "height": 1230,
       "z": -1,
       "parentId": "cloud",
       "text": "Insights & royalties",
@@ -118,9 +118,9 @@
       "id": "listener",
       "type": "actor",
       "x": 0,
-      "y": 911,
+      "y": 903,
       "width": 140,
-      "height": 118,
+      "height": 134,
       "z": 0,
       "text": "Listener",
       "description": "Plays music on every device they own.",
@@ -186,9 +186,9 @@
       "id": "gateway",
       "type": "service",
       "x": 680,
-      "y": 767,
+      "y": 759,
       "width": 240,
-      "height": 126,
+      "height": 142,
       "z": 0,
       "parentId": "edge-d",
       "text": "API Gateway",
@@ -201,10 +201,10 @@
     {
       "id": "playlists",
       "type": "service",
-      "x": 1032,
-      "y": 236,
-      "width": 176,
-      "height": 109,
+      "x": 1040,
+      "y": 219,
+      "width": 280,
+      "height": 142,
       "z": 0,
       "parentId": "library",
       "text": "Playlists",
@@ -217,10 +217,10 @@
     {
       "id": "playlists-db",
       "type": "database",
-      "x": 1340,
-      "y": 219,
+      "x": 1400,
+      "y": 201,
       "width": 240,
-      "height": 143,
+      "height": 179,
       "z": 0,
       "parentId": "library",
       "text": "Playlists DB",
@@ -242,10 +242,10 @@
     {
       "id": "search",
       "type": "service",
-      "x": 1032,
-      "y": 429,
-      "width": 176,
-      "height": 103,
+      "x": 1040,
+      "y": 409,
+      "width": 280,
+      "height": 142,
       "z": 0,
       "parentId": "library",
       "text": "Search",
@@ -257,7 +257,7 @@
     {
       "id": "index",
       "type": "database",
-      "x": 1400,
+      "x": 1460,
       "y": 409,
       "width": 120,
       "height": 143,
@@ -272,10 +272,10 @@
     {
       "id": "audio",
       "type": "service",
-      "x": 1032,
-      "y": 776,
-      "width": 176,
-      "height": 109,
+      "x": 1040,
+      "y": 759,
+      "width": 280,
+      "height": 142,
       "z": 0,
       "parentId": "listening",
       "text": "Audio API",
@@ -288,10 +288,10 @@
     {
       "id": "events",
       "type": "queue",
-      "x": 1390,
-      "y": 791,
+      "x": 1450,
+      "y": 782,
       "width": 140,
-      "height": 120,
+      "height": 139,
       "z": 0,
       "parentId": "listening",
       "text": "listening-events",
@@ -303,7 +303,7 @@
     {
       "id": "dj",
       "type": "actor",
-      "x": 1050,
+      "x": 1110,
       "y": 1135,
       "width": 140,
       "height": 134,
@@ -329,10 +329,10 @@
     {
       "id": "recs",
       "type": "service",
-      "x": 1372,
-      "y": 1148,
-      "width": 176,
-      "height": 109,
+      "x": 1410,
+      "y": 1131,
+      "width": 220,
+      "height": 142,
       "z": 0,
       "parentId": "personal",
       "text": "Recommendations",
@@ -373,10 +373,10 @@
           {
             "id": "r.candidates",
             "type": "component",
-            "x": 749,
+            "x": 819,
             "y": 0,
             "width": 152,
-            "height": 99,
+            "height": 114,
             "z": 0,
             "text": "Candidate Generator",
             "description": "Embeds the request and pulls 2,000 near tracks.",
@@ -387,10 +387,10 @@
           {
             "id": "r.vectors",
             "type": "database",
-            "x": 1036,
+            "x": 1106,
             "y": 0.75,
             "width": 260,
-            "height": 143,
+            "height": 179,
             "z": 0,
             "text": "Track Embeddings",
             "description": "Nearest neighbours over 100M track vectors.",
@@ -401,7 +401,7 @@
           {
             "id": "r.ranker",
             "type": "component",
-            "x": 749,
+            "x": 819,
             "y": 153,
             "width": 152,
             "height": 99,
@@ -415,10 +415,10 @@
           {
             "id": "r.features",
             "type": "database",
-            "x": 1056,
-            "y": 195.5625,
+            "x": 1126,
+            "y": 187.5625,
             "width": 220,
-            "height": 143,
+            "height": 179,
             "z": 0,
             "text": "Listener Features",
             "description": "Recent plays, skips and time of day.",
@@ -429,7 +429,7 @@
           {
             "id": "r.mix",
             "type": "component",
-            "x": 749,
+            "x": 819,
             "y": 306,
             "width": 152,
             "height": 99,
@@ -562,10 +562,10 @@
     {
       "id": "warehouse",
       "type": "database",
-      "x": 1710,
-      "y": 759,
+      "x": 1770,
+      "y": 741,
       "width": 220,
-      "height": 143,
+      "height": 179,
       "z": 0,
       "parentId": "insights",
       "text": "Listening Warehouse",
@@ -577,10 +577,10 @@
     {
       "id": "weekly",
       "type": "service",
-      "x": 1690,
-      "y": 227,
+      "x": 1750,
+      "y": 219,
       "width": 260,
-      "height": 126,
+      "height": 142,
       "z": 0,
       "parentId": "insights",
       "text": "Weekly Mix Builder",
@@ -602,10 +602,10 @@
     {
       "id": "royalties",
       "type": "service",
-      "x": 2030,
-      "y": 767,
+      "x": 2090,
+      "y": 759,
       "width": 260,
-      "height": 126,
+      "height": 142,
       "z": 0,
       "parentId": "insights",
       "text": "Royalties Run",
@@ -617,7 +617,7 @@
     {
       "id": "labels",
       "type": "actor",
-      "x": 2530,
+      "x": 2590,
       "y": 762,
       "width": 140,
       "height": 137,
@@ -631,10 +631,10 @@
     {
       "id": "cdn",
       "type": "service",
-      "x": 220,
-      "y": 1139,
-      "width": 220,
-      "height": 126,
+      "x": 242,
+      "y": 1153,
+      "width": 176,
+      "height": 99,
       "z": 0,
       "text": "Audio CDN",
       "description": "Caches audio files close to listeners.",
@@ -661,9 +661,9 @@
       "id": "artist",
       "type": "actor",
       "x": 0,
-      "y": 1351,
+      "y": 1343,
       "width": 140,
-      "height": 118,
+      "height": 134,
       "z": 0,
       "text": "Artist",
       "description": "Releases music and follows their listeners.",
@@ -705,7 +705,7 @@
             "id": "i.portal",
             "type": "service",
             "x": 0,
-            "y": 95,
+            "y": 73,
             "width": 176,
             "height": 68,
             "z": 0,
@@ -718,9 +718,9 @@
             "id": "i.api",
             "type": "service",
             "x": 302,
-            "y": 77.5,
-            "width": 176,
-            "height": 103,
+            "y": 68.13636363636363,
+            "width": 220,
+            "height": 142,
             "z": 0,
             "text": "Release API",
             "description": "Takes DDEX releases and their audio.",
@@ -731,8 +731,8 @@
           {
             "id": "i.jobs",
             "type": "queue",
-            "x": 677,
-            "y": 192.7159090909091,
+            "x": 721,
+            "y": 213,
             "width": 140,
             "height": 89,
             "z": 0,
@@ -746,10 +746,10 @@
           {
             "id": "i.encoders",
             "type": "service",
-            "x": 981,
-            "y": 149,
+            "x": 1025,
+            "y": 169,
             "width": 220,
-            "height": 126,
+            "height": 142,
             "z": 0,
             "text": "Encoders",
             "description": "Encode Ogg and AAC at five bitrates.",
@@ -761,10 +761,10 @@
           {
             "id": "i.loudness",
             "type": "service",
-            "x": 1319,
-            "y": 149,
+            "x": 1363,
+            "y": 169,
             "width": 280,
-            "height": 126,
+            "height": 142,
             "z": 0,
             "text": "Loudness Check",
             "description": "Measures LUFS so every track plays at one level.",
@@ -775,8 +775,8 @@
           {
             "id": "i.storage",
             "type": "database",
-            "x": 1736,
-            "y": 149,
+            "x": 1780,
+            "y": 169,
             "width": 120,
             "height": 114,
             "z": 0,
@@ -788,10 +788,10 @@
           {
             "id": "i.catalog",
             "type": "database",
-            "x": 617,
-            "y": 54.4375,
+            "x": 661,
+            "y": 10.585227272727252,
             "width": 260,
-            "height": 143,
+            "height": 179,
             "z": 0,
             "text": "Track Catalog",
             "description": "Tracks, credits, territories and release dates.",
@@ -802,10 +802,10 @@
           {
             "id": "i.dlq",
             "type": "queue",
-            "x": 1021,
-            "y": 329,
+            "x": 1065,
+            "y": 358,
             "width": 140,
-            "height": 104,
+            "height": 124,
             "z": 0,
             "text": "encode-jobs-dlq",
             "description": "Tracks that failed every attempt.",
@@ -842,7 +842,7 @@
             },
             "targetAnchor": {
               "side": "left",
-              "offset": 0.5
+              "offset": 0.75
             },
             "semanticsOrigin": "explicit"
           },
@@ -863,6 +863,16 @@
               "side": "left",
               "offset": 0.25
             },
+            "waypoints": [
+              {
+                "x": 600,
+                "y": 120.6
+              },
+              {
+                "x": 600,
+                "y": 221.75
+              }
+            ],
             "semanticsOrigin": "inferred"
           },
           {
@@ -901,14 +911,6 @@
             "directed": true,
             "routing": "smoothstep",
             "semantic": "writes",
-            "sourceAnchor": {
-              "side": "bottom",
-              "offset": 0.75
-            },
-            "targetAnchor": {
-              "side": "bottom",
-              "offset": 0.25
-            },
             "semanticsOrigin": "explicit"
           },
           {
@@ -918,12 +920,12 @@
             "directed": true,
             "routing": "smoothstep",
             "sourceAnchor": {
-              "side": "right",
+              "side": "bottom",
               "offset": 0.75
             },
             "targetAnchor": {
               "side": "left",
-              "offset": 0.25
+              "offset": 0.5
             }
           }
         ],
@@ -975,10 +977,62 @@
       }
     },
     {
+      "id": "j.publish.out",
+      "type": "ellipse",
+      "x": 992,
+      "y": 1392,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "cloud",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "publish"
+    },
+    {
+      "id": "j.publish.in",
+      "type": "ellipse",
+      "x": 1612,
+      "y": 431,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "library",
+      "text": "A",
+      "textOrigin": "explicit",
+      "link": "publish"
+    },
+    {
+      "id": "j.mix.out",
+      "type": "ellipse",
+      "x": 2042,
+      "y": 240,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "insights",
+      "text": "B",
+      "textOrigin": "explicit",
+      "link": "mix"
+    },
+    {
+      "id": "j.mix.in",
+      "type": "ellipse",
+      "x": 1162,
+      "y": 142,
+      "width": 36,
+      "height": 36,
+      "z": 0,
+      "parentId": "library",
+      "text": "B",
+      "textOrigin": "explicit",
+      "link": "mix"
+    },
+    {
       "id": "counts",
       "type": "text",
-      "x": 1835,
-      "y": 1052,
+      "x": 1895,
+      "y": 1070,
       "width": 330,
       "height": 164,
       "z": 0,
@@ -991,7 +1045,7 @@
     {
       "id": "money",
       "type": "text",
-      "x": 2130,
+      "x": 2190,
       "y": 272,
       "width": 188,
       "height": 36,
@@ -1006,7 +1060,7 @@
       "id": "title",
       "type": "text",
       "x": 0,
-      "y": -99,
+      "y": -176,
       "width": 1100,
       "height": 110,
       "z": 0,
@@ -1017,10 +1071,10 @@
     {
       "id": "seq-dj",
       "type": "sequence",
-      "x": 1622,
+      "x": 1654,
       "y": 1596,
-      "width": 760,
-      "height": 792,
+      "width": 788,
+      "height": 798,
       "z": 0,
       "text": "Ask the AI DJ, message by message",
       "textOrigin": "explicit",
@@ -1254,7 +1308,7 @@
       "semantic": "routes",
       "sourceAnchor": {
         "side": "top",
-        "offset": 0.3
+        "offset": 0.25
       },
       "targetAnchor": {
         "side": "left",
@@ -1272,7 +1326,7 @@
       "semantic": "routes",
       "sourceAnchor": {
         "side": "top",
-        "offset": 0.7
+        "offset": 0.75
       },
       "targetAnchor": {
         "side": "left",
@@ -1417,17 +1471,33 @@
     {
       "id": "mix",
       "source": "weekly",
-      "target": "playlists",
+      "target": "j.mix.out",
       "label": "Weekly mixes",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "triggers",
-      "portal": true,
+      "sourceAnchor": {
+        "side": "right",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "mix.in",
+      "source": "j.mix.in",
+      "target": "playlists",
+      "directed": true,
+      "routing": "smoothstep",
       "sourceAnchor": {
         "side": "bottom",
-        "offset": 0.2
+        "offset": 0.5
       },
-      "semanticsOrigin": "inferred"
+      "targetAnchor": {
+        "side": "top",
+        "offset": 0.5
+      }
     },
     {
       "id": "count",
@@ -1496,17 +1566,33 @@
     {
       "id": "publish",
       "source": "ingestion",
-      "target": "index",
+      "target": "j.publish.out",
       "label": "New tracks",
       "directed": true,
       "routing": "smoothstep",
-      "semantic": "indexes",
-      "portal": true,
-      "targetAnchor": {
+      "sourceAnchor": {
         "side": "right",
         "offset": 0.5
       },
-      "semanticsOrigin": "explicit"
+      "targetAnchor": {
+        "side": "left",
+        "offset": 0.5
+      }
+    },
+    {
+      "id": "publish.in",
+      "source": "j.publish.in",
+      "target": "index",
+      "directed": true,
+      "routing": "smoothstep",
+      "sourceAnchor": {
+        "side": "left",
+        "offset": 0.5
+      },
+      "targetAnchor": {
+        "side": "right",
+        "offset": 0.5
+      }
     }
   ],
   "viewport": {
@@ -1516,13 +1602,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {
@@ -1665,6 +1745,11 @@
           "id": "f.weekly.s2",
           "edgeId": "mix",
           "caption": "600M personal playlists are written before Monday morning."
+        },
+        {
+          "id": "f.weekly.s3",
+          "edgeId": "mix.in",
+          "caption": "Playlists stores each listener's new mix."
         }
       ],
       "accent": "green"
@@ -1714,6 +1799,11 @@
           "id": "f.release.s4",
           "edgeId": "publish",
           "caption": "On release day the tracks become searchable."
+        },
+        {
+          "id": "f.release.s5",
+          "edgeId": "publish.in",
+          "caption": "The Track Index takes the new tracks."
         }
       ],
       "accent": "violet"
@@ -1725,7 +1815,7 @@
       "tool": "highlighter",
       "color": "yellow",
       "size": 14,
-      "x": 2126,
+      "x": 2186,
       "y": 294,
       "points": [
         0,

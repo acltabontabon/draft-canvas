@@ -10,7 +10,10 @@ for more leads. Follow the entry point through the main request and its handled 
   order", "Publishes OrderPlaced"); a pipeline drawn in data direction names what moves
   ([modeling.md](modeling.md#make-the-layouts-job-easy)). `technology`: one product, optionally
   versioned ("Spring Boot 3"), so its logo shows. `replicas` on a service-like element when the
-  deployment says how many run (`replicas: 3` in a Compose file or a Deployment). Add `semantic` and `kind` when the code says
+  deployment says how many run (`replicas: 3` in a Compose file or a Deployment). Where one connector would cross the whole
+  diagram, end it at a `junction` and start again from another with the same `link` and the same short label ("A"):
+  people jump between them, and no relationship is implied. Junctions sharing a `link` need the same label in one
+  request. Add `semantic` and `kind` when the code says
   ([vocabulary.md](vocabulary.md) maps code to them).
 - **Sharpen the evidence**: add `symbol` and `line` for what you read; `basis: "inferred"` for what you
   concluded without seeing it.

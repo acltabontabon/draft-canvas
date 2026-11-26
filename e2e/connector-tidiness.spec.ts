@@ -41,7 +41,7 @@ test('context Async and inspector Sync agree, including response visibility and 
   await expect(page.getByRole('menuitem', { name: 'Make synchronous', exact: true })).toBeVisible();
   await expect(page.getByRole('menuitem', { name: 'Add reply line', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await page.keyboard.press('ControlOrMeta+z');
   // Undo restores selection quietly; click the edge to show its inspector again.
   const path = page.locator('.react-flow__edge[data-id="edge"] .dc-edge-hit').first();
   const point = await path.evaluate((el) => {
@@ -74,7 +74,10 @@ test('duplicate reconnect gives feedback without advertising a valid target or a
   await page.mouse.up();
   await expect(page.getByText('Already connected to that shape.', { exact: true })).toBeVisible();
   await expect(path).toHaveAttribute('d', before!);
-  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeDisabled();
+  // Nothing was recorded: undo has nothing to take back.
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(path).toHaveAttribute('d', before!);
+  await expect(page.locator('.dc-edge')).toHaveCount(2);
 });
 
 test('a zoomed-out endpoint can be grabbed beyond its dot', async ({ page }) => {
@@ -101,6 +104,8 @@ test('a zoomed-out endpoint can be grabbed beyond its dot', async ({ page }) => 
   await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
   await page.mouse.up();
   await expect(path).not.toHaveAttribute('d', before!);
-  await expect(page.getByRole('button', { name: 'Undo', exact: true })).toBeEnabled();
   await expect(page.locator('.dc-edge')).toHaveCount(2);
+  // The reconnection was recorded: undo takes it back.
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(path).toHaveAttribute('d', before!);
 });

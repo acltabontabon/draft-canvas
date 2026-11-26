@@ -1,6 +1,6 @@
 {
   "format": "draft-canvas",
-  "version": 28,
+  "version": 34,
   "metadata": {
     "id": "starter-medallion",
     "title": "Medallion",
@@ -11,10 +11,10 @@
     {
       "id": "sources",
       "type": "group",
-      "x": -52,
+      "x": -112,
       "y": 97,
       "width": 304,
-      "height": 615,
+      "height": 633,
       "z": -2,
       "text": "Sources",
       "textOrigin": "explicit",
@@ -23,10 +23,10 @@
     {
       "id": "lake",
       "type": "group",
-      "x": 420,
-      "y": 225,
-      "width": 1364,
-      "height": 511,
+      "x": 408,
+      "y": 207,
+      "width": 1376,
+      "height": 529,
       "z": -2,
       "text": "Ride Lakehouse",
       "textOrigin": "explicit",
@@ -36,9 +36,9 @@
       "id": "l-bronze",
       "type": "group",
       "x": 688,
-      "y": 277,
+      "y": 259,
       "width": 304,
-      "height": 427,
+      "height": 445,
       "z": -1,
       "parentId": "lake",
       "text": "Bronze · raw",
@@ -50,9 +50,9 @@
       "id": "l-silver",
       "type": "group",
       "x": 1068,
-      "y": 277,
+      "y": 259,
       "width": 304,
-      "height": 427,
+      "height": 445,
       "z": -1,
       "parentId": "lake",
       "text": "Silver · clean",
@@ -63,9 +63,9 @@
       "id": "l-gold",
       "type": "group",
       "x": 1448,
-      "y": 277,
+      "y": 259,
       "width": 304,
-      "height": 427,
+      "height": 445,
       "z": -1,
       "parentId": "lake",
       "text": "Gold · curated",
@@ -79,7 +79,7 @@
       "x": 1940,
       "y": 207,
       "width": 240,
-      "height": 367,
+      "height": 376,
       "z": -2,
       "text": "Consumers",
       "textOrigin": "explicit",
@@ -88,7 +88,7 @@
     {
       "id": "rides",
       "type": "database",
-      "x": -20,
+      "x": -80,
       "y": 149,
       "width": 240,
       "height": 143,
@@ -103,8 +103,8 @@
     {
       "id": "events",
       "type": "queue",
-      "x": -20,
-      "y": 348,
+      "x": -80,
+      "y": 341,
       "width": 240,
       "height": 104,
       "z": 0,
@@ -118,10 +118,10 @@
     {
       "id": "payouts",
       "type": "database",
-      "x": -20,
-      "y": 537,
+      "x": -80,
+      "y": 519,
       "width": 240,
-      "height": 143,
+      "height": 179,
       "z": 0,
       "parentId": "sources",
       "text": "Partner Exports",
@@ -143,10 +143,10 @@
     {
       "id": "ingest",
       "type": "service",
-      "x": 452,
-      "y": 339,
-      "width": 176,
-      "height": 123,
+      "x": 440,
+      "y": 309,
+      "width": 200,
+      "height": 182,
       "z": 0,
       "parentId": "lake",
       "text": "Ingestion Jobs",
@@ -159,9 +159,9 @@
       "id": "bronze",
       "type": "database",
       "x": 720,
-      "y": 329,
+      "y": 311,
       "width": 240,
-      "height": 143,
+      "height": 179,
       "z": 0,
       "parentId": "l-bronze",
       "text": "bronze.trips_raw",
@@ -254,9 +254,9 @@
       "id": "pricing",
       "type": "service",
       "x": 1972,
-      "y": 459,
+      "y": 449,
       "width": 176,
-      "height": 83,
+      "height": 102,
       "z": 0,
       "parentId": "consumers",
       "text": "Surge Pricing Model",
@@ -268,7 +268,7 @@
     {
       "id": "title",
       "type": "text",
-      "x": -52,
+      "x": -112,
       "y": -69,
       "width": 1100,
       "height": 110,
@@ -298,12 +298,12 @@
       },
       "waypoints": [
         {
-          "x": 404,
-          "y": 220
+          "x": 372,
+          "y": 197
         },
         {
-          "x": 404,
-          "y": 364
+          "x": 372,
+          "y": 335.93
         }
       ],
       "semanticsOrigin": "explicit"
@@ -335,16 +335,16 @@
       },
       "targetAnchor": {
         "side": "left",
-        "offset": 0.8
+        "offset": 0.88
       },
       "waypoints": [
         {
-          "x": 404,
+          "x": 372,
           "y": 580
         },
         {
-          "x": 404,
-          "y": 437
+          "x": 372,
+          "y": 380.13
         }
       ],
       "semanticsOrigin": "explicit"
@@ -436,13 +436,7 @@
   },
   "settings": {
     "showSequence": true,
-    "grid": "dots",
-    "background": {
-      "enabled": false,
-      "fit": "cover",
-      "dim": 0.55,
-      "blur": 0
-    }
+    "grid": "dots"
   },
   "flows": [
     {

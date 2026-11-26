@@ -219,6 +219,16 @@ export function nodeTechnologyIcon(node: DraftNode, snapshot: TechnologyIconSnap
 
 export const TECHNOLOGY_MARK_SIZE = RAIL_SIZE;
 
+/**
+ * Where a glyph carries its technology mark: off its top-right corner, out to the right and up past
+ * its top. It stood beside the glyph's right edge, level with its upper connection point, and every
+ * connector into that side drew its arrowhead through the logo. Off the corner it is clear of the
+ * right side's points (the first is a quarter of the way down) and of the top's (the last is inside
+ * the glyph's shoulder).
+ */
+const GLYPH_MARK_OUT = 6;
+const GLYPH_MARK_UP = TECHNOLOGY_MARK_SIZE - 6;
+
 /** Node-local visual extent only. The mark never changes sizing, handles or routing obstacles.
  * Data stores attach to their compact glyph; every other architecture shape carries it at the
  * corner end of its marker rail, above the top-right corner (`document/markerRail.ts`). It used to
@@ -227,11 +237,11 @@ export function technologyMarkBounds(node: DraftNode, snapshot: TechnologyIconSn
   if (!nodeTechnologyIcon(node, snapshot)) return undefined;
   if (node.type === 'database' || isGlyphShape(node)) {
     const glyph = dataStoreGlyphBounds({ ...node, x: 0, y: 0 });
-    return { x: glyph.right + 9, y: glyph.top + 2, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
+    return { x: glyph.right + GLYPH_MARK_OUT, y: glyph.top - GLYPH_MARK_UP, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
   }
   if (node.type === 'artifact') {
     const glyph = artifactGlyphBounds({ ...node, x: 0, y: 0 });
-    return { x: glyph.right + 9, y: glyph.top + 2, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
+    return { x: glyph.right + GLYPH_MARK_OUT, y: glyph.top - GLYPH_MARK_UP, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };
   }
   const at = markerRail(node, { technology: true }).technology!;
   return { x: at.x, y: at.y, width: TECHNOLOGY_MARK_SIZE, height: TECHNOLOGY_MARK_SIZE };

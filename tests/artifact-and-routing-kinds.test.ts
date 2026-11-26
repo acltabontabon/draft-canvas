@@ -41,7 +41,9 @@ describe('Load Balancer and Proxy', () => {
     expect({ width: balancer.width, height: balancer.height }).toEqual(defaultSizeFor('database'));
     expect(createNode({ type: 'service', serviceKind: 'proxy', x: 0, y: 0 }).text).toBe('Proxy');
     // A card kind keeps the card's box.
-    expect(createNode({ type: 'service', serviceKind: 'api', x: 0, y: 0 }).width).toBe(defaultSizeFor('service').width);
+    expect(createNode({ type: 'service', serviceKind: 'external', x: 0, y: 0 }).width).toBe(defaultSizeFor('service').width);
+    // An API is drawn as what it offers, so it takes the glyph's box like the rest.
+    expect(createNode({ type: 'service', serviceKind: 'api', x: 0, y: 0 })).toMatchObject({ text: 'API', ...defaultSizeFor('database') });
   });
 
   it('take connectors on the glyph, not on the empty box around it', () => {
@@ -50,7 +52,8 @@ describe('Load Balancer and Proxy', () => {
     expect(band.left!).toBeGreaterThan(balancer.x);
     expect(band.right!).toBeLessThan(balancer.x + balancer.width);
     expect(band.bottom).toBeLessThan(balancer.y + balancer.height);
-    expect(anchorBandOf(createNode({ type: 'service', serviceKind: 'api', x: 0, y: 0 }))).toBeUndefined();
+    expect(anchorBandOf(createNode({ type: 'service', serviceKind: 'external', x: 0, y: 0 }))).toBeUndefined();
+    expect(anchorBandOf(createNode({ type: 'service', serviceKind: 'api', x: 0, y: 0 }))).toBeDefined();
   });
 
   it('change box when the kind moves between a card and a glyph, around the same centre', () => {
@@ -58,7 +61,8 @@ describe('Load Balancer and Proxy', () => {
     const box = boxForKind(card, 'generic', 'proxy')!;
     expect({ width: box.width, height: box.height }).toEqual(defaultSizeFor('service', 'proxy'));
     expect(box.x + box.width / 2).toBeCloseTo(card.x + card.width / 2, 0);
-    expect(boxForKind(card, 'generic', 'api')).toBeNull();
+    expect(boxForKind(card, 'generic', 'external')).toBeNull();
+    expect(boxForKind(card, 'generic', 'api')).not.toBeNull();
     expect(boxForKind({ ...card, ...box }, 'proxy', 'load-balancer')).toBeNull();
     expect(boxForKind({ ...card, ...box }, 'proxy', 'worker')).toBeNull();
   });
@@ -182,9 +186,9 @@ describe('in the editor', () => {
     useEditorStore.getState().updateNodeById(node.id, { serviceKind: 'proxy' });
     let now = useEditorStore.getState().document.nodes.find((n) => n.id === node.id)!;
     expect(now).toMatchObject({ serviceKind: 'proxy', text: 'Proxy', ...defaultSizeFor('service', 'proxy') });
-    useEditorStore.getState().updateNodeById(node.id, { serviceKind: 'api' });
+    useEditorStore.getState().updateNodeById(node.id, { serviceKind: 'external' });
     now = useEditorStore.getState().document.nodes.find((n) => n.id === node.id)!;
-    expect(now).toMatchObject({ serviceKind: 'api', text: 'API', ...defaultSizeFor('service') });
+    expect(now).toMatchObject({ serviceKind: 'external', text: 'External System', ...defaultSizeFor('service') });
   });
 
   it('typing HAProxy onto a Service makes it a Load Balancer, box included', () => {

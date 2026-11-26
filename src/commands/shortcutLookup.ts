@@ -96,6 +96,7 @@ function buildFixtureContext(selection: { nodes: string[]; edges: string[] }): C
       zoomTo: NOOP_ASYNC,
       screenToFlowPosition: (p: { x: number; y: number }) => p,
       setViewport: NOOP_ASYNC,
+      getViewport: () => ({ x: 0, y: 0, zoom: 1 }),
       viewWidth: 1200,
       viewHeight: 800,
     },

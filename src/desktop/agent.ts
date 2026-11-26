@@ -36,6 +36,7 @@ import { holdPreview, readPreview, clearPreviews } from './agentPreviews';
 import { capabilities } from '../agent/capabilities';
 import { advisoriesReceipt, gate, legibilityReceipt, qualityReceipt } from '../agent/compile';
 import { AgentError, toAgentError } from '../agent/errors';
+import { HistoryToolError, historyTool, type HistoryToolArgs } from '../store/evolution/agentTool';
 import type { JobResult } from '../agent/jobs';
 import { runOffThread, type Progress } from '../agent/offThread';
 import type { AgentStarter } from '../agent/starter';
@@ -215,6 +216,16 @@ async function run(api: DesktopApi, host: AgentHost, event: Request): Promise<un
       return render(host, args, context);
     case 'read_selection':
       return readSelection(host, context);
+    case 'diagram_history':
+      return host.inTurn(async () => {
+        try {
+          return await historyTool({ ...(args as unknown as HistoryToolArgs), diagramId: context.diagramId ?? '' });
+        } catch (error) {
+          if (!(error instanceof HistoryToolError)) throw error;
+          const code = error.code === 'NOT_ACTIVE' ? 'NOT_ACTIVE' : error.code === 'NOT_FOUND' || error.code === 'NO_HISTORY' ? 'NOT_FOUND' : error.code === 'NOT_ALLOWED' ? 'READ_ONLY' : 'INVALID_INPUT';
+          throw new AgentError(code, error.message);
+        }
+      });
     case 'get_implementation_context':
       return implementationContext(host, args, context);
     case 'active_context':

@@ -292,7 +292,8 @@ async fn full_tools_keeps_individual_annotations_available() {
             "preview_diagram",
             "submit_proposal",
             "get_proposal",
-            "list_proposals"
+            "list_proposals",
+            "diagram_history"
         ]
     );
     let create = tools

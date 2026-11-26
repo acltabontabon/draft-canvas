@@ -17,6 +17,14 @@ pub enum ErrorKind {
     InvalidPath,
     AlreadyExists,
     Io,
+    /// A diagram history refused a write because someone else changed it first (`history/`).
+    Conflict,
+    /// A diagram history holds something it should not, or something that could not be read.
+    Corrupt,
+    /// A request to a diagram history that is not well formed: a bad id, ref or object id.
+    Invalid,
+    /// A repository in a format history does not read (SHA-256).
+    Unsupported,
 }
 
 /// What every command rejects with, already worded for a person. Nothing here ever carries a raw OS
@@ -28,6 +36,10 @@ pub struct AppError {
     pub message: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// A finer reason the page may act on where the kind alone is not enough: a diagram history's
+    /// Git failures and publishing refusals (`history/gitcli.rs`, `history/project.rs`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// What Draft Canvas was doing when the disk objected, so the sentence can say "save" or "open".
@@ -53,6 +65,7 @@ pub enum Subject<'a> {
     Path(&'a Path),
     RecoveryCopy,
     Preferences,
+    History,
 }
 
 impl Subject<'_> {
@@ -61,6 +74,7 @@ impl Subject<'_> {
             Subject::Path(p) => file_name(p),
             Subject::RecoveryCopy => "a recovery copy".to_string(),
             Subject::Preferences => "your settings".to_string(),
+            Subject::History => "this diagram's history".to_string(),
         }
     }
 
@@ -78,6 +92,7 @@ impl AppError {
             kind,
             message: message.into(),
             path: None,
+            reason: None,
         }
     }
 

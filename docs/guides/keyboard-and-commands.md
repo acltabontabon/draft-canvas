@@ -38,6 +38,8 @@ drop a connector on empty canvas still lists them first.
 | --- | --- |
 | `⌥` + arrow | Select the nearest shape in that direction |
 | `⌥⇧→` / `⌥⇧←` | Follow an outgoing / incoming connector |
+| `G` | Go where the selected [linked junction](shapes-and-connectors.md#linked-junctions) continues; with several places, list them |
+| `⇧G` / `⌥G` | Back to where you followed a junction from / forward again |
 | Arrow / `Shift` + arrow | Nudge the selection 1 / 10 units |
 | Hold `⌥` while dragging or resizing | Turn off [snapping](shapes-and-connectors.md#line-things-up) |
 | Hold `Shift` and rest on a shape | Light up everything its data comes from and feeds |
@@ -104,6 +106,18 @@ shapes, connectors and flows in any room, and tidies up. **Tidy up** previews a 
 before applying it; **Straighten connectors**, **Arrange diagram**, **Check layout**, **Tidy
 connectors**, **Auto attach all connectors** and **Fit shapes to text** each do one thing. With shapes
 selected it also aligns, distributes and matches sizes.
+
+## Timeline
+
+Open it with **Show the timeline** in `⌘K`. These keys work while focus is in it; see
+[Diagram history](history.md#the-timeline).
+
+| Key | Action |
+| --- | --- |
+| `←` / `→` | Older / newer revision; past the newest is Live |
+| `Home` / `End` | Oldest revision / Live |
+| `Space` | Play or pause |
+| `Esc` | Stop comparing, then return to Live, then close the timeline |
 
 ## Presenting
 

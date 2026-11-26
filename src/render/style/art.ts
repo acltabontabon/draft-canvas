@@ -47,6 +47,23 @@ function placed(d: string, ox: number, oy: number, sx: number, sy: number): stri
 /** Placed paths are remembered: a drawing is laid out once per box, not once per frame. */
 const PLACED = new Lru<string, string[]>(600);
 
+/** What a drawing draws, as a short key: an id alone is only a content hash when this app made it,
+ *  and a style from a file can give another drawing the same id. */
+const FINGERPRINTS = new WeakMap<StyleAsset, string>();
+function fingerprint(asset: StyleAsset): string {
+  let known = FINGERPRINTS.get(asset);
+  if (known === undefined) {
+    let hash = 0x811c9dc5;
+    for (const path of asset.paths) {
+      for (let i = 0; i < path.d.length; i += 1) hash = Math.imul(hash ^ path.d.charCodeAt(i), 0x01000193);
+      hash = Math.imul(hash ^ 0x7c, 0x01000193);
+    }
+    known = `${asset.paths.length}.${(hash >>> 0).toString(36)}`;
+    FINGERPRINTS.set(asset, known);
+  }
+  return known;
+}
+
 function paint(value: ArtPaint | undefined, palette: AccentPalette, theme: Theme): string | undefined {
   if (value === undefined) return undefined;
   if (value[0] === '#') return value;
@@ -72,7 +89,7 @@ export function artShapes(asset: StyleAsset, box: Box, fit: StyleFit, palette: A
     sx = scale;
     sy = scale;
   }
-  const key = `${asset.id}|${round(ox)}|${round(oy)}|${round(sx * 1000)}|${round(sy * 1000)}`;
+  const key = `${asset.id}|${fingerprint(asset)}|${round(ox)}|${round(oy)}|${round(sx * 1000)}|${round(sy * 1000)}`;
   const paths = PLACED.getOrCreate(key, () => asset.paths.map((path) => placed(path.d, ox, oy, sx, sy)));
   // A line drawn in the drawing's own units is as heavy, beside the drawing, at any size.
   const pen = Math.sqrt(Math.abs(sx * sy));
