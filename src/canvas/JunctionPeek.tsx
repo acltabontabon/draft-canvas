@@ -272,7 +272,9 @@ function JunctionPeekBody({
     const onKeyDown = (event: KeyboardEvent) => {
       if (isImeKeyEvent(event) || overlayAboveCanvasIsOpen()) return;
       if (event.key === 'Escape') {
-        event.stopPropagation();
+        // A card that only came up on hover closes but keeps no key from what is underneath: it
+        // once swallowed the Escape that ends renaming the Junction, leaving the editor open.
+        if (asked) event.stopPropagation();
         close(asked);
         return;
       }
