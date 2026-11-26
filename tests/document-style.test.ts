@@ -70,6 +70,8 @@ describe('the shapes a style can name', () => {
     expect(artSlotOf('database', 'cache')).toBe('glyph');
     expect(artSlotOf('service', 'generic')).toBe('body');
     expect(artSlotOf('service', 'gateway')).toBe('glyph');
+    // External's dashed outline is what it says; a drawing in place of the card would hide it.
+    expect(artSlotOf('service', 'external')).toBeNull();
     expect(artSlotOf('component', 'generic')).toBe('body');
     expect(artSlotOf('component', 'port')).toBe('glyph');
     expect(artSlotOf('queue', 'topic')).toBe('body');
