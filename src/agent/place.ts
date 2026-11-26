@@ -15,7 +15,7 @@ import { createFlow, setFlowVariantOf } from '../document/flow';
 import { DEFAULTS } from '../document/limits';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftNode, DraftNodeType, Side, ViewLevel } from '../document/types';
 import { hasAttachmentRoom } from '../document/operations';
-import { anchorBandOf, bandSpan } from '../document/queueGeometry';
+import { anchorBandOf, bandSpan, middlePointsOnly } from '../document/queueGeometry';
 import { roomOf } from '../depth/tree';
 import { layoutGraph, LayoutError, type Direction, type LayoutEdge } from '../layout/layered';
 import { assignAnchors, MIN_LABELLED_FAN, type AnchorRect, type TitleSpan } from '../layout/anchors';
@@ -485,6 +485,7 @@ export function anchorRectOf(node: DraftNode): AnchorRect {
     x: node.x, y: node.y, width: node.width, height: node.height,
     ...(band ? { bandTop: band.top, bandBottom: band.bottom } : {}),
     ...(across.length !== node.width ? { bandLeft: across.start, bandRight: across.start + across.length } : {}),
+    ...(middlePointsOnly(node.type) ? { middleOnly: true } : {}),
   };
 }
 

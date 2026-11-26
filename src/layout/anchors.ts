@@ -118,7 +118,8 @@ function corridorClear(source: Rect, target: Rect, rects: Map<string, Rect>, edg
 /** A shape's box, and for a queue or Data Store the band its left/right connectors land on.
  *  `bandLeft`/`bandRight`: the stretch its top and bottom connectors are spread along, when that is
  *  not the box's whole width (`bandSpan`). */
-export type AnchorRect = Rect & { bandTop?: number; bandBottom?: number; bandLeft?: number; bandRight?: number };
+/** `middleOnly`: the shape has just the middle point of each side (a Junction, `middlePointsOnly`). */
+export type AnchorRect = Rect & { bandTop?: number; bandBottom?: number; bandLeft?: number; bandRight?: number; middleOnly?: boolean };
 
 const HANDLES = [0.25, 0.5, 0.75];
 const OPPOSITE: Record<Side, Side> = { top: 'bottom', bottom: 'top', left: 'right', right: 'left' };
@@ -561,12 +562,16 @@ export function assignAnchors(
     });
   }
   const out = new Map<string, Anchors>();
+  // A Junction has only the middle of each side: spreading several ends over its side gave them
+  // 0.25 and 0.75, handles it does not render ("left@2"), and those connectors were not drawn.
+  const offsetAt = (id: string, end: 'source' | 'target', node: string) =>
+    (rects.get(node) as AnchorRect | undefined)?.middleOnly ? 0.5 : (offsets.get(`${id}\u0000${end}`) ?? 0.5);
   for (const edge of edges) {
     const chosen = sides.get(edge.id);
     if (!chosen) continue;
     out.set(edge.id, {
-      sourceAnchor: { side: chosen.source, offset: offsets.get(`${edge.id}\u0000source`) ?? 0.5 },
-      targetAnchor: { side: chosen.target, offset: offsets.get(`${edge.id}\u0000target`) ?? 0.5 },
+      sourceAnchor: { side: chosen.source, offset: offsetAt(edge.id, 'source', edge.source) },
+      targetAnchor: { side: chosen.target, offset: offsetAt(edge.id, 'target', edge.target) },
     });
   }
   return out;

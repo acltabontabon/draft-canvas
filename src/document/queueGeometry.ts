@@ -70,6 +70,23 @@ export function anchorBandOf(
 }
 
 /**
+ * Whether a shape has only the middle point of each side to connect to. A Junction (`ellipse`) is a
+ * circle that touches its box only there, so its handles (`DraftNodeView`) are those four alone; every
+ * other shape has three per side. An end pinned anywhere else on a Junction named a handle that does
+ * not exist ("left@2"): React Flow could not find it (error 008) and drew no connector at all, which
+ * is how agent-made diagrams that ended lines at junctions lost them.
+ */
+export function middlePointsOnly(type: DraftNode['type'] | undefined): boolean {
+  return type === 'ellipse';
+}
+
+/** `anchor` on a point a shape of `type` really has: a Junction's end moves to the middle of its
+ *  side (`middlePointsOnly`), every other shape's is returned as it is. */
+export function anchorOnShape<A extends { offset: number }>(type: DraftNode['type'] | undefined, anchor: A): A {
+  return middlePointsOnly(type) && anchor.offset !== 0.5 ? { ...anchor, offset: 0.5 } : anchor;
+}
+
+/**
  * How much wider than a glyph the stretch its top and bottom anchors are spread along is: the width
  * of a default glyph box (120) over the glyph drawn in it (54 at 114 / 88, a hair under 70). A shape
  * at its default size therefore has its anchors exactly where they always were, a quarter, a half

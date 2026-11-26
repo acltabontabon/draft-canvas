@@ -3,6 +3,7 @@ import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../re
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
+import { anchorOnShape } from '../document/queueGeometry';
 import { visibleEdgesForPlayback } from '../presentation/visibleEdges';
 import { useInternalNode, useReactFlow, type EdgeProps } from '@xyflow/react';
 import { useShallow } from 'zustand/react/shallow';
@@ -1638,7 +1639,7 @@ export function EdgeEndpointHandle({
       const edge = document.edges.find((item) => item.id === edgeId);
       const node = candidate && edge && !reconnectProblem(document, edge, endpoint, candidate.id) ? candidate : undefined;
       const hoverId = node?.id ?? null;
-      const handleId = node ? handleIdForAnchor(snappedAnchorForDrop(rectOf(node), point)) ?? null : null;
+      const handleId = node ? handleIdForAnchor(snappedAnchorForDrop(rectOf(node), point), node.type) ?? null : null;
       const hoverKey = hoverId ? `${hoverId}:${handleId ?? ''}` : null;
       if (hoverKey !== lastHover.current) {
         lastHover.current = hoverKey;
@@ -1661,7 +1662,9 @@ export function EdgeEndpointHandle({
       const node = findDropNode(point);
       if (!node) return; // Empty canvas: leave the connection exactly as it was.
       // A deliberate side drop is a pin; a body-center drop keeps smart attachment.
-      const anchor = snappedAnchorForDrop(rectOf(node), point);
+      // Only a point the shape has: a Junction takes the middle of the side it was dropped on.
+      const dropped = snappedAnchorForDrop(rectOf(node), point);
+      const anchor = dropped && anchorOnShape(node.type, dropped);
       useEditorStore.getState().reconnectEdge(edgeId, endpoint, node.id, anchor?.side, anchor?.offset);
     },
     [edgeId, endDrag, endpoint, findDropNode, screenToFlowPosition],

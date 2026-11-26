@@ -25,7 +25,7 @@ import { SequenceOverlay } from './sequence/SequenceOverlay';
 import { SequenceStepLayer } from './sequence/SequenceStepLayer';
 import { activeTextEditor, handleMarkdownKey } from './textEditor';
 import { nodeReading } from '../nodes/readings';
-import { HANDLE_ANCHORS } from '../edges/routing';
+import { HANDLE_ANCHORS, handleAnchorsOf } from '../edges/routing';
 import { beginClipScope, emitDisplayList } from '../render/svg/emit';
 import { useSettle } from './useContinuation';
 import { DragCapsule } from './DragCapsule';
@@ -815,7 +815,7 @@ export const DraftNodeView = memo(function DraftNodeView({ id, selected, width, 
         The dot starts the drawing gesture; after the drop an automatic end
         may move to another point or side as the shapes move.
       */}
-      {(node.type === 'ellipse' ? HANDLE_ANCHORS.filter((anchor) => anchor.offset === 0.5) : HANDLE_ANCHORS).map(
+      {handleAnchorsOf(node.type).map(
         (anchor) => (
           <DraftHandle
             key={anchor.id}

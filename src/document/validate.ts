@@ -16,6 +16,7 @@ import { cleanDescription, cleanEdgeLabel, cleanTechnology, cleanTitle, DEFAULT_
 import { repairCompensationLinks } from './compensation';
 import { migrateToCurrent, UnsupportedVersionError } from './migrate';
 import { defaultSizeFor } from './factory';
+import { anchorOnShape } from './queueGeometry';
 import {
   ACCENTS,
   ACTOR_KINDS,
@@ -730,10 +731,12 @@ export function normalizeDocument(raw: unknown, repairs: string[] = [], parent?:
     const waypoints = parseWaypoints(candidate.waypoints);
     if (waypoints) edge.waypoints = waypoints;
 
+    // An end pinned where its shape has no point (a Junction's "left@2", which agent layouts once
+    // wrote) is moved onto the one it has, so the connector is drawn rather than dropped.
     const sourceAnchor = parseAnchor(candidate.sourceAnchor);
-    if (sourceAnchor) edge.sourceAnchor = sourceAnchor;
+    if (sourceAnchor) edge.sourceAnchor = anchorOnShape(byId.get(source)?.type, sourceAnchor);
     const targetAnchor = parseAnchor(candidate.targetAnchor);
-    if (targetAnchor) edge.targetAnchor = targetAnchor;
+    if (targetAnchor) edge.targetAnchor = anchorOnShape(byId.get(target)?.type, targetAnchor);
 
     // The identical `Attachment` shape a node carries, just hosted on a connector.
     const edgeAttachments = parseAttachments(candidate.attachments, LIMITS.maxAttachmentsPerEdge);

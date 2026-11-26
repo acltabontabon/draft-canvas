@@ -12,7 +12,7 @@
  * route or caption would run over a shape, tries the other side pairs in a fixed order.
  */
 
-import { anchorBandOf } from '../document/queueGeometry';
+import { anchorBandOf, middlePointsOnly } from '../document/queueGeometry';
 import { isCollapsedCompensation, visibleEdges } from '../document/compensation';
 import { crossingsBetween, isDetour, runsOf } from './routeMetrics';
 import type { DraftEdge, DraftNode, Side } from '../document/types';
@@ -698,7 +698,11 @@ export function repairAnchors(
     const hood = new Set(touching.flatMap((e) => [e.source, e.target]));
     const edge = mover;
     const candidates: { source: DraftEdge['sourceAnchor']; target: DraftEdge['targetAnchor']; cost: number }[] = [];
+    // A Junction end tries only the middle of a side, the one point it has (`middlePointsOnly`).
+    const sourceMiddle = middlePointsOnly(byId.get(edge.source)?.type);
+    const targetMiddle = middlePointsOnly(byId.get(edge.target)?.type);
     offsets: for (const [sourceOffset, targetOffset] of OFFSET_PAIRS) {
+      if ((sourceMiddle && sourceOffset !== 0.5) || (targetMiddle && targetOffset !== 0.5)) continue;
       for (const source of SIDES) {
         for (const target of SIDES) {
           if (pastDeadline()) break offsets;

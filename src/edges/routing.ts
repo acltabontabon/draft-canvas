@@ -9,7 +9,7 @@ import {
   type EdgeRouting,
   type Side,
 } from '../document/types';
-import { anchorBandOf, bandReach, bandSpan, type AnchorBand } from '../document/queueGeometry';
+import { anchorBandOf, anchorOnShape, bandReach, bandSpan, middlePointsOnly, type AnchorBand } from '../document/queueGeometry';
 import { centerOf, clamp } from '../lib/math';
 import { longestRunMidpoint, orthogonalThrough, polylineMidpoint, polylinePath, responseWaypoints, smoothPath, stepPolyline } from './waypoints';
 import { edgeLabelSize, LABEL_PADDING_X, LABEL_PADDING_Y } from './labelLayout';
@@ -2607,6 +2607,13 @@ export const HANDLE_ANCHORS: readonly HandleAnchor[] = OFFSET_INDEX_ORDER.flatMa
   })),
 );
 
+/** The connection points a shape of `type` renders: all twelve, or a Junction's four midpoints
+ *  (`middlePointsOnly`). `handleIdForAnchor` names only these, so the two cannot disagree. */
+const MIDDLE_HANDLE_ANCHORS = HANDLE_ANCHORS.filter((anchor) => anchor.offset === 0.5);
+export function handleAnchorsOf(type: DraftNode['type'] | undefined): readonly HandleAnchor[] {
+  return middlePointsOnly(type) ? MIDDLE_HANDLE_ANCHORS : HANDLE_ANCHORS;
+}
+
 /** Decodes a `HANDLE_ANCHORS` id (e.g. `"top@1"`) back into the `EdgeAnchor` it represents. */
 export function parseAnchorId(value: unknown): EdgeAnchor | undefined {
   if (typeof value !== 'string') return undefined;
@@ -2620,8 +2627,11 @@ export function parseAnchorId(value: unknown): EdgeAnchor | undefined {
  *  snapping to the nearest of the three offsets a stored anchor doesn't land exactly on. `undefined`
  *  in, `undefined` out: an edge with no explicit anchor has no specific handle to point React Flow
  *  at either, and should keep resolving dynamically. */
-export function handleIdForAnchor(anchor: EdgeAnchor | undefined): string | undefined {
+export function handleIdForAnchor(anchor: EdgeAnchor | undefined, type?: DraftNode['type']): string | undefined {
   if (!anchor) return undefined;
+  // Only a handle the shape renders: a Junction end stored off its middle once named "left@2",
+  // which React Flow could not find (error 008), and the connector vanished.
+  if (type !== undefined) anchor = anchorOnShape(type, anchor);
   const index = ANCHOR_OFFSETS.reduce(
     (best, candidate, i) => (Math.abs(candidate - anchor.offset) < Math.abs(ANCHOR_OFFSETS[best]! - anchor.offset) ? i : best),
     0,
