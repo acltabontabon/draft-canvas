@@ -208,6 +208,11 @@ note in every docs image: `readMarker` (`export/docs/marker.ts`) gives a viewer 
 beside the SVG and its level. A Markdown preview could swap the image for an interactive view, reusing
 `renderDocumentSvg` and the reader (never a second renderer) and loading no remote script.
 
+**Diagram history.** Each diagram's history is a Git repository the app keeps apart from the file:
+IndexedDB on the web, the app's data folder on the desktop. Recording, recovery, merging and
+publishing are in [Canvas Evolution](evolution.md); its threat model, and how the desktop runs Git,
+in [Canvas Evolution security](evolution-security.md).
+
 **Encrypted storage.** Browser records are written plain. `crypto/documentCipher.ts` and
 `crypto/keyStore.ts` only decrypt legacy rows and are called only by `storage/IndexedDbRepository.ts`.
 The passphrase export is separate. See [Security](../../SECURITY.md#browser-storage).

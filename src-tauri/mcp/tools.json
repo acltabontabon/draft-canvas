@@ -1181,5 +1181,57 @@
       "readOnlyHint": true,
       "openWorldHint": false
     }
+  },
+  {
+    "name": "diagram_history",
+    "title": "Diagram history",
+    "description": "Open diagram history: summary, list(query), compare(revision, against id|live), preview_restore/preview_merge(alternative), suggest_milestone(name). read only if allowed.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "diagramId": {
+          "type": "string"
+        },
+        "action": {
+          "enum": [
+            "summary",
+            "list",
+            "compare",
+            "read",
+            "preview_restore",
+            "preview_merge",
+            "suggest_milestone"
+          ]
+        },
+        "revision": {
+          "type": "string"
+        },
+        "against": {
+          "type": "string"
+        },
+        "alternative": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "query": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "diagramId",
+        "action"
+      ],
+      "additionalProperties": false
+    },
+    "annotations": {
+      "title": "Diagram history",
+      "readOnlyHint": true,
+      "openWorldHint": false
+    }
   }
 ]

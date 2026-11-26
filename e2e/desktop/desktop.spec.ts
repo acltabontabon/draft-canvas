@@ -1317,6 +1317,8 @@ test('Settings moves between pages by keyboard, shows one agent setup at a time,
   await page.keyboard.press('ArrowDown');
   await expect(settings.getByRole('tab', { name: 'Canvas' })).toBeFocused();
   await page.keyboard.press('ArrowDown');
+  await expect(settings.getByRole('tab', { name: 'History' })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
   const agents = settings.getByRole('tab', { name: 'AI agents' });
   await expect(agents).toBeFocused();
   await expect(agents).toHaveAttribute('aria-selected', 'true');

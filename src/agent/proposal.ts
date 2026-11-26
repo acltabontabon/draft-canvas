@@ -11,6 +11,7 @@ import type { DepthPath } from '../depth/tree';
 import { roomsOf, viewOf, walkGraphs } from '../depth/tree';
 import { AgentError } from './errors';
 import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPoint } from '../document/types';
+import { GEOMETRY_FIELDS } from '../document/fieldClasses';
 import { OPEN_POINT_LABELS } from '../document/openPoints';
 import { applyUpdate, type PatchResult } from './patch';
 import { smallestArrange, unreadableFix, type QualityIssue } from './quality';
@@ -208,8 +209,6 @@ export interface DiffField {
   after?: string;
 }
 
-/** Placement and routing: what an arrange or a nudge changes, and no agent chose. */
-const GEOMETRY_FIELDS: ReadonlySet<string> = new Set(['x', 'y', 'width', 'height', 'z', 'sourceAnchor', 'targetAnchor', 'routeMode', 'waypoints']);
 
 export interface ElementDiffRow {
   path?: string[];

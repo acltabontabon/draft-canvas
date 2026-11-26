@@ -17,7 +17,30 @@ import type { CollabLanStarted, DocsPublished, DocsStatus, MarkdownFile, Markdow
 export type { DocsImage, DocsPublished, DocsStatus, MarkdownFile, MarkdownSaveResult } from './wire';
 export type { CollabLanStarted, ExplorerSaveResult, ExplorerStart, ExplorerDirectory, ExplorerEntry, ExplorerLocation, MovedFile, OpenedDoc, SavedAs, SaveResult, ProjectInfo, ProjectFile, Scan as ProjectScan } from './wire';
 
+import type {
+  Binding,
+  CommitRecord,
+  JournalRecord,
+  LogQuery,
+  Oid,
+  RefEntry,
+  RefName,
+  RefUpdate,
+  RefUpdateResult,
+  RepoMeta,
+  RepoUsage,
+  SnapshotWrite,
+  TagRecord,
+  TagWrite,
+} from '../evolution/contracts';
+
 export type Handle = string;
+
+/** What history maintenance did; `skipped: 'journal'` while an operation is still open. */
+export interface HistoryMaintainOutcome {
+  skipped: 'journal' | null;
+  pruned: number;
+}
 
 export type AppErrorKind =
   | 'NotFound'
@@ -29,19 +52,119 @@ export type AppErrorKind =
   | 'InvalidHandle'
   | 'InvalidPath'
   | 'AlreadyExists'
-  | 'Io';
+  | 'Io'
+  // A diagram history's refusals (`historyStore.ts` turns them into `HistoryError` codes).
+  | 'Conflict'
+  | 'Corrupt'
+  | 'Invalid'
+  | 'Unsupported';
 
 /** A refusal from the shell, already worded for a person ("…because the file is read-only."). */
 export class DesktopError extends Error {
   readonly kind: AppErrorKind;
   readonly path: string | undefined;
+  /**
+   * Finer than `kind` where the page acts on it: a history remote's Git failure (`auth`,
+   * `host-key`, `offline`, `rejected-non-fast-forward`…) or why publishing into a project refused
+   * (`partially-staged`, `head-moved`…). See `historyRemote.ts`.
+   */
+  readonly reason: string | undefined;
 
-  constructor(kind: AppErrorKind, message: string, path?: string) {
+  constructor(kind: AppErrorKind, message: string, path?: string, reason?: string) {
     super(message);
     this.name = 'DesktopError';
     this.kind = kind;
     this.path = path;
+    this.reason = reason;
   }
+}
+
+/** Whether the person's own `git` can be used for remotes and project publishing. */
+export interface GitStatus {
+  available: boolean;
+  version: string | null;
+  reason: string | null;
+}
+
+/** A local branch against its remote-tracking branch after a fetch (counts stop at 500). */
+export interface RemoteBranchState {
+  branch: RefName;
+  local: Oid | null;
+  remote: Oid | null;
+  ahead: number;
+  behind: number;
+}
+
+export interface RemoteFetchOutcome {
+  /** Every `refs/remotes/origin/...` after the fetch; each one passed the diagram-history check. */
+  refs: RefEntry[];
+  branches: RemoteBranchState[];
+}
+
+export interface RemotePushPreview {
+  ref: RefName;
+  destination: RefName;
+  local: Oid;
+  /** What this device last fetched for that ref; always `null` for a milestone. */
+  remote: Oid | null;
+  /** Commits the remote-tracking branches don't have, at most 500. */
+  outgoing: number;
+  /** First lines of those commits, newest first, at most 20. */
+  subjects: string[];
+  fastForward: boolean;
+  upToDate: boolean;
+}
+
+export interface RemotePushedRef {
+  ref: RefName;
+  oid: Oid;
+  upToDate: boolean;
+}
+
+/** The person's own repository holding a saved diagram (`history_project_repo`). */
+export interface ProjectRepoInfo {
+  rootName: string;
+  /** `null` when HEAD is detached. */
+  branch: string | null;
+  /** The diagram's path in the repository, forward slashes. */
+  relPath: string;
+  headOid: Oid | null;
+  merging: boolean;
+  rebasing: boolean;
+  cherryPicking: boolean;
+  reverting: boolean;
+  bisecting: boolean;
+  pathStaged: boolean;
+  pathPartiallyStaged: boolean;
+  pathUntracked: boolean;
+  pathIgnored: boolean;
+  filtered: boolean;
+  sparseExcluded: boolean;
+  signingRequired: boolean;
+  hasOrigin: boolean;
+  /** The branch of its own the diagram is published to (`draft-canvas/<path>`). */
+  publishBranch: string;
+  /** Why Draft Canvas won't run Git in this repository at all, if it won't. */
+  configRefused: string | null;
+  /** Repository settings Draft Canvas overrides on every run (hooks, fsmonitor). */
+  configOverridden: string[];
+}
+
+export interface ProjectPublished {
+  branch: string;
+  oid: Oid;
+  /** False when the branch already held exactly this file. */
+  changed: boolean;
+}
+
+export interface ProjectPushPreview {
+  branch: string;
+  local: Oid;
+  remote: Oid | null;
+  /** Every commit no `origin/*` branch has yet (the person's own source commits included), at most 10,000. */
+  outgoing: number;
+  subjects: string[];
+  fastForward: boolean;
 }
 
 /** Where a canvas created inside a project (but never written to disk) remembers it should be saved. */
@@ -338,6 +461,61 @@ export interface DesktopApi {
   recoveryList(): Promise<RecoveryEntry[]>;
   recoveryRead(id: string): Promise<string>;
   recoveryDiscard(id: string): Promise<void>;
+
+  // Canvas Evolution's diagram histories (`src-tauri/src/history/`): bare Git repositories in the
+  // app's own data folder, named by id only. `historyStore.ts` wraps these as a `VersionStore`.
+  /** Every history's `repo.json`, by id. Imports still being checked are not listed. */
+  historyList(): Promise<RepoMeta[]>;
+  /** A new bare repository on `main` with this `repo.json`; `Conflict` when the id is taken. */
+  historyCreate(meta: RepoMeta): Promise<void>;
+  historyRemove(repo: string): Promise<void>;
+  /** `repo` is a history id or, for the read methods, an import's `.staging-<id>`. */
+  historyMeta(repo: string): Promise<RepoMeta>;
+  historyWriteMeta(repo: string, meta: RepoMeta): Promise<void>;
+  historyWriteSnapshot(repo: string, write: SnapshotWrite): Promise<Oid>;
+  historyUpdateRef(repo: string, update: RefUpdate): Promise<RefUpdateResult>;
+  historyReadRef(repo: string, name: RefName): Promise<Oid | null>;
+  historyListRefs(repo: string, prefix: string): Promise<RefEntry[]>;
+  /** At most 1000 at once, in the order asked. */
+  historyReadCommits(repo: string, oids: Oid[]): Promise<CommitRecord[]>;
+  historyReadSnapshot(repo: string, oid: Oid): Promise<string>;
+  historyLog(repo: string, query: LogQuery): Promise<CommitRecord[]>;
+  historyMergeBases(repo: string, a: Oid, b: Oid): Promise<Oid[]>;
+  historyIsAncestor(repo: string, ancestor: Oid, descendant: Oid): Promise<boolean>;
+  historyWriteTag(repo: string, tag: TagWrite): Promise<Oid>;
+  historyListTags(repo: string, prefix: string): Promise<TagRecord[]>;
+  historyJournalPut(repo: string, record: JournalRecord): Promise<void>;
+  historyJournalList(repo: string): Promise<JournalRecord[]>;
+  historyJournalDelete(repo: string, opId: string): Promise<void>;
+  historyUsage(repo: string): Promise<RepoUsage>;
+  /** Prunes old unreachable loose objects, judged by the shell's clock. */
+  historyMaintain(repo: string): Promise<HistoryMaintainOutcome>;
+  /** A version 2 pack of every object `tips` reach, for a bundle. */
+  historyPackReachable(repo: string, tips: Oid[]): Promise<Uint8Array>;
+  /** Indexes a pack into a hidden staging repository and returns its name (`.staging-<id>`). */
+  historyImportBegin(meta: RepoMeta, pack: Uint8Array): Promise<string>;
+  /** Creates `refs` in a checked import and moves it into place; returns its history id. */
+  historyImportCommit(staging: string, refs: RefEntry[]): Promise<string>;
+  historyImportAbort(staging: string): Promise<void>;
+  historyBindingGet(copyId: string): Promise<Binding | null>;
+  historyBindingPut(binding: Binding): Promise<void>;
+  historyBindingDelete(copyId: string): Promise<void>;
+  historyBindingList(): Promise<Binding[]>;
+  // Remotes and project repositories, through the person's own `git` (`historyRemote.ts`).
+  historyGitStatus(): Promise<GitStatus>;
+  /** Validates `url` (https:// or ssh, no credentials) and makes it the history's `origin`; returns it as stored. */
+  historyRemoteSet(repo: string, url: string): Promise<string>;
+  historyRemoteRemove(repo: string): Promise<void>;
+  historyFetch(repo: string): Promise<RemoteFetchOutcome>;
+  /** `refs`: `refs/heads/main`, `refs/heads/alt/<id>` or `refs/tags/milestone/<id>`. No network. */
+  historyPushPreview(repo: string, refs: RefName[]): Promise<RemotePushPreview[]>;
+  historyPush(repo: string, refs: RefName[]): Promise<RemotePushedRef[]>;
+  /** `null` when the file a handle names is in no Git working tree. */
+  historyProjectRepo(handle: Handle): Promise<ProjectRepoInfo | null>;
+  historyProjectPublishBranch(handle: Handle, message: string): Promise<ProjectPublished>;
+  historyProjectCommitCurrent(handle: Handle, message: string, expectedHead: Oid): Promise<ProjectPublished>;
+  historyProjectPushPreview(handle: Handle, branch: string): Promise<ProjectPushPreview>;
+  historyProjectPush(handle: Handle, branch: string): Promise<void>;
 
   // Settings and dialogs
   settingsSet(patch: Partial<DesktopSettings>): Promise<DesktopSettings>;

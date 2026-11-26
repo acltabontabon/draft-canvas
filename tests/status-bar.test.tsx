@@ -5,7 +5,6 @@ import { createDocument } from '../src/document/factory';
 import { useEditorStore } from '../src/store/editorStore';
 import { StatusBar, type SaveFailureActions } from '../src/ui/Editor/StatusBar';
 import { saveFailureMessage } from '../src/storage/saveFailure';
-import { useUiStore } from '../src/store/uiStore';
 
 // The UI store reads device preferences when it is created; never the real storage, so no test here
 // can leave something behind for another to read.
@@ -152,15 +151,9 @@ describe('StatusBar controls say what they do', () => {
     expect(describedBy('100%, fit to view')).toMatch(/Shortcut .*1/);
   });
 
-  it('says why Undo and Redo are off while a flow is traced or the copy is read-only', () => {
-    useUiStore.setState({ flowTrace: { flowId: null } as never, readOnly: null });
-    const { unmount } = mount(false);
-    expect(screen.getByRole('button', { name: 'Undo' })).toBeDisabled();
-    expect(screen.getByRole('button', { name: 'Undo' })).toHaveAttribute('title', 'Finish or cancel tracing the flow first.');
-    unmount();
-    useUiStore.setState({ flowTrace: null, readOnly: { sharedTitle: 'Shared' } as never });
+  it('leaves undo and redo to the keyboard and ⌘K, keeping the bar to one history control', () => {
     mount(false);
-    expect(screen.getByRole('button', { name: 'Redo' })).toHaveAttribute('title', 'This diagram is read-only.');
-    useUiStore.setState({ readOnly: null });
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Redo' })).not.toBeInTheDocument();
   });
 });

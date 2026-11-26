@@ -107,6 +107,18 @@ function strays(layer: string, allowed: (to: string) => boolean): string[] {
 
 const within = (...layers: string[]) => (to: string) => layers.includes(layerOf(to));
 
+/** The files outside `document/` and `depth/` that `evolution/` may read, each pure and worker-safe. */
+const EVOLUTION_FROM_ELSEWHERE = [
+  'src/export/project.ts',
+  'src/export/canonical.ts',
+  'src/collab/changes.ts',
+  'src/collab/diff.ts',
+  'src/collab/equal.ts',
+  'src/collab/fileIndex.ts',
+  'src/collab/apply.ts',
+  'src/collab/repair.ts',
+];
+
 describe('the dependency rules are kept', () => {
   it('finds the source and its imports', () => {
     expect(FILES.length).toBeGreaterThan(400);
@@ -174,6 +186,10 @@ describe('the dependency rules are kept', () => {
     ['history', (to: string) => within('document', 'depth')(to) || to === 'src/collab/selective.ts'],
     ['continuation', within('document', 'render', 'edges')],
     ['openPoints', within('document', 'depth', 'render')],
+    // Canvas Evolution's domain runs in the history worker: the model, the room tree, the canonical
+    // serializer, and only the pure comparison helpers of collaboration — never collab's sessions,
+    // transport or sanitizer, and never `lib/` wholesale.
+    ['evolution', (to: string) => within('document', 'depth')(to) || EVOLUTION_FROM_ELSEWHERE.includes(to)],
   ] as const)('%s/ imports only what it is allowed to', (layer, allowed) => {
     expect(strays(layer, allowed)).toEqual([]);
   });
@@ -189,6 +205,11 @@ describe('the dependency rules are kept', () => {
       expect(strays(layer, allowed)).toEqual([]);
     },
   );
+
+  // The history worker loads `evolution/` alone: nothing of the editor may come with it.
+  it('evolution/ never reaches the editor', () => {
+    expect(strays('evolution', (to) => !EDITOR.includes(layerOf(to)))).toEqual([]);
+  });
 
   // "`agent/` may consume these and rendering/export helpers, never UI or store modules."
   it('agent/ never imports UI, canvas, store or shell modules', () => {
@@ -210,7 +231,7 @@ describe('the dependency rules are kept', () => {
   // "`src/document/` imports neither React nor React Flow." The same holds for the other layers that
   // are React-free by rule (`collab/`, `ink/`, `agent/`) or by what they are. `edges/` is not
   // listed: `routing.ts` builds its paths with React Flow's own path functions.
-  it.each(['document', 'collab', 'ink', 'agent', 'depth', 'traffic', 'gallery', 'history', 'layout', 'sequence', 'junctions'])(
+  it.each(['document', 'collab', 'ink', 'agent', 'depth', 'traffic', 'gallery', 'history', 'layout', 'sequence', 'junctions', 'evolution'])(
     '%s/ imports neither React, React Flow nor the store library',
     (layer) => {
       const packages = IMPORTS.filter((entry) => !entry.relative && layerOf(entry.from) === layer && /^(react|react-dom|@xyflow\/|zustand)/.test(entry.to));

@@ -1,0 +1,167 @@
+/* Compare (`canvas/CompareLayers.tsx`): what differs between two versions, marked on the canvas.
+   Every mark has a glyph as well as a colour, and colours come from the editor's own tokens:
+   the selection teal for what was added, danger for what was removed, caution for what changed. */
+
+/* What did not change recedes, so the changes are what the eye finds. */
+.dc-history-lens[data-compare] [data-diagram-node]:not([data-change]),
+.dc-history-lens[data-compare] [data-diagram-edge]:not([data-change]),
+.dc-history-lens[data-compare] [data-diagram-edge-labels]:not([data-change]) {
+  opacity: 0.42;
+  transition: opacity var(--dc-dur-slow) var(--dc-ease-out);
+}
+
+.dc-history-lens [data-diagram-edge][data-change='added'] {
+  filter: drop-shadow(0 0 1.5px var(--dc-selection));
+}
+
+.dc-history-lens [data-diagram-edge][data-change='removed'] {
+  filter: drop-shadow(0 0 1.5px var(--dc-danger));
+}
+
+.dc-history-lens [data-diagram-edge][data-change='changed'] {
+  filter: drop-shadow(0 0 1.5px var(--dc-caution));
+}
+
+.dc-compare {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+}
+
+/* Elements only the other side has: there, faintly, where they were. */
+.dc-compare-ghost {
+  position: absolute;
+  opacity: 0.38;
+  filter: grayscale(0.6);
+}
+
+.dc-compare-ghost > svg {
+  display: block;
+  overflow: visible;
+}
+
+.dc-compare-mark {
+  position: absolute;
+  border: 1.5px solid var(--dc-mark-colour);
+  border-radius: calc(var(--dc-radius) + 4px);
+  --dc-mark-colour: var(--dc-caution);
+}
+
+.dc-compare-mark[data-mark='added'] {
+  --dc-mark-colour: var(--dc-selection);
+}
+
+.dc-compare-mark[data-mark='removed'] {
+  --dc-mark-colour: var(--dc-danger);
+  border-style: dashed;
+}
+
+.dc-compare-mark[data-mark='moved'] {
+  --dc-mark-colour: var(--dc-text-muted);
+  border-style: dotted;
+}
+
+.dc-compare-mark[data-focused='true'] {
+  border-width: 2.5px;
+  animation: dc-compare-find 900ms var(--dc-ease-out) 1;
+}
+
+@keyframes dc-compare-find {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--dc-mark-colour) 55%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 14px transparent;
+  }
+}
+
+.dc-compare-glyph {
+  position: absolute;
+  top: -10px;
+  left: -10px;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-mark-colour);
+  color: var(--dc-canvas);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Where a moved shape used to be. */
+.dc-compare-was {
+  position: absolute;
+  border: 1.5px dashed var(--dc-text-faint);
+  border-radius: var(--dc-radius);
+  opacity: 0.7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dc-compare-mark[data-focused='true'] {
+    animation: none;
+  }
+  .dc-history-lens[data-compare] [data-diagram-node]:not([data-change]) {
+    transition: none;
+  }
+}
+
+/* Side by side: the lens steps aside, and two panes share the one camera. */
+.react-flow:has(.dc-compare-split) .dc-history-lens {
+  opacity: 0;
+}
+
+.dc-compare-split {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  container-type: inline-size;
+  pointer-events: none;
+}
+
+.dc-compare-pane {
+  position: relative;
+  overflow: hidden;
+  background: var(--dc-canvas);
+}
+
+.dc-compare-pane + .dc-compare-pane {
+  border-left: 1px solid var(--dc-border);
+}
+
+.dc-compare-pane-label {
+  position: absolute;
+  top: 12px;
+  left: 14px;
+  z-index: 1;
+  max-width: calc(100% - 28px);
+  overflow: hidden;
+  padding: 3px 9px;
+  border-radius: var(--dc-radius-pill);
+  background: var(--dc-surface-raised);
+  color: var(--dc-text-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dc-compare-pane-world {
+  position: absolute;
+  left: 0;
+  top: 0;
+  transform-origin: 0 0;
+}
+
+.dc-compare-pane-picture {
+  position: absolute;
+}
+
+.dc-compare-pane-picture > svg {
+  display: block;
+  overflow: visible;
+}

@@ -10,6 +10,23 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **History** — Every diagram keeps its history as you work. When you pause, a revision is added
+  in standard Git on your own device, and nothing is uploaded. Click the clock in the status bar
+  and choose **Open timeline** to scrub back through it, play it forward, and see the diagram as it
+  was. Name a revision as a milestone. <!-- highlight -->
+- **Compare and restore** — Compare any two versions, or a version and now, laid over each other
+  or side by side, with every change listed. Restore a whole revision, or bring back just the
+  shapes you pick. Either way it is one undo step and a new revision, and nothing earlier is lost.
+- **Alternatives** — Try another direction as an alternative, switch between them, and bring one
+  into another. When both changed the same thing, you choose which side to keep, on the canvas.
+- **History, your way** — **Settings → History** sets how often revisions are added, the name
+  they carry, and whether a diagram records at all. You can export a diagram's history as a Git
+  bundle, import one, or remove it. **Duplicate** offers to copy the history too. In a live session
+  only the host records, and each revision credits only the people whose changes it holds.
+- **Agents and history** — Connected agents can list and compare revisions and preview a restore
+  or merge with the `diagram_history` tool. Restoring and merging stay yours. Reading a past
+  revision in full needs your permission in Settings.
+
 - **A style of your own** — **Appearance** (the palette button at the bottom right, a right-click
   on the canvas, or `⌘K`) opens beside the canvas and fits the diagram
   to what is left, so every choice is seen on your diagram as you make it. Pick a style from the
@@ -36,6 +53,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Changed
 
+- **A quieter status bar** — The undo and redo buttons are gone from the status bar. `⌘Z`, `⇧⌘Z`
+  and the menus still undo and redo. On the web, a small lock means your diagram is saved and a soft
+  dot means a save is on its way. Words show only when something needs you. The timeline docks
+  where the status bar was while it is open.
 - **A calm place to style** — While Appearance is open the tools, Present and Share and the status
   bar step back, leaving the diagram and the panel. **Done** brings them back.
 - **Shadows** — Off, Soft or Deep: Deep lifts shapes off the canvas, on dark canvases too.
@@ -96,6 +117,18 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 #### Added
 
+- **Publish history** — **Settings → History** copies a diagram's history to a Git repository of
+  your own, on GitHub, GitLab or any Git server. Your Git sign-in is used, the first publish to an
+  address is shown and confirmed first, and nothing is ever force-pushed. Fetch to see what the
+  remote has, and bring its revisions in the same way as an alternative.
+- **Commit a diagram to its project** — A saved diagram inside a Git repository can be committed
+  there. By default it goes to a branch of its own, and your current branch, staged changes and
+  working files are left alone. You can also commit it to your current branch, which Draft Canvas
+  refuses whenever that could surprise you. A push shows every commit it would publish first.
+  Draft Canvas will not run Git in a repository whose settings would run a program.
+- **History follows your files** — History follows a file you rename or move in the app, and a
+  Quick Draft you save. A file changed outside the app and reloaded is recorded as a revision of
+  its own.
 - **OpenCode** — **Settings → AI agents** connects OpenCode 1 and 2 in one click, alongside Claude
   Code, Codex, Cursor, Gemini CLI and Junie, and shows how to check the connection.
 - **Sort your diagrams** — Every list in **Find a diagram** shows the most recently edited first,

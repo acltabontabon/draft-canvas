@@ -93,6 +93,8 @@ import { AgentPreviewLayer, ArrangePreviewLayer, ProposalPreviewLayer, TidyPrevi
 import { ContinuationGhost } from './ContinuationGhost';
 import { RecoveryConnectGhost } from './RecoveryConnectGhost';
 import { RoomFrame } from './RoomFrame';
+import { HistoryLens } from './HistoryLens';
+import { CompareOverlay, CompareSplit } from './CompareLayers';
 import { PresenceLayer } from './PresenceLayer';
 import { FollowPrompt } from '../ui/collab/FollowPrompt';
 import { stopFollowingOnGesture } from '../ui/collab/presence/useFollowPresenter';
@@ -2527,6 +2529,11 @@ const CanvasBody = memo(function CanvasBody({ onCreateAt, onQuickConnectMenu, on
             </div>
           )}
         </ViewportLayer>
+        {/* A past revision, drawn over the hidden live diagram while the timeline shows it. Never in the document. */}
+        <HistoryLens />
+        {/* Compare: what differs, marked on the lens, or both versions side by side. */}
+        <CompareOverlay />
+        <CompareSplit />
         {outageActive && <OutageDock />}
       </ReactFlow>
     </div>

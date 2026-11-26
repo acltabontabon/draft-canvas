@@ -107,6 +107,18 @@ before applying it; **Straighten connectors**, **Arrange diagram**, **Check layo
 connectors**, **Auto attach all connectors** and **Fit shapes to text** each do one thing. With shapes
 selected it also aligns, distributes and matches sizes.
 
+## Timeline
+
+Open it with **Show the timeline** in `⌘K`. These keys work while focus is in it; see
+[Diagram history](history.md#the-timeline).
+
+| Key | Action |
+| --- | --- |
+| `←` / `→` | Older / newer revision; past the newest is Live |
+| `Home` / `End` | Oldest revision / Live |
+| `Space` | Play or pause |
+| `Esc` | Stop comparing, then return to Live, then close the timeline |
+
 ## Presenting
 
 | Key | Action |
