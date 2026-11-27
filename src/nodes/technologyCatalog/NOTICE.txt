@@ -1,4 +1,4 @@
-Simple Icons 16.37.0 — complete technology catalog
+Simple Icons 16.38.0 — complete technology catalog
 https://github.com/simple-icons/simple-icons
 Package: CC0-1.0; individual logo terms and trademarks may differ.
 The following source, guidelines and license information is retained from the pinned package.
@@ -6715,6 +6715,10 @@ Kitsu
 Source: https://kitsu.io
 License: no individual license data supplied by Simple Icons; see source and package disclaimer.
 
+kitty
+Source: https://sw.kovidgoyal.net/kitty
+License: GPL-3.0-only (https://spdx.org/licenses/GPL-3.0-only)
+
 Kiwix
 Source: https://wiki.kiwix.org/wiki/Logo
 License: CC-BY-SA-4.0 (https://spdx.org/licenses/CC-BY-SA-4.0)
@@ -13062,6 +13066,11 @@ License: no individual license data supplied by Simple Icons; see source and pac
 
 Traefik Proxy
 Source: https://traefik.io/traefik
+License: no individual license data supplied by Simple Icons; see source and package disclaimer.
+
+Traffic.cv
+Source: https://traffic.cv/logo.svg
+Guidelines: https://traffic.cv/terms-of-service
 License: no individual license data supplied by Simple Icons; see source and package disclaimer.
 
 Trailforks
