@@ -125,6 +125,17 @@ impl Runs {
         lock(&self.open).get(run).map(|o| o.policy.clone())
     }
 
+    /// The person took back `folder` in Settings. A run already going stops reading it from its next
+    /// call — every call reads the policy, as it re-reads the diagram folders — instead of reading on
+    /// until its turn ended.
+    pub fn forget_code(&self, folder: &std::path::Path) {
+        for entry in lock(&self.open).values_mut() {
+            if entry.policy.code.as_deref() == Some(folder) {
+                entry.policy.code = None;
+            }
+        }
+    }
+
     /// Records a call the run's connection is making; `false` once the run has ended, and the call
     /// must not start.
     pub fn track(&self, run: &str, call: &Arc<CallRegistry>) -> bool {
@@ -327,6 +338,31 @@ mod tests {
             .is_err());
         runs.close("a");
         assert_eq!(runs.history("a", &json!({})).unwrap_err().code, "CANCELLED");
+    }
+
+    #[test]
+    fn taking_back_a_code_folder_reaches_a_run_already_going() {
+        let runs = Runs::default();
+        let folder = PathBuf::from("/work/shop");
+        let lent = RunPolicy {
+            code: Some(folder.clone()),
+            ..policy(false)
+        };
+        runs.open_deferred("a", lent.clone());
+        runs.open_deferred(
+            "b",
+            RunPolicy {
+                code: Some(PathBuf::from("/work/other")),
+                ..policy(false)
+            },
+        );
+        runs.forget_code(&folder);
+        assert_eq!(runs.policy("a").unwrap().code, None);
+        assert_eq!(
+            runs.policy("b").unwrap().code,
+            Some(PathBuf::from("/work/other")),
+            "another folder stays lent"
+        );
     }
 
     #[test]

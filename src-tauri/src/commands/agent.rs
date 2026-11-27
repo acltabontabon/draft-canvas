@@ -268,6 +268,7 @@ pub async fn agent_configure(app: AppHandle, patch: AgentPatch) -> Result<AgentS
             if let Some(companion) = app.try_state::<Arc<crate::companion::Companion>>() {
                 companion.forget_code_now(Path::new(path));
             }
+            agent.runs.forget_code(Path::new(path));
         }
         configure(state, &agent, patch)?;
         // A companion run can't reach the diagram any more; it is stopped rather than left to fail.
