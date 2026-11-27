@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createDocument } from '../document/factory';
+import { realRepairs } from '../document/validate';
 import { deserializeDocument, serializeDocument } from '../export/project';
 import { logDiagnostic } from '../lib/diagnostics';
 import { isEditableTarget } from '../lib/isEditableTarget';
@@ -149,8 +150,9 @@ export function useHostDocument(session: DocumentSession, channel?: HostChannel 
       setState({ error: null, invalidWhileOpen: false });
       // Said out loud, as an import in the Library does: the file itself still holds the original,
       // and the first edit writes the repaired document over it.
-      if (parsed && parsed.repairs.length > 0) {
-        useUiStore.getState().notify(`Opened with repairs, saved to the file on your next edit: ${parsed.repairs.join(' ')}`);
+      const repaired = parsed ? realRepairs(parsed.repairs) : [];
+      if (repaired.length > 0) {
+        useUiStore.getState().notify(`Opened with repairs, saved to the file on your next edit: ${repaired.join(' ')}`);
       }
       // Opening normalises what it read; that alone must not dirty the file. A new file is the
       // exception: it gets its first contents now.

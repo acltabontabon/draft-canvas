@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { CURRENT_VERSION, DRAFT_FORMAT, type DraftNode } from '../src/document/types';
-import { parseDocument } from '../src/document/validate';
+import { parseDocument, realRepairs } from '../src/document/validate';
 import { createNode } from '../src/document/factory';
 import { describeContext, describeNode, naturalArchitectureSize } from '../src/nodes/describe';
 import { LIGHT } from '../src/render/theme/tokens';
@@ -42,6 +42,14 @@ describe('C4 text in the document (v15)', () => {
     expect(result.document.version).toBe(CURRENT_VERSION);
     expect(result.repairs).toEqual([`Upgraded document format from v14 to v${CURRENT_VERSION}.`]);
     expect(result.document.nodes[0]?.description).toBeUndefined();
+  });
+
+  // A share link, a desktop file and an import all say "opened with repairs" from these: an older
+  // file brought up to this version's format must not read as a damaged one.
+  it('counts bringing an older file up to date as no repair', () => {
+    const result = parseDocument(JSON.stringify(file(14, shape('api'))));
+    expect(result.ok && realRepairs(result.repairs)).toEqual([]);
+    expect(realRepairs(['Upgraded document format from v14 to v34.', 'Dropped 1 connector to a missing shape.'])).toEqual(['Dropped 1 connector to a missing shape.']);
   });
 
   it('keeps description and technology at the root and in every room below it', () => {

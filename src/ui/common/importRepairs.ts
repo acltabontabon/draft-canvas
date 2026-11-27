@@ -1,3 +1,5 @@
+import { realRepairs } from '../../document/validate';
+
 /**
  * The toast for a file imported with real repairs, or null when there is nothing to say.
  *
@@ -7,6 +9,6 @@
  * nothing (`IndexedDbRepository` leaves the line out the same way).
  */
 export function importRepairsNotice(repairs: readonly string[]): string | null {
-  const real = repairs.filter((line) => !line.startsWith('Upgraded document format'));
+  const real = realRepairs(repairs);
   return real.length > 0 ? `Imported with repairs: ${real.join(' ')}` : null;
 }
