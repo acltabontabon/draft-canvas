@@ -1690,6 +1690,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // The armed tool goes too — one armed on the canvas just closed would place a node on the
     // next one's first click.
     const cleared = resetViewSession();
+    // So do the tools that outlast a move between rooms on purpose (Make room, the Pencil, a linked
+    // Junction's counterpart in hand) and the Appearance panel: they are about the canvas being
+    // closed. Left, the next diagram's first drag pushed its shapes apart or drew a stroke, and it
+    // opened under the panel. A reload of the same canvas (`keepPath`) keeps them.
+    if (!options?.keepPath) useUiStore.setState({ makeRoom: null, pencil: null, junctionPlacing: null, stylePanelOpen: false });
     set((state) => {
       // A reload of the same file — the desktop shell posts one on every outside edit — should leave you
       // standing where you were, as long as the shape you were inside is still there.

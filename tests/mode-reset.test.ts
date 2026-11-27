@@ -54,6 +54,26 @@ describe('per-canvas UI state does not leak', () => {
     expect(useUiStore.getState().armed).toBeNull();
   });
 
+  /**
+   * Make room, the Pencil and a counterpart in hand outlast a move between rooms on purpose; they
+   * outlasted opening another diagram too, so its first drag pushed shapes apart or drew a stroke,
+   * and it opened under the Appearance panel.
+   */
+  it('tools in hand and the Appearance panel are put down when another document opens, not on a reload', () => {
+    const inHand = () => {
+      const ui = useUiStore.getState();
+      return { makeRoom: ui.makeRoom, pencil: ui.pencil, junctionPlacing: ui.junctionPlacing, stylePanelOpen: ui.stylePanelOpen };
+    };
+    const pickUp = () => useUiStore.setState({ makeRoom: { line: null }, pencil: 'pen', junctionPlacing: { sourceId: 'j1' }, stylePanelOpen: true });
+
+    pickUp();
+    store.getState().setDocument(store.getState().document, { keepPath: true });
+    expect(inHand()).toEqual({ makeRoom: { line: null }, pencil: 'pen', junctionPlacing: { sourceId: 'j1' }, stylePanelOpen: true });
+
+    store.getState().setDocument(createDocument('B'));
+    expect(inHand()).toEqual({ makeRoom: null, pencil: null, junctionPlacing: null, stylePanelOpen: false });
+  });
+
   it('popovers, menus and pending requests close when the document is replaced', () => {
     useUiStore.setState({
       openAttachmentDetail: { hostKind: 'node', hostId: 'n1', attachmentId: null },
