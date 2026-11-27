@@ -89,7 +89,7 @@ import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, fl
 import { pastDeadline, relaxLayoutAnchors, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
 import { arrangeFreshRoom } from './compile';
-import { checkQuality, isBetterReport, isClean, type QualityIssue, type QualityReport } from './quality';
+import { asDrawn, checkQuality, isBetterReport, isClean, type QualityIssue, type QualityReport } from './quality';
 import { moveInside, moveOutside } from './restructure';
 import { newFindings, REVIEW_LIMIT, reviewView } from './review';
 import { technologyAdvice } from './advice';
@@ -699,7 +699,8 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     // `embed` rewrites every owner up the chain, so each ancestor room reads as changed. One holding
     // nothing this request touched has nothing for a focused check to judge — skip its whole pass.
     if (!inTouchedRoom && !graph.nodes.some((n) => touched.has(n.id)) && !graph.edges.some((e) => touched.has(e.id))) return;
-    const report = checkQuality(graph.nodes, graph.edges, ctx, inTouchedRoom ? undefined : touched, explicit);
+    // Judged as the canvas will draw it (`asDrawn`): this request's repairs re-anchored connectors in place.
+    const report = checkQuality(graph.nodes, asDrawn(graph.edges), ctx, inTouchedRoom ? undefined : touched, explicit);
     // A problem in another view (a linked junction renamed there) says which, as a create's do: an
     // arrange of this view, the op it was otherwise answered with, can't reach it.
     const elsewhere = !samePath(graphPath, path);

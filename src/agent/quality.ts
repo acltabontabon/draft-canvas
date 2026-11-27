@@ -186,6 +186,17 @@ const contains = (outer: Box, inner: Box) =>
  *  geometry are refused whoever asked for them. */
 const ROUTE_KINDS: ReadonlySet<QualityIssue['kind']> = new Set(['through-node', 'label-over-node', 'label-collision', 'label-crossed', 'shared-run']);
 
+/**
+ * Connectors as the canvas will draw them: each one a new object. A repair re-anchors connectors in
+ * place (`route.ts`'s `tryMove`), while the line memos in `edges/sides.ts` and `edges/endpoints.ts`
+ * are kept per connector object and compare only what it is drawn between: judged on the repaired
+ * objects, a layout could be read with a line from before a repair, and passed or refused on lines
+ * nobody will see. A request's final check judges copies, so its verdict is the drawing's.
+ */
+export function asDrawn(edges: readonly DraftEdge[]): DraftEdge[] {
+  return edges.map((edge) => ({ ...edge }));
+}
+
 export function checkQuality(
   nodes: readonly DraftNode[],
   edges: readonly DraftEdge[],

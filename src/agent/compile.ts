@@ -15,7 +15,7 @@ import { readCreate, type CreateSpec, type LayoutSpec, type RoomSpec } from './i
 import { hasPeerCalls } from '../layout/layered';
 import { captionSizer, measureContext, placeRoom, type PlacedRoom } from './place';
 import { silent, type Report } from './progress';
-import { checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
+import { asDrawn, checkFit, isBetterCandidate, isCleanCandidate, checkQuality, renderedBoundsOf, smallestFontPresent, type FitReport, type QualityIssue, type QualityReport } from './quality';
 import { pastDeadline, relaxLayoutAnchors, repairAnchors, withDeadline, type KeptPin } from './route';
 import { buildFromStarter, starterKeptIds, type AgentStarter } from './starter';
 import { legibilityCost, legibilityOf, type Legibility } from './legibility';
@@ -67,7 +67,8 @@ function composeWithin(raw: unknown, diagramId: string, report: Report, starter?
   // generated diagrams follow moved shapes. A starter's pins are authored; kept.
   const relaxed = spec.starter ? { placed: candidate.placed, kept: [] } : relaxPlaced(spec, candidate.placed, ctx);
   const placed = relaxed.placed;
-  const found = qualityOfEveryRoom(placed, ctx, explicitIds(spec));
+  // Judged as the canvas will draw it (`asDrawn`): the repairs above re-anchored connectors in place.
+  const found = qualityOfEveryRoom(asDrawnRoom(placed), ctx, explicitIds(spec));
   const legibility = legibilityOf(placed.nodes, placed.edges, aboutOf(spec));
   const fit = used.viewport ? checkFit(renderedBoundsOf(placed.nodes, placed.edges, ctx), smallestFontPresent(placed.nodes, placed.edges), used.viewport) : undefined;
   // A starter's own drawing was laid out by hand and passed the gallery's check: this one, written for
@@ -515,6 +516,14 @@ function explicitIds(room: RoomSpec): Set<string> {
   };
   visit(room);
   return out;
+}
+
+/** `room` with every connector, in every inside view too, a new object (`asDrawn`). */
+function asDrawnRoom(room: PlacedRoom): PlacedRoom {
+  const nodesOf = (nodes: PlacedRoom['nodes']): PlacedRoom['nodes'] => nodes.map((node) => (
+    node.inside ? { ...node, inside: { ...node.inside, nodes: nodesOf(node.inside.nodes), edges: asDrawn(node.inside.edges) } } : node
+  ));
+  return { ...room, nodes: nodesOf(room.nodes), edges: asDrawn(room.edges) };
 }
 
 function qualityOfEveryRoom(room: PlacedRoom, ctx: ReturnType<typeof measureContext>, explicit?: ReadonlySet<string>): QualityReport {
