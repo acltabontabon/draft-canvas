@@ -1322,7 +1322,6 @@ fn record(agent: &Agent, entry: Entry) -> Result<(), ToolError> {
         .map_err(|_| ledger_unavailable())
 }
 
-/// A request refused before anything changed: it may run again under the same id.
 /// Writes a new diagram under the free name `pick` gives, recording the path in the ledger before
 /// each try so a crash mid-write is recoverable. Picking (`unique_name`) only checks; the create-new
 /// write is what claims a name, and it fails having written nothing when another create took the name
@@ -1362,6 +1361,7 @@ fn claim_new_file(
     Err(error)
 }
 
+/// A request refused before anything changed: it may run again under the same id.
 fn fail(agent: &Agent, key: &str, error: &ToolError) {
     let now = now_ms();
     let code = error.code;
