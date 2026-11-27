@@ -296,6 +296,37 @@ describe('what the owner says at the door', () => {
   });
 });
 
+describe('the owner’s door, when the owner’s clock steps back', () => {
+  it('still says what it has to at once: the relay budget never refills by less than nothing', async () => {
+    // Timers and `performance` run on; `Date` is stepped (time sync, a VM resuming, a change by hand).
+    vi.useFakeTimers();
+    FakeSocket.made = [];
+    vi.stubGlobal('WebSocket', FakeSocket);
+    const identity = await newOwnerIdentity();
+    const lobby = new HostLobby(newSessionLink(identity), identity, 'wss://relay.example', 'Olive', { localOnly: true, server: '' }, {
+      status: () => {},
+      knocks: () => {},
+      admitted: () => {},
+      isReturning: () => null,
+      failed: () => {},
+    });
+    await lobby.open();
+    const socket = FakeSocket.made[0]!;
+    socket.fire('open');
+    const say = (lobby as unknown as { toGuest(id: string, data: string, busy?: boolean): void }).toGuest.bind(lobby);
+    const to = () => socket.sent.map((text) => (JSON.parse(text) as { to: string }).to);
+    say('g_before', 'seen');
+    vi.setSystemTime(Date.now() - 60_000);
+    // A minute back took the budget to minus 150: the greeting waited the minute, and the knocker
+    // gave up on it after 30 s, told the door was busy.
+    say('g_after', 'seen');
+    expect(to()).toEqual(['g_before', 'g_after']);
+    await lobby.close();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  });
+});
+
 describe('a knock nobody greets', () => {
   it('says the door is busy after a while, rather than knocking for good', async () => {
     vi.useFakeTimers();

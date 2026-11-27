@@ -12,6 +12,7 @@
  * waiting for them, they are let back in without asking — and the session still makes them prove
  * the place is theirs with its private key before giving it back (`HostSession.attach`'s `requireKey`).
  */
+import { REAL_CLOCK } from './clock';
 import { followOwner, iceConfig, type ConnectionPreferences } from './connect';
 import { MAX_GUEST_MESSAGE_BYTES, readName, type Role } from './protocol';
 import {
@@ -105,7 +106,7 @@ export class HostLobby {
   /** What waits to be said to knockers, and the budget it is paced by (`toGuest`). */
   private outgoing: { id: string; data: string; busy: boolean }[] = [];
   private tokens = RELAY_BUDGET;
-  private refilledAt = Date.now();
+  private refilledAt = REAL_CLOCK.now();
   private pacing: ReturnType<typeof setTimeout> | null = null;
   /** Knocks whose key exchange is still being worked out; they count toward the door's limit. */
   private readonly pendingKnocks = new Set<string>();
@@ -211,8 +212,12 @@ export class HostLobby {
   }
 
   private pumpOutgoing(): void {
-    const now = Date.now();
-    this.tokens = Math.min(RELAY_BUDGET, this.tokens + ((now - this.refilledAt) * RELAY_BUDGET) / RELAY_WINDOW_MS);
+    // On the monotonic clock its pacing timer runs on, and never refilled by less than nothing. On the
+    // wall clock, a step back (time sync, a VM resuming, a change by hand) took the budget below zero
+    // for as long as the step: greetings, offers and refusals waited that long, and whoever knocked
+    // meanwhile was told the door was busy.
+    const now = REAL_CLOCK.now();
+    this.tokens = Math.min(RELAY_BUDGET, this.tokens + (Math.max(0, now - this.refilledAt) * RELAY_BUDGET) / RELAY_WINDOW_MS);
     this.refilledAt = now;
     while (this.tokens >= 1 && this.outgoing.length > 0) {
       const next = this.outgoing.findIndex((item) => !item.busy);
