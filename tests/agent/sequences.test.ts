@@ -324,6 +324,22 @@ describe('a sequence drawn in the editor, read and sent back', () => {
     expect(messagesOf(after).map((message) => [message.id, message.replyTo])).toEqual([['c2', undefined], ['r', 'c2']]);
     expect(checkSequence(after)).toEqual([]);
   });
+
+  it('says which words a read writes in place of nothing: only a blank participant’s or box’s name', () => {
+    const sequence = normalizeSequence({
+      participants: [{ id: 'a', name: '', type: 'service', serviceKind: 'generic' }, { id: 'b', name: 'B', type: 'service', serviceKind: 'generic' }],
+      groups: [{ id: 'g', name: '', participantIds: ['a'] }],
+      items: [createMessage({ id: 'm', from: 'a', to: 'b' })],
+    }).sequence;
+    const text = textOf({ ...createDocument('Shop'), nodes: [{ ...createNode({ id: 'checkout', type: 'sequence', x: 0, y: 0, text: 'Blank' }), sequence }] });
+    expect(text).toContain(' as Participant\n');
+    expect(text).toContain('box transparent Group\n');
+    expect(text).not.toContain('Message');
+    const said = (capabilities({ topics: ['sequences'] }).sequences as { edit: string }).edit;
+    expect(said).toContain('"Participant"');
+    expect(said).toContain('"Group"');
+    expect(said).not.toContain('"Message"');
+  });
 });
 
 describe('scoped edits and participant-anchored connectors', () => {

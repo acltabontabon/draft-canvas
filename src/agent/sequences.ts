@@ -112,8 +112,8 @@ export function readSequenceSource(
  *
  * Mermaid can't say what a participant is beyond "actor" or not, what it is built with or its
  * colour; nor a group's colour, a reference to another interaction (a read writes it as a note), a
- * blank label (written as a word: Mermaid needs one), which call a reply answers when that isn't the
- * latest one, or any id. Text that was read and sent back changed none of that, and an agent adding
+ * blank participant or box name (written as a word: Mermaid needs one), which call a reply answers
+ * when that isn't the latest one, or any id. Text that was read and sent back changed none of that, and an agent adding
  * one message used to turn every Data Store and Queue into a plain Service, drop technologies and
  * colours, make references notes and write "Message" into blank replies, all in silence.
  *

@@ -212,9 +212,10 @@ technology and follows it:
 `read_diagram` returns each sequence the same way (`mermaid`, `links`). `set.mermaid` replaces what
 it holds and keeps the links of participants still written under the same ids; `set.title` renames
 it; `set.links` re-links. Edit the text a read gave in place: what Mermaid can't say (a participant's
-kind, technology and colour, a box's colour, a reference read as a `ref:` note, a blank label read as
-"Message") stays as it was wherever your text still says what the read said. A receipt advisory
-names anything in the text that is not drawn (`autonumber`, `rect`, lost messages).
+kind, technology and colour, a box's colour, a reference read as a `ref:` note, a blank participant
+or box name read as "Participant" or "Group") stays as it was wherever your text still says what the
+read said. A receipt advisory names anything in the text that is not drawn (`autonumber`, `rect`,
+lost messages).
 `get_capabilities` topic `sequences` has the rest.
 
 ## Styled labels

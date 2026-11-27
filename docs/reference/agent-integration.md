@@ -596,9 +596,9 @@ flows, build one only from an order the person or the code gives.
   the ids a read gave keep their links), `set.links` (re-links; `null` unlinks all) and `set.place`.
   `remove` takes its id.
 - What Mermaid can't say (a participant's kind, technology and colour, a box's colour, a reference
-  read as a `ref:` note, a blank label read as "Message", attachments, which call a reply answers) is
-  kept wherever the text sent back still says what the read said; only what it changed is taken from
-  it. The same text sent back changes nothing.
+  read as a `ref:` note, a blank participant or box name read as "Participant" or "Group",
+  attachments, which call a reply answers) is kept wherever the text sent back still says what the
+  read said; only what it changed is taken from it. The same text sent back changes nothing.
 - What the text asks for that is not drawn (`autonumber`, `rect`, lost messages) comes back as a
   receipt advisory. Text that is not a sequence diagram is `INVALID_INPUT`.
 - A shape an agent renames or retypes is renamed where it stands in a sequence, in the same change.
