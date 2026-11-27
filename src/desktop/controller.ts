@@ -293,6 +293,13 @@ export class DesktopController {
   private latestText: string | null = null;
   /** The first `opened` after a load sets the saved baseline — except for recovered work, which is unsaved by definition. */
   private expectBaseline = true;
+  /**
+   * The load an agent's change to a just-opened file is being applied to (`loadOpened`): shown as it
+   * was before the change, then changed on screen. The file on disk already holds the change, so
+   * there is nothing to save meanwhile. Counted as unsaved instead, a ⌘S or a quit's Save in that
+   * moment wrote the "before" over the agent's change while the screen went on to show it as saved.
+   */
+  private applyingWrite: number | null = null;
   /** A Quick Draft with anything in it: one left untouched has nothing worth keeping. */
   private edited = false;
   private snapshotTimer: unknown = null;
@@ -730,7 +737,7 @@ export class DesktopController {
    * shell the window was edited, and a quit asked to save a file nobody had touched, then cancelled.
    */
   private get loading(): boolean {
-    return this.session.kind === 'file' && this.expectBaseline && this.savedText === null;
+    return (this.session.kind === 'file' && this.expectBaseline && this.savedText === null) || this.applyingWrite === this.seq;
   }
 
   private get displayName(): string {
@@ -949,14 +956,20 @@ export class DesktopController {
       await shown;
       return;
     }
+    this.applyingWrite = seq;
     this.load(write.before, opened.name, { baseline: false });
     this.publish();
-    await shown;
-    const snapshot = this.seq === seq ? await this.askEditor({ kind: 'snapshot' }).catch(() => null) : null;
-    const committed =
-      snapshot?.kind === 'snapshot' && this.seq === seq
-        ? await this.askEditor({ kind: 'commit', expectedRevision: snapshot.revision, file: after.document, label: 'Agent edit' }).catch(() => null)
-        : null;
+    let committed: AgentEditorReply | null = null;
+    try {
+      await shown;
+      const snapshot = this.seq === seq ? await this.askEditor({ kind: 'snapshot' }).catch(() => null) : null;
+      committed =
+        snapshot?.kind === 'snapshot' && this.seq === seq
+          ? await this.askEditor({ kind: 'commit', expectedRevision: snapshot.revision, file: after.document, label: 'Agent edit' }).catch(() => null)
+          : null;
+    } finally {
+      if (this.applyingWrite === seq) this.applyingWrite = null;
+    }
     if (this.seq !== seq) return;
     if (committed?.kind === 'committed') {
       // The editor now shows the file exactly as on disk; only its undo history holds the "before".
@@ -1113,7 +1126,8 @@ export class DesktopController {
       await this.guard('Couldn’t save', () => this.saveAsFlow());
       return;
     }
-    if (!this.dirty) return;
+    // An agent's change is still being put on screen; the file already holds it (`applyingWrite`).
+    if (!this.dirty || this.applyingWrite === this.seq) return;
     await this.guard(`Couldn’t save ${session.name}.draftcanvas`, async () => {
       const text = this.latestText;
       if (text === null) return;

@@ -2,12 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { serializeDocument } from '../../src/export/project';
 import { createDocument, createNode } from '../../src/document/factory';
 import { DesktopError } from '../../src/desktop/api';
+import { __resetAgentWrites, confirmWrite, rememberPendingWrite } from '../../src/desktop/agentWrites';
 import { createHarness, decoder, documentText, type Harness } from './harness';
 
 let h: Harness;
 
 beforeEach(() => {
   h = createHarness();
+  __resetAgentWrites();
 });
 
 afterEach(() => {
@@ -1265,5 +1267,50 @@ describe('start-up', () => {
     await h.controller.start();
     expect(h.store.getSnapshot()).toMatchObject({ ready: true, platform: 'macos', recents: [expect.objectContaining({ name: 'old' })] });
     expect(h.loads()).toEqual([]);
+  });
+});
+
+describe('a file an agent changed while it was closed', () => {
+  // Opened, it is shown as it was before the change and the change is applied on top, as one undo
+  // step. The file on disk already holds the change the whole time: a ⌘S while the editor was still
+  // applying it wrote the "before" over the agent's change, and the screen then showed it as saved.
+  it('is not written over by a save made while the change is still being put on screen', async () => {
+    await h.controller.start();
+    const before = documentText('orders');
+    const after = edited('orders');
+    const handle = h.addFile('orders', after);
+    rememberPendingWrite(1, { title: 'orders', before, after });
+    confirmWrite(1, '~/work/orders.draftcanvas', 'v1:1');
+    const asked: { id: number; kind: string }[] = [];
+    const deliver = h.link.deliver;
+    h.link.deliver = (message) => {
+      const typed = message as { type?: string; command?: string; id?: number; request?: { kind: string } };
+      if (typed.type === 'draft-canvas:command' && typed.command === 'agent') {
+        asked.push({ id: typed.id!, kind: typed.request!.kind });
+        return;
+      }
+      deliver(message);
+    };
+    const opening = h.controller.openHandle(handle);
+    await h.settle();
+    expect(asked.map((a) => a.kind)).toEqual(['snapshot']);
+
+    await h.controller.save();
+    expect(h.api.saveDocument).not.toHaveBeenCalled();
+    expect(doc()).toMatchObject({ dirty: false });
+
+    h.link.onMessage({
+      type: 'draft-canvas:agent',
+      id: asked[0]!.id,
+      reply: { kind: 'snapshot', file: createDocument('orders'), revision: 'r1', path: [], selection: { nodes: [], edges: [] } },
+    });
+    await h.settle();
+    expect(asked.map((a) => a.kind)).toEqual(['snapshot', 'commit']);
+    h.edit(after);
+    h.link.onMessage({ type: 'draft-canvas:agent', id: asked[1]!.id, reply: { kind: 'committed', revision: 'r2' } });
+    await opening;
+    await h.settle();
+    expect(h.files.get(handle)!.text).toBe(after);
+    expect(doc()).toMatchObject({ dirty: false });
   });
 });
