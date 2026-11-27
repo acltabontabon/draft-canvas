@@ -1210,6 +1210,29 @@ export function fileWithLiveViewport(state: FileState & Pick<EditorStore, 'liveV
 }
 
 /**
+ * The room to show after an edit took its last shape, and the file it is part of; `null` for any
+ * other edit. A room exists only while it holds a shape (`depth/tree.ts`), so the room has just left
+ * the file with its sketches, flows and level. The edited view still carried them: the canvas kept
+ * drawing the sketches and the Flows panel listing the flows, every edit to them was an undo step
+ * that changed nothing, and they vanished on the next move or reload. Shown instead is the room as
+ * the file now has it, with that file as `outer`, so `fileOf` hands back the very file recorded.
+ */
+function emptiedRoom(state: FileState, next: DraftDocument): { view: DraftDocument; file: DraftDocument } | null {
+  if (state.path.length === 0 || next.nodes.length > 0) return null;
+  const file = fileOf({ ...state, document: next });
+  const view = viewOf(file, state.path);
+  return view ? { view, file } : null;
+}
+
+/** Says what went with a room's last shape (`emptiedRoom`); strokes chosen there are let go of. */
+function sayRoomEmptied(edited: DraftDocument): void {
+  const ui = useUiStore.getState();
+  if (ui.inkSelection.length > 0) ui.setInkSelection([]);
+  const gone = [inkOf(edited).length > 0 ? 'sketches' : '', edited.flows.length > 0 ? 'flows' : ''].filter(Boolean);
+  if (gone.length > 0) ui.notify(`A room goes with its last shape, so its ${gone.join(' and ')} went too. Undo brings them back.`);
+}
+
+/**
  * What the room on screen is showing, if anything is known about that — its own level, or the one
  * that follows from the room outside it. `undefined` for every canvas nobody has said anything
  * about, which is the state in which nothing behaves differently at all.
@@ -1693,15 +1716,19 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Structural sharing means an operation that changed nothing returns the
     // same object, so no-op commands never create a dead undo step.
     if (next === before || shallowEqualDocument(next, before)) return;
+    const emptied = emptiedRoom(state, next);
+    const shown = emptied?.view ?? next;
 
     if (interaction) {
       set((s) => ({
-        document: next,
+        document: shown,
+        ...(emptied ? { outer: emptied.file } : {}),
         selection: options?.selection ?? selectionIn(next, before, s.selection),
         revision: s.revision + 1,
-        ...focusThatSurvives(next, s),
+        ...focusThatSurvives(shown, s),
       }));
       settleSubSelections(get().selection);
+      if (emptied) sayRoomEmptied(next);
       return;
     }
 
@@ -1709,7 +1736,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // History spans the whole file, not the room the edit happened in: undo has to be able to put
     // back a shape you deleted two rooms ago, and it carries the path so it can take you there.
     const fileBefore = fileOf(state);
-    const fileAfter = fileOf({ ...state, document: next });
+    const fileAfter = emptied?.file ?? fileOf({ ...state, document: next });
     const entry = recorded(label, fileBefore, fileAfter, state.path, state.selection, selectionAfter, {
       coalesceKey: options?.coalesceKey,
       amendKey: options?.amendKey,
@@ -1717,14 +1744,16 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       flowSessionAfter: options?.flowSessionAfter,
     });
     set((s) => ({
-      document: next,
+      document: shown,
+      ...(emptied ? { outer: emptied.file } : {}),
       selection: selectionAfter,
       revision: s.revision + 1,
-      ...focusThatSurvives(next, s),
+      ...focusThatSurvives(shown, s),
       history: pushEntry(s.history, entry),
     }));
     settleSubSelections(selectionAfter);
-    closeStaleAttachmentDetail(next);
+    closeStaleAttachmentDetail(shown);
+    if (emptied) sayRoomEmptied(next);
   },
 
   applyToFile(label, recipe, expectedRevision) {
@@ -3641,7 +3670,14 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
   },
 
   createFlow(title) {
-    if (totals(fileOf(get())).flows >= LIMITS.maxFlows) return null;
+    const state = get();
+    // A room exists only once it holds a shape, so an empty one has nowhere to keep a flow: it was
+    // listed and selected with an undo step, and was never in the file (as `setViewLevel` refuses).
+    if (state.path.length > 0 && state.document.nodes.length === 0) {
+      useUiStore.getState().notify('Draw something here first — then tell a flow through it.');
+      return null;
+    }
+    if (totals(fileOf(state)).flows >= LIMITS.maxFlows) return null;
     const flow = createFlowEntity({ title: title?.trim() || nextFlowTitle(get().document) });
     get().apply('Create flow', (doc) => addFlow(doc, flow));
     // `addFlow` silently refuses at the cap; without this check a caller would go on to select

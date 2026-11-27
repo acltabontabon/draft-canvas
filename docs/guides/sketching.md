@@ -32,7 +32,8 @@ With **Select**, click a stroke to choose it (`Shift`-click for more), drag to m
 
 Sketches belong to the view they were drawn in. The top-level canvas can hold sketches on its own.
 Inside a [room](depth.md), add a shape before drawing or pasting a sketch, or paste the shape and
-sketch together. Duplicating a selection copies its shapes and sketches together.
+sketch together. Deleting a room's last shape takes its sketches with it; undo brings them back.
+Duplicating a selection copies its shapes and sketches together.
 
 ## Smart Ink
 

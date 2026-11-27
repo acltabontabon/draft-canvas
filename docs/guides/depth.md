@@ -12,7 +12,9 @@ Shortcuts use Mac keys. On Windows and Linux, use `Ctrl` for `⌘`.
 2. Draw its detail on the empty canvas.
 3. Press `⌘↑` to go back out. `Esc` also works when nothing is selected.
 
-Rooms nest three levels deep. A Port has no room, and a room disappears with its last shape.
+Rooms nest three levels deep. A Port has no room, and a room disappears with its last shape, taking
+its sketches and flows with it; undo brings them back. A flow can be made in a room once it holds a
+shape.
 
 ## Set the view level
 
