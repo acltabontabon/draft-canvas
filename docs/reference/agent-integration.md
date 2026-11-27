@@ -338,8 +338,10 @@ hint permits reuse only of views it actually read. Each run's connector carries 
   `ask_to_read_code`, which the app answers itself ("end your turn"); Nodi then asks in chat. With it
   (`DRAFT_CANVAS_CODE=1`), the run is offered `list_code`, `search_code` and `read_code`, answered
   from one folder (`agent/code.rs`): canonical paths inside it only, no symlinks out, no `.git`,
-  dependency or build folders, nothing the root `.gitignore` ignores with `*` and `**` patterns (lines
-  using `?`, character classes, escapes or negation are skipped, and matching is case-sensitive), no
+  dependency or build folders, nothing the root `.gitignore` ignores (its patterns read as Git reads
+  them: `*`, `**`, `?`, `[…]` classes with ranges, `!` or `^` negation and POSIX names such as
+  `[:digit:]`, and `\` escapes, matched without regard to case on Windows and macOS as Git matches
+  there; a `!pattern` line is skipped, so it can only hide more than Git would, never less), no
   secrets (`.env`, keys, credentials, Terraform state, kubeconfig, registry logins), no binaries,
   bounded results. The folder
   is the one chosen for the diagram, else the repository it is saved in, else its own folder; "Always"
