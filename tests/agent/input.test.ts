@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { agentStarter } from '../fixtures/gallery';
+import { agentStarter, vendoredFile } from '../fixtures/gallery';
+import { compose } from '../../src/agent/compile';
 import { AgentError } from '../../src/agent/errors';
 import { readCreate } from '../../src/agent/input';
+import { idsInFile } from '../../src/agent/patch';
+import { roomsOf } from '../../src/depth/tree';
+import { deserializeDocument } from '../../src/export/project';
 
 function refusal(raw: unknown): AgentError {
   try {
@@ -163,5 +167,39 @@ describe('reading a create_diagram request', () => {
 
   it('refuses a starter that isn\'t downloaded, saying how to go on', () => {
     expect(() => readCreate({ title: 'T', starter: { id: 'event-driven' } })).toThrow(/Load starters|Compose the diagram/);
+  });
+
+  // Order processing has an inside view (inside its API) with ids of its own, `c.web` … `c.db`, the
+  // convention the skill teaches for inside views. Food delivery has inside views, notes attached to
+  // its shapes, and a sequence whose participants stand for them.
+  it.each([['order-processing', [['x.api']]], ['food-delivery', [['x.saga'], ['x.dispatch']]]])('puts every id of %s under its prefix, in every view, and keeps what refers to them', (id, rooms) => {
+    const composed = deserializeDocument(compose({ title: 'Shop', starter: { id, prefix: 'x.' } }, 'd_starterids0', { starter: agentStarter(id) }).text);
+    if (!composed.ok) throw new Error(composed.error);
+    expect(composed.repairs).toEqual([]);
+    const ids = [...idsInFile(composed.document)];
+    expect(ids.length).toBeGreaterThan(20);
+    expect(ids.filter((each) => !each.startsWith('x.'))).toEqual([]);
+    expect(roomsOf(composed.document).filter((room) => room.path.length > 0).map((room) => room.path)).toEqual(rooms);
+    for (const { graph } of roomsOf(composed.document)) {
+      const here = new Set(graph.nodes.map((node) => node.id));
+      expect(graph.edges.filter((edge) => !here.has(edge.source) || !here.has(edge.target))).toEqual([]);
+      const refs = graph.nodes.flatMap((node) => node.sequence?.participants.flatMap((participant) => (participant.ref ? [participant.ref] : [])) ?? []);
+      expect(refs.filter((ref) => !here.has(ref))).toEqual([]);
+    }
+  });
+
+  it('refuses an id a starter already uses inside one of its views as a duplicate, by its path', () => {
+    const inner = vendoredFile('order-processing').nodes.find((node) => node.inside)!.inside!.nodes[0]!.id;
+    for (const prefix of ['', 'x.']) {
+      let error: unknown;
+      try {
+        readCreate({ title: 'Shop', starter: { id: 'order-processing', prefix }, nodes: [{ id: `${prefix}${inner}`, type: 'service', label: 'Mine' }] }, agentStarter('order-processing'));
+      } catch (thrown) {
+        error = thrown;
+      }
+      expect(error).toBeInstanceOf(AgentError);
+      expect((error as AgentError).code).toBe('DUPLICATE_ID');
+      expect((error as AgentError).details?.path).toBe('/nodes/0/id');
+    }
   });
 });

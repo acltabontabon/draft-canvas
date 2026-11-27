@@ -31,7 +31,7 @@ import {
 import { LIMITS } from '../document/limits';
 import { DEFAULT_TITLE } from '../document/sanitize';
 import { Problems } from './errors';
-import { starterFor, starterIds, type AgentStarter } from './starter';
+import { starterFor, starterIds, starterTaken, type AgentStarter } from './starter';
 import { isEvidence, EVIDENCE_LIMIT } from '../document/evidence';
 import type { SourceEvidence } from '../document/types';
 import { CREATE_FIELDS, ROOM_FIELDS, unknownFieldHint } from './fields';
@@ -1012,7 +1012,7 @@ export function readCreate(raw: unknown, resolved?: AgentStarter): CreateSpec {
       relationships: new Set(ids.edges),
       relationshipSemantics: new Map(ids.edges.map((id, index) => [id, chosen.file.edges[index]?.semantic])),
     };
-    for (const id of [...ids.nodes.map((n) => n.id), ...ids.edges, ...ids.flows]) taken.add(id);
+    for (const id of starterTaken(chosen, starter.prefix)) taken.add(id);
   }
   const room = readRoom(r, body, '', { taken, depth: 0, fallbackType, ...(existing ? { existing } : {}) });
   const layout = readLayout(r, body.layout, '/layout', new Set(room.flows.map((f) => f.id)));

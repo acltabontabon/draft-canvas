@@ -10,7 +10,8 @@
 
 import { createDocument } from '../document/factory';
 import { boundsOf } from '../document/geometry';
-import type { DraftDocument, DraftEdge, DraftFlow, DraftNode } from '../document/types';
+import type { Attachment, DraftDocument, DraftEdge, DraftNode } from '../document/types';
+import { walkGraphs } from '../depth/tree';
 import { assignAnchors } from '../layout/anchors';
 import type { DescribeContext } from '../nodes/describe';
 import { GUTTER } from './compose';
@@ -59,8 +60,8 @@ export function starterKeptIds(starter: AgentStarter, prefix: string, placed: re
   const inside = (nodes: readonly DraftNode[]) => {
     for (const node of nodes) {
       if (!node.inside) continue;
-      for (const inner of node.inside.nodes) kept.add(inner.id);
-      for (const edge of node.inside.edges) kept.add(edge.id);
+      for (const inner of node.inside.nodes) kept.add(`${prefix}${inner.id}`);
+      for (const edge of node.inside.edges) kept.add(`${prefix}${edge.id}`);
       inside(node.inside.nodes);
     }
   };
@@ -68,20 +69,53 @@ export function starterKeptIds(starter: AgentStarter, prefix: string, placed: re
   return kept;
 }
 
-/** The starter's diagram with every id under `prefix`, its top-left corner at the origin. */
-function prefixed(file: DraftDocument, prefix: string): { nodes: DraftNode[]; edges: DraftEdge[]; flows: DraftFlow[] } {
+/**
+ * Every id a starter's file holds, in every view, under `prefix`: what a request's own ids must not
+ * be. Its inside views and attached notes have ids of their own (`c.web` inside an API, the
+ * convention the skill teaches), and one reused by the request was refused only by the last check
+ * before writing, as INTERNAL "would be altered on its next open", naming neither the id nor the fix.
+ */
+export function starterTaken(starter: AgentStarter, prefix: string): string[] {
+  const ids: string[] = [];
+  walkGraphs(starter.file, (graph) => {
+    for (const host of [...graph.nodes, ...graph.edges]) {
+      ids.push(`${prefix}${host.id}`);
+      for (const attachment of host.attachments ?? []) ids.push(`${prefix}${attachment.id}`);
+    }
+    for (const flow of graph.flows) ids.push(`${prefix}${flow.id}`);
+  });
+  return ids;
+}
+
+type Room = Pick<DraftDocument, 'nodes' | 'edges' | 'flows'>;
+
+/** The starter's diagram with every id under `prefix`, in every view, its top-left corner at the origin. */
+function prefixed(file: DraftDocument, prefix: string): Room {
   const bounds = boundsOf(file.nodes);
-  const dx = bounds ? -bounds.x : 0;
-  const dy = bounds ? -bounds.y : 0;
-  const id = (value: string) => `${prefix}${value}`;
-  const nodes = file.nodes.map((node) => ({ ...node, id: id(node.id), x: node.x + dx, y: node.y + dy, ...(node.parentId ? { parentId: id(node.parentId) } : {}) }));
-  const edges = file.edges.map((edge) => {
-    const next: DraftEdge = { ...edge, id: id(edge.id), source: id(edge.source), target: id(edge.target) };
+  return prefixedRoom(file, (value) => `${prefix}${value}`, bounds ? -bounds.x : 0, bounds ? -bounds.y : 0);
+}
+
+/** One room under the prefix (`id`), moved by `dx`, `dy`; the rooms inside it keep their own coordinates. */
+function prefixedRoom(room: Room, id: (value: string) => string, dx = 0, dy = 0): Room {
+  const attachments = (list: readonly Attachment[] | undefined) => (list ? { attachments: list.map((attachment) => ({ ...attachment, id: id(attachment.id) })) } : {});
+  const nodes = room.nodes.map((node): DraftNode => ({
+    ...node,
+    id: id(node.id),
+    x: node.x + dx,
+    y: node.y + dy,
+    ...(node.parentId ? { parentId: id(node.parentId) } : {}),
+    ...attachments(node.attachments),
+    ...(node.inside ? { inside: { ...node.inside, ...prefixedRoom(node.inside, id) } } : {}),
+    // A participant that stands for a shape names it by its id, in the same view.
+    ...(node.sequence ? { sequence: { ...node.sequence, participants: node.sequence.participants.map((participant) => (participant.ref ? { ...participant, ref: id(participant.ref) } : participant)) } } : {}),
+  }));
+  const edges = room.edges.map((edge) => {
+    const next: DraftEdge = { ...edge, id: id(edge.id), source: id(edge.source), target: id(edge.target), ...attachments(edge.attachments) };
     if (edge.compensationFor) next.compensationFor = id(edge.compensationFor);
     if (edge.waypoints) next.waypoints = edge.waypoints.map((p) => ({ x: p.x + dx, y: p.y + dy }));
     return next;
   });
-  const flows = file.flows.map((flow) => ({
+  const flows = room.flows.map((flow) => ({
     ...flow,
     id: id(flow.id),
     ...(flow.variantOf ? { variantOf: id(flow.variantOf) } : {}),

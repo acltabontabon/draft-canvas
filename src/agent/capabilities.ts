@@ -63,7 +63,7 @@ export function capabilities(args: { topics?: unknown; starter?: unknown; tool?:
         elements: file.nodes.map((n) => ({ key: n.id, type: n.type, label: n.text ?? null, ...(n.parentId ? { group: n.parentId } : {}) })),
         relationships: file.edges.map((e, i) => ({ id: ids.edges[i], from: e.source, to: e.target, ...(e.label ? { label: e.label } : {}) })),
         flows: file.flows.map((f, i) => ({ id: ids.flows[i], title: f.title, steps: f.steps.length })),
-        note: 'Ids here are unprefixed; with starter.prefix "p-", element "api" becomes "p-api".',
+        note: 'Ids here are unprefixed; with starter.prefix "p-", element "api" becomes "p-api", as does every id inside its views. The request\'s own ids must differ from all of them.',
       },
     };
   }
