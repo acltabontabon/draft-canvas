@@ -60,7 +60,8 @@ work starts and ends only where the text says so.
 | `box Aqua Name`, `box rgb(…) Name` | Participant group named what follows the colour, as Mermaid reads it: a first word only when a browser takes it for a colour (`box Bluebird Team` keeps both words). The colour is not kept |
 | `alt`/`else`, `opt`, `loop`, `par`/`and` (and `par_over`), `critical`/`option`, `break` | Frame, with its branches and conditions |
 | `title` or `title:`, in the diagram or its front matter | The sequence's name |
-| A line that starts with `%%` | A comment, ignored; a `%%` later in a line is text, as Mermaid reads it |
+| `;` between statements (`A->>B: hi; B-->>A: ok`) | Two statements, as Mermaid reads them, even within a message's words or quotes; the `;` of an entity code (`#59;`) is text |
+| A line, or a statement after a `;`, that starts with `%%` | A comment to the end of the line, ignored; a `%%` later in a statement is text, as Mermaid reads it |
 
 Listed in the import notice and not drawn: `autonumber`, a `rect` background (what is inside it is
 kept), `link`/`links`/`properties` on a participant, `activate`/`deactivate` with no message beside

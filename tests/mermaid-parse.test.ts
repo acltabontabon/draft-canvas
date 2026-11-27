@@ -282,4 +282,29 @@ describe('a sequence written by hand, read as Mermaid reads it', () => {
       expect([head, read.ok && read.sequence.groups?.[0]?.name]).toEqual([head, name]);
     }
   });
+
+  it('ends a statement at every `;`, as Mermaid does, between quotes too', async () => {
+    // `participant Alice;` made a participant called "Alice;" beside the Alice who spoke, and each of
+    // these lines was one message.
+    const text = [
+      'sequenceDiagram',
+      '  participant Alice; participant Bob;',
+      '  Alice->>Bob: hello; Bob-->>Alice: hi;',
+      '  Alice->>Bob: "quoted; Bob->>Alice: words"',
+      '  loop every minute; Alice-)Bob: ping; end',
+      '  Alice->>Bob: 100%% done; %% the rest of the line; Bob->>Alice: is a comment',
+    ].join('\n');
+    const said = ['hello', 'hi', '"quoted', 'words"', 'ping', '100%% done'];
+    const db = await mermaidDb(text);
+    expect([...db.getActors().keys()]).toEqual(['Alice', 'Bob']);
+    // Without the loop's start and end.
+    expect(db.getMessages().filter((entry) => entry.type !== 10 && entry.type !== 11).map((entry) => entry.message)).toEqual(said);
+    const read = parseMermaidSequence(text);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.sequence.participants.map((participant) => participant.name)).toEqual(['Alice', 'Bob']);
+    expect(messagesOf(read.sequence).map((message) => message.label)).toEqual(said);
+    expect(read.sequence.items.map((item) => (item.t === 'fragment' ? item.operator : item.t))).toEqual(['message', 'message', 'message', 'message', 'loop', 'message']);
+    expect(read.unsupported).toEqual([]);
+  });
 });

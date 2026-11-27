@@ -48,12 +48,41 @@ function decode(text: string): string {
     .trim();
 }
 
+const SOLID = /\S/g;
+/** A `;`, or an entity code whose `;` is not one: Mermaid encodes every `#…;` before it reads a word. */
+const SEPARATOR = /#\w+;|;/g;
+
 /**
- * A comment is a line that starts `%%`. (A directive, `%%{…}%%`, is one too: it configures a renderer
- * this is not.) A `%%` later in a line is text — Mermaid keeps `A->>B: 100%% done` whole — and cutting
- * there read it as "100".
+ * The statements of a text, ended where Mermaid ends them: at a line break and at every `;`, even in
+ * a message's words or between quotes. `participant Alice;` was a participant called "Alice;", and
+ * `A->>B: hello; B-->>A: hi` one message. The `;` of an entity code (`#59;`) is a character in the words.
+ *
+ * A comment is a statement that starts `%%`, and it runs to the end of its line, `;` and all. (A
+ * directive, `%%{…}%%`, is one too: it configures a renderer this is not.) A `%%` later in a
+ * statement is text — Mermaid keeps `A->>B: 100%% done` whole — and cutting there read it as "100".
  */
-const withoutComment = (line: string): string => (line.trimStart().startsWith('%%') ? '' : line);
+function statementsOf(text: string): string[] {
+  const statements: string[] = [];
+  for (const line of text.split(/\r?\n/)) {
+    for (let at = 0; at < line.length; ) {
+      SOLID.lastIndex = at;
+      const start = SOLID.exec(line)?.index;
+      if (start === undefined || line.startsWith('%%', start)) break;
+      let end = line.length;
+      SEPARATOR.lastIndex = start;
+      for (let found = SEPARATOR.exec(line); found; found = SEPARATOR.exec(line)) {
+        if (found[0] === ';') {
+          end = found.index;
+          break;
+        }
+      }
+      const statement = line.slice(start, end).trimEnd();
+      if (statement) statements.push(statement);
+      at = end + 1;
+    }
+  }
+  return statements;
+}
 
 /*
  * Messages, declarations and notes are read by hand, never by one pattern over the whole line. The
@@ -185,11 +214,8 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
   const others = otherFencedBlocks(text);
   if (others > 0) unsupported.add(others === 1 ? 'another Mermaid block in the file (not imported)' : `${others} other Mermaid blocks in the file (not imported)`);
   let title = frontMatterTitle(unfenced);
-  const lines = stripFrontMatter(unfenced)
-    .split(/\r?\n/)
-    .map((line) => withoutComment(line).trim())
-    .filter((line) => line !== '');
-  if (!/^sequenceDiagram\b/i.test(lines[0] ?? '')) return { ok: false, error: 'That text does not start with "sequenceDiagram".' };
+  const statements = statementsOf(stripFrontMatter(unfenced));
+  if (!/^sequenceDiagram\b/i.test(statements[0] ?? '')) return { ok: false, error: 'That text does not start with "sequenceDiagram".' };
 
   const participants: SeqParticipant[] = [];
   const byName = new Map<string, SeqParticipant>();
@@ -256,7 +282,7 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
     return made;
   };
 
-  for (const line of lines.slice(1)) {
+  for (const line of statements.slice(1)) {
     const word = (line.split(/\s+/)[0] ?? '').toLowerCase();
     const rest = line.slice(word.length).trim();
 
