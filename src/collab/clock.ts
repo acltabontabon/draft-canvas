@@ -8,11 +8,22 @@ export interface Clock {
   clearTimeout(handle: unknown): void;
 }
 
+/**
+ * Only ever asked how long something took — nothing read from it is a date or crosses the wire — so
+ * it runs on the monotonic clock the timers do. On the wall clock, time sync or a manual change
+ * stepping it back emptied every collaborator's rate limits and the owner cut them off for flooding;
+ * stepped forward, it read as silence long enough to drop their connections.
+ */
 export const REAL_CLOCK: Clock = {
-  now: () => Date.now(),
+  now: () => performance.now(),
   setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms),
   clearTimeout: (handle) => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
+
+/** Seconds since the last refill, never negative whatever clock a session was handed. */
+function elapsed(now: number, at: number): number {
+  return Math.max(0, now - at) / 1000;
+}
 
 /**
  * A token bucket: `rate` tokens a second, holding at most `burst`. A message costs one token; one
@@ -36,7 +47,7 @@ export class RateLimit {
 
   take(count = 1): boolean {
     const now = this.clock.now();
-    this.tokens = Math.min(this.burst, this.tokens + ((now - this.at) / 1000) * this.rate);
+    this.tokens = Math.min(this.burst, this.tokens + elapsed(now, this.at) * this.rate);
     this.at = now;
     if (this.tokens < count) return false;
     this.tokens -= count;
@@ -65,7 +76,7 @@ export class ByteBudget {
 
   spend(size: number): boolean {
     const now = this.clock.now();
-    this.bytes = Math.min(this.burst, this.bytes + ((now - this.at) / 1000) * this.rate);
+    this.bytes = Math.min(this.burst, this.bytes + elapsed(now, this.at) * this.rate);
     this.at = now;
     if (size > this.bytes) return false;
     this.bytes -= size;
