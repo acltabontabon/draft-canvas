@@ -65,8 +65,9 @@ work starts and ends only where the text says so.
 
 Listed in the import notice and not drawn: `autonumber`, a `rect` background (what is inside it is
 kept), `link`/`links`/`properties` on a participant, `activate`/`deactivate` with no message beside
-it, lines it cannot read, and a second `sequenceDiagram` in the same text (everything from it on). A two-way arrow (`<<->>`) is drawn as one call and a lost message
-(`-x`) as a call. A sequence holds at most 40 participants and 600 messages, notes and frames.
+it, lines it cannot read, and a second `sequenceDiagram` in the same text (everything from it on). A two-way arrow (`<<->>`) is drawn as one call, a lost message
+(`-x`) as a call, and a message with a circle where it meets a lifeline (`A->>()B`, `A()->>B`) as
+an ordinary message. A sequence holds at most 40 participants and 600 messages, notes and frames.
 
 ## Limits
 

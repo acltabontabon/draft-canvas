@@ -103,6 +103,8 @@ interface Said {
   to: string;
   /** Everything after the first colon; absent without one. */
   text?: string;
+  /** Written with a `()` beside the arrow: a circle where the message meets that lifeline. */
+  central: boolean;
 }
 
 /** `A->>+B: text`: the sender up to the first arrow, an optional `+`/`-`, the receiver up to the first colon, the text after it. */
@@ -111,17 +113,27 @@ function readMessage(line: string): Said | null {
   ARROW.lastIndex = 1;
   const arrow = ARROW.exec(line);
   if (!arrow) return null;
-  const from = line.slice(0, arrow.index).trim();
+  let from = line.slice(0, arrow.index).trim();
   let rest = line.slice(arrow.index + arrow[0].length).trimStart();
+  // Mermaid's central connection, `A->>()B`, `A()->>B` or both: a circle where the message meets that
+  // lifeline, and still a message from A to B. `A->>()B` was a call to someone called "()B".
+  const centralFrom = from.endsWith('()');
+  if (centralFrom) from = from.slice(0, -2).trimEnd();
+  const centralTo = rest.startsWith('()');
+  if (centralTo) rest = rest.slice(2).trimStart();
   let mark = '';
   if (rest.startsWith('+') || rest.startsWith('-')) {
     mark = rest[0]!;
     rest = rest.slice(1).trimStart();
   }
+  // Mermaid takes a `+`/`-` or a `()`, never both, and refuses `A->>+()B`; so does this.
+  if (mark && (centralFrom || centralTo || rest.startsWith('()'))) return null;
   const colon = rest.indexOf(':');
   const to = (colon === -1 ? rest : rest.slice(0, colon)).trimEnd();
   if (!from || !to) return null;
-  return colon === -1 ? { from, arrow: arrow[0], mark, to } : { from, arrow: arrow[0], mark, to, text: rest.slice(colon + 1) };
+  const said: Said = { from, arrow: arrow[0], mark, to, central: centralFrom || centralTo };
+  if (colon !== -1) said.text = rest.slice(colon + 1);
+  return said;
 }
 
 interface Declared {
@@ -410,6 +422,7 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
       const to = participant(said.to);
       if (arrow.startsWith('<<')) unsupported.add('a message both ways at once: drawn as one call');
       if (arrow.endsWith('x') && !toDestroy.has(to.id) && !toDestroy.has(from.id)) unsupported.add('a lost message (-x): drawn as a call');
+      if (said.central) unsupported.add('a circle where a message meets a lifeline ("()"): the message is kept');
       let kind: SeqMessageKind = arrow === '-)' || arrow === '--)' ? 'async' : arrow.startsWith('--') || arrow === '<<-->>' ? 'reply' : 'sync';
       const message: SeqMessage = { id: createId('sm'), t: 'message', from: from.id, to: to.id, kind, label: decode(said.text ?? '') };
       if (toCreate.delete(to.id)) kind = 'create';

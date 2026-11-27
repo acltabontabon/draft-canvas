@@ -141,7 +141,7 @@ describe('a source with several diagrams', () => {
 async function mermaidDb(text: string) {
   const diagram = await mermaid.mermaidAPI.getDiagramFromText(text);
   return diagram.db as unknown as {
-    getMessages(): { type: number; message: string; wrap: boolean }[];
+    getMessages(): { type: number; message: string; wrap: boolean; from?: unknown; to?: unknown }[];
     getActors(): Map<string, { description: string; wrap: boolean }>;
     getBoxes(): { name?: string }[];
   };
@@ -306,5 +306,36 @@ describe('a sequence written by hand, read as Mermaid reads it', () => {
     expect(messagesOf(read.sequence).map((message) => message.label)).toEqual(said);
     expect(read.sequence.items.map((item) => (item.t === 'fragment' ? item.operator : item.t))).toEqual(['message', 'message', 'message', 'message', 'loop', 'message']);
     expect(read.unsupported).toEqual([]);
+  });
+
+  it('reads a `()` beside an arrow as the circle Mermaid draws on that lifeline, not as a name', async () => {
+    // `Alice->>()Bob` was a call to a third participant, called "()Bob".
+    const text = 'sequenceDiagram\n  Alice->>()Bob: hi\n  Alice()->>Bob: how are you?\n  Bob()-->>()Alice: fine\n';
+    const said = [
+      ['Alice', 'Bob', 'hi'],
+      ['Alice', 'Bob', 'how are you?'],
+      ['Bob', 'Alice', 'fine'],
+    ];
+    const db = await mermaidDb(text);
+    expect([...db.getActors().keys()]).toEqual(['Alice', 'Bob']);
+    // The messages, without the circles Mermaid notes beside them.
+    expect(db.getMessages().filter((entry) => entry.type === 0 || entry.type === 1).map((entry) => [entry.from, entry.to, entry.message])).toEqual(said);
+    const read = parseMermaidSequence(text);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    const name = new Map(read.sequence.participants.map((participant) => [participant.id, participant.name]));
+    expect([...name.values()]).toEqual(['Alice', 'Bob']);
+    expect(messagesOf(read.sequence).map((message) => [name.get(message.from), name.get(message.to), message.label])).toEqual(said);
+    expect(messagesOf(read.sequence).map((message) => [message.kind, Boolean(message.activate), Boolean(message.replyTo)])).toEqual([['sync', false, false], ['sync', false, false], ['reply', false, true]]);
+    expect(read.unsupported).toEqual(['a circle where a message meets a lifeline ("()"): the message is kept']);
+
+    // Beside a `+` or `-`, Mermaid refuses the line, and so does the import: nobody called "()Bob".
+    for (const line of ['Alice->>+()Bob: hi', 'Alice->>()+Bob: hi', 'Alice()->>+Bob: hi']) {
+      const refused = `sequenceDiagram\n  participant Alice\n  participant Bob\n  ${line}\n`;
+      expect([line, await parses(refused)]).toEqual([line, false]);
+      const back = parseMermaidSequence(refused);
+      expect(back.ok && back.sequence.participants.map((participant) => participant.name)).toEqual(['Alice', 'Bob']);
+      expect(back.ok && back.unsupported).toEqual([`a line it couldn’t read: “${line}”`]);
+    }
   });
 });
