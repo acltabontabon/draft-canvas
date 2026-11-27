@@ -34,7 +34,7 @@ import { badgeCrowds, badgePoint } from './badgePoint';
 import { describeAttachmentChips } from './attachmentChips';
 import { connectorMarkRow, markRowAttachmentsWidth } from './connectorMarks';
 import { bridgePath } from './bridge';
-import { computeEdgeRoutes, routedCaption, type EdgeRoutes } from './edgeRoutes';
+import { computeEdgeRoutes, routedCaption, routedLabel, type EdgeRoutes } from './edgeRoutes';
 import { sequenceAnchorRect } from './sequenceAnchors';
 
 const captionOf = (caption: string | undefined) => (caption ? { caption } : {});
@@ -224,7 +224,7 @@ function routesOf(edge: DraftEdge, nodes: Map<string, DraftNode>, ctx: EdgeDescr
     source: sequenceAnchorRect(source, rectOf(source), edge.sourceAnchor),
     target: sequenceAnchorRect(target, rectOf(target), edge.targetAnchor),
     routing: edge.routing,
-    label: edge.label,
+    label: routedLabel(edge),
     ...captionOf(routedCaption(edge, categoryOf(source), categoryOf(target))),
     sourceAnchor: edge.sourceAnchor,
     targetAnchor: edge.targetAnchor,

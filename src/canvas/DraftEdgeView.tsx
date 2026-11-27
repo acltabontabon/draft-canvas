@@ -66,7 +66,7 @@ import { pointInBox } from '../lib/math';
 import { isImeKeyEvent } from '../lib/isEditableTarget';
 import { EdgeBendHandles, type BendPreview } from './EdgeBendHandles';
 import { translateWaypoints } from '../edges/waypoints';
-import { computeEdgeRoutes, edgeRoutes, routedCaption, searchAllowed, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
+import { computeEdgeRoutes, edgeRoutes, routedCaption, routedLabel, searchAllowed, type EdgeRouteInputs, type EdgeRoutes } from '../edges/edgeRoutes';
 import { endpointPlan } from '../edges/endpoints';
 import { sequenceAnchorRect } from '../edges/sequenceAnchors';
 import { separationPlan } from '../edges/separation';
@@ -637,7 +637,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
     source: sequenceAnchorRect(committedSource, effectiveSourceRect, dragOverride?.endpoint === 'source' ? undefined : edge.sourceAnchor),
     target: sequenceAnchorRect(committedTarget, effectiveTargetRect, dragOverride?.endpoint === 'target' ? undefined : edge.targetAnchor),
     routing: edge.routing,
-    label: displayLabel,
+    // The words its chip shows — a named recovery action's name — as every other reader routes them.
+    label: routedLabel(edge),
     // Its caption is placed with its size in view too, as every other renderer routes it.
     ...(routedCaptionText ? { caption: routedCaptionText } : {}),
     // A dragged end's persisted anchor is set aside (see `effectiveSourceRect` above).

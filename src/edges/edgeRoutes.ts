@@ -102,6 +102,17 @@ function keyOf(inputs: EdgeRouteInputs): string {
 }
 
 /**
+ * The words a connector's label chip is placed for: a named recovery action's name, which its chip
+ * shows instead of the label (`compensationDisplayLabel`), else its label. The canvas routed the name
+ * and every other reader — the export, agent checks, overlays, previews — the label, which a named
+ * action often has none of: its words were placed clear of the shapes on the canvas and nowhere
+ * else, and the exported name could land on a shape.
+ */
+export function routedLabel(edge: Pick<DraftEdge, 'compensationFor' | 'compensationName' | 'label'>): string | undefined {
+  return compensationDisplayLabel(edge);
+}
+
+/**
  * The caption a connector's words are placed for, when it shows one: its relationship caption, unless
  * it shows a label instead. The canvas passes the same, from the categories it already has.
  */
@@ -217,7 +228,7 @@ function connectorInputsWithin(
     source: sequenceAnchorRect(source, overrides.source ?? rectOf(source), edge.sourceAnchor),
     target: sequenceAnchorRect(target, overrides.target ?? rectOf(target), edge.targetAnchor),
     routing: edge.routing,
-    label: edge.label,
+    label: routedLabel(edge),
     ...withCaption(routedCaption(edge, categoryOf(source), categoryOf(target))),
     sourceAnchor: edge.sourceAnchor,
     targetAnchor: edge.targetAnchor,
