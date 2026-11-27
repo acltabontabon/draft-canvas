@@ -43,7 +43,7 @@ import type { EdgeTracks } from './separation';
 import type { Crossing } from './crossings';
 import { categoryOf } from '../document/connectorSemantics';
 import { connectorCaptionText } from './captionText';
-import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, RECOVERY_LABEL_GAP, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
+import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, LABEL_STEP_GAP, LABEL_STEP_SIZE, LABEL_STEP_TEXT, RECOVERY_LABEL_GAP, fittedConnectorCaption, labelChipSize, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from './labelLayout';
 import { compensationLabelParts } from './compensationMarker';
 import { PORTAL_RING, portalName, portalOf, portalWordsRect, slotPoint } from './portal';
 import type { PortalSlots } from './portalPlan';
@@ -105,8 +105,14 @@ export interface EdgeDescribeContext {
 }
 
 const BADGE_RADIUS = 8;
-/** Space between the step circle and the label text inside a chip. */
-const LABEL_GAP = 5;
+/**
+ * The step a numbered label carries inside its chip, drawn as the canvas draws `.dc-edge-label-step`:
+ * a ring whose outside edge is the badge's box (`LABEL_STEP_SIZE`, border-box on the canvas), and its
+ * number a point smaller than a step on the line's. It was a ring a little over 17 across round an
+ * 11-point number, in a chip a unit taller than the canvas's.
+ */
+const LABEL_STEP_RING = 1.3;
+const LABEL_STEP_FONT = { ...FONTS.sequenceBadge, size: LABEL_STEP_TEXT };
 const CONDITION_PADDING_X = 6;
 const CONDITION_PADDING_Y = 2;
 /** How far below the label point a condition chip's top sits, in canvas units — `conditionTransform`'s 16px. */
@@ -613,11 +619,10 @@ export function describeEdge(
 
     // A numbered connector carries its step inside the label chip. Drawing the
     // two separately puts them on top of each other on any short connector.
-    const stepWidth = hasStep ? BADGE_RADIUS * 2 + LABEL_GAP : 0;
+    const stepWidth = hasStep ? LABEL_STEP_SIZE + LABEL_STEP_GAP : 0;
     const contentWidth = recoveryLayout?.width ?? layout.width;
     const contentHeight = recoveryLayout?.height ?? layout.height;
-    const w = contentWidth + stepWidth + LABEL_PADDING_X * 2;
-    const h = Math.max(contentHeight, hasStep ? BADGE_RADIUS * 2 : 0) + LABEL_PADDING_Y * 2;
+    const { width: w, height: h } = labelChipSize({ width: contentWidth, height: contentHeight }, hasStep);
     const chip = ctx.sharedLabel ?? { side: recoveryChipSide, x: labelX, y: labelY };
     const { left, top } = labelChipRect(chip.side, chip.x, chip.y, w, h);
     const centerY = top + h / 2;
@@ -639,11 +644,11 @@ export function describeEdge(
     });
 
     if (hasStep) {
-      const cx = left + LABEL_PADDING_X + BADGE_RADIUS;
+      const cx = left + LABEL_PADDING_X + LABEL_STEP_SIZE / 2;
       const stepLayout = layoutText(String(ctx.stepIndex), {
-        font: FONTS.sequenceBadge,
+        font: LABEL_STEP_FONT,
         maxWidth: 40,
-        lineHeight: FONTS.sequenceBadge.size * LINE_HEIGHTS.label,
+        lineHeight: LABEL_STEP_FONT.size * LINE_HEIGHTS.label,
         maxLines: 1,
         measurer: ctx.measurer,
       });
@@ -652,17 +657,17 @@ export function describeEdge(
           t: 'ellipse',
           cx,
           cy: centerY,
-          rx: BADGE_RADIUS,
-          ry: BADGE_RADIUS,
+          rx: (LABEL_STEP_SIZE - LABEL_STEP_RING) / 2,
+          ry: (LABEL_STEP_SIZE - LABEL_STEP_RING) / 2,
           fill: 'none',
-          stroke: { color, width: 1.3 },
+          stroke: { color, width: LABEL_STEP_RING },
         },
         {
           t: 'text',
           x: cx,
           y: centerY - stepLayout.height / 2,
           layout: stepLayout,
-          font: FONTS.sequenceBadge,
+          font: LABEL_STEP_FONT,
           fill: color,
           align: 'middle',
         },

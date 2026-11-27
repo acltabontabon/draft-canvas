@@ -33,7 +33,7 @@ import {
 import { routingPlan } from '../edges/bundles';
 import { labelGroupPlan, labelLeader, pointAlong } from '../edges/labelGroups';
 import { replyLabelPlan } from '../edges/replyLabels';
-import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, fittedConnectorCaption, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
+import { CAPTION_PADDING_X, CAPTION_PADDING_Y, LABEL_PADDING_X, LABEL_PADDING_Y, fittedConnectorCaption, labelChipSize, layoutEdgeLabel, layoutEdgeResponse, layoutRecoveryLabel } from '../edges/labelLayout';
 import { RESPONSE_DASH, dashForEdge, markerVariantForEdge, resolveEdgeColor } from '../edges/kindStyle';
 import { compensationLabelParts } from '../edges/compensationMarker';
 import { compensationDisplayLabel } from '../document/compensation';
@@ -748,10 +748,8 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   // same box `edges/describe.ts` measures for the export.
   const ownWords = ((): OccupiedRect | undefined => {
     if (hasLabel && !hidesOwnLabel && labelLayout && !sharedLabel) {
-      // `.dc-edge-label`: 3px 6px padding, and — for a numbered step — a 16px badge plus a 6px gap.
-      const stepWidth = hasStep ? 16 + 6 : 0;
-      const w = (recoveryLayout?.width ?? labelLayout.width) + stepWidth + LABEL_PADDING_X * 2;
-      const h = Math.max(recoveryLayout?.height ?? labelLayout.height, hasStep ? 16 : 0) + LABEL_PADDING_Y * 2;
+      // `.dc-edge-label`: its padding, and — for a numbered step — its badge and gap.
+      const { width: w, height: h } = labelChipSize({ width: recoveryLayout?.width ?? labelLayout.width, height: recoveryLayout?.height ?? labelLayout.height }, hasStep);
       const { left, top } = labelChipRect(chipSide, chipX, chipY, w, h);
       return { left, top, width: w, height: h };
     }

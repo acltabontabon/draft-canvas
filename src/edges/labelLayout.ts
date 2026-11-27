@@ -9,6 +9,24 @@ import type { TextMeasurer } from '../render/text/measure';
 export const LABEL_PADDING_X = 6;
 export const LABEL_PADDING_Y = 3;
 
+/** The step a numbered label carries inside its chip: its badge's size and number, and the gap
+ *  between it and the words. The canvas draws them as `.dc-edge-label-step` and `.dc-edge-label`'s
+ *  gap, and the export and the box both renderers stack a condition chip and a mark row against
+ *  (`labelChipSize`) are worked out from these; they had drifted apart (a 16-unit badge and a 5-unit
+ *  gap in the export, 15 and 6 on the canvas, 16 and 6 in the canvas's own box).
+ *  `tests/connector-text.test.ts` holds the CSS to them. */
+export const LABEL_STEP_SIZE = 15;
+export const LABEL_STEP_GAP = 6;
+export const LABEL_STEP_TEXT = 10;
+
+/** The box a label chip takes: its words, the step it carries when it has one, and its padding. */
+export function labelChipSize(words: { width: number; height: number }, stepped: boolean): { width: number; height: number } {
+  return {
+    width: words.width + (stepped ? LABEL_STEP_SIZE + LABEL_STEP_GAP : 0) + LABEL_PADDING_X * 2,
+    height: Math.max(words.height, stepped ? LABEL_STEP_SIZE : 0) + LABEL_PADDING_Y * 2,
+  };
+}
+
 /** A relationship caption's backing: a canvas-toned mask this far around its text, close enough
  *  that the caption still reads as text on the canvas rather than as a chip. Shared by the canvas
  *  (`.dc-edge-caption`'s padding) and the exporter. */

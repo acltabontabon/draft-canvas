@@ -829,13 +829,14 @@
   gap: 2px;
 }
 
+/* In a label's own tone, which the export fills both lines with (`theme.edgeText`). */
 .dc-edge-recovery-name {
-  color: var(--dc-text-faint);
+  color: var(--dc-edge-text);
   font-weight: 500;
 }
 
 .dc-edge-recovery-operation {
-  color: var(--dc-text-faint);
+  color: var(--dc-edge-text);
   font-weight: 500;
   opacity: 0.75;
 }
