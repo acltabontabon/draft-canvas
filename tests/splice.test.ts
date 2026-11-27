@@ -8,6 +8,7 @@ import type { Attachment, DraftDocument, DraftEdge, DraftNode } from '../src/doc
 import { parseDocument } from '../src/document/validate';
 import { serializeDocument } from '../src/export/project';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
+import { useUiStore } from '../src/store/uiStore';
 
 function node(input: CreateNodeInput): DraftNode {
   return createNode(input);
@@ -285,9 +286,12 @@ describe('store: splice and delete-keeping-lines', () => {
     const before = store.getState().document;
     const steps = store.getState().history.past.length;
     store.getState().setSelection({ nodes: [g.id], edges: [] });
+    useUiStore.setState({ toasts: [] });
     store.getState().deleteSelectionKeepingLines();
     expect(store.getState().document).toBe(before);
     expect(store.getState().history.past.length).toBe(steps);
+    // Said for what it is: the shape has one way in and one way out.
+    expect(useUiStore.getState().toasts.at(-1)?.message).toContain(`holds ${LIMITS.maxAttachmentsPerEdge} notes`);
   });
 });
 

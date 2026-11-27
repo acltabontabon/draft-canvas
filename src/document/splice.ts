@@ -116,11 +116,25 @@ function overfull(inEdge: DraftEdge, outEdge: DraftEdge): boolean {
  * and those whose joined connector couldn't hold every attachment its two legs carry.
  */
 export function bridgeProblems(doc: DraftDocument, nodeIds: readonly string[]): string[] {
-  return nodeIds.filter((id) => {
-    const { incoming, outgoing } = sidesOf(doc, id);
-    if (incoming.length > 1 && outgoing.length > 1) return true;
-    return incoming.some((inEdge) => outgoing.some((outEdge) => overfull(inEdge, outEdge) && joins(doc, inEdge, outEdge)));
-  });
+  return nodeIds.filter((id) => problemOf(doc, id) !== null);
+}
+
+/** Why the first of `nodeIds` that can't be taken out with its lines joined can't, or `null`: what
+ *  a refusal says, so a shape whose notes wouldn't fit isn't told it has too many ways in and out. */
+export function bridgeProblem(doc: DraftDocument, nodeIds: readonly string[]): BridgeProblem | null {
+  for (const id of nodeIds) {
+    const problem = problemOf(doc, id);
+    if (problem) return problem;
+  }
+  return null;
+}
+
+function problemOf(doc: DraftDocument, nodeId: string): BridgeProblem | null {
+  const { incoming, outgoing } = sidesOf(doc, nodeId);
+  if (incoming.length > 1 && outgoing.length > 1) return 'many-to-many';
+  return incoming.some((inEdge) => outgoing.some((outEdge) => overfull(inEdge, outEdge) && joins(doc, inEdge, outEdge)))
+    ? 'attachments'
+    : null;
 }
 
 /**
