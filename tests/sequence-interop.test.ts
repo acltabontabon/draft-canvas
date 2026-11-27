@@ -256,6 +256,20 @@ sequenceDiagram
     expect(read.unsupported).toEqual(['message numbering (autonumber)', 'a tinted background (rect): what was inside it is kept']);
   });
 
+  it('reads a critical section’s options as its branches, each with its condition', () => {
+    // They were merged into one straight line with their conditions gone, and nothing said so.
+    const read = parseMermaidSequence('sequenceDiagram\n  A->>B: connect\n  critical Establish a connection\n    A->>DB: open\n  option Network timeout\n    A->>A: log error\n  option Bad credentials\n    A->>A: alert\n  end\n');
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(shape(read.sequence.items)).toEqual([
+      ['sync', 'connect', false, false, false],
+      ['critical', ['Establish a connection', [['sync', 'open', false, false, false]]], ['Network timeout', [['sync', 'log error', false, false, false]]], ['Bad credentials', [['sync', 'alert', false, false, false]]]],
+    ]);
+    expect(read.unsupported).toEqual([]);
+    expect(sequenceToMermaid(asNode(read.sequence))).toContain('    critical Establish a connection\n        A->>DB: open\n    option Network timeout\n');
+    expect(sequenceToPlantUml(asNode(read.sequence))).toContain('critical Establish a connection\n    A -> DB: open\nelse Network timeout\n');
+  });
+
   it('refuses what is not a sequence diagram, and one with nobody in it', () => {
     expect(parseMermaidSequence('flowchart LR\n A-->B')).toEqual({ ok: false, error: 'That text does not start with "sequenceDiagram".' });
     expect(parseMermaidSequence('sequenceDiagram\n')).toEqual({ ok: false, error: 'There is nobody in that sequence diagram.' });

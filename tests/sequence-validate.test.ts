@@ -148,6 +148,16 @@ describe('reading a sequence', () => {
     expect(dropped).toBe(59);
   });
 
+  it('keeps a critical section’s option branches', () => {
+    const message = (id: string) => ({ id, t: 'message', from: 'a', to: 'b', kind: 'sync', label: id });
+    const { sequence, dropped } = normalizeSequence({
+      participants: [who('a'), who('b')],
+      items: [{ id: 'f', t: 'fragment', operator: 'critical', operands: [{ id: 'o1', guard: 'open', items: [message('one')] }, { id: 'o2', guard: 'timeout', items: [message('two')] }] }],
+    });
+    expect(sequence.items[0]).toMatchObject({ operator: 'critical', operands: [{ id: 'o1', guard: 'open' }, { id: 'o2', guard: 'timeout' }] });
+    expect(dropped).toBe(0);
+  });
+
   it('a one-branch fragment handed several keeps their messages in one', () => {
     const message = (id: string) => ({ id, t: 'message', from: 'a', to: 'b', kind: 'sync', label: id });
     const { sequence } = normalizeSequence({

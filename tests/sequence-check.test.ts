@@ -136,6 +136,20 @@ describe('replies', () => {
   });
 });
 
+describe('a critical section’s options', () => {
+  it('are other ways the same moment goes: a call answered in each is answered once', () => {
+    const post = call('post', 'a', 'b');
+    let subject = sequence([post, reply('ok', post)]);
+    subject = wrapItems(subject, ['ok'], { id: 'crit', operator: 'critical' });
+    subject = addOperand(subject, 'crit', { id: 'timeout' });
+    subject = insertItem(subject, reply('late', post), { operandId: 'timeout', index: 0 });
+    expect(subject.items[1]).toMatchObject({ operands: [{ items: [{ id: 'ok' }] }, { id: 'timeout', items: [{ id: 'late' }] }] });
+    expect(checkSequence(subject)).toEqual([]);
+    // The work the call started ends in either option, not twice.
+    expect(executionsOf(subject).unmatched).toEqual([]);
+  });
+});
+
 describe('moving', () => {
   it('objects only to what a move would newly break', () => {
     const m1 = call('m1', 'a', 'b');

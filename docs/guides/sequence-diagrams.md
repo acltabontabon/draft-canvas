@@ -102,16 +102,17 @@ Select the messages that belong together and choose **Wrap in…**.
 | **Loop** | Repeats while the condition holds |
 | **Parallel** (`par`) | Branches that run at the same time, in no order |
 | **Break** | If this happens, the rest is skipped |
-| **Critical** | Must not be interleaved with anything else |
+| **Critical** | Must not be interleaved with anything else; each *option* branch says what happens instead |
 | **Reference** | Stands for another interaction, named but not drawn here |
 
-Type the condition and press `Enter`. **Add branch** adds an *else* (or another parallel branch).
+Type the condition and press `Enter`. **Add branch** adds an *else* (another parallel branch, or an
+*option* in a critical section).
 `Delete` on a frame removes the frame and keeps its messages; **Delete with its messages** removes
 both.
 
 Each kind of frame has its own colour and mark, so a loop is told from a condition at a glance, and
-every branch after the first is labelled `else` (or `and`, in a parallel frame). None of it is
-yours to style.
+every branch after the first is labelled `else` (`and` in a parallel frame, `option` in a critical
+section). None of it is yours to style.
 
 ![A loop, a condition with an optional part inside it, and parallel branches, each in its own colour.](../media/guides/sequence-frames.png)
 

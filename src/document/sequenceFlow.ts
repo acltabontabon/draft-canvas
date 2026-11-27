@@ -37,7 +37,9 @@ function steps(node: DraftNode): DraftFlowStep[] {
                 ? `[${branch.guard}]`
                 : item.operator === 'alt' && index > 0
                   ? '[else]'
-                  : item.operator;
+                  : item.operator === 'critical' && index > 0
+                    ? '[option]'
+                    : item.operator;
           visit(branch.items, [...context, here]);
         });
       }

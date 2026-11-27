@@ -264,6 +264,14 @@ describe('fragments', () => {
     expect(addOperand(loop, 'f1', { id: 'o3' })).toBe(loop);
   });
 
+  it('adds option branches to a critical section, and keeps them through a change of kind', () => {
+    const critical = wrapItems(shop(), ['m2'], { id: 'f1', operator: 'critical' });
+    const two = addOperand(critical, 'f1', { id: 'o2', guard: 'timeout' });
+    expect((findItem(two, 'f1')!.item as SeqFragment).operands.map((branch) => branch.guard)).toEqual([undefined, 'timeout']);
+    const alt = setFragmentOperator(two, 'f1', 'alt');
+    expect((findItem(setFragmentOperator(alt, 'f1', 'critical'), 'f1')!.item as SeqFragment).operands).toHaveLength(2);
+  });
+
   it('removing a branch hands its messages to its neighbour', () => {
     const alt = addOperand(wrapItems(shop(), ['m2'], { id: 'f1', operator: 'alt' }), 'f1', { id: 'o2' });
     const filled = moveItem(alt, 'r2', { operandId: 'o2', index: 0 });

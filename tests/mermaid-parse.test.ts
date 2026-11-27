@@ -148,4 +148,14 @@ describe('a sequence drawn on the canvas, as Mermaid reads it', () => {
     expect(plantUml).toContain('\nAPI -> API\n');
     expect(plantUml).not.toMatch(/^\s*Note$/m);
   });
+
+  it('writes a critical section’s branches as the options Mermaid reads', async () => {
+    const read = parseMermaidSequence('sequenceDiagram\n  critical Connect\n    A->>B: open\n  option Timeout\n    A->>A: log\n  end\n');
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    const text = sequenceToMermaid(asNode(read.sequence));
+    expect(await parses(text)).toBe(true);
+    // CRITICAL_START, a message, OPTION, a message, CRITICAL_END.
+    expect((await mermaidDb(text)).getMessages().map((entry) => [entry.type, entry.message])).toEqual([[27, 'Connect'], [0, 'open'], [28, 'Timeout'], [0, 'log'], [29, '']]);
+  });
 });
