@@ -245,6 +245,8 @@ export function scanPack(pack: Uint8Array, limits: PackLimits): PackSummary {
   if (count > limits.maxObjects) throw new PackRejected(`The pack holds ${count} objects; at most ${limits.maxObjects} are accepted.`);
   const end = pack.length - 20;
   const depthAt = new Map<number, number>();
+  /** The deepest delta chain any entry so far can end in. */
+  let deepest = 0;
   let at = 12;
   let inflated = 0;
   let deltas = 0;
@@ -276,8 +278,15 @@ export function scanPack(pack: Uint8Array, limits: PackLimits): PackSummary {
       depth = depthAt.get(base)! + 1;
     } else if (type === 7) {
       at += 20;
-      // A base named by id may be anywhere: count it as one more level than the deepest so far.
-      depth = 1;
+      // A base named by id is found only by hashing objects as they are resolved, and nothing is
+      // resolved here. So it counts as one more level than the deepest entry so far, never less than
+      // its chain's real depth while its base comes before it: the only place isomorphic-git's indexer
+      // finds one (it leaves the delta out otherwise). gix finds a base further on too, but resolves
+      // each object once, from a work stack, so a longer chain costs it no more than the objects and
+      // bytes these limits already bound. It once counted as one level whatever it was built on, and
+      // a chain of them escaped the limit. More of them than `maxDeltaDepth` are refused even if each
+      // is one level deep: Git writes offset deltas into a bundle, and Draft Canvas writes no deltas.
+      depth = deepest + 1;
     }
     if (depth > limits.maxDeltaDepth) throw new PackRejected('A delta chain is deeper than allowed.');
     // A delta's declared size is the size of its instructions; the result size is checked below.
@@ -296,6 +305,7 @@ export function scanPack(pack: Uint8Array, limits: PackLimits): PackSummary {
     }
     if (inflated > limits.maxTotalInflated) throw new PackRejected('The pack inflates to more than allowed.');
     depthAt.set(entryStart, depth);
+    deepest = Math.max(deepest, depth);
     at = next;
   }
   if (at !== end) throw new PackRejected('The pack has data after its last object.');

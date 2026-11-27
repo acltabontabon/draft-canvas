@@ -78,6 +78,39 @@ function objectHeader(type: number, size: number): number[] {
   return out;
 }
 
+/** An offset delta's distance back to its base, as Git encodes it. */
+function baseDistance(distance: number): number[] {
+  let rest = distance;
+  const out = [rest & 0x7f];
+  while ((rest = Math.floor(rest / 128)) > 0) {
+    rest -= 1;
+    out.unshift(0x80 | (rest & 0x7f));
+  }
+  return out;
+}
+
+/**
+ * A five-byte blob, then `deltas` in order: `ref` names its base by id (each the entry before it, as a
+ * chain of them would), `ofs` builds on the entry before it by offset. Each turns five bytes into five.
+ */
+function deltaChain(deltas: ('ref' | 'ofs')[]): Uint8Array {
+  const count = deltas.length + 1;
+  const out: number[] = [0x50, 0x41, 0x43, 0x4b, 0, 0, 0, 2, count >>> 24, (count >>> 16) & 0xff, (count >>> 8) & 0xff, count & 0xff];
+  let previous = out.length;
+  out.push(...objectHeader(3, 5), ...zlibSync(text('hello')));
+  const delta = Uint8Array.from([5, 5, 5, ...text('hallo')]);
+  deltas.forEach((kind, i) => {
+    const start = out.length;
+    out.push(...objectHeader(kind === 'ref' ? 7 : 6, delta.length));
+    if (kind === 'ref') out.push(...new Array<number>(20).fill(i + 1));
+    else out.push(...baseDistance(start - previous));
+    out.push(...zlibSync(delta));
+    previous = start;
+  });
+  out.push(...new Array<number>(20).fill(0));
+  return Uint8Array.from(out);
+}
+
 /**
  * A pack built to read as two harmless objects to a scan that finds where a stream ends by looking
  * for its checksum, while the inflater indexing it reads one object whose stream goes on: object 1
@@ -183,6 +216,17 @@ describe('the pack pre-scan', { timeout: 60_000 }, () => {
 
   it('refuses something that is not a pack', () => {
     expect(() => scanPack(new Uint8Array(64), LIMITS)).toThrow(/Not a Git pack/);
+  });
+
+  it('counts a delta that names its base by id as deeper than everything before it', () => {
+    const chain = (length: number) => deltaChain(new Array<'ref'>(length).fill('ref'));
+    expect(scanPack(chain(LIMITS.maxDeltaDepth), LIMITS).deltas).toBe(LIMITS.maxDeltaDepth);
+    // Each once counted as one level deep, so a chain of them of any length went through.
+    expect(() => scanPack(chain(LIMITS.maxDeltaDepth + 1), LIMITS)).toThrow(/deeper than allowed/);
+    // An offset delta goes on from the depth of a by-id one it is built on, and the other way round.
+    const mixed = (length: number) => deltaChain(Array.from({ length }, (_, i) => (i % 2 === 0 ? 'ref' : 'ofs')));
+    expect(scanPack(mixed(LIMITS.maxDeltaDepth), LIMITS).deltas).toBe(LIMITS.maxDeltaDepth);
+    expect(() => scanPack(mixed(LIMITS.maxDeltaDepth + 1), LIMITS)).toThrow(/deeper than allowed/);
   });
 
   it('refuses a delta that points before the pack', () => {
