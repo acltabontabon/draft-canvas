@@ -17,7 +17,7 @@ import { dashForEdge } from './kindStyle';
 import { sameRouteGeometry, type PlanScope } from './sameGeometry';
 import { BRIDGE_RADIUS } from './bridge';
 import { connectorRouteInputs } from './connectorRoutes';
-import { edgeRoutes } from './edgeRoutes';
+import { edgeRoutes, type EdgeRoutes } from './edgeRoutes';
 import {
   flattenPath,
   labelLaneOffset,
@@ -197,16 +197,21 @@ function glyphsOf(edge: DraftEdge, at: { x: number; y: number }): { x: number; y
 }
 
 /**
- * Each connector's lines from the last canvas plan, keyed by everything its route depends on. Routing
- * every connector is almost all of a plan's cost, and a commit — a drag, a rename — changes the
- * inputs of only the few connectors it touches: the rest reuse their lines instead of being routed
- * again (a diagram of 1,200 connectors spent a quarter of a second per edit here). Rebuilt from the
- * current connectors on every pass, so it never holds more than one entry per connector; and it holds
- * only lines, never a plan's own working structures (see AGENTS.md on memoized plans).
+ * Each connector's lines from the last canvas plan, with the routes and the connector they were drawn
+ * from. Turning a route into lines (flattening its path, finding its bends) is most of what a plan
+ * costs once the routes are known, and a commit — a drag, a rename — changes the routes of only the
+ * few connectors it touches: the rest reuse their lines (a diagram of 1,200 connectors spent a
+ * quarter of a second per edit here). Rebuilt from the current connectors on every pass, so it never
+ * holds more than one entry per connector; and it holds only lines, never a plan's own working
+ * structures (see AGENTS.md on memoized plans).
+ *
+ * Reused only for the very routes object `edgeRoutes` hands back, which it keeps one of per complete
+ * set of inputs, and the very connector. The memo once had a key of its own that left out where the
+ * connector's ends were spread, its tracks and whether it could still search (all added to a route's
+ * inputs after it): a move elsewhere that spread an untouched connector's ends kept its old lines,
+ * and line jumps were worked out on lines nobody drew any more.
  */
-let routeMemo = new Map<string, { key: string; lines: Line[] }>();
-
-const rectKey = (rect: Rect) => `${rect.x},${rect.y},${rect.width},${rect.height}${rect.anchorBand ? `,${JSON.stringify(rect.anchorBand)}` : ''}`;
+let routeMemo = new Map<string, { edge: DraftEdge; routes: EdgeRoutes; lines: Line[] }>();
 
 /** Routes every connector once, exactly as the renderers do, and reduces each to a polyline plus
  *  the few points an arc must keep away from. `memoize` is the canvas's own pass; an export or a
@@ -220,7 +225,7 @@ function linesOf(
 ): Line[] {
   const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const lines: Line[] = [];
-  const nextMemo = memoize ? new Map<string, { key: string; lines: Line[] }>() : null;
+  const nextMemo = memoize ? new Map<string, { edge: DraftEdge; routes: EdgeRoutes; lines: Line[] }>() : null;
 
   for (const edge of edges) {
     // A portal draws no line across the diagram: nothing crosses it, and it bridges nothing.
@@ -228,38 +233,20 @@ function linesOf(
     // The same inputs, and so the same routes, the canvas draws (`edgeRoutes.ts`).
     const inputs = connectorRouteInputs(edge, { nodes, edges }, scope, nodeById, {}, obstacleNodes);
     if (!inputs) continue;
-    const { lane, spine, obstacles } = inputs;
+    const { lane, spine } = inputs;
 
-    let key = '';
+    // On the canvas, this pass runs inside the first connector's render, and every connector then
+    // finds its routes already worked out.
+    const routes = edgeRoutes(inputs, scope);
     if (nextMemo) {
-      key = [
-        edge.source,
-        edge.target,
-        rectKey(inputs.source),
-        rectKey(inputs.target),
-        JSON.stringify([edge.sourceAnchor, edge.targetAnchor, spine, edge.waypoints]),
-        edge.routing,
-        edge.label,
-        inputs.caption ?? '',
-        lane,
-        edge.hasResponse ? 1 : 0,
-        edge.kind,
-        edge.async ? 1 : 0,
-        dashForEdge(edge) === undefined ? 1 : 0,
-        obstacles.map(rectKey).join(';'),
-      ].join('|');
       const memo = routeMemo.get(edge.id);
-      if (memo && memo.key === key) {
+      if (memo && memo.routes === routes && memo.edge === edge) {
         lines.push(...memo.lines);
         nextMemo.set(edge.id, memo);
         continue;
       }
     }
     const firstLine = lines.length;
-
-    // On the canvas, this pass runs inside the first connector's render, and every connector then
-    // finds its routes already worked out.
-    const routes = edgeRoutes(inputs, scope);
     const route = routes.request;
     const points = flattenPath(route.d);
     if (points.length >= 2) {
@@ -299,7 +286,7 @@ function linesOf(
         });
       }
     }
-    nextMemo?.set(edge.id, { key, lines: lines.slice(firstLine) });
+    nextMemo?.set(edge.id, { edge, routes, lines: lines.slice(firstLine) });
   }
   if (nextMemo) routeMemo = nextMemo;
   return lines;

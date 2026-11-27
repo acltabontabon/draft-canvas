@@ -394,6 +394,15 @@ describe('every plan the canvas hands a connector equals one built from nothing'
     const document = load(file);
     chain(grownGlyphs(document.nodes, rng(31)), document.edges, 31, 10, reword);
   });
+
+  // Line jumps were worked out on the lines a connector had before a move elsewhere spread its ends or
+  // moved its runs onto tracks: the crossing plan's own memo of each connector's lines left those out.
+  it('over moves and word edits of the larger diagram', () => {
+    const { document } = buildScaleDocument(SCALE_SPECS.medium);
+    const random = rng(5);
+    const nodes = grownGlyphs(withStrays(document, random).nodes, random);
+    chain(nodes, document.edges, 5, 6, (current, next) => (next() < 0.65 ? edit(current, document.edges, next) : reword(current, next)));
+  }, 30_000);
 });
 
 describe('a shape that keeps its box but not where its connectors meet it', () => {
