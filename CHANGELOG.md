@@ -75,8 +75,8 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Opening older diagrams** — A diagram from an older version no longer opens or imports "with
   repairs", from a file, a share link or the desktop.
 - **Live collaboration** — Collaborators stay connected when the owner's clock is set back or jumps
-  forward, and someone let in just as the owner's relay connection dropped gets in when let in
-  again. A collaborator using Make room on a large diagram stays in the session. Cursors and
+  forward, and someone asking to join then isn't told the owner is busy. Someone let in just as the
+  owner's relay connection dropped gets in when let in again. A collaborator using Make room on a large diagram stays in the session. Cursors and
   selection rings stay visible when the canvas and the device differ in light or dark.
 - **Shared undo** — Undo after others' edits is refused with a message when it would take the
   diagram past its size limits. It no longer takes away the level someone gave a shape's inside,
@@ -86,7 +86,10 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **History** — Switching, starting or bringing in an alternative no longer throws away changes
   made while recording is paused or off; it asks you to turn recording on first. A paused diagram
   shows as paused when opened again. Removing or pausing a copy's history leaves the original's
-  alone, and after an interrupted switch, "Keep the diagram as it is" stays on that alternative.
+  alone, and a history can be removed once the other diagram that shared it is deleted. After an
+  interrupted switch, "Keep the diagram as it is" stays on that alternative.
+- **Importing history** — A bundle crafted to take minutes to scan, or whose deltas chain past the
+  depth limit, is checked quickly or refused instead of keeping the app busy.
 - **Outage** — Work that goes round a loop is followed, so taking something down no longer calls
   everything beyond a loop quiet, and a connector inside a loop can be taken down. The list of what
   each outage would do opens at once on large diagrams and keeps up while you edit. With one
