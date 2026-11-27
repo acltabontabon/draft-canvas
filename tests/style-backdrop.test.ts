@@ -49,6 +49,21 @@ describe('a style’s backdrop', () => {
     expect(backdropTile(resolveStyle({ v: 1, hand: { base: 'clean' } }), 'light')).toBeNull();
   });
 
+  it('is drawn fainter or stronger than its drawing, at each of the three strengths', () => {
+    for (const { id, asset } of BUILTIN_BACKDROPS) {
+      const tileAt = (strength: string) => backdropTile(resolveStyle(normalizeStyle({ v: 1, hand: { base: 'clean' }, backdrop: { art: asset.id, strength }, assets: [asset] }).style), 'light')!;
+      const [faint, regular, strong] = [tileAt('faint'), tileAt('regular'), tileAt('strong')];
+      // Strong once drew exactly Regular: its multiplier was clamped where the whole tile is laid.
+      expect(new Set([faint.uri, regular.uri, strong.uri]).size, id).toBe(3);
+      const own = asset.paths.map((path) => path.o ?? 1);
+      const opacities = (tile: typeof faint) => tile.shapes.map((shape) => (shape.t === 'path' ? shape.opacity ?? 1 : NaN));
+      expect([regular.opacity, opacities(regular)], id).toEqual([1, own]);
+      expect([faint.opacity, opacities(faint)], id).toEqual([0.5, own]);
+      // Stronger is each part laid heavier, never past solid.
+      expect([strong.opacity, opacities(strong)], id).toEqual([1, own.map((o) => Math.min(1, Math.round(o * 1.7 * 1000) / 1000))]);
+    }
+  });
+
   it('is drawn behind an export, and left out of a transparent one', () => {
     const style = normalizeStyle(withBackdrop()).style as DocumentStyle;
     const document = { ...addNodes(createDocument('Backdrop'), [createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'Orders' })]), style };
