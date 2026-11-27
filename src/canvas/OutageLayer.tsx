@@ -1,6 +1,6 @@
 import { memo, useEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from 'react';
 import { Panel, useReactFlow } from '@xyflow/react';
-import { applyOutageFix, outageFixLabel } from '../commands/outage';
+import { applyOutageFix, keepAsOpenPoint, keptAsOpenPoint, outageFixLabel } from '../commands/outage';
 import { displayNameFor } from '../document/factory';
 import type { DraftNode } from '../document/types';
 import { motionMs } from '../lib/motion';
@@ -151,11 +151,7 @@ export const OutageLayer = memo(function OutageLayer() {
   };
   // Pressing a note must not start a selection box or a pan underneath it.
   const hold = (event: PointerEvent) => event.stopPropagation();
-  const kept = (note: OutageNote) => !!note.ask && (openPoints ?? []).some((point) => point.context === note.ask && point.targets.some((target) => target.id === note.focus[0]));
-  const keep = (note: OutageNote) => {
-    if (!note.ask || !note.focus[0]) return;
-    useEditorStore.getState().addOpenPoint('awaiting', [{ kind: 'node', id: note.focus[0] }], note.ask);
-  };
+  const kept = (note: OutageNote) => keptAsOpenPoint(note, openPoints);
   const pointed = !outage && pointer ? nodes.filter((node) => pointer.ids.includes(node.id)) : [];
   const struck = outage ? nodes.filter((node) => (outage.instances ? node.id === outage.target : outage.lost.includes(node.id))) : [];
 
@@ -273,7 +269,7 @@ export const OutageLayer = memo(function OutageLayer() {
                   {outageFixLabel(note.fix)}
                 </button>
               )}
-              <button type="button" disabled={kept(note)} onClick={() => keep(note)}>
+              <button type="button" disabled={kept(note)} onClick={() => keepAsOpenPoint(note)}>
                 {kept(note) ? 'Kept as open point' : 'Keep as open point'}
               </button>
             </div>

@@ -6,11 +6,14 @@
  *
  * A fix is the person answering a question the walk raised by drawing the answer. Each is one
  * existing store action, so it is an ordinary edit: one undo step, and the walk reads the diagram
- * again as soon as it lands.
+ * again as soon as it lands. Keeping a question as an open point is `addOpenPoint`, the same way.
  */
 
+import { normalizeOpenPointText } from '../document/openPoints';
+import type { OpenPoint } from '../document/types';
 import { useEditorStore } from '../store/editorStore';
-import { mayTakeDown, type OutageFix } from '../traffic';
+import { useUiStore } from '../store/uiStore';
+import { mayTakeDown, type OutageFix, type OutageNote } from '../traffic';
 
 type Editor = ReturnType<typeof useEditorStore.getState>;
 
@@ -52,4 +55,25 @@ export function applyOutageFix(fix: OutageFix, editor: Editor = useEditorStore.g
   if (fix.kind === 'dead-letter') editor.addDeadLetterQueue(fix.queue);
   else if (fix.kind === 'replay') editor.addReplayRoute(fix.from, fix.to);
   else editor.updateNodeById(fix.node, { replicas: 2 }, 'Run two instances');
+}
+
+/**
+ * Whether a question is already kept as an open point on the shape it is about. Compared as the
+ * point stores it: an open point's text is trimmed, its blank lines collapsed and cut at its length
+ * limit, so a question naming a long or multi-line shape never matched what was kept, and every
+ * click kept it again.
+ */
+export function keptAsOpenPoint(note: OutageNote, openPoints: readonly OpenPoint[] | undefined): boolean {
+  if (!note.ask || !note.focus[0]) return false;
+  const context = normalizeOpenPointText(note.ask);
+  return (openPoints ?? []).some((point) => point.context === context && point.targets.some((target) => target.id === note.focus[0]));
+}
+
+/** "Keep as open point": the question, on the shape it is about, once. At the canvas's limit on open
+ *  points nothing is added, and the person is told so rather than left clicking a button that does nothing. */
+export function keepAsOpenPoint(note: OutageNote, editor: Editor = useEditorStore.getState()): void {
+  if (!note.ask || !note.focus[0] || keptAsOpenPoint(note, editor.document.openPoints)) return;
+  if (editor.addOpenPoint('awaiting', [{ kind: 'node', id: note.focus[0] }], note.ask)) return;
+  // The same words the open-point popover uses at the limit.
+  useUiStore.getState().notify('This canvas is holding as many open points as it can.', 'error');
 }

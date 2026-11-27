@@ -8,10 +8,12 @@ vi.mock('../src/lib/preferences', () => ({
   writePreference: (key: string, value: string) => void preferences.set(key, value),
 }));
 
-import { applyOutageFix, outageCandidate, outageFixLabel, startOutage, toggleOutage } from '../src/commands/outage';
+import { applyOutageFix, keepAsOpenPoint, keptAsOpenPoint, outageCandidate, outageFixLabel, startOutage, toggleOutage } from '../src/commands/outage';
+import { LIMITS } from '../src/document/limits';
 import { parseDocument } from '../src/document/validate';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 import { outageEdgeOf, outageIn, outageNodeReading, outageReviewIn, roomMayHaveOutage, runtimeOf } from '../src/store/outage';
+import { useUiStore } from '../src/store/uiStore';
 
 /*
  * The outage walk through the real store: what taking a shape down sets, what each shape and
@@ -199,5 +201,45 @@ describe('answering a question by drawing it', () => {
     store.getState().setSelection({ nodes: [], edges: ['consume-projection'] });
     startOutage();
     expect(store.getState().outage.cut).toBe('consume-projection');
+  });
+});
+
+describe('keeping a question as an open point', () => {
+  /** The question the walk asks of the dead-letter queue, with nothing kept yet. */
+  const replayQuestion = () => outageIn(store.getState())!.notes.find((note) => note.id.startsWith('no-replay'))!;
+
+  it('keeps it once, and knows it is kept, even when a long name was stored cleaned up', () => {
+    // An open point is stored trimmed, its blank lines collapsed and cut at its length limit, so
+    // the question as asked and the point as kept no longer read alike.
+    const name = `External System   \n\n\n\n${'with a long name '.repeat(40)}`;
+    store.getState().updateNodeById('external', { text: name });
+    store.getState().takeDown('external');
+    const question = replayQuestion();
+    expect(question.ask!.length).toBeGreaterThan(LIMITS.maxOpenPointContextLength);
+    expect(keptAsOpenPoint(question, store.getState().document.openPoints)).toBe(false);
+
+    keepAsOpenPoint(question);
+    expect(store.getState().document.openPoints).toHaveLength(1);
+    expect(keptAsOpenPoint(replayQuestion(), store.getState().document.openPoints)).toBe(true);
+    // A second click is the same question: nothing more is added.
+    keepAsOpenPoint(replayQuestion());
+    expect(store.getState().document.openPoints).toHaveLength(1);
+    // Kept is one ordinary edit.
+    store.getState().undo();
+    expect(store.getState().document.openPoints).toHaveLength(0);
+  });
+
+  it('says so when the canvas holds as many open points as it can', () => {
+    const notify = vi.spyOn(useUiStore.getState(), 'notify');
+    try {
+      const full = Array.from({ length: LIMITS.maxOpenPoints }, (_, index) => ({ id: `op-${index}`, kind: 'awaiting' as const, targets: [{ kind: 'node' as const, id: 'producer' }], context: `Point ${index}` }));
+      store.getState().setDocument({ ...structuredClone(starter), openPoints: full });
+      store.getState().takeDown('external');
+      keepAsOpenPoint(replayQuestion());
+      expect(store.getState().document.openPoints).toHaveLength(LIMITS.maxOpenPoints);
+      expect(notify).toHaveBeenCalledWith(expect.stringMatching(/as many open points as it can/), 'error');
+    } finally {
+      notify.mockRestore();
+    }
   });
 });
