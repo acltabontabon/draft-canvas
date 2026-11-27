@@ -47,8 +47,15 @@ export function sanitizeParticipantName(label: string): string {
  *  re-escaped. */
 const MERMAID_ENTITY: Record<string, string> = { '#': '#35;', ';': '#59;', '%': '#37;', '<': '#lt;', '>': '#gt;', '&': '#amp;' };
 
+/** Mermaid reads a leading `wrap:` or `nowrap:` (after an optional colon) on a message, note, name,
+ *  condition or box as a wrapping switch and drops it from the words; its first letter as an entity
+ *  code keeps them words. */
+const WRAP_SWITCH = /^(\s*)(:?(?:no)?wrap:)/i;
+
 export function escapeMermaidText(text: string): string {
-  return text.replace(/[#;%<>&]/g, (ch) => MERMAID_ENTITY[ch]!);
+  return text
+    .replace(/[#;%<>&]/g, (ch) => MERMAID_ENTITY[ch]!)
+    .replace(WRAP_SWITCH, (_whole, space: string, word: string) => `${space}#${word.codePointAt(0)};${word.slice(1)}`);
 }
 
 /** A message's label runs from the first `:` after the arrow to the end of the line, and a colon

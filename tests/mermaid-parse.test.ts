@@ -178,6 +178,31 @@ describe('a sequence drawn on the canvas, as Mermaid reads it', () => {
     expect(plantUml).not.toMatch(/^\s*Note$/m);
   });
 
+  it('keeps words that start "wrap:" or "nowrap:", which Mermaid reads as a switch and drops', async () => {
+    const sequence: DraftSequence = {
+      participants: [who('a', 'wrap: Checkout'), who('b', 'B')],
+      groups: [{ id: 'g', name: 'nowrap: Team', participantIds: ['b'] }],
+      items: [
+        createMessage({ id: 'm', from: 'a', to: 'b', label: 'wrap: the order in an envelope' }),
+        createMessage({ id: 'm2', from: 'a', to: 'b', label: ':nowrap:raw' }),
+        createNote({ id: 'n', over: ['a'], text: 'wrap: note' }),
+      ],
+    };
+    const text = sequenceToMermaid(asNode(sequence));
+    expect(await parses(text)).toBe(true);
+    const db = await mermaidDb(text);
+    // Read as a switch, the flag is set and the words lose their prefix; written as text, neither.
+    expect(db.getMessages().filter((entry) => entry.type === 0 || entry.type === 2).map((entry) => [entry.wrap, entry.message.endsWith('rap: the order in an envelope') || entry.message.endsWith('owrap:raw') || entry.message.endsWith('rap: note')])).toEqual([
+      [false, true],
+      [false, true],
+      [false, true],
+    ]);
+    expect([...db.getActors().values()].map((actor) => [actor.wrap, actor.description.endsWith('rap: Checkout')])[0]).toEqual([false, true]);
+    expect((db as unknown as { getBoxes(): { name: string; wrap: boolean }[] }).getBoxes().map((box) => [box.wrap, box.name.endsWith('owrap: Team')])).toEqual([[false, true]]);
+    const back = parseMermaidSequence(text);
+    expect(back.ok && [back.sequence.participants[0]!.name, ...messagesOf(back.sequence).map((message) => message.label)]).toEqual(['wrap: Checkout', 'wrap: the order in an envelope', ':nowrap:raw']);
+  });
+
   it('writes a critical section’s branches as the options Mermaid reads', async () => {
     const read = parseMermaidSequence('sequenceDiagram\n  critical Connect\n    A->>B: open\n  option Timeout\n    A->>A: log\n  end\n');
     expect(read.ok).toBe(true);
