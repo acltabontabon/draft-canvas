@@ -279,10 +279,6 @@ function drainInsides(ctx: FileContext, repairs: string[]): void {
   }
 }
 
-/**
- * Parses a `.draftcanvas` payload. Accepts either a JSON string or an
- * already-parsed value so callers can reuse it for IndexedDB records.
- */
 const UPGRADED = 'Upgraded document format from';
 
 /**
@@ -294,6 +290,10 @@ export function realRepairs(repairs: readonly string[]): string[] {
   return repairs.filter((line) => !line.startsWith(UPGRADED));
 }
 
+/**
+ * Parses a `.draftcanvas` payload. Accepts either a JSON string or an
+ * already-parsed value so callers can reuse it for IndexedDB records.
+ */
 export function parseDocument(input: unknown): NormalizeResult {
   let raw: unknown = input;
 
