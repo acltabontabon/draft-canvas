@@ -161,7 +161,12 @@ pub fn listen(agent: Arc<Agent>) -> std::io::Result<Running> {
                     tokio::time::sleep(ACCEPT_BACKOFF).await;
                     continue;
                 }
-                let (read, write) = tokio::io::split(server);
+                let connected = server;
+                // The next instance before this one is handed over: if it closed at once, the pipe
+                // would have no instance at all, a sidecar connecting then would be told there is
+                // no pipe, and the name would be free for any program to take.
+                let next = another_instance(&name, &owner_only);
+                let (read, write) = tokio::io::split(connected);
                 tauri::async_runtime::spawn(serve(
                     agent.clone(),
                     token.clone(),
@@ -169,25 +174,21 @@ pub fn listen(agent: Arc<Agent>) -> std::io::Result<Running> {
                     write,
                     stop_rx.subscribe(),
                 ));
-                // The next instance, for the next sidecar. A failure here used to end this task for
-                // good while Settings still said agents could connect; it is tried again instead,
-                // backing off, and said once per run of failures.
-                let mut failures = 0u32;
-                server = loop {
-                    // SAFETY: as above — `owner_only` lives as long as this task.
-                    match unsafe {
-                        ServerOptions::new()
-                            .reject_remote_clients(true)
-                            .create_with_security_attributes_raw(&name, owner_only.attributes())
-                    } {
-                        Ok(s) => break s,
-                        Err(e) => {
-                            if failures == 0 {
-                                eprintln!("Draft Canvas: agent pipe unusable ({e}); retrying");
+                // A failure here used to end this task for good while Settings still said agents
+                // could connect, dropping the sidecar that had just connected. That one is served
+                // meanwhile, and the next instance is tried again, backing off, said once per run
+                // of failures.
+                server = match next {
+                    Ok(s) => s,
+                    Err(e) => {
+                        eprintln!("Draft Canvas: agent pipe unusable ({e}); retrying");
+                        let mut failures = 1u32;
+                        loop {
+                            tokio::time::sleep(ACCEPT_BACKOFF * failures.min(50)).await;
+                            match another_instance(&name, &owner_only) {
+                                Ok(s) => break s,
+                                Err(_) => failures = failures.saturating_add(1),
                             }
-                            failures = failures.saturating_add(1);
-                            let wait = ACCEPT_BACKOFF * failures.min(50);
-                            tokio::time::sleep(wait).await;
                         }
                     }
                 };
@@ -251,6 +252,21 @@ impl OwnerOnly {
 
     fn attributes(&self) -> *mut core::ffi::c_void {
         &self.attributes as *const _ as *mut core::ffi::c_void
+    }
+}
+
+/// One more instance of the pipe the listener already holds, for the next sidecar.
+#[cfg(windows)]
+fn another_instance(
+    name: &str,
+    owner_only: &OwnerOnly,
+) -> std::io::Result<tokio::net::windows::named_pipe::NamedPipeServer> {
+    // SAFETY: the attributes and the descriptor they point at outlive the call: `owner_only` is
+    // borrowed for it, and the listener keeps it as long as it makes instances.
+    unsafe {
+        tokio::net::windows::named_pipe::ServerOptions::new()
+            .reject_remote_clients(true)
+            .create_with_security_attributes_raw(name, owner_only.attributes())
     }
 }
 
