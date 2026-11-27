@@ -103,6 +103,18 @@ function tagsOf(node: DraftNode): string[] {
   return tags;
 }
 
+/**
+ * Structurizr nests one group in another only once the model declares a separator — the parser
+ * refuses the workspace otherwise — and from then on reads it in any group's name as one more level.
+ */
+const GROUP_SEPARATOR = '/';
+
+/** Whether a boundary sits inside another in this room, as `boundaryTree` reads `parentId`. */
+function nestsGroups(room: ExportRoom): boolean {
+  const boundaries = new Set(room.document.nodes.filter(isBoundary).map((node) => node.id));
+  return room.document.nodes.some((node) => isBoundary(node) && node.parentId !== undefined && node.parentId !== node.id && boundaries.has(node.parentId));
+}
+
 /** `kind "Name" "Description" "Technology" "Tags"` — trailing empty arguments dropped. */
 function declaration(node: DraftNode, kind: Kind): string {
   const args = [str(nameOf(node)), str(node.description)];
@@ -142,6 +154,12 @@ export function structurizrSource(document: DraftDocument): string {
   const roomByOwner = new Map(rooms.filter((room) => room.owners.length > 0).map((room) => [room.owners[room.owners.length - 1]!.id, room]));
   const model: Model = { outside: [], lines: [], relationships: [], systems: [], containers: [] };
   const title = titleOf(document);
+  const nests = rooms.some(nestsGroups);
+  const groupName = (node: DraftNode) => {
+    const name = oneLine(node.text) || 'Boundary';
+    // DIVISION SLASH: drawn as a slash, never read as a level.
+    return nests ? name.replaceAll(GROUP_SEPARATOR, '\u2215') : name;
+  };
 
   const emitRoom = (room: ExportRoom, depth: Kind, at: number, out: string[]) => {
     const graph = room.document;
@@ -149,7 +167,7 @@ export function structurizrSource(document: DraftDocument): string {
     const emit = (nodes: readonly DraftNode[], level: number) => {
       for (const node of nodes) {
         if (isBoundary(node)) {
-          out.push(`${INDENT.repeat(level)}group ${str(oneLine(node.text) || 'Boundary')} {`);
+          out.push(`${INDENT.repeat(level)}group ${str(groupName(node))} {`);
           emit(tree.childrenOf(node), level + 1);
           out.push(`${INDENT.repeat(level)}}`);
           continue;
@@ -226,6 +244,7 @@ export function structurizrSource(document: DraftDocument): string {
     `workspace ${str(title)} ${str('Exported from Draft Canvas')} {`,
     '',
     `${INDENT}model {`,
+    ...(nests ? [`${INDENT.repeat(2)}properties {`, `${INDENT.repeat(3)}${str('structurizr.groupSeparator')} ${str(GROUP_SEPARATOR)}`, `${INDENT.repeat(2)}}`] : []),
     ...model.outside,
     ...model.lines,
     ...(model.relationships.length > 0 ? ['', ...model.relationships] : []),

@@ -245,6 +245,22 @@ describe('Structurizr DSL', () => {
     expect(nested).toContain('container Bank {');
   });
 
+  it('declares the separator Structurizr needs before it nests one group in another', () => {
+    const outer = createNode({ type: 'group', x: -50, y: -50, width: 1200, height: 600, text: 'Shop platform' });
+    const inner = createNode({ type: 'group', x: 250, y: -20, width: 500, height: 300, text: 'CI/CD' });
+    const api = createNode({ type: 'service', x: 300, y: 0, text: 'Orders API' });
+    inner.parentId = outer.id;
+    api.parentId = inner.id;
+    const text = structurizrSource({ ...createDocument('Nested'), level: 'container' as const, nodes: [outer, inner, api], edges: [] });
+    expect(text).toMatch(/model \{\n\s+properties \{\n\s+"structurizr\.groupSeparator" "\/"\n\s+\}\n/);
+    // A slash in a name would read as one more level.
+    expect(text).toContain('group "Shop platform" {\n                group "CI\u2215CD" {');
+    // Without nesting, the workspace is as it was.
+    const flat = structurizrSource({ ...createDocument('Flat'), level: 'container' as const, nodes: [inner, { ...api, parentId: inner.id }].map((node) => (node.id === inner.id ? { ...node, parentId: undefined } : node)), edges: [] });
+    expect(flat).not.toContain('properties');
+    expect(flat).toContain('group "CI/CD" {');
+  });
+
   it('keeps the contents of a room when its owner is hoisted to model level', () => {
     const customer = createNode({ type: 'actor', x: 0, y: 0, text: 'Customer' });
     const app = createNode({ type: 'service', x: 0, y: 0, text: 'App' });
