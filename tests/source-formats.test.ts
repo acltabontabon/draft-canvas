@@ -220,6 +220,31 @@ describe('Structurizr DSL', () => {
     expect(text).toContain('Customer -> Web "browses"');
   });
 
+  it('declares a system outside ours at model level, as the C4 reading does', () => {
+    // Stripe and the partner were containers inside the canvas's own system, while `depth/c4.ts` and
+    // C4-PlantUML (`System_Ext`) call them external software systems.
+    const user = createNode({ type: 'actor', x: 0, y: 0, text: 'Shopper' });
+    const api = createNode({ type: 'service', x: 300, y: 0, text: 'Checkout API' });
+    const stripe = createNode({ type: 'service', x: 600, y: 0, text: 'Stripe', serviceKind: 'external' });
+    const partner = createNode({ type: 'actor', x: 600, y: 300, text: 'Partner system', actorKind: 'system' });
+    const edges = [createEdge({ source: user.id, target: api.id, label: 'buys' }), createEdge({ source: api.id, target: stripe.id, label: 'charges' }), createEdge({ source: api.id, target: partner.id, label: 'notifies' })];
+    const document = { ...createDocument('Shop'), level: 'container' as const, nodes: [user, api, stripe, partner], edges };
+    const text = structurizrSource(document);
+    expect(text).toMatch(/model \{\n\s+Shopper = person "Shopper"\n\s+Stripe = softwareSystem "Stripe" "" "External"\n\s+PartnerSystem = softwareSystem "Partner system" "" "External"\n\s+System = softwareSystem "Shop" \{\n\s+CheckoutAPI = container "Checkout API"\n\s+\}/);
+    expect(text).toContain('CheckoutAPI -> Stripe "charges"');
+    expect(c4PlantUmlSource(document)).toContain('System_Ext(Stripe, "Stripe")');
+
+    // In a system's own room too, and with what is drawn inside it as its containers.
+    const shop = createNode({ type: 'service', x: 0, y: 0, text: 'Shop' });
+    const bank = createNode({ type: 'service', x: 0, y: 0, text: 'Bank', serviceKind: 'external' });
+    const ledger = createNode({ type: 'database', x: 0, y: 0, text: 'Ledger' });
+    bank.inside = { nodes: [ledger], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+    shop.inside = { nodes: [createNode({ type: 'service', x: 0, y: 0, text: 'Web' }), bank], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } };
+    const nested = structurizrSource({ ...createDocument('Landscape'), level: 'context' as const, nodes: [shop], edges: [] });
+    expect(nested).toMatch(/model \{\n\s+Bank = softwareSystem "Bank" "" "External" \{\n\s+Ledger = container "Ledger" "" "" "Database"\n\s+\}\n\s+Shop = softwareSystem "Shop" \{\n\s+Web = container "Web"\n\s+\}/);
+    expect(nested).toContain('container Bank {');
+  });
+
   it('keeps the contents of a room when its owner is hoisted to model level', () => {
     const customer = createNode({ type: 'actor', x: 0, y: 0, text: 'Customer' });
     const app = createNode({ type: 'service', x: 0, y: 0, text: 'App' });
