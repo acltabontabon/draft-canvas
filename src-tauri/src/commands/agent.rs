@@ -27,9 +27,15 @@ pub async fn agent_ack(agent: State<'_, Arc<Agent>>, id: u64) -> Result<(), AppE
 
 /// The commit gate: true means go ahead and change the document; false means the request expired or
 /// was cancelled, and nothing may be changed for it.
+///
+/// Passing the gate writes the request log through to disk, and can wait behind its compaction, so it
+/// runs off the async runtime's threads.
 #[tauri::command]
 pub async fn agent_gate(agent: State<'_, Arc<Agent>>, id: u64) -> Result<bool, AppError> {
-    Ok(broker::gate_passed(&agent, id))
+    let agent = Arc::clone(&agent);
+    tauri::async_runtime::spawn_blocking(move || broker::gate_passed(&agent, id))
+        .await
+        .map_err(|_| AppError::internal())
 }
 
 /// The person cancelled a request from the status line. Only a request still before its commit gate
