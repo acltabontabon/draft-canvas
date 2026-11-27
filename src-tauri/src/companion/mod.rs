@@ -284,26 +284,29 @@ pub fn validate(request: &PromptRequest) -> Result<(), AppError> {
 /// `agent_dir` is where this app keeps `agent.json`: the connector is told it outright, so a run reaches
 /// the app that started it even when that isn't the installed app (a development or beta build).
 /// A shell line that reopens a conversation in the agent's own terminal UI, from the folder the
-/// companion ran it in (sessions are looked up by folder). Quoted for the platform's shell.
+/// companion ran it in (sessions are looked up by folder). Quoted for the platform's shell: on
+/// Windows that is PowerShell, the shell a terminal opens there. The cmd line it was before
+/// (`cd /d "…" && "…" …`) didn't parse in PowerShell, so pasting it into the terminal ran nothing.
 pub fn continue_line(work_dir: &Path, program: &Path, resume: &[String]) -> String {
     let quote = |text: &str| {
         if cfg!(windows) {
-            format!("\"{}\"", text.replace('"', "\"\""))
+            format!("'{}'", text.replace('\'', "''"))
         } else {
             format!("'{}'", text.replace('\'', "'\\''"))
         }
     };
-    let cd = if cfg!(windows) { "cd /d" } else { "cd" };
     let args = resume
         .iter()
         .map(|a| quote(a))
         .collect::<Vec<_>>()
         .join(" ");
-    format!(
-        "{cd} {} && {} {args}",
-        quote(&work_dir.to_string_lossy()),
-        quote(&program.to_string_lossy())
-    )
+    let dir = quote(&work_dir.to_string_lossy());
+    let program = quote(&program.to_string_lossy());
+    if cfg!(windows) {
+        format!("Set-Location -LiteralPath {dir}; & {program} {args}")
+    } else {
+        format!("cd {dir} && {program} {args}")
+    }
 }
 
 /// What the run's own connector is told: which run it belongs to, which app to reach, and whether to
@@ -2615,6 +2618,20 @@ mod tests {
             );
             assert!(prompt.ends_with(text));
         }
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn the_terminal_line_is_powershell_on_windows() {
+        let line = continue_line(
+            Path::new(r"C:\Users\me\AppData\Local\Draft Canvas\companion\work"),
+            Path::new(r"C:\Users\me's\.local\bin\claude.exe"),
+            &["--resume".into(), "it's-1".into()],
+        );
+        assert_eq!(
+            line,
+            r"Set-Location -LiteralPath 'C:\Users\me\AppData\Local\Draft Canvas\companion\work'; & 'C:\Users\me''s\.local\bin\claude.exe' '--resume' 'it''s-1'"
+        );
     }
 
     #[test]

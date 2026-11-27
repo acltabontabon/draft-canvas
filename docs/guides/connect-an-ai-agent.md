@@ -86,7 +86,7 @@ picks the folder, and **Allow** *folder* lets agents use it.
    connectors"), offered as buttons. Ask "what can you do?" for the list.
 3. While the agent works, one line says what it is doing. The bubble holds the whole conversation;
    past two turns, earlier ones fold away. The pencil starts a new conversation, and `>_` copies a
-   command that continues it in your agent's own terminal.
+   command that reopens the latest turn in your agent's own terminal (a PowerShell command on Windows).
 
 ![Nodi answering "What can you do?" itself, with buttons.](../media/guides/nodi-help.png)
 
