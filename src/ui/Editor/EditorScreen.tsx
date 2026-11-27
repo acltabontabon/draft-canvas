@@ -66,6 +66,7 @@ import { OutlinePanel } from './OutlinePanel';
 import { StylePanel } from './StylePanel';
 import { useEditorDress } from '../../canvas/useEditorDress';
 import { createNudgeCoalescer } from './nudgeCoalescer';
+import { focusPlacedByPointer, watchFocusOrigin } from './focusOrigin';
 import { useSelectionAnnouncements } from './useSelectionAnnouncements';
 import { OpenPointPopover } from '../../canvas/OpenPointPopover';
 import { DepthAnnouncer, DepthStack } from './DepthStack';
@@ -137,15 +138,13 @@ function hasNameToType(type: DraftNode['type']): boolean {
   return type !== 'ellipse' && type !== 'sequence';
 }
 
-/** Focus sits on a control that was reached from the keyboard (`:focus-visible`), not by a click. */
+/** Focus sits on a control that was reached from the keyboard, not by a click. Asked of how focus
+ *  arrived (`focusOrigin.ts`), not of `:focus-visible`: Chromium turns that on for whatever has focus
+ *  the moment a key goes down, before this page hears the key. */
 function keyboardFocusIsOnControl(): boolean {
   const active = document.activeElement;
   if (!active || active === document.body) return false;
-  try {
-    return active.matches(':focus-visible');
-  } catch {
-    return false;
-  }
+  return !focusPlacedByPointer(active);
 }
 
 /** Sample content for a fresh code card, so it is never a blank grey box. */
@@ -1157,6 +1156,10 @@ export function useKeyboard({
     window.addEventListener('keydown', onEscapeCapture, true);
     return () => window.removeEventListener('keydown', onEscapeCapture, true);
   }, []);
+
+  // The bare keys below ask how focus reached a control (`keyboardFocusIsOnControl`), so how it
+  // arrives is followed from the moment the editor is up.
+  useEffect(() => watchFocusOrigin(), []);
 
   useEffect(() => {
     const nudges = createNudgeCoalescer((dx, dy, ids) => useEditorStore.getState().nudgeSelection(dx, dy, ids));

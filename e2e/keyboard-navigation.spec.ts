@@ -265,6 +265,32 @@ test.describe('keyboard focus around the canvas', () => {
     await expect(page.locator('.dc-node')).toHaveCount(2);
   });
 
+  test('a control clicked with the mouse leaves Delete and the shape keys to the canvas', async ({ page, browserName }) => {
+    await newCanvas(page, 'Keys after a click');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Queue', { x: 650, y: 300 });
+    const nodes = page.locator('.dc-node');
+
+    // Chromium, and so the desktop app's WebView2, marks a clicked button `:focus-visible` as soon as
+    // a key goes down on it, before the page hears the key. A guard asking then took the button for
+    // one reached from the keyboard, and Delete did nothing.
+    await nodes.first().click();
+    const zoomIn = page.getByRole('button', { name: 'Zoom in', exact: true });
+    await zoomIn.click();
+    if (browserName === 'chromium') await expect(zoomIn).toBeFocused();
+    await page.keyboard.press('Delete');
+    await expect(nodes).toHaveCount(1);
+
+    // The same for a letter: click Service, press S over the canvas, and a Service arrives.
+    const service = page.getByRole('toolbar', { name: 'Create' }).getByRole('button', { name: 'Service', exact: true });
+    await service.click();
+    if (browserName === 'chromium') await expect(service).toBeFocused();
+    const pane = (await page.locator('.react-flow__pane').boundingBox())!;
+    await page.mouse.move(pane.x + 450, pane.y + 500);
+    await page.keyboard.press('s');
+    await expect(nodes).toHaveCount(2);
+  });
+
   test('Escape in the History popover closes only the popover', async ({ page }) => {
     await newCanvas(page, 'History escape');
     await create(page, 'Service', { x: 300, y: 300 });
