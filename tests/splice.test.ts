@@ -3,7 +3,7 @@ import { createAttachment, createDocument, createEdge, createNode, type CreateNo
 import { createFlow } from '../src/document/flow';
 import { LIMITS } from '../src/document/limits';
 import { addEdges, addNodes } from '../src/document/operations';
-import { bridgeProblems, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../src/document/splice';
+import { bridgeProblems, bridgeThrough, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../src/document/splice';
 import type { Attachment, DraftDocument, DraftEdge, DraftNode } from '../src/document/types';
 import { parseDocument } from '../src/document/validate';
 import { serializeDocument } from '../src/export/project';
@@ -204,6 +204,8 @@ describe('removeAndBridge', () => {
       { ...createEdge({ source: second.id, target: api.id }), attachments: notes('5') },
     ];
     expect(removeAndBridge(graph([client, gateway, second, api], edges), [gateway.id, second.id])).toBeNull();
+    // Each shape has one way in and one way out: the refusal says the notes don't fit, as it is.
+    expect(bridgeThrough(graph([client, gateway, second, api], edges), [gateway.id, second.id])).toEqual({ problem: 'attachments' });
   });
 
   // Was: the way in was copied onto every joined connector under the same attachment ids, which a

@@ -153,7 +153,7 @@ import { makeRoom as makeRoomOp, type RoomPush } from '../document/makeRoom';
 import { fixedIds } from '../document/held';
 import { replicasField, splitReplicaCount } from '../document/replicas';
 import { CONVERTIBLE_TYPE_NAMES, convertNodeType, isConvertibleType, type ConvertibleType } from '../document/convert';
-import { bridgeProblem, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
+import { bridgeThrough, canSpliceInto, removeAndBridge, spliceNodeIntoEdge } from '../document/splice';
 import type {
   Accent,
   AttachableType,
@@ -3185,11 +3185,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     // Connectors picked alongside the shapes go first: a connector the person chose to delete is
     // not one to join through.
     const withoutEdges = removeElements(document, [], selection.edges);
-    const problem = bridgeProblem(withoutEdges, selection.nodes);
-    if (problem || !removeAndBridge(withoutEdges, selection.nodes)) {
+    const attempt = bridgeThrough(withoutEdges, selection.nodes);
+    if ('problem' in attempt) {
       const plain = `${plainShortcut('Backspace')} deletes without joining.`;
       useUiStore.getState().notify(
-        problem === 'attachments'
+        attempt.problem === 'attachments'
           ? `A connector holds ${LIMITS.maxAttachmentsPerEdge} notes and code cards, so these lines can't be joined into one. ${plain}`
           : `${plainShortcut('Alt Backspace')} joins up shapes with one way in or one way out. ${plain}`,
       );

@@ -119,16 +119,6 @@ export function bridgeProblems(doc: DraftDocument, nodeIds: readonly string[]): 
   return nodeIds.filter((id) => problemOf(doc, id) !== null);
 }
 
-/** Why the first of `nodeIds` that can't be taken out with its lines joined can't, or `null`: what
- *  a refusal says, so a shape whose notes wouldn't fit isn't told it has too many ways in and out. */
-export function bridgeProblem(doc: DraftDocument, nodeIds: readonly string[]): BridgeProblem | null {
-  for (const id of nodeIds) {
-    const problem = problemOf(doc, id);
-    if (problem) return problem;
-  }
-  return null;
-}
-
 function problemOf(doc: DraftDocument, nodeId: string): BridgeProblem | null {
   const { incoming, outgoing } = sidesOf(doc, nodeId);
   if (incoming.length > 1 && outgoing.length > 1) return 'many-to-many';
@@ -152,7 +142,21 @@ export function removeAndBridge(
   doc: DraftDocument,
   nodeIds: readonly string[],
 ): { doc: DraftDocument; joined: number } | null {
-  if (bridgeProblems(doc, nodeIds).length > 0) return null;
+  const result = bridgeThrough(doc, nodeIds);
+  return 'problem' in result ? null : result;
+}
+
+/** `removeAndBridge`, saying why it can't when it can't: what a refusal tells the person. The reason
+ *  is the one that stopped it, so a chain whose notes only add up past the limit as it is joined
+ *  through isn't told its shapes have too many ways in and out, as a check of each shape alone said. */
+export function bridgeThrough(
+  doc: DraftDocument,
+  nodeIds: readonly string[],
+): { doc: DraftDocument; joined: number } | { problem: BridgeProblem } {
+  for (const id of nodeIds) {
+    const problem = problemOf(doc, id);
+    if (problem) return { problem };
+  }
   let next = doc;
   let joined = 0;
   const merged: string[] = [];
@@ -161,7 +165,7 @@ export function removeAndBridge(
     const { incoming, outgoing } = sidesOf(next, nodeId);
     // Joining an earlier shape of the selection can give a later one several ways in as well as
     // out; that one is just as ambiguous as if it had been drawn so.
-    if (incoming.length > 1 && outgoing.length > 1) return null;
+    if (incoming.length > 1 && outgoing.length > 1) return { problem: 'many-to-many' };
     const bridges: Bridge[] = incoming.flatMap((inEdge) => outgoing.map((outEdge) => ({ incoming: inEdge, outgoing: outEdge })));
     // The ids this shape's joined connectors already carry. The leg every bridge shares (the one way
     // in, or the one way out) is copied onto each of them, and a copy gets an id of its own, as a
@@ -173,7 +177,7 @@ export function removeAndBridge(
       if (!joins(next, inEdge, outEdge)) continue;
       // Asked again here, as above for many-to-many: a chain adds up as it is joined through, so a
       // later shape's way in can be a connector that already carries an earlier one's two legs.
-      if (overfull(inEdge, outEdge)) return null;
+      if (overfull(inEdge, outEdge)) return { problem: 'attachments' };
       const label = inEdge.label ?? outEdge.label;
       const attachments = [...(inEdge.attachments ?? []), ...(outEdge.attachments ?? [])].map((attachment) => {
         if (!given.has(attachment.id)) {
