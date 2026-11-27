@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
+import { LIMITS } from '../src/document/limits';
 import { makeRoom, roomToClose } from '../src/document/makeRoom';
 import { addEdges, addNodes, setEdgeWaypoints } from '../src/document/operations';
+import { parseDocument } from '../src/document/validate';
+import { serializeDocument } from '../src/export/project';
 
 function room() {
   const a = createNode({ id: 'a', type: 'service', x: 0, y: 0, text: 'A' });
@@ -45,6 +48,23 @@ describe('making room', () => {
     const doc = makeRoom(base, { axis: 'x', at: 300, delta: 100 });
     expect(at(doc, 'g')).toMatchObject({ x: -40, width: 800 });
     expect(at(doc, 'b').x).toBe(500);
+  });
+
+  // Was: a push near the edge of the canvas left a shape, a bend or a stretched boundary past the
+  // limits a load keeps, and the next open moved or shrank it back.
+  it('keeps what it pushes within the canvas limits, as the next open would', () => {
+    const edge = LIMITS.maxCoordinate;
+    const far = createNode({ id: 'far', type: 'service', x: edge - 50, y: 0, text: 'Far' });
+    const zone = createNode({ id: 'zone', type: 'group', x: -40, y: -60, width: LIMITS.maxNodeSize - 50, height: 260, text: 'Zone' });
+    const base = setEdgeWaypoints(addNodes(room(), [far, zone]), 'bc', [{ x: edge - 20, y: 150 }]);
+    const doc = makeRoom(base, { axis: 'x', at: 300, delta: 120 });
+    expect(at(doc, 'far').x).toBe(edge);
+    expect(at(doc, 'zone').width).toBe(LIMITS.maxNodeSize);
+    expect(doc.edges.find((e) => e.id === 'bc')!.waypoints).toEqual([{ x: edge, y: 150 }]);
+    expect(at(doc, 'c').x).toBe(920);
+    const reopened = parseDocument(serializeDocument(doc));
+    if (!reopened.ok) throw new Error(reopened.error);
+    expect(serializeDocument(reopened.document)).toBe(serializeDocument(doc));
   });
 
   it('takes a connector’s own bends past the line along', () => {
