@@ -127,13 +127,22 @@ const NOT_FOR_A_CANVAS: &[&str] = &[
     "workspace_dependencies",
 ];
 
-/// The features this Codex has (`codex features list`), asked once per program per app run.
+/// The features this Codex has (`codex features list`), asked once per program and version per app
+/// run. Keyed by the version too: an npm update leaves the same `codex.cmd` in place, and a list
+/// cached from before it disabled flags the new Codex no longer has (every run failed until a restart)
+/// and missed a feature it newly has (left on).
 fn features(program: &Path, probe_home: &Path) -> Result<HashSet<String>, AppError> {
-    static KNOWN: std::sync::OnceLock<
-        std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, HashSet<String>>>,
-    > = std::sync::OnceLock::new();
+    type Known = std::collections::HashMap<(std::path::PathBuf, String), HashSet<String>>;
+    static KNOWN: std::sync::OnceLock<std::sync::Mutex<Known>> = std::sync::OnceLock::new();
     let known = KNOWN.get_or_init(Default::default);
-    if let Some(found) = known.lock().ok().and_then(|k| k.get(program).cloned()) {
+    // No version, no cache: the list is asked for again rather than kept under a guess.
+    let key = quick(program, &["--version"])
+        .and_then(|out| version_of(&out))
+        .map(|version| (program.to_path_buf(), version.to_string()));
+    if let Some(found) = key
+        .as_ref()
+        .and_then(|key| known.lock().ok().and_then(|k| k.get(key).cloned()))
+    {
         return Ok(found);
     }
     // An unavailable probe must not silently leave the person's plugins, apps or browser enabled.
@@ -142,8 +151,8 @@ fn features(program: &Path, probe_home: &Path) -> Result<HashSet<String>, AppErr
     // inspect defaults in the private run folder, never the person's settings or project.
     let output = quick_in_home(program, &["features", "list"], Some(probe_home));
     let found = checked_features(output.as_deref())?;
-    if let Ok(mut k) = known.lock() {
-        k.insert(program.to_path_buf(), found.clone());
+    if let (Some(key), Ok(mut k)) = (key, known.lock()) {
+        k.insert(key, found.clone());
     }
     Ok(found)
 }
