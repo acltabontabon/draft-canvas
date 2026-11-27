@@ -1,5 +1,5 @@
 import { categoryOf } from '../document/connectorSemantics';
-import { anchorBandOf, bandWords, type AnchorBand } from '../document/queueGeometry';
+import { anchorBandOf, BAND_WORD_FIELDS, type AnchorBand } from '../document/queueGeometry';
 import type { DraftEdge, DraftNode } from '../document/types';
 import { sequenceAnchorRect } from './sequenceAnchors';
 import { OBSTACLE_REACH, rectOf } from './routing';
@@ -32,9 +32,6 @@ export function sameNodeGeometry(a: readonly DraftNode[], b: readonly DraftNode[
   return true;
 }
 
-/** What of a shape stands its glyph, and so its connectors' ends (`bandWords`), field by field. */
-const BAND_FIELDS = Object.keys(bandWords({})) as Array<keyof ReturnType<typeof bandWords>>;
-
 /**
  * Whether a shape that kept its box still gives its connectors the same ends to route between: the
  * band they land on and the category their captions are worded for.
@@ -50,7 +47,8 @@ const BAND_FIELDS = Object.keys(bandWords({})) as Array<keyof ReturnType<typeof 
  */
 function sameEnds(x: DraftNode, y: DraftNode): boolean {
   if (categoryOf(x) !== categoryOf(y)) return false;
-  if (BAND_FIELDS.every((field) => x[field] === y[field])) return true;
+  // What of a shape stands its glyph, and so its connectors' ends, field by field (`bandWords`).
+  if (BAND_WORD_FIELDS.every((field) => x[field] === y[field])) return true;
   return sameBand(anchorBandOf(x), anchorBandOf(y));
 }
 

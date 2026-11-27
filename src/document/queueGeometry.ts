@@ -125,14 +125,22 @@ export function bandReach(box: { x: number; width: number }, band: AnchorBand | 
 }
 
 /**
+ * The fields `bandWords` takes, named one by one for whatever compares two shapes by them
+ * (`edges/sameGeometry.ts`). Read off what `bandWords({})` returns, the list would come out empty
+ * the day it stopped writing out the fields a shape leaves unset, and every shape would compare
+ * equal. `tests/plan-reuse.test.ts` holds the two to the same fields.
+ */
+export const BAND_WORD_FIELDS = ['serviceKind', 'componentKind', 'databaseKind', 'artifactKind', 'text', 'technology', 'description'] as const satisfies readonly (keyof DraftNode)[];
+
+type BandWord = (typeof BAND_WORD_FIELDS)[number];
+
+/**
  * What of a shape decides where its glyph stands, beside its box: the kind it is drawn as and the
  * words under it. Anything that builds a box to ask `anchorBandOf` about, from a live size or a
  * shape not made yet, takes these from the shape whole, so the handles, the lines and the drawing
  * are asked about the same thing.
  */
-export function bandWords(
-  shape: Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind' | 'databaseKind' | 'artifactKind' | 'text' | 'technology' | 'description'>,
-): Pick<Partial<DraftNode>, 'serviceKind' | 'componentKind' | 'databaseKind' | 'artifactKind' | 'text' | 'technology' | 'description'> {
+export function bandWords(shape: Pick<Partial<DraftNode>, BandWord>): Pick<Partial<DraftNode>, BandWord> {
   return {
     serviceKind: shape.serviceKind,
     componentKind: shape.componentKind,

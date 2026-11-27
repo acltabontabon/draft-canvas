@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { buildScaleDocument, SCALE_SPECS } from '../benchmark/workloads/scale';
 import { visibleEdges } from '../src/document/compensation';
 import { createEdge, createNode } from '../src/document/factory';
+import { BAND_WORD_FIELDS, bandWords } from '../src/document/queueGeometry';
 import type { DraftDocument, DraftEdge, DraftNode } from '../src/document/types';
 import { routingPlan, TRUNK_OBSTACLE_MARGIN } from '../src/edges/bundles';
 import { connectorRoutes } from '../src/edges/connectorRoutes';
@@ -450,6 +451,13 @@ describe('a shape that keeps its box but not where its connectors meet it', () =
     const after = before.map((node) => (node.id === 'a' ? { ...node, serviceKind: 'gateway' as const } : node.id === 'stray' ? { ...node, x: 6200 } : node));
     expect(sameNodeGeometryAround(before, after, edges)).toBe(false);
     expect(sameRouteGeometryAround(before, after, edges)).toBe(false);
+  });
+
+  // A shape is compared field by field before its band is asked for: a field left off the list
+  // would keep every plan across a change to it.
+  it('compares a shape by every field its glyph stands by', () => {
+    const shape = Object.fromEntries(BAND_WORD_FIELDS.map((field) => [field, `${field} set`])) as Parameters<typeof bandWords>[0];
+    expect(Object.keys(bandWords(shape)).sort()).toEqual([...BAND_WORD_FIELDS].sort());
   });
 
   it('keeps every plan for a rename that leaves each glyph where it stood', () => {
