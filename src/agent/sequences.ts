@@ -132,7 +132,7 @@ export function keepUnwritten(node: DraftNode, next: DraftSequence): DraftSequen
   const merge: Merge = { traced: new Map(), tracedIds: new Map(), kept: new Map(), replies: new Map() };
   trace(current.items, base.items, merge);
   const items = mergeItems(next.items, base.items, merge);
-  settleReplies(items, merge);
+  settleReplies(items, merge, new Set(messagesOf({ participants: [], items }).map((message) => message.id)));
   const was = new Map(current.participants.map((participant) => [participant.id, participant]));
   const said = new Map(base.participants.map((participant) => [participant.id, participant]));
   const participants = inPlace(current.participants, base.participants, next.participants.map((participant) => {
@@ -300,20 +300,24 @@ function mergeItem(item: SeqItem, read: SeqItem, was: SeqItem, merge: Merge): Se
 }
 
 /**
- * Which call each reply answers, once every message has the id it keeps. A matched reply the text
- * still links as the read's text did answers what it answered; the text says nothing else about it.
+ * Which call each reply answers, once every message has the id it keeps (`messageIds`). A matched
+ * reply the text still links as the read's text did answers what it answered, while that call is
+ * still there: the text says nothing else about it. A call the agent took out leaves it to the text,
+ * which kept it answering the earlier of two calls, then dropped that link with the call.
  */
-function settleReplies(items: readonly SeqItem[], merge: Merge): void {
+function settleReplies(items: readonly SeqItem[], merge: Merge, messageIds: ReadonlySet<string>): void {
   for (const item of items) {
     if (item.t === 'fragment') {
-      for (const operand of item.operands) settleReplies(operand.items, merge);
+      for (const operand of item.operands) settleReplies(operand.items, merge, messageIds);
       continue;
     }
     if (item.t !== 'message') continue;
     const matched = merge.replies.get(item);
     const said = matched ? matched.said.replyTo : item.replyTo;
     const text = said === undefined ? undefined : (merge.kept.get(said) ?? said);
-    const reply = matched && text === (matched.read.replyTo === undefined ? undefined : merge.tracedIds.get(matched.read.replyTo)) ? matched.was.replyTo : text;
+    const read = matched?.read.replyTo === undefined ? undefined : merge.tracedIds.get(matched.read.replyTo);
+    const answered = matched?.was.replyTo;
+    const reply = matched && text === read && (answered === undefined || messageIds.has(answered)) ? answered : text;
     if (reply !== undefined) item.replyTo = reply;
     else delete item.replyTo;
   }

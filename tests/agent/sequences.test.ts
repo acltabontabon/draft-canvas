@@ -305,6 +305,25 @@ describe('a sequence drawn in the editor, read and sent back', () => {
     expect(after.participants.slice(0, -1)).toEqual(before.participants);
     expect(after.groups).toEqual(before.groups);
   });
+
+  it('links a reply to the call the text now gives it once the one it answered is gone', () => {
+    // A reply that answers the first of two calls, not the latest: what the text can't say.
+    const reply = createMessage({ id: 'r', from: 'api', to: 'web', kind: 'reply', label: 'ok', replyTo: 'c1' });
+    delete reply.deactivate;
+    const sequence = normalizeSequence({
+      participants: [
+        { id: 'web', name: 'Web', type: 'actor', actorKind: 'human' },
+        { id: 'api', name: 'API', type: 'service', serviceKind: 'generic' },
+      ],
+      items: [createMessage({ id: 'c1', from: 'web', to: 'api', label: 'first' }), createMessage({ id: 'c2', from: 'web', to: 'api', label: 'second' }), reply],
+    }).sequence;
+    const file: DraftDocument = { ...createDocument('Shop'), nodes: [{ ...createNode({ id: 'checkout', type: 'sequence', x: 0, y: 0, text: 'Calls' }), sequence }] };
+    expect(update(file, [{ op: 'update', id: 'checkout', set: { mermaid: textOf(file) } }]).file).toBe(file);
+    const edited = textOf(file).replace(/\n\s*Web->>\+?API: first/, '');
+    const after = sequenceOf(sequenceIn(update(file, [{ op: 'update', id: 'checkout', set: { mermaid: edited } }]).file, 'checkout'));
+    expect(messagesOf(after).map((message) => [message.id, message.replyTo])).toEqual([['c2', undefined], ['r', 'c2']]);
+    expect(checkSequence(after)).toEqual([]);
+  });
 });
 
 describe('scoped edits and participant-anchored connectors', () => {
