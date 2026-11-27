@@ -1262,16 +1262,23 @@ mod tests {
         assert!(!output.success);
         assert!(String::from_utf8_lossy(&output.stdout).contains("hello"));
         assert!(String::from_utf8_lossy(&output.stderr).contains("denied"));
+        // Twice the limit, written in large blocks: cmd's `for /L … @echo` wrote 42 bytes per line and,
+        // on a busy machine, hadn't reached the limit by the deadline, so the probe timed out instead.
+        let dir = tempfile::tempdir().unwrap();
+        let big = dir.path().join("big.txt");
+        std::fs::write(&big, vec![b'x'; 2 * 1024 * 1024]).unwrap();
         command = crate::companion::runner::tests::shell(
-            "while :; do echo 0123456789012345678901234567890123456789; done",
-            "for /L %i in (1,1,100000) do @echo 0123456789012345678901234567890123456789",
+            &format!("cat '{}'", big.display()),
+            &format!("type \"{}\"", big.display()),
         );
         assert_eq!(
-            run(command, Duration::from_secs(5)).err().unwrap().kind(),
+            run(command, Duration::from_secs(60)).err().unwrap().kind(),
             std::io::ErrorKind::InvalidData
         );
     }
 
+    /// Both bounds sit far under the 30 s the inherited `ping` would hold the pipes for, so they prove
+    /// the job was ended, with room for a slow cmd start on a busy machine.
     #[cfg(windows)]
     #[test]
     fn cli_probe_jobs_end_on_timeout_and_on_parent_exit_with_inherited_pipes() {
@@ -1284,15 +1291,15 @@ mod tests {
                 .kind(),
             std::io::ErrorKind::TimedOut
         );
-        assert!(started.elapsed() < Duration::from_secs(3));
+        assert!(started.elapsed() < Duration::from_secs(10));
         let command = crate::companion::runner::tests::shell(
             "",
             r#"start "" /b ping -n 30 127.0.0.1 & exit /b 0"#,
         );
         let started = Instant::now();
-        let output = run(command, Duration::from_secs(2)).unwrap();
+        let output = run(command, Duration::from_secs(15)).unwrap();
         assert!(output.success);
-        assert!(started.elapsed() < Duration::from_secs(2));
+        assert!(started.elapsed() < Duration::from_secs(15));
     }
 
     #[cfg(unix)]
