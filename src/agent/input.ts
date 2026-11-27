@@ -73,6 +73,8 @@ export const AGENT_LIMITS = {
   /** A Junction's `link`: the name of its group. Short: it is an identifier, never shown. */
   linkLength: 64,
   insideDepth: LIMITS.maxInsideDepth,
+  /** A captured selection passed back as `scope`: at most this many shapes, and as many relationships. */
+  scopeIds: 300,
 } as const;
 
 /** New ids an agent chooses. Existing ids — including the editor's own `n_…` ones — are addressed as they are. */

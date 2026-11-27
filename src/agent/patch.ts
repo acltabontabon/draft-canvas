@@ -155,8 +155,8 @@ function readScope(r: Reader, raw: unknown, at: string, view: DraftDocument): Sc
   if (raw === undefined || raw === null) return undefined;
   const obj = r.object(raw, at);
   if (!obj) return undefined;
-  const nodeIds = r.array(obj.nodes, `${at}/nodes`, 300).filter((id): id is string => typeof id === 'string');
-  const edgeIds = r.array(obj.edges, `${at}/edges`, 300).filter((id): id is string => typeof id === 'string');
+  const nodeIds = r.array(obj.nodes, `${at}/nodes`, AGENT_LIMITS.scopeIds).filter((id): id is string => typeof id === 'string');
+  const edgeIds = r.array(obj.edges, `${at}/edges`, AGENT_LIMITS.scopeIds).filter((id): id is string => typeof id === 'string');
   const knownNodes = new Set(view.nodes.map((n) => n.id));
   const knownEdges = new Set(view.edges.map((e) => e.id));
   const missing = [...nodeIds.filter((id) => !knownNodes.has(id)), ...edgeIds.filter((id) => !knownEdges.has(id))];

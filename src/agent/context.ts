@@ -16,7 +16,7 @@
 import { AgentError } from './errors';
 import { viewOf, type DepthPath } from '../depth/tree';
 import type { DraftDocument, DraftNode } from '../document/types';
-import { nearestElement } from './read';
+import { nearestElement, READ_LIMITS } from './read';
 import { sequenceRead } from './sequences';
 import { groupKindOf } from './vocabulary';
 
@@ -33,6 +33,46 @@ export interface NoteRef {
    *  'nearest': a freestanding note, positionally associated with something — proximity, not structure. */
   provenance: 'attached' | 'nearest';
   about?: string;
+  /** Cut at `READ_LIMITS.noteText`, as read_diagram cuts one; `characters` is the whole note's length. */
+  truncated?: true;
+  characters?: number;
+}
+
+/**
+ * A note's text as these reads carry it: cut where read_diagram cuts one. A note holds up to 20,000
+ * characters and a shape twelve of them, so two shapes of pasted runbooks made one read 236 KB.
+ */
+function noteText(text: string): Pick<NoteRef, 'text' | 'truncated' | 'characters'> {
+  const characters = [...text];
+  if (characters.length <= READ_LIMITS.noteText) return { text };
+  return { text: `${characters.slice(0, READ_LIMITS.noteText).join('')}…`, truncated: true, characters: characters.length };
+}
+
+/** How to read what `withinReadLimit` or `noteText` cut, said once in the response that was cut. */
+const MORE = {
+  notes: 'A note cut short says truncated, with its whole length in characters: read_attachment({diagramId, expectedRevision, attachmentId}) returns an attached one whole, read_diagram with focus {nodes: [its id]} and include ["fullText"] a free one.',
+} as const;
+
+/**
+ * `result` held to what read_diagram sends at most (`READ_LIMITS.bytes`): past it, the lists named
+ * in `order` are halved in turn, each named in `truncated`, until it fits; `more` says how to read
+ * the rest. Every list stays in the order it was in, so what is kept is what came first.
+ */
+export function withinReadLimit(result: Record<string, unknown>, order: readonly string[], rest: string): Record<string, unknown> {
+  const bytes = () => new TextEncoder().encode(JSON.stringify(result)).length;
+  const cut = new Set<string>();
+  for (const key of order) {
+    while (Array.isArray(result[key]) && (result[key] as unknown[]).length > 0 && bytes() > READ_LIMITS.bytes) {
+      const list = result[key] as unknown[];
+      result[key] = list.slice(0, Math.floor(list.length / 2));
+      cut.add(key);
+    }
+  }
+  if (cut.size) result.truncated = { ...(result.truncated as Record<string, unknown> | undefined), ...Object.fromEntries([...cut].map((key) => [key, true])) };
+  const notesCut = Array.isArray(result.notes) && (result.notes as NoteRef[]).some((note) => note.truncated);
+  const more = [...(notesCut ? [MORE.notes] : []), ...(cut.size ? [rest] : [])];
+  if (more.length) result.more = more.join(' ');
+  return result;
 }
 
 export interface CollectNotesOptions {
@@ -57,14 +97,14 @@ export function collectNotes(view: DraftDocument, options: CollectNotesOptions =
     if (!want(node.id)) continue;
     for (const a of node.attachments ?? []) {
       if (a.type !== 'note') continue;
-      push({ id: a.id, text: a.text ?? '', kind: a.noteKind, provenance: 'attached', about: node.id });
+      push({ id: a.id, ...noteText(a.text ?? ''), kind: a.noteKind, provenance: 'attached', about: node.id });
     }
   }
   for (const edge of view.edges) {
     if (!want(edge.id)) continue;
     for (const a of edge.attachments ?? []) {
       if (a.type !== 'note') continue;
-      push({ id: a.id, text: a.text ?? '', kind: a.noteKind, provenance: 'attached', about: edge.id });
+      push({ id: a.id, ...noteText(a.text ?? ''), kind: a.noteKind, provenance: 'attached', about: edge.id });
     }
   }
 
@@ -72,7 +112,7 @@ export function collectNotes(view: DraftDocument, options: CollectNotesOptions =
   for (const note of freestanding) {
     const nearest = nearestElement(note, view.nodes);
     if (aboutIds && (!nearest || !aboutIds.has(nearest))) continue;
-    push({ id: note.id, text: note.text ?? '', kind: note.noteKind, provenance: 'nearest', about: nearest });
+    push({ id: note.id, ...noteText(note.text ?? ''), kind: note.noteKind, provenance: 'nearest', about: nearest });
   }
 
   return { notes, truncated };
@@ -230,7 +270,7 @@ export function buildImplementationContext(
     .slice(0, SEQUENCES_LIMIT)
     .map((n) => sequenceRead(n, true));
 
-  return {
+  return withinReadLimit({
     ...base,
     flows,
     ...(sequences.length ? { sequences } : {}),
@@ -241,5 +281,5 @@ export function buildImplementationContext(
     ...(flowsTruncated || notesTruncated || snippetsTruncated || boundariesTruncated
       ? { truncated: { ...(flowsTruncated ? { flows: true } : {}), ...(notesTruncated ? { notes: true } : {}), ...(snippetsTruncated ? { snippets: true } : {}), ...(boundariesTruncated ? { boundaries: true } : {}) } }
       : {}),
-  };
+  }, ['notes', 'snippets', 'evidence', 'boundaries', 'sequences', 'flows'], 'A list cut short is named in truncated: focus on fewer shapes, or on one flow, for the rest.');
 }

@@ -66,7 +66,7 @@ The operations below are passed as `tool`, with their arguments in `args`.
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read | Full note or code text in 8,192-character chunks. |
 | `read_selection({diagramId})` | read | The current selection. See [Selection-aware editing](#selection-aware-editing). |
 | `diagram_history({diagramId, action, revision?, against?, alternative?, name?, query?, limit?})` | read | The open diagram's history: summaries, revision lists, comparisons, restore and merge previews, milestone suggestions. Full reads only when the person allows them. See [Canvas Evolution](evolution.md#adr-13-diagram_history-a-reviewed-view-for-agents). |
-| `get_implementation_context({diagramId, view?, focus?})` | read | Flow steps as stored, sequences (at most 8), notes, decisions, code and boundaries: what to implement, in order. |
+| `get_implementation_context({diagramId, view?, focus?})` | read | Flow steps as stored, sequences (at most 8), notes, decisions, code and boundaries: what to implement, in order. Held to a read's 96 KB: notes are cut at 400 characters, a list that still doesn't fit is halved and named in `truncated`, and `more` says how to read the rest. |
 | `render_diagram({diagramId, view?, format?, scale?, theme?, previewId?, focus?})` | read | PNG (`scale` 1–3, `light`/`dark`) or SVG from the export renderer, at most 8 MB. `focus`: `{nodes}`, `{group}`, `{flow}` or `{selection: true}`, with optional `neighbors`. |
 | `create_diagram({requestId, title, nodes?, relationships?, groups?, flows?, notes?, sequences?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?, fallbackType?})` | write | A new file. A title in use is `DUPLICATE_TITLE` unless `allowDuplicateTitle`. `fallbackType` draws unknown types as that type. `starter` begins from a downloaded gallery starter; its elements keep the file's ids under `starter.prefix`, in every view, and an id of the request's own that one of them has is `DUPLICATE_ID`. The receipt counts free notes in `created.notes` and attached notes and code in `created.attachments`, across every inside view. |
 | `update_diagram({requestId, diagramId, expectedRevision, ops?, view?, scope?, layout?, activate?, onConflict?, previewId?})` | write | Every follow-up. See [Changing a diagram](#changing-a-diagram). |
@@ -226,7 +226,9 @@ An agent captures the selection once, then edits only those ids, even if the per
 1. `read_selection({diagramId})` reads the open diagram (`NOT_ACTIVE` if it is not open, a `null`
    selection if nothing is selected). Items have `role: "selected"` or `"context"` (up to 50
    neighbours). The ids come back as `selection: {path, nodes, edges}`. A selected sequence is
-   reported under `sequences`, in full.
+   reported under `sequences`, in full. The read is held to 96 KB as `get_implementation_context`
+   is; `selection` always keeps every selected id. A scope takes at most 300 shapes and 300
+   relationships: a larger selection says so in `message`.
 2. The agent passes them as `scope: {nodes, edges}` to `update_diagram`, `preview_diagram` or `submit_proposal`.
 
 With `scope`, `add` is always allowed. An `update` or `remove` outside scope is `OUT_OF_SCOPE`, naming

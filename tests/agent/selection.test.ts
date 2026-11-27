@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
+import { validateToolInput } from '../../src/agent/contract';
+import { AGENT_LIMITS } from '../../src/agent/input';
+import { READ_LIMITS } from '../../src/agent/read';
 import { readSelectionContext } from '../../src/agent/selection';
+import { createNode } from '../../src/document/factory';
 import { deserializeDocument } from '../../src/export/project';
 import type { DraftDocument } from '../../src/document/types';
 
@@ -57,5 +61,20 @@ describe('read_selection', () => {
     const file = base();
     const out = readSelectionContext(file, [], { nodes: ['db'], edges: [] }, 'o:1.1', 'd_1') as { notes?: { id: string; about?: string }[] };
     expect(out.notes?.some((n) => n.id === 'n1' && n.about === 'db')).toBe(true);
+  });
+
+  // The ids a read hands back are what the agent passes as scope; a scope takes at most 300 of each.
+  it('says when a selection is larger than a scope takes, rather than handing back ids a scope refuses', () => {
+    const file = base();
+    const many = Array.from({ length: AGENT_LIMITS.scopeIds + 100 }, (_, i) => createNode({ id: `s${i}`, type: 'service', x: (i % 20) * 200, y: 400 + Math.floor(i / 20) * 120, text: `Service ${i}` }));
+    const big = { ...file, nodes: [...file.nodes, ...many] };
+    const out = readSelectionContext(big, [], { nodes: many.map((n) => n.id), edges: [] }, 'o:1.1', 'd_1') as { selection: { nodes: string[] }; message?: string };
+    expect(out.selection.nodes).toHaveLength(many.length);
+    expect(out.message).toContain(`at most ${AGENT_LIMITS.scopeIds}`);
+    expect(new TextEncoder().encode(JSON.stringify(out)).length).toBeLessThanOrEqual(READ_LIMITS.bytes);
+    // Passed back as it is, it is refused for its size: the read said so first.
+    expect(() => validateToolInput('update_diagram', { requestId: 'r', diagramId: 'd', expectedRevision: 'o:1.1', scope: { nodes: out.selection.nodes }, ops: [{ op: 'remove', ids: ['s1'] }] })).toThrow(/at most 300/);
+    // One a scope takes says nothing of the kind.
+    expect(readSelectionContext(file, [], { nodes: ['db'], edges: [] }, 'o:1.1', 'd_1').message).toBeUndefined();
   });
 });

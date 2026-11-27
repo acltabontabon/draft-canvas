@@ -13,7 +13,8 @@ import { classify } from '../depth/c4';
 import { effectiveLevel } from '../depth/level';
 import { ownerAt, viewOf, type DepthPath } from '../depth/tree';
 import type { DraftDocument } from '../document/types';
-import { collectNotes, collectSnippets } from './context';
+import { collectNotes, collectSnippets, withinReadLimit } from './context';
+import { AGENT_LIMITS } from './input';
 import { c4Of, relationshipOf } from './read';
 import { sequenceRead } from './sequences';
 import { typeWordOf } from './vocabulary';
@@ -107,10 +108,15 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
 
   const { notes, truncated: notesTruncated } = collectNotes(view, { aboutIds: new Set([...selectedNodes, ...selectedEdges]) });
   const { snippets, truncated: snippetsTruncated } = collectSnippets(view, { aboutIds: new Set([...selectedNodes, ...selectedEdges]) });
+  // What is read here is passed back as `scope`, which takes only so many: said here, where the
+  // agent can still choose, rather than as a refusal of the ids it was handed.
+  const scopable = selectedNodes.size <= AGENT_LIMITS.scopeIds && selectedEdges.size <= AGENT_LIMITS.scopeIds;
 
-  return {
+  // Every selected id stays in `selection`, whatever is cut from the detail to fit.
+  return withinReadLimit({
     ...base,
     selection: { path: [...path], nodes: [...selectedNodes], edges: [...selectedEdges] },
+    ...(scopable ? {} : { message: `This selection is larger than a scope takes (at most ${AGENT_LIMITS.scopeIds} shapes and ${AGENT_LIMITS.scopeIds} relationships), so it can't be passed back as scope: make the change without one, naming only these ids, or ask the person to select less.` }),
     elements,
     relationships,
     ...(groups.length ? { groups } : {}),
@@ -118,5 +124,5 @@ export function readSelectionContext(file: DraftDocument, path: DepthPath, selec
     ...(notes.length ? { notes } : {}),
     ...(snippets.length ? { snippets } : {}),
     ...(notesTruncated || snippetsTruncated || neighborsTruncated ? { truncated: { ...(notesTruncated ? { notes: true } : {}), ...(snippetsTruncated ? { snippets: true } : {}), ...(neighborsTruncated ? { neighbors: true } : {}) } } : {}),
-  };
+  }, ['notes', 'snippets', 'sequences', 'groups', 'relationships', 'elements'], 'A list cut short is named in truncated: read_diagram with focus {nodes} reads the rest; selection still holds every selected id.');
 }
