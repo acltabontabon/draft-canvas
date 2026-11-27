@@ -1877,7 +1877,11 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
     if (!current) return;
     const label = `Draw ${INK_CHOICE_LABEL[choice]}`;
     const top = state.history.past[state.history.past.length - 1];
-    if (top?.amendKey === inkAmendKey(nodeId) && samePath(top.path, state.path)) {
+    // Only while the file is still exactly what the drawing's step left: a collaborator's edit lands
+    // without a step of its own, so that step stays on top, and making the choice again from its
+    // `before` threw their edit away (at the root, every room, open point and the title with it) and
+    // sent the loss to everyone as this person's edit. `finishTextEdit` asks the same.
+    if (top?.amendKey === inkAmendKey(nodeId) && samePath(top.path, state.path) && !top.crossed && top.after === fileOf(state)) {
       // The drawing's own step is still the last one: make the drawing into the new choice from
       // scratch, revising that step — undo still takes it straight back to the strokes.
       const base = viewOf(top.before, state.path);

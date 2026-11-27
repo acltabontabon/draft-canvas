@@ -309,6 +309,32 @@ describe('Smart Ink conversion', () => {
     expect(store.getState().document.nodes.find((n) => n.id === id)!.type).toBe('component');
   });
 
+  /**
+   * A collaborator's edit lands without an undo step of its own, so the drawing's step stays on top.
+   * The choice was made again from the snapshot taken before the drawing, and threw their rename and
+   * their new shape away — and, at the root, every room, open point, style and title with them.
+   */
+  it('a later choice after somebody else has edited keeps their work, changing the shape in place', () => {
+    const stroke = draw(c.rectangle(0, 300, 200, 100, c.hand(5))[0]!);
+    const drawn = { x: 0, y: 300, width: 200, height: 100 };
+    const id = store.getState().inkToShape([stroke.id], 'component', drawn, [])!;
+    const file = fileOf(store.getState());
+    expect(
+      store.getState().applyRemote({
+        ...file,
+        nodes: [...file.nodes.map((n) => (n.id === 'n_db' ? { ...n, text: 'Orders DB' } : n)), createNode({ id: 'n_queue', type: 'queue', x: 800, y: 0, text: 'Events' })],
+      }),
+    ).toBe(true);
+
+    store.getState().retypeInkShape(id, [stroke], 'service', drawn, []);
+
+    const nodes = store.getState().document.nodes;
+    expect(nodes.find((n) => n.id === id)!.type).toBe('service');
+    expect(nodes.find((n) => n.id === 'n_db')!.text).toBe('Orders DB');
+    expect(nodes.some((n) => n.id === 'n_queue')).toBe(true);
+    expect(strokes()).toBe(0);
+  });
+
   it('keep as sketch puts the strokes back; redo can make the shape again', () => {
     const stroke = draw(c.rectangle(0, 300, 200, 100, c.hand(6))[0]!);
     const id = store.getState().inkToShape([stroke.id], 'component', { x: 0, y: 300, width: 200, height: 100 }, [])!;
