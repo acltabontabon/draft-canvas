@@ -21,6 +21,35 @@ export class GalleryRequestError extends Error {
   }
 }
 
+/**
+ * A response's body as text, decoded as `Response.text()` decodes it, read no further than
+ * `maxBytes`. A missing or compressed Content-Length says nothing about what arrives, so the limit
+ * holds while the bytes do, not after all of them are in memory.
+ */
+async function textWithin(response: Response, maxBytes: number): Promise<string> {
+  const reader = response.body?.getReader();
+  if (!reader) return response.text();
+  const chunks: Uint8Array[] = [];
+  let length = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    length += value.byteLength;
+    if (length > maxBytes) {
+      void reader.cancel().catch(() => undefined);
+      throw new GalleryRequestError('too-large');
+    }
+    chunks.push(value);
+  }
+  const bytes = new Uint8Array(length);
+  let at = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, at);
+    at += chunk.byteLength;
+  }
+  return new TextDecoder().decode(bytes);
+}
+
 /** Reads one gallery file as text, refusing anything over `maxBytes`. */
 export async function readGalleryFile(path: string, maxBytes: number, signal?: AbortSignal): Promise<string> {
   if (!SAFE_PATH.test(path) || path.includes('..')) throw new GalleryRequestError('refused');
@@ -44,7 +73,7 @@ export async function readGalleryFile(path: string, maxBytes: number, signal?: A
     if (!response.ok) throw new GalleryRequestError('offline');
     const declared = Number(response.headers.get('content-length'));
     if (Number.isFinite(declared) && declared > maxBytes) throw new GalleryRequestError('too-large');
-    const text = await response.text();
+    const text = await textWithin(response, maxBytes);
     if (new TextEncoder().encode(text).length > maxBytes) throw new GalleryRequestError('too-large');
     return text;
   } catch (error) {
