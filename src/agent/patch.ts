@@ -56,6 +56,7 @@ import { fitSequenceNode, fitSequences } from '../nodes/sequenceFit';
 import { aliasesOf } from '../sequence/native/shared';
 import { keepUnwritten, linked, readSequenceSource, sequenceNode, unsupportedAdvice } from './sequences';
 import { sameValue } from '../collab/equal';
+import { classOfField } from '../document/fieldClasses';
 import { DEFAULTS, LIMITS } from '../document/limits';
 import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode, DraftSequence } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
@@ -178,15 +179,17 @@ function refuseOutOfScope(r: Reader, at: string, offending: readonly string[]) {
   r.problems.add('OUT_OF_SCOPE', at, `${offending.map((id) => `"${id}"`).join(', ')} ${offending.length === 1 ? 'is' : 'are'} outside the captured selection; expand the scope, or make this change without one`);
 }
 
-/** Where a shape or connector is drawn rather than what it says (attachments are compared on their own). */
-const DRAWN_NODE: ReadonlySet<string> = new Set(['x', 'y', 'width', 'height', 'inside', 'attachments']);
-const DRAWN_EDGE: ReadonlySet<string> = new Set(['sourceAnchor', 'targetAnchor', 'waypoints', 'routeMode', 'routing', 'attachments']);
-
-function saysTheSame(before: object, after: object, drawn: ReadonlySet<string>): boolean {
+/**
+ * A shape or connector that changed only where it is drawn (`classOfField`'s layout: a move, a
+ * resize, a reroute). A room inside is compared as a room of its own, and an attachment added
+ * beside the ones it had is an add's, which a scope always allows; one changed or taken off is not.
+ */
+function saysTheSame(before: object, after: object): boolean {
   const a = before as Record<string, unknown>;
   const b = after as Record<string, unknown>;
-  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) if (!drawn.has(key) && !sameValue(a[key], b[key])) return false;
-  // A note attached beside the ones it had is an add's, and an add is always allowed; one changed or taken off is not.
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) {
+    if (key !== 'inside' && key !== 'attachments' && classOfField(key) !== 'layout' && !sameValue(a[key], b[key])) return false;
+  }
   const had = (a.attachments ?? []) as Attachment[];
   return sameValue(had, ((b.attachments ?? []) as Attachment[]).filter((attachment) => had.some((old) => old.id === attachment.id)));
 }
@@ -209,11 +212,11 @@ function reachedOutside(file: DraftDocument, next: DraftDocument, scope: Scope):
     const kept = new Map(now.flows.map((flow) => [flow.id, flow]));
     for (const node of graph.nodes) {
       const after = nodes.get(node.id);
-      if (!scope.nodes.has(node.id) && (!after || !saysTheSame(node, after, DRAWN_NODE))) shapes.push({ id: node.id, path });
+      if (!scope.nodes.has(node.id) && (!after || !saysTheSame(node, after))) shapes.push({ id: node.id, path });
     }
     for (const edge of graph.edges) {
       const after = edges.get(edge.id);
-      if (!scope.edges.has(edge.id) && (!after || !saysTheSame(edge, after, DRAWN_EDGE))) shapes.push({ id: edge.id, path });
+      if (!scope.edges.has(edge.id) && (!after || !saysTheSame(edge, after))) shapes.push({ id: edge.id, path });
     }
     for (const flow of graph.flows) if (!sameValue(flow, kept.get(flow.id))) flows.push(flow.id);
   });
