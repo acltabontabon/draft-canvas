@@ -34,6 +34,7 @@ import {
 import { createDocument, createNode } from '../src/document/factory';
 import { addNodes, countLabelMatches, removeElements, replaceLabels } from '../src/document/operations';
 import type { DraftSequence, SeqFragment, SeqItem, SeqMessage, SeqParticipant } from '../src/document/types';
+import { checkSequence } from '../src/sequence/check';
 
 const participant = (id: string, extra: Partial<SeqParticipant> = {}): SeqParticipant => ({
   id,
@@ -175,6 +176,20 @@ describe('messages', () => {
     const message = findItem(next, 'm2')!.item as SeqMessage;
     expect(message).toMatchObject({ kind: 'async', kindOrigin: 'explicit' });
     expect(message.activate).toBeUndefined();
+  });
+
+  it('made a reply, a message answers the call above it that came the other way', () => {
+    // It was left answering nothing, flagged "no matching call" with the call right above it.
+    const drawn: DraftSequence = { ...shop(), items: [call('m1', 'client', 'api', 'GET /orders'), call('ok', 'api', 'client', '200 OK')] };
+    const replied = setMessageKind(drawn, 'ok', 'reply');
+    expect(findItem(replied, 'ok')!.item).toMatchObject({ kind: 'reply', replyTo: 'm1', deactivate: true });
+    expect(checkSequence(replied)).toEqual([]);
+    // Nothing above waits on it the other way: it answers nothing in particular, as before.
+    const first = setMessageKind({ ...drawn, items: [...drawn.items].reverse() }, 'ok', 'reply');
+    expect((findItem(first, 'ok')!.item as SeqMessage).replyTo).toBeUndefined();
+    // A call already answered above is not answered again.
+    const answered = setMessageKind({ ...drawn, items: [...drawn.items.slice(0, 1), createReply(drawn.items[0] as SeqMessage), drawn.items[1]!] }, 'ok', 'reply');
+    expect((findItem(answered, 'ok')!.item as SeqMessage).replyTo).toBeUndefined();
   });
 
   it('turns a message round', () => {

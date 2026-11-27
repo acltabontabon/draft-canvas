@@ -19,6 +19,8 @@ import {
   heightOf,
   isBranching,
   itemsAt,
+  slotOf,
+  waitingCall,
   type SeqSlot,
 } from './sequenceModel';
 import type {
@@ -548,8 +550,11 @@ export function updateMessageAttachment(
 /**
  * Makes a message a different kind, by someone's choice. It takes that kind's own starting
  * settings: a call starts work, a reply ends it, and anything that is not a reply answers nothing.
+ * A reply answers the call above it that came the other way and is still waiting, as one drawn
+ * back does; made a reply from the kind menu, it answered nothing and was flagged at once.
  */
 export function setMessageKind(sequence: DraftSequence, id: string, kind: SeqMessageKind): DraftSequence {
+  const slot = kind === 'reply' ? slotOf(sequence, id) : null;
   return rewrite(sequence, (item) => {
     if (item.id !== id) return undefined;
     if (item.t !== 'message') return item;
@@ -559,7 +564,13 @@ export function setMessageKind(sequence: DraftSequence, id: string, kind: SeqMes
     if (kind === 'sync' && item.from !== item.to) next.activate = true;
     if (kind === 'reply') {
       next.deactivate = true;
+      const call = replyTo || !slot ? undefined : waitingCall(sequence, item.from, item.to, slot);
       if (replyTo) next.replyTo = replyTo;
+      else if (call) {
+        next.replyTo = call.id;
+        // It ends the work its call started, and none when the call started none (`createReply`).
+        if (!call.activate) delete next.deactivate;
+      }
     }
     return next;
   });

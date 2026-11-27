@@ -119,6 +119,51 @@ export function slotOf(sequence: DraftSequence, itemId: string): SeqSlot | null 
   return found ? { operandId: found.at.operand?.id ?? null, index: found.at.index } : null;
 }
 
+/**
+ * Everything said by the time a slot is reached, in order, the way the sequence runs: what comes
+ * before it in its own list and in each list around it. The other branches of a frame it is inside
+ * are left out — "declined" is not something that has happened in "approved".
+ */
+export function saidBefore(sequence: DraftSequence, slot: SeqSlot): SeqMessage[] {
+  interface Step {
+    items: readonly SeqItem[];
+    upTo: number;
+  }
+  const find = (items: readonly SeqItem[], operandId: string | null): Step[] | null => {
+    if (operandId === slot.operandId) return [{ items, upTo: slot.index }];
+    for (let at = 0; at < items.length; at += 1) {
+      const item = items[at]!;
+      if (item.t !== 'fragment') continue;
+      for (const branch of item.operands) {
+        const below = find(branch.items, branch.id);
+        if (below) return [{ items, upTo: at }, ...below];
+      }
+    }
+    return null;
+  };
+  const out: SeqMessage[] = [];
+  const all = (items: readonly SeqItem[]) => {
+    for (const item of items) {
+      if (item.t === 'message') out.push(item);
+      else if (item.t === 'fragment') for (const branch of item.operands) all(branch.items);
+    }
+  };
+  for (const step of find(sequence.items, null) ?? []) all(step.items.slice(0, step.upTo));
+  return out;
+}
+
+/**
+ * The call a reply from `from` to `to` at `slot` answers: the latest one above it the other way —
+ * `to` calling `from` — that nothing said above has answered yet. The rule an imported reply and a
+ * Flow drawn as a sequence are paired by.
+ */
+export function waitingCall(sequence: DraftSequence, from: string, to: string, slot: SeqSlot): SeqMessage | undefined {
+  if (from === to) return undefined;
+  const said = saidBefore(sequence, slot);
+  const answered = new Set(said.flatMap((message) => (message.replyTo ? [message.replyTo] : [])));
+  return said.findLast((message) => message.kind === 'sync' && message.from === to && message.to === from && !answered.has(message.id));
+}
+
 /** How many fragments deep an item reaches below itself: 0 for a message, 1 for a flat fragment. */
 export function heightOf(item: SeqItem): number {
   if (item.t !== 'fragment') return 0;

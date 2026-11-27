@@ -131,6 +131,19 @@ describe('replies', () => {
     expect(checkSequence(finding.fix!.apply(subject))).toEqual([]);
   });
 
+  it('a reply that answers nothing, below the call it could answer, is offered that call', () => {
+    const m1 = call('m1', 'a', 'b');
+    const { replyTo: _none, ...unlinked } = reply('r1', m1);
+    const subject = sequence([m1, unlinked]);
+    const finding = checkSequence(subject).find((entry) => entry.kind === 'reply-without-call')!;
+    expect(finding.fix?.label).toBe('Answer the call above');
+    expect(checkSequence(finding.fix!.apply(subject))).toEqual([]);
+    // With no call it could answer, there is nothing to offer.
+    const alone = checkSequence(sequence([unlinked, m1]))[0]!;
+    expect(alone.kind).toBe('reply-without-call');
+    expect(alone.fix).toBeUndefined();
+  });
+
   it('a call left unanswered is not a problem', () => {
     expect(checkSequence(sequence([call('m1', 'a', 'b'), call('m2', 'b', 'c')]))).toEqual([]);
   });
