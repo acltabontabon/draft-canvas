@@ -37,6 +37,10 @@ const COMPACT_AFTER: usize = 200;
 /// either is refused until some are accepted, rejected or dismissed. Revising one in place is not new.
 pub const PENDING_PER_DIAGRAM: usize = 50;
 pub const PENDING_TOTAL: usize = 500;
+/// And by size: one proposal can carry up to a request frame (4 MiB) of ops, preconditions and
+/// sourceRef, so the count caps alone let a runaway agent hold gigabytes in memory, in the journal
+/// and in the review panel's list. Thousands of ordinary proposals fit.
+pub const PENDING_BYTES: usize = 64 * 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -232,9 +236,10 @@ impl Proposals {
 
     /// Why another waiting proposal for `diagram_id` can't be added, if it can't.
     pub fn pending_limit(&self, diagram_id: &str) -> Option<String> {
-        let (mut here, mut total) = (0, 0);
+        let (mut here, mut total, mut bytes) = (0, 0, 0);
         for p in self.entries.values().filter(|p| !p.status.is_terminal()) {
             total += 1;
+            bytes += serde_json::to_vec(p).map_or(0, |line| line.len());
             if p.diagram_id == diagram_id {
                 here += 1;
             }
@@ -247,6 +252,11 @@ impl Proposals {
             Some(format!(
                 "There are already {PENDING_TOTAL} proposals waiting for review."
             ))
+        } else if bytes >= PENDING_BYTES {
+            Some(
+                "The proposals waiting for review are already as large as Draft Canvas keeps."
+                    .into(),
+            )
         } else {
             None
         }
@@ -545,6 +555,20 @@ mod tests {
             others += 1;
         }
         assert!(store.pending_limit("d_new").unwrap().contains("500"));
+    }
+
+    #[test]
+    fn waiting_proposals_are_capped_by_size_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut store = Proposals::open(dir.path(), 1).unwrap();
+        // A request frame's worth each, spread over three diagrams: well under both count caps.
+        for i in 0..(PENDING_BYTES / (4 * 1024 * 1024) + 1) {
+            let mut p = proposal(&format!("big{i}"), ProposalStatus::Pending, 1);
+            p.diagram_id = format!("d_{}", i % 3);
+            p.source_ref = Some(serde_json::json!("x".repeat(4 * 1024 * 1024)));
+            store.entries.insert(p.id.clone(), p);
+        }
+        assert!(store.pending_limit("d_new").unwrap().contains("as large"));
     }
 
     #[test]
