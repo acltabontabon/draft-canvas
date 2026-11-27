@@ -266,6 +266,45 @@ describe('a sequence drawn in the editor, read and sent back', () => {
     expect(after.items[0]).toEqual({ ...before.items[0], label: 'POST /orders/v2' });
     expect(after.items.at(-1)).toMatchObject({ t: 'message', from: 'api', to: 'pay', kind: 'async', label: 'Refund' });
   });
+
+  // A participant a create message makes is declared at that message in the text, so it reads back
+  // after the others and outside any box. Neither says anything the agent changed.
+  const created = (): DraftDocument => {
+    let sequence: DraftSequence = normalizeSequence({
+      participants: [
+        { id: 'web', name: 'Web', type: 'actor', actorKind: 'human' },
+        { id: 'job', name: 'Receipt job', type: 'service', serviceKind: 'worker', technology: 'AWS Lambda' },
+        { id: 'api', name: 'API', type: 'service', serviceKind: 'generic' },
+        { id: 'w1', name: 'Resize worker', type: 'service', serviceKind: 'worker' },
+        { id: 'w2', name: 'Thumb worker', type: 'service', serviceKind: 'worker' },
+      ],
+      items: [
+        createMessage({ id: 'c', from: 'web', to: 'api', label: 'Upload' }),
+        createMessage({ id: 'mk', from: 'api', to: 'job', kind: 'create', label: 'start' }),
+        createMessage({ id: 's1', from: 'api', to: 'w1', kind: 'create', label: 'spawn' }),
+        createMessage({ id: 's2', from: 'api', to: 'w2', kind: 'create', label: 'spawn' }),
+      ],
+    }).sequence;
+    sequence = groupParticipants(sequence, ['job', 'api'], { id: 'g', name: 'Backend', accent: 'green' });
+    sequence = groupParticipants(sequence, ['w1', 'w2'], { id: 'w', name: 'Workers', accent: 'violet' });
+    return { ...createDocument('Shop'), nodes: [{ ...createNode({ id: 'checkout', type: 'sequence', x: 0, y: 0, text: 'Upload' }), sequence }] };
+  };
+
+  it('is the same sequence when the text comes back, participants a message creates and their groups included', () => {
+    const file = created();
+    const result = update(file, [{ op: 'update', id: 'checkout', set: { mermaid: textOf(file) } }]);
+    expect(sequenceOf(sequenceIn(result.file, 'checkout'))).toEqual(sequenceOf(sequenceIn(file, 'checkout')));
+    expect(result.file).toBe(file);
+
+    // Edited, the lifelines keep their order and the groups their members, a new participant
+    // where the text puts it.
+    const edited = textOf(file).replace(/\n$/, '\n    API-)Audit: uploaded\n');
+    const after = sequenceOf(sequenceIn(update(file, [{ op: 'update', id: 'checkout', set: { mermaid: edited } }]).file, 'checkout'));
+    const before = sequenceOf(sequenceIn(file, 'checkout'));
+    expect(after.participants.map((participant) => participant.name)).toEqual(['Web', 'Receipt job', 'API', 'Resize worker', 'Thumb worker', 'Audit']);
+    expect(after.participants.slice(0, -1)).toEqual(before.participants);
+    expect(after.groups).toEqual(before.groups);
+  });
 });
 
 describe('scoped edits and participant-anchored connectors', () => {

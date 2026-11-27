@@ -16,13 +16,13 @@
 import { createNode } from '../document/factory';
 import { messagesOf, sequenceOf } from '../document/sequenceModel';
 import { isLinkable, participantFromNode } from '../document/sequenceLinks';
-import type { DraftNode, DraftSequence, SeqGroup, SeqItem, SeqMessage, SeqNote, SeqOperand } from '../document/types';
+import type { DraftNode, DraftSequence, SeqGroup, SeqItem, SeqMessage, SeqNote, SeqOperand, SeqParticipant } from '../document/types';
 import { normalizeSequence } from '../document/validateSequence';
 import { parseMermaidSequence, UNTITLED_SEQUENCE } from '../import/mermaid/sequence';
 import type { DescribeContext } from '../nodes/describe';
 import { fitSequenceNode } from '../nodes/sequenceFit';
 import { sequenceToMermaid } from '../sequence/native/mermaid';
-import { aliasesOf } from '../sequence/native/shared';
+import { aliasesOf, createdBy } from '../sequence/native/shared';
 import type { Reader } from './input';
 
 type Json = Record<string, unknown>;
@@ -135,7 +135,7 @@ export function keepUnwritten(node: DraftNode, next: DraftSequence): DraftSequen
   settleReplies(items, merge);
   const was = new Map(current.participants.map((participant) => [participant.id, participant]));
   const said = new Map(base.participants.map((participant) => [participant.id, participant]));
-  const participants = next.participants.map((participant) => {
+  const participants = inPlace(current.participants, base.participants, next.participants.map((participant) => {
     const before = was.get(participant.id);
     const then = said.get(participant.id);
     if (!before || !then) return participant;
@@ -143,9 +143,30 @@ export function keepUnwritten(node: DraftNode, next: DraftSequence): DraftSequen
     // All the text says of what a participant is: an actor or not. While that holds, it is what it was.
     if ((participant.type === 'actor') !== (then.type === 'actor')) return { ...participant, name, ...(before.ref ? { ref: before.ref } : {}) };
     return { ...before, name };
-  });
-  const groups = groupsKept(current.groups ?? [], base.groups ?? [], next.groups);
+  }));
+  const groups = groupsKept(current, base.groups ?? [], next.groups, new Set(participants.map((participant) => participant.id)));
   return normalizeSequence({ ...next, participants, items, ...(groups ? { groups } : {}) }).sequence;
+}
+
+/**
+ * The agent's participants in the order the person put them, while its text keeps the order the
+ * read wrote them in: one a create message makes is declared at that message, so it reads back
+ * after the others although nothing about it moved. A new one stands after the participant the
+ * text puts it after. Text that reorders them is the agent's order.
+ */
+function inPlace(current: readonly SeqParticipant[], base: readonly SeqParticipant[], next: readonly SeqParticipant[]): SeqParticipant[] {
+  const known = new Set(current.map((participant) => participant.id));
+  const kept = next.filter((participant) => known.has(participant.id));
+  const keptIds = new Set(kept.map((participant) => participant.id));
+  if (!sameList(kept.map((participant) => participant.id), base.filter((participant) => keptIds.has(participant.id)).map((participant) => participant.id))) return [...next];
+  const byId = new Map(kept.map((participant) => [participant.id, participant]));
+  const after = new Map<string | null, SeqParticipant[]>();
+  let anchor: string | null = null;
+  for (const participant of next) {
+    if (keptIds.has(participant.id)) anchor = participant.id;
+    else after.set(anchor, [...(after.get(anchor) ?? []), participant]);
+  }
+  return [...(after.get(null) ?? []), ...current.flatMap((participant) => (byId.has(participant.id) ? [byId.get(participant.id)!, ...(after.get(participant.id) ?? [])] : []))];
 }
 
 interface Merge {
@@ -299,23 +320,48 @@ function settleReplies(items: readonly SeqItem[], merge: Merge): void {
 }
 
 /**
- * The agent's boxes, each the group it was when it holds the same participants (or, failing that,
- * reads the same name), with the group's id, colour and own name kept: a box has no colour in the text.
+ * The agent's boxes, each the group it was, with the group's id, colour and own name kept (a box has
+ * no colour in the text), in the order the groups were in.
+ *
+ * A participant a create message makes is declared at that message, outside any box, so the box a
+ * read writes for a group holds only its other members: that is what pairs a box with its group. A
+ * group gets its created members back, and one of nothing but them, which had no box to write, stays
+ * as it was. Paired by every member, the first lost its created members and its colour, and the
+ * second was deleted, by text sent back unchanged.
  */
-function groupsKept(current: readonly SeqGroup[], base: readonly SeqGroup[], next: readonly SeqGroup[] | undefined): SeqGroup[] | undefined {
-  if (!next?.length) return next ? [...next] : undefined;
-  const members = (group: SeqGroup) => [...group.participantIds].sort().join('\u0000');
-  const written = new Map(base.map((group) => [members(group), group]));
-  const left = [...current];
-  return next.map((group) => {
-    let at = left.findIndex((candidate) => members(candidate) === members(group));
-    if (at < 0) at = left.findIndex((candidate) => written.get(members(candidate))?.name === group.name);
-    if (at < 0) return group;
-    const before = left.splice(at, 1)[0]!;
-    const kept: SeqGroup = { ...group, id: before.id, name: written.get(members(before))?.name === group.name ? before.name : group.name };
-    if (before.accent) kept.accent = before.accent;
-    return kept;
-  });
+function groupsKept(current: DraftSequence, base: readonly SeqGroup[], next: readonly SeqGroup[] | undefined, present: ReadonlySet<string>): SeqGroup[] | undefined {
+  const made = new Set(createdBy(current).values());
+  const members = (ids: readonly string[]) => [...ids].sort().join('\u0000');
+  const groups = current.groups ?? [];
+  const wroteFor = new Map(base.flatMap((box) => {
+    const group = groups.find((candidate) => members(candidate.participantIds.filter((id) => !made.has(id))) === members(box.participantIds));
+    return group ? [[box, group] as const] : [];
+  }));
+  const unread = [...base];
+  const claimed = new Set((next ?? []).flatMap((group) => group.participantIds));
+  const kept = new Map<SeqGroup, SeqGroup>();
+  const added: SeqGroup[] = [];
+  for (const group of next ?? []) {
+    let at = unread.findIndex((box) => members(box.participantIds) === members(group.participantIds));
+    if (at < 0) at = unread.findIndex((box) => box.name === group.name);
+    const box = at < 0 ? undefined : unread.splice(at, 1)[0];
+    const before = box && wroteFor.get(box);
+    if (!box || !before || kept.has(before)) {
+      added.push(group);
+      continue;
+    }
+    const back = before.participantIds.filter((id) => made.has(id) && present.has(id) && !claimed.has(id));
+    const restored: SeqGroup = { ...group, id: before.id, name: group.name === box.name ? before.name : group.name, participantIds: [...group.participantIds, ...back] };
+    if (before.accent) restored.accent = before.accent;
+    kept.set(before, restored);
+  }
+  for (const group of groups) {
+    if (kept.has(group) || group.participantIds.some((id) => !made.has(id))) continue;
+    const still = group.participantIds.filter((id) => present.has(id) && !claimed.has(id));
+    if (still.length) kept.set(group, { ...group, participantIds: still });
+  }
+  const out = [...groups.flatMap((group) => (kept.has(group) ? [kept.get(group)!] : [])), ...added];
+  return out.length || next ? out : undefined;
 }
 
 /** The sequences of a room's request. */
