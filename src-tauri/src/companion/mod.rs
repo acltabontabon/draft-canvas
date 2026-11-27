@@ -280,9 +280,6 @@ pub fn validate(request: &PromptRequest) -> Result<(), AppError> {
     Ok(())
 }
 
-/// The MCP configuration one run's agent loads: only Draft Canvas's connector, told which run it is.
-/// `agent_dir` is where this app keeps `agent.json`: the connector is told it outright, so a run reaches
-/// the app that started it even when that isn't the installed app (a development or beta build).
 /// A shell line that reopens a conversation in the agent's own terminal UI, from the folder the
 /// companion ran it in (sessions are looked up by folder). Quoted for the platform's shell: on
 /// Windows that is PowerShell, the shell a terminal opens there. The cmd line it was before
@@ -290,7 +287,18 @@ pub fn validate(request: &PromptRequest) -> Result<(), AppError> {
 pub fn continue_line(work_dir: &Path, program: &Path, resume: &[String]) -> String {
     let quote = |text: &str| {
         if cfg!(windows) {
-            format!("'{}'", text.replace('\'', "''"))
+            // PowerShell ends a single-quoted string at a curly single quote too (‘ ’ ‚ ‛), so a
+            // folder such as `O’Brien` cut the line short; any of them doubled reads as itself.
+            let mut quoted = String::with_capacity(text.len() + 2);
+            quoted.push('\'');
+            for c in text.chars() {
+                if matches!(c, '\'' | '\u{2018}' | '\u{2019}' | '\u{201A}' | '\u{201B}') {
+                    quoted.push(c);
+                }
+                quoted.push(c);
+            }
+            quoted.push('\'');
+            quoted
         } else {
             format!("'{}'", text.replace('\'', "'\\''"))
         }
@@ -326,6 +334,9 @@ pub fn server_env(run_id: &str, agent_dir: &Path, code: bool) -> Vec<(&'static s
     env
 }
 
+/// The MCP configuration one run's agent loads: only Draft Canvas's connector, told which run it is.
+/// `agent_dir` is where this app keeps `agent.json`: the connector is told it outright, so a run reaches
+/// the app that started it even when that isn't the installed app (a development or beta build).
 pub fn mcp_config(sidecar: &Path, run_id: &str, agent_dir: &Path, code: bool) -> Vec<u8> {
     let env: serde_json::Map<String, serde_json::Value> = server_env(run_id, agent_dir, code)
         .into_iter()
@@ -2631,6 +2642,17 @@ mod tests {
         assert_eq!(
             line,
             r"Set-Location -LiteralPath 'C:\Users\me\AppData\Local\Draft Canvas\companion\work'; & 'C:\Users\me''s\.local\bin\claude.exe' '--resume' 'it''s-1'"
+        );
+        // PowerShell reads a curly single quote as a quote too: each is doubled, not left to end
+        // the string.
+        let line = continue_line(
+            Path::new("C:\\Users\\O\u{2019}Brien\\work"),
+            Path::new("C:\\tools\\\u{2018}x\u{201A}\u{201B}\\claude.exe"),
+            &["--resume".into(), "s-1".into()],
+        );
+        assert_eq!(
+            line,
+            "Set-Location -LiteralPath 'C:\\Users\\O\u{2019}\u{2019}Brien\\work'; & 'C:\\tools\\\u{2018}\u{2018}x\u{201A}\u{201A}\u{201B}\u{201B}\\claude.exe' '--resume' 's-1'"
         );
     }
 
