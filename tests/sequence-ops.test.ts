@@ -100,6 +100,17 @@ describe('participants', () => {
     expect(findItem(removeParticipant(once, 'api'), 'n1')).toBeNull();
   });
 
+  it('a reference over two keeps the one that is left, and goes with its last', () => {
+    // With no one left to cover it was left covering no one in particular, which is everyone.
+    const withRef = insertItem(shop(), createFragment({ id: 'ref', operator: 'ref', label: 'Fraud check', covers: ['api', 'db'] }), { operandId: null, index: 0 });
+    const once = removeParticipant(withRef, 'db');
+    expect(findItem(once, 'ref')!.item).toMatchObject({ covers: ['api'], label: 'Fraud check' });
+    expect(findItem(removeParticipant(once, 'api'), 'ref')).toBeNull();
+    // One over everyone stays over everyone.
+    const overAll = insertItem(shop(), createFragment({ id: 'all', operator: 'ref', label: 'Sign in' }), { operandId: null, index: 0 });
+    expect(findItem(removeParticipant(overAll, 'db'), 'all')!.item).toEqual(findItem(overAll, 'all')!.item);
+  });
+
   it('reorders by final position and keeps untouched items by identity', () => {
     const start = shop();
     const next = moveParticipant(start, 'db', 0);
