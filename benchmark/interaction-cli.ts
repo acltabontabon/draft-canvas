@@ -159,7 +159,9 @@ async function main(): Promise<void> {
         meta: { ...result.meta, label: againstLabel, commit: 'baseline', branch: 'baseline' },
         scenarios: againstSummaries,
       };
-      const otherOut = out.replace(/\.json$/, `.${againstLabel}.json`);
+      // The label is free text (`--against-label origin/main`); one with a slash named a folder that
+      // didn't exist, and the run failed after measuring both builds, keeping neither comparison.
+      const otherOut = out.replace(/\.json$/, `.${againstLabel.replace(/[^\w.-]+/g, '-')}.json`);
       writeFileSync(otherOut, JSON.stringify(other, null, 2));
       console.log(`\n${formatRun(other)}\n\n${formatComparison(other, result)}\n\nResults: ${otherOut}`);
     }
