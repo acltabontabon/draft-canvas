@@ -125,6 +125,10 @@ export class DesktopStore {
   }
 }
 
-/** The one the app reads. Tests build their own `DesktopStore` and hand it to the controller. */
-export const desktopStore = new DesktopStore();
+/**
+ * The one the app reads. Tests build their own `DesktopStore` and hand it to the controller. Marked
+ * pure so a build that never reads it leaves it out: the web editor imports the desktop status bar,
+ * which its build drops, and this came along with it.
+ */
+export const desktopStore = /* @__PURE__ */ new DesktopStore();
 
