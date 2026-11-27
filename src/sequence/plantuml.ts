@@ -62,10 +62,14 @@ export function sanitizeParticipantName(label: string): string {
 
 /** A PlantUML message's text runs to the end of the line, with no delimiter character of its own
  *  to guard (unlike Mermaid's `:`) — only newlines need collapsing to keep it on one line, and
- *  the markup above needs disarming. */
+ *  the markup above needs disarming. Blank is blank: `B --> A`, with no colon, is a message with no words. */
+export function messageText(label: string): string {
+  return escapePlantUmlText(label.replace(/\r\n?|\n/g, ' ').trim());
+}
+
+/** A Flow's message, which always has words: `label.ts` falls back to a caption, so this never shows. */
 export function sanitizeMessageLabel(label: string): string {
-  const clean = escapePlantUmlText(label.replace(/\r\n?|\n/g, ' ').trim());
-  return clean || 'Message';
+  return messageText(label) || 'Message';
 }
 
 /** A `group <label>` line is as unquoted and single-line as PlantUML gets — an embedded newline in
@@ -105,6 +109,8 @@ export function noteBlock(
   depth: number,
   aliasOf: (id: string) => string,
   code: boolean,
+  /** What a note with no words says. A sequence's note may be left blank, and is written as one empty line. */
+  blank = 'Note',
 ): string[] {
   const pad = INDENT.repeat(depth);
   const anchor = participantIds.map(aliasOf).join(',');
@@ -118,13 +124,14 @@ export function noteBlock(
   // SQL or shell snippet can start either way. Writing the first character as a `<U+XXXX>` code keeps
   // each literal and renders as just that character — the `~` escape doesn't: checked against the
   // PlantUML server, `~end note` keeps its tilde on screen and `~@enduml` renders as a lone `~`.
-  const contentLines = (rawLines.length > 0 ? rawLines : ['Note']).map((line) => {
+  const contentLines = (rawLines.length > 0 ? rawLines : [blank]).map((line) => {
     const escaped = escapePlantUmlText(line);
     return /^\s*(?:!|@|'|\/'|end\s*[hr]?note\b)/i.test(escaped) ? unicodeFirst(escaped.trimStart()) : escaped;
   });
   const prefix = noteKind ? (NOTE_PREFIX[noteKind] ?? '') : '';
+  const first = `${prefix}${contentLines[0]}`;
 
-  const lines = [`${pad}note over ${anchor}`, `${INDENT.repeat(depth + 1)}${prefix}${contentLines[0]}`];
+  const lines = [`${pad}note over ${anchor}`, first ? `${INDENT.repeat(depth + 1)}${first}` : ''];
   for (const line of contentLines.slice(1)) lines.push(`${INDENT.repeat(depth + 1)}${line}`);
   lines.push(`${pad}end note`);
   return lines;

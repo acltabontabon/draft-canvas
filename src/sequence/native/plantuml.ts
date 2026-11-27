@@ -8,7 +8,7 @@
  */
 import { sequenceOf } from '../../document/sequenceModel';
 import type { DraftNode, SeqItem, SeqMessage, SeqParticipant } from '../../document/types';
-import { noteBlock, plantUmlKeyword, sanitizeGroupLabel, sanitizeMessageLabel, sanitizeParticipantName } from '../plantuml';
+import { messageText, noteBlock, plantUmlKeyword, sanitizeGroupLabel, sanitizeParticipantName } from '../plantuml';
 import { aliasesOf, createdBy, participantKindOf, Working } from './shared';
 
 const INDENT = '    ';
@@ -49,7 +49,9 @@ export function sequenceToPlantUml(node: DraftNode): string {
     const created = creates ? sequence.participants.find((participant) => participant.id === creates) : undefined;
     if (created) out.push(`${pad}${declare(created, true)}`);
     const arrow = item.kind === 'async' ? '->>' : item.kind === 'reply' || item.kind === 'create' ? '-->' : '->';
-    out.push(`${pad}${of(item.from)} ${arrow} ${of(item.to)}: ${sanitizeMessageLabel(item.label)}`);
+    const text = messageText(item.label);
+    // Replies, self-messages and lifecycle messages often say nothing, and with no colon PlantUML draws them so.
+    out.push(`${pad}${of(item.from)} ${arrow} ${of(item.to)}${text ? `: ${text}` : ''}`);
     if (item.deactivate && working.end(item.from)) out.push(`${pad}deactivate ${of(item.from)}`);
     if (item.kind === 'destroy') {
       working.clear(item.to);
@@ -67,7 +69,7 @@ export function sequenceToPlantUml(node: DraftNode): string {
       if (item.t === 'message') {
         lines.push(...message(item, pad));
       } else if (item.t === 'note') {
-        const block = noteBlock(item.over.length > 1 ? [item.over[0]!, item.over[item.over.length - 1]!] : item.over, item.text, undefined, depth, of, false);
+        const block = noteBlock(item.over.length > 1 ? [item.over[0]!, item.over[item.over.length - 1]!] : item.over, item.text, undefined, depth, of, false, '');
         // `noteBlock` writes "note over A,B"; a note beside a lifeline says which side instead.
         if (item.side) block[0] = `${pad}note ${item.side} of ${of(item.over[0]!)}`;
         lines.push(...block);

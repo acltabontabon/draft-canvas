@@ -1,8 +1,15 @@
 import mermaid from 'mermaid';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { createNode } from '../src/document/factory';
+import { messagesOf } from '../src/document/sequenceModel';
+import { createMessage, createNote, createReply } from '../src/document/sequenceOps';
+import type { DraftSequence, SeqParticipant } from '../src/document/types';
 import { sequenceSourceFor } from '../src/export/sequence';
+import { parseMermaidSequence } from '../src/import/mermaid/sequence';
 import { aliasFor } from '../src/sequence/alias';
 import { toMermaid } from '../src/sequence/mermaid';
+import { sequenceToMermaid } from '../src/sequence/native/mermaid';
+import { sequenceToPlantUml } from '../src/sequence/native/plantuml';
 import type { SequenceModel } from '../src/sequence/types';
 import { ARCHITECTURE_STARTERS } from './fixtures/starters-v1/catalog';
 import { starterDocument } from './fixtures/starters-v1/document';
@@ -98,5 +105,47 @@ describe('the Mermaid export parses with Mermaid', () => {
     const text = toMermaid(m);
     expect(text).not.toMatch(/%%\{/);
     expect(await parses(text)).toBe(true);
+  });
+});
+
+/** What Mermaid's own database holds for a text: what a reader of the rendered diagram gets. */
+async function mermaidDb(text: string) {
+  const diagram = await mermaid.mermaidAPI.getDiagramFromText(text);
+  return diagram.db as unknown as {
+    getMessages(): { type: number; message: string; wrap: boolean }[];
+    getActors(): Map<string, { description: string; wrap: boolean }>;
+  };
+}
+
+describe('a sequence drawn on the canvas, as Mermaid reads it', () => {
+  const who = (id: string, name: string): SeqParticipant => ({ id, name, type: 'service', serviceKind: 'generic' });
+  const asNode = (sequence: DraftSequence) => ({ ...createNode({ id: 'n', type: 'sequence', x: 0, y: 0, text: 'T' }), sequence });
+
+  beforeAll(() => {
+    mermaid.initialize({ startOnLoad: false });
+  });
+
+  it('writes a blank label as nothing, and it comes back blank', async () => {
+    // Replies, self-messages and notes start blank; they were exported as "Message" and "Note".
+    const call = createMessage({ id: 'c', from: 'a', to: 'b', label: 'GET /orders' });
+    const sequence: DraftSequence = {
+      participants: [who('a', 'Web'), who('b', 'API')],
+      items: [call, { ...createReply(call), id: 'r' }, createMessage({ id: 's', from: 'b', to: 'b' }), createNote({ id: 'n', over: ['a'] })],
+    };
+    const text = sequenceToMermaid(asNode(sequence));
+    expect(text).not.toMatch(/Message|Note over Web: Note/);
+    expect(await parses(text)).toBe(true);
+    expect((await mermaidDb(text)).getMessages().filter((entry) => entry.type === 0 || entry.type === 1 || entry.type === 2).map((entry) => entry.message)).toEqual(['GET /orders', '', '', '']);
+    const back = parseMermaidSequence(text);
+    expect(back.ok).toBe(true);
+    if (!back.ok) return;
+    expect(messagesOf(back.sequence).map((message) => message.label)).toEqual(['GET /orders', '', '']);
+    expect(back.sequence.items.at(-1)).toMatchObject({ t: 'note', text: '' });
+
+    const plantUml = sequenceToPlantUml(asNode(sequence));
+    expect(plantUml).not.toContain('Message');
+    expect(plantUml).toContain('\nAPI --> Web\n');
+    expect(plantUml).toContain('\nAPI -> API\n');
+    expect(plantUml).not.toMatch(/^\s*Note$/m);
   });
 });

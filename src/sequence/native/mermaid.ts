@@ -9,7 +9,7 @@
  */
 import { sequenceOf } from '../../document/sequenceModel';
 import type { DraftNode, SeqItem, SeqMessage, SeqParticipant } from '../../document/types';
-import { escapeMermaidText, mermaidKeyword, sanitizeMessageLabel, sanitizeNoteText, sanitizeParticipantName } from '../mermaid';
+import { escapeMermaidText, mermaidKeyword, messageText, noteText, sanitizeNoteText, sanitizeParticipantName } from '../mermaid';
 import { aliasesOf, createdBy, participantKindOf, Working } from './shared';
 
 const INDENT = '    ';
@@ -18,6 +18,9 @@ const oneLine = (text: string): string => escapeMermaidText(text.replace(/\r\n?|
 
 /** Both formats take a note "over" one participant or from one to another: the first and the last. */
 const spanOf = (over: readonly string[]): string[] => (over.length > 1 ? [over[0]!, over[over.length - 1]!] : [...over]);
+
+/** What follows a message's or a note's colon. Replies, self-messages and notes often say nothing, and `A-->>B:` says just that. */
+const said = (text: string): string => (text ? `: ${text}` : ':');
 
 export function sequenceToMermaid(node: DraftNode): string {
   const sequence = sequenceOf(node);
@@ -66,7 +69,7 @@ export function sequenceToMermaid(node: DraftNode): string {
       working.start(item.to);
       starts = '+';
     }
-    out.push(`${pad}${of(item.from)}${arrow}${starts || ends}${of(item.to)}: ${sanitizeMessageLabel(item.label)}`);
+    out.push(`${pad}${of(item.from)}${arrow}${starts || ends}${of(item.to)}${said(messageText(item.label))}`);
     // Mermaid takes one mark per arrow; a message that both ends and starts work says the other on its own line.
     if (starts && ends) out.push(`${pad}deactivate ${of(item.from)}`);
     return out;
@@ -79,7 +82,7 @@ export function sequenceToMermaid(node: DraftNode): string {
         lines.push(...message(item, pad));
       } else if (item.t === 'note') {
         const anchor = item.side ? `${item.side} of ${of(item.over[0]!)}` : `over ${spanOf(item.over).map(of).join(',')}`;
-        lines.push(`${pad}Note ${anchor}: ${sanitizeNoteText(item.text)}`);
+        lines.push(`${pad}Note ${anchor}${said(noteText(item.text))}`);
       } else if (item.operator === 'ref') {
         const covered = (item.covers?.length ? item.covers : sequence.participants.map((participant) => participant.id)).map(of);
         const span = covered.length > 1 ? `${covered[0]},${covered[covered.length - 1]}` : covered[0];

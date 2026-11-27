@@ -53,10 +53,15 @@ export function escapeMermaidText(text: string): string {
 
 /** A message's label runs from the first `:` after the arrow to the end of the line, and a colon
  *  inside it is just text — `GET /orders: by id` is what the author wrote (checked against Mermaid
- *  11's grammar, which splits on the first colon only). Only line breaks need collapsing. */
+ *  11's grammar, which splits on the first colon only). Only line breaks need collapsing. Blank is
+ *  blank: Mermaid reads `B-->>A:` as a message with no words, which is what a reply often is. */
+export function messageText(label: string): string {
+  return escapeMermaidText(label.replace(/\r\n?|\n/g, ' ').trim());
+}
+
+/** A Flow's message, which always has words: `label.ts` falls back to a caption, so this never shows. */
 export function sanitizeMessageLabel(label: string): string {
-  const clean = escapeMermaidText(label.replace(/\r\n?|\n/g, ' ').trim());
-  return clean || 'Message';
+  return messageText(label) || 'Message';
 }
 
 /**
@@ -69,11 +74,16 @@ export function sanitizeMessageLabel(label: string): string {
  * literal `<br/>` — Mermaid's own documented line-break token inside note text, not a hack. A colon
  * is kept: `Note over A: text` splits on its first colon only, so the ones in the text are text.
  */
-export function sanitizeNoteText(text: string, code = false): string {
-  const lines = noteLines(text, code)
+export function noteText(text: string, code = false): string {
+  return noteLines(text, code)
     .map((line) => escapeMermaidText(line.trim()))
-    .filter((line) => line.length > 0);
-  return lines.join('<br/>') || 'Note';
+    .filter((line) => line.length > 0)
+    .join('<br/>');
+}
+
+/** A Flow's note, which `build.ts` only makes from words; a sequence's note may be left blank (`noteText`). */
+export function sanitizeNoteText(text: string, code = false): string {
+  return noteText(text, code) || 'Note';
 }
 
 /** Portable, CSS-free prefixes — the source itself must carry the distinction, since a `.mmd`/
