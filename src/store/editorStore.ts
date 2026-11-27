@@ -1078,15 +1078,24 @@ function linksInStep(before: DraftDocument, after: DraftDocument): DraftDocument
  * selected, or erased chosen strokes along with the shape just added. Writes the UI store, so it is
  * called outside updaters.
  */
-function settleSubSelections(selection: Selection): void {
+function settleSubSelections(selection: Selection, previous?: Selection): void {
   const ui = useUiStore.getState();
   // What is selected inside a sequence belongs to a selection of that sequence alone.
   const inside = ui.sequenceFocus;
   if (inside && !(selection.nodes.length === 1 && selection.edges.length === 0 && selection.nodes[0] === inside.nodeId)) {
     useUiStore.setState({ sequenceFocus: null, sequenceEdit: null });
   }
-  // Choosing shapes or connectors puts any chosen sketch strokes down.
+  // Choosing shapes or connectors puts any chosen sketch strokes down. An edit that leaves the
+  // selection as it was (a nudge or recolour of a marquee of shapes and strokes) chose nothing: the
+  // strokes stay chosen, so the next Delete still takes them along.
+  if (previous && sameSelection(previous, selection)) return;
   if (selection.nodes.length > 0 || selection.edges.length > 0) ui.setInkSelection([]);
+}
+
+function sameSelection(a: Selection, b: Selection): boolean {
+  if (a === b) return true;
+  return a.nodes.length === b.nodes.length && a.edges.length === b.edges.length
+    && a.nodes.every((id, i) => b.nodes[i] === id) && a.edges.every((id, i) => b.edges[i] === id);
 }
 
 /** After an edit, an undo or someone else's change: what was selected inside a sequence may be gone. */
@@ -1747,7 +1756,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         revision: s.revision + 1,
         ...focusThatSurvives(shown, s),
       }));
-      settleSubSelections(get().selection);
+      settleSubSelections(get().selection, state.selection);
       if (emptied) sayRoomEmptied(next);
       return;
     }
@@ -1771,7 +1780,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       ...focusThatSurvives(shown, s),
       history: pushEntry(s.history, entry),
     }));
-    settleSubSelections(selectionAfter);
+    settleSubSelections(selectionAfter, state.selection);
     closeStaleAttachmentDetail(shown);
     if (emptied) sayRoomEmptied(next);
   },
