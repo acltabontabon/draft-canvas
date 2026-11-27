@@ -1720,13 +1720,22 @@ kbd {
   padding: 0 7px 0 9px;
 }
 
+/* Words, where every other tool is a drawing, so held to 4.5:1 rather than a drawing's 3:1: at the
+   drawings' 62% it read at 4.2:1 on the Paper palette and under 4.5:1 on every light canvas. A hand
+   on the button, or its picker open, still takes it to the full text colour with them. */
 .dc-tool-shapes-word {
+  color: color-mix(in srgb, var(--dc-text) 65%, transparent);
   font-family: var(--dc-mono);
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   white-space: nowrap;
+  transition: color 120ms var(--dc-ease-out);
+}
+
+.dc-create-rail .dc-tool-shapes:is(:hover, [data-open]) .dc-tool-shapes-word {
+  color: inherit;
 }
 
 .dc-tool-caret {
