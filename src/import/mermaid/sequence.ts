@@ -47,11 +47,12 @@ function decode(text: string): string {
     .trim();
 }
 
-/** A comment runs from `%%` to the end of the line. (A directive, `%%{…}%%`, is one too: it configures a renderer this is not.) */
-const withoutComment = (line: string): string => {
-  const at = line.indexOf('%%');
-  return at === -1 ? line : line.slice(0, at);
-};
+/**
+ * A comment is a line that starts `%%`. (A directive, `%%{…}%%`, is one too: it configures a renderer
+ * this is not.) A `%%` later in a line is text — Mermaid keeps `A->>B: 100%% done` whole — and cutting
+ * there read it as "100".
+ */
+const withoutComment = (line: string): string => (line.trimStart().startsWith('%%') ? '' : line);
 
 /*
  * Messages, declarations and notes are read by hand, never by one pattern over the whole line. The
@@ -153,7 +154,8 @@ interface Block {
   answered?: Set<SeqMessage>;
 }
 
-const OPERATORS: Record<string, SeqOperator> = { alt: 'alt', opt: 'opt', loop: 'loop', par: 'par', critical: 'critical', break: 'break' };
+// `par_over` is Mermaid's `par` drawn over the participants; read as anything else, its `end` closed the frame around it.
+const OPERATORS: Record<string, SeqOperator> = { alt: 'alt', opt: 'opt', loop: 'loop', par: 'par', par_over: 'par', critical: 'critical', break: 'break' };
 const NEXT_BRANCH: Record<string, SeqOperator> = { else: 'alt', and: 'par', option: 'critical' };
 
 export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<string, string>): MermaidSequenceParse {
@@ -245,7 +247,8 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
       break;
     }
 
-    if (word === 'title') {
+    // `title Checkout`, and Mermaid's older `title: Checkout`.
+    if (word === 'title' || word === 'title:') {
       title = decode(rest.replace(/^:\s*/, ''));
       continue;
     }

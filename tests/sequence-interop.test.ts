@@ -249,7 +249,8 @@ sequenceDiagram
     participant Web
     U->>+Web: Sign in
     rect rgb(240, 240, 240)
-      Web->>+Auth: check password %% a comment
+      %% a comment
+      Web->>+Auth: check password %% not one
       Auth-->>-Web: token
     end
     loop every minute
@@ -264,13 +265,39 @@ sequenceDiagram
     expect(read.sequence.participants.map((participant) => participant.name)).toEqual(['User', 'Web', 'Auth']);
     expect(shape(read.sequence.items)).toEqual([
       ['sync', 'Sign in', true, false, false],
-      ['sync', 'check password', true, false, false],
+      // Only a line that starts `%%` is a comment: Mermaid keeps the rest of this one as the message.
+      ['sync', 'check password %% not one', true, false, false],
       ['reply', 'token', false, true, true],
       ['loop', ['every minute', [['async', 'refresh', false, false, false]]]],
       ['note', 'Tokens last an hour\nthen expire', 1, 'right'],
       ['reply', 'Signed in', false, true, true],
     ]);
     expect(read.unsupported).toEqual(['message numbering (autonumber)', 'a tinted background (rect): what was inside it is kept']);
+  });
+
+  it('reads what Mermaid reads: a title in the body, a %% inside text, a par_over', () => {
+    // `title:` was a line it couldn't read, `100%% done` came back as "100", and `par_over`'s `end`
+    // closed the loop around it, so "store results" fell out of the loop.
+    const read = parseMermaidSequence(`sequenceDiagram
+  title: Checkout flow
+  A->>B: 100%% done
+  loop every minute
+    par_over Poll both
+      A->>B: poll B
+    and
+      A->>C: poll C
+    end
+    A->>A: store results
+  end
+`);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.title).toBe('Checkout flow');
+    expect(shape(read.sequence.items)).toEqual([
+      ['sync', '100%% done', false, false, false],
+      ['loop', ['every minute', [['par', ['Poll both', [['sync', 'poll B', false, false, false]]], ['', [['sync', 'poll C', false, false, false]]]], ['sync', 'store results', false, false, false]]]],
+    ]);
+    expect(read.unsupported).toEqual([]);
   });
 
   it('reads a critical section’s options as its branches, each with its condition', () => {

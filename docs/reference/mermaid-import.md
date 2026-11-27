@@ -57,8 +57,9 @@ work starts and ends only where the text says so.
 | `destroy B` then a message | Destroy |
 | `Note over A,B`, `Note left of A`, `Note right of A` | Note |
 | `box Name … end` | Participant group |
-| `alt`/`else`, `opt`, `loop`, `par`/`and`, `critical`/`option`, `break` | Frame, with its branches and conditions |
-| `title`, or `title:` in front matter | The sequence's name |
+| `alt`/`else`, `opt`, `loop`, `par`/`and` (and `par_over`), `critical`/`option`, `break` | Frame, with its branches and conditions |
+| `title` or `title:`, in the diagram or its front matter | The sequence's name |
+| A line that starts with `%%` | A comment, ignored; a `%%` later in a line is text, as Mermaid reads it |
 
 Listed in the import notice and not drawn: `autonumber`, a `rect` background (what is inside it is
 kept), `link`/`links`/`properties` on a participant, `activate`/`deactivate` with no message beside
