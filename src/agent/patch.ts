@@ -54,7 +54,8 @@ import { messagesOf, sequenceOf } from '../document/sequenceModel';
 import { editMessageAttachments } from '../document/sequenceOps';
 import { fitSequenceNode, fitSequences } from '../nodes/sequenceFit';
 import { aliasesOf } from '../sequence/native/shared';
-import { linked, readSequenceSource, sequenceNode, unsupportedAdvice } from './sequences';
+import { keepUnwritten, linked, readSequenceSource, sequenceNode, unsupportedAdvice } from './sequences';
+import { sameValue } from '../collab/equal';
 import { DEFAULTS, LIMITS } from '../document/limits';
 import type { Accent, AttachableType, Attachment, DraftDocument, DraftEdge, DraftFlow, DraftFlowStep, DraftInside, DraftNode, DraftSequence } from '../document/types';
 import { ACCENTS, CODE_LANGUAGES, CONNECTOR_KINDS, EDGE_SEMANTICS } from '../document/types';
@@ -789,7 +790,14 @@ function keepMessageAttachments(before: DraftSequence, after: DraftSequence, id:
   const taken = new Set<string>();
   const matches = new Map<string, string>();
   const sameRoute = (a: (typeof old)[number], b: (typeof next)[number]) => a.from === b.from && a.to === b.to && a.kind === b.kind;
+  // A message `keepUnwritten` found in the new text is the same message, its attachments already on it.
   for (const message of old) {
+    if (!next.some((candidate) => candidate.id === message.id)) continue;
+    matches.set(message.id, message.id);
+    taken.add(message.id);
+  }
+  for (const message of old) {
+    if (matches.has(message.id)) continue;
     const found = next.find((candidate) => !taken.has(candidate.id) && sameRoute(message, candidate) && message.label === candidate.label);
     if (!found) continue;
     matches.set(message.id, found.id);
@@ -799,6 +807,7 @@ function keepMessageAttachments(before: DraftSequence, after: DraftSequence, id:
     const attachments = message.attachments;
     if (!attachments?.length) continue;
     let target = matches.get(message.id);
+    if (target === message.id) continue;
     if (!target) {
       const alternatives = next.filter((candidate) => !taken.has(candidate.id) && sameRoute(message, candidate));
       const remaining = old.filter((candidate) => !matches.has(candidate.id) && sameRoute(message, candidate));
@@ -834,7 +843,7 @@ function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Js
     const read = readSequenceSource(r, set, at, elementIds, current);
     if (!read) return undefined;
     advisories.push(...unsupportedAdvice(node.id, read.unsupported));
-    sequence = linked(read.sequence, read.links, shapes, node.id, advisories);
+    sequence = linked(keepUnwritten(node, read.sequence), read.links, shapes, node.id, advisories);
     sequence = keepMessageAttachments(current, sequence, node.id, advisories);
     if (current.numberMessages === false) sequence = { ...sequence, numberMessages: false };
     if (set.title === undefined && read.title) title = read.title;
@@ -858,6 +867,8 @@ function updateSequence(r: Reader, view: DraftDocument, node: DraftNode, set: Js
     sequence = linked(unlinked, links, shapes, node.id, advisories);
   }
   if (!r.problems.empty) return undefined;
+  // The text sent back as it was read, or links it already had: nothing to commit, nothing to undo.
+  if (title === (node.text ?? '') && sameValue(sequence, current)) return view;
   const changed = fitSequenceNode(node, { ...node, text: title, sequence }, ctx);
   const kept = new Set(sequence.participants.map((participant) => participant.id));
   const removed = new Set(current.participants.filter((participant) => !kept.has(participant.id)).map((participant) => participant.id));

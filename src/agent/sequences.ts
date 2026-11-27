@@ -16,7 +16,8 @@
 import { createNode } from '../document/factory';
 import { messagesOf, sequenceOf } from '../document/sequenceModel';
 import { isLinkable, participantFromNode } from '../document/sequenceLinks';
-import type { DraftNode, DraftSequence } from '../document/types';
+import type { DraftNode, DraftSequence, SeqGroup, SeqItem, SeqMessage, SeqNote, SeqOperand } from '../document/types';
+import { normalizeSequence } from '../document/validateSequence';
 import { parseMermaidSequence, UNTITLED_SEQUENCE } from '../import/mermaid/sequence';
 import type { DescribeContext } from '../nodes/describe';
 import { fitSequenceNode } from '../nodes/sequenceFit';
@@ -103,6 +104,218 @@ export function readSequenceSource(
     if (before) link(name, before);
   }
   return { title: parsed.title === UNTITLED_SEQUENCE ? undefined : parsed.title, sequence: parsed.sequence, links, unsupported: parsed.unsupported };
+}
+
+/**
+ * `next`, the sequence an agent's text reads as, with what that text has no words for kept from
+ * `node`'s sequence, which it replaces.
+ *
+ * Mermaid can't say what a participant is beyond "actor" or not, what it is built with or its
+ * colour; nor a group's colour, a reference to another interaction (a read writes it as a note), a
+ * blank label (written as a word: Mermaid needs one), which call a reply answers when that isn't the
+ * latest one, or any id. Text that was read and sent back changed none of that, and an agent adding
+ * one message used to turn every Data Store and Queue into a plain Service, drop technologies and
+ * colours, make references notes and write "Message" into blank replies, all in silence.
+ *
+ * So the text the read gave (`sequenceToMermaid`, as `sequenceRead` writes it) is read again, and
+ * wherever the agent's text still says what that text said (a participant under the same id and the
+ * same keyword, a message, note, branch or group left as it was) the sequence keeps what it held;
+ * what the agent changed is the agent's. Items are matched branch by branch on a weighted longest
+ * common subsequence, so a message added or taken out doesn't shift what the rest is matched with.
+ */
+export function keepUnwritten(node: DraftNode, next: DraftSequence): DraftSequence {
+  const current = sequenceOf(node);
+  const ids = new Map([...aliasesOf(current)].map(([id, alias]) => [alias, id]));
+  const reread = parseMermaidSequence(sequenceToMermaid(node), ids);
+  if (!reread.ok) return next;
+  const base = reread.sequence;
+  const merge: Merge = { traced: new Map(), tracedIds: new Map(), kept: new Map(), replies: new Map() };
+  trace(current.items, base.items, merge);
+  const items = mergeItems(next.items, base.items, merge);
+  settleReplies(items, merge);
+  const was = new Map(current.participants.map((participant) => [participant.id, participant]));
+  const said = new Map(base.participants.map((participant) => [participant.id, participant]));
+  const participants = next.participants.map((participant) => {
+    const before = was.get(participant.id);
+    const then = said.get(participant.id);
+    if (!before || !then) return participant;
+    const name = participant.name === then.name ? before.name : participant.name;
+    // All the text says of what a participant is: an actor or not. While that holds, it is what it was.
+    if ((participant.type === 'actor') !== (then.type === 'actor')) return { ...participant, name, ...(before.ref ? { ref: before.ref } : {}) };
+    return { ...before, name };
+  });
+  const groups = groupsKept(current.groups ?? [], base.groups ?? [], next.groups);
+  return normalizeSequence({ ...next, participants, items, ...(groups ? { groups } : {}) }).sequence;
+}
+
+interface Merge {
+  /** What each item of the reread text was read from: the item of the current sequence. */
+  traced: Map<SeqItem, SeqItem>;
+  /** The same for messages, by id: a reply in the reread text names its call by the reread id. */
+  tracedIds: Map<string, string>;
+  /** The id each message of the agent's text keeps. */
+  kept: Map<string, string>;
+  /** Replies matched with one that was there, with the two they were matched through. */
+  replies: Map<SeqMessage, { said: SeqMessage; read: SeqMessage; was: SeqMessage }>;
+}
+
+/** The reread text against the sequence it was written from: one item each, in the same order. */
+function trace(current: readonly SeqItem[], base: readonly SeqItem[], merge: Merge): void {
+  if (current.length !== base.length) return;
+  current.forEach((item, index) => {
+    const read = base[index]!;
+    // A reference is written as a note: the one thing whose kind the text changes.
+    if (item.t === 'fragment' && item.operator === 'ref') {
+      if (read.t === 'note') merge.traced.set(read, item);
+      return;
+    }
+    if (item.t !== read.t) return;
+    merge.traced.set(read, item);
+    if (item.t === 'message') merge.tracedIds.set(read.id, item.id);
+    if (item.t === 'fragment' && read.t === 'fragment' && item.operands.length === read.operands.length) {
+      item.operands.forEach((operand, k) => trace(operand.items, read.operands[k]!.items, merge));
+    }
+  });
+}
+
+/** What makes two items one item edited (`loose`), and one item as it was (`exact`). */
+function keysOf(item: SeqItem): { loose: string; exact: string } {
+  if (item.t === 'message') {
+    const loose = `m\u0000${item.from}\u0000${item.to}`;
+    return { loose, exact: `${loose}\u0000${item.kind}\u0000${item.label}\u0000${item.activate ? 1 : 0}${item.deactivate ? 1 : 0}` };
+  }
+  if (item.t === 'note') return { loose: 'n', exact: `n\u0000${item.over.join('\u0000')}\u0000${item.side ?? ''}\u0000${item.text}` };
+  return { loose: 'f', exact: `f\u0000${item.operator}\u0000${item.operands.map((operand) => operand.guard ?? '').join('\u0000')}` };
+}
+
+/** For each of `next`, the index of the item of `base` it is, or -1. */
+function align(next: readonly SeqItem[], base: readonly SeqItem[]): number[] {
+  const a = next.map(keysOf);
+  const b = base.map(keysOf);
+  const score = (i: number, j: number) => (a[i]!.exact === b[j]!.exact ? 2 : a[i]!.loose === b[j]!.loose ? 1 : 0);
+  const width = base.length + 1;
+  const best = new Uint32Array((next.length + 1) * width);
+  for (let i = 1; i <= next.length; i += 1) {
+    for (let j = 1; j <= base.length; j += 1) {
+      const s = score(i - 1, j - 1);
+      best[i * width + j] = Math.max(best[(i - 1) * width + j]!, best[i * width + j - 1]!, s ? best[(i - 1) * width + j - 1]! + s : 0);
+    }
+  }
+  const pairs = new Array<number>(next.length).fill(-1);
+  for (let i = next.length, j = base.length; i > 0 && j > 0; ) {
+    const s = score(i - 1, j - 1);
+    if (s && best[i * width + j] === best[(i - 1) * width + j - 1]! + s) {
+      pairs[i - 1] = j - 1;
+      i -= 1;
+      j -= 1;
+    } else if (best[(i - 1) * width + j]! >= best[i * width + j - 1]!) i -= 1;
+    else j -= 1;
+  }
+  return pairs;
+}
+
+function mergeItems(next: readonly SeqItem[], base: readonly SeqItem[], merge: Merge): SeqItem[] {
+  const pairs = align(next, base);
+  return next.map((item, index) => {
+    const read = pairs[index]! >= 0 ? base[pairs[index]!] : undefined;
+    const was = read && merge.traced.get(read);
+    return read && was ? mergeItem(item, read, was, merge) : item;
+  });
+}
+
+const sameList = (a: readonly string[], b: readonly string[]) => a.length === b.length && a.every((entry, index) => entry === b[index]);
+
+/** `item`, from the agent's text, with each field it still says as `read` said it kept from `was`. */
+function mergeItem(item: SeqItem, read: SeqItem, was: SeqItem, merge: Merge): SeqItem {
+  if (item.t === 'message' && read.t === 'message' && was.t === 'message') {
+    const kept: SeqMessage = { ...item, id: was.id, kind: item.kind === read.kind ? was.kind : item.kind, label: item.label === read.label ? was.label : item.label };
+    for (const flag of ['activate', 'deactivate'] as const) {
+      // Mermaid writes the end of work only where its own count has work to end (`Working`).
+      if (Boolean(item[flag]) === Boolean(read[flag]) ? was[flag] : item[flag]) kept[flag] = true;
+      else delete kept[flag];
+    }
+    if (kept.kind === was.kind && was.kindOrigin) kept.kindOrigin = was.kindOrigin;
+    if (was.attachments?.length) kept.attachments = was.attachments;
+    merge.kept.set(item.id, was.id);
+    merge.replies.set(kept, { said: item, read, was });
+    return kept;
+  }
+  if (item.t === 'note' && read.t === 'note') {
+    const over = sameList(item.over, read.over);
+    if (was.t === 'fragment') {
+      if (item.text === read.text && over) return was;
+      // Still a reference while the text keeps writing it as one; its words are its label.
+      const label = /^ref:\s*([\s\S]*)$/.exec(item.text)?.[1];
+      if (label === undefined) return item;
+      const reference = { ...was, covers: over ? was.covers : [...item.over] };
+      if (label.trim()) reference.label = label.trim();
+      else delete reference.label;
+      return reference;
+    }
+    if (was.t !== 'note') return item;
+    const kept: SeqNote = { ...item, id: was.id, text: item.text === read.text ? was.text : item.text, over: over ? was.over : item.over };
+    const side = item.side === read.side ? was.side : item.side;
+    if (side) kept.side = side;
+    else delete kept.side;
+    return kept;
+  }
+  if (item.t === 'fragment' && read.t === 'fragment' && was.t === 'fragment') {
+    return {
+      ...item,
+      id: was.id,
+      operands: item.operands.map((operand, k): SeqOperand => {
+        const then = read.operands[k];
+        const before = was.operands[k];
+        if (!then || !before) return operand;
+        const kept: SeqOperand = { ...operand, id: before.id, items: mergeItems(operand.items, then.items, merge) };
+        const guard = operand.guard === then.guard ? before.guard : operand.guard;
+        if (guard) kept.guard = guard;
+        else delete kept.guard;
+        return kept;
+      }),
+    };
+  }
+  return item;
+}
+
+/**
+ * Which call each reply answers, once every message has the id it keeps. A matched reply the text
+ * still links as the read's text did answers what it answered; the text says nothing else about it.
+ */
+function settleReplies(items: readonly SeqItem[], merge: Merge): void {
+  for (const item of items) {
+    if (item.t === 'fragment') {
+      for (const operand of item.operands) settleReplies(operand.items, merge);
+      continue;
+    }
+    if (item.t !== 'message') continue;
+    const matched = merge.replies.get(item);
+    const said = matched ? matched.said.replyTo : item.replyTo;
+    const text = said === undefined ? undefined : (merge.kept.get(said) ?? said);
+    const reply = matched && text === (matched.read.replyTo === undefined ? undefined : merge.tracedIds.get(matched.read.replyTo)) ? matched.was.replyTo : text;
+    if (reply !== undefined) item.replyTo = reply;
+    else delete item.replyTo;
+  }
+}
+
+/**
+ * The agent's boxes, each the group it was when it holds the same participants (or, failing that,
+ * reads the same name), with the group's id, colour and own name kept: a box has no colour in the text.
+ */
+function groupsKept(current: readonly SeqGroup[], base: readonly SeqGroup[], next: readonly SeqGroup[] | undefined): SeqGroup[] | undefined {
+  if (!next?.length) return next ? [...next] : undefined;
+  const members = (group: SeqGroup) => [...group.participantIds].sort().join('\u0000');
+  const written = new Map(base.map((group) => [members(group), group]));
+  const left = [...current];
+  return next.map((group) => {
+    let at = left.findIndex((candidate) => members(candidate) === members(group));
+    if (at < 0) at = left.findIndex((candidate) => written.get(members(candidate))?.name === group.name);
+    if (at < 0) return group;
+    const before = left.splice(at, 1)[0]!;
+    const kept: SeqGroup = { ...group, id: before.id, name: written.get(members(before))?.name === group.name ? before.name : group.name };
+    if (before.accent) kept.accent = before.accent;
+    return kept;
+  });
 }
 
 /** The sequences of a room's request. */
