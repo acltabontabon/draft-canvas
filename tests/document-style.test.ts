@@ -145,8 +145,8 @@ describe('a style from anywhere', () => {
 
 describe('a drawing in a style', () => {
   it('is path data of four commands and short numbers, and nothing else', () => {
-    expect(pathCommands('M0 0L10 0C1 2 3 4 5 6Z')).toBe(4);
-    expect(pathCommands('M-12.5 0.25L1000 2000Z')).toBe(3);
+    expect(pathCommands('M0 0L10 0C1 2 3 4 5 6Z', 1000, 1000)).toBe(4);
+    expect(pathCommands('M-12.5 0.25L1000 2000Z', 1000, 1000)).toBe(3);
     for (const bad of [
       '',
       'L0 0',
@@ -165,8 +165,26 @@ describe('a drawing in a style', () => {
       'M0 0L10 0"/><script>alert(1)</script>',
       'M0 0L10 0 url(#x)',
     ]) {
-      expect(pathCommands(bad), bad).toBeNull();
+      expect(pathCommands(bad, 1000, 1000), bad).toBeNull();
     }
+  });
+
+  it('reaches no further past its own box than its own size', () => {
+    // Held to -1000..2000 whatever its size, a 1×1 drawing reached 2,000 of its own widths: one
+    // Service painted an opaque square over the whole canvas and every export.
+    const cover = { id: 'acover0001', w: 1, h: 1, paths: [{ d: 'M-1000 -1000L2000 -1000L2000 2000L-1000 2000Z', fill: '#000000' }] };
+    expect(normalizeAsset(cover)).toBeNull();
+    const { style, repairs } = normalizeStyle({ v: 1, hand: { base: 'clean' }, shapes: { service: { art: cover.id } }, assets: [cover] });
+    expect(style?.assets).toBeUndefined();
+    expect(style?.shapes).toBeUndefined();
+    expect(repairs).toEqual(['Left out 1 custom drawing(s) that could not be read or were too large.']);
+    // One of its own widths and heights past each side is still its own: a tile that joins itself,
+    // a hat brim. Each axis by its own measure.
+    const tall = { ...cover, w: 10, h: 20 };
+    expect(normalizeAsset({ ...tall, paths: [{ d: 'M-10 -20L20 -20L20 40Z', fill: 'line' }] })).not.toBeNull();
+    expect(normalizeAsset({ ...tall, paths: [{ d: 'M-10 -20L20.01 -20L20 40Z', fill: 'line' }] })).toBeNull();
+    expect(normalizeAsset({ ...tall, paths: [{ d: 'M0 0L10 40.01Z', fill: 'line' }] })).toBeNull();
+    expect(normalizeAsset({ ...tall, paths: [{ d: 'M0 -20.01L10 0Z', fill: 'line' }] })).toBeNull();
   });
 
   it('is kept whole or not at all', () => {

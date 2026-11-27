@@ -83,11 +83,20 @@ export const STYLE_LIMITS = {
   maxAssetsChars: 262_144,
   /** A drawing's own width and height, in its own units. */
   maxArtUnits: 1_000,
-  /** How far outside its own box a drawing's coordinates may reach. */
-  minArtCoordinate: -1_000,
-  maxArtCoordinate: 2_000,
+  /**
+   * How far past each side of its own box a drawing's coordinates may reach, in its own widths and
+   * heights (`artBounds`). It was once -1000 to 2000 whatever the drawing's size, and a 1×1 drawing
+   * reaching that far painted one Service over the whole canvas and every export.
+   */
+  artReach: 1,
   maxArtStrokeWidth: 64,
 } as const;
+
+/** The coordinates a drawing `w` by `h` may use, across and down: its box, and `artReach` of it past each side. */
+export function artBounds(w: number, h: number): { x: readonly [number, number]; y: readonly [number, number] } {
+  const reach = STYLE_LIMITS.artReach;
+  return { x: [-w * reach, w * (1 + reach)], y: [-h * reach, h * (1 + reach)] };
+}
 
 export interface SurfaceStyle {
   weight?: StyleWeight;
@@ -330,11 +339,13 @@ function paint(value: unknown): ArtPaint | undefined {
 
 /**
  * How many drawing commands `d` holds, or `null` when it is anything but the stored form: absolute
- * `M`, `L`, `C` and `Z`, each with exactly its numbers, every number short and inside the drawing's
- * reach. Checked character by character because this is the one string in a style that is drawn.
+ * `M`, `L`, `C` and `Z`, each with exactly its numbers, every number short and inside the reach of
+ * a drawing `w` by `h` (`artBounds`). Checked character by character because this is the one string
+ * in a style that is drawn.
  */
-export function pathCommands(d: string): number | null {
+export function pathCommands(d: string, w: number, h: number): number | null {
   if (d.length === 0 || d[0] !== 'M') return null;
+  const { x, y } = artBounds(w, h);
   let commands = 0;
   let at = 0;
   while (at < d.length) {
@@ -348,10 +359,13 @@ export function pathCommands(d: string): number | null {
     } else {
       const numbers = body.split(' ');
       if (numbers.length !== arity) return null;
-      for (const entry of numbers) {
+      for (let index = 0; index < numbers.length; index += 1) {
+        const entry = numbers[index]!;
         if (!NUMBER.test(entry)) return null;
         const value = Number(entry);
-        if (value < STYLE_LIMITS.minArtCoordinate || value > STYLE_LIMITS.maxArtCoordinate) return null;
+        // Every command's numbers are points, across then down.
+        const [min, max] = index % 2 === 0 ? x : y;
+        if (value < min || value > max) return null;
       }
     }
     commands += 1;
@@ -378,7 +392,7 @@ export function normalizeAsset(raw: unknown): StyleAsset | null {
     if (!isRecord(candidate) || typeof candidate.d !== 'string') return null;
     chars += candidate.d.length;
     if (chars > STYLE_LIMITS.maxAssetChars) return null;
-    const count = pathCommands(candidate.d);
+    const count = pathCommands(candidate.d, w, h);
     if (count === null) return null;
     commands += count;
     if (commands > STYLE_LIMITS.maxAssetCommands) return null;

@@ -28,7 +28,7 @@ const imported = (text: string, mode: 'diagram' | 'original' = 'diagram') => {
 const numbers = (d: string) => (d.match(/-?\d+(?:\.\d+)?/g) ?? []).map(Number);
 
 describe('reading path data', () => {
-  const stored = (d: string) => written(readPath(d, 1000) as Exclude<ReturnType<typeof readPath>, null | 'limit'>, -1000, 2000);
+  const stored = (d: string) => written(readPath(d, 1000) as Exclude<ReturnType<typeof readPath>, null | 'limit'>, [-1000, 2000]);
 
   it('turns every command into absolute moves, lines, curves and closes', () => {
     expect(stored('M10 10 L20 10 20 20 Z')).toBe('M10 10L20 10L20 20Z');
@@ -39,7 +39,7 @@ describe('reading path data', () => {
     expect(stored('M0 0 Q30 0 30 30')).toBe('M0 0C20 0 30 10 30 30');
     // A move with more pairs: the rest are lines.
     expect(stored('M1 1 2 2 3 3')).toBe('M1 1L2 2L3 3');
-    for (const d of ['M0 0 A10 10 0 0 1 20 0', 'M0 0a10 10 0 0120 0', 'M.5.5l1e1-2']) expect(pathCommands(stored(d)), d).not.toBeNull();
+    for (const d of ['M0 0 A10 10 0 0 1 20 0', 'M0 0a10 10 0 0120 0', 'M.5.5l1e1-2']) expect(pathCommands(stored(d), 1000, 1000), d).not.toBeNull();
   });
 
   it('draws an arc as curves that pass where the arc does', () => {
@@ -68,8 +68,8 @@ describe('importing an SVG', () => {
     // Painted alike, so one path: the square, then the circle.
     expect(asset.paths).toHaveLength(1);
     expect(asset.paths[0]!.d.startsWith('M10 20L40 20L40 60L10 60Z')).toBe(true);
-    expect(pathCommands(asset.paths[0]!.d)).toBeGreaterThan(5);
-    for (const path of asset.paths) expect(pathCommands(path.d)).not.toBeNull();
+    expect(pathCommands(asset.paths[0]!.d, asset.w, asset.h)).toBeGreaterThan(5);
+    for (const path of asset.paths) expect(pathCommands(path.d, asset.w, asset.h)).not.toBeNull();
   });
 
   it('is the same drawing, with the same id, every time', () => {
@@ -211,9 +211,13 @@ describe('a hostile SVG', () => {
     if (result.ok) expect(result.asset.paths.reduce((sum, path) => sum + path.d.length, 0)).toBeLessThanOrEqual(STYLE_LIMITS.maxAssetChars);
     // A reference to itself.
     expect(importSvgArt(svg('<g id="loop"><use href="#loop"/><rect width="5" height="5" fill="#000"/></g>')).ok).toBe(true);
-    // Coordinates that could not be stored are held to the drawing's reach, never written as they are.
+    // Coordinates that could not be stored are held to the drawing's reach, one of its own widths
+    // and heights past its box, never written as they are.
     const far = imported(svg('<path d="M-1e9 -1e9 L1e9 1e9 L50 50 Z" fill="#000"/>')).asset;
-    for (const value of numbers(far.paths[0]!.d)) expect(Math.abs(value)).toBeLessThanOrEqual(STYLE_LIMITS.maxArtCoordinate);
+    expect(far.paths[0]!.d).toBe('M-100 -100L200 200L50 50Z');
+    const wide = imported(svg('<path d="M-900 0 L900 25 L50 50 Z" fill="#000"/>', 'viewBox="0 0 100 50"')).asset;
+    expect([wide.w, wide.h, wide.paths[0]!.d]).toEqual([100, 50, 'M-100 0L200 25L50 50Z']);
+    expect(normalizeAsset(wide)).toEqual(wide);
     expect(importSvgArt(svg('<rect width="NaN" height="Infinity" fill="#000"/><circle r="-5" fill="#000"/>')).ok).toBe(false);
   });
 });

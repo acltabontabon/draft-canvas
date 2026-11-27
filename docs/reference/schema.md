@@ -185,7 +185,7 @@ is drawn in the style in use on the device that opens it, as every file before v
 | `shapes` | Keyed by shape type (`service`) or type and kind (`service:gateway`). Each entry has the `general` fields, plus `art` (an asset id), `fit` and `builtin` where a drawing applies. A kind inherits from its type, a type from `general`. |
 | `connectors` | `weight`, `head` (`nib`, `triangle`), `colour` (`source`, `plain`). |
 | `backdrop` | Optional: `art` (an asset id), `strength` (`faint`, `strong`) and `scale` (`small`, `large`). One drawing repeated on the canvas behind the diagram, and in exports that have a background. |
-| `assets` | Custom drawings: `id`, `w`, `h` and `paths` of `d` (absolute `M`, `L`, `C`, `Z` only), `fill`, `stroke`, `sw`, `o`, `rule`. No markup is ever stored. |
+| `assets` | Custom drawings: `id`, `w`, `h` and `paths` of `d` (absolute `M`, `L`, `C`, `Z` only, every point within one `w` across and one `h` down of the drawing's own box), `fill`, `stroke`, `sw`, `o`, `rule`. No markup is ever stored. |
 
 `normalizeStyle` rebuilds a style from this whitelist wherever one is read: a file, a collaborator's
 change, a profile or a gallery pack. A drawing that is not exactly the stored form is dropped whole, a

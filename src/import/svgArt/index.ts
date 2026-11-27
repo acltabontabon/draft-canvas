@@ -1,4 +1,4 @@
-import { normalizeAsset, STYLE_LIMITS, type ArtPaint, type ArtPath, type StyleAsset } from '../../document/style';
+import { artBounds, normalizeAsset, STYLE_LIMITS, type ArtPaint, type ArtPath, type StyleAsset } from '../../document/style';
 import { luminance } from '../../lib/colour';
 import { IDENTITY, multiply, readPath, transformed, written, type Matrix, type Segment } from '../../render/style/pathData';
 import { descendants, readMarkup, type SvgElement } from './markup';
@@ -377,6 +377,8 @@ export function importSvgArt(text: string, mode: SvgArtMode = 'diagram'): SvgArt
   const place: Matrix = [scale, 0, 0, scale, -frame.x * scale, -frame.y * scale];
   const w = Math.max(1, Math.round(frame.w * scale * 100) / 100);
   const h = Math.max(1, Math.round(frame.h * scale * 100) / 100);
+  // Whatever it drew far outside its own frame is held to the reach a drawing may have.
+  const bounds = artBounds(w, h);
 
   // Painted in the shape's own colour, a picture of one colour is its outline; one of several keeps
   // its light and dark, as the shape's fill and its line.
@@ -397,7 +399,7 @@ export function importSvgArt(text: string, mode: SvgArtMode = 'diagram'): SvgArt
     const stroke = painted(item.stroke, 'stroke');
     if (!fill && !stroke) continue;
     const opacity = Math.round(Math.min(1, fill ? item.fillAlpha : item.strokeAlpha) * 100) / 100;
-    const path: ArtPath = { d: written(transformed(item.segments, place), STYLE_LIMITS.minArtCoordinate, STYLE_LIMITS.maxArtCoordinate) };
+    const path: ArtPath = { d: written(transformed(item.segments, place), bounds.x, bounds.y) };
     if (fill) path.fill = fill;
     if (stroke) {
       path.stroke = stroke;
