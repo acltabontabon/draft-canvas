@@ -257,6 +257,24 @@ describe('presenting owns the keyboard', () => {
     expect(useEditorStore.getState().document.nodes).toHaveLength(before);
   });
 
+  it('takes ⌘+, ⌘− and ⌘0 while presenting as the presenter\'s own camera, as a pan is', () => {
+    // A zoom the keyboard asks for moves the camera without a pointer event, so the canvas never
+    // hears of it; without this, the next step or a resize snapped the camera back to the step.
+    mount();
+    for (const key of ['=', '+', '-', '0']) {
+      useUiStore.getState().resetPresentation();
+      useEditorStore.setState({ mode: 'present' });
+      expect(useUiStore.getState().presentation.framing).toBe('guided');
+      press(key, { metaKey: true });
+      expect(useUiStore.getState().presentation.framing, key).toBe('manual');
+    }
+    // Editing, the same chords zoom and leave a presentation's framing as it was.
+    useUiStore.getState().resetPresentation();
+    useEditorStore.setState({ mode: 'edit' });
+    press('=', { metaKey: true });
+    expect(useUiStore.getState().presentation.framing).toBe('guided');
+  });
+
   it('leaves Escape alone while presenting, where the Open points panel is hidden rather than closed', () => {
     mount();
     useUiStore.getState().setOpenPointsPanelOpen(true);

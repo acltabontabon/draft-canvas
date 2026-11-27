@@ -1333,18 +1333,15 @@ export function useKeyboard({
             return;
           case '=':
           case '+':
-            event.preventDefault();
-            void zoomIn();
-            return;
           case '-':
-            event.preventDefault();
-            void zoomOut();
-            return;
           case '0':
-            // Reset-to-100%, the browser/VS Code/design-tool convention for this chord — keeps the
-            // current viewport center rather than recentering on the document.
             event.preventDefault();
-            void zoomTo(1);
+            // A presenter's own zoom, like their pan, hands them the camera. Moved by the keyboard,
+            // the canvas never hears of it, and the next step or a resize snapped the camera back.
+            if (presenting) useUiStore.getState().setPresentation({ framing: 'manual' });
+            // ⌘0 is reset-to-100%, the browser/VS Code/design-tool convention for this chord — it
+            // keeps the current viewport center rather than recentering on the document.
+            void (key === '0' ? zoomTo(1) : key === '-' ? zoomOut() : zoomIn());
             return;
           case 'b':
           case 'i': {
