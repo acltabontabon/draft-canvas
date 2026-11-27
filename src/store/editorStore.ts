@@ -2339,7 +2339,9 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // Stamped like any other change, as `restoreSnapshot` does: the snapshot's own stamp is older
       // than the autosaved "Add text", so the Library's edited time ran backwards and a reload stash
       // of this state was judged stale, bringing the removed node back.
-      const restored = touch(top.before);
+      // And, as there, the camera stays where it is: the snapshot's is the one of its moment, and
+      // clearing the live one saved the camera the diagram was opened with.
+      const restored = touch(withCamerasOf(top.before, fileWithLiveViewport(state)));
       set({
         document: viewOf(restored, top.path) ?? restored,
         outer: state.path.length > 0 ? restored : null,
@@ -2347,8 +2349,6 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         history: { past: history.past.slice(0, -1), future: [] },
         selection: EMPTY_SELECTION,
         revision: revision + 1,
-        // The camera belongs to the document being replaced, not the one going back in.
-        liveViewport: null,
       });
       return;
     }
