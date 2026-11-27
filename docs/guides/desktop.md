@@ -88,8 +88,9 @@ them is installed; click it or press `⌘J`. See
 
 ## Settings
 
-**Settings…** (`⌘,`) has six pages: **General** (closing the window), **Appearance** (your style, and
+**Settings…** (`⌘,`) has seven pages: **General** (closing the window), **Appearance** (your style, and
 using it in the open diagram), **Canvas** (next-shape suggestions),
+**History** (recording and publishing each diagram's history; see [Diagram history](history.md#settings)),
 **AI agents**, **Updates** and **Support**
 (a diagnostic report with no diagram content or file paths, never sent automatically).
 **Canvas Settings…** in the menu bar and the sliders button in the status bar open it at **Canvas**.
