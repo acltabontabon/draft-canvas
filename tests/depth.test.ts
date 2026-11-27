@@ -8,6 +8,7 @@ import { __resetInteraction, fileOf, fileWithLiveViewport, useEditorStore, viewL
 import { useUiStore } from '../src/store/uiStore';
 import { createFlow } from '../src/document/flow';
 import { inkOf } from '../src/document/ink';
+import { removeElements } from '../src/document/operations';
 import type { DraftDocument, DraftInk } from '../src/document/types';
 
 /**
@@ -636,6 +637,25 @@ describe('standing in a room that stops existing', () => {
     expect(store.getState().path).toEqual([]);
     expect(store.getState().outer).toBeNull();
     expect(store.getState().document).toBe(withoutPlatform);
+  });
+
+  /**
+   * An agent's change can take away the room you stand in. Its step is recorded at the root with the
+   * selection of the room that went, so its undo selected ids the root has not got: ⌘D on them said
+   * the diagram was too large.
+   */
+  it('an undo that puts back a room a file change took selects only what is on screen', () => {
+    const { platform } = withPlatform();
+    store.getState().enterInside(platform.id);
+    const inner = store.getState().addNode({ type: 'component', x: 0, y: 0, text: 'Controller' });
+    expect(store.getState().selection.nodes).toEqual([inner.id]);
+    expect(store.getState().applyToFile('Agent change', (whole) => removeElements(whole, [platform.id]))).toBe(true);
+    expect(store.getState().path).toEqual([]);
+
+    store.getState().undo();
+    const { document, selection } = store.getState();
+    expect(insideOf(platform.id)?.nodes.map((node) => node.id)).toEqual([inner.id]);
+    expect(selection.nodes.every((id) => document.nodes.some((node) => node.id === id))).toBe(true);
   });
 
   it('follows an undo that removes the shape you are standing inside', () => {

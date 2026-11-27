@@ -1558,9 +1558,6 @@ function selectiveStep(set: SetEditorState, get: GetEditorState, direction: 'und
     selection: direction === 'undo' ? entry.selectionBefore : entry.selectionAfter,
     flowSession: direction === 'undo' ? entry.flowSessionBefore : entry.flowSessionAfter,
   });
-  const after = get();
-  const selection = selectionThatExists(after.document, after.selection);
-  if (selection !== after.selection) set({ selection });
   if (result.partial) notify(`Part of "${entry.label}" was changed by someone else since, and was left as they made it.`);
   quietIfOneConnector(get().selection);
 }
@@ -1618,9 +1615,12 @@ function restoreSnapshot(
     // room you land in is saved with a view from the one you were standing in.
     ...(moved ? { liveViewport: null } : {}),
     ...(cleared ?? reconcileSessionState(view, s)),
-    // After the reset: the entry's selection belongs to the room the entry was recorded in,
-    // which is the room we just moved to.
-    selection: restored.selection,
+    // After the reset: the entry's selection belongs to the room the entry was recorded in, which
+    // is the room we just moved to — as far as it is still there. Someone else may have removed part
+    // of it since (a selective step), and a file change that took away the room you stood in (an
+    // agent's) is recorded at the root with that room's selection: put back raw, it selected ids the
+    // root has not got, and ⌘D on them said the diagram was too large.
+    selection: selectionThatExists(view, restored.selection),
     ...(restored.flowSession ?? {}),
   }));
   settleSubSelections(get().selection);
@@ -3896,7 +3896,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       // See `FlowSessionSnapshot`.
       flowSession: entry.flowSessionBefore,
     });
-    quietIfOneConnector(entry.selectionBefore);
+    quietIfOneConnector(get().selection);
   },
 
   redo() {
@@ -3913,7 +3913,7 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
       selection: entry.selectionAfter,
       flowSession: entry.flowSessionAfter,
     });
-    quietIfOneConnector(entry.selectionAfter);
+    quietIfOneConnector(get().selection);
   },
 
   canUndo: () => canUndo(get().history),
