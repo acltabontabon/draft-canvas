@@ -1532,7 +1532,7 @@ function selectiveStep(set: SetEditorState, get: GetEditorState, direction: 'und
   const result = direction === 'undo' ? revertKeys(current, entry.after, entry.before, keys) : revertKeys(current, entry.before, entry.after, keys);
   const notify = useUiStore.getState().notify;
   // What the step puts back meets an id somebody else has used since: it can't come back as it was.
-  if (result.blocked || !idsUnique(result.file)) {
+  if (result.blocked || (result.file !== current && !idsUnique(result.file))) {
     // Dropped rather than kept: left on the stack it would block every step behind it.
     const { past, future } = state.history;
     set({ history: direction === 'undo' ? { past: past.slice(0, -1), future } : { past, future: future.slice(1) } });
