@@ -607,7 +607,9 @@ export function arrangeParts(parts: RoomParts, layout: LayoutSpec, ctx: Describe
   if (layout.fans !== 'unlabelled') {
     const fans = new Map<string, string[]>();
     for (const edge of edges) {
-      if (!edge.label) continue;
+      // Words of its own: what its chip shows (`routedLabel`), a named recovery action's name too. A
+      // fan of those was laid out with no room on its branches for the names they carry.
+      if (!routedLabel(edge)) continue;
       // The main path's own steps bundle only with each other (see `assignAnchors`).
       const main = primaryEdges.has(edge.id) ? '\u0000main' : '';
       for (const key of [`s\u0000${edge.source}\u0000${compatibilityKey(edge)}${main}`, `t\u0000${edge.target}\u0000${compatibilityKey(edge)}${main}`]) fans.set(key, [...(fans.get(key) ?? []), edge.id]);
