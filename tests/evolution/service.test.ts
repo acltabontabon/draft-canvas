@@ -159,6 +159,29 @@ describe('the history service', { timeout: 30_000 }, () => {
     expect(useEvolutionStore.getState().tip).toBe((await revisions(h.backend))[0]!.oid);
   });
 
+  it('reopens a paused diagram as paused, and records nothing until it is resumed', async () => {
+    const h = harness(doc());
+    await h.service.attach({ kind: 'library', documentId: h.file.metadata.id });
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    await h.service.setPaused(true);
+    h.edit(updateNode(h.file, 'n_api', { text: 'Gateway' }));
+    await h.service.detach();
+    const again = new HistoryService({ ...(h.service as unknown as { deps: ConstructorParameters<typeof HistoryService>[0] }).deps });
+    await again.attach({ kind: 'library', documentId: h.file.metadata.id });
+    await settle();
+    // It once said the change would be added in a moment, and offered to add it now, which did nothing.
+    expect(again.paused).toBe(true);
+    expect(useEvolutionStore.getState().capture).toEqual({ kind: 'off', reason: 'diagram' });
+    again.requestCapture('manual');
+    await h.clock.advance(DEFAULT_SCHEDULE.maxMs + 10);
+    expect(await revisions(h.backend)).toHaveLength(1);
+    expect(useEvolutionStore.getState().capture).toEqual({ kind: 'off', reason: 'diagram' });
+    await again.setPaused(false);
+    expect(useEvolutionStore.getState().capture.kind).toBe('pending');
+    await h.clock.advance(DEFAULT_SCHEDULE.idleMs + 10);
+    expect(await revisions(h.backend)).toHaveLength(2);
+  });
+
   it('finishes a capture into the history it began with when another diagram opens meanwhile', async () => {
     const h = harness(doc());
     await h.service.attach({ kind: 'library', documentId: h.file.metadata.id });

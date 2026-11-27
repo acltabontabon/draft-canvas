@@ -205,12 +205,27 @@ export class HistoryService {
         }
       }
       if (this.session !== session) return;
-      const dirty = session.tipBlob !== working.blobId;
-      this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
-      this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+      this.restart(session, session.tipBlob !== working.blobId);
     } catch (error) {
       this.setCapture(session, { kind: 'unavailable', message: messageOf(error) });
     }
+  }
+
+  /**
+   * The scheduler starts again from whether the working copy differs from the tip, and the status
+   * says where that leaves it. This once overwrote the pause `bind` had just shown, so a paused
+   * diagram reopened saying its changes would be added in a moment, and "Add to history now" did nothing.
+   */
+  private restart(session: Session, dirty: boolean): void {
+    const now = this.deps.clock.now();
+    this.dispatch(session, { kind: 'reset', at: now, generation: this.deps.editor.generation(), dirty });
+    this.setCapture(session, this.idle(session, dirty, now));
+  }
+
+  /** What the status says while no capture runs: paused wins, since nothing is recorded then. */
+  private idle(session: Session, pending: boolean, since: number): CaptureState {
+    if (session.paused) return { kind: 'off', reason: 'diagram' };
+    return pending ? { kind: 'pending', since } : { kind: 'up-to-date' };
   }
 
   private async knownHistories(backend: HistoryBackend): Promise<KnownHistory[]> {
@@ -281,9 +296,7 @@ export class HistoryService {
         await this.bind(session, binding);
       }
       const working = await this.deps.compute.prepare(this.deps.editor.file());
-      const dirty = session.tipBlob !== working.blobId;
-      this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
-      this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+      this.restart(session, session.tipBlob !== working.blobId);
     } catch (error) {
       this.setCapture(session, { kind: 'unavailable', message: messageOf(error) });
     }
@@ -453,7 +466,7 @@ export class HistoryService {
 
   private finish(session: Session, _recorded: boolean): void {
     session.schedule = step(session.schedule, { kind: 'succeeded', at: this.deps.clock.now() });
-    this.setCapture(session, isPending(session.schedule) ? { kind: 'pending', since: session.schedule.dirtySince ?? this.deps.clock.now() } : { kind: 'up-to-date' });
+    this.setCapture(session, this.idle(session, isPending(session.schedule), session.schedule.dirtySince ?? this.deps.clock.now()));
     this.arm(session);
   }
 
@@ -483,9 +496,7 @@ export class HistoryService {
       this.setCapture(session, { kind: 'off', reason: 'diagram' });
     } else {
       const working = await this.deps.compute.prepare(this.deps.editor.file());
-      const dirty = working.blobId !== session.tipBlob;
-      this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
-      this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+      this.restart(session, working.blobId !== session.tipBlob);
     }
   }
 
@@ -575,9 +586,7 @@ export class HistoryService {
     session.tipDocument = null;
     await this.bind(session, binding);
     const working = await this.deps.compute.prepare(this.deps.editor.file());
-    const dirty = working.blobId !== session.tipBlob;
-    this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
-    this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+    this.restart(session, working.blobId !== session.tipBlob);
   }
 
   /** Bytes all histories take on this device. */
@@ -642,9 +651,7 @@ export class HistoryService {
     }
     if (this.session !== session) return;
     const working = await this.deps.compute.prepare(this.deps.editor.file());
-    const dirty = working.blobId !== session.tipBlob;
-    this.dispatch(session, { kind: 'reset', at: this.deps.clock.now(), generation: this.deps.editor.generation(), dirty });
-    this.setCapture(session, dirty ? { kind: 'pending', since: this.deps.clock.now() } : { kind: 'up-to-date' });
+    this.restart(session, working.blobId !== session.tipBlob);
     useEvolutionStore.setState({ tipAt: this.deps.clock.now() });
     this.publishTip(session, 1);
   }
