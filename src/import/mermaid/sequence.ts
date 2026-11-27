@@ -15,6 +15,7 @@ import { createId } from '../../document/ids';
 import { LIMITS } from '../../document/limits';
 import { normalizeSequence } from '../../document/validateSequence';
 import type { DraftSequence, SeqFragment, SeqGroup, SeqItem, SeqMessage, SeqMessageKind, SeqNote, SeqOperand, SeqOperator, SeqParticipant } from '../../document/types';
+import { isCssColour } from './cssColour';
 import { frontMatterTitle, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
 
 export type MermaidSequenceParse =
@@ -124,6 +125,24 @@ function readDeclared(line: string): Declared | null {
   const as = AS.exec(body);
   if (!as) return { ...declared, name: body, configured: false };
   return { ...declared, name: body.slice(0, as.index).trimEnd(), label: body.slice(as.index + as[0].length).trimStart(), configured: false };
+}
+
+/** Mermaid's own split of what follows `box` (`parseBoxData`): a colour, then the name. */
+const BOX = /^((?:rgba?|hsla?)\s*\(.*\)|\w*)(.*)$/;
+
+/**
+ * A box's name, read as Mermaid reads it: the first word (or an `rgb(…)`/`hsl(…)` up to the line's last
+ * `)`) is the colour when a browser takes it for one, and the name is what follows; when it is not,
+ * all of it is the name. So `box Aqua Payments` is named "Payments" and `box Aqua` has none, while
+ * `box Bluebird Team`, `box transparent Blue team` and `box rgb(1,2,3) Payments (EU)` (which no
+ * browser reads as a colour) keep every word. Mermaid takes `#` for the start of a comment, so
+ * `box #E3F2FD Backend` has no name there; here a hex colour is still the colour, and the name is kept.
+ */
+function boxName(rest: string): string {
+  const hex = /^#[0-9a-f]{3,8}(?:\s+|$)/i.exec(rest);
+  if (hex) return rest.slice(hex[0].length);
+  const [, colour = '', named = ''] = BOX.exec(rest) ?? [];
+  return isCssColour(colour) ? named.trim() : rest;
 }
 
 const NOTE_PLACE = /^(over|left of|right of)\s+/i;
@@ -274,9 +293,7 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
     }
 
     if (word === 'box') {
-      // `box Aqua Group name`, `box rgb(1,2,3) Name`, `box transparent Name`, or just `box Name`.
-      const named = rest.replace(/^(?:transparent|rgba?\([^)]*\)|#[0-9a-f]{3,8})\s*/i, '');
-      const group: SeqGroup = { id: createId('sg'), name: decode(named), participantIds: [] };
+      const group: SeqGroup = { id: createId('sg'), name: decode(boxName(rest)), participantIds: [] };
       groups.push(group);
       box ??= group;
       open({ kind: 'box', group });

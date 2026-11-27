@@ -397,6 +397,8 @@ describe('reading hostile Mermaid', () => {
     ['a note with no colon', `Note over a${spaces}b`],
     ['a declaration with no alias', `participant a${spaces}b`],
     ['a configured declaration', `participant a${spaces}b @{ x`],
+    ['a box whose colour never closes', `box rgb(1${spaces}2${spaces}`],
+    ['a box with a long colour', `box rgb(1${spaces}2${spaces}) a${spaces}b`],
   ])('reads %s in one pass', (_name, line) => {
     expect(timed(`sequenceDiagram\n${line}\n`).ms).toBeLessThan(500);
   });

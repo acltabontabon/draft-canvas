@@ -143,6 +143,7 @@ async function mermaidDb(text: string) {
   return diagram.db as unknown as {
     getMessages(): { type: number; message: string; wrap: boolean }[];
     getActors(): Map<string, { description: string; wrap: boolean }>;
+    getBoxes(): { name?: string }[];
   };
 }
 
@@ -246,5 +247,39 @@ describe('a sequence drawn on the canvas, as Mermaid reads it', () => {
     expect(await parses(text)).toBe(true);
     // CRITICAL_START, a message, OPTION, a message, CRITICAL_END.
     expect((await mermaidDb(text)).getMessages().map((entry) => [entry.type, entry.message])).toEqual([[27, 'Connect'], [0, 'open'], [28, 'Timeout'], [0, 'log'], [29, '']]);
+  });
+});
+
+/** Each text as Mermaid reads it and as the import does: the two must say the same. */
+describe('a sequence written by hand, read as Mermaid reads it', () => {
+  beforeAll(() => {
+    mermaid.initialize({ startOnLoad: false });
+  });
+
+  it('takes a box’s first word for its colour only where Mermaid does', async () => {
+    // `box Aqua Payments` made a group called "Aqua Payments"; Mermaid draws an aqua box called "Payments".
+    const named: [string, string][] = [
+      ['Aqua Payments', 'Payments'],
+      ['AQUA Payments', 'Payments'],
+      ['Aqua', ''],
+      ['Background jobs', 'jobs'],
+      ['Initial checks', 'checks'],
+      ['Red-Team Payments', '-Team Payments'],
+      ['transparent Blue team', 'Blue team'],
+      ['Bluebird Team', 'Bluebird Team'],
+      ['None Team', 'None Team'],
+      ['Payments', 'Payments'],
+      ['rgb(1,2,3) Payments', 'Payments'],
+      ['rgba(1, 2, 3, 0.5) Payments', 'Payments'],
+      ['hsl(120 50% 50% / .5) Payments', 'Payments'],
+      ['rgb(1, 2%, 3) Payments', 'rgb(1, 2%, 3) Payments'],
+      ['rgb(1,2,3) Payments (EU)', 'rgb(1,2,3) Payments (EU)'],
+    ];
+    for (const [head, name] of named) {
+      const text = `sequenceDiagram\n  box ${head}\n    participant A\n  end\n  A->>A: hi\n`;
+      expect([head, (await mermaidDb(text)).getBoxes()[0]?.name ?? '']).toEqual([head, name]);
+      const read = parseMermaidSequence(text);
+      expect([head, read.ok && read.sequence.groups?.[0]?.name]).toEqual([head, name]);
+    }
   });
 });

@@ -57,6 +57,7 @@ work starts and ends only where the text says so.
 | `destroy B` then a message | Destroy |
 | `Note over A,B`, `Note left of A`, `Note right of A` | Note |
 | `box Name … end` | Participant group |
+| `box Aqua Name`, `box rgb(…) Name` | Participant group named what follows the colour, as Mermaid reads it: a first word only when a browser takes it for a colour (`box Bluebird Team` keeps both words). The colour is not kept |
 | `alt`/`else`, `opt`, `loop`, `par`/`and` (and `par_over`), `critical`/`option`, `break` | Frame, with its branches and conditions |
 | `title` or `title:`, in the diagram or its front matter | The sequence's name |
 | A line that starts with `%%` | A comment, ignored; a `%%` later in a line is text, as Mermaid reads it |
