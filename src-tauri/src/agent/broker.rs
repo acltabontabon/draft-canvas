@@ -1214,18 +1214,14 @@ async fn create(
 
     // The write, recorded first so a crash during it is recoverable by looking for the id.
     let folder = checked_path(&enabled_projects(&app.state::<AppState>()), &project.root)?;
-    let file = unique_name(&folder, &sanitize_stem(&title), &format!(".{DOC_EXT}"));
-    let target = folder.join(file);
-    let now = now_ms();
-    agent
-        .with_ledger(|l| {
-            l.advance(&key, Stage::Committing, now, |e| {
-                e.path = Some(target.to_string_lossy().into())
-            })
-        })
-        .ok_or_else(ledger_unavailable)?
-        .map_err(|_| ledger_unavailable())?;
-    let stamp = create_new_atomic(&target, text.as_bytes()).map_err(disk_outcome_unknown)?;
+    let pick = || {
+        folder.join(unique_name(
+            &folder,
+            &sanitize_stem(&title),
+            &format!(".{DOC_EXT}"),
+        ))
+    };
+    let (target, stamp) = claim_new_file(agent, &key, pick, text.as_bytes())?;
     let rel = target
         .strip_prefix(&project.root)
         .map(|p| p.to_string_lossy().replace('\\', "/"))
@@ -1327,6 +1323,45 @@ fn record(agent: &Agent, entry: Entry) -> Result<(), ToolError> {
 }
 
 /// A request refused before anything changed: it may run again under the same id.
+/// Writes a new diagram under the free name `pick` gives, recording the path in the ledger before
+/// each try so a crash mid-write is recoverable. Picking (`unique_name`) only checks; the create-new
+/// write is what claims a name, and it fails having written nothing when another create took the name
+/// in between — so a fresh name is picked and tried. Answered OUTCOME_UNKNOWN, that losing create
+/// stayed unknown on every retry for 30 days, though nothing had landed.
+fn claim_new_file(
+    agent: &Agent,
+    key: &str,
+    mut pick: impl FnMut() -> PathBuf,
+    bytes: &[u8],
+) -> Result<(PathBuf, String), ToolError> {
+    const TRIES: u32 = 4;
+    for attempt in 1..=TRIES {
+        let target = pick();
+        let now = now_ms();
+        agent
+            .with_ledger(|l| {
+                l.advance(key, Stage::Committing, now, |e| {
+                    e.path = Some(target.to_string_lossy().into())
+                })
+            })
+            .ok_or_else(ledger_unavailable)?
+            .map_err(|_| ledger_unavailable())?;
+        match create_new_atomic(&target, bytes) {
+            Ok(stamp) => return Ok((target, stamp)),
+            Err(e) if e.kind == crate::errors::ErrorKind::AlreadyExists && attempt < TRIES => {}
+            Err(e) if e.kind == crate::errors::ErrorKind::AlreadyExists => break,
+            Err(e) => return Err(disk_outcome_unknown(e)),
+        }
+    }
+    let error = ToolError::new(
+        "BUSY",
+        "Other diagrams kept taking this name while it was being saved. Nothing was written.",
+    )
+    .retryable();
+    fail(agent, key, &error);
+    Err(error)
+}
+
 fn fail(agent: &Agent, key: &str, error: &ToolError) {
     let now = now_ms();
     let code = error.code;
@@ -2574,6 +2609,44 @@ mod tests {
             admit(&agent, "update_diagram", &args, &[], &calls, |_| None).await,
             Err(error) if error.code == "OUT_OF_SCOPE"
         ));
+    }
+
+    #[test]
+    fn a_create_that_loses_its_name_to_another_takes_the_next_one() {
+        let dir = tempfile::tempdir().unwrap();
+        let agent = Agent::new(dir.path());
+        agent.ensure_ledger().unwrap();
+        // pending_create's request, already past its gate.
+        let key = "create_diagram:r";
+        record(&agent, pending_create("d_race0000001")).unwrap();
+        let folder = dir.path().join("P");
+        std::fs::create_dir(&folder).unwrap();
+        // Another create took "Shop" after the name was picked.
+        std::fs::write(folder.join("Shop.draftcanvas"), "theirs").unwrap();
+        let mut names = ["Shop.draftcanvas", "Shop 2.draftcanvas"].into_iter();
+        let (target, _) =
+            claim_new_file(&agent, key, || folder.join(names.next().unwrap()), b"mine").unwrap();
+        assert!(target.ends_with("Shop 2.draftcanvas"));
+        assert_eq!(
+            std::fs::read_to_string(folder.join("Shop.draftcanvas")).unwrap(),
+            "theirs"
+        );
+        assert_eq!(std::fs::read_to_string(&target).unwrap(), "mine");
+
+        // Every name taken: a definite refusal that can be retried, never "outcome unknown".
+        let error =
+            claim_new_file(&agent, key, || folder.join("Shop.draftcanvas"), b"mine").unwrap_err();
+        assert_eq!(error.code, "BUSY");
+        assert_eq!(error.retryable, Some(true));
+        assert_eq!(
+            agent.with_ledger(|l| l.begin(key, "f")),
+            Some(Begin::Fresh),
+            "a retry runs again rather than answering OUTCOME_UNKNOWN"
+        );
+        assert_eq!(
+            std::fs::read_to_string(folder.join("Shop.draftcanvas")).unwrap(),
+            "theirs"
+        );
     }
 
     #[test]
