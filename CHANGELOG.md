@@ -168,7 +168,9 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 - **Agent checks** — A problem a change causes in another view names that view, and a named
   recovery action is judged by the name its chip shows. A starter's inside views take the agent's
   id prefix, and an id clash names the id. Boundaries nested deeper than a diagram keeps are
-  refused, and changes to the open diagram get the same reopen check as other agent writes.
+  refused, and changes to the open diagram get the same reopen check as other agent writes. An
+  agent's finished diagram is checked on the lines the canvas will draw, not on lines from before
+  a repair.
 - **Agent skill** — The refusal table says what the app's message says to do, and the request
   checker reports wrongly typed fields instead of crashing. Installing the skill, and its update at
   launch, work again when the agent's skills folder is a link to a folder on another drive.
