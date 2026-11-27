@@ -42,18 +42,32 @@ export function aliasesOf(sequence: DraftSequence): Map<string, string> {
   return aliases;
 }
 
-/** The participants a `create` message brings into being, by the message that does it: they are declared there, not at the top. */
+/**
+ * The participants a `create` message brings into being, by the message that does it: they are
+ * declared there, not at the top. Only where the text names them first: both formats refuse to
+ * create a participant already there, and one that takes part above its create message (which
+ * `check.ts` flags and allows) made the whole Mermaid text fail to parse. Such a one is declared at
+ * the top, and its create message is written as any other.
+ */
 export function createdBy(sequence: DraftSequence): Map<string, string> {
   const made = new Map<string, string>();
-  const claimed = new Set<string>();
+  /** Who the text has named so far, top to bottom — what each item writes, as both formats write it. */
+  const named = new Set<string>();
+  const everyone = sequence.participants.map((participant) => participant.id);
   const visit = (items: DraftSequence['items']) => {
     for (const item of items) {
       if (item.t === 'message') {
-        if (item.kind === 'create' && item.from !== item.to && !claimed.has(item.to)) {
-          claimed.add(item.to);
-          made.set(item.id, item.to);
-        }
-      } else if (item.t === 'fragment') for (const branch of item.operands) visit(branch.items);
+        if (item.kind === 'create' && item.from !== item.to && !named.has(item.to)) made.set(item.id, item.to);
+        named.add(item.from).add(item.to);
+      } else if (item.t === 'note') {
+        // Over its first and last participant, or beside its first.
+        named.add(item.over[0]!).add(item.side ? item.over[0]! : item.over[item.over.length - 1]!);
+      } else if (item.operator === 'ref') {
+        // A reference covering nobody in particular covers everyone.
+        for (const id of item.covers?.length ? item.covers : everyone) named.add(id);
+      } else {
+        for (const branch of item.operands) visit(branch.items);
+      }
     }
   };
   visit(sequence.items);

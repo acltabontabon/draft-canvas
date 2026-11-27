@@ -203,6 +203,25 @@ describe('a sequence drawn on the canvas, as Mermaid reads it', () => {
     expect(back.ok && [back.sequence.participants[0]!.name, ...messagesOf(back.sequence).map((message) => message.label)]).toEqual(['wrap: Checkout', 'wrap: the order in an envelope', ':nowrap:raw']);
   });
 
+  it('creates a participant only where the text first names it', async () => {
+    // Job took part above its create message (`check.ts` flags it, and allows it), and Mermaid
+    // refuses a `create participant` for one already there: the whole text failed to parse.
+    const ping = createMessage({ id: 'm1', from: 'a', to: 'b', label: 'ping' });
+    const start = createMessage({ id: 'm2', from: 'a', to: 'b', kind: 'create', label: 'start' });
+    const early: DraftSequence = { participants: [who('a', 'API'), who('b', 'Job')], items: [ping, start] };
+    for (const items of [early.items, [createNote({ id: 'n', over: ['a', 'b'], text: 'warm up' }), start]]) {
+      const text = sequenceToMermaid(asNode({ ...early, items }));
+      expect(text).toContain('\n    participant Job as Job\n');
+      expect(text).not.toContain('create participant');
+      expect(await parses(text)).toBe(true);
+      expect(sequenceToPlantUml(asNode({ ...early, items }))).not.toContain('create participant');
+    }
+    // Named first by its create message, it is created there.
+    const fresh = sequenceToMermaid(asNode({ ...early, items: [start, ping] }));
+    expect(fresh).toContain('\n    create participant Job as Job\n    API-->>Job: start\n');
+    expect(await parses(fresh)).toBe(true);
+  });
+
   it('writes a critical section’s branches as the options Mermaid reads', async () => {
     const read = parseMermaidSequence('sequenceDiagram\n  critical Connect\n    A->>B: open\n  option Timeout\n    A->>A: log\n  end\n');
     expect(read.ok).toBe(true);
