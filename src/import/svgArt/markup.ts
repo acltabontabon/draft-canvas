@@ -25,7 +25,14 @@ export interface SvgMarkup {
   all: SvgElement[];
 }
 
-const ENTITIES: Record<string, string> = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'" };
+/** A map, not an object: `&constructor;` was once read as what every object inherits under that name. */
+const ENTITIES: ReadonlyMap<string, string> = new Map([
+  ['amp', '&'],
+  ['lt', '<'],
+  ['gt', '>'],
+  ['quot', '"'],
+  ['apos', "'"],
+]);
 
 const isSpace = (code: number): boolean => code === 32 || code === 9 || code === 10 || code === 13;
 /** A character a name may start with: a letter, `_` or `:`. Names here are ASCII; anything else is not SVG. */
@@ -55,7 +62,7 @@ function decoded(raw: string): string | null {
       if (!(code > 0 && code <= 0x10ffff) || (code >= 0xd800 && code <= 0xdfff)) return null;
       out += String.fromCodePoint(code);
     } else {
-      const value = ENTITIES[name];
+      const value = ENTITIES.get(name);
       if (value === undefined) return null;
       out += value;
     }

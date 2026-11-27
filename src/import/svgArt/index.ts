@@ -37,12 +37,15 @@ const NOTE_LEFT_OUT = 'Text, images and effects were left out.';
 const NOTE_SHEET = 'Colours set in a style sheet were not read. Export it with presentation attributes to keep them.';
 const NOTE_GRADIENT = 'Gradients and patterns were drawn as one colour.';
 
-const NAMED: Record<string, string> = {
-  black: '#000000', white: '#ffffff', red: '#ff0000', green: '#008000', blue: '#0000ff', yellow: '#ffff00', orange: '#ffa500', purple: '#800080',
-  pink: '#ffc0cb', brown: '#a52a2a', gray: '#808080', grey: '#808080', silver: '#c0c0c0', navy: '#000080', teal: '#008080', maroon: '#800000',
-  olive: '#808000', lime: '#00ff00', aqua: '#00ffff', cyan: '#00ffff', fuchsia: '#ff00ff', magenta: '#ff00ff', gold: '#ffd700', indigo: '#4b0082',
-  violet: '#ee82ee', coral: '#ff7f50', salmon: '#fa8072', khaki: '#f0e68c', tan: '#d2b48c', beige: '#f5f5dc', ivory: '#fffff0', crimson: '#dc143c',
-};
+/** A map, not an object: `fill="constructor"` was once a "colour" whose value was a function. */
+const NAMED: ReadonlyMap<string, string> = new Map(
+  Object.entries({
+    black: '#000000', white: '#ffffff', red: '#ff0000', green: '#008000', blue: '#0000ff', yellow: '#ffff00', orange: '#ffa500', purple: '#800080',
+    pink: '#ffc0cb', brown: '#a52a2a', gray: '#808080', grey: '#808080', silver: '#c0c0c0', navy: '#000080', teal: '#008080', maroon: '#800000',
+    olive: '#808000', lime: '#00ff00', aqua: '#00ffff', cyan: '#00ffff', fuchsia: '#ff00ff', magenta: '#ff00ff', gold: '#ffd700', indigo: '#4b0082',
+    violet: '#ee82ee', coral: '#ff7f50', salmon: '#fa8072', khaki: '#f0e68c', tan: '#d2b48c', beige: '#f5f5dc', ivory: '#fffff0', crimson: '#dc143c',
+  }),
+);
 
 /** A paint as the file gave it: a colour, the page's text colour, a reference to something else, or none. */
 type Read = { kind: 'none' } | { kind: 'current' } | { kind: 'colour'; hex: string; alpha: number } | { kind: 'reference'; id: string };
@@ -68,7 +71,8 @@ function readPaint(raw: string): Read | null {
     const alpha = rgb[4] === undefined ? 1 : rgb[4].endsWith('%') ? parseFloat(rgb[4]) / 100 : parseFloat(rgb[4]);
     return { kind: 'colour', hex: `#${hex2(channel(rgb[1]!))}${hex2(channel(rgb[2]!))}${hex2(channel(rgb[3]!))}`, alpha: Number.isFinite(alpha) ? Math.min(1, Math.max(0, alpha)) : 1 };
   }
-  return NAMED[value] ? { kind: 'colour', hex: NAMED[value], alpha: 1 } : null;
+  const named = NAMED.get(value);
+  return named ? { kind: 'colour', hex: named, alpha: 1 } : null;
 }
 
 /** What is inherited down the tree: an element draws with its own values, or its parent's. */

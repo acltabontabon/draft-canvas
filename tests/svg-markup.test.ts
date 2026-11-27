@@ -51,6 +51,22 @@ describe('reading SVG markup', () => {
     const { root } = read('<svg a="&lt;&amp;&gt;&quot;&apos;" b="&#65;&#x42;" c=\'"\'/>');
     expect(Object.fromEntries(root.attributes)).toEqual({ a: '<&>"\'', b: 'AB', c: '"' });
     for (const bad of ['<svg a="&nbsp;"/>', '<svg a="&#0;"/>', '<svg a="&#xD800;"/>', '<svg a="&#x110000;"/>', '<svg a="&amp"/>', '<svg a="&#;"/>']) expect(readMarkup(bad, 10), bad).toBeNull();
+    // Looked up by name on a plain object, these were once read as what any object inherits:
+    // `&constructor;` became the text of Object itself.
+    for (const inherited of ['constructor', '__proto__', 'toString', 'valueOf', 'hasOwnProperty']) expect(readMarkup(`<svg a="&${inherited};"/>`, 10), inherited).toBeNull();
+  });
+
+  it('reads a colour name only if it is one, never a name every object has', () => {
+    // `fill="constructor"` was a colour whose value was a function: kept as the picture's own
+    // colours, the drawing failed its checks and the file was refused as too detailed.
+    for (const name of ['constructor', '__proto__']) {
+      const result = importSvgArt(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><path d="M0 0h50v50z" fill="${name}"/><path d="M0 60h50v30z" fill="#ff0000"/></svg>`, 'original');
+      expect(result.ok, name).toBe(true);
+      // Read as no colour at all, so the path keeps the one it inherits: SVG's black.
+      if (result.ok) expect(result.asset.paths.map((path) => path.fill), name).toEqual(['#000000', '#ff0000']);
+    }
+    const named = importSvgArt('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><path d="M0 0h5v5z" fill="Teal"/></svg>', 'original');
+    expect(named.ok && named.asset.paths[0]!.fill).toBe('#008080');
   });
 
   it('refuses anything that is not well formed', () => {
