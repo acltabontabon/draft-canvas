@@ -3487,11 +3487,13 @@ export const useEditorStore = create<EditorStore>((set, get) => ({
         let detached = doc;
         for (const child of children) detached = setParent(detached, [child.id], survivingParentOf(child.parentId));
         // Remove only the boundary; `removeElements` would take the contents too — but that also
-        // means skipping its cascade, so connectors drawn to the boundary itself and flow steps
-        // that spotlit it or walked those connectors are pruned here.
-        const edges = detached.edges.filter((e) => !boundaryIds.has(e.source) && !boundaryIds.has(e.target));
-        const kept = new Set(edges);
-        const removedEdgeIds = new Set(detached.edges.filter((e) => !kept.has(e)).map((e) => e.id));
+        // means skipping its cascade, so it is repeated here: connectors drawn to the boundary
+        // itself, the compensating actions linked to those (left behind, one was linked to nothing,
+        // drawn nowhere and out of reach, and came back unlinked on the next open), and flow steps
+        // that spotlit it or walked those connectors.
+        const removedEdgeIds = new Set(detached.edges.filter((e) => boundaryIds.has(e.source) || boundaryIds.has(e.target)).map((e) => e.id));
+        for (const edge of detached.edges) if (edge.compensationFor && removedEdgeIds.has(edge.compensationFor)) removedEdgeIds.add(edge.id);
+        const edges = detached.edges.filter((e) => !removedEdgeIds.has(e.id));
         // A point about the boundary itself was about its scope, not its members — it goes with the
         // boundary rather than being spread over the children; one about a member is untouched.
         return pruneOpenPoints(

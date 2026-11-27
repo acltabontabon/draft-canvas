@@ -100,6 +100,30 @@ describe('ungroup', () => {
     expect(selection.nodes).toEqual([leaf.id]);
     expect(store.getState().history.past.at(-1)!.selectionAfter.nodes).toEqual([leaf.id]);
   });
+
+  /**
+   * Ungroup takes away connectors drawn to the boundary itself, but not, as a delete does, the
+   * compensating actions folded under them: one stayed linked to nothing, drawn nowhere and out of
+   * reach, and came back unlinked on the next open with nothing said.
+   */
+  it('takes the compensating actions of the connectors it removes with them, as a delete does', () => {
+    const client = createNode({ type: 'service', x: -400, y: 0, text: 'Client' });
+    const payments = createNode({ type: 'group', x: 0, y: 0, width: 600, height: 300, text: 'Payments' });
+    const api = createNode({ type: 'service', x: 40, y: 40, text: 'API', parentId: payments.id });
+    const charge = createEdge({ source: client.id, target: payments.id, label: 'charge card' });
+    const refund = { ...createEdge({ source: api.id, target: client.id }), semantic: 'compensates' as const, compensationFor: charge.id, compensationVisible: false, compensationName: 'Refund payment' };
+    const kept = createEdge({ source: api.id, target: client.id, label: 'notifies' });
+    store.setState({
+      document: { ...createDocument('Ungroup'), nodes: [client, payments, api], edges: [charge, refund, kept] },
+      history: { past: [], future: [] },
+      selection: { nodes: [payments.id], edges: [] },
+      revision: 0,
+    });
+    store.getState().ungroupSelection();
+    const { edges } = store.getState().document;
+    expect(edges.map((edge) => edge.id)).toEqual([kept.id]);
+    expect(edges.every((edge) => !edge.compensationFor || edges.some((other) => other.id === edge.compensationFor))).toBe(true);
+  });
 });
 
 describe('setFlowPlayback', () => {
