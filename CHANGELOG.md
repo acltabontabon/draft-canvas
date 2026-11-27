@@ -6,6 +6,13 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ## [Unreleased]
 
+### Shared
+
+#### Fixed
+
+- **Appearance** — Opening Appearance on a busy computer frames the diagram in the canvas beside
+  the panel, rather than sometimes leaving it under the panel.
+
 ## [1.22.0] - 2026-11-26
 
 Every version of your diagram, in a style of your own.
