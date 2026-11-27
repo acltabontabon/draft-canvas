@@ -119,8 +119,21 @@ function statementsOf(text: string): string[] {
  */
 
 /** `->>`, `-->>`, `-)`, `--)`, `-x`, `--x`, `->`, `-->`, `<<->>`, `<<-->>`: longest first, so `-->>` is not read as `-->`. */
-// Match arrows in the context of a message. A bare `-->` also ends an HTML comment.
-const ARROW = /<<-->>|<<->>|-->>|--\)|--x|-->|->>|-\)|-x|->/g;
+const ARROWS = ['<<-->>', '<<->>', '-->>', '--)', '--x', '-->', '->>', '-)', '-x', '->'] as const;
+
+/**
+ * The first arrow at or after `start`, and where it begins: the leftmost one, the longest there.
+ * Compared as strings rather than matched by a pattern: a pattern listing `-->`, Mermaid's dotted
+ * arrow, reads to code scanning as an HTML comment filter that misses `--!>`, which it isn't.
+ */
+function firstArrow(line: string, start: number): { index: number; arrow: string } | null {
+  for (let index = start; index < line.length; index += 1) {
+    const char = line[index];
+    if (char !== '-' && char !== '<') continue;
+    for (const arrow of ARROWS) if (line.startsWith(arrow, index)) return { index, arrow };
+  }
+  return null;
+}
 
 interface Said {
   from: string;
@@ -137,11 +150,10 @@ interface Said {
 /** `A->>+B: text`: the sender up to the first arrow, an optional `+`/`-`, the receiver up to the first colon, the text after it. */
 function readMessage(line: string): Said | null {
   // A sender is at least one character.
-  ARROW.lastIndex = 1;
-  const arrow = ARROW.exec(line);
+  const arrow = firstArrow(line, 1);
   if (!arrow) return null;
   let from = line.slice(0, arrow.index).trim();
-  let rest = line.slice(arrow.index + arrow[0].length).trimStart();
+  let rest = line.slice(arrow.index + arrow.arrow.length).trimStart();
   // Mermaid's central connection, `A->>()B`, `A()->>B` or both: a circle where the message meets that
   // lifeline, and still a message from A to B. `A->>()B` was a call to someone called "()B".
   const centralFrom = from.endsWith('()');
@@ -158,7 +170,7 @@ function readMessage(line: string): Said | null {
   const colon = rest.indexOf(':');
   const to = (colon === -1 ? rest : rest.slice(0, colon)).trimEnd();
   if (!from || !to) return null;
-  const said: Said = { from, arrow: arrow[0], mark, to, central: centralFrom || centralTo };
+  const said: Said = { from, arrow: arrow.arrow, mark, to, central: centralFrom || centralTo };
   if (colon !== -1) said.text = rest.slice(colon + 1);
   return said;
 }
