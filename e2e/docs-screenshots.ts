@@ -356,9 +356,6 @@ async function richTextScreenshots(page: Page) {
   await page.getByRole('button', { name: 'Hand font' }).click();
   await page.getByRole('button', { name: 'Marker background' }).click();
   await page.locator(CANVAS).click({ position: { x: 12, y: 12 } });
-  await page.mouse.move(20, 600);
-  const canvas = await box(page.locator(CANVAS));
-  await shot(page, 'rich-text', { ...canvas, height: 470 });
 
   // The same shape being edited: its Markdown source, and the format bar in its popover.
   await page.locator('.dc-node').first().dblclick();
@@ -402,25 +399,20 @@ async function outageScreenshots(page: Page) {
   await shot(page, 'outage-overview');
   const calls = page.locator('button.dc-outage-note', { hasText: 'calls fail' });
   await calls.click();
-  await shot(page, 'outage-note');
   await calls.press('Escape');
   await page.getByRole('button', { name: 'Draw the replay route' }).click();
   await expect(page.locator('button.dc-outage-note', { hasText: 'replay from here once' })).toBeVisible();
   await settled();
-  await shot(page, 'outage-fix');
   await takeDown('checkout');
   await shot(page, 'outage-instances');
   await clickEdge(page, page.locator('.react-flow__edge[data-id="orders-fulfilment"] .dc-edge-line').first());
   await settled();
-  await page.mouse.move(720, 120);
-  await shot(page, 'outage-connector');
   await takeDown('cache');
   await page.locator('button.dc-outage-note', { hasText: 'every read falls to' }).click();
   await shot(page, 'outage-cache');
   await clickEdge(page, page.locator('.react-flow__edge[data-id="checkout-orders"] .dc-edge-line').first());
   await settled();
-  await page.locator('button.dc-outage-note', { hasText: "can't publish" }).click();
-  await shot(page, 'outage-half-done');
+  await expect(page.locator('button.dc-outage-note', { hasText: "can't publish" })).toBeVisible();
 }
 
 /**
@@ -463,14 +455,11 @@ async function junctionScreenshots(page: Page) {
   await expect(card.getByRole('option')).toHaveCount(3);
   await page.keyboard.press('ArrowDown');
   await expect(card.locator('.dc-junction-picture')).toContainText('Reconciliation');
-  await shot(page, 'junction-places');
 
   // Followed: the place it continues, and the way back.
   await page.keyboard.press('Enter');
   await expect(junction('ledger')).toBeInViewport({ ratio: 1 });
   await expect(page.getByRole('navigation', { name: 'Junction history' })).toBeVisible();
-  await page.mouse.move(720, 760);
-  await shot(page, 'junction-arrived');
 }
 
 /**
@@ -966,10 +955,8 @@ async function appearanceScreenshots(page: Page) {
   await panel.getByRole('radiogroup', { name: 'Brand colour' }).getByRole('radio', { name: 'Amber', exact: true }).evaluate(pick);
   await panel.getByRole('radiogroup', { name: 'Backdrop' }).getByRole('radio', { name: /^Stars/ }).evaluate(pick);
   await expect(page.locator('.dc-canvas-backdrop')).toBeVisible();
-  await shot(page, 'appearance-canvas');
   // The pen: each choice drawn as what it does.
   await panel.getByRole('tab', { name: 'Drawing', exact: true }).click();
-  await shot(page, 'appearance-drawing');
   // That made a style of one's own; the pictures after it start from Clean again.
   await panel.getByRole('tab', { name: 'Styles', exact: true }).click();
   await panel.getByRole('button', { name: 'Delete style', exact: true }).click();
@@ -979,15 +966,8 @@ async function appearanceScreenshots(page: Page) {
   const pack = (name: string) => panel.locator('.dc-prefs-pack', { hasText: name });
   await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
 
-  for (const [name, file] of [
-    ['High seas', 'style-pack-high-seas'],
-    ['Cyberpunk', 'style-pack-cyberpunk'],
-    ['Arena', 'style-pack-arena'],
-    ['Cute', 'style-pack-cute'],
-    ['Weeb', 'style-pack-weeb'],
-    ['Hardwood', 'style-pack-hardwood'],
-    ['Match Point', 'style-pack-match-point'],
-  ] as const) {
+  // Every pack can still be added and drawn with, though only the first is pictured.
+  for (const name of ['High seas', 'Cyberpunk', 'Arena', 'Cute', 'Weeb', 'Hardwood', 'Match Point']) {
     await pack(name).getByRole('button', { name: `Add ${name} to my styles`, exact: true }).click();
     await expect(styles.getByRole('radio', { name: new RegExp(`^${name}`) })).toBeChecked();
     if (name === 'High seas') {
@@ -998,7 +978,6 @@ async function appearanceScreenshots(page: Page) {
     await panel.getByRole('button', { name: 'Done', exact: true }).click();
     await expect(panel).toBeHidden();
     await frame();
-    await shot(page, file);
     panel = await openAppearance(page);
     await expect(pack('Cute').locator('.dc-style-preview svg')).toBeVisible();
   }
@@ -1280,7 +1259,7 @@ async function main() {
 
     // Architecture examples are not captured here: each starter's picture lives beside it in the
     // starters gallery (github.com/acltabontabon/draft-canvas-starters), drawn by
-    // `scripts/starters/render.ts`, and `docs/guides/examples.md` links there.
+    // `scripts/starters/render.ts`, and the getting-started guide links there.
 
     await technologyScreenshots(page);
     log('rich text');
