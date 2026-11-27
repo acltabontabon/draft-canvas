@@ -16,7 +16,9 @@ from the toolbar), not in text fields or dialogs.
 | `L` | [Sequence](sequence-diagrams.md) | | |
 
 The shape appears under the pointer, ready to name. **Connect to…** in `⌘K` connects it.
-Over a sequence, `S` `D` `Q` `A` `M` add a participant of that kind instead.
+Over a sequence, `S` `D` `Q` `A` `M` add a participant of that kind instead. Any other shape or a
+technology: press `Enter` on **Shapes** at the end of the toolbar, type its name (`kafka`), and
+`Enter` puts it down, ready to name.
 
 `Tab` accepts the faint next-shape suggestion, `Esc` waves it away, and `]` / `[` cycle through
 others, or pick the next shape when none shows. **Turn off next-shape suggestions** in `⌘K`, or use

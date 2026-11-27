@@ -456,4 +456,29 @@ test.describe('keyboard focus around the canvas', () => {
     await expect(outline).toBeHidden();
     await expect(canvas(page)).toBeFocused();
   });
+
+  test('a shape chosen from All shapes with the keyboard is put down, ready to name', async ({ page }) => {
+    // A technology has no key of its own, and an armed tool waits for a click: "kafka" could be found
+    // from the keyboard but never placed.
+    await newCanvas(page, 'Keyboard shape');
+    await page.getByRole('button', { name: 'All shapes' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('combobox', { name: 'Search shapes' })).toBeFocused();
+    await page.keyboard.type('kafka');
+    await page.keyboard.press('Enter');
+
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+    await expect(page.locator('.dc-node-editor')).toBeFocused();
+    const made = await page.evaluate(async () => {
+      const { useEditorStore } = await import('/src/store/editorStore.ts');
+      const { useUiStore } = await import('/src/store/uiStore.ts');
+      const [node] = useEditorStore.getState().document.nodes;
+      return { type: node?.type, technology: node?.technology, armed: useUiStore.getState().armed };
+    });
+    expect(made).toEqual({ type: 'queue', technology: 'Apache Kafka', armed: null });
+    await page.keyboard.type('Orders');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.dc-node').first()).toContainText('Orders');
+    await expect(canvas(page)).toBeFocused();
+  });
 });

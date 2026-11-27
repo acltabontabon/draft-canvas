@@ -698,6 +698,7 @@ function EditorScreen({ session }: { session: DocumentSession }) {
           onBack={() => returnHome(session.closeDocument)}
           onPresent={onPresent}
           onExport={() => setExportOpen(true)}
+          onPlaceShape={createAtPointer}
           readOnly={readOnly !== null}
         />
         </div>

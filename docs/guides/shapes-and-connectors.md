@@ -8,7 +8,10 @@ Press a key to add a shape, or pick one from the toolbar. **Shapes** at the end 
 every shape with its key and finds one by any name you'd use (`cache`, `user`, `topic`). Type a
 technology and it offers the shape that technology is: `kafka` gives a Queue that arrives as a Kafka
 stream, `redis` a Data Store that is a cache, `s3` object storage, each with its logo where there is
-one. A language or framework (`spring`, `rust`) gives a Service built with it.
+one. A language or framework (`spring`, `rust`) gives a Service built with it. Opened and chosen
+with the keyboard, the shape goes down at once where a shape's key puts one (under the pointer,
+beside the selected shape, or in the middle of the view), ready to name; chosen with the pointer, it
+waits for a click on the canvas.
 
 Type what a thing is called and it offers the shape already set to that kind: `load balancer`,
 `reverse proxy`, `cdn`, `config`, `tls`, `api key`, `pod`. Where the name says more than the kind
