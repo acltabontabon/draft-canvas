@@ -52,7 +52,8 @@ pub fn setup(app: &mut App) -> Result<(), Box<dyn std::error::Error>> {
         // Windows and Linux hand a double-clicked file to the program as an argument. (macOS sends an
         // Opened event instead, handled below.)
         let cwd = std::env::current_dir().unwrap_or_default();
-        open_paths(&handle, paths_from_args(std::env::args().skip(1), &cwd));
+        // `args_os`: `args` panics on an argument that isn't valid Unicode, and a file name can be one.
+        open_paths(&handle, paths_from_args(std::env::args_os().skip(1), &cwd));
     }
 
     let fallback = handle.clone();
@@ -193,8 +194,8 @@ pub fn second_instance(app: &AppHandle, args: Vec<String>, cwd: String) {
 
 /// Command-line arguments as paths, made absolute against the directory the command was run from, and
 /// only the ones that name a `.draftcanvas`: launchers add flags and other arguments of their own.
-fn paths_from_args(args: impl Iterator<Item = String>, cwd: &Path) -> Vec<PathBuf> {
-    args.map(PathBuf::from)
+fn paths_from_args<A: Into<PathBuf>>(args: impl Iterator<Item = A>, cwd: &Path) -> Vec<PathBuf> {
+    args.map(Into::into)
         .filter(|p| has_doc_ext(p))
         .map(|p| if p.is_absolute() { p } else { cwd.join(p) })
         .collect()
@@ -474,7 +475,30 @@ mod tests {
 
     #[test]
     fn no_arguments_means_no_paths() {
-        assert!(paths_from_args(std::iter::empty(), Path::new("/w")).is_empty());
+        assert!(paths_from_args(std::iter::empty::<String>(), Path::new("/w")).is_empty());
+    }
+
+    /// A file whose name isn't valid Unicode opens like any other; reading the arguments as `String`s
+    /// panicked at startup instead.
+    #[test]
+    fn a_file_name_that_is_not_unicode_is_still_a_path() {
+        #[cfg(windows)]
+        let name = {
+            use std::os::windows::ffi::OsStringExt;
+            let mut wide: Vec<u16> = vec![0xD800]; // an unpaired surrogate
+            wide.extend("plan.draftcanvas".encode_utf16());
+            std::ffi::OsString::from_wide(&wide)
+        };
+        #[cfg(unix)]
+        let name = {
+            use std::os::unix::ffi::OsStringExt;
+            let mut bytes = vec![0xFF];
+            bytes.extend_from_slice(b"plan.draftcanvas");
+            std::ffi::OsString::from_vec(bytes)
+        };
+        assert!(name.to_str().is_none());
+        let paths = paths_from_args([name.clone()].into_iter(), Path::new("/w"));
+        assert_eq!(paths, [Path::new("/w").join(name)]);
     }
 
     #[test]
