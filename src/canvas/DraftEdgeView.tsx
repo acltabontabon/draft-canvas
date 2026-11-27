@@ -1,6 +1,7 @@
 import { playbackFlowOf } from '../document/sequenceFlow';
 import { CONNECTOR_STYLE, connectorStrokePath, styledConnectorPath } from '../render/connectorStyle';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { returnFocusToCanvas } from './canvasFocus';
 import { LIMITS } from '../document/limits';
 import { reconnectProblem } from '../document/reconnect';
 import { anchorOnShape } from '../document/queueGeometry';
@@ -424,13 +425,30 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
   const sourceNode = useInternalNode(edge?.source ?? '');
   const targetNode = useInternalNode(edge?.target ?? '');
 
+  // Enter or Escape finishes an edit with its field still focused, and the field unmounts: focus fell
+  // to <body>, where a screen reader lost its place and the next Tab skipped the canvas. It goes back
+  // to the canvas, as a shape's name edit does (`DraftNodeView`), only once the field has gone:
+  // focused while it is still there, its blur would commit what Escape is reverting. A blur (a click
+  // or Tab elsewhere) has already put focus where it was going, and is left alone.
+  const returnFocus = useRef(false);
   const [editing, setEditing] = useState(false);
-  const stopEditing = useCallback(() => setEditing(false), []);
+  const stopEditing = useCallback((byKey = false) => {
+    returnFocus.current = byKey;
+    setEditing(false);
+  }, []);
   // The condition chip is editable in place exactly like the label chip: anything a diagram shows
   // on a connector, the person looking at it can double-click and change — a route rule shouldn't
   // send them hunting for the inspector's own Condition field.
   const [editingCondition, setEditingCondition] = useState(false);
-  const stopEditingCondition = useCallback(() => setEditingCondition(false), []);
+  const stopEditingCondition = useCallback((byKey = false) => {
+    returnFocus.current = byKey;
+    setEditingCondition(false);
+  }, []);
+  useLayoutEffect(() => {
+    if (editing || editingCondition || !returnFocus.current) return;
+    returnFocus.current = false;
+    returnFocusToCanvas(null);
+  }, [editing, editingCondition]);
   const editRequested = useUiStore((state) => state.editRequestId === id);
   const compensating = Boolean(edge?.compensationFor);
   const isPortal = Boolean(edge?.portal);
@@ -1259,9 +1277,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                   if (isImeKeyEvent(event)) return;
                   if (event.key === 'Enter') {
                     useEditorStore.getState().updateEdgeLabel(edge.id, event.currentTarget.value.trim());
-                    stopEditing();
+                    stopEditing(true);
                   }
-                  if (event.key === 'Escape') stopEditing();
+                  if (event.key === 'Escape') stopEditing(true);
                 }}
               />
             ) : (
@@ -1357,9 +1375,9 @@ export const DraftEdgeView = memo(function DraftEdgeView({ id, selected }: EdgeP
                     if (isImeKeyEvent(event)) return;
                     if (event.key === 'Enter') {
                       useEditorStore.getState().setEdgeCondition(edge.id, event.currentTarget.value.trim());
-                      stopEditingCondition();
+                      stopEditingCondition(true);
                     }
-                    if (event.key === 'Escape') stopEditingCondition();
+                    if (event.key === 'Escape') stopEditingCondition(true);
                   }}
                 />
               ) : (

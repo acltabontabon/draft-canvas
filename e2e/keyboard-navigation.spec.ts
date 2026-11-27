@@ -379,6 +379,32 @@ test.describe('keyboard focus around the canvas', () => {
     await expect(caption).toHaveText('pays');
   });
 
+  test('a connector label edited on the canvas from the keyboard hands focus back to the canvas', async ({ page }) => {
+    await newCanvas(page, 'Canvas label focus');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Queue', { x: 700, y: 300 });
+    await connectShapes(page, 0, 1);
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+    await canvas(page).focus();
+    await page.keyboard.press('Enter');
+    const field = page.locator('.dc-edge-label-input');
+    await expect(field).toBeFocused();
+    await page.keyboard.type('pays');
+    await page.keyboard.press('Escape');
+    await expect(field).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+    // Escape still reverts: handing focus back must not commit what was typed.
+    await expect(page.locator('.dc-edge-label-text')).toHaveCount(0);
+
+    await page.keyboard.press('Enter');
+    await expect(field).toBeFocused();
+    await page.keyboard.type('pays');
+    await page.keyboard.press('Enter');
+    await expect(field).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+    await expect(page.locator('.dc-edge-label-text')).toHaveText('pays');
+  });
+
   test('Escape on the connector colour flyout closes the flyout alone', async ({ page }) => {
     // As the shape toolbar's colour panel does: the connector stays selected, its toolbar open.
     const toolbar = await connectorToolbar(page, 'Connector colour flyout');
