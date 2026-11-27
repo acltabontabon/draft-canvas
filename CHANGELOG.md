@@ -8,10 +8,179 @@ this file. See [Release notes](docs/reference/releases.md#release-notes).
 
 ### Shared
 
+#### Changed
+
+- **Faster connectors** — Dropping a shape replans connectors about 30% faster on large diagrams,
+  and Tidy up and Arrange run about twice as fast on a 300-connector diagram, with the same
+  previews.
+- **Tidy up on large diagrams** — Over 800 connectors, Tidy up stops on its work budget in seconds
+  and gives the same preview on any computer. Run it again to continue.
+
 #### Fixed
 
 - **Appearance** — Opening Appearance on a busy computer frames the diagram in the canvas beside
   the panel, rather than sometimes leaving it under the panel.
+- **Canvas colours** — A canvas colour of your own is always drawn on that colour: some blues and
+  greys, including Fluent's and Bootstrap's, turned the diagram to the built-in dark or light
+  canvas. On such a canvas the selection, Share and removed items in previews stay visible, and
+  banner words and coloured Text read clearly on every canvas swatch.
+- **Backdrops** — Backdrop strength Strong is now stronger than Regular, on the canvas and in
+  exports.
+- **Styles** — A picture used to draw a shape can no longer paint far beyond that shape.
+- **Starters** — A starter's preview is drawn in the style it will land in.
+- **Export** — Each room's SVG, in an "Every level" ZIP or on its own, has its own ids, so several
+  can share a page. A named recovery action's name is kept clear of shapes, and a numbered label's
+  step and a recovery action's words look the same as on the canvas.
+- **Connectors** — Line jumps, shared labels, spread ends and parallel tracks follow when a Service
+  or Component changes kind, a glyph's words change or an edit elsewhere re-spreads connectors, so
+  an export made during a session matches the reopened file.
+- **Delete and join** — `⌥⌫` leaves a shape whose joined connector couldn't hold all its notes and
+  code (a connector holds four), and says so, instead of joining it and losing the extras on the
+  next open. With one way in and several out, each joined connector gets its own copy of the notes.
+- **Compensating actions** — An HTTP recovery action whose link was broken no longer gains "POST"
+  the second time the diagram opens. Ungroup takes the compensating actions of connectors drawn to
+  the boundary with them, instead of leaving them hidden and linked to nothing.
+- **The edge of the canvas** — Turning a shape into another, Make room and adding a starter beside
+  the edge of the canvas keep shapes and step cameras within it, so the next open doesn't move them.
+- **Make room** — The band shows on diagrams placed far from the origin. Delete, paste and shape
+  keys wait while a Make room drag is under way instead of being lost, and giving one up with Escape
+  no longer makes the diagram's edited time go backwards.
+- **Selection** — Adding a shape, pasting, duplicating or undoing lets go of a message selected
+  inside a sequence and of chosen sketch strokes, so the next Delete or arrow key acts on what is
+  selected.
+- **Rooms** — Deleting a room's last shape takes its sketches and flows off the screen with it and
+  says so; one undo brings them back. A flow can no longer be made in a room with no shapes, where
+  it was never saved.
+- **Smart Ink** — Converting a long sketch, or one drawn zoomed out and read zoomed in, no longer
+  freezes the canvas, and a very long stroke is kept at once when you lift the pen. Choosing another
+  kind in the strip keeps a collaborator's edits made since the drawing was converted.
+- **Presenting** — Zooming with ⌘+, ⌘− or ⌘0 keeps your camera until you press R. Coming back with
+  ⇧G from a linked Junction in another room carries on from the step it was on, and leaving
+  restores the selection from before. Step marks are larger targets, larger still on touch screens.
+- **Linked junctions** — With reduced motion, the arrival ring lights as soon as the camera jumps.
+- **Text** — Leaving a new Text element empty no longer resets the saved camera.
+- **Editor** — Opening another diagram puts down Make room, the Pencil and a Junction counterpart in
+  hand, and closes Appearance.
+- **Keyboard** — Backspace or Delete on a toolbar or status bar button reached with Tab no longer
+  deletes the selected shapes. Finishing a shape's name, editing a connector's words on the canvas,
+  and closing a toolbar, the Outline or Open points put focus back on the canvas, and Escape closes
+  just the popover, flyout or panel it was pressed in.
+- **Connectors and the keyboard** — Connectors are no longer separate, invisible Tab stops; the
+  Outline reaches every connector. A shape or technology chosen with the keyboard, such as kafka,
+  is put on the canvas ready to name.
+- **Screen readers** — Present says which flow it will play, Appearance's Done is called Done, the
+  highlighted context-menu row's shortcut is easy to read, Appearance's headings are in order, and
+  Escape closes a tooltip wherever focus is.
+- **Opening older diagrams** — A diagram from an older version no longer opens or imports "with
+  repairs", from a file, a share link or the desktop.
+- **Live collaboration** — Collaborators stay connected when the owner's clock is set back or jumps
+  forward, and someone let in just as the owner's relay connection dropped gets in when let in
+  again. A collaborator using Make room on a large diagram stays in the session. Cursors and
+  selection rings stay visible when the canvas and the device differ in light or dark.
+- **Shared undo** — Undo after others' edits is refused with a message when it would take the
+  diagram past its size limits. It no longer takes away the level someone gave a shape's inside,
+  and undoing a deleted shape brings its inside back at its level. A connector ending on a point a
+  Junction doesn't have is moved onto one of its points before it is shared, and a collaborator let
+  back in while their copy is opening never sends the canvas that was on screen before it.
+- **History** — Switching, starting or bringing in an alternative no longer throws away changes
+  made while recording is paused or off; it asks you to turn recording on first. A paused diagram
+  shows as paused when opened again. Removing or pausing a copy's history leaves the original's
+  alone, and after an interrupted switch, "Keep the diagram as it is" stays on that alternative.
+- **Outage** — Work that goes round a loop is followed, so taking something down no longer calls
+  everything beyond a loop quiet, and a connector inside a loop can be taken down. The list of what
+  each outage would do opens at once on large diagrams and keeps up while you edit. With one
+  instance of a Service down, the note says the drawing doesn't show whether the rest can take all
+  the work. Keep as open point keeps a question once, and says so when the canvas holds 200.
+- **Attachments** — On a glyph Service, a glyph Component or an Artifact, the attachment and
+  open-point tabs sit at the corner.
+- **Depth** — Flying into or out of a room shows its latest sketches.
+- **Sequences** — Changing a message to Reply answers the call above it, and an unlinked reply
+  offers Answer the call above. Deleting the only participant a reference covers removes the
+  reference. A critical section keeps its option branches on import, and Add branch adds one. A
+  participant standing for a shape with a very long name stays in step with it.
+- **Sequence export** — Replies, self-messages and notes left blank export blank. A canvas with
+  several sequence diagrams exports Mermaid as Markdown, one block per diagram, which imports back
+  as separate diagrams. Words starting "wrap:" or "nowrap:" keep that start, and a participant
+  whose name starts with x, or that takes part before it is created, exports text Mermaid reads.
+- **Mermaid** — Importing a very long or deeply nested sequence diagram no longer freezes the tab.
+  A sequence's `title:` line, a `%%` inside a message and `par_over` are read as Mermaid reads
+  them, and a flowchart name that starts with a backtick no longer breaks the export.
+- **Structurizr export** — External systems are declared as software systems outside yours, and
+  nested boundaries load in Structurizr.
+- **Third-party notices** — The notices carry the licence text of every Rust crate and bundled
+  package.
+
+### Desktop
+
+#### Fixed
+
+- **Saving on Windows** — Diagrams in deeply nested folders save, rename and move again, instead
+  of saying the file couldn't be found. Rename and Save As refuse names Windows keeps for devices
+  (CON, NUL, COM1…), and a suggested name gets an underscore instead.
+- **Opening** — A double-clicked diagram whose file name isn't valid Unicode opens instead of
+  stopping the app. Opening, reloading or reverting a large diagram no longer flashes "Unsaved
+  changes", and quitting meanwhile doesn't ask to save it.
+- **Quick Drafts** — A Quick Draft started with ⌘N or from the tray just after going back to Home
+  keeps its edits, saves, and is kept on quit.
+- **Changed on disk** — Overwrite replaces only the version you were asked about. If the file
+  changes again while you decide, Draft Canvas asks again.
+- **Recovery** — Unsaved changes this version can't read open the file as it is on disk, keep the
+  copy and say why, instead of leaving the last diagram on screen.
+- **Recent and Home** — Entries on an offline drive or network share are kept, and Remove from Home
+  and Remove from Recent work after a folder or file was renamed only in case. A setting, Remove
+  from Recent, Clear Recent or Discard draft that can't be saved says why.
+- **Start-up** — If the app can't start its desktop features, it says so instead of quietly running
+  as the web app.
+- **Nodi** — An answer ends the agent's access to the diagram and code at once, and an agent that
+  keeps running after answering is stopped with its answer applied. "Couldn't reach Draft Canvas"
+  at the start is shown instead of being lost. Taking back a code folder in Settings stops a run
+  already reading it. Continue in Terminal copies a PowerShell command on Windows, and updating
+  Codex while the app runs no longer breaks Nodi until a restart. Long replies stream in without
+  slowing the window, and a proposal waiting for review keeps its chip when a lookup fails.
+- **AI agents** — An agent showing a diagram it changed no longer takes the field you're typing in;
+  while you type, its notice offers Show instead. A ⌘S or a quit's Save made while an agent's
+  change is still opening no longer writes the old version over it. Undoing an agent's change that
+  removed the room you were in no longer leaves that room's shapes selected.
+- **Agent requests** — A retried request answers with its first receipt even after its diagram was
+  renamed or moved, and two creates that pick the same file name both succeed. Agent settings
+  files saved with a byte-order mark or Windows line endings are read and rewritten correctly, and
+  agents can connect again on Windows after a pipe error.
+- **Agents keep your sequences** — A sequence an agent reads and sends back keeps its participants'
+  kinds, technologies, colours, order and groups, box colours, references and blank labels, and a
+  reply keeps answering the right call: the same text sent back changes nothing.
+- **Agents in your selection** — A change scoped to your selection is refused when it would also
+  rename a linked junction elsewhere or change what an unselected connector means, and two adds in
+  one request can't give a new junction group two labels.
+- **Agent reads** — Implementation context and selection reads cut long notes and stay within a
+  read's size, saying how to read the rest. A selection too large to pass back as a scope says so,
+  and reads mark held shapes, as does an arrange over them.
+- **Agent checks** — A problem a change causes in another view names that view, and a named
+  recovery action is judged by the name its chip shows. A starter's inside views take the agent's
+  id prefix, and an id clash names the id. Boundaries nested deeper than a diagram keeps are
+  refused, and changes to the open diagram get the same reopen check as other agent writes.
+- **Agent skill** — The refusal table says what the app's message says to do, and the request
+  checker reports wrongly typed fields instead of crashing.
+- **Proposals** — A proposal that landed before a crash is recognised even when its labels had
+  extra spaces.
+- **History** — Import history… accepts bundles with named revisions, including the app's own
+  exports, and an alternative made in another window no longer disappears when you change
+  publishing settings in this one.
+
+#### Security
+
+- **Nodi on Windows** — Checking which agent CLIs are installed no longer runs in the folder of a
+  double-clicked diagram, where a planted `node.exe` could run.
+
+### Web
+
+#### Fixed
+
+- **Editor** — The editor loads less: Nodi's desktop-only mascot and state no longer come with it.
+- **Home** — Diagram cards are named by what they show, including when each was edited, and Home
+  has a main landmark.
+- **Restore** — Restoring a file that isn't a backup, or a damaged one, says so in plain words.
+- **History** — Import history… checks every object of a bundle to its real end, so a crafted
+  bundle can't exhaust the tab's memory.
 
 ## [1.22.0] - 2026-11-26
 
