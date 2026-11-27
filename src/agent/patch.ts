@@ -177,6 +177,48 @@ function refuseOutOfScope(r: Reader, at: string, offending: readonly string[]) {
   r.problems.add('OUT_OF_SCOPE', at, `${offending.map((id) => `"${id}"`).join(', ')} ${offending.length === 1 ? 'is' : 'are'} outside the captured selection; expand the scope, or make this change without one`);
 }
 
+/** Where a shape or connector is drawn rather than what it says (attachments are compared on their own). */
+const DRAWN_NODE: ReadonlySet<string> = new Set(['x', 'y', 'width', 'height', 'inside', 'attachments']);
+const DRAWN_EDGE: ReadonlySet<string> = new Set(['sourceAnchor', 'targetAnchor', 'waypoints', 'routeMode', 'routing', 'attachments']);
+
+function saysTheSame(before: object, after: object, drawn: ReadonlySet<string>): boolean {
+  const a = before as Record<string, unknown>;
+  const b = after as Record<string, unknown>;
+  for (const key of new Set([...Object.keys(a), ...Object.keys(b)])) if (!drawn.has(key) && !sameValue(a[key], b[key])) return false;
+  // A note attached beside the ones it had is an add's, and an add is always allowed; one changed or taken off is not.
+  const had = (a.attachments ?? []) as Attachment[];
+  return sameValue(had, ((b.attachments ?? []) as Attachment[]).filter((attachment) => had.some((old) => old.id === attachment.id)));
+}
+
+/**
+ * What a scoped request changed that the scope doesn't hold, in any room: a shape or connector that
+ * was there and now says something else or is gone, and a flow it changed (no scope holds a flow).
+ * Where something is drawn is not what it says: a boundary grown round a shape moved into it, the
+ * contents of a moved group and connectors re-anchored to a shape that moved are not counted. A
+ * room that is gone went with the shape it was inside, which was in the scope.
+ */
+function reachedOutside(file: DraftDocument, next: DraftDocument, scope: Scope): { shapes: { id: string; path: DepthPath }[]; flows: string[] } {
+  const shapes: { id: string; path: DepthPath }[] = [];
+  const flows: string[] = [];
+  walkGraphs(file, (graph, path) => {
+    const now = viewOf(next, path);
+    if (!now || (now.nodes === graph.nodes && now.edges === graph.edges && now.flows === graph.flows)) return;
+    const nodes = new Map(now.nodes.map((node) => [node.id, node]));
+    const edges = new Map(now.edges.map((edge) => [edge.id, edge]));
+    const kept = new Map(now.flows.map((flow) => [flow.id, flow]));
+    for (const node of graph.nodes) {
+      const after = nodes.get(node.id);
+      if (!scope.nodes.has(node.id) && (!after || !saysTheSame(node, after, DRAWN_NODE))) shapes.push({ id: node.id, path });
+    }
+    for (const edge of graph.edges) {
+      const after = edges.get(edge.id);
+      if (!scope.edges.has(edge.id) && (!after || !saysTheSame(edge, after, DRAWN_EDGE))) shapes.push({ id: edge.id, path });
+    }
+    for (const flow of graph.flows) if (!sameValue(flow, kept.get(flow.id))) flows.push(flow.id);
+  });
+  return { shapes, flows };
+}
+
 /** The first of the document's file-wide limits `file` is past, if any. */
 function overFileLimits(file: DraftDocument): { what: string; count: number; limit: number } | undefined {
   const used = totals(file);
@@ -226,7 +268,6 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
   let base = file;
   let view = viewOf(file, path);
   if (!view) throw new AgentError('NOT_FOUND', 'That view no longer exists.');
-  const originalView = view;
   const explainOrder = laterAdd(ops);
   let otherViews: Map<string, DepthPath> | undefined;
   const missingTarget = (current: DraftDocument, at: string, id: string): void => {
@@ -582,23 +623,8 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     const synced = fitSequences(started, syncLinks(started, view).doc, () => ctx);
     const beforeSync = new Map(view.nodes.map((node) => [node.id, node]));
     const syncedIds = synced.nodes.filter((node) => beforeSync.get(node.id) !== node).map((node) => node.id);
-    refuseOutOfScope(r, '/scope', outOfScope(scope, syncedIds.filter((id) => originalView.nodes.some((node) => node.id === id)), 'nodes'));
     for (const id of syncedIds) touched.add(id);
     view = synced;
-  }
-  if (scope) {
-    // A sequence replacement may delete incident connectors, and link sync or unlink can
-    // change identities on either side. Arrange still owns its existing incident-route policy.
-    const nodes = new Map(view.nodes.map((node) => [node.id, node]));
-    const edges = new Set(view.edges.map((edge) => edge.id));
-    refuseOutOfScope(r, '/scope', [
-      ...outOfScope(scope, originalView.nodes.filter((node) => {
-        const next = nodes.get(node.id);
-        return node.type === 'sequence' && next && next.sequence !== node.sequence;
-      }).map((node) => node.id), 'nodes'),
-      ...outOfScope(scope, originalView.edges.filter((edge) => !edges.has(edge.id)).map((edge) => edge.id), 'edges'),
-    ]);
-    problems.throwIfAny();
   }
 
   let nextFile = path.length ? embed(base, path, view) : view;
@@ -621,6 +647,22 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     for (const { id, link, label, was } of settled.adopted) {
       advisories.push(`Junction "${id}" joined group "${link}" and reads "${label}", the group's label, not "${was}". To rename the group, update any of its junctions with set.label.`);
     }
+  }
+  // Checked once every cascade has run, in every room: each op was checked on the ids it names, but
+  // what it carries along (a connector re-inferred for a retyped shape, a linked junction renamed with
+  // its group, a sequence participant with its shape, connectors and flow steps of a removed shape)
+  // reached past the scope unchecked when it was settled after the op's own check.
+  if (scope) {
+    const reached = reachedOutside(file, nextFile, scope);
+    if (reached.shapes.length) {
+      const named = reached.shapes.map(({ id, path: at }) => (samePath(at, path) ? `"${id}"` : `"${id}" (${at.length ? `inside ${at.join(' ▸ ')}` : 'in the top view'})`));
+      const elsewhere = reached.shapes.some(({ path: at }) => !samePath(at, path));
+      problems.add('OUT_OF_SCOPE', '/scope', `this change would also change ${named.join(', ')}, outside the captured selection; ${elsewhere ? 'a scope holds only what is in the view it was captured in, so make this change without one' : `expand the scope to take ${named.length === 1 ? 'it' : 'them'} in, or make this change without one`}`);
+    }
+    if (reached.flows.length) {
+      problems.add('OUT_OF_SCOPE', '/scope', `this change would also change ${reached.flows.length === 1 ? 'flow' : 'flows'} ${reached.flows.map((id) => `"${id}"`).join(', ')}, which a captured selection never covers; make this change without a scope`);
+    }
+    problems.throwIfAny();
   }
   // Only what this request could plausibly have broken — `touched` plus, through `checkQuality`'s
   // pairwise checks, anything untouched it collides with — never a claim the whole file is clean.

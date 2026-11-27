@@ -229,8 +229,12 @@ An agent captures the selection once, then edits only those ids, even if the per
    reported under `sequences`, in full.
 2. The agent passes them as `scope: {nodes, edges}` to `update_diagram`, `preview_diagram` or `submit_proposal`.
 
-With `scope`, `add` is always allowed. An `update`, `remove` or cascade outside scope is `OUT_OF_SCOPE`,
-naming the ids. A scoped id that no longer exists is `SCOPE_TARGET_MISSING`.
+With `scope`, `add` is always allowed. An `update` or `remove` outside scope is `OUT_OF_SCOPE`, naming
+the ids, and so is anything such a change would carry outside it, in any view: a connector's meaning
+re-inferred for a retyped shape, a linked junction renamed with its group, a sequence participant
+renamed with its shape, a connector or flow step removed with a shape. Only where something is drawn
+may change past the scope: a boundary grows to hold a shape moved into it, and connectors are
+re-anchored to a shape that moved. A scoped id that no longer exists is `SCOPE_TARGET_MISSING`.
 
 ## Proposals: review before applying
 
