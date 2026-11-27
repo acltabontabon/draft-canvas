@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { createEdge, createNode } from '../src/document/factory';
 import { routingPlan } from '../src/edges/bundles';
 import { crossingPlan } from '../src/edges/crossings';
-import { computeEdgeRoutes, edgeRoutes, type EdgeRouteInputs } from '../src/edges/edgeRoutes';
+import { computeEdgeRoutes, edgeRoutes, withRouteMemo, type EdgeRouteInputs, type EdgeRoutes } from '../src/edges/edgeRoutes';
 import { obstacleKey, obstaclesForEdge } from '../src/edges/obstacles';
 import { laneIndex, rectOf } from '../src/edges/routing';
 import type { DraftEdge, DraftNode } from '../src/document/types';
@@ -57,6 +57,25 @@ describe('shared connector routes', () => {
     expect(edgeRoutes(inputs, 'transient')).not.toBe(first);
     const filed = edgeRoutes(inputs);
     expect(edgeRoutes(inputs, 'transient')).toBe(filed);
+  });
+});
+
+describe('routes kept for a layout job', () => {
+  it('are found again while the job runs, and let go of when it ends', () => {
+    const nodes = [box('s', 0, 3000), box('t', 700, 3100)];
+    const edges = [createEdge({ id: 'st', source: 's', target: 't' })];
+    const inputs = inputsFor(nodes, edges, edges[0]!);
+    let kept: EdgeRoutes | undefined;
+    withRouteMemo(() => {
+      kept = edgeRoutes(inputs, 'transient');
+      expect(edgeRoutes({ ...inputs }, 'transient')).toBe(kept);
+      // A job inside a job keeps on with the same routes.
+      withRouteMemo(() => expect(edgeRoutes(inputs, 'transient')).toBe(kept));
+    });
+    expect(edgeRoutes(inputs, 'transient')).not.toBe(kept);
+    expect(edgeRoutes(inputs, 'transient')).toEqual(kept);
+    // And never filed for the canvas.
+    expect(edgeRoutes(inputs)).not.toBe(kept);
   });
 });
 

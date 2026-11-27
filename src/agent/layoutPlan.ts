@@ -8,10 +8,16 @@
  * whether the other reading direction is worked out, depends on how much work was spent and never on
  * how fast the machine is, so the same diagram gives the same preview anywhere. A result that stopped
  * on the budget says so (`partial`); applying it and asking again continues from where it left off.
+ *
+ * Each keeps the routes it works out for as long as it runs (`withRouteMemo`): a candidate redraws
+ * the whole view, almost all of it as the one before drew it. A unit of the budget is charged for a
+ * connector drawn whether its route was worked out or found, so the budget is spent, and the preview
+ * comes out, exactly as it would without them.
  */
 
 import type { DraftDocument } from '../document/types';
 import { visibleEdges } from '../document/compensation';
+import { withRouteMemo } from '../edges/edgeRoutes';
 import { fixedIds, heldCount } from '../document/held';
 import type { ArrangeFix } from '../lib/arrangeFixes';
 import { arrangeView, readingDirectionOf } from './arrange';
@@ -139,6 +145,10 @@ export function reuseOf(base: DraftDocument, view: DraftDocument): DraftDocument
  * straight.
  */
 export function planArrange(doc: DraftDocument, ask: { selection?: readonly string[]; preset?: ArrangePreset } = {}): ArrangePlanResult {
+  return withRouteMemo(() => arrangeWithin(doc, ask));
+}
+
+function arrangeWithin(doc: DraftDocument, ask: { selection?: readonly string[]; preset?: ArrangePreset }): ArrangePlanResult {
   const scoped = ask.selection !== undefined;
   const preset = ask.preset ?? {};
   // Held shapes stay exactly where they are: the rest is arranged as a selection is, set back down
@@ -240,6 +250,10 @@ export function planArrange(doc: DraftDocument, ask: { selection?: readonly stri
  * applies none of it.
  */
 export function planTidy(doc: DraftDocument, scope?: readonly string[]): TidyPlanResult {
+  return withRouteMemo(() => tidyWithin(doc, scope));
+}
+
+function tidyWithin(doc: DraftDocument, scope: readonly string[] | undefined): TidyPlanResult {
   const edges = visibleEdges(doc.edges).length;
   // Held shapes are never nudged: the cleanup is scoped to everything else.
   const fixed = fixedIds(doc.nodes);

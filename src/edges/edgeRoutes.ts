@@ -12,7 +12,7 @@
  * Routing is pure in its inputs, so one key — every input, serialised — names one answer. Only the
  * canvas writes: an export, a preview or an agent's candidate (`PlanScope` `'transient'`) reads what
  * the canvas already worked out but never files its own routes, which would push out the ones on
- * screen.
+ * screen. A layout job keeps its own for as long as it runs (`withRouteMemo`).
  */
 import { compensationDisplayLabel, visibleEdges } from '../document/compensation';
 import { categoryOf } from '../document/connectorSemantics';
@@ -129,9 +129,14 @@ export function routedCaption(
 /** The caption key only when there is one, so inputs without stay byte-identical. */
 const withCaption = (caption: string | undefined) => (caption ? { caption } : {});
 
+/** How many routes have been worked out from scratch — counted, so a test can hold a layout job to
+ *  working each out once (`withRouteMemo`) on any machine. */
+export const routeWork = { computed: 0 };
+
 /** Routes a connector from scratch, exactly as both renderers draw it. Uncached: for a gesture's
  *  frames, whose inputs no later frame repeats. */
 export function computeEdgeRoutes(inputs: EdgeRouteInputs): EdgeRoutes {
+  routeWork.computed += 1;
   const { source, target, routing, lane, spine, obstacles, mode, fallback } = inputs;
   const waypoints = inputs.waypoints as DraftPoint[] | undefined;
   const requestOptions = {
@@ -172,13 +177,41 @@ export function computeEdgeRoutes(inputs: EdgeRouteInputs): EdgeRoutes {
   return { request, response, responseLabel: responseLabelAnchor(request, response, source, target, lane) };
 }
 
+/**
+ * Routes worked out for a render outside the canvas while a layout job runs (`withRouteMemo`).
+ *
+ * Tidy up and Arrange try candidate after candidate, each a new set of connectors, and draw every
+ * connector of the view for each — almost all of them exactly as the candidate before drew them. A
+ * `'transient'` route is never filed in the canvas's cache, and the worker the jobs run on has no
+ * canvas, so every one was worked out again: on the supported diagram, Tidy up routed 40,110 times
+ * for 1,826 different connectors. Kept for the one job, apart from the canvas's, and let go with it.
+ */
+let jobRoutes: Lru<string, EdgeRoutes> | null = null;
+
+/**
+ * Runs `work` with every `'transient'` route it works out kept until it returns, so a route asked for
+ * again is not worked out again. Routing is pure in its inputs, so the answers, and everything
+ * worked out from them, are exactly what they would have been; only the time differs. Within a run
+ * that is already keeping them, it keeps on with the same.
+ */
+export function withRouteMemo<T>(work: () => T): T {
+  if (jobRoutes) return work();
+  jobRoutes = new Lru(LIMITS.maxEdges);
+  try {
+    return work();
+  } finally {
+    jobRoutes = null;
+  }
+}
+
 /** A connector's routes, from the shared cache when anything has already worked them out. */
 export function edgeRoutes(inputs: EdgeRouteInputs, scope: PlanScope = 'canvas'): EdgeRoutes {
   const key = keyOf(inputs);
-  const known = SHARED.get(key);
+  const known = SHARED.get(key) ?? (scope === 'transient' ? jobRoutes?.get(key) : undefined);
   if (known) return known;
   const routes = computeEdgeRoutes(inputs);
   if (scope === 'canvas') SHARED.set(key, routes);
+  else jobRoutes?.set(key, routes);
   return routes;
 }
 
