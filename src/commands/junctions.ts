@@ -19,6 +19,7 @@ import { counterpartsOf, groupLabel, junctionGroups, junctionOf, membersOf, same
 import { arrivalFrame, journeyOf, type Insets, type Journey } from '../junctions/journey';
 import { canGoBack, canGoForward, EMPTY_TRAIL, peekStop, step, travel, withoutStop, type TrailStop } from '../junctions/trail';
 import { announce } from '../lib/announce';
+import { motionMs } from '../lib/motion';
 import { count } from '../lib/plural';
 import { PRESENTATION_INSETS } from '../presentation/useFlowPlayback';
 import { fileOf, useEditorStore, type EditorStore, type FlowPlaybackState } from '../store/editorStore';
@@ -146,7 +147,9 @@ function lightArrival(id: string, journey: Journey): void {
         if (useUiStore.getState().jumpFlashId === id) useUiStore.getState().setJumpFlashId(null);
       }, ARRIVAL_MS);
     },
-    Math.round(journey.duration * ARRIVAL_LEAD),
+    // The journey as the camera takes it: under reduced motion the camera jumps at once (`calm`), and
+    // a delay worked out from the full journey lit the ring up to 600 ms after the jump.
+    Math.round(motionMs(journey.duration) * ARRIVAL_LEAD),
   );
 }
 

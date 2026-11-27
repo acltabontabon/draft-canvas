@@ -169,6 +169,23 @@ describe('following a junction', () => {
     expect(useUiStore.getState().jumpFlashId).toBeNull();
   });
 
+  /** The camera jumps at once under reduced motion; the ring still waited out the journey it no longer took. */
+  it('lights the arrival at once for a viewer who asked for less motion', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    vi.stubGlobal('matchMedia', vi.fn((query: string) => ({ matches: query.includes('reduce'), media: query })));
+    try {
+      const { ctx, place } = camera();
+      place(OFF_TO_ONE_SIDE);
+      await followJunction(ctx(), 'b1');
+      vi.advanceTimersByTime(0);
+      expect(useUiStore.getState().jumpFlashId).toBe('b2');
+      vi.advanceTimersByTime(ARRIVAL_MS + 1);
+      expect(useUiStore.getState().jumpFlashId).toBeNull();
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('a second journey started before the first lands takes the arrival with it', async () => {
     vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
     const { ctx } = camera();
