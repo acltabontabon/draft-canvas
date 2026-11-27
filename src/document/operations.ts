@@ -882,8 +882,15 @@ export function pasteDocument(
       if (step.extraEdgeIds) next.extraEdgeIds = step.extraEdgeIds.flatMap((id) => edges.get(id) ?? []);
       if (step.extraNodeIds) next.extraNodeIds = step.extraNodeIds.flatMap((id) => nodes.get(id) ?? []);
       if (!edgeId && !next.extraEdgeIds?.length && !next.extraNodeIds?.length && !next.viewport) continue;
-      // A step's camera looks at the same shapes, now `offset` away.
-      if (step.viewport) next.viewport = { ...step.viewport, x: step.viewport.x - offset.x * step.viewport.zoom, y: step.viewport.y - offset.y * step.viewport.zoom };
+      // A step's camera looks at the same shapes, now `offset` away, and stays within the coordinate
+      // limit as a load keeps it (unclamped, one beside the edge was moved by the next open).
+      if (step.viewport) {
+        next.viewport = {
+          ...step.viewport,
+          x: clamp(step.viewport.x - offset.x * step.viewport.zoom, -LIMITS.maxCoordinate, LIMITS.maxCoordinate),
+          y: clamp(step.viewport.y - offset.y * step.viewport.zoom, -LIMITS.maxCoordinate, LIMITS.maxCoordinate),
+        };
+      }
       steps.push(next);
     }
     if (steps.length === 0) continue;

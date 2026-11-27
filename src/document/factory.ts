@@ -1,4 +1,5 @@
 import { familyKindOf, isGlyphKind } from './dataStoreGeometry';
+import { clampCoord } from './geometry';
 import { createId } from './ids';
 import { plainTextOfMarkdown } from './markdownText';
 import { DEFAULTS } from './limits';
@@ -488,7 +489,8 @@ export function cloneDocumentAsNew(doc: DraftDocument, title: string): DraftDocu
 /**
  * The box a Service or Component takes when its kind moves between a card and a glyph (Generic →
  * Load Balancer, Port → Generic): the new drawing's default size around the same centre, as turning one shape into
- * another does (`convert.ts`). `null` when the kind stayed in its family and the box is fine.
+ * another does (`convert.ts`). `null` when the kind stayed in its family and the box is fine. Its
+ * position is clamped as a load clamps one, so a shape beside the edge of the canvas stays on it.
  */
 export function boxForKind(
   node: Pick<DraftNode, 'type' | 'x' | 'y' | 'width' | 'height'>,
@@ -498,8 +500,8 @@ export function boxForKind(
   if (isGlyphKind(node.type, from) === isGlyphKind(node.type, to)) return null;
   const size = defaultSizeFor(node.type, to);
   return {
-    x: Math.round(node.x + node.width / 2 - size.width / 2),
-    y: Math.round(node.y + node.height / 2 - size.height / 2),
+    x: clampCoord(node.x + node.width / 2 - size.width / 2),
+    y: clampCoord(node.y + node.height / 2 - size.height / 2),
     width: size.width,
     height: size.height,
   };

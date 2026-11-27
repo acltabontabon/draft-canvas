@@ -16,6 +16,7 @@ import {
   distributeNodes,
   extractFragment,
   moveNodes,
+  pasteDocument,
   pasteFragment,
   removeElements,
   sendBackward,
@@ -24,8 +25,11 @@ import {
   setTitle,
   updateNode,
 } from '../src/document/operations';
+import { createFlow } from '../src/document/flow';
 import { CURRENT_VERSION, DRAFT_FORMAT, SERVICE_KINDS } from '../src/document/types';
 import { LIMITS } from '../src/document/limits';
+import { parseDocument } from '../src/document/validate';
+import { serializeDocument } from '../src/export/project';
 
 function sample() {
   const a = createNode({ type: 'service', x: 0, y: 0, text: 'Order Service' });
@@ -438,6 +442,31 @@ describe('z-order', () => {
     expect(sendToBack(doc, [a.id])).toBe(doc);
     expect(sendBackward(doc, [a.id])).toBe(doc);
     expect(bringToFront(doc, [a.id]).nodes[0]!.z).toBe(2);
+  });
+});
+
+describe('pasting a whole document', () => {
+  // Was: a step's camera was shifted by the offset with no clamp, so one beside the edge of the
+  // canvas came out past it and the next open moved it back.
+  it('keeps a flow step\'s camera on the canvas, where the next open keeps it', () => {
+    const { a, b, edge } = sample();
+    const flow = createFlow({ title: 'Tour' });
+    flow.steps = [{ id: 's1', edgeId: edge.id, viewport: { x: -LIMITS.maxCoordinate + 5, y: LIMITS.maxCoordinate - 5, zoom: 1 } }];
+    const source = { ...addEdges(addNodes(createDocument('Starter'), [a, b]), [edge]), flows: [flow] };
+    const { doc } = pasteDocument(createDocument('Here'), source, { x: 40, y: -40 });
+    expect(doc.flows[0]!.steps[0]!.viewport).toEqual({ x: -LIMITS.maxCoordinate, y: LIMITS.maxCoordinate, zoom: 1 });
+    const reopened = parseDocument(serializeDocument(doc));
+    if (!reopened.ok) throw new Error(reopened.error);
+    expect(serializeDocument(reopened.document)).toBe(serializeDocument(doc));
+  });
+
+  it('still moves a step\'s camera with the shapes it looks at', () => {
+    const { a, b, edge } = sample();
+    const flow = createFlow({ title: 'Tour' });
+    flow.steps = [{ id: 's1', edgeId: edge.id, viewport: { x: 100.5, y: -20, zoom: 2 } }];
+    const source = { ...addEdges(addNodes(createDocument('Starter'), [a, b]), [edge]), flows: [flow] };
+    const { doc } = pasteDocument(createDocument('Here'), source, { x: 40, y: -40 });
+    expect(doc.flows[0]!.steps[0]!.viewport).toEqual({ x: 20.5, y: 60, zoom: 2 });
   });
 });
 

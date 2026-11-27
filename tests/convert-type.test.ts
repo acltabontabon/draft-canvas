@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { convertedNode, convertNodeType } from '../src/document/convert';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
-import { DEFAULTS } from '../src/document/limits';
+import { DEFAULTS, LIMITS } from '../src/document/limits';
 import { addEdges, addNodes } from '../src/document/operations';
+import { parseDocument } from '../src/document/validate';
+import { serializeDocument } from '../src/export/project';
 import { __resetInteraction, useEditorStore } from '../src/store/editorStore';
 
 describe('convertedNode', () => {
@@ -36,6 +38,20 @@ describe('convertedNode', () => {
   it('drops a dead-letter role on leaving Queue', () => {
     const dlq = createNode({ type: 'queue', deliveryRole: 'dead-letter', text: 'DLQ', x: 0, y: 0 });
     expect(convertedNode(dlq, 'service').deliveryRole).toBeUndefined();
+  });
+
+  // Was: the new box was centred with no clamp, so a shape converted beside the edge of the canvas
+  // sat past it until the next open moved it back.
+  it('keeps a shape converted beside the edge of the canvas on it, as the next open would', () => {
+    const edge = LIMITS.maxCoordinate;
+    const service = createNode({ type: 'service', text: 'Edge', x: edge - 10, y: -edge + 10 });
+    const doc = addNodes(createDocument('C'), [service]);
+    const actor = convertNodeType(doc, service.id, 'actor').nodes[0]!;
+    expect(actor.x).toBe(edge);
+    expect(actor.y).toBe(-edge);
+    const reopened = parseDocument(serializeDocument({ ...doc, nodes: [actor] }));
+    if (!reopened.ok) throw new Error(reopened.error);
+    expect(reopened.document.nodes[0]).toEqual(actor);
   });
 
   it('leaves a document alone for a non-architecture shape or the same type', () => {

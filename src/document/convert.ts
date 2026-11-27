@@ -6,6 +6,7 @@
  */
 
 import { boxForKind, createNode } from './factory';
+import { clampCoord } from './geometry';
 import { technologyKindPatch } from './technologyKind';
 import type { DraftDocument, DraftNode, DraftNodeType } from './types';
 
@@ -51,8 +52,10 @@ export function convertedNode(node: DraftNode, type: ConvertibleType): DraftNode
   if (next.textOrigin === undefined) delete next.textOrigin;
   next.width = fresh.width;
   next.height = fresh.height;
-  next.x = Math.round(node.x + node.width / 2 - fresh.width / 2);
-  next.y = Math.round(node.y + node.height / 2 - fresh.height / 2);
+  // Clamped as a load clamps a position: centred unclamped, a shape beside the edge of the canvas
+  // came out past it and the next open moved it.
+  next.x = clampCoord(node.x + node.width / 2 - fresh.width / 2);
+  next.y = clampCoord(node.y + node.height / 2 - fresh.height / 2);
   // A technology it carries can fix the new shape's kind too: a Service built "with Kafka" turned
   // into a Queue is a topic.
   const kind = technologyKindPatch(next, next.technology);

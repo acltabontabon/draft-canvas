@@ -3,6 +3,7 @@ import { baseCategory, capabilityFor, categoryOf } from '../src/document/connect
 import { relationLabel } from '../src/document/edgeSemantics';
 import { convertedNode } from '../src/document/convert';
 import { boxForKind, createDocument, createNode, defaultSizeFor, displayNameFor } from '../src/document/factory';
+import { LIMITS } from '../src/document/limits';
 import { addNodes } from '../src/document/operations';
 import { anchorBandOf } from '../src/document/queueGeometry';
 import { isLinkable } from '../src/document/sequenceLinks';
@@ -65,6 +66,13 @@ describe('Load Balancer and Proxy', () => {
     expect(boxForKind(card, 'generic', 'api')).not.toBeNull();
     expect(boxForKind({ ...card, ...box }, 'proxy', 'load-balancer')).toBeNull();
     expect(boxForKind({ ...card, ...box }, 'proxy', 'worker')).toBeNull();
+  });
+
+  it('keep the new box on the canvas beside its edge, where the next open would put it', () => {
+    const card = createNode({ type: 'service', x: LIMITS.maxCoordinate - 10, y: -LIMITS.maxCoordinate + 10 });
+    const box = boxForKind(card, 'generic', 'proxy')!;
+    expect(box.x).toBe(LIMITS.maxCoordinate);
+    expect(box.y).toBe(-LIMITS.maxCoordinate);
   });
 
   it.each([
