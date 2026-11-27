@@ -1,63 +1,37 @@
-# Canvas Evolution: architecture and decisions
+# Canvas Evolution: design and security
 
-Canvas Evolution records each diagram's history as genuine Git, in the background, with no Git step
-asked of the person. This page is the developer reference: how it is built, why, and the invariants
-that hold it together. The person-facing guide is [Diagram history](../guides/history.md); the threat
-model is [Canvas Evolution security](evolution-security.md).
+Canvas Evolution keeps each diagram's history as standard Git, recorded in the background. This page
+holds its design decisions, invariants and threat model; the person-facing guide is
+[Diagram history](../guides/history.md).
 
 ## Three layers, kept apart
-
-```mermaid
-flowchart LR
-  edit[Editing] --> store[editorStore]
-  store --> autosave[Autosave / desktop recovery<br/>working copy, crash safety]
-  store --> bridge[store/evolution/bridge.ts]
-  bridge --> scheduler[scheduler.ts<br/>when to record]
-  scheduler --> service[service.ts<br/>what to record, bound to its session]
-  service --> worker[history worker<br/>canonical text, blob id, diff, wording]
-  service --> backend{HistoryBackend}
-  backend -->|web| igit[isomorphic-git over IndexedDB]
-  backend -->|desktop| gix[gix in the desktop shell]
-  gix -. explicit .-> remote[(Git remote)]
-```
 
 | Layer | Responsible for | Never |
 | --- | --- | --- |
 | Working copy (autosave, desktop recovery copies) | Durability of what is on screen, crash recovery | Waits on history |
-| History (this feature) | Revisions, timeline, compare, alternatives, restore, merge | Changes the working copy except through an explicit, journaled operation |
+| History | Revisions, timeline, compare, alternatives, restore, merge | Changes the working copy except through an explicit, journaled operation |
 | Remote (desktop, opt-in) | Fetch and publish | Runs without an explicit choice; force-pushes; touches local capture |
 
 ## Decisions
 
 ### ADR-1: reuse Git implementations, own only the semantics
 
-- **Web:** [isomorphic-git](https://github.com/isomorphic-git/isomorphic-git) (MIT), in a dedicated
-  module worker (`src/evolution/worker.ts`). It writes and reads loose and packed objects, indexes
-  packs (deltas included), writes packs, finds merge bases and walks ancestry. It needs a global
-  `Buffer`, so the worker installs [`buffer`](https://github.com/feross/buffer) (MIT) before
-  isomorphic-git loads (`bufferGlobal.ts`); the editor's thread loads neither. Its HTTP client is never
-  imported.
-- **Desktop:** [gix](https://github.com/GitoxideLabs/gitoxide) in the shell (`src-tauri/src/history/`),
-  network features off. It adds true compare-and-swap ref transactions and on-disk repositories that
-  standard Git reads in place.
-- **Owned, narrowly:**
-  - Bundle header framing (`bundle.ts`): no library here writes or reads bundles.
-  - The pack pre-scan (`packScan.ts`): neither library bounds how far one object may inflate.
-  - The IndexedDB file system (`browser/kvfs.ts`): LightningFS flushes on a debounce, so a closed tab
-    could lose a write it had reported done.
-  - Compare-and-swap on top of isomorphic-git, done under a Web Lock.
-  - A bounded history walk, so both backends list revisions in one order.
-- **One contract, two backends:**
-  - `VersionStore` and `HistoryBackend` (`contracts.ts`, `backend.ts`) are the only Git surface the
-    editor sees.
-  - `tests/fixtures/evolution/contract.json` holds canonical documents and the commit ids standard Git
-    computes for them.
-  - `tests/evolution/igit-store.test.ts` (web), the Rust tests in `src-tauri/src/history/` (desktop)
-    and real `git` all reproduce those ids.
-- **Interoperability:**
-  - Bundles round-trip with standard Git both ways: `git clone` of ours, and import of Git's,
-    deltas included.
-  - Only SHA-1 histories are supported. SHA-256 and partial (filtered) bundles are refused by name.
+- The web backend is isomorphic-git in the history worker (`src/evolution/worker.ts`), which
+  installs a global `Buffer` before isomorphic-git loads (`bufferGlobal.ts`). The editor's thread
+  loads neither, and isomorphic-git's HTTP client is never imported.
+- The desktop backend is gix in the shell (`src-tauri/src/history/`), with network features off. It
+  gives true compare-and-swap ref transactions and repositories that standard Git reads in place.
+- Draft Canvas owns only what neither library provides: bundle header framing (`bundle.ts`), a
+  bounded pack pre-scan (`packScan.ts`), an IndexedDB file system whose writes commit before they
+  resolve (`browser/kvfs.ts`), compare-and-swap on isomorphic-git under a Web Lock, and a bounded
+  history walk so both backends list revisions in the same order.
+- `VersionStore` and `HistoryBackend` (`contracts.ts`, `backend.ts`) are the editor's only Git
+  surface. Both backends and real `git` must reproduce the commit ids in
+  `tests/fixtures/evolution/contract.json`, and the real-Git tests are mandatory under `CI`.
+  Regenerate the fixtures (`npx tsx tests/fixtures/evolution/generate.ts`) only for a deliberate
+  format change.
+- Bundles round-trip with standard Git in both directions, deltas included. Only SHA-1 histories
+  are supported; SHA-256 and partial (filtered) bundles are refused by name.
 
 ### ADR-2: identity: history follows the working copy
 
@@ -68,93 +42,80 @@ flowchart LR
 | Working copy | A library entry (`lib_<id>`), a Quick Draft (`draft_<recovery id>`) or a saved file (`file_<path>`) |
 | Binding | `copyId → { repoId, altId, paused }`, kept beside the histories, never in the file |
 | Alternative | A stable `altId`; its branch is `refs/heads/alt/<altId>`, and its name is display only |
-| Editor session | One history session per open working copy (`service.ts`, a token every async step checks) |
+| Editor session | One history session per open working copy (`service.ts`), a token every async step checks |
 | Generation | `editorStore.revision`, which grows with every edit and load |
-| Ref generation | The commit id a branch holds, moved only by compare-and-swap |
 
-Rules:
-
-- **New copies.** A copy with no binding whose `metadata.id` matches an existing history is offered
-  "Continue its history" or "Start new history". Capture waits for the answer. Histories are never
-  joined or forked on the id alone (`identity.ts`).
-- **One writer per copy.** One editor records a copy's history: a Web Lock per copy, held for the
-  session (`bridge.ts`). Another tab with the same diagram shows history read-only. Where the browser
-  has no Web Locks, history is off and the status says so.
-- **Repository locks.** A repository's lock only serialises ref updates and changes to its
-  `repo.json`, each read again under it (`changeMeta`). Two copies on different alternatives of one
-  history may record at once; each moves only its own branch, by compare-and-swap.
-- **Active alternative.** Which alternative a copy is on lives in its binding, not in the repository,
-  so two sessions never fight over a global "current branch".
-- **Per copy, not per history.** A pause lives in the binding too, so copies continuing one history
-  pause separately (`repo.json`'s old `paused` is only read, and lifted on resume). Removing history
-  from one of them deletes only its binding while another copy is bound to it; deleting the shared
-  history is a separate choice the person makes. A library diagram deleted since keeps its binding,
-  so a restored backup takes it back to its history, but it no longer counts as another copy.
+- Histories are never joined or forked on `metadata.id` alone (`identity.ts`). An unbound copy whose
+  id matches a history is offered **Continue its history** or **Start new history**, and nothing is
+  captured until the person answers.
+- One editor records a copy, holding that copy's Web Lock for the session (`bridge.ts`). Another tab
+  shows history read-only. Where the browser has no Web Locks, history is off and the status says
+  so.
+- A repository's lock serialises only ref updates and `repo.json` changes, each read again under it
+  (`changeMeta`). Copies on different alternatives of one history record at once, each moving only
+  its own branch.
+- The active alternative and the pause live in the binding, so copies of one history never fight
+  over a "current branch" and pause separately. `repo.json`'s old `paused` is only read, and lifted
+  on resume.
+- Removing history from one copy deletes only its binding while another copy is bound. A deleted
+  library diagram keeps its binding, so a restored backup returns to its history, but it no longer
+  counts as another copy.
 
 ### ADR-3: one recoverable operation protocol
 
-- **Checkpoints need no journal.** Objects are content-addressed and immutable. One compare-and-swap
-  makes them reachable, and a crash before it leaves unreachable objects that maintenance prunes after
-  14 days.
-- **Every other operation is journaled.** This covers switching alternatives, restoring, finishing a
-  merge, a remote fast-forward and adopting an external change. Each records `prepared →
-  pointer-moved → working-reconciled` in the repository's journal before each next step
-  (`journal.ts`).
-- **Restore and merge move history first.** The restoration or merge commit is written and the branch
-  moved before the editor changes. A crash in between leaves the editor on the old content, which then
-  reads as uncaptured work. Nothing is lost.
-
-At each interruption boundary, recovery decides as follows:
+Checkpoints need no journal: objects are content-addressed and immutable, and one compare-and-swap
+makes them reachable. Every other operation (switching alternatives, restoring, finishing a merge,
+a remote fast-forward, adopting an external change) records `prepared → pointer-moved →
+working-reconciled` in the repository's journal before each next step (`journal.ts`). Restore and
+merge write their commit and move the branch before the editor changes, so a crash in between leaves
+the old content on screen as uncaptured work.
 
 | Interrupted after | Source of truth | Recovery |
 | --- | --- | --- |
 | `prepared`, pointer unmoved | Old ref and the autosaved working copy | Discard the entry |
 | Pointer moved, working copy as it was | The new ref | Complete: load the target into the working copy |
-| Pointer moved, working copy changed since | Both | Ask: Resume or Keep current. Both versions stay |
+| Pointer moved, working copy changed since | Both | Ask the person whether to finish or keep the diagram as it is. Both versions stay |
 | Pointer moved elsewhere (another writer) | The other writer's ref | Discard as stale |
 | `working-reconciled` | Everything is in place | Remove the entry |
 
 A switch whose binding had already moved asks the same way. Until the person answers, nothing is
-recorded on either alternative, and Keep current puts the binding back on the alternative it left.
+recorded on either alternative; keeping the diagram as it is puts the binding back on the
+alternative it left.
 
-Durability:
-
-- **Desktop.** Write a temp file, fsync it, rename it, then fsync the directory on Unix. Atomic
-  replace with write-through on Windows. gix writes ref lock files.
-- **Web.** Each IndexedDB write is its own transaction with `durability: 'strict'`, resolved once
-  committed. Web Locks are released by the browser when a tab dies.
+Durability: the desktop writes a temp file, fsyncs it and renames it, then fsyncs the directory on
+Unix, or replaces atomically with write-through on Windows; gix writes ref lock files. On the web,
+each IndexedDB write is its own `durability: 'strict'` transaction, resolved once committed, and the
+browser releases a dead tab's Web Locks.
 
 ### ADR-4: automatic history never writes to an external repository
 
-- **Histories live in the app's own storage.** Web: IndexedDB `draft-canvas-history`. Desktop:
-  `<app data>/history/<repoId>.git`. Never beside the diagram, never in the folder it was opened from.
-- **A project folder that is a Git repository gets nothing from recording.** No objects, refs, hooks,
-  index or working-tree changes, whatever the folder holds (`desktop/history.ts`).
-- **Publishing is a separate, explicit action.** Copying revisions to a remote, or into a project's
-  own repository, happens only when the person asks, never as a side effect of capture, and never
-  holds up capture or the working copy. On the desktop it runs the person's own `git`, hardened as
-  [Running Git](evolution-security.md#running-git-for-remotes-and-project-repositories-desktop)
-  describes. Remote revisions come in through the same merge as alternatives (`startMerge` with
-  `remote`). Committing into a project goes to the diagram's own branch by default
-  (`src-tauri/src/history/project.rs`), and the page drives both through `desktop/remoteHistory.ts`.
-  A file changed on disk and reloaded is recorded as a revision with `initiator: external`.
+Histories live only in the app's own storage: IndexedDB `draft-canvas-history` on the web,
+`<app data>/history/<repoId>.git` on the desktop. Recording writes nothing to a project folder, even
+one that is a Git repository (`desktop/history.ts`).
+
+Publishing to a remote, or committing into a project's own repository, happens only when the person
+asks and never holds up capture or the working copy. It runs the person's own `git`, as
+[Running Git for remotes and project repositories](#running-git-for-remotes-and-project-repositories-desktop)
+describes, driven by the page through `desktop/remoteHistory.ts`. Remote revisions come in through
+the same merge as alternatives (`startMerge` with `remote`). Project commits go to the diagram's own
+branch by default (`src-tauri/src/history/project.rs`). The web app has no remotes; it exports and
+imports bundles only.
+
+A file changed on disk and reloaded is recorded as a revision with `initiator: external`.
 
 ### ADR-6: one content model
 
-- **What a revision stores.** `diagram.draftcanvas`: the canonical serialization of
-  `historyContent(file)` (`document/content.ts`). Only `metadata.updatedAt` and each room's camera are
-  pinned; every other durable field is kept exactly.
-- **What counts as "nothing changed".** Byte equality of that text, which is blob-id equality.
-  `tests/evolution/content-diff.test.ts` holds this to the semantic diff over seeded random edits: the
-  diff lists a change exactly when the bytes differ.
-- **Old revisions are never rewritten.** They are migrated in memory when read (`snapshot.ts`), as an
-  old file is.
+A revision stores one file, `diagram.draftcanvas`: the canonical serialization of
+`historyContent(file)` (`document/content.ts`). Only `metadata.updatedAt` and each room's camera are
+pinned; every other durable field is kept exactly. "Nothing changed" means byte equality of that
+text, which is blob-id equality, and `tests/evolution/content-diff.test.ts` holds the semantic diff
+to the same answer. Old revisions are never rewritten: like an old file, they are migrated in memory
+when read (`snapshot.ts`).
 
 ### ADR-7: a semantic three-way merge, decided by the person
 
-The engine is `evolution/merge.ts`, run in the history worker; the protocol around it is
-`store/evolution/merging.ts`. It merges documents, never text. Changes are matched by id
-(`collab/diff.ts`) and merged in units that mean something together:
+`evolution/merge.ts` runs in the history worker and merges documents, never text, matching changes
+by id (`collab/diff.ts`). These units merge as one; everything else merges field by field.
 
 | Unit | Fields merged as one |
 | --- | --- |
@@ -166,189 +127,209 @@ The engine is `evolution/merge.ts`, run in the history worker; the protocol arou
 | Sequence | The whole payload |
 | Style | The diagram's whole style, drawings included |
 
-Everything else merges field by field.
-
-- **Conflicts are never last-writer-wins.** The same change on both sides is not a conflict. Anything
-  else both sides touched is listed with all three versions until the person chooses a side:
-  `both-changed`, `removed-and-changed`, `same-id`, `moved-apart`, and `file` (title, settings,
-  style, level or order). The candidate shown while deciding resolves open conflicts toward `ours`;
-  finishing requires a choice for every one (`mergeReady`).
-- **Validation conflicts.** The combination is applied to the ancestor and checked whole.
-  Whatever `repairReferences` would drop (a connector to a shape the other side removed), a boundary
-  the two sides together put inside itself, and any repair `normalizeDocument` would make become
-  `combination` conflicts, never silent repairs.
-- **Already included or simply ahead.** No merge commit. A fast-forward moves the branch to the other
-  tip through the journaled protocol (ADR-3) and applies it as one undo step.
-- **Several merge bases.** `virtualBase` folds them pairwise when each pair has one common ancestor
-  and merges cleanly; otherwise the merge stops and asks the person to merge step by step. Two
-  histories with no common ancestor are refused.
-- **A durable session.** The choices are kept in the journal (`kind: 'merge-session'`, rewritten on
-  every choice), and `refs/draft-canvas/merge/<id>/theirs` keeps the other side's objects reachable
-  so maintenance never prunes them. On attach, a session whose `ours` is still the tip is offered back
-  with its choices; otherwise it is dropped. Cancel removes both.
-- **Finishing re-checks everything it read.** Both branch tips and the blob id of the live content
-  must still match the session's start, so a collaborator's newer edit is never overwritten because
-  the branches happened not to move. Then a two-parent commit, a journaled compare-and-swap, and
-  `applyToFile` at the generation the session began at. If the editor moved meanwhile, the merge is
-  in history, nothing on the canvas is replaced and the person is asked.
+- Conflicts are never last-writer-wins. The same change on both sides is not a conflict; anything
+  else both sides touched waits for the person to choose a side: `both-changed`,
+  `removed-and-changed`, `same-id`, `moved-apart`, and `file` (title, settings, style, level or
+  order). The candidate shown meanwhile resolves open conflicts toward `ours`, and finishing needs a
+  choice for every one (`mergeReady`).
+- The combination is applied to the ancestor and validated whole. Whatever `repairReferences` would
+  drop, a boundary the two sides together put inside itself, and any repair `normalizeDocument`
+  would make become `combination` conflicts, never silent repairs.
+- When the other side is already included, or ahead, there is no merge commit. A side that
+  is ahead is fast-forwarded through the ADR-3 protocol and applied as one undo step.
+- Several merge bases fold pairwise (`virtualBase`) only when each pair has one common ancestor and
+  merges cleanly; otherwise the person merges step by step. Histories with no common ancestor are
+  refused.
+- A merge session survives a reload: its choices are kept in the journal
+  (`kind: 'merge-session'`), and `refs/draft-canvas/merge/<id>/theirs` keeps the other side's
+  objects reachable. It is offered back only while its `ours` is still the tip. **Cancel** removes
+  both.
+- Finishing re-checks both branch tips and the blob id of the live content, so a collaborator's
+  newer edit is never overwritten merely because the branches did not move. The result is applied
+  with `applyToFile` at the generation the session began at; if the editor moved meanwhile, the
+  merge stays in history, nothing on the canvas is replaced, and the person is asked.
+- The candidate can't be edited on the canvas. Further changes are ordinary edits after the merge.
 
 ### ADR-8: checkpoint semantics
 
-- **Edits.** A `revision` bump only marks the copy dirty.
-- **When a revision is recorded.** At a boundary (no gesture held), after 30 s of quiet or 120 s of
-  steady editing. Both intervals are set in Settings → History.
-- **Agent edits.** Agent commits (`host/agentBridge.ts`) are coalesced and recorded once the agent has
-  been quiet for 3 s.
-- **One capture at a time.** Edits made meanwhile stay pending.
-- **Failures.** A failure retries with backoff and shows in the status. Drawing and autosave never
-  wait.
-- **No empty commits.** An undo back to the recorded content records nothing.
-- **Messages.** Deterministic and factual (`summary.ts`), with trailers (`trailers.ts`) that are
-  sanitised both ways.
+An edit only marks the copy dirty. A revision is recorded at a boundary (no gesture held), after
+30 s of quiet or 120 s of steady editing, both set in **Settings → History**. Agent commits
+(`host/agentBridge.ts`) are coalesced and recorded once the agent has been quiet for 3 s. One
+capture runs at a time; a failure retries with backoff and shows in the status, and drawing and
+autosave never wait. An undo back to the recorded content records nothing. Messages are
+deterministic and factual (`summary.ts`), with trailers sanitised both ways (`trailers.ts`).
 
 ### ADR-9 and ADR-11: the timeline and the history lens
 
-- **Live is an endpoint, not a revision.** The timeline always ends in Live, the diagram as it is
-  now (`historyView.ts`'s `showLive`). Stepping past the newest revision returns to it; the lens
-  eases to the live content, then closes.
-- **Sessions are presentation only.** Revisions more than 20 minutes apart start a new session
-  (`timeline.ts`). A session's label is its net change, start to end, worked out once in the worker
-  and cached. Git's history underneath is never collapsed.
-- **One renderer.** The lens (`canvas/HistoryLens.tsx`) draws a revision with the shared scene
-  renderer, `renderDocumentSvg`: the same display lists as the canvas and every export
-  (`nodes/describe.ts`, `edges/describe.ts`), in the revision's own style and routing. There is no
-  history-only drawing to drift. The live layers are hidden under it
-  (`.react-flow:has(.dc-history-lens)`) and keep receiving changes; `uiStore.historyLens` makes the
+- The timeline always ends in **Live**, the diagram as it is now: an endpoint, not a revision.
+- Sessions (a gap of more than 20 minutes starts a new one) are presentation only. Git's history
+  underneath is never collapsed.
+- The lens (`canvas/HistoryLens.tsx`) draws a revision with `renderDocumentSvg`, from the same
+  display lists as the canvas and every export, in the revision's own style and routing. There is no
+  history-only drawing, so canvas-only chrome (selection, handles, the ring around linked Junctions)
+  is not shown. The live canvas keeps receiving changes under it, and `uiStore.historyLens` makes the
   editor read-only while it is up.
-- **Transitions keyed by id.** Shapes in both revisions glide from where they were, new ones fade and
-  scale in, removed ones fade out from the outgoing picture, and connectors redraw once their shapes
-  settle. The animation uses the individual `translate` and `scale` properties because a shape's
-  group is placed by its own `transform` attribute, which `transform` would replace. A newer step
-  cancels the one in flight, reduced motion shows each revision at once, and a timer finishes every
-  animation so a throttled background tab still ends on the right picture.
-- **Camera.** `presentation/revisionFraming.ts` is pure, like `framing.ts`, and reuses `frameStep`:
-  a change already in view keeps the camera still, one partly off screen is nudged, and only a change
-  elsewhere is flown to. It moves only when **Follow changes with the camera** is on.
-- **Compare draws over the lens** (`canvas/CompareLayers.tsx`). Every change has a mark and a glyph,
-  never colour alone. Side by side follows one camera.
+- Camera moves are decided in pure `presentation/revisionFraming.ts`, and happen only when
+  **Follow changes with the camera** is on.
+- Compare (`canvas/CompareLayers.tsx`) gives every change a mark and a glyph, never colour alone.
 
 ### ADR-12: history in live collaboration
 
-- **Owner-only capture.** Only the owner's editor records, from the owner's canvas. A guest's copy is
-  opened read-only for history: capture is off and the timeline is unavailable.
-- **Attribution by changed keys.** At capture, `collabBridge.ts`'s `historyAttribution` intersects the
-  keys the revision changed with the session's authorship touches. A person is credited only when
-  the revision contains their change; being connected, or making changes that were all undone, is
-  not enough. Names are written as `Draft-Canvas-Contributor: <name> (unverified)`.
-- **`Draft-Canvas-Collab-Seq`.** The owner's collaboration commit number at capture, tying a revision
-  to a point in the session.
-- **Session end is a capture boundary.** `stopHosting` freezes the authorship touches and sequence
-  number, then requests a capture, so what the session changed is recorded with its contributors
-  before the authorship record is discarded.
-- **Switching, exploring and merging alternatives are refused during a session.** Each would replace
-  everyone's diagram at once. Restore and Bring back are ordinary edits through `applyToFile`, with
-  the generation check, so a newer collaborator edit is never overwritten.
-- **No guest access to history.** History holds what a diagram used to contain, including content the
-  owner removed, so sending it would reveal more than the canvas on screen. The owner's file is the
-  single authority, and a guest's copy is never saved, so there is nothing of the guest's to record.
-  `src/collab/` does not import history, and no collaboration message carries it.
+- Only the owner's editor records, from the owner's canvas. Guests get no history: it holds content
+  the owner removed, a guest's copy is never saved, `src/collab/` does not import history, and no
+  collaboration message carries it.
+- A person is credited only when the revision contains their change: `collabBridge.ts`'s
+  `historyAttribution` intersects the keys the revision changed with the session's authorship
+  touches. Names are written as `Draft-Canvas-Contributor: <name> (unverified)`.
+  `Draft-Canvas-Collab-Seq` records the owner's collaboration commit number at capture.
+- Ending a session (`stopHosting`) requests a capture before the authorship record is discarded.
+- Switching, exploring and merging alternatives are refused during a session: each would replace
+  everyone's diagram at once. **Restore** and **Bring back** are ordinary edits through
+  `applyToFile`, with the generation check.
 
 ### ADR-13: `diagram_history`, a reviewed view for agents
 
-Served by the page that has the diagram open (`store/evolution/agentTool.ts`, reached through the
-desktop broker like `read_selection`). Another diagram answers `NOT_ACTIVE`. The tool is annotated
-`readOnlyHint: true`.
+The page that has the diagram open serves the tool (`store/evolution/agentTool.ts`) through the
+desktop broker; another diagram answers `NOT_ACTIVE`. The tool is annotated `readOnlyHint: true`,
+addresses revisions only by the 40-hex ids `list` returns, and exposes no raw Git, ref names, Git
+commands or other diagrams' histories. Restoring, merging, switching and naming stay the person's
+actions.
 
 | Action | Class | Returns |
 | --- | --- | --- |
 | `summary` | Read: summaries | Current revision id, alternative, alternatives, milestones, whether a capture is pending |
-| `list` | Read: summaries | Up to 100 revisions, newest first: id, time, summary, categories, initiator, milestones; `query` filters |
+| `list` | Read: summaries | Up to 100 revisions, newest first; `query` filters |
 | `compare` | Read: summaries | The semantic diff (up to 200 elements) and its wording, between two revisions or a revision and `live` |
 | `preview_restore` | Preview | What restoring a revision would change. Never applied |
-| `preview_merge` | Preview | How much combines and which conflicts need a decision. Never applied; several bases return a note |
+| `preview_merge` | Preview | How much combines and which conflicts need a decision. Never applied |
 | `suggest_milestone` | Request | A suggestion in the history details; nothing is named until the person accepts |
 | `read` | Full content | A whole past revision, only when **Let agents read past revisions in full** is on (`history-agents-read`, off by default); otherwise `READ_ONLY` |
 
-- Revisions are addressed only by the 40-hex ids `list` returns. No raw Git, ref names, Git
-  commands or other diagrams' histories.
-- Restoring, merging, switching and naming stay the person's actions in the timeline.
-- `HistoryToolError` codes map to the broker's: `NOT_ACTIVE`, `NOT_FOUND` (no history, unknown
-  alternative), `READ_ONLY` (full reads not allowed) and `INVALID_INPUT`.
+Error codes: `NOT_ACTIVE`, `NOT_FOUND` (no history, unknown alternative), `READ_ONLY` and
+`INVALID_INPUT`.
 
 ### ADR-15: storage policy
 
-- **Web.** Revisions are written as loose objects. Maintenance packs the reachable loose objects into
-  one pack, without deltas (isomorphic-git writes none), and removes unreachable loose objects older
-  than 14 days. It skips a repository with an open journal entry.
-- **When.** The history service runs maintenance in the background after every 40 revisions it
-  records, on either backend.
-- **Desktop.** Maintenance removes unreachable loose objects older than 14 days and nothing else:
-  there is no repack. A `git gc` run by hand on the repository works.
-- **Growth.** Measured on the web backend at about 1.1 MB per 100 revisions of a 160 KB diagram,
-  the same packed or loose, since packs here carry no deltas (`benchmark/history.ts`).
-- **Never to make room.** History never deletes reachable revisions to free space; a quota failure
-  pauses history (see [security](evolution-security.md#threats-and-mitigations)).
+History never deletes a reachable revision to free space; a quota failure pauses history instead.
+The history service runs maintenance in the background after every 40 revisions it records.
+
+- Web: revisions are written as loose objects. Maintenance packs the reachable ones into one pack
+  without deltas (isomorphic-git writes none), so a packed history is larger than Git's own `gc`
+  would make it. It removes unreachable loose objects older than 14 days, and skips a repository
+  with an open journal entry. Measured growth is about 1.1 MB per 100 revisions of a 160 KB
+  diagram, packed or loose (`benchmark/history.ts`).
+- Desktop: maintenance only removes unreachable loose objects older than 14 days. Running `git gc`
+  by hand on the repository works.
 
 ## Invariants
 
-- `src/evolution/` is React-free, store-free and DOM-free. It may import `document/`, `depth/`, the
-  canonical serializer and the listed pure `collab/` helpers only (`tests/layering.test.ts`).
-- History state in the editor (`store/evolution/evolutionStore.ts`) is never saved, undone, shared or
-  exported.
-- Nothing in history changes the working copy except a journaled operation, and those go through
-  `editorStore.applyToFile` as one undo step.
-- An operation that replaces what is on screen with a recorded revision (switching, exploring,
-  bringing an alternative in) starts only from the branch's tip. While recording is paused or off,
-  `flush` records nothing, so unrecorded content refuses the operation; it is never recorded anyway.
-- Every ref name is built from ids (`refs.ts`), and every ref read from outside passes
-  `isSafeRefName`.
-- Every revision read back passes `parseDocument`. A tree that is not exactly `{ diagram.draftcanvas }`
-  is refused.
+- `src/evolution/` is React-free, store-free and DOM-free. It may import only `document/`, `depth/`,
+  the canonical serializer and the listed pure `collab/` helpers (`tests/layering.test.ts`).
+- History work runs in the history worker or the desktop shell. The drawing thread only hands over
+  an immutable snapshot.
+- History state in the editor (`store/evolution/evolutionStore.ts`) is never saved, undone, shared
+  or exported.
+- Only a journaled operation changes the working copy, through `editorStore.applyToFile` as one undo
+  step.
+- An operation that replaces the canvas with a recorded revision (switching, exploring, bringing an
+  alternative in) starts only from the branch's tip. While recording is paused or off, `flush`
+  records nothing, so the operation is refused if anything is unrecorded.
+- Refs move only by compare-and-swap. Every ref name is built from ids (`refs.ts`), and every ref
+  read from outside passes `isSafeRefName`.
+- Every revision read back passes `parseDocument`, and its tree must be exactly
+  `{ diagram.draftcanvas }`.
 
-## Performance
+## Security
 
-Medians from `npx tsx benchmark/history.ts` on Windows with Node 22. All of this runs off the drawing
-thread, in the history worker or the desktop shell; the drawing thread only hands over an immutable
-snapshot. The benchmark checks the medium workload against budgets in its header.
+Everything history reads from outside the running editor is untrusted: repositories on disk,
+bundles, fetched objects, commit metadata, collaboration messages and requests over the desktop
+shell's IPC.
 
-- **Medium workload** (200 shapes, 300 connectors, a 160 KB file): canonical text and blob id
-  1.8 ms; semantic diff and wording 0.2 ms; three-way merge 2.6 ms; recording a revision on the web
-  backend 4.6 ms; listing 100 revisions 11 ms.
-- **Large workload** (500 shapes, 800 connectors, a 404 KB file): canonical text and blob id 4.3 ms;
-  semantic diff and wording 0.1 ms; three-way merge 6.2 ms; recording a revision on the web backend
-  8.2 ms; listing 100 revisions 10 ms.
+| Asset | Where | Who may change it |
+| --- | --- | --- |
+| A diagram's history | See ADR-4 | The editor recording that working copy; the person's explicit actions |
+| Working-copy bindings | Web: the history database. Desktop: `history/bindings.json` | The history service |
+| The person's Git identity label | `localStorage` preferences | The person, in **Settings → History** |
+| Credentials for remotes | The person's own credential helper or keychain | Never Draft Canvas |
 
-## Known limitations
+### Threats and mitigations
 
-- **No editing of a merge candidate on the canvas.** Conflicts are resolved by choosing a side per
-  unit. Further changes are made after the merge, as ordinary edits.
-- **No guest history browsing** in live sessions (ADR-12).
-- **No remotes in the web app.** The web exports and imports bundles only.
-- **Web packs have no deltas.** isomorphic-git writes none, so a packed history is larger than Git's
-  own `gc` would make it.
-- **Desktop maintenance does not repack.** It only prunes unreachable loose objects.
-- **The lens draws with the export renderer.** Canvas-only chrome is not shown in a past revision:
-  selection, handles, and the ring around linked Junctions.
-- **`diagram_history` serves only the open diagram.** Another diagram's history answers `NOT_ACTIVE`.
-
-## Testing
-
-| Suite | Covers |
+| Threat | Mitigation |
 | --- | --- |
-| `tests/evolution/igit-store.test.ts` | Contract ids, compare-and-swap races, walk order, maintenance, real-Git interop (`fsck`, `log`, `show`, `clone`, delta bundles) |
-| `tests/evolution/pack-scan.test.ts` | Decompression bombs, oversize objects, malformed packs, real Git packs |
-| `tests/evolution/content-diff.test.ts` | Content model, byte/diff agreement (seeded), wording |
-| `tests/evolution/protocol.test.ts` | Journal recovery decisions, identity decisions, trailer forging, ref and bundle validation |
-| `tests/evolution/scheduler.test.ts` | Idle and maximum intervals, gesture boundaries, agent coalescing, backoff |
-| `tests/evolution/service.test.ts` | End-to-end capture on a real backend, no-op after undo, a switch mid-capture, identity questions |
-| `tests/evolution/timeline.test.ts` | Session grouping, search, milestone parsing, revision framing |
-| `tests/evolution/operations.test.ts` | Restore and Bring back as one undo step, alternatives, interrupted-operation recovery, merging and fast-forward, the agent history tool |
-| `tests/desktop/remote-history.test.ts` | Remote settings kept in the history, nothing sent on connect, the first publish confirmed, milestones-only publishing, offline state |
-| `src-tauri/src/history/git_tests.rs` | The hardened Git runner against real Git: refused repository settings, hooks never run, holding-area fetch, isolated and guarded project commits, push previews |
-| `tests/evolution/merge.test.ts` | Merge units, conflict kinds, validation conflicts, one-sided changes kept (seeded) |
-| `tests/evolution/faults.test.ts` | Full storage, a ref move that failed after objects were written, racing writers, damaged revisions |
-| `e2e/history.spec.ts` | Background recording across a reload, the lens leaving the live diagram alone, compare and restore in the browser |
-| `benchmark/history.ts` | The [performance](#performance) medians and their budgets |
+| Malicious bundle: path traversal, odd trees, foreign files | Import runs into a new, unbound repository. Every revision any ref reaches must have a tree of exactly `100644 blob diagram.draftcanvas`, and its blob must pass `parseDocument`; otherwise the whole repository is removed. No tree path is ever written to a file system. |
+| Decompression bombs, giant objects, deep delta chains | `packScan.ts` walks the pack before any library inflates it, reading each object's stream to its exact end and counting the output against its declared size. Limits: 24 MB per object, 2 GB inflated in total, delta depth 4096, and a bounded object count. Nothing is hashed during the scan, so a delta that names its base by id counts as one level deeper than every object before it. |
+| Corrupt or forged objects | isomorphic-git or gix indexes each pack and recomputes every object id. A damaged pack is refused. |
+| Malicious ref names (`../x`, `-x`, `x.lock`, `@{`) | A ref read from outside must pass `isSafeRefName`, a strict subset of `git check-ref-format`; anything else is reported and not created. |
+| Forged commit metadata or trailers | Values are cleaned when written and again when read: no line breaks, no control or line-separator characters, and a length cap. Contributor names are labelled `(unverified)`. Git author fields are labels, never authorization. |
+| SHA-256 or partial histories | Refused by name, never half-read. |
+| Two tabs or windows writing one branch | Compare-and-swap ref moves and one recording editor per copy (ADR-2). |
+| Crash mid-operation | The journal protocol (ADR-3). Recovery never deletes a working copy, a recovery copy or a ref. |
+| Storage exhaustion | A history write that fails for quota pauses history with a clear status. Autosave and drawing continue. |
+| Untrusted IPC (desktop) | Commands take repository ids, validated and resolved only under the app's history folder. Paths from the page are never used. Every payload is bounded. |
+| Exposure of removed content | History keeps what a diagram once contained, and **Settings → History** says so. Exporting a diagram never includes its history. Removing history is explicit and confirmed, and the confirmation says it does not reach published or exported copies. A history another diagram on the device continues is kept for it, and the confirmation says so; deleting it for both is a separate, confirmed action. |
+| A merge that hides a broken combination | Validation conflicts and the re-check before finishing (ADR-7). |
+| An agent reading or changing history over MCP | `diagram_history` is read-only and serves only the open diagram (ADR-13). |
+| History leaking through a live session | Owner-only capture, no guest access, unverified contributor names (ADR-12). |
 
-The real-Git tests are mandatory under `CI`. Regenerate fixtures only for a deliberate format change:
-`npx tsx tests/fixtures/evolution/generate.ts`.
+### Running Git for remotes and project repositories (desktop)
+
+Publishing and project commits run the person's own `git` (`src-tauri/src/history/gitcli.rs`). A
+project repository may come from anyone, so every call starts from a fixed, minimal setup. History
+never runs a repository's hooks, filters, merge drivers or helpers (gix and isomorphic-git have none
+in the paths used).
+
+Every call:
+
+- `git` 2.38 or later is resolved once from absolute `PATH` entries, never the working directory,
+  then canonicalised. It runs by absolute path with no shell, in an empty folder of the app's, with
+  the repository passed as `--git-dir` and `--work-tree`.
+- The environment is rebuilt from an allowlist: the home and profile folders, the SSH agent socket,
+  and what a keyring helper needs. `PATH` holds only Git's own and the system's folders, and no
+  `GIT_*` or `SSH_*` variable from outside gets through. Always set: `GIT_CONFIG_NOSYSTEM`,
+  `GIT_TERMINAL_PROMPT=0`, `GIT_ATTR_NOSYSTEM`, `GIT_NO_REPLACE_OBJECTS`, `GIT_OPTIONAL_LOCKS=0`,
+  `GIT_PROTOCOL_FROM_USER=0`, `GIT_ALLOW_PROTOCOL=https:ssh`, `GIT_NO_LAZY_FETCH`,
+  `GIT_LITERAL_PATHSPECS` and `LC_ALL=C`.
+- Hooks point to an empty folder, and hooks defined in the person's own configuration (Git 2.50's
+  `hook.<name>.command`) are switched off by name. `core.fsmonitor`, `core.sshCommand`,
+  `core.askPass` and `diff.external` are off.
+- Credential helpers are reset, then only known helpers from the person's global or system
+  configuration are re-added.
+- Only https and ssh are allowed, submodules are never recursed into, fetched objects are checked
+  with `transfer.fsckObjects`, and automatic garbage collection is off.
+- There is a timeout (120 seconds for network calls) and an output cap. Cancel or timeout kills the
+  whole process tree, through a Windows job object or a Unix process group.
+- Repository identifiers and file handles come from the shell. A path from the page is never
+  trusted.
+
+Before Git runs in a project repository at all, its configuration is read without following
+includes. Git is refused there if that configuration names anything Git would execute, or anything
+that changes where Git connects: includes; hooks, including `hook.*` commands; filters and textconv;
+credential and other helpers; `gpg.program`; SSH or proxy commands; upload and receive packs;
+`url.*.insteadOf`; any `http.*` setting, and `remote.*.proxy`; `core.worktree`; mirror remotes;
+object alternates. A `.git` file is followed only to a genuine linked worktree that points back to
+it, and a symlinked `.git` is refused.
+
+Remotes:
+
+- Addresses are `https://` or SSH only. One with embedded credentials, control characters, a
+  leading `-`, `ext::`, `fd::` or `file:` is refused, and the address Git will actually use, after
+  any rewriting, is checked again.
+- A fetch lands objects in a holding area and never touches the diagram. Only branches whose every
+  commit is a diagram history become remote-tracking branches.
+- A push uses explicit refspecs and is never forced. The first push to a destination is previewed
+  in the page and confirmed in a native dialog, and the shell remembers the confirmation.
+- Errors are classified (sign-in, unknown host key, offline, rejected, timeout and so on) and shown
+  with credentials and control characters removed.
+
+Project repositories:
+
+- A commit to the diagram's own branch is built by tree construction with exactly one path replaced,
+  and the branch moves by compare-and-swap. HEAD, the index and the working tree are never touched.
+- A commit to the current branch is allowed only when every precondition holds, checked again in
+  the same step. The branch moves by compare-and-swap from the HEAD the person saw, then exactly the
+  diagram's index entry is updated. No other file changes, and the working tree is left alone.
+- The diagram's path must be a normalised regular file inside the work tree, not reached through a
+  symlink, a submodule or a sparse-excluded folder. A path with filter or line-ending attributes
+  that would change the file is refused.
+- Only the diagram's own branch or the current branch can be pushed, after a preview of every commit
+  it would publish.

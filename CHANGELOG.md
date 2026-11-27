@@ -1460,7 +1460,7 @@ long list of fixes to saving, editing and exporting. Every diagram you already h
   fields are refused, `inside` is typed), and a receipt says how many advisories it left out.
 - A **Third-party licences** page (linked from About, shipped beside the app) lists every package
   the app carries, with its licence text.
-- An [Architecture examples](docs/guides/examples.md) guide pictures every starter.
+- An [Architecture examples](https://github.com/acltabontabon/draft-canvas/blob/v1.12.0/docs/guides/examples.md) guide pictures every starter.
 
 #### Changed
 

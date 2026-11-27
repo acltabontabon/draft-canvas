@@ -1,7 +1,7 @@
 # Architecture
 
-Why the code is shaped this way. Rules: [AGENTS.md](../../AGENTS.md). Scripts and wiring:
-[development reference](development.md).
+Why Draft Canvas's code is shaped this way. The rules themselves are in [AGENTS.md](../../AGENTS.md);
+scripts and wiring are in the [development reference](development.md).
 
 ## Principles
 
@@ -15,26 +15,17 @@ Why the code is shaped this way. Rules: [AGENTS.md](../../AGENTS.md). Scripts an
 - **Degrade without destroying.** Keep usable content; report what is lost.
 - **One action per capability.** Menus, shortcuts and the palette call the same operation.
 
+**Deliberately not built:** accounts, cloud sync, a hosted collaboration service, cloud-provider icon
+packs, standalone image nodes and a built-in AI generation service.
+
 ## Shape of the system
 
 <!-- Drawn in Draft Canvas: ../media/reference/architecture.json, rendered by e2e/og-diagram.ts. -->
-![UI and canvas edits through editor state and history and draws with rendering; editor state, rendering, and storage and export all depend on the document model.](../media/reference/architecture.png)
+![The UI and canvas edit through editor state and history, and draw with rendering. Editor state, rendering, and storage and export all depend on the document model.](../media/reference/architecture.png)
 
-Dependencies point toward `src/document/`, which is plain data with no React or React Flow.
-
-| Module | Imports only |
-| --- | --- |
-| `document/` | `lib/` |
-| `depth/`, `gallery/` | `document/` |
-| `layout/` | `document/`, `edges/bundles` |
-| `collab/` | `document/`, `depth/`, `lib/`, its own `transport/` |
-| `history/` | `document/`, `depth/`, and `collab/selective`'s `changeKeys` (which elements an edit touched, kept on an entry while a session is live) |
-| `continuation/` | `document/`, `edges/routing`, `edges/clearance`, `edges/compensationMarker`, `render/text` |
-| `openPoints/` | `document/`, `depth/`, `render/` |
-| `ink/` | `document/` |
-| `agent/` | the above plus rendering and export; never UI or store |
-
-Library and editor are two states of `src/App.tsx` with no router, so the build works from any path.
+Dependencies point one way, toward `src/document/`: plain data with no React or React Flow. Each
+module's allowed imports are in AGENTS.md, and `tests/layering.test.ts` enforces them. Library and
+editor are two states of `src/App.tsx` with no router, so the build works from any path.
 
 ## The document model
 
@@ -48,24 +39,22 @@ Library and editor are two states of `src/App.tsx` with no router, so the build 
 ## The canvas boundary
 
 - The store owns content; React Flow is a controlled view. The document is not written during a drag.
-- One gesture is one undo entry. Continuous edits such as typing coalesce.
+- One gesture is one undo entry; continuous edits such as typing coalesce.
 - Camera moves are saved but are never content edits or undo steps.
 
 ## One renderer
 
-Shapes and text are pure display lists (`nodes/describe.ts`, `render/text/layout.ts`) shared by canvas
-and export. Selection, handles and other chrome are React and CSS only, so they never reach an export.
-How a diagram is drawn is one resolved style (`render/style/resolve.ts`) that both read, and nothing
-else about style reaches a renderer. A diagram that carries a `style` is drawn in it on every device;
-one that carries none is drawn in the style in use on this device. A style changes how a shape
-looks, never its size, where a connector meets it, or what it means.
+Shapes and text are pure display lists (`nodes/describe.ts`, `render/text/layout.ts`) shared by
+canvas and export. Selection, handles and other chrome are React and CSS only, so they never reach an
+export. A style changes how a shape looks, never its size, where a connector meets it, or what it
+means.
 
 ## The two seams
 
 | Seam | Failure mode |
 | --- | --- |
 | Two independent connector renderers: `canvas/DraftEdgeView.tsx` and `edges/describe.ts` | A badge, dash or chip added to one is missing from the other. `edges/kindStyle.ts` and `e2e/line-jumps.spec.ts` cover part of it. |
-| Side effects in a React state updater | Development mode runs updaters twice; this once recorded every drag twice. |
+| Side effects in a React state updater | Development mode runs updaters twice, so the effect happens twice, such as a drag recorded twice. |
 
 ## Relationship model
 
@@ -76,45 +65,26 @@ pairing stays free; an unusual one gets guidance, not rejection.
 ## Connector routing
 
 - **Semantic graph vs. routing graph.** Spines, bundles and line jumps are presentation: never nodes,
-  never saved, no effect on semantics.
-- A stored anchor is a pin: routing never changes its side or point (only its own reply line steps
-  beside it, and connectors pinned to one point spread within a quarter of a handle gap). An end
-  without one is automatic: it faces the other shape and moves with it. Nothing guesses a pin from
-  geometry; **Auto attach** and **Pin ends here** are the only ways one becomes the other.
-  **Tidy connectors** clears only route modes and bends.
-- Export and agent checks read `connectorRouteInputs` / `connectorRoutes` in
-  `edges/connectorRoutes.ts`. The canvas gathers live geometry through per-connector subscriptions
-  and passes equivalent inputs to the same `edgeRoutes` function, so a drag remains responsive. A
-  browser check compares the settled canvas path with the accessor's path. The passes run in one
-  order with no cycles: sides and trunk membership, then where automatic ends sit
-  on a side (`edges/endpoints.ts` spreads ends sharing a side, and pins sharing one point within
-  their band), then which side a troubled line should have used instead (`edges/sides.ts`, below)
-  and those ends placed again, then the raw routes (`edges/edgeRoutes.ts`), then parallel tracks for runs sharing a
-  corridor (`edges/separation.ts`, each shift checked and kept only if it clears shapes and adds no
-  crossing), then labels, label groups and line jumps on the final lines. A stepped
-  line is checked against the shapes; when it is blocked, `edges/pathfinder.ts` searches for a clear
-  one within the area its shapes were collected from, and a line it cannot clear says `blocked` or
-  `budget` rather than passing as clear. Gesture frames are never searched.
-- **Sides are a repair, not a restyle.** Two shapes alone choose the facing sides across their wider
-  gap. `edges/sides.ts` revisits only a line with something wrong — it crosses another connector,
-  runs through a shape, or had to be searched for — and tries its automatic ends on the other
-  sides, drawn the quick way and kept only when clear. One scale decides: length, a bend, a crossing,
-  a run shared with another line. A clean line is never touched, so a laid-out diagram draws as it
-  did; pins, bends, trunks, parallel pairs and shared labels are only routed around. Lines settle in
-  id order within a fixed budget, so canvas, export and agent checks agree. A gesture's frames
-  draw a moving shape's lines the quick way and the drop settles them.
-- Agent repair screens candidates locally, then checks the complete view before accepting one: a
-  shared corridor can move lines that share no endpoint. After selecting the layout, a bounded
-  polish pass removes avoidable crossings and detours only if it preserves readable neighbours,
-  shared trunks and overall quality. Explicit routes and hand-placed bends remain authored.
-- A request/reply Z nests its middle runs; endpoint lane offsets alone would stack them. Caption
-  sides follow the final drawn rails, including corridor separation. A small glyph that cannot
-  align its automatic end may instead align the other, unpinned end. Two differently labelled
-  operations keep independent exits rather than forming a two-member fork.
-- Hover traces are transient SVG paths: once per hover, absent during gestures, an outage walk and
-  presentation, disabled by reduced-motion CSS, and never exported or persisted.
-- Spine geometry is relative to the hub, so it follows a drag without writing the document.
-- The connection target shows where a release will land before the pointer is released.
+  never saved, no effect on semantics. Spine geometry is relative to the hub, so it follows a drag
+  without writing the document.
+- **A stored anchor is a pin.** Routing never changes its side or point; only its own reply line
+  steps beside it, and connectors pinned to one point spread within a quarter of a handle gap. An end
+  without an anchor faces the other shape and moves with it. Nothing guesses a pin from geometry:
+  only **Auto attach** and **Pin ends here** turn one into the other. **Tidy connectors** clears only
+  route modes and bends.
+- **One route function.** Canvas, export and agent checks all call `edgeRoutes`
+  (`edges/edgeRoutes.ts`): export and agents through `edges/connectorRoutes.ts`, the canvas with live
+  geometry so a drag stays responsive. Its passes run in one order with no cycles, and lines settle in
+  id order within a fixed budget, so every caller draws the same lines.
+- **Sides are a repair, not a restyle.** `edges/sides.ts` revisits only a line that crosses another
+  connector, runs through a shape or had to be searched for, and keeps another side only when it is
+  clear. A clean line is never touched, so a laid-out diagram draws as it did.
+- A line the pathfinder cannot clear says `blocked` or `budget` rather than passing as clear. Gesture
+  frames are drawn the quick way and never searched; the drop settles them.
+- Agent repair checks the complete view before accepting a candidate, since a shared corridor can
+  move lines that share no endpoint. Explicit routes and hand-placed bends stay as authored.
+- Hover traces are transient: absent during gestures, outage walks and presentation, off under
+  reduced motion, and never exported or saved.
 
 ## Flows and presentation
 
@@ -123,9 +93,8 @@ pairing stays free; an unusual one gets guidance, not rejection.
 - A selected flow acts as a lighter lens, except during presentation or focus, or when empty.
 - Playback, emphasis and camera guidance are never saved, undone or exported. A presenter's pan takes
   the camera until guidance is requested again.
-- Sequence export writes every playable flow, and every native sequence, to one file: PlantUML, or
-  Mermaid, which is Markdown with one Mermaid block per diagram when there is more than one. The
-  text is the product.
+- Sequence export writes every playable flow, and every native sequence, to one PlantUML or Mermaid
+  file. The text is the product.
 - Nothing infers timing, outcomes or execution.
 
 ## Sequences
@@ -133,90 +102,78 @@ pairing stays free; an unusual one gets guidance, not rejection.
 A sequence is one node (`type: 'sequence'`) with a nested, coordinate-free payload: semantic model →
 operations → checks → layout → display list → interaction overlay.
 
-- `document/sequenceOps.ts` holds the pure operations; `sequence/check.ts` the findings;
-  `sequence/layout.ts` a deterministic timeline solver (columns from label widths, rows in document
-  order, nested fragment bands) that also answers hit-tests and insertion slots.
-- `nodes/sequence.ts` turns the layout into the same display list every node uses, so canvas, PNG
-  and SVG agree. A participant's head is `describeNode` on a compact synthetic shape: the real
-  Service, Data Store, Queue, Actor or Component, with its technology mark.
-- The node's size follows its content (`nodes/sequenceFit.ts`), applied in the store's `apply` and
-  in the agent's update: a snug box stays snug, an enlarged one is kept until it must grow.
-- `canvas/sequence/` is the only interactive layer, mounted while the node is hovered, selected, a
-  drop target or presenting. Sub-selection (`uiStore.sequenceFocus`) and the open editor are
-  transient, never saved or undone.
-- Presenting plays a derived, never-saved flow (`document/sequenceFlow.ts`), one step per message,
-  through the existing playback.
-- Mermaid and PlantUML are written by `sequence/native/`; Mermaid is read by
-  `import/mermaid/sequence.ts`. Agents send and read the same Mermaid text (`agent/sequences.ts`).
+- The layout (`sequence/layout.ts`) is a deterministic timeline solver that also answers hit-tests and
+  insertion slots. `nodes/sequence.ts` turns it into the display list every node uses, so canvas, PNG
+  and SVG agree.
+- The node's size follows its content: a snug box stays snug, and an enlarged one is kept until it
+  must grow.
+- The interactive layer (`canvas/sequence/`) is mounted only while the node is hovered, selected, a
+  drop target or presenting. Sub-selection and the open editor are transient.
+- Presenting plays a derived, never-saved flow, one step per message, through the existing playback.
+- Agents send and read the same Mermaid text that export writes and import reads.
 
 ## Command surface
 
-`commands/registry.ts` derives commands from selection, mode and document on demand. Each calls one
+`commands/registry.ts` derives commands from selection, mode and document on demand; each calls one
 existing store action. The context menu (`commands/contextMenu.ts`) is a flat, curated subset of the
-same commands, sometimes with shorter labels, minus any that open a follow-up picker (a
-`CommandStage`, such as **Connect to…**).
+same commands, sometimes with shorter labels. It leaves out any command that opens a follow-up picker
+(a `CommandStage`, such as **Connect to…**).
 
 ## Derived capabilities
 
-- **Starters** are `.draftcanvas` files in the public starters gallery
-  ([draft-canvas-starters](https://github.com/acltabontabon/draft-canvas-starters)), not part of the
-  app. `gallery/` reads them on request: `remote.ts` is the app's one `fetch`, to that repository
-  only, and every file is hashed against `catalog.json` and opened through `parseDocument` before it
-  is kept in its own IndexedDB database. Adding one is a paste of the whole file (`pasteDocument`),
-  flows included, as one undo step. The Order processing example ships in `gallery/example/`.
-- **Next-shape suggestions** (`continuation/`) rank next shapes from the selection's neighborhood; only high confidence shows unprompted.
-- **Open points** attach to element ids; they never affect geometry, routing or semantics.
-- **Sketches** (`DraftInk`) are per-room annotation over the shapes: compact relative points, one
-  SVG layer in the viewport, one paint description (`render/ink.ts`) shared with export. They are
-  never obstacles, members or semantics, and the drawing being made never renders React — samples
-  go straight to one live path, and the document gets one stroke at pen-up.
-- **Smart Ink** separates geometry from meaning. `ink/recognize.ts` scores a drawing as a
-  rectangle, ellipse, cylinder, tube, stick figure, line or arrow in screen pixels; `ink/interpret.ts`
-  reads that against the canvas (containment, endpoints) and offers only existing shape kinds.
-  A one-stroke outline is read as the loop inside it, without overshoot tails, and a box against
-  its own four corners as well as its extent, so a leaning one still reads.
-  Strokes are kept as ink first, so a conversion is one undo step that undo reverses to them; a
-  later choice amends that step (`HistoryEntry.amendKey`). Recognition loads on first use.
-- **Linked junctions** (`junctions/`) are Junctions that share `DraftNode.link`, an opaque group
-  id on the Junctions themselves. There is no table of groups, so membership cannot dangle or
-  disagree with a copy, an undo or a collaborator's edit; a group of one is a Junction waiting for a
-  counterpart. The label is each member's own text, which a group rename writes on all of them. A
-  link adds no connector: routing, flows, outage walks, semantics and exports never read it.
-  Travelling is pure arithmetic handed to the camera: `destination.ts` picks a bounded context (the
-  shapes a Junction is wired to, one step on), `journey.ts` chooses where to stop (the current zoom
-  when it reads well) and how to get there (a pan, or one `interpolateZoom` flight timed by the
-  path's length), and `trail.ts` is the back/forward history. None of it is saved, undone or shared.
+- **Starters** are content, not code: `.draftcanvas` files in the public
+  [draft-canvas-starters](https://github.com/acltabontabon/draft-canvas-starters) gallery, read only on
+  request and checked against the catalog's hash and the file parser before they are kept. Adding one
+  is one undo step.
+- **Next-shape suggestions** rank shapes from the selection's neighbourhood; only high confidence
+  shows unprompted.
+- **Open points** attach to element ids and never affect geometry, routing or semantics.
+- **Sketches** are per-room annotation, never obstacles, members or semantics. The stroke being drawn
+  bypasses React and reaches the document as one stroke at pen-up.
+- **Smart Ink** keeps geometry (`ink/recognize.ts`) apart from meaning (`ink/interpret.ts`), which
+  offers only existing shape kinds. Strokes are kept as ink first, so a conversion is one undo step
+  that undo reverses to the strokes.
+- **Linked junctions** share `DraftNode.link`, an opaque group id on the Junctions themselves. With no
+  table of groups, membership cannot dangle or disagree with a copy, an undo or a collaborator's edit.
+  A link is not a connector, and travelling along one is camera arithmetic that is never saved,
+  undone or shared.
 - **View levels** change how rooms are shown, not the tree.
 
 ## Persistence and the storage boundary
 
 - The editor sees plain documents; storage owns reading, writing and recovery.
-- Browser storage keeps summaries apart from bodies, so the library lists without loading canvases.
-- Desktop storage uses ordinary files plus recovery copies.
-- Content writes check for intervening changes. Camera-only saves never conflict.
+- Browser storage keeps summaries apart from bodies, so the library lists without loading canvases. A
+  save writes both in one transaction.
+- Content writes check for intervening changes, and conflicts always ask. Camera-only saves never
+  conflict and never show as unsaved.
 - Reading never rewrites. Unreadable data is kept, never replaced with an empty diagram.
+- A failed autosave keeps the document and says why; panning does not retry it. The reload stash
+  covers a same-tab refresh only and fails when storage is full.
+- Backups skip unreadable diagrams and say so; a partial backup does not reset the last-backup date,
+  and a missing project manifest fails the backup. Restore never overwrites a diagram, but retrying
+  after a storage error may add extra copies.
+- Desktop saves replace the file atomically, and unsaved work is kept as recovery copies in the app's
+  data folder. Neither replaces an exported backup.
 
-**Docs images.** `export/docs/` draws the picture a Markdown page shows with the export renderer, never
-with the diagram embedded. The link back to the source is the SVG itself: it sits beside
-`name.draftcanvas` as `name.svg` and carries a note naming the level, look and whether it follows
-saves. There is no manifest. After any save, including an agent's, `desktop/docs.ts` redraws a following
-picture from the saved text; `src-tauri/src/docs.rs` replaces only an SVG with that note, skips
-identical bytes, and adds to a Markdown file only an insertion into the text the person read. Pictures
-are drawn in the app, where text is measured, so no headless renderer can drift from it.
+**Docs images.** `export/docs/` draws the picture a Markdown page shows with the export renderer, in
+the app where text is measured, never with the diagram embedded. The SVG (`name.svg` beside
+`name.draftcanvas`) carries a note naming the level, look and whether it follows saves; there is no
+manifest.
 
-**Richer previews: decided, not built.** A custom fenced block (```` ```draftcanvas ````) works only in
-a viewer that knows it, never on GitHub, so the portable SVG ships alone. The extension point is the
-note in every docs image: `readMarker` (`export/docs/marker.ts`) gives a viewer the `.draftcanvas`
-beside the SVG and its level. A Markdown preview could swap the image for an interactive view, reusing
-`renderDocumentSvg` and the reader (never a second renderer) and loading no remote script.
+After any save, including an agent's, a picture that follows saves is redrawn. Only an SVG with that
+note is replaced, identical bytes are skipped, and a Markdown file only gets an insertion into the
+text the person read.
 
-**Diagram history.** Each diagram's history is a Git repository the app keeps apart from the file:
-IndexedDB on the web, the app's data folder on the desktop. Recording, recovery, merging and
-publishing are in [Canvas Evolution](evolution.md); its threat model, and how the desktop runs Git,
-in [Canvas Evolution security](evolution-security.md).
+**Richer previews: decided, not built.** A custom fenced block (```` ```draftcanvas ````) works only
+in a viewer that knows it, never on GitHub, so the portable SVG ships alone. A viewer could read the
+note (`readMarker`, `export/docs/marker.ts`) to swap in an interactive view, reusing
+`renderDocumentSvg` rather than a second renderer and loading no remote script.
+
+**Diagram history.** Each diagram has its own Git repository, kept apart from the file. See
+[Canvas Evolution](evolution.md) for its design and security.
 
 **Encrypted storage.** Browser records are written plain. `crypto/documentCipher.ts` and
-`crypto/keyStore.ts` only decrypt legacy rows and are called only by `storage/IndexedDbRepository.ts`.
+`crypto/keyStore.ts` only decrypt legacy rows, and only `storage/IndexedDbRepository.ts` calls them.
 The passphrase export is separate. See [Security](../../SECURITY.md#browser-storage).
 
 ## Untrusted input and schema evolution
@@ -228,25 +185,20 @@ Recoverable defects are repaired and reported; newer formats are refused by name
 
 The desktop shell owns files, saving and recovery. The editor reaches it only through `DesktopApi`,
 so desktop screens also run against a fake shell. Agent edits use the same operations, stay
-provisional until committed, and join the normal undo history ([Agent integration](agent-integration.md)).
+provisional until committed, and join the normal undo history
+([Agent integration](agent-integration.md)).
 
 ## Live collaboration
 
-- The session owner's editor holds the authoritative file and saves it as usual. Others connect over
-  WebRTC, or through the desktop app's LAN relay.
-- A stateless rendezvous relay ([`relay.js`](../../www/cloudflare/relay.js)) forwards only the
-  connection handshake, sealed with a key from the link's fragment. It keeps a fingerprint of the room
-  secret until 12 hours after the owner was last connected. Direct invites work without it.
-- Changes travel per element id (`collab/diff.ts`). The owner sanitizes each like an import
-  (`collab/sanitize.ts`), repairs dangling references (`collab/repair.ts`) and broadcasts a numbered commit.
-- Collaborators show the confirmed file plus their pending changes (`collab/replica.ts`). Property
-  tests check that every copy converges on the owner's.
-- Every fresh copy sent to a collaborator (joining, reconnecting, after a gap) starts a new epoch. The
-  owner drops patches from before it; the collaborator resends whatever is unconfirmed as one patch.
+- The owner's editor holds the authoritative file and saves it as usual. Others connect over WebRTC,
+  or through the desktop app's LAN relay.
+- The rendezvous relay forwards only the connection handshake, sealed with a key from the link's
+  fragment; direct invites work without it. What it keeps is in
+  [Website](website.md#the-collaboration-relay).
+- Changes travel per element id. The owner sanitizes each like an import, repairs dangling references
+  and broadcasts a numbered commit. Collaborators show the confirmed file plus their pending changes,
+  and property tests check that every copy converges on the owner's.
+- Every fresh copy sent to a collaborator starts a new epoch: the owner drops older patches, and the
+  collaborator resends whatever is unconfirmed as one patch.
 - A held gesture delays incoming changes. Undo reverts only your own edit, never work built on it.
   Cameras, selection and presence never enter the document.
-
-## Deliberately not built
-
-Accounts, cloud sync, a hosted collaboration service, cloud-provider icon packs, standalone image
-nodes, a built-in AI generation service.

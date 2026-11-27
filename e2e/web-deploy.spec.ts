@@ -266,9 +266,9 @@ test.describe('the documentation', () => {
     await expect(page).toHaveURL(START);
     const sidebar = page.getByRole('navigation', { name: 'Documentation' });
     await expect(sidebar.locator('details[open]')).toHaveCount(0);
-    await sidebar.getByText('Present and share', { exact: true }).click();
+    await sidebar.getByText('Save and share', { exact: true }).click();
     await sidebar.getByRole('link', { name: 'Saving and sharing', exact: true }).click();
-    await expect(sidebar.locator('details[open] > summary')).toHaveText('Present and share');
+    await expect(sidebar.locator('details[open] > summary')).toHaveText('Save and share');
     await expect(sidebar.getByRole('link', { name: 'Saving and sharing', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(sidebar.getByRole('link', { name: 'Shapes and connectors', exact: true })).toBeHidden();
   });
@@ -337,14 +337,14 @@ test.describe('the documentation', () => {
     const unpublished = [
       ['changelog', 'Changelog'],
       ['contributing', 'Contributing'],
-      ['reliability', 'Reliability and release acceptance'],
+      ['releases', 'Releases'],
       ['semantics', 'Semantics'],
       ['schema', 'Document schema'],
       ['mermaid-import', 'Mermaid import'],
       ['architecture', 'Architecture'],
       ['performance', 'Performance'],
       ['agent-integration', 'Agent integration'],
-      ['principles', 'Principles'],
+      ['evolution', 'Canvas Evolution: design and security'],
     ] as const;
     for (const [, title] of unpublished) {
       await expect(sidebar.getByRole('link', { name: title, exact: true })).toHaveCount(0);

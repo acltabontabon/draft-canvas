@@ -1,71 +1,46 @@
 # Development reference
 
-Scripts, CI behavior and host wiring. Setup, the repository map and which checks to run are in
-[Contributing](../../CONTRIBUTING.md); implementation rules in [AGENTS.md](../../AGENTS.md).
+Every npm script, what CI runs and when, and where each host is wired in. Setup and which checks
+to run are in [Contributing](../../CONTRIBUTING.md); implementation rules in
+[AGENTS.md](../../AGENTS.md).
 
-## Commands
-
-### Editor and website
+## Scripts
 
 | Command | Purpose |
 | --- | --- |
-| `npm run dev` | Editor dev server on :5180 |
+| `npm run dev` / `preview` | Editor dev server on :5180; serve the built `dist/` |
 | `npm run dev:relay` | Local collaboration relay on :8791, used by the dev server for session links |
 | `npm run build` | Type-check and build into `dist/` |
-| `npm run site:dev` | Website dev server on :5280 |
-| `npm run build:web` | Assemble editor and website into `dist-web/` |
-| `npm run site:preview` | Build, stage and serve `dist-web/` the way it is hosted |
-
-### Checks and tests
-
-| Command | Purpose |
-| --- | --- |
-| `npm run check` | Lint, tooling type-check, build and unit tests |
-| `npm run check:full` | `check` plus every browser suite (optional) |
+| `npm run site:dev` / `site:build` | Website dev server on :5280; build the website |
+| `npm run build:web` / `site:preview` | Assemble editor and website into `dist-web/`; serve it the way it is hosted |
+| `npm run check` | Lint, tooling type-check (`typecheck:tooling`), build and unit tests |
+| `npm run check:full` | `check` plus the `e2e`, `e2e:offline` and `e2e:web` suites (optional) |
 | `npm run lint` | oxlint |
-| `npm test` / `npm run test:watch` | Unit and integration tests |
-| `npm run test:coverage` | Unit tests with V8 coverage |
+| `npm test` / `test:watch` / `test:coverage` | Unit and integration tests; watch mode; V8 coverage |
 | `npm run e2e:install` | Install Playwright browsers once |
-| `npm run e2e` | Editor browser suite |
-| `npm run e2e:offline` | Offline production-build suite |
-| `npm run e2e:web` | Assembled web deployment suite |
-| `npm run audit:npm` / `npm run audit:rust` | Dependency advisory audits |
-
-### Desktop and agents
-
-| Command | Purpose |
-| --- | --- |
-| `npm run desktop:dev` | Desktop app with hot reload (web side on :5198) |
-| `npm run desktop:build` | Build a desktop installer |
-| `npm run desktop:check` | Desktop web build, Rust checks and version check (`desktop:web`, `desktop:rust`, `desktop:version`) |
-| `npm run desktop:rust` | `cargo fmt`, `clippy` and tests; needs the desktop web build |
-| `npm run desktop:bindings` | Regenerate `src/desktop/wire.ts` from Rust payloads |
+| `npm run e2e` / `e2e:offline` / `e2e:web` | Editor, offline production-build and assembled-site browser suites |
 | `npm run e2e:desktop` | Desktop browser suite against a fake shell (no Rust needed) |
 | `npm run e2e:mcp` | Real MCP sidecar to editor round trip; run after `desktop:check` |
-| `npm run agent:schemas` | Regenerate the tool catalogs in `src-tauri/mcp/` (`tools.json`, `entry-tools.json`, `planning-entry-tools.json`, `run-tools.json`) and the skill's `pairings.json` from `src/agent/schema.ts` |
+| `npm run desktop:dev` / `desktop:build` | Desktop app with hot reload (web side on :5198); a desktop installer |
+| `npm run desktop:check` | `desktop:web` build, `desktop:rust` (`cargo fmt`, `clippy`, tests) and `desktop:version` |
+| `npm run desktop:bindings` | Regenerate `src/desktop/wire.ts` from Rust payloads |
+| `npm run agent:schemas` | Regenerate the tool catalogs in `src-tauri/mcp/` and the skill's `pairings.json` from `src/agent/schema.ts` |
 | `npm run agent:sidecar` | Build the MCP sidecar |
-
-### Generated files and performance
-
-| Command | Purpose |
-| --- | --- |
+| `npm run tauri` | The Tauri CLI |
+| `npm run audit:npm` / `audit:rust` | Dependency advisory audits; see [Dependency triage](releases.md#dependency-triage) |
+| `npm run release:notes` / `release:whats-new` | Preview release notes and What's New; see [Releases](releases.md) |
 | `npm run icons:generate` / `icons:check` | Regenerate or verify the Simple Icons catalog |
-| `npm run starters:fixtures` | Refresh the vendored starter snapshot in `tests/fixtures/starters/` |
 | `npm run licenses` / `licenses:check` | Regenerate or verify `THIRD_PARTY_LICENSES.txt` |
-| `npm run perf` | Measure diagram loading and memory |
-| `npm run perf:check` | Interaction and lifecycle budgets (the release gate) |
-| `npm run perf:stress` / `perf:interaction` / `perf:lifecycle` | The individual harnesses behind `perf` and `perf:check` |
-| `npm run perf:publish` | Update the generated tables in [Performance](performance.md) |
-| `npm run adoption:compare` | ELK/Ajv comparison harness; see [Library adoption](library-adoption.md) |
+| `npm run starters:fixtures` | Refresh the vendored starter snapshot in `tests/fixtures/starters/` |
+| `npm run perf`, `perf:*` | Benchmarks and the release gate; see [Performance](performance.md) |
+| `npm run adoption:compare` | ELK/Ajv comparison harness |
 | `npx tsx e2e/docs-screenshots.ts` | Regenerate guide screenshots |
+
+`desktop:rust` needs the desktop web build (`desktop:web`) first.
 
 ## Focused checks
 
-```bash
-npx vitest run tests/history.test.ts
-npx vitest run -t 'coalesces'
-PLAYWRIGHT_BROWSER=chromium npx playwright test e2e/editing.spec.ts
-```
+Beyond the single-file runs in Contributing, filter by test name with `npx vitest run -t 'coalesces'`.
 
 Reproduce a flaky Firefox test without retries:
 
@@ -83,22 +58,15 @@ npx playwright show-trace 'test-results/<failed-test>/trace.zip'
 
 `ci.yml` is the entry point for pull requests and `main`.
 
-- **Shared checks** (`shared-checks.yml`): lint, tooling type-check, unit tests with coverage, once.
-- **Browsers:** the editor suite runs in four Chromium, four Firefox and six WebKit shards.
-  `--fully-parallel` distributes individual tests, one worker per runner. CI retries once, but
-  `--fail-on-flaky-tests` fails a test that passes only on retry.
-- **Desktop** (`desktop-ci.yml`): runs when `src/`, `src-tauri/`, desktop tests, root package or
-  build config, workflows or CI scripts change (`scripts/ci-plan.mjs`).
+- **Flaky tests fail.** CI retries once, but `--fail-on-flaky-tests` fails a test that passes only on
+  retry.
+- **Desktop checks** (`desktop-ci.yml`) run only when `src/`, `src-tauri/`, desktop tests, root
+  package or build config, workflows or CI scripts change (`scripts/ci-plan.mjs`).
 - **Docs only:** changes limited to `docs/**/*.md`, `docs/media/` images and video, `README.md`,
   `CONTRIBUTING.md`, `AGENTS.md`, `CODE_OF_CONDUCT.md` and `SECURITY.md` run workflow validation, doc
   link checks and the site build only. `CHANGELOG.md` is compiled into the editor, so it runs full CI.
-- **`verify`** is the final required job. Performance budgets run only for tagged releases.
 - Manual runs, release callers (`full-checks: true`) and missing history always run everything.
-
-Desktop Chromium and WebKit journeys run on separate runners. Native CI builds keep line tables for
-backtraces, not full debug data, to cut compile time and cache size; local Cargo profiles are
-unchanged. The security job caches its pinned `cargo-audit` binary but always fetches current
-advisories and reruns every audit.
+- `verify` is the final required job. Performance budgets run only for tagged releases.
 
 ### Reusing a PR run on `main`
 
@@ -109,7 +77,8 @@ After a merge, CI may reuse a successful PR run instead of re-testing (`scripts/
 - Fork PRs, direct and forced pushes, manual runs and releases always verify fresh.
 - Workflow validation and security audits still run.
 
-`scripts/verify-source.mjs` refuses to check out a revision that is not on the default branch's history.
+`scripts/verify-source.mjs` refuses to check out a revision that is not on the default branch's
+history.
 
 ## Entry points and host wiring
 

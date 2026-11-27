@@ -1,6 +1,6 @@
 # Self-hosting Draft Canvas
 
-The web editor is a static site with no backend.
+Build the web app and serve it yourself. It is a static site with no backend.
 
 ## Build
 
@@ -12,9 +12,9 @@ npm ci
 npm run build
 ```
 
-Deploy `dist/`; `npm run preview` tries it locally. For the landing page and docs too, run
-`npm ci --prefix www` and `npm run build:web`, then deploy `dist-web/site/` (landing page and
-docs) and `dist-web/app/` (the editor, the same as `dist/`) as two sites.
+Deploy `dist/`; `npm run preview` tries it locally. To host the landing page and docs too, run
+`npm ci --prefix www` and `npm run build:web`, then deploy `dist-web/site/` (landing page and docs)
+and `dist-web/app/` (the web app, the same as `dist/`) as two sites.
 
 ## Serve
 
@@ -37,6 +37,7 @@ docs) and `dist-web/app/` (the editor, the same as `dist/`) as two sites.
 
 ## Storage and updates
 
-- Diagrams belong to each browser and address. Export before moving hosts or clearing site data; see
-  [Saving and sharing](saving-and-sharing.md).
-- Deploy each build as a whole. Open copies keep the old version until their service worker updates.
+- Diagrams belong to each browser and address. Export before moving hosts or clearing site data;
+  see [Saving and sharing](saving-and-sharing.md).
+- Deploy each build as a whole. Open copies keep the old version until their service worker
+  updates.

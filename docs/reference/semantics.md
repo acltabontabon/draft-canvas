@@ -1,55 +1,50 @@
 # Architecture semantics
 
-Rules for connections and "what next?" suggestions. Rationale:
+How Draft Canvas reads a connection: the relation it infers, how its caption reads, what a sequence
+derives, and which next shape it suggests. For the reasoning, see
 [Architecture](architecture.md#relationship-model).
 
-A connection is never rejected. Draft Canvas infers a default for a fresh connector and shows
-guidance when a pairing is unusual.
+A connection is never rejected. A new connector gets an inferred default, and an unusual pairing
+gets a guidance note.
 
 ## Node categories
 
-`categoryOf` in `src/document/connectorSemantics.ts` maps each node to a `NodeCategory`:
+`categoryOf` (`src/document/connectorSemantics.ts`) maps each node to the category the matrix is
+keyed by:
 
 | Category | Derived from |
 | --- | --- |
-| `actor` | Actor shape: a person, group, third party or participating system |
-| `agent` | Actor with `actorKind: 'agent'` |
-| `device` | Actor with `actorKind: 'device'` |
+| `actor` | Actor shape |
+| `agent` / `device` | Actor with that `actorKind` |
 | `service` | Service shape, `serviceKind` of `generic` or `api` |
-| `external` / `worker` / `scheduler` | Service with that `serviceKind` |
-| `gateway` | Service with `serviceKind: 'gateway'` |
-| `loadBalancer` / `proxy` | Service with `serviceKind` `load-balancer` or `proxy`. Every rule reads them as `gateway`; only the caption differs (`routes` reads "distributes to" and "forwards to") |
+| `external` / `worker` / `scheduler` / `gateway` | Service with that `serviceKind` |
+| `loadBalancer` / `proxy` | Service with `serviceKind` `load-balancer` or `proxy` |
 | `component` | Component shape, `componentKind` of `generic`, `module` or `adapter` |
 | `port` | Component with `componentKind: 'port'` |
 | `database` | Database shape, `databaseKind` of `generic`, `sql`, `nosql` or `table` |
 | `cache` / `fileSystem` / `objectStorage` / `searchIndex` | Database with `databaseKind` `cache`, `file-system`, `object-storage`, `search-index` |
-| `queue` | Queue shape, `queueKind: 'queue'`: one message, one consumer |
-| `topic` | Queue shape, `queueKind: 'topic'`: one message, every subscriber |
-| `stream` | Queue shape, `queueKind: 'stream'`: a retained log each consumer group reads in full |
+| `queue` / `topic` / `stream` | Queue shape with that `queueKind` |
 | `deadLetter` | Queue with `deliveryRole: 'dead-letter'` (what **Add DLQ** creates) |
 | `artifact` | Artifact shape, `artifactKind: 'file'` |
-| `config` / `secret` / `certificate` | Artifact with that `artifactKind`. Every rule reads them as `artifact`; only the caption differs (`reads` is "configured by", "authenticates with", "presents") |
+| `config` / `secret` / `certificate` | Artifact with that `artifactKind` |
 | `junction` | Junction (ellipse) shape |
 | `generic` | Every other shape (text, note, code, group): no rules apply |
 
-### Folding
+A pairing without its own row borrows one (`capabilityFor`):
 
-A pairing without its own row borrows one (`resolved()` and `capabilityFor`):
-
-- `external`, `worker`, `scheduler`, `gateway` and `component` fold to `service`.
-- `agent` and `device` fold to `actor`. `stream` folds to `topic`. `deadLetter` folds to `queue`.
-- `loadBalancer` and `proxy` are read as `gateway`, and `config`, `secret` and `certificate` as
-  `artifact`, before any lookup (`baseCategory`).
-- `artifact` never folds: nothing queries a certificate, so it borrows no data-store row.
-- `port` never folds. A contract has no verbs of its own beyond its rows.
-- Lookup order: exact pair, source folded, target folded, both folded. A dead-letter source only
-  folds with both sides, so DLQ → DLQ stays unlisted.
+- `loadBalancer` and `proxy` read as `gateway`, and `config`, `secret` and `certificate` as
+  `artifact` (`baseCategory`); only their captions differ.
+- `external`, `worker`, `scheduler`, `gateway` and `component` fold to `service`; `agent` and
+  `device` to `actor`; `stream` to `topic`; `deadLetter` to `queue`. `artifact` and `port` never
+  fold.
+- Lookup order: exact pair, source folded, target folded, both folded. A dead-letter source folds
+  only when both sides do, so DLQ → DLQ stays unlisted.
 
 ## The capability matrix
 
-`MATRIX` in `src/document/connectorSemantics.ts` is the source of truth, keyed
-`source>target`. It is sparse on purpose: a pairing with no entry (Queue → Queue, Actor →
-Database, anything touching `generic`) is an unrestricted connector with no default.
+`MATRIX` in `src/document/connectorSemantics.ts` is the source of truth, keyed `source>target`. It
+is sparse on purpose: a pairing with no entry (Queue → Queue, Actor → Database, anything touching
+`generic`) is an unrestricted connector with no default.
 
 | Source → Target | Relations offered | Default | Notes |
 | --- | --- | --- | --- |
@@ -117,32 +112,21 @@ Database, anything touching `generic`) is an unrestricted connector with no defa
 | Proxy → Object Storage | reads, dependsOn | reads | a CDN's origin; captioned "serves from". A Gateway or Load Balancer here keeps the nudge |
 | Proxy → File System | reads, dependsOn | reads | a web server's files; captioned "serves from" |
 
-- Offered relations are suggestions. The inspector keeps a connector's current value selectable.
-- Unusual pairings draw normally, with a marker and guidance note. **Insert Worker** splices a
-  Service between the Queue and Topic and re-infers both connectors.
-- "Dashed" rows set `defaultAsync`. Topics and streams use the `event` behaviour's dotted line.
-- A technology can refine a default: a database drawn into a change-data-capture tool (Debezium,
-  AWS DMS, Datastream, GoldenGate) infers `cdc` instead of `reads`.
-- Reconnecting, reversing or changing a node's kind or technology re-infers only inferred relationships, and
-  drops a dash only inference added. Explicit choices are kept.
+- Relations offered are suggestions; the inspector keeps a connector's current value selectable.
+- **Insert Worker** splices a Service between the Queue and Topic and re-infers both connectors.
+- "Dashed" rows set `defaultAsync`.
+- A technology can refine a default: a database drawn into a change-data-capture tool infers `cdc`
+  instead of `reads`.
+- Reconnecting, reversing, or changing a node's kind or technology re-infers only inferred
+  relationships, and drops only a dash that inference added. Explicit choices are kept.
 
 ## Captions read in the arrow's direction
 
 A caption reads *source, verb, target*. When the arrow starts at the verb's object, the caption
-turns passive (`relationLabel` in `src/document/edgeSemantics.ts`):
-
-| Relationship | Arrow from the doer | Arrow from the other end |
-| --- | --- | --- |
-| reads, writes, query, searches, invalidates, watches | Service → Database: "reads from" | Database → Service: "read by" |
-| readsWrites | "reads / writes" | "read / written by" |
-| consumes | Worker → Queue: "consumes from" | Queue → Worker: "consumed by"; Stream → Worker: "read by" |
-| ingests, indexes | | Topic → Database: "ingested by"; Topic → Search Index: "indexed by" |
-
-- Other verbs have no passive form. `http` reads "calls over HTTP", `grpc` "calls over gRPC",
-  `event` "emits", `command` "sends command to".
-- Display only: `semantic` is never rewritten, and a typed label always wins.
-- Sequence export sends a passive connector from its far end with the active caption
-  (`Worker ->> Queue: consumes from`).
+turns passive (`relationLabel` in `src/document/edgeSemantics.ts`): Database → Service reads "read
+by", Queue → Worker "consumed by". Captions are display only: `semantic` is never rewritten, and a
+typed label always wins. Sequence export sends a passive connector from its far end with the active
+caption (`Worker ->> Queue: consumes from`).
 
 ## Two independent vocabularies
 
@@ -160,75 +144,59 @@ at once.
 ## Junctions are semantics-transparent
 
 Inference looks through a Junction, including chained Junctions, to what feeds it:
-`Service → Junction → Database` still infers `readsWrites`. A side with no single category
-resolves to `junction`, with the unrestricted vocabulary.
+`Service → Junction → Database` still infers `readsWrites`. A side with no single category resolves
+to `junction`, with the unrestricted vocabulary. Sequence export flattens `A → Junction → B` into one
+message (`resolveJunctionEndpoint`); the Junction is a participant only when its side is ambiguous
+or dangling.
 
-Sequence export flattens `A → Junction → B` into one message (`resolveJunctionEndpoint`). The
-Junction is a participant only when its side is ambiguous or dangling.
+A link between Junctions (`DraftNode.link`) is not a connector and is never looked through: nothing
+is inferred across it, no flow steps over it, an outage walk stops at each Junction, and sequence
+export treats the two as separate dangling Junctions.
 
-A **link** between Junctions (`DraftNode.link`) is not a connector and is never looked through.
-`Service → (A)` in one place and `(A) → Database` in another are two separate ends: nothing is
-inferred across the pair, no flow steps over it, an outage walk stops at each Junction, and sequence
-export treats them as two dangling Junctions. A link is for travelling between the two places.
+## Sequence diagram interaction kinds
 
-## Sequence Diagram interaction kinds
-
-Each Sequence Diagram message is `sync`, `async` or `response` (`InteractionKind` in
-`src/sequence/label.ts`). Nothing new is stored on the document.
-
-- `response`: the reply synthesized for a connector with `hasResponse`.
-- `async`: `semantic` is `publishes`, `consumes`, `deliversTo`, `fansOut` or `deadLetters`; or
-  `kind` is `event` or `async`; or the connector's `async` flag is set.
-- `sync`: everything else.
-
-Structural relationships produce no message. `STRUCTURAL_SEMANTICS` (`dependsOn`, `implementedBy`, `implements`)
-is in `src/sequence/structural.ts`. Their endpoints can still appear through other connectors.
+Each sequence-diagram message is `sync`, `async` or `response`, derived from its connector
+(`InteractionKind` in `src/sequence/label.ts`); nothing new is stored on the document. Structural
+relationships produce no message. `STRUCTURAL_SEMANTICS` (`dependsOn`, `implementedBy`,
+`implements`) is in `src/sequence/structural.ts`. Their endpoints can still appear through other
+connectors.
 
 ## Native sequences
 
 A [sequence](../guides/sequence-diagrams.md) stores what happens, never where it is drawn
-(`src/document/sequenceModel.ts`, `sequenceOps.ts`). What is derived, and what is only offered:
+(`src/document/sequenceModel.ts`).
 
-- **Work bars are derived** (`src/sequence/executions.ts`). A message with `activate` opens one on
-  its receiver; one with `deactivate` closes the sender's. A reply closes the bar its own call
-  (`replyTo`) opened and any opened above it. A bar left open ends after its participant's last
-  message in the part where it began. Branches of a fragment each start from the bars open when the
-  fragment began.
-- **Defaults are written when a message is made, then left alone.** A call between two participants
-  starts work; a reply ends it; a message to itself starts none. A reply is never inserted.
-- **Kind is suggested, never assumed** (`src/sequence/suggest.ts`). A new message is a call. Where
-  the capability matrix says the pairing is normally asynchronous (into a queue or topic, or an
-  event), Asynchronous is marked as suggested; choosing a kind stamps `kindOrigin: 'explicit'` and
-  ends the suggestion.
-- **New message labels** use the same relationship caption as a canvas connector when the
-  participants have a known pairing. Replies, self-messages and lifecycle messages start blank.
-  Labels from linked connectors and earlier messages are available as suggestions in the editor.
-- **The next message** offered after a call is its reply (between two services) or the onward call
-  (from a person), then a call to itself; after a reply, the reply still owed further back.
-- **Checks never change anything** (`src/sequence/check.ts`): a message before its participant is
-  created or after it is destroyed, a second create, a reply before or without its call, work ended
-  that never started. An unfinished sequence produces none. A move that would cause one is refused.
-- **A linked participant and its shape are one identity** (`src/document/sequenceLinks.ts`): name,
-  kind, technology and colour. Either end changed updates the other in the same undo step; where
-  both changed, the shape is believed. Position, connectors and what is inside stay the
-  architecture's.
-- **Order is never inferred** from connectors or layout. A sequence made from selected shapes has
-  no messages; one made from a flow takes the flow's own order.
+- Work bars are derived from the messages' `activate`, `deactivate` and `replyTo`
+  (`src/sequence/executions.ts`).
+- Defaults are written when a message is made, then left alone: a call between two participants
+  starts work, and a reply ends it. A reply is never inserted.
+- Kind is suggested, never assumed (`src/sequence/suggest.ts`). Where the matrix says a pairing is
+  normally asynchronous, **Asynchronous** is marked as suggested. Choosing a kind stamps
+  `kindOrigin: 'explicit'` and ends the suggestion.
+- When the participants' pairing is known, a new message's label is the matching connector caption.
+  Replies, self-messages and lifecycle messages start blank.
+- Checks (`src/sequence/check.ts`) only report problems and never change anything. A move that
+  would cause one is refused.
+- A linked participant and its shape are one identity: name, kind, technology and colour
+  (`src/document/sequenceLinks.ts`). A change at either end updates the other in the same undo
+  step; if both changed, the shape wins.
+- Order is never inferred from connectors or layout. A sequence made from selected shapes has no
+  messages; one made from a flow takes the flow's order.
 
 ## Next-shape suggestion rules
 
-Next-shape suggestions for a selected node (Settings → Canvas; `src/continuation/`, where the code calls them continuations). Connectors a rule adds are inferred from
-the matrix; a pairing it does not offer, or marks unusual, is dropped.
+Next-shape suggestions (**Settings → Canvas**; continuations in the code, `src/continuation/`) offer
+what usually comes after the selected node. A rule's connectors are inferred from the matrix; a
+pairing the matrix does not offer, or marks unusual, is dropped.
 
-- **High confidence** (may ghost unprompted): a `primary` rule whose evidence holds and that
+- High-confidence suggestions may ghost unprompted: a `primary` rule whose evidence holds and that
   repeats nothing already drawn.
-- **Medium**: shown only when asked with `]` / `[`, or in the picker a connector dropped on empty
+- Medium ones show only when asked with `]` / `[`, or in the picker a connector dropped on empty
   canvas opens.
-- **Keyboard only**: the `service-*`, `actor-*`, `person-*` and `component-*` rules
-  (`surfaces: 'invoke'`) never appear in that picker or unprompted.
+- The `service-*`, `actor-*`, `person-*` and `component-*` rules (`surfaces: 'invoke'`) appear only
+  when asked from the keyboard.
 
-A suggestion's pill carries the rule's reason (the last column below) as its tooltip, with `Esc` to
-dismiss; the screen-reader announcement reads it too.
+The Reason column is each suggestion's tooltip and screen-reader text.
 
 <!-- continuation-rules:start — generated from `src/continuation/rules.ts`; `tests/continuation.test.ts` fails on drift -->
 | Rule | Tier | Adds | Reason |
@@ -268,8 +236,8 @@ dismiss; the screen-reader announcement reads it too.
 
 Nothing starts unprompted from a plain Service, an Actor, a Data Store, a Cache, a File System, a
 Search Index or a non-Port Component: each has too many valid next shapes. Services and Actors get
-a short list when asked. A Table gets one only when another store already `ingests` or
-`transforms` into it.
+a short list when asked. A Table gets one only when another store already `ingests` or `transforms`
+into it.
 
 ### Where it won't guess
 
@@ -290,86 +258,22 @@ For these shapes, `]` opens the add-element picker with a one-line reason
 | `component` | Component | A controller, a use case and a repository all look alike — nothing here says which this is. |
 <!-- continuation-ambiguous:end -->
 
-### Ranking
+### Rules every suggestion keeps
 
-Confidence comes first. Within a confidence level, signals in `src/continuation/rank.ts` reorder
-(never promote); ties fall back to tier, then the rules table order.
-
-| Signal | Effect |
-| --- | --- |
-| Sibling branch | A fan-out anchor (Topic, Gateway, Object Storage) with a branch already leads with another of the same shape. |
-| Fits the neighborhood | A Service's alternatives are ordered by what points at it (below). |
-| Repeats what's there | The same verb to the same kind of node drops back. Fan-out rules are exempt. |
-| Already drawn | Connecting to an existing node outranks creating a look-alike. |
-| Recently accepted | A small nudge among medium candidates for a rule accepted this session. Never saved. |
-
-#### What points at it
-
-`src/continuation/role.ts` reads a Service's inbound connectors. The most specific row wins.
-
-| What points at it | Leads with |
-| --- | --- |
-| Queue, Topic, Stream or dead-letter queue | Data Store, Topic, External System |
-| Scheduler | Data Store, External System, Search Index |
-| Gateway or an Actor | Data Store, Cache, Service |
-| Nothing, or another Service | Authored order |
-
-This only reorders; it never adds, removes or surfaces a candidate. **Search Index** is offered to
-a Service only once it writes to a Data Store.
-
-### Where it lands
-
-- Beside the anchor in the direction the diagram already flows at it — right, or below when its
-  connectors run vertically — and nowhere that would sit on one of your shapes. No clear place, no
-  suggestion.
-- Placed so the connector between the two is straight: what lines up is where connectors meet each
-  shape (a Queue's tube, a Data Store's glyph), not the edges of the boxes. The gap is sized so the
-  connector's caption fits whole.
-- Inside the anchor's boundary when it fits there. A spot that would straddle the boundary's edge
-  is tried after any spot wholly outside it, and the boundary's title row and the connectors
-  already drawn are avoided when there is room.
-
-### Connecting to what's already there
-
-A candidate may connect to an existing node instead of creating one (`src/continuation/existing.ts`).
-
-- Verbs: `publishes`, `writes`, `readsWrites`, `command`, `fansOut`, `deliversTo`, `consumes`,
-  `routes`, `triggers`, and `calls` from an Actor.
-- The target must be nearby, in the same boundary, a valid matrix pairing, not connected to the
-  anchor either way or two hops away, and not already receiving that verb from someone else.
-- In a System Context view, only people and systems qualify.
-- It ghosts unprompted only when the target has no inbound connections, the anchor doesn't
-  already do the same to the same kind of node, the names share a word or it is the only
-  candidate, and the direction is not a coin toss.
-- A bucket needs an inbound `writes` or `readsWrites` before a notification path appears
-  unprompted.
-
-### Compensation
-
-`compensates` is never inferred (`src/continuation/compensation.ts`).
-
-- A Service that already compensates one step and drives (`command`, `calls`, `http`, `grpc`) two
-  or more uncompensated steps offers **Compensate *step*** when asked. With one left, it could be
-  the pivot, so nothing is offered.
-- Between two services, a second connector becomes the compensation (or the step, if the undo was
-  drawn first). A third is refused.
-- A step's connector also has **Add compensation** in its inspector, ⌘K and context menu.
-
-### What the view is showing
-
-A canvas or room may store a `ViewLevel` (System context, Containers, Components), set by a
-starter or the **View level** command. Levels of nested rooms are derived (`src/depth/level.ts`),
-never stored. The status bar and depth map show the level in force.
-
-- `silentAt: ['context']`: every infrastructure rule is quiet in a System Context view, and so are
-  existing-node suggestions for infrastructure.
-- `levels`: a rule offered only where the level is known (`person-*` at context, `component-*` at
-  component).
-
-### When it stays quiet
-
-Next-shape suggestions are off during a flow lens, presentation, focus mode and an outage walk; while a gesture is
-under way (a drag, a resize, a connector being repointed) or the Pencil is in hand; and while the
-picker a dropped connector opens is showing. A suggestion appears a quarter of a second after the
-selection settles, so passing through shapes shows none; `]` asks at once. Nothing is suggested
-that would not fit in the file's size limits (`]` says so). Accepting never changes a Flow.
+- Ranking (`rank.ts`, `role.ts`) only reorders candidates within a confidence level: it never
+  promotes, adds, removes or surfaces one. A rule accepted this session gets a small nudge that is
+  never saved.
+- A suggestion never lands on an existing shape. With no clear place, there is no suggestion.
+- A candidate may connect to an existing node instead of creating one (`existing.ts`): a nearby node
+  in the same boundary, with a valid pairing, that is not already connected to the anchor.
+- `compensates` is never inferred (`compensation.ts`). **Compensate *step*** is offered only when
+  asked. Between two services, a second connector becomes the compensation and a third is refused.
+- A view's level (`ViewLevel`, set by a starter, the **View level** command or an answer to the
+  system-overview question) only narrows suggestions. Infrastructure rules are silent in a System
+  Context view (`silentAt`); `person-*` rules appear only at context level and `component-*` rules
+  only at component level (`levels`). A room without a level of its own derives one
+  (`src/depth/level.ts`).
+- Suggestions are off during a flow lens, presentation, focus mode and an outage walk; during a
+  gesture or while the Pencil is in hand; and while a dropped connector's picker is open. Nothing is
+  suggested that would take the file past its [size limits](schema.md#limits), and accepting one
+  never changes a Flow.

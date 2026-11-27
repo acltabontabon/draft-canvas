@@ -1,97 +1,109 @@
 # Contributing to Draft Canvas
 
-Keep changes focused and the editor local-first.
+Thanks for helping. Keep each change focused, and read the principles below before proposing a feature.
+
+## Principles
+
+Draft Canvas is built on **your architecture, your agents, your decisions**:
+
+- No feature may need a Draft Canvas account, an API key held by Draft Canvas, or a server that sees
+  diagrams.
+- An agent is a collaborator, not a command runner: it explains and proposes. Its changes arrive as
+  proposals, drawn where they apply, and nothing skips review unless the person chose that.
+- An agent is limited to what the person allowed, and Draft Canvas enforces that limit itself.
+- The canvas stays the subject. Agent surfaces point at the diagram; they don't take it over.
 
 ## Setup
 
-Needs **Node 22.22.2+** and **npm**. No backend or environment variables.
+You need **Node 22.22.2+** and npm. There is no backend and no environment to configure.
 
 ```bash
 git clone https://github.com/acltabontabon/draft-canvas.git
 cd draft-canvas
 npm install
-npm run dev        # http://localhost:5180
+npm run dev        # editor on http://localhost:5180
 ```
 
-- **Collaboration session links:** also run `npm run dev:relay` (local relay on :8791). Direct invites work without it.
-- **Desktop app:** install Rust and the Tauri prerequisites first; see [Building it yourself](docs/guides/desktop.md#building-it-yourself).
-- **Website:** run `npm ci` in `www/` once, then `npm run site:dev` from the root.
+- **Session links for live collaboration:** also run `npm run dev:relay` (a local relay on :8791).
+  Direct invites work without it.
+- **Desktop app:** install Rust and the Tauri prerequisites, then run `npm run desktop:dev`. See
+  [Building it yourself](docs/guides/desktop.md#building-it-yourself).
+- **Website:** run `npm ci` in `www/` once, then `npm run site:dev` (on :5280).
 
-## Commands
+## Checks
 
-| Command | Purpose |
+| Change | Run |
 | --- | --- |
-| `npm run dev` | Editor on :5180 |
-| `npm run check` | Lint, tooling type-check, build and unit tests |
-| `npm run desktop:dev` | Desktop app with hot reload |
-| `npm run desktop:check` | Desktop build, Rust checks and version check |
-| `npm run site:dev` | Website on :5280 |
+| Docs only | `npx vitest run tests/docs.test.ts` (links, anchors and images) |
+| Code, scripts or configuration | `npm run check` (lint, type-check, build and unit tests), plus focused tests |
+| Desktop or agent code | `npm run desktop:check`; for agent changes also `npm run e2e:mcp` |
 
-All scripts and CI behavior: [development reference](docs/reference/development.md).
+Focused tests run one file at a time:
 
-## Which checks for which change
+```bash
+npx vitest run tests/history.test.ts
+PLAYWRIGHT_BROWSER=chromium npx playwright test e2e/editing.spec.ts
+```
 
-- **Docs only:** check formatting, links, anchors and images (`npx vitest run tests/docs.test.ts`).
-  No builds, lint or benchmarks unless asked.
-- **Code, scripts or configuration:** `npm run check`, plus focused checks for what changed:
-
-  ```bash
-  npx vitest run tests/history.test.ts
-  PLAYWRIGHT_BROWSER=chromium npx playwright test e2e/editing.spec.ts
-  ```
-
-- **Desktop or agent code:** `npm run desktop:check`; for agent changes also `npm run e2e:mcp`.
-- **Browsers:** CI runs the full Chromium, Firefox and WebKit suites. `npm run check:full` is optional.
-
-Report only checks you ran; pending CI has not passed.
+CI runs the full Chromium, Firefox and WebKit suites. In your PR, list only the checks you ran. Every
+script is described in the [development reference](docs/reference/development.md).
 
 ## Repository map
 
 | Path | Contents |
 | --- | --- |
-| `src/document/`, `src/depth/` | File model (operations, validation, migrations); rooms inside shapes |
-| `src/store/`, `src/history/` | Editor and transient UI state; undo |
+| `src/document/`, `src/depth/` | The file model: operations, validation, migrations; views inside shapes |
+| `src/store/`, `src/history/` | Editor state and undo |
 | `src/canvas/`, `src/ui/` | Canvas interaction and controls |
 | `src/nodes/`, `src/edges/`, `src/render/` | Drawing, connector routing and text layout |
-| `src/commands/` | Command palette, context menus and jump targets |
-| `src/presentation/`, `src/sequence/` | Presentation camera and callouts; sequence export |
-| `src/gallery/`, `src/continuation/`, `src/openPoints/`, `src/traffic/` | Starters gallery, next-step suggestions, open points, outage walk |
-| `src/storage/`, `src/crypto/`, `src/export/`, `src/import/`, `src/share/` | Persistence, exports, Mermaid import, share links |
+| `src/commands/` | Command palette, context menus and search |
+| `src/presentation/`, `src/sequence/` | Presenting; sequence diagrams |
+| `src/gallery/`, `src/traffic/`, `src/openPoints/` | Starters gallery, outage walk, open points |
 | `src/collab/` | Live collaboration; network code only in `src/collab/transport/` |
 | `src/agent/`, `src/layout/` | Agent operations and automatic layout |
-| `src/host/`, `src/desktop/` | Host interfaces; desktop screens, controller and Tauri adapter |
-| `src-tauri/` | Native Rust shell; `src/collab/` is the LAN relay, `mcp/` the MCP sidecar |
-| `skills/draft-canvas/` | Agent skill installed by the desktop app |
-| `www/` | Website (own lockfile); `www/cloudflare/` has deploy config and the rendezvous relay |
-| `tests/`, `e2e/` | Unit tests; browser specs (`e2e/desktop/` uses a fake shell) |
+| `src/storage/`, `src/export/`, `src/import/` | Persistence, export and import |
+| `src/host/`, `src/desktop/` | Host interfaces; the desktop app's screens and Tauri adapter |
+| `src-tauri/` | Native Rust shell, the local network relay, and the MCP sidecar (`mcp/`) |
+| `skills/draft-canvas/` | The agent skill the desktop app installs |
+| `www/` | Website and docs site (own lockfile); `www/cloudflare/` holds deploy config and the relay |
+| `tests/`, `e2e/` | Unit tests; browser tests (`e2e/desktop/` uses a fake desktop shell) |
 | `benchmark/`, `scripts/` | Performance harnesses; build, CI and release tooling |
-| `docs/` | Guides, reference and media |
-
-Entry points and host wiring: [development reference](docs/reference/development.md#entry-points-and-host-wiring).
 
 ## Conventions
 
-- npm, 2-space indentation, single quotes, semicolons, trailing commas. oxlint, not Prettier.
+- npm, 2-space indentation, single quotes, semicolons and trailing commas. oxlint, not Prettier.
 - Comments explain why. Keep comments that record past bugs.
-- Read [AGENTS.md](AGENTS.md) before changing core code; [Architecture](docs/reference/architecture.md)
-  explains the boundaries.
-- UI changes: check both themes, keyboard access, and presentation or drawing styles when affected.
-- New or updated dependency, copied code or asset: add credits and notices in the same PR
+- Read [AGENTS.md](AGENTS.md) before changing core code. It lists the rules the code relies on, and
+  [Architecture](docs/reference/architecture.md) explains the boundaries behind them.
+- For UI changes, check both themes, keyboard access, and presenting or drawing styles where affected.
+- A new dependency, copied code or asset needs its credits in the same PR
   ([third-party attribution](docs/reference/third-party.md#maintaining-attributions)).
 
 ## Submitting a change
 
-1. Discuss schema changes, new concepts or other large changes in an issue first.
-2. Fork, branch and make one focused change.
+1. Discuss schema changes, new concepts and other large changes in an issue first.
+2. Fork, branch from `main` (the 1.x line; 2.x work happens on `develop/2.x`) and make one focused change.
 3. Run the checks above.
-4. Update guides when behavior changes. Add user-facing changes under `[Unreleased]` in `CHANGELOG.md`
-   (Shared, Desktop or Web); see [release notes](docs/reference/releases.md#release-notes).
-5. Open a PR against `main`: what changed, why, and how you checked it.
+4. Update the guides when behaviour changes, and add user-facing changes under `[Unreleased]` in
+   `CHANGELOG.md` ([format](docs/reference/releases.md#release-notes)).
+5. Open a PR against `main` saying what changed, why, and how you checked it.
 
-**Bugs:** include platform, version and steps to reproduce. Attach a small `.draftcanvas` file if it
-helps and contains nothing private. **Feature requests:** describe the problem.
-**Security:** report privately; see [SECURITY.md](SECURITY.md).
+Bug reports need the platform, version and steps to reproduce; attach a small `.draftcanvas` file if it
+contains nothing private. Report security issues privately: see [SECURITY.md](SECURITY.md).
 
-## Releases
+## Reference
 
-Maintainers cut releases from `main` by tagging `vX.Y.Z`; the steps are in [Releases](docs/reference/releases.md).
+| Topic | Page |
+| --- | --- |
+| How the app fits together | [Architecture](docs/reference/architecture.md) |
+| Scripts, CI and entry points | [Development](docs/reference/development.md) |
+| The `.draftcanvas` file format | [Schema](docs/reference/schema.md) |
+| What shapes and connectors mean | [Semantics](docs/reference/semantics.md) |
+| Tools for coding agents (MCP) | [Agent integration](docs/reference/agent-integration.md) |
+| Diagram history in Git | [Evolution](docs/reference/evolution.md) |
+| Mermaid import | [Mermaid import](docs/reference/mermaid-import.md) |
+| Storage, sharing and network use | [Privacy and security](docs/reference/privacy.md) |
+| Benchmarks | [Performance](docs/reference/performance.md) |
+| Releasing, updates and recovery | [Releases](docs/reference/releases.md) |
+| The website and the relay | [Website](docs/reference/website.md) |
+| Credits | [Third-party acknowledgements](docs/reference/third-party.md) |

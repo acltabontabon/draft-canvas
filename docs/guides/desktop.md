@@ -1,7 +1,7 @@
 # Draft Canvas Desktop
 
-The editor as an app for macOS (Apple Silicon and Intel) and Windows (x64), with local files,
-project folders and Quick Drafts. No account needed.
+Draft Canvas Desktop is the editor as an app for macOS (Apple Silicon and Intel) and Windows (x64),
+with local files, project folders and Quick Drafts. No account needed.
 
 ## Installing
 
@@ -17,14 +17,11 @@ or **More info → Run anyway** in Windows SmartScreen.
 
 ## Quick Draft
 
-Choose **Quick Draft** on Home (`⌘N`) and start drawing; no name or folder needed.
+Choose **Quick Draft** on Home (`⌘N`) and start drawing, with no name or folder. Quick Drafts stay
+under **Drafts** on Home, across restarts, until you save or discard them. **Try an example** opens a
+ready-made one.
 
 ![Desktop Home with Quick Draft, Open file and Connect an agent.](../media/guides/desktop-home.png)
-
-- Quick Drafts stay under **Drafts** on Home, across restarts, until you save or discard them.
-  An untouched blank draft leaves nothing behind.
-- **Try an example** opens a ready-made Quick Draft.
-- **View all** browses every draft, recent file and project.
 
 ## Files
 
@@ -37,11 +34,12 @@ Choose **Quick Draft** on Home (`⌘N`) and start drawing; no name or folder nee
 | Rename, revert, find on disk | **File → Rename File…**, **Revert to Saved…**, **Reveal in Finder** / **File Explorer** |
 
 - The file changes only when you save. Unsaved work has a recovery copy, and closing asks first.
-- If the original file can’t be opened, its recovery copy opens as a Quick Draft from Home.
-- A diagram published for docs keeps its SVG beside it updated on save; see
-  [Diagrams in your docs](diagrams-in-docs.md#on-the-desktop).
+- If the original file can't be opened, its recovery copy opens as a Quick Draft from Home.
 - If another app changes the file, it reloads when you have no unsaved edits; otherwise Draft Canvas
   asks before overwriting.
+
+To bring a diagram over from the web app, export it with **Save an editable file → Editable** and
+open the file. Encrypted `.dcenc` files open only in the web app.
 
 ## Folders as projects
 
@@ -52,48 +50,46 @@ Choose **Quick Draft** on Home (`⌘N`) and start drawing; no name or folder nee
 ![The folder explorer with navigation and a diagram preview.](../media/guides/desktop-explorer.png)
 
 A project is an ordinary folder of `.draftcanvas` files. **New canvas here** adds a diagram to the
-current folder. **Find a diagram** (`⌘F` on Home) searches projects, recent files and drafts.
-Diagrams are listed with the most recently edited first; choose **Name** above the list to sort them
-alphabetically. Home remembers the choice.
+current folder, and **Find a diagram** (`⌘F` on Home) searches projects, recent files and drafts.
 **Remove from Home** forgets a project; its files stay.
 
 To move a diagram to another project, point at its tile on Home or in **Find a diagram** and choose
-**Move to a project**, or drag the tile onto a project's name above the grid. For the open diagram,
-use **File → Move to Project…**. It lands in the project's top folder. If
-the project already has a diagram with that name, Draft Canvas asks first; **Keep both** numbers the
-moved one, and nothing is replaced.
+**Move to a project**, or drag the tile onto a project's name. For the open diagram, use **File →
+Move to Project…**. It lands in the project's top folder. If the project has a diagram with that
+name, Draft Canvas asks first: **Keep both** numbers the moved one, and nothing is replaced.
 
 ![Move "checkout": the project it is in now, and Payments asking to keep both copies.](../media/guides/desktop-move.png)
 
 ![A diagram dragged onto the Fulfilment project in Find a diagram.](../media/guides/desktop-move-drag.png)
-
-To bring a browser diagram here, use **Export → Save an editable file → Editable** and open the file. Encrypted
-`.dcenc` files open only in the web app.
 
 ## Menu bar and system tray
 
 The first time you close the window, Draft Canvas keeps running in the menu bar (macOS) or system
 tray (Windows) and asks whether to keep doing that. Change it in **Settings → General**.
 
-For coding agents, see [Connect an AI agent](connect-an-ai-agent.md).
-
 ## Nodi
 
 Nodi asks your own Claude Code or Codex about the open diagram: explain it, find its risks, or
-propose a change you review on the canvas. It appears at the right end of the status bar once one of
-them is installed; click it or press `⌘J`. See
-[Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas).
+propose a change you review on the canvas. Click it at the right end of the status bar, or press
+`⌘J`. See [Ask Nodi, on the canvas](connect-an-ai-agent.md#ask-nodi-on-the-canvas), and
+[Connect an AI agent](connect-an-ai-agent.md) for other coding agents.
 
 ![Nodi up on the canvas, saying hello.](../media/guides/nodi-rest.png)
 
 ## Settings
 
-**Settings…** (`⌘,`) has seven pages: **General** (closing the window), **Appearance** (your style, and
-using it in the open diagram), **Canvas** (next-shape suggestions),
-**History** (recording and publishing each diagram's history; see [Diagram history](history.md#settings)),
-**AI agents**, **Updates** and **Support**
-(a diagnostic report with no diagram content or file paths, never sent automatically).
-**Canvas Settings…** in the menu bar and the sliders button in the status bar open it at **Canvas**.
+**Settings…** (`⌘,`) has seven pages:
+
+| Page | Holds |
+| --- | --- |
+| **General** | What closing the window does |
+| **Appearance** | Your style, and using it in the open diagram |
+| **Canvas** | Next-shape suggestions. **Canvas Settings…** in the menu bar and the sliders button in the status bar open this page |
+| **History** | Recording and publishing each diagram's history; see [Diagram history](history.md#settings) |
+| **AI agents** | Agent access; see [Connect an AI agent](connect-an-ai-agent.md) |
+| **Updates** | Update checks |
+| **Support** | A [diagnostic report](saving-and-sharing.md#if-something-looks-wrong) for bug reports |
+
 Licences are under **About Draft Canvas**.
 
 ## Updates
@@ -135,4 +131,5 @@ npm run desktop:build    # installer in src-tauri/target/release/bundle/
 npm run desktop:check    # desktop build, Rust and version checks
 ```
 
-Maintainers: [desktop updates](../reference/desktop-updates.md) covers releases, signing and Homebrew.
+Maintainers: [Releases](../reference/releases.md#desktop-updates) covers desktop updates, signing and
+Homebrew.
