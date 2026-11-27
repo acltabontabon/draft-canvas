@@ -161,20 +161,7 @@ pub fn listen(agent: Arc<Agent>) -> std::io::Result<Running> {
                     tokio::time::sleep(ACCEPT_BACKOFF).await;
                     continue;
                 }
-                let connected = server;
-                // SAFETY: as above — `owner_only` lives as long as this task.
-                server = match unsafe {
-                    ServerOptions::new()
-                        .reject_remote_clients(true)
-                        .create_with_security_attributes_raw(&name, owner_only.attributes())
-                } {
-                    Ok(s) => s,
-                    Err(e) => {
-                        eprintln!("Draft Canvas: agent pipe unusable ({e})");
-                        return;
-                    }
-                };
-                let (read, write) = tokio::io::split(connected);
+                let (read, write) = tokio::io::split(server);
                 tauri::async_runtime::spawn(serve(
                     agent.clone(),
                     token.clone(),
@@ -182,6 +169,28 @@ pub fn listen(agent: Arc<Agent>) -> std::io::Result<Running> {
                     write,
                     stop_rx.subscribe(),
                 ));
+                // The next instance, for the next sidecar. A failure here used to end this task for
+                // good while Settings still said agents could connect; it is tried again instead,
+                // backing off, and said once per run of failures.
+                let mut failures = 0u32;
+                server = loop {
+                    // SAFETY: as above — `owner_only` lives as long as this task.
+                    match unsafe {
+                        ServerOptions::new()
+                            .reject_remote_clients(true)
+                            .create_with_security_attributes_raw(&name, owner_only.attributes())
+                    } {
+                        Ok(s) => break s,
+                        Err(e) => {
+                            if failures == 0 {
+                                eprintln!("Draft Canvas: agent pipe unusable ({e}); retrying");
+                            }
+                            failures = failures.saturating_add(1);
+                            let wait = ACCEPT_BACKOFF * failures.min(50);
+                            tokio::time::sleep(wait).await;
+                        }
+                    }
+                };
             }
         });
         Ok(Running { stop, task })
