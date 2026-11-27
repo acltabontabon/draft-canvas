@@ -12,8 +12,7 @@
 
 import type { DraftDocument } from '../document/types';
 import type { Selection } from '../history/HistoryStack';
-import { isEditableTarget } from '../lib/isEditableTarget';
-import { typedWithin } from '../lib/recentTyping';
+import { typingInField } from '../lib/recentTyping';
 import { fileWithLiveViewport, isInteracting, useEditorStore } from '../store/editorStore';
 import { useUiStore } from '../store/uiStore';
 import { useCollabStore } from '../store/collabStore';
@@ -50,20 +49,14 @@ export function proposalStale(baseRevision: string, shellStale: boolean): boolea
   return baseRevision.startsWith('o:') ? baseRevision !== currentRevision() : shellStale;
 }
 
-/** How long after the last keystroke a focused field still counts as being typed in. Focus alone
- *  isn't enough: counted as busy, an idle title or inspector field held every agent change back
- *  until the person happened to click elsewhere. */
-const TYPING_IDLE_MS = 2500;
-
 /** Why an outside change must wait, if it must. Never steals focus to make the moment right. */
 export function busyReason(): string | undefined {
   // A collaborator's copy is not the diagram: the owner's is, and an agent edit here would only be
   // a patch the owner might refuse. Agents work on the owner's machine.
   if (useCollabStore.getState().role === 'guest') return 'This diagram is open as a collaborator in someone else’s session; agents can edit it on the owner’s copy.';
   if (isInteracting()) return 'Someone is dragging or resizing on the canvas.';
-  if (typeof document !== 'undefined' && isEditableTarget(document.activeElement) && typedWithin(TYPING_IDLE_MS)) {
-    return 'Someone is typing in the diagram.';
-  }
+  // A focused field alone isn't someone typing (`typingInField`).
+  if (typingInField()) return 'Someone is typing in the diagram.';
   if (useEditorStore.getState().mode === 'present') return 'The diagram is being presented.';
   // A change to the diagram cancels a trace in progress (see `editorStore`), losing the person's picks.
   if (useUiStore.getState().flowTrace) return 'Someone is tracing a flow on the diagram.';

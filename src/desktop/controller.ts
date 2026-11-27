@@ -20,8 +20,8 @@ import { DocsPublisher } from './docs';
 import type { DocsSettings } from '../export/docs/marker';
 import { picturesOf } from '../export/docs/names';
 import { logDiagnostic } from '../lib/diagnostics';
-import { isEditableTarget } from '../lib/isEditableTarget';
 import { isRecord } from '../lib/isRecord';
+import { typingInField } from '../lib/recentTyping';
 import { exampleCanvas } from '../gallery/example';
 import {
   DesktopError,
@@ -541,13 +541,16 @@ export class DesktopController {
   }
 
   /**
-   * Why opening another diagram over the one open would interrupt the person: a field has the keyboard
-   * (a label, the title, Nodi's message), and replacing the canvas would close it under them, with
-   * what they typed into it. Not part of `quietOpenRefusal`: that settles whether an agent's change
-   * may be made at all, and someone typing only holds back the open, never the change to the file.
+   * Why opening another diagram over the one open would interrupt the person: they are typing in a
+   * field (a label, the title, Nodi's message), and replacing the canvas would close it under them,
+   * with what they typed into it. Not part of `quietOpenRefusal`: that settles whether an agent's
+   * change may be made at all, and someone typing only holds back the open, never the change to the
+   * file. Typing, as for an agent's change (`busyReason`), not a field merely holding focus: Nodi's
+   * composer takes focus when Nodi opens and keeps it after Send, and every open an agent asked for
+   * while Nodi was open was refused.
    */
   private typingRefusal(): string | null {
-    if (this.session.kind === 'none' || typeof document === 'undefined' || !isEditableTarget(document.activeElement)) return null;
+    if (this.session.kind === 'none' || !typingInField()) return null;
     return 'Someone is typing, and opening another diagram would close the field under them.';
   }
 

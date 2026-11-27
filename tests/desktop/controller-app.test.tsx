@@ -114,6 +114,7 @@ it('leaves the field being typed in alone when an agent asks to show a diagram i
   document.body.append(field);
   field.focus();
   field.value = 'Payments ledg';
+  field.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', bubbles: true }));
   try {
     // An agent changed another, closed diagram and asked for it to be shown once written.
     const other = app.h.addFile('ledger');
@@ -127,5 +128,29 @@ it('leaves the field being typed in alone when an agent asks to show a diagram i
     expect(app.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'payments', dirty: false });
   } finally {
     field.remove();
+  }
+});
+
+it('shows a diagram an agent changed when a field only holds focus, nobody typing in it', async () => {
+  const app = await connect();
+  await app.open('payments');
+  // Nodi's composer, empty, keeping focus after Send, with the last key long ago.
+  const composer = document.createElement('input');
+  document.body.append(composer);
+  composer.focus();
+  composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(Date.now() + 60_000);
+  try {
+    const other = app.h.addFile('ledger');
+    rememberPendingWrite(41, { title: 'ledger', before: documentText('ledger'), after: documentText('ledger'), activate: true });
+    app.h.hostEvent({ type: 'agent-file-written', id: 41, handle: other, displayPath: '~/work/ledger.draftcanvas', stamp: 'v1:1', created: false });
+
+    // Focus alone is nobody typing, as for an agent's change (`busyReason`): the diagram is shown.
+    await waitFor(() => expect(app.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'ledger' }));
+    await waitFor(() => expect(title()).toBe('ledger'));
+  } finally {
+    vi.useRealTimers();
+    composer.remove();
   }
 });
