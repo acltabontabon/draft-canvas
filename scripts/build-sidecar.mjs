@@ -32,6 +32,9 @@ const release = process.argv.includes('--release') || (process.env.TAURI_ENV_DEB
 const args = ['build', '--manifest-path', join(tauriDir, 'Cargo.toml'), '-p', 'draft-canvas-mcp'];
 if (release) args.push('--release');
 if (explicit) args.push('--target', triple);
+// In CI the committed lock is what gets built; a build there re-resolved quietly when Cargo.toml and
+// the lock drifted. Locally, cargo keeps updating the lock as a dependency changes.
+if (process.env.CI) args.push('--locked');
 execFileSync('cargo', args, { stdio: 'inherit' });
 
 const exe = triple.includes('windows') ? '.exe' : '';

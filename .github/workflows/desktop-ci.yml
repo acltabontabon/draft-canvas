@@ -141,8 +141,10 @@ jobs:
       # The workspace: the app and its agent connector (src-tauri/mcp), whose tests drive the real
       # connector binary with a real MCP client.
       - run: cargo fmt --manifest-path src-tauri/Cargo.toml --all --check
-      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets -- -D warnings
-      - run: cargo test --manifest-path src-tauri/Cargo.toml --workspace
+      # `--locked`: what is checked and built is the committed Cargo.lock. Without it a build quietly
+      # re-resolved when Cargo.toml and the lock drifted, past what `cargo audit` read.
+      - run: cargo clippy --manifest-path src-tauri/Cargo.toml --workspace --all-targets --locked -- -D warnings
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --workspace --locked
       - name: Install browsers for the real MCP-to-editor round trip
         if: runner.os == 'macOS'
         run: npx playwright install chromium webkit
@@ -152,7 +154,7 @@ jobs:
           test -x src-tauri/target/debug/draft-canvas-mcp
           npm run e2e:mcp -- --project=chromium --project=webkit --fail-on-flaky-tests
       - name: Build and package
-        run: npx tauri build --debug --ci --config src-tauri/tauri.sidecar.conf.json
+        run: npx tauri build --debug --ci --config src-tauri/tauri.sidecar.conf.json -- --locked
       # Bundled beside the app, and the same version as it: Settings → AI agents points agents here.
       - name: The agent connector is bundled and answers
         shell: bash

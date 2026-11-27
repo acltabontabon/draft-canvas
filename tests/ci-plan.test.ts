@@ -304,11 +304,11 @@ describe('standalone desktop release verification', () => {
   it('requires timing acceptance for previews and standalone rebuilds', () => {
     const verify = (result: string) => run(release, {
       VERIFIED_COMMIT: '', SOURCE_COMMIT: 'a'.repeat(40), CHECKS_RESULT: 'success', VERIFY_RESULT: 'success',
-      PERFORMANCE_RESULT: result, PREVIEW: 'true',
+      PERFORMANCE_RESULT: result, SECURITY_RESULT: 'success', PREVIEW: 'true',
     });
     expect(verify('success')).toBe(0);
     for (const result of ['failure', 'cancelled', 'skipped']) expect(verify(result)).not.toBe(0);
-    expect(release).toContain('needs: [verify, checks, performance]');
+    expect(release).toContain('needs: [verify, checks, performance, security]');
     const performance = readFileSync(new URL('../.github/workflows/performance.yml', import.meta.url), 'utf8');
     expect(performance).not.toContain('schedule:');
     expect(performance).toContain('workflow_dispatch:');
@@ -317,7 +317,7 @@ describe('standalone desktop release verification', () => {
   it('requires fresh checks for standalone previews/rebuilds and avoids repeating orchestrated CI', () => {
     const verify = (commit: string, checks: string, source = 'success', revision = commit) => run(release, {
       VERIFIED_COMMIT: commit, SOURCE_COMMIT: revision, CHECKS_RESULT: checks, VERIFY_RESULT: source,
-      PERFORMANCE_RESULT: commit ? 'skipped' : 'success', PREVIEW: 'false',
+      PERFORMANCE_RESULT: commit ? 'skipped' : 'success', SECURITY_RESULT: commit ? 'skipped' : 'success', PREVIEW: 'false',
     });
     expect(verify('', 'success')).toBe(0);
     expect(verify('a'.repeat(40), 'skipped')).toBe(0);
@@ -331,5 +331,30 @@ describe('standalone desktop release verification', () => {
     expect(verify('main', 'skipped')).not.toBe(0);
     expect(release).toMatch(/  checks:\n[\s\S]*?if: inputs.verified-commit == ''/);
     expect(release).toContain('uses: ./.github/workflows/desktop-ci.yml');
+  });
+
+  // Was: a desktop-v* preview reached every prerelease install without the dependency audit that
+  // stable releases get through unified CI.
+  it('requires the dependency audit for standalone previews and rebuilds, and not after orchestrated CI', () => {
+    const verify = (commit: string, security: string) => run(release, {
+      VERIFIED_COMMIT: commit, SOURCE_COMMIT: commit || 'a'.repeat(40), CHECKS_RESULT: commit ? 'skipped' : 'success',
+      VERIFY_RESULT: 'success', PERFORMANCE_RESULT: 'success', SECURITY_RESULT: security, PREVIEW: 'true',
+    });
+    expect(verify('', 'success')).toBe(0);
+    for (const result of ['failure', 'cancelled', 'skipped']) expect(verify('', result)).not.toBe(0);
+    expect(verify('a'.repeat(40), 'skipped')).toBe(0);
+    expect(verify('a'.repeat(40), 'failure')).not.toBe(0);
+    expect(release).toContain(
+      "  security:\n    needs: verify\n    if: inputs.verified-commit == ''\n    uses: ./.github/workflows/security.yml\n    with:\n      ref: ${{ needs.verify.outputs.commit }}\n",
+    );
+  });
+
+  it('builds and checks Rust from the committed lock in CI', () => {
+    expect(desktop).toContain('--workspace --all-targets --locked -- -D warnings');
+    expect(desktop).toContain('cargo test --manifest-path src-tauri/Cargo.toml --workspace --locked');
+    expect(desktop).toMatch(/npx tauri build [^\n]* -- --locked\n/);
+    expect(release).toMatch(/args: [^\n]* -- --locked\n/);
+    const sidecar = readFileSync(new URL('../scripts/build-sidecar.mjs', import.meta.url), 'utf8');
+    expect(sidecar).toContain("if (process.env.CI) args.push('--locked');");
   });
 });

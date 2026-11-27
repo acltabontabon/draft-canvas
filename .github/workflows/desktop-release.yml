@@ -135,8 +135,17 @@ jobs:
     with:
       ref: ${{ needs.verify.outputs.commit }}
 
+  # Stable releases audit their dependencies in unified CI. Standalone previews and rebuilds reach
+  # installed copies too (previews through alpha.json), so they run the same audit on their source.
+  security:
+    needs: verify
+    if: inputs.verified-commit == ''
+    uses: ./.github/workflows/security.yml
+    with:
+      ref: ${{ needs.verify.outputs.commit }}
+
   acceptance:
-    needs: [verify, checks, performance]
+    needs: [verify, checks, performance, security]
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -148,6 +157,7 @@ jobs:
           VERIFY_RESULT: ${{ needs.verify.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
           PERFORMANCE_RESULT: ${{ needs.performance.result }}
+          SECURITY_RESULT: ${{ needs.security.result }}
           PREVIEW: ${{ needs.verify.outputs.preview }}
         run: |
           node <<'NODE'
@@ -158,6 +168,7 @@ jobs:
           }
           const expected = commit ? 'skipped' : 'success';
           if (process.env.CHECKS_RESULT !== expected) throw new Error('Desktop acceptance failed');
+          if (process.env.SECURITY_RESULT !== expected) throw new Error('Dependency audit failed');
           const timing = process.env.PREVIEW === 'true' || !commit ? 'success' : 'skipped';
           if (process.env.PERFORMANCE_RESULT !== timing) throw new Error('Release performance acceptance failed');
           NODE
@@ -315,7 +326,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          args: ${{ matrix.args }} --config src-tauri/tauri.sidecar.conf.json --config src-tauri/tauri.updater.conf.json --config src-tauri/tauri.version.conf.json --config src-tauri/tauri.signing.conf.json
+          args: ${{ matrix.args }} --config src-tauri/tauri.sidecar.conf.json --config src-tauri/tauri.updater.conf.json --config src-tauri/tauri.version.conf.json --config src-tauri/tauri.signing.conf.json -- --locked
       # The agent connector rides inside the app bundle (Settings → AI agents points agents at it): it
       # must be there, intact, and — where the runner can run it — built from this source (it reports
       # package.json's version, which a prerelease tag may lead).
