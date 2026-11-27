@@ -124,9 +124,23 @@ jobs:
       - run: npm ci --no-audit --no-fund
         working-directory: www
       # Builds the editor, builds the site, and assembles dist-web/ — failing loudly if either
-      # half is missing a file the deploy needs.
+      # half is missing a file the deploy needs, or if the published docs have a broken link
+      # (www/scripts/docs.mjs).
       - run: npm run build:web
-      - run: npm run test:coverage
+      # Off a tag the editor is a release's, and so is the Markdown beside this commit's docs/:
+      # README.md, AGENTS.md, and CHANGELOG.md, which What's New is built from. The release's link
+      # test would fail every site deploy until the next release over a guide this commit moved or
+      # removed, yet none of that Markdown is published and the release's CI checked its links.
+      # build:web checks the links of the docs this deploys; this commit's own CI checks its tree.
+      - name: Run the unit tests
+        env:
+          MIXED: ${{ steps.release.outcome == 'success' }}
+        run: |
+          if [ "$MIXED" = true ]; then
+            npm run test:coverage -- --exclude tests/docs.test.ts
+          else
+            npm run test:coverage
+          fi
       - run: npm run licenses:check
       - run: npm audit --audit-level=high
       - run: npm audit --audit-level=high

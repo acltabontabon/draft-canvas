@@ -76,7 +76,8 @@ Off a release tag, `pages.yml` builds the editor from the newest stable `vX.Y.Z`
 docs from the workflow commit. Its Chromium, Firefox and WebKit acceptance tests use that release's
 offline editor tests with the site's web tests and example fixtures. The relay and the editor's
 hosting files (`relay*.js`, `relay.jsonc`, `app.jsonc`, `app.headers`) come from the release wherever
-it has them.
+it has them. The build runs that release's unit tests except `tests/docs.test.ts`, which would hold
+the release's own Markdown to the commit's docs; the site build checks the published docs' links.
 
 ### Cloudflare
 
