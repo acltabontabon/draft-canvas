@@ -34,6 +34,20 @@ export function stripFrontMatter(text: string): string {
   return text.replace(FRONT_MATTER, '');
 }
 
+/**
+ * The `title:` a front-matter block gives, read a line at a time. `title\s*:\s*(.+?)\s*$` over the
+ * whole block backtracked over every split of a long run of spaces: 2 s at 40 KB.
+ */
+export function frontMatterTitle(text: string): string | undefined {
+  const front = FRONT_MATTER.exec(text)?.[1];
+  for (const line of front?.split('\n') ?? []) {
+    const named = /^\s*title\s*:/.exec(line);
+    const title = named ? line.slice(named[0].length).trim() : '';
+    if (title) return title;
+  }
+  return undefined;
+}
+
 function firstStatement(line: string): string {
   const semicolon = line.indexOf(';');
   return semicolon === -1 ? line : line.slice(0, semicolon);

@@ -12,9 +12,10 @@
  * between the same two, which is how the text is read by anyone looking at it.
  */
 import { createId } from '../../document/ids';
+import { LIMITS } from '../../document/limits';
 import { normalizeSequence } from '../../document/validateSequence';
 import type { DraftSequence, SeqFragment, SeqGroup, SeqItem, SeqMessage, SeqMessageKind, SeqNote, SeqOperand, SeqOperator, SeqParticipant } from '../../document/types';
-import { FRONT_MATTER, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
+import { frontMatterTitle, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
 
 export type MermaidSequenceParse =
   | {
@@ -52,14 +53,99 @@ const withoutComment = (line: string): string => {
   return at === -1 ? line : line.slice(0, at);
 };
 
+/*
+ * Messages, declarations and notes are read by hand, never by one pattern over the whole line. The
+ * patterns this replaced trimmed with `\s*` beside a lazy group (`(.+?)\s*:`), so a run of spaces that
+ * no arrow, colon or `as` ended was backtracked over at every split: 2 s for a 40 KB line, more than
+ * eight minutes for one near the 512 KB cap, on the main thread of a paste.
+ */
+
 /** `->>`, `-->>`, `-)`, `--)`, `-x`, `--x`, `->`, `-->`, `<<->>`, `<<-->>`: longest first, so `-->>` is not read as `-->`. */
 // Match arrows in the context of a message. A bare `-->` also ends an HTML comment.
-const MESSAGE = /^(.+?)\s*(<<-->>|<<->>|-->>|--\)|--x|-->|->>|-\)|-x|->)\s*([+-]?)\s*(.+?)\s*(?::\s*(.*))?$/;
+const ARROW = /<<-->>|<<->>|-->>|--\)|--x|-->|->>|-\)|-x|->/g;
+
+interface Said {
+  from: string;
+  arrow: string;
+  /** `+` or `-` straight after the arrow. */
+  mark: string;
+  to: string;
+  /** Everything after the first colon; absent without one. */
+  text?: string;
+}
+
+/** `A->>+B: text`: the sender up to the first arrow, an optional `+`/`-`, the receiver up to the first colon, the text after it. */
+function readMessage(line: string): Said | null {
+  // A sender is at least one character.
+  ARROW.lastIndex = 1;
+  const arrow = ARROW.exec(line);
+  if (!arrow) return null;
+  const from = line.slice(0, arrow.index).trim();
+  let rest = line.slice(arrow.index + arrow[0].length).trimStart();
+  let mark = '';
+  if (rest.startsWith('+') || rest.startsWith('-')) {
+    mark = rest[0]!;
+    rest = rest.slice(1).trimStart();
+  }
+  const colon = rest.indexOf(':');
+  const to = (colon === -1 ? rest : rest.slice(0, colon)).trimEnd();
+  if (!from || !to) return null;
+  return colon === -1 ? { from, arrow: arrow[0], mark, to } : { from, arrow: arrow[0], mark, to, text: rest.slice(colon + 1) };
+}
+
+interface Declared {
+  create: boolean;
+  actor: boolean;
+  name: string;
+  label?: string;
+  /** Written with Mermaid's `@{ … }` configuration. */
+  configured: boolean;
+}
+
+const DECLARES = /^(create\s+)?(participant|actor)\s+/i;
+const AS = /\sas\s/i;
+
+/** `participant A`, `actor A as Name`, `create participant A@{ "type": "database" } as Name`. */
+function readDeclared(line: string): Declared | null {
+  const head = DECLARES.exec(line);
+  if (!head) return null;
+  const body = line.slice(head[0].length);
+  const declared = { create: head[1] !== undefined, actor: head[2]!.toLowerCase() === 'actor' };
+  const open = body.indexOf('@{');
+  const close = body.lastIndexOf('}');
+  if (open > 0 && close > open) {
+    // Nothing after the configuration, or ` as Name`.
+    const after = body.slice(close + 1);
+    const spoken = after.trimStart();
+    if (!spoken) return { ...declared, name: body.slice(0, open).trimEnd(), configured: true };
+    if (spoken.length < after.length && /^as\s/i.test(spoken)) return { ...declared, name: body.slice(0, open).trimEnd(), label: spoken.slice(2).trimStart(), configured: true };
+  }
+  const as = AS.exec(body);
+  if (!as) return { ...declared, name: body, configured: false };
+  return { ...declared, name: body.slice(0, as.index).trimEnd(), label: body.slice(as.index + as[0].length).trimStart(), configured: false };
+}
+
+const NOTE_PLACE = /^(over|left of|right of)\s+/i;
+
+/** `over A,B: text`, `left of A: text`, `right of A: text` — what follows the word `Note`. */
+function readNote(rest: string): { where: string; names: string; text: string } | null {
+  const place = NOTE_PLACE.exec(rest);
+  if (!place) return null;
+  const body = rest.slice(place[0].length);
+  const colon = body.indexOf(':');
+  const names = colon === -1 ? '' : body.slice(0, colon).trimEnd();
+  return names ? { where: place[1]!.toLowerCase(), names, text: body.slice(colon + 1) } : null;
+}
 
 interface Block {
-  kind: 'fragment' | 'box' | 'rect';
+  /** `flat`: a frame that is not kept — nested past what a sequence holds — whose messages stay in the frame around it. */
+  kind: 'fragment' | 'flat' | 'box' | 'rect';
+  /** A fragment's or a flat frame's: whose `else`, `and` or `option` it takes. */
+  operator?: SeqOperator;
   fragment?: SeqFragment;
   operand?: SeqOperand;
+  /** A fragment's or a flat frame's: where what is said inside it goes. */
+  items?: SeqItem[];
   group?: SeqGroup;
   /** The calls still waiting for a reply when the fragment began: what each of its branches starts from. */
   waiting?: SeqMessage[];
@@ -77,7 +163,7 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
   const unfenced = unfence(text);
   const others = otherFencedBlocks(text);
   if (others > 0) unsupported.add(others === 1 ? 'another Mermaid block in the file (not imported)' : `${others} other Mermaid blocks in the file (not imported)`);
-  let title = /^\s*title\s*:\s*(.+?)\s*$/m.exec(FRONT_MATTER.exec(unfenced)?.[1] ?? '')?.[1];
+  let title = frontMatterTitle(unfenced);
   const lines = stripFrontMatter(unfenced)
     .split(/\r?\n/)
     .map((line) => withoutComment(line).trim())
@@ -89,20 +175,42 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
   const groups: SeqGroup[] = [];
   const root: SeqItem[] = [];
   const stack: Block[] = [];
+  /** The fragments and flat frames open, innermost last: where what is said goes, and whose branch an `else` starts. */
+  const frames: Block[] = [];
+  /** The fragments open — never more than a sequence nests. */
+  const fragments: Block[] = [];
+  /** The box being read: the first one opened, as Mermaid has no box inside a box. */
+  let box: SeqGroup | undefined;
   /** Participants announced by `create`, waiting for the message that makes them; and by `destroy`, for the one that ends them. */
   const toCreate = new Set<string>();
   const toDestroy = new Set<string>();
   let calls: SeqMessage[] = [];
   let last: SeqMessage | null = null;
 
-  const here = (): SeqItem[] => {
-    for (let at = stack.length - 1; at >= 0; at -= 1) {
-      const block = stack[at]!;
-      if (block.kind === 'fragment') return block.operand!.items;
+  /*
+   * What one sequence keeps (`normalizeSequence`) is counted as it is read, and nothing past it is
+   * built: 40 participants, 600 messages, notes and frames, and frames 8 deep. Built in full, 50,000
+   * nested frames took 12 s and 30,000 calls with as many unanswered replies 14 s, every line walking
+   * all that was opened or said above it, only for the reader to drop nearly all of it.
+   */
+  const outside = new Set<string>();
+  let kept = 0;
+  let beyond = 0;
+  const keeps = (...ids: string[]): boolean => {
+    if (kept >= LIMITS.maxSequenceItems || ids.some((id) => outside.has(id))) {
+      beyond += 1;
+      return false;
     }
-    return root;
+    kept += 1;
+    return true;
   };
-  const box = (): SeqGroup | undefined => stack.find((block) => block.kind === 'box')?.group;
+
+  const here = (): SeqItem[] => frames[frames.length - 1]?.items ?? root;
+  const open = (block: Block) => {
+    stack.push(block);
+    if (block.items) frames.push(block);
+    if (block.kind === 'fragment') fragments.push(block);
+  };
 
   const participant = (rawName: string, label?: string, actor = false): SeqParticipant => {
     const key = rawName.trim();
@@ -117,8 +225,13 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
       ? { id, name: label ?? decode(key), type: 'actor', actorKind: 'human' }
       : { id, name: label ?? decode(key), type: 'service', serviceKind: 'generic' };
     byName.set(key, made);
-    participants.push(made);
-    box()?.participantIds.push(made.id);
+    if (participants.length < LIMITS.maxSequenceParticipants) {
+      participants.push(made);
+      box?.participantIds.push(made.id);
+    } else {
+      outside.add(made.id);
+      beyond += 1;
+    }
     return made;
   };
 
@@ -139,13 +252,11 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
       continue;
     }
 
-    const configured = /^(create\s+)?(participant|actor)\s+(.+?)\s*@\{(.*)\}(?:\s+as\s+(.+))?$/i.exec(line);
-    const declares = configured ?? /^(create\s+)?(participant|actor)\s+(.+?)(?:\s+as\s+(.+))?$/i.exec(line);
-    if (declares) {
-      const label = declares[configured ? 5 : 4];
-      const made = participant(declares[3]!, label ? decode(label) : undefined, declares[2]!.toLowerCase() === 'actor');
-      if (configured) unsupported.add('participant configuration (type or alias): the participant is kept');
-      if (declares[1]) toCreate.add(made.id);
+    const declared = readDeclared(line);
+    if (declared) {
+      const made = participant(declared.name, declared.label ? decode(declared.label) : undefined, declared.actor);
+      if (declared.configured) unsupported.add('participant configuration (type or alias): the participant is kept');
+      if (declared.create) toCreate.add(made.id);
       continue;
     }
     if (word === 'destroy' && rest) {
@@ -158,42 +269,59 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
       const named = rest.replace(/^(?:transparent|rgba?\([^)]*\)|#[0-9a-f]{3,8})\s*/i, '');
       const group: SeqGroup = { id: createId('sg'), name: decode(named), participantIds: [] };
       groups.push(group);
-      stack.push({ kind: 'box', group });
+      box ??= group;
+      open({ kind: 'box', group });
       continue;
     }
     if (word === 'rect') {
       unsupported.add('a tinted background (rect): what was inside it is kept');
-      stack.push({ kind: 'rect' });
+      open({ kind: 'rect' });
       continue;
     }
     // Own keys only: a line that starts `constructor` or `__proto__` is not a fragment.
     if (Object.hasOwn(OPERATORS, word)) {
+      const operator = OPERATORS[word]!;
+      // Nested deeper than a sequence keeps, the frame is opened out as a file this deep is: it goes,
+      // and what it says stays in the frame around it.
+      if (fragments.length >= LIMITS.maxSequenceDepth) {
+        beyond += 1;
+        open({ kind: 'flat', operator, items: here() });
+        continue;
+      }
+      if (!keeps()) {
+        open({ kind: 'flat', operator, items: here() });
+        continue;
+      }
       const operand: SeqOperand = { id: createId('so'), items: [] };
       const guard = decode(rest);
       if (guard) operand.guard = guard;
-      const fragment: SeqFragment = { id: createId('sf'), t: 'fragment', operator: OPERATORS[word]!, operands: [operand] };
+      const fragment: SeqFragment = { id: createId('sf'), t: 'fragment', operator, operands: [operand] };
       here().push(fragment);
-      stack.push({ kind: 'fragment', fragment, operand, waiting: calls.slice(), answered: new Set() });
+      open({ kind: 'fragment', operator, fragment, operand, items: operand.items, waiting: calls.slice(), answered: new Set() });
       continue;
     }
     if (Object.hasOwn(NEXT_BRANCH, word)) {
-      const open = [...stack].reverse().find((block) => block.kind === 'fragment');
-      if (open?.fragment && open.fragment.operator === NEXT_BRANCH[word]) {
+      const frame = frames[frames.length - 1];
+      if (!frame || frame.operator !== NEXT_BRANCH[word]) {
+        unsupported.add(`"${word}" outside the block it belongs to`);
+      } else if (frame.fragment) {
         const operand: SeqOperand = { id: createId('so'), items: [] };
         const guard = decode(rest);
         if (guard) operand.guard = guard;
-        open.fragment.operands.push(operand);
-        open.operand = operand;
+        frame.fragment.operands.push(operand);
+        frame.operand = operand;
+        frame.items = operand.items;
         // Each branch is another way the same moment can go: it starts from what was waiting when
         // the fragment began, so "replies in either branch" is one call answered either way.
-        calls = (open.waiting ?? []).slice();
-      } else {
-        unsupported.add(`"${word}" outside the block it belongs to`);
+        calls = (frame.waiting ?? []).slice();
       }
       continue;
     }
     if (word === 'end') {
       const closed = stack.pop();
+      if (closed?.items) frames.pop();
+      if (closed?.kind === 'fragment') fragments.pop();
+      if (closed?.group === box) box = undefined;
       // Answered in any branch is answered.
       if (closed?.kind === 'fragment' && closed.waiting) calls = closed.waiting.filter((call) => !closed.answered?.has(call));
       continue;
@@ -209,32 +337,37 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
     }
 
     if (word === 'note') {
-      const placed = /^(over|left of|right of)\s+(.+?)\s*:\s*(.*)$/i.exec(rest);
+      const placed = readNote(rest);
       if (placed) {
-        const over = placed[2]!.split(',').map((name) => participant(name).id);
-        const note: SeqNote = { id: createId('sn'), t: 'note', text: decode(placed[3]!), over: [...new Set(over)] };
-        const where = placed[1]!.toLowerCase();
-        if (where === 'left of') note.side = 'left';
-        if (where === 'right of') note.side = 'right';
-        here().push(note);
+        const over = [...new Set(placed.names.split(',').map((name) => participant(name).id))].filter((id) => !outside.has(id));
+        if (over.length === 0) beyond += 1;
+        else if (keeps()) {
+          const note: SeqNote = { id: createId('sn'), t: 'note', text: decode(placed.text), over };
+          if (placed.where === 'left of') note.side = 'left';
+          if (placed.where === 'right of') note.side = 'right';
+          here().push(note);
+        }
         continue;
       }
     }
 
-    const said = MESSAGE.exec(line);
+    const said = readMessage(line);
     if (said) {
-      const from = participant(said[1]!);
-      const arrow = said[2]!;
-      const mark = said[3]!;
-      const to = participant(said[4]!);
+      const from = participant(said.from);
+      const arrow = said.arrow;
+      const to = participant(said.to);
       if (arrow.startsWith('<<')) unsupported.add('a message both ways at once: drawn as one call');
       if (arrow.endsWith('x') && !toDestroy.has(to.id) && !toDestroy.has(from.id)) unsupported.add('a lost message (-x): drawn as a call');
       let kind: SeqMessageKind = arrow === '-)' || arrow === '--)' ? 'async' : arrow.startsWith('--') || arrow === '<<-->>' ? 'reply' : 'sync';
-      const message: SeqMessage = { id: createId('sm'), t: 'message', from: from.id, to: to.id, kind, label: decode(said[5] ?? '') };
+      const message: SeqMessage = { id: createId('sm'), t: 'message', from: from.id, to: to.id, kind, label: decode(said.text ?? '') };
       if (toCreate.delete(to.id)) kind = 'create';
       else if (toDestroy.delete(to.id)) kind = 'destroy';
       else if (toDestroy.delete(from.id)) unsupported.add('a message that destroys its sender: the message is kept');
       message.kind = kind;
+      if (said.mark === '+') message.activate = true;
+      if (said.mark === '-') message.deactivate = true;
+      last = message;
+      if (!keeps(from.id, to.id)) continue;
       if (kind === 'reply') {
         // The latest call between these two, the other way, that nothing has answered yet.
         const at = calls.findLastIndex((call) => call.from === to.id && call.to === from.id);
@@ -244,16 +377,13 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
           // Mermaid counts work straight down the text and refuses to end the same work in a second
           // branch, so a reply there is written without its `-`. Where an earlier branch already
           // ended this call's work, this one does too.
-          if (call.activate && stack.some((block) => block.answered?.has(call))) message.deactivate = true;
-          for (const block of stack) block.answered?.add(call);
+          if (call.activate && fragments.some((block) => block.answered?.has(call))) message.deactivate = true;
+          for (const block of fragments) block.answered?.add(call);
         }
       } else if (kind === 'sync' && from.id !== to.id) {
         calls.push(message);
       }
-      if (mark === '+') message.activate = true;
-      if (mark === '-') message.deactivate = true;
       here().push(message);
-      last = message;
       continue;
     }
 
@@ -261,9 +391,10 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
   }
 
   const read = normalizeSequence({ participants, groups, items: root });
-  if (read.dropped > 0) unsupported.add(`${read.dropped} part${read.dropped === 1 ? '' : 's'} beyond what one sequence holds`);
+  const dropped = read.dropped + beyond;
+  if (dropped > 0) unsupported.add(`${dropped} part${dropped === 1 ? '' : 's'} beyond what one sequence holds`);
   if (read.sequence.participants.length === 0) return { ok: false, error: 'There is nobody in that sequence diagram.' };
-  const kept = new Set(read.sequence.participants.map((entry) => entry.id));
-  const written = new Map([...byName].filter(([, entry]) => kept.has(entry.id)).map(([name, entry]) => [entry.id, name]));
+  const standing = new Set(read.sequence.participants.map((entry) => entry.id));
+  const written = new Map([...byName].filter(([, entry]) => standing.has(entry.id)).map(([name, entry]) => [entry.id, name]));
   return { ok: true, title: title?.trim() || UNTITLED_SEQUENCE, sequence: read.sequence, unsupported: [...unsupported], written };
 }

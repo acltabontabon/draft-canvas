@@ -314,6 +314,73 @@ describe('a Flow drawn as a sequence', () => {
   });
 });
 
+describe('reading hostile Mermaid', () => {
+  const spaces = ' '.repeat(60_000);
+  const timed = (text: string) => {
+    const started = performance.now();
+    const result = parseMermaidSequence(text);
+    return { result, ms: performance.now() - started };
+  };
+
+  // Each took seconds at 40 KB and minutes near the 512 KB cap: a lazy group beside `\s*` backtracked
+  // over every split of a run of spaces that no arrow, colon or `as` ended.
+  it.each([
+    ['a line with no arrow', `a${spaces}b`],
+    ['a message with nothing after its receiver', `a->>b${spaces}c`],
+    ['a note with no colon', `Note over a${spaces}b`],
+    ['a declaration with no alias', `participant a${spaces}b`],
+    ['a configured declaration', `participant a${spaces}b @{ x`],
+  ])('reads %s in one pass', (_name, line) => {
+    expect(timed(`sequenceDiagram\n${line}\n`).ms).toBeLessThan(500);
+  });
+
+  it('reads a front-matter title in one pass', () => {
+    const { result, ms } = timed(`---\ntitle: a${spaces}b\n---\nsequenceDiagram\nA->>B: hi\n`);
+    expect(ms).toBeLessThan(500);
+    expect(result.ok && result.title.startsWith('a')).toBe(true);
+  });
+
+  it('does not walk everything opened or said above each line', () => {
+    // 20,000 nested loops took 4 s, and 30,000 calls then as many replies that answer none of them
+    // 14 s: every new participant and every reply walked the whole stack or every waiting call.
+    const pairs = Array.from({ length: 2_000 }, (_, i) => `p${i}->>q${i}: c\nq${i}-->>p${i}: r\n`).join('');
+    const deep = timed(`sequenceDiagram\n${'loop x\n'.repeat(20_000)}${pairs}`);
+    expect(deep.ms).toBeLessThan(2000);
+    const calls = 'a->>b\n'.repeat(30_000);
+    expect(timed(`sequenceDiagram\n${calls}${'c-->>d\n'.repeat(30_000)}`).ms).toBeLessThan(2000);
+    expect(timed(`sequenceDiagram\n${calls}${'opt\nend\n'.repeat(30_000)}`).ms).toBeLessThan(2000);
+  });
+
+  it('keeps what one sequence holds of a text past it, and counts the rest', () => {
+    const nested = `sequenceDiagram\n${'loop x\n'.repeat(20)}A->>B: deep\n${'end\n'.repeat(20)}A->>B: after\n`;
+    const read = parseMermaidSequence(nested);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    // Eight frames deep, as a file keeps; the rest are opened out and their message stays inside.
+    let depth = 0;
+    let items = read.sequence.items;
+    while (items[0]?.t === 'fragment') {
+      depth += 1;
+      items = items[0].operands[0]!.items;
+    }
+    expect(depth).toBe(8);
+    expect(messagesOf(read.sequence).map((message) => message.label)).toEqual(['deep', 'after']);
+    expect(read.unsupported).toContain('12 parts beyond what one sequence holds');
+
+    const many = parseMermaidSequence(`sequenceDiagram\n${Array.from({ length: 45 }, (_, i) => `A->>P${i}: m${i}\n`).join('')}`);
+    expect(many.ok).toBe(true);
+    if (!many.ok) return;
+    expect(many.sequence.participants).toHaveLength(40);
+    expect(messagesOf(many.sequence)).toHaveLength(39);
+    // Six participants past the 40th, and the six messages to them.
+    expect(many.unsupported).toContain('12 parts beyond what one sequence holds');
+
+    const long = parseMermaidSequence(`sequenceDiagram\n${'A->>B: x\nB-->>A: y\n'.repeat(400)}`);
+    expect(long.ok && messagesOf(long.sequence)).toHaveLength(600);
+    expect(long.ok && long.unsupported).toContain('200 parts beyond what one sequence holds');
+  });
+});
+
 it('reports a sender-destroy directive without ending the receiver’s lifeline', () => {
   const result = parseMermaidSequence('sequenceDiagram\nparticipant A\nparticipant B\ndestroy A\nA->>B: Goodbye\nB->>B: Continue');
   expect(result.ok).toBe(true);

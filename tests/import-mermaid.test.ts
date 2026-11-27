@@ -441,6 +441,14 @@ describe('hostile text', () => {
     expect(performance.now() - started).toBeLessThan(500);
   });
 
+  it('does not backtrack for seconds on a long run of spaces in a front-matter title', () => {
+    // `title\s*:\s*(.+?)\s*$` over the front matter took 2 s at 40 KB of spaces.
+    const started = performance.now();
+    const result = parsed(`---\ntitle: a${' '.repeat(60_000)}b\n---\nflowchart TD\n  A --> B`);
+    expect(performance.now() - started).toBeLessThan(500);
+    expect(result.create.title.startsWith('a')).toBe(true);
+  });
+
   it('does not rescan to the end of the line for every unclosed bracket in an & chain', () => {
     // Each `(((` and `((` without its closer was read to the end of the statement: 88 KB took 7.5 s,
     // so this input took about 40 s. Now about 150 ms; the bound leaves room for a busy CI runner

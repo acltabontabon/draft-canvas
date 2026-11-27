@@ -15,7 +15,7 @@
 
 import { LIMITS } from '../../document/limits';
 import { CONTROL_CHARS, cleanTitle } from '../../document/sanitize';
-import { DEFAULT_IMPORT_TITLE, FRONT_MATTER, HEADER, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
+import { DEFAULT_IMPORT_TITLE, frontMatterTitle, HEADER, MERMAID_TEXT_LIMIT, otherFencedBlocks, stripFrontMatter, unfence } from './sniff';
 
 export { looksLikeMermaid } from './sniff';
 
@@ -387,12 +387,8 @@ export function parseMermaidFlowchart(text: string): MermaidParse {
   // One diagram per import: the rest of a Markdown file's Mermaid blocks are named, not dropped silently.
   const others = otherFencedBlocks(text);
   if (others > 0) unsupported.add(others === 1 ? 'another Mermaid block in the file (not imported)' : `${others} other Mermaid blocks in the file (not imported)`);
-  const front = FRONT_MATTER.exec(unfenced);
-  let title: string | undefined;
-  if (front) {
-    const named = /^\s*title\s*:\s*(.+?)\s*$/m.exec(front[1]!);
-    if (named) title = cleanLabel(named[1]!, unsupported);
-  }
+  const named = frontMatterTitle(unfenced);
+  const title = named ? cleanLabel(named, unsupported) : undefined;
   const body = stripFrontMatter(unfenced);
 
   const statements: string[] = [];
