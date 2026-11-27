@@ -15,7 +15,8 @@ vi.mock('../../src/lib/preferences', () => ({
 const { Companion, IDLE_MS } = await import('../../src/desktop/ui/Companion');
 const { goodbyeLine, seedOf } = await import('../../src/desktop/ui/nodiLines');
 const { NodiDock } = await import('../../src/desktop/ui/NodiDock');
-const { companion } = await import('../../src/desktop/companion');
+const companionModule = await import('../../src/desktop/companion');
+const { companion } = companionModule;
 const { desktopStore } = await import('../../src/desktop/store');
 const { setDesktopController } = await import('../../src/desktop/useDesktop');
 const { createDocument, createNode } = await import('../../src/document/factory');
@@ -726,6 +727,36 @@ describe('the companion', () => {
     expect(screen.getByRole('region', { name: 'Conversation with Claude Code' }).textContent).toMatch(/shown on the canvas/);
     await settle();
     expect(controller.getProposal).toHaveBeenCalledWith('p1');
+  });
+
+  it('redraws a long reply a few times a second while it streams in, not on every chunk', async () => {
+    vi.useFakeTimers();
+    useUiStore.setState({ companionOpen: true });
+    await act(async () => {
+      mount();
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(0);
+    });
+    const line = (i: number) => `- The orders service writes the ledger before it answers, part ${i}.\n`;
+    act(() => {
+      companion.begin(doc.metadata.id, 'long', 'Walk me through all of it', null);
+      companion.apply('long', { type: 'message-chunk', text: Array.from({ length: 300 }, (_, i) => line(i)).join('') });
+    });
+    const parsed = vi.spyOn(companionModule, 'replyBlocks');
+    // Half a second more of it: a chunk every 5 ms, each its own event from the shell.
+    for (let i = 300; i < 400; i += 1) {
+      act(() => companion.apply('long', { type: 'message-chunk', text: line(i) }));
+      await act(async () => {
+        vi.advanceTimersByTime(5);
+      });
+    }
+    expect(parsed.mock.calls.length).toBeLessThanOrEqual(15);
+    expect(document.querySelectorAll('.dc-companion-reply li').length).toBeGreaterThan(300);
+
+    // Finished, all of it is there at once.
+    act(() => companion.apply('long', { type: 'stopped', reason: { kind: 'end-turn' }, summary: null, costMicroUsd: null, usage: null }));
+    expect(document.querySelector('.dc-companion-reply li:last-child')?.textContent).toBe('The orders service writes the ledger before it answers, part 399.');
   });
 
   it('explains conversation usage on keyboard focus, with cache separated from new tokens', async () => {

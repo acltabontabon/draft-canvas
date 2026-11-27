@@ -1419,7 +1419,7 @@ const TurnView = memo(function TurnView({ turn, pinned, onAction }: { turn: Turn
       )}
       {/* Numbered only while its pins can be on the canvas: a waiting proposal holds the canvas
           (`pointsOf`), and numbers in the bubble with no pins to match point at nothing. */}
-      {reply && <ReplyText text={reply} pinned={pinned && !turn.proposalId} />}
+      {reply && <ReplyText text={reply} pinned={pinned && !turn.proposalId} streaming={turn.stop === null} />}
       {/* Still at it: below whatever it has said so far, so words that arrive first ("I'll review the
           modules, then…") never look like the end of the turn. */}
       {turn.stop === null && <Working now={activity.now} />}
@@ -1916,11 +1916,51 @@ function PartChip({ id, entry }: { id: string; entry: ReplyEntry | null }) {
   );
 }
 
+/** How often a reply still streaming in is drawn again: at most once a frame, and less often the longer
+ *  it gets, a millisecond more for every `STREAM_REDRAW_CHARS_PER_MS` characters, up to a second. */
+const STREAM_REDRAW_MIN_MS = 16;
+const STREAM_REDRAW_MAX_MS = 1000;
+const STREAM_REDRAW_CHARS_PER_MS = 500;
+
+/**
+ * The reply as the card draws it. It streams in a few characters at a time, and drawing it reads all
+ * of it again (its paragraphs, its lists, the parts it names): drawn for every chunk, a long reply cost
+ * more with each one, a 128 KB one seconds of work, until the card held the window up. While it
+ * streams it is drawn now and then instead, so each second of drawing costs about the same however
+ * long it gets; a finished reply is drawn whole at once.
+ */
+function useStreamedReply(text: string, streaming: boolean): string {
+  const [shown, setShown] = useState(text);
+  const latest = useRef(text);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    latest.current = text;
+    if (!streaming || timer.current !== null) return;
+    const wait = Math.min(STREAM_REDRAW_MAX_MS, Math.max(STREAM_REDRAW_MIN_MS, text.length / STREAM_REDRAW_CHARS_PER_MS));
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      setShown(latest.current);
+    }, wait);
+  }, [text, streaming]);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) clearTimeout(timer.current);
+    },
+    [],
+  );
+  return streaming ? shown : text;
+}
+
+function ReplyText({ text, pinned = false, streaming = false }: { text: string; pinned?: boolean; streaming?: boolean }) {
+  return <ReplyBlocks text={useStreamedReply(text, streaming)} pinned={pinned} />;
+}
+
 /**
  * The agent's reply as it reads best in the card: paragraphs and lists, as advice usually comes. In the
- * latest turn (`pinned`), each paragraph or bullet about a part carries the number pinned on it.
+ * latest turn (`pinned`), each paragraph or bullet about a part carries the number pinned on it. Read
+ * again only when the text it is given changes, which while it streams is now and then (`useStreamedReply`).
  */
-function ReplyText({ text, pinned = false }: { text: string; pinned?: boolean }) {
+const ReplyBlocks = memo(function ReplyBlocks({ text, pinned }: { text: string; pinned: boolean }) {
   const pointing = useContext(PointingContext);
   const blocks = numberedBlocks(replyBlocks(text), (id) => pointing?.here.has(id) ?? false);
   const point = (entry: ReplyEntry) =>
@@ -1971,4 +2011,4 @@ function ReplyText({ text, pinned = false }: { text: string; pinned?: boolean })
       )}
     </div>
   );
-}
+});
