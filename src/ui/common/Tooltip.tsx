@@ -189,6 +189,25 @@ export function Tooltip({ content, body, showOnClick = false, children }: Toolti
     return () => warmth.leave(close);
   }, [open, warmth]);
 
+  // Dismissible without moving the pointer or focus (WCAG 1.4.13): a tooltip the pointer is resting
+  // on closes on Escape wherever focus is, not only from its trigger. The key is not claimed, so it
+  // still does its own work (the editor's Escape puts a tool down). With focus on the trigger, the
+  // trigger's own Escape below decides: an explanation opened by a click owns that first press.
+  useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || anchorRef.current?.contains(document.activeElement)) return;
+      if (showTimer.current !== null) window.clearTimeout(showTimer.current);
+      if (hideTimer.current !== null) window.clearTimeout(hideTimer.current);
+      showTimer.current = null;
+      hideTimer.current = null;
+      retained.current = false;
+      setOpen(false);
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [open]);
+
   const show = () => {
     clearTimers();
     setOpen(true);

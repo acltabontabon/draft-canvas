@@ -176,3 +176,30 @@ describe('Tooltip warmth', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 });
+
+describe('Tooltip dismissal', () => {
+  it('closes a tooltip shown by hover on Escape wherever focus is, and leaves the key to the page', () => {
+    // WCAG 1.4.13: dismissible without moving the pointer or focus. Escape used to be heard only on
+    // the trigger, so a tooltip the pointer rested on stayed over the canvas while focus was there.
+    vi.useFakeTimers();
+    const { a } = mountPair();
+    const elsewhere = document.createElement('button');
+    document.body.append(elsewhere);
+    elsewhere.focus();
+    const reachedPage = vi.fn();
+    window.addEventListener('keydown', reachedPage);
+    try {
+      fireEvent.mouseEnter(a);
+      advance(COLD_DELAY);
+      expect(screen.getByRole('tooltip')).toHaveTextContent('A');
+      fireEvent.keyDown(elsewhere, { key: 'Escape' });
+      expect(screen.queryByRole('tooltip')).toBeNull();
+      // Not claimed: the editor's own Escape (putting a tool down, say) still runs.
+      expect(reachedPage).toHaveBeenCalledTimes(1);
+      expect(reachedPage.mock.calls[0]![0].defaultPrevented).toBe(false);
+    } finally {
+      window.removeEventListener('keydown', reachedPage);
+      elsewhere.remove();
+    }
+  });
+});
