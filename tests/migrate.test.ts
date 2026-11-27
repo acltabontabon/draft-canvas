@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parseDocument } from '../src/document/validate';
 import { CURRENT_VERSION, DRAFT_FORMAT } from '../src/document/types';
-import { chooseSides } from '../src/edges/routing';
+import { anchorPoint, chooseSides, rectOf } from '../src/edges/routing';
 import { migrateToCurrent } from '../src/document/migrate';
 import { anchorBandOf } from '../src/document/queueGeometry';
 
@@ -524,13 +524,15 @@ describe('v10 to v11 migration: BFF Service kind removal', () => {
     expect(result.document.nodes[0]).toMatchObject({
       type: 'service',
       serviceKind: 'api',
-      x: 10,
-      y: 20,
-      width: 140,
-      height: 70,
       text: 'Web BFF',
       accent: 'teal',
     });
+    // An API has since become a glyph (v34): the card grew to hold one, around the same middle.
+    const api = result.document.nodes[0]!;
+    expect(api).toMatchObject({ width: 120, height: 114 });
+    expect(api.x + api.width / 2).toBe(80);
+    const band = anchorBandOf(api)!;
+    expect(Math.abs((band.top + band.bottom) / 2 - 55)).toBeLessThanOrEqual(1);
   });
 
   it('leaves non-bff services and other node types untouched', () => {
@@ -1001,7 +1003,7 @@ describe('v30 to v31 migration: Module, Adapter and Port become glyphs', () => {
   it('leaves a Generic Component, and every other shape, exactly as it was', () => {
     const before = [
       { id: 'c', type: 'component', componentKind: 'generic', x: 0, y: 0, width: 152, height: 56, z: 0, text: 'Use Cases' },
-      { id: 's', type: 'service', serviceKind: 'api', x: 300, y: 0, width: 176, height: 68, z: 0, text: 'API' },
+      { id: 's', type: 'service', serviceKind: 'generic', x: 300, y: 0, width: 176, height: 68, z: 0, text: 'Orders' },
     ];
     const doc = open(before);
     expect(doc.nodes.map(({ x, y, width, height }) => ({ x, y, width, height }))).toEqual(before.map(({ x, y, width, height }) => ({ x, y, width, height })));
@@ -1015,6 +1017,105 @@ describe('v30 to v31 migration: Module, Adapter and Port become glyphs', () => {
       },
     ]);
     expect(doc.nodes[0]!.inside?.nodes[0]?.height).toBe(114);
+  });
+});
+
+describe('v33 to v34 migration: an External system is a card again, and glyph pins stay put', () => {
+  const v32 = (nodes: unknown[], edges: unknown[] = []) => ({
+    format: DRAFT_FORMAT,
+    version: 32,
+    metadata: { id: 'd1', title: 'Legacy', createdAt: 0, updatedAt: 0 },
+    nodes,
+    edges,
+    settings: { showSequence: true, grid: 'dots' },
+    flows: [],
+  });
+  const open = (nodes: unknown[], edges: unknown[] = []) => {
+    const result = parseDocument(JSON.stringify(v32(nodes, edges)));
+    if (!result.ok) throw new Error('did not open');
+    return result.document;
+  };
+  const edge = (id: string, source: string, target: string, anchors: Record<string, unknown>) => ({ id, source, target, kind: 'sync', directed: true, routing: 'smoothstep', ...anchors });
+
+  it('gives back the height the glyph took, with the card where the glyph was', () => {
+    const doc = open([
+      { id: 'plain', type: 'service', serviceKind: 'external', x: 100, y: 100, width: 120, height: 114, z: 0, text: 'Stripe' },
+      { id: 'told', type: 'service', serviceKind: 'external', x: 400, y: 100, width: 200, height: 143, z: 0, text: 'Stripe', description: 'Takes card payments.' },
+    ]);
+    expect(doc.version).toBe(CURRENT_VERSION);
+    const [plain, told] = doc.nodes;
+    expect(plain).toMatchObject({ x: 100, width: 120, height: 68 });
+    expect(told).toMatchObject({ x: 400, width: 200, height: 103 });
+    // The glyph's middle was 39 below the box's top (9 down to a glyph 42 high, both at 114 / 88).
+    for (const node of [plain!, told!]) expect(Math.abs(node.y + node.height / 2 - 139)).toBeLessThanOrEqual(1);
+    // A card takes its connectors on its own edges.
+    expect(anchorBandOf(plain!)).toBeUndefined();
+  });
+
+  it('keeps a pin on its side at the height it was drawn', () => {
+    const doc = open(
+      [
+        { id: 'a', type: 'service', x: 0, y: 105, width: 176, height: 68, z: 0, text: 'Orders' },
+        { id: 'x', type: 'service', serviceKind: 'external', x: 400, y: 100, width: 120, height: 114, z: 0, text: 'Stripe' },
+      ],
+      [edge('ax', 'a', 'x', { sourceAnchor: { side: 'right', offset: 0.5 }, targetAnchor: { side: 'left', offset: 0.25 } })],
+    );
+    const card = doc.nodes.find((n) => n.id === 'x')!;
+    const pin = doc.edges[0]!.targetAnchor!;
+    // A quarter down the glyph: 11.66 to its top, then a quarter of its 54.4.
+    expect(card.y + pin.offset * card.height).toBeCloseTo(100 + 11.66 + 54.41 / 4, 0);
+    expect(pin.side).toBe('left');
+  });
+
+  it('keeps a pin on a wide glyph\'s top where it was drawn, or at the glyph\'s corner', () => {
+    const doc = open(
+      [
+        { id: 'db', type: 'database', x: 0, y: 200, width: 200, height: 143, z: 0, text: 'Orders DB', description: 'Every order ever placed.' },
+        { id: 'a', type: 'service', x: 0, y: 0, width: 176, height: 68, z: 0, text: 'Orders' },
+        { id: 'small', type: 'database', x: 400, y: 200, width: 120, height: 114, z: 0, text: 'Cache' },
+      ],
+      [
+        edge('near', 'a', 'db', { targetAnchor: { side: 'top', offset: 0.4 } }),
+        edge('far', 'a', 'db', { targetAnchor: { side: 'top', offset: 0.1 } }),
+        edge('same', 'a', 'small', { targetAnchor: { side: 'top', offset: 0.25 } }),
+      ],
+    );
+    const db = doc.nodes.find((n) => n.id === 'db')!;
+    const rect = rectOf(db);
+    const at = (id: string) => anchorPoint(rect, 'top', doc.edges.find((e) => e.id === id)!.targetAnchor!.offset).x;
+    // 0.4 of the box was 80 across, over the glyph: it is still there.
+    expect(at('near')).toBeCloseTo(80, 0);
+    // 0.1 of the box was 20 across, in the air beside the glyph: it is at the glyph's corner now.
+    expect(at('far')).toBeCloseTo(rect.anchorBand!.left!, 0);
+    // A box no wider than its glyph's reach spreads its anchors as it always did.
+    expect(doc.edges.find((e) => e.id === 'same')!.targetAnchor).toEqual({ side: 'top', offset: 0.25 });
+  });
+
+  it('grows an API card into a glyph around the same middle, and keeps its side pins level', () => {
+    const doc = open(
+      [
+        { id: 'a', type: 'service', x: 0, y: 100, width: 176, height: 68, z: 0, text: 'Orders' },
+        { id: 'api', type: 'service', serviceKind: 'api', x: 400, y: 100, width: 176, height: 68, z: 0, text: 'Orders API' },
+      ],
+      [edge('call', 'a', 'api', { sourceAnchor: { side: 'right', offset: 0.25 }, targetAnchor: { side: 'left', offset: 0.25 } })],
+    );
+    const api = doc.nodes.find((n) => n.id === 'api')!;
+    expect(api).toMatchObject({ width: 120, height: 114 });
+    expect(api.x + api.width / 2).toBe(488);
+    const rect = rectOf(api);
+    // The card's middle was at 134, and its quarter at 117: the glyph's middle and the pin are there.
+    expect(Math.abs((rect.anchorBand!.top + rect.anchorBand!.bottom) / 2 - 134)).toBeLessThanOrEqual(1);
+    expect(anchorPoint(rect, 'left', doc.edges[0]!.targetAnchor!.offset).y).toBeCloseTo(117, 0);
+  });
+
+  it('reaches an External system inside a room', () => {
+    const doc = open([
+      {
+        id: 'host', type: 'service', x: 0, y: 0, width: 176, height: 68, z: 0, text: 'Orders',
+        inside: { nodes: [{ id: 'x', type: 'service', serviceKind: 'external', x: 0, y: 0, width: 120, height: 114, z: 0, text: 'Stripe' }], edges: [], flows: [], viewport: { x: 0, y: 0, zoom: 1 } },
+      },
+    ]);
+    expect(doc.nodes[0]!.inside?.nodes[0]?.height).toBe(68);
   });
 });
 

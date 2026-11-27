@@ -150,7 +150,7 @@ test.describe('architecture starters', () => {
     await page.getByRole('button', { name: 'View all starters', exact: true }).click();
     const collection = page.getByRole('dialog', { name: 'Starters', exact: true });
     await collection.getByRole('radio', { name: /^Patterns/ }).click();
-    await collection.getByRole('button', { name: 'Transactional Outbox', exact: true }).click();
+    await collection.getByRole('button', { name: /^Transactional Outbox\b/ }).click();
     // A preview first, with what it's for, then a choice.
     await expect(collection.getByRole('heading', { name: 'Transactional Outbox' })).toBeVisible();
     await expect(collection.getByText('Use it when')).toBeVisible();

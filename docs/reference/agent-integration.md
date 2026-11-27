@@ -65,6 +65,7 @@ The operations below are passed as `tool`, with their arguments in `args`.
 | `read_diagram({diagramId, query?, view?, focus?, include?, outage?, cursor?, format?})` | read | One view, semantically. See [Reading](#reading). |
 | `read_attachment({diagramId, expectedRevision, attachmentId, offset?, view?})` | read | Full note or code text in 8,192-character chunks. |
 | `read_selection({diagramId})` | read | The current selection. See [Selection-aware editing](#selection-aware-editing). |
+| `diagram_history({diagramId, action, revision?, against?, alternative?, name?, query?, limit?})` | read | The open diagram's history: summaries, revision lists, comparisons, restore and merge previews, milestone suggestions. Full reads only when the person allows them. See [Canvas Evolution](evolution.md#adr-13-diagram_history-a-reviewed-view-for-agents). |
 | `get_implementation_context({diagramId, view?, focus?})` | read | Flow steps as stored, sequences (at most 8), notes, decisions, code and boundaries: what to implement, in order. |
 | `render_diagram({diagramId, view?, format?, scale?, theme?, previewId?, focus?})` | read | PNG (`scale` 1–3, `light`/`dark`) or SVG from the export renderer, at most 8 MB. `focus`: `{nodes}`, `{group}`, `{flow}` or `{selection: true}`, with optional `neighbors`. |
 | `create_diagram({requestId, title, nodes?, relationships?, groups?, flows?, notes?, sequences?, level?, starter?, layout?, project?, open?, allowDuplicateTitle?, fallbackType?})` | write | A new file. A title in use is `DUPLICATE_TITLE` unless `allowDuplicateTitle`. `fallbackType` draws unknown types as that type. `starter` begins from a downloaded gallery starter; its elements keep the file's ids under `starter.prefix`. The receipt counts free notes in `created.notes` and attached notes and code in `created.attachments`, across every inside view. |
@@ -191,6 +192,28 @@ make: a missing dead-letter path belongs in the diagram only if the system has o
 Render it with `render_diagram({diagramId, previewId})`, then apply it with
 `update_diagram({requestId, diagramId, expectedRevision, previewId})`. Candidates last 10 minutes; at
 most 4 (64 MB) are kept per page. A changed diagram refuses the candidate; panning and zooming do not count.
+
+**Linked junctions.** A `junction` takes `link`, a name of up to 64 characters that the agent
+chooses. Junctions with the same `link` are one continuation point drawn in several places, in one
+view or across inside views, and people travel between them. Use a pair in place of a relationship
+that would cross the whole diagram: end the line at one junction, start it again from another with
+the same `link`, and give both the same short label.
+
+- Create or add: `{id: "out", type: "junction", label: "A", link: "payment-handoff"}`.
+- Link, move to another group, or unlink: `{op: "update", id, set: {link: "payment-handoff"}}`,
+  `set: {link: null}`.
+- `read_diagram` returns each junction's `link`, and `linkedJunctions: [{link, label, places:
+  [{id, view}]}]` for every group with a member on the page: where each is drawn, by view path.
+  `query` finds junctions by their link as well as their label.
+- A group reads as one label, as it does for a person:
+  - Junctions sharing a `link` in one create or `add` need the same label (`INVALID_INPUT` otherwise).
+  - `set.label` on any junction of a group renames every member, in every view. The receipt says
+    how many others changed, and a review or proposal lists each with its view.
+  - A junction joining an existing group (`add` with `link`, or `set.link` alone) takes the
+    group's label, with an advisory when that replaced its own.
+- `rename_element` renames a linked group by its label when no architecture shape carries that label.
+- A link adds no relationship. Flows, semantics and outage reads follow drawn relationships only.
+- `link` on any other element type is `UNSUPPORTED`.
 
 **Source evidence.** Elements and relationships take up to 8 `evidence` entries:
 `{path, basis: "observed" | "inferred", symbol?, commit?, line?, explanation?}`, with a

@@ -212,7 +212,7 @@ describe('FlowPanel', () => {
     expect(useEditorStore.getState().document.flows.map((flow) => flow.title)).toEqual(['Refunds']);
   });
 
-  it('is a tree, as the Outline is: treeitems with aria-expanded, steps in a nested group, one row in the Tab order', () => {
+  it('is a tree, as the Outline is: treeitems with aria-expanded, steps in a group of their own, one row in the Tab order', () => {
     const edge = addConnectedPair();
     const state = useEditorStore.getState();
     const checkout = state.createFlow('Checkout')!;
@@ -238,7 +238,7 @@ describe('FlowPanel', () => {
     const steps = within(group).getAllByRole('treeitem');
     expect(steps).toHaveLength(1);
     expect(steps[0]!.getAttribute('aria-level')).toBe('2');
-    expect(steps[0]!.getAttribute('aria-label')).toBe('Step 1: A to B, calls');
+    expect(steps[0]!.getAttribute('aria-label')).toBe('Step 1: A → B, calls');
     expect(within(steps[0]!).getByRole('button', { name: 'Remove step 1' })).toBeTruthy();
 
     // Focus moves the tab stop with it; arrows still walk the rows.

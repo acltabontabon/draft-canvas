@@ -8,7 +8,6 @@ export function GalleryHeading({ action }: { action: ReactNode }) {
       <div>
         <p className="dc-gallery-eyebrow">Your library</p>
         <h2>Thoughts <em>worth keeping.</em></h2>
-        <p className="dc-gallery-subtitle">A little collection of things you made clearer.</p>
       </div>
       {action}
     </div>

@@ -175,6 +175,15 @@ same commands, sometimes with shorter labels, minus any that open a follow-up pi
   its own four corners as well as its extent, so a leaning one still reads.
   Strokes are kept as ink first, so a conversion is one undo step that undo reverses to them; a
   later choice amends that step (`HistoryEntry.amendKey`). Recognition loads on first use.
+- **Linked junctions** (`junctions/`) are Junctions that share `DraftNode.link`, an opaque group
+  id on the Junctions themselves. There is no table of groups, so membership cannot dangle or
+  disagree with a copy, an undo or a collaborator's edit; a group of one is a Junction waiting for a
+  counterpart. The label is each member's own text, which a group rename writes on all of them. A
+  link adds no connector: routing, flows, outage walks, semantics and exports never read it.
+  Travelling is pure arithmetic handed to the camera: `destination.ts` picks a bounded context (the
+  shapes a Junction is wired to, one step on), `journey.ts` chooses where to stop (the current zoom
+  when it reads well) and how to get there (a pan, or one `interpolateZoom` flight timed by the
+  path's length), and `trail.ts` is the back/forward history. None of it is saved, undone or shared.
 - **View levels** change how rooms are shown, not the tree.
 
 ## Persistence and the storage boundary
@@ -198,6 +207,11 @@ a viewer that knows it, never on GitHub, so the portable SVG ships alone. The ex
 note in every docs image: `readMarker` (`export/docs/marker.ts`) gives a viewer the `.draftcanvas`
 beside the SVG and its level. A Markdown preview could swap the image for an interactive view, reusing
 `renderDocumentSvg` and the reader (never a second renderer) and loading no remote script.
+
+**Diagram history.** Each diagram's history is a Git repository the app keeps apart from the file:
+IndexedDB on the web, the app's data folder on the desktop. Recording, recovery, merging and
+publishing are in [Canvas Evolution](evolution.md); its threat model, and how the desktop runs Git,
+in [Canvas Evolution security](evolution-security.md).
 
 **Encrypted storage.** Browser records are written plain. `crypto/documentCipher.ts` and
 `crypto/keyStore.ts` only decrypt legacy rows and are called only by `storage/IndexedDbRepository.ts`.

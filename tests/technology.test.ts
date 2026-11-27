@@ -115,7 +115,12 @@ describe('Quiet corner rendering', () => {
   it('attaches to the data-store glyph as it scales, independently of document position', () => {
     const node = createNode({ type: 'database', x: -300, y: 900, width: 240, height: 220, technology: 'Postgres' });
     const glyph = dataStoreGlyphBounds({ ...node, x: 0, y: 0 });
-    expect(technologyMarkBounds(node)).toMatchObject({ x: glyph.right + 9, y: glyph.top + 2 });
+    const mark = technologyMarkBounds(node)!;
+    // Off the glyph's top-right corner: right of it, and wholly above its side's first connection
+    // point (a quarter of the way down), so no connector into that side runs through the logo.
+    expect(mark.x).toBeGreaterThan(glyph.right);
+    expect(mark.y).toBeLessThan(glyph.top);
+    expect(mark.y + mark.height).toBeLessThan(glyph.top + (glyph.bottom - glyph.top) * 0.25 - 4);
   });
 
   it('sits at the corner end of the marker rail on every other architecture shape', () => {

@@ -45,10 +45,10 @@ export function setUpFilm() {
   };
 
   /** With sound if the browser allows it; silently, with captions, if it does not. */
-  const play = async (wantSound = !film.muted || stage.dataset.state === 'idle', byItself = false) => {
+  const play = async (byItself = false) => {
     end.hidden = true;
-    film.muted = !wantSound;
-    try { await film.play(); } catch {
+    try { await film.play(); } catch (error) {
+      if (error.name !== 'NotAllowedError' || film.muted || held || (byItself && !inView)) return;
       film.muted = true;
       try { await film.play(); } catch { /* not allowed to play at all: the play mark stays */ }
     }
@@ -66,22 +66,23 @@ export function setUpFilm() {
   film.addEventListener('play', () => setState('playing'));
   film.addEventListener('pause', () => { if (!film.ended) setState('paused'); });
   film.addEventListener('ended', () => {
+    const hadFocus = stage.contains(document.activeElement);
     setState('ended');
     end.hidden = false;
     if (document.fullscreenElement === stage) void document.exitFullscreen();
-    end.querySelector('.film-replay').focus({ preventScroll: true });
+    if (hadFocus) end.querySelector('.film-replay').focus({ preventScroll: true });
   });
 
   toggle.addEventListener('click', () => {
-    if (film.paused) { held = false; void play(true); }
+    if (film.paused) { held = false; void play(); }
     else { held = true; film.pause(); }
   });
   sound.addEventListener('click', () => { film.muted = !film.muted; reflectSound(); });
-  end.querySelector('.film-replay').addEventListener('click', () => { held = false; seek(0); void play(true); toggle.focus({ preventScroll: true }); });
-  for (const step of steps) step.button.addEventListener('click', () => { held = false; seek(step.at); void play(true); });
-  // A timecode anywhere on the page: go to the film and start there. The press itself lets it start with sound.
+  end.querySelector('.film-replay').addEventListener('click', () => { held = false; seek(0); void play(); toggle.focus({ preventScroll: true }); });
+  for (const step of steps) step.button.addEventListener('click', () => { held = false; seek(step.at); void play(); });
+  // A timecode anywhere on the page goes to the film and starts it there.
   for (const link of document.querySelectorAll('[data-film-jump]')) {
-    link.addEventListener('click', () => { held = false; seek(Number(link.dataset.filmJump)); void play(true); });
+    link.addEventListener('click', () => { held = false; seek(Number(link.dataset.filmJump)); void play(); });
   }
 
   if (stage.requestFullscreen) {
@@ -91,7 +92,7 @@ export function setUpFilm() {
 
   const paint = () => {
     const t = film.currentTime;
-    const total = film.duration || 108.4;
+    const total = film.duration || 122.7;
     let current = 0;
     steps.forEach((step, index) => {
       const next = steps[index + 1]?.at ?? total;
@@ -104,12 +105,12 @@ export function setUpFilm() {
   film.addEventListener('timeupdate', paint);
   film.addEventListener('seeked', paint);
   reflectSound();
-  film.muted = false;
+  film.controls = false;
 
   if (!('IntersectionObserver' in window)) return;
   new IntersectionObserver(([entry]) => {
     inView = entry.intersectionRatio >= 0.6;
-    if (inView) { if (!calm && !held && film.paused && !film.ended) void play(undefined, true); }
+    if (inView) { if (!calm && !held && film.paused && !film.ended) void play(true); }
     else film.pause();
   }, { threshold: [0, 0.6, 1] }).observe(stage);
 }

@@ -43,9 +43,9 @@ export function stashForReload(document: DraftDocument, { base, stamp, writing, 
   const id = document.metadata.id;
   const documentKey = PREFIX + id;
   const contextKey = CONTEXT_PREFIX + id;
-  const storage = window.sessionStorage;
   let before: { document: string | null; context: string | null } | null = null;
   try {
+    const storage = window.sessionStorage;
     before = { document: storage.getItem(documentKey), context: storage.getItem(contextKey) };
     storage.setItem(documentKey, JSON.stringify(document));
     // Picked field by field: a whole `ReloadStash` passed back in would store its document twice.
@@ -61,6 +61,7 @@ export function stashForReload(document: DraftDocument, { base, stamp, writing, 
     // copy. So what was there before goes back: the older pair whole, never a mixture.
     if (!before) return;
     try {
+      const storage = window.sessionStorage;
       for (const [key, value] of [[documentKey, before.document], [contextKey, before.context]] as const) {
         if (value === null) storage.removeItem(key);
         else storage.setItem(key, value);

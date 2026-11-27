@@ -48,6 +48,10 @@ multiple folders make the destination ambiguous. Keep the returned id and revisi
 - Batch related ops in one `update_diagram` per view. Pass the latest file revision as
   `expectedRevision` and carry the receipt's revision forward. For uncertain changes, use
   `preview_diagram` and apply the candidate by `previewId` if it meets the request.
+- To untangle a relationship that crosses the whole view, replace it with linked junctions in one
+  `update_diagram`: remove it, add a junction beside each end with one `link` and one label, and
+  the relationships to and from them. A flow step on the removed relationship goes with it, so keep
+  the line where a flow tells it. A path that continues in another view needs one request per view.
 - For architectural review or a proposed change, use `submit_proposal` and direct the person to
   review it in Draft Canvas. Only the person accepts a review-only proposal.
 

@@ -1,7 +1,7 @@
 {
   "name": "draft-canvas",
   "private": true,
-  "version": "1.21.1",
+  "version": "1.22.0",
   "type": "module",
   "description": "A local-first canvas for developers to explain software visually.",
   "license": "Apache-2.0",
@@ -75,8 +75,10 @@
   "dependencies": {
     "@xyflow/react": "^13.0.3",
     "@xyflow/system": "1.0.1",
+    "buffer": "6.0.3",
     "fflate": "^0.8.3",
     "idb": "^8.0.4",
+    "isomorphic-git": "1.44.19",
     "marked": "^18.2.1",
     "react": "^19.3.1",
     "react-aria-components": "^1.22.1",
@@ -86,7 +88,7 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
-    "@axe-core/playwright": "^4.13.0",
+    "@axe-core/playwright": "^4.14.0",
     "@playwright/test": "^1.65.1",
     "@tauri-apps/api": "^2.12.5",
     "@tauri-apps/cli": "^2.12.6",
@@ -110,7 +112,7 @@
     "typescript": "~7.0.2",
     "vite": "^8.3.8",
     "vite-plugin-pwa": "^2.0.0",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   },
   "overrides": {
     "lodash-es": "^4.18.1",

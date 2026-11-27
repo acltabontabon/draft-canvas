@@ -23,6 +23,7 @@ pub mod scope;
 pub mod session;
 pub mod skill;
 
+use crate::state::{AppState, HostEvent};
 use crate::util::{lock, now_ms};
 use ledger::Ledger;
 use proposals::Proposals;
@@ -31,7 +32,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tokio::sync::watch;
 
 /// The bridge protocol spoken between the sidecar and the app. Bumped on any incompatible change to
@@ -180,12 +181,22 @@ impl Agent {
 
     pub(crate) fn connection_opened(&self) {
         self.connections.fetch_add(1, Ordering::SeqCst);
-        self.tray_changed();
+        self.connections_changed();
     }
 
     pub(crate) fn connection_closed(&self) {
         self.connections.fetch_sub(1, Ordering::SeqCst);
+        self.connections_changed();
+    }
+
+    /// The tray's line and Settings → AI agents both say how many agents are connected. Settings is
+    /// where someone watches for the first one after setting an agent up, so the page is told rather
+    /// than left to find out when it is next opened.
+    fn connections_changed(&self) {
         self.tray_changed();
+        if let Some(app) = self.app() {
+            app.state::<AppState>().events.emit(HostEvent::AgentChanged);
+        }
     }
 
     /// The tray menu's one line of status follows access and connections; it is rebuilt off the

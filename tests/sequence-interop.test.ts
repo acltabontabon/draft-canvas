@@ -211,6 +211,17 @@ describe('reading Mermaid', () => {
     expect(messagesOf(read.sequence).find((message) => message.label === 'authorize; capture later')).toBeDefined();
   });
 
+  it('preserves literal Mermaid entity codes alongside the characters they name', () => {
+    const name = 'Parser #lt; <';
+    const label = 'Encode & as #amp; and < as #lt;';
+    const sequence = { participants: [who('a', name), who('b', 'API')], items: [call('send', 'a', 'b', label)] };
+    const read = parseMermaidSequence(sequenceToMermaid(asNode(sequence)));
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.sequence.participants[0]?.name).toBe(name);
+    expect(messagesOf(read.sequence)[0]?.label).toBe(label);
+  });
+
   it('reads a diagram somebody wrote by hand, and says what it left out', () => {
     const read = parseMermaidSequence(`---
 title: Sign in

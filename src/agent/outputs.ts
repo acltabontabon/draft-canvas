@@ -25,6 +25,7 @@ export function outputFor(name: string): Schema {
     case 'read_selection': success = object({ ...identity, selection: { type: ['object', 'null'] } }, ['diagramId', 'revision', 'selection']); break;
     case 'get_implementation_context': success = object({ ...identity, flows: array }, ['diagramId', 'revision', 'flows']); break;
     case 'list_proposals': success = object({ proposals: array, complete: { type: 'boolean' } }, ['proposals', 'complete']); break;
+    case 'diagram_history': success = object({ diagramId: string, action: string }, ['diagramId', 'action']); break;
     default: success = object({ proposalId: string, status: string }, ['proposalId']);
   }
   return { type: 'object', anyOf: [success, error] };

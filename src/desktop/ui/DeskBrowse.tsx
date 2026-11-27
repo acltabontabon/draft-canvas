@@ -3,7 +3,9 @@ import { createPortal } from 'react-dom';
 import { warmExplorer } from './DesktopExplorer';
 import { Button } from '../../ui/common/Button';
 import { Icon } from '../../ui/common/Icon';
+import { SegmentedControl } from '../../ui/common/SegmentedControl';
 import { isImeKeyEvent } from '../../lib/isEditableTarget';
+import { readPreference, writePreference } from '../../lib/preferences';
 import { GalleryHeading } from '../../ui/Library/GalleryHeading';
 import { LibraryBrand } from '../../ui/Library/LibraryBrand';
 import { DesktopError, type Handle } from '../api';
@@ -12,7 +14,7 @@ import type { DesktopController } from '../controller';
 import { desktopStore, type DesktopState, type FileTarget, type ProjectState } from '../store';
 import { DocTile, type DocTileProps } from './DocTile';
 import { folderOfPath, resolveFileTarget } from './fileTargets';
-import { childrenOf, descendantsOf, folderTile, projectTile } from './tiles';
+import { childrenOf, descendantsOf, folderTile, projectTile, sortTiles, type BrowseOrder } from './tiles';
 import { useTileDrag } from './useTileDrag';
 
 export type BrowseScope = 'all' | 'unsaved' | 'recent' | { project: Handle; relPath: string };
@@ -24,7 +26,16 @@ export type BrowseTile = Omit<DocTileProps, 'index' | 'onKeyDown'> & {
   haystack: string;
   /** The file on disk a tile stands for: what dragging it onto a project moves. */
   file?: FileTarget;
+  /** When it last changed (a draft's last edit, a project file's modified time, a recent file's last
+   * open): what "Last edited" sorts by. A folder has none. */
+  when?: number;
 };
+
+const ORDER_KEY = 'browse-order';
+
+function recallOrder(): BrowseOrder {
+  return readPreference(ORDER_KEY) === 'name' ? 'name' : 'edited';
+}
 
 /** How many tiles show before "Show all": Everything, unsearched, is many groups' worth at once; every
  * other view is already just the one thing it's scoped to. */
@@ -60,6 +71,7 @@ export function DeskBrowse({
   const [scope, setScope] = useState<BrowseScope>(initialScope);
   const [query, setQuery] = useState(() => (scopesMatch(remembered?.scope, initialScope) ? remembered?.query ?? '' : ''));
   const [showAll, setShowAll] = useState(false);
+  const [order, setOrder] = useState<BrowseOrder>(recallOrder);
   const searchRef = useRef<HTMLInputElement>(null);
   // `.dc-browse` doesn't scroll itself — `.dc-desk`, its ancestor, does (see `desktop.css`) — so
   // that's the element a scroll position is saved from and restored to.
@@ -150,9 +162,10 @@ export function DeskBrowse({
     setShowAll(false);
   };
   const view = viewFor(scope, scoped, make, deferredQuery, searching, controller, openFolder);
+  const tiles = sortTiles(view.tiles, order);
 
   const limit = scope === 'all' && !searching ? OVERVIEW : FOCUSED;
-  const visible = showAll ? view.tiles : view.tiles.slice(0, limit);
+  const visible = showAll ? tiles : tiles.slice(0, limit);
 
   const scopes: { key: string; value: BrowseScope; label: string; count?: number; project?: Handle }[] = [
     { key: 'all', value: 'all', label: 'Everything' },
@@ -295,21 +308,38 @@ export function DeskBrowse({
                 {view.meta}
               </span>
             )}
-            {view.actions && <span className="dc-browse-actions">{view.actions}</span>}
+            <span className="dc-browse-tools">
+              {view.actions && <span className="dc-browse-actions">{view.actions}</span>}
+              {tiles.length > 1 && (
+                <SegmentedControl
+                  name="browse-order"
+                  legend="Sort by"
+                  value={order}
+                  options={[
+                    { value: 'edited', label: 'Last edited' },
+                    { value: 'name', label: 'Name' },
+                  ]}
+                  onChange={(next) => {
+                    setOrder(next);
+                    writePreference(ORDER_KEY, next);
+                  }}
+                />
+              )}
+            </span>
           </header>
-          {view.tiles.length === 0 && !searching ? (
+          {tiles.length === 0 && !searching ? (
             view.empty ?? <p className="dc-browse-summary">Nothing here yet. Add a project, or start a Quick Draft.</p>
           ) : (
             <div className="dc-browse-grid dc-gallery-grid" onPointerDown={pickUp}>
               {visible.map((tile, i) => {
-                const { haystack: _haystack, description: _description, file: _file, ...props } = tile;
+                const { haystack: _haystack, description: _description, file: _file, when: _when, ...props } = tile;
                 return <DocTile key={tile.entryKey} {...props} gallery index={Math.min(i, 12)} />;
               })}
             </div>
           )}
-          {visible.length < view.tiles.length && (
+          {visible.length < tiles.length && (
             <button type="button" className="dc-browse-more" onClick={() => setShowAll(true)}>
-              Show all {view.tiles.length}
+              Show all {tiles.length}
             </button>
           )}
         </section>
@@ -323,7 +353,7 @@ export function DeskBrowse({
             <div className="dc-browse">
               <div className="dc-browse-grid dc-gallery-grid">
                 {(() => {
-                  const { haystack: _haystack, description: _description, file: _file, fileActions: _actions, action: _action, ...props } = drag.item;
+                  const { haystack: _haystack, description: _description, file: _file, when: _when, fileActions: _actions, action: _action, ...props } = drag.item;
                   return <DocTile {...props} gallery index={0} />;
                 })()}
               </div>

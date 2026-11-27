@@ -293,13 +293,10 @@ function OutlineTree({ buildCommandContext }: { buildCommandContext: () => Comma
             </span>
           )}
           <span className="dc-outline-name">{row.label}</span>
+          {/* The space is for whoever reads the row as text (axe, a copy): the gap on screen is the row's. */}
+          {row.detail && ' '}
           {row.detail && <span className="dc-outline-detail">{row.detail}</span>}
         </div>
-        {hasChildren && !isCollapsed && (
-          <ul role="group" className="dc-outline-group">
-            {row.childKeys.map((key) => byKey.get(key)).map((child) => child && renderRow(child))}
-          </ul>
-        )}
       </li>
     );
   };
@@ -307,7 +304,12 @@ function OutlineTree({ buildCommandContext }: { buildCommandContext: () => Comma
   return (
     <div className="dc-outline-scroll">
       <ul ref={treeRef} role="tree" aria-label="Shapes and connectors in this view" className="dc-outline-tree" onKeyDown={onKeyDown}>
-        {rows.filter((row) => row.parentKey === null).map(renderRow)}
+        {/*
+          One flat list, nesting said by `aria-level` alone. A row that held its children's rows had
+          their text inside it, and its own name ("Orders API, service, 2 connectors") then left out
+          most of what it showed: the name a row is given has to contain the words on it.
+        */}
+        {visible.map(renderRow)}
       </ul>
     </div>
   );

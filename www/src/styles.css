@@ -306,8 +306,6 @@ main {
     position: static;
     margin: 40px auto 0;
   }
-
-  .dl-close { display: none; }
 }
 
 .dl::backdrop {
@@ -357,6 +355,10 @@ html:has(.dl[open]) {
 .dl-close:hover {
   color: var(--ink);
   border-color: var(--rule-strong);
+}
+
+@media (scripting: none) {
+  .dl-close { display: none; }
 }
 
 .dl-close svg {
@@ -2038,6 +2040,10 @@ html:has(.landing) { scroll-padding-top: 0; }
 }
 .film-stage[data-state='playing']:not(:hover, :focus-within, [data-muted]) .film-hud { opacity: 0.28; }
 .film-stage[data-state='ended'] :is(.film-hud, .film-toggle) { display: none; }
+
+@media (scripting: none) {
+  .film-hud, .film-toggle { display: none; }
+}
 
 :is(.film-sound, .film-full) {
   display: inline-flex;

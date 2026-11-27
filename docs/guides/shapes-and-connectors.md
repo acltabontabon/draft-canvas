@@ -38,12 +38,14 @@ To turn a shape into another, select it and press `⇧` with the new shape's key
 Queue, `⇧D` a Data Store. Its name, connectors, flows and notes stay. **Turn into…** in `⌘K` does the
 same.
 
-Generic and API are cards. Every other Service kind is drawn as what it does, with its name
-underneath: a **Gateway** is one way in, a gate, and three different destinations behind it; a **Load
-Balancer** one address fanning out to identical instances; a **Proxy** two plates, a connection
-ending at one and another leaving the other, forward or reverse; a **Worker** a trace, the short
-span of the request and the long one of the job it started; a **Scheduler** a page of time slots;
-an **External** system a block inside a dashed boundary. Gateway, Load Balancer and Proxy all
+Generic and External are cards: an **External** system has a dashed outline and an arrow leaving
+its corner. Every other Service kind is drawn as what it does, with its name underneath: an **API**
+is a body holding out three operations on stems, one of them in use, and a connector into its side
+lands on one; a **Gateway** is one way in, a gate, and three different destinations behind it; a
+**Load Balancer** one address fanning out to identical instances; a **Proxy** two plates, a
+connection ending at one and another leaving the other, forward or reverse; a **Worker** a trace,
+the short span of the request and the long one of the job it started; a **Scheduler** a page of
+time slots. Gateway, Load Balancer and Proxy all
 route. A plain **Component** is a card too; a **Module** is a block with two lugs
 through its edge, a **Port** a ball on a stem, and an **Adapter** the cup that ball sits in, with a
 different end on its far side. An **Artifact** is something read,
@@ -53,8 +55,14 @@ shape picker gives one).
 
 ![A plain Component as a card, then a Module, a Port and an Adapter as glyphs; below, a use case using a port that a Postgres adapter implements.](../media/guides/component-kinds.png)
 
+![A load balancer in front of a storefront that calls an Orders API, drawn as a body holding out three operations, which charges a payment provider, writes to its database and sends a receipt through an email service.](../media/guides/service-cards.png)
+
 Use **External** for a service you don't own. **Actor frame → Framed** outlines an actor. Drag a
-corner handle to resize; Actor, Queue and Data Store artwork grows with the box.
+corner handle to resize. A card fills its box. A shape drawn as a glyph fills it too: the drawing
+grows as far as the box lets it, and the connection points stay on what is drawn, with the bottom
+three right under its name.
+
+![The twelve connection points of an API, an External system, a Gateway, a Port and a Data Store, at their default size and resized.](../media/guides/connection-points.png)
 
 ## Names, technology and instances
 
@@ -336,7 +344,8 @@ An agent using the Draft Canvas MCP tools, including Nodi, can add the same asso
 - **Add DLQ** on a Queue adds a dead-letter queue; click its connector to set delivery attempts. A
   muted amber outline and message icon mark its role, not a live error. An explicit colour overrides
   it.
-- A Junction (`J`) shares a route. Right-click a bundle → **Convert to junction**.
+- A Junction (`J`) shares a route. Right-click a bundle → **Convert to junction**. Two Junctions can
+  also stand for one point in two places: see [Linked junctions](#linked-junctions).
 - **Put a shape in between**: drag a shape with no connectors onto a connector, or place one there
   with a shape tool. `Orders API → Billing` with a Queue dropped on it becomes
   `Orders API → orders → Billing`. Works for Queues, Data Stores, Services, Components and Junctions;
@@ -363,6 +372,63 @@ view there. The connector is otherwise unchanged: flows, outages and agents read
 A portal's own label rides with the stub that leaves its source. Its caption, condition, attachments
 and open-point marker are not shown while it is a portal. A connector with a reply line cannot be
 drawn as one.
+
+### Linked junctions
+
+Where a connector would cross the whole diagram, end it at a Junction and pick the flow up again
+from another Junction somewhere else. Link the two and they are one continuation point drawn in two
+places: "continues at A". A link is not a connector. Nothing is routed between the Junctions, and
+flows, outage walks and exports read only the connectors you drew.
+
+**Link them**
+
+- Select a Junction and choose **Add link** (its toolbar or right-click; **Add linked junction** in
+  `⌘K`). Pan,
+  zoom or look inside a shape, then click where the flow continues. The new Junction takes the same
+  label, colour and size. A group starts with the next free letter: A, B … Z, AA.
+- To link Junctions that already exist, select them and choose **Link junctions**. A Junction that
+  shares its label with others is offered **Link with the other "A" junctions**, and **Link to
+  junction group…** in `⌘K` joins any group in the diagram.
+- A group can be drawn in as many places as you like, in any view of the diagram.
+- **Unlink** takes one Junction out of its group and leaves the shape, its label and its connectors.
+- Renaming a linked Junction renames it everywhere it is drawn, in one undo step. Two groups may
+  carry the same label and stay separate: Junctions are linked by choice, never by matching names.
+
+A linked Junction wears a thin ring. The ring is dashed while a Junction waits for a counterpart,
+and a small number counts the other places when there are several. Rings are part of the editor,
+not of the drawing: an export shows the Junction and its label.
+
+**Go where it continues**
+
+Rest the pointer on a linked Junction to see where it continues: a picture of the place, the
+section it is in, and what it leads to.
+
+![Resting on Junction B shows the Notifications section it continues in, with Go there.](../media/guides/junction-peek.png)
+
+Press `G` with the Junction selected, click **Go there** on the card, or choose **Follow link**. With one counterpart the view travels
+straight to it. With several, the places are listed first: `↑` `↓` look at each, `Enter` goes.
+
+![Junction A continues in three places; the list shows each section and what it leads to.](../media/guides/junction-places.png)
+
+The view arrives on the Junction together with the shapes it is wired to, at the zoom you were
+working at when that reads well, and a ring marks the Junction as the view settles. A nearby place
+is a short pan; a far one is a single flight that pulls back, crosses and closes in. Pan or zoom at
+any point to take over.
+
+![Arrived at Junction A in Reconciliation, with the way back at the bottom left.](../media/guides/junction-arrived.png)
+
+**Come back.** `⇧G` returns to exactly the view you left, and `⌥G` goes forward again; the bar at
+the bottom left does the same and says where each leads. Pressing `G` again follows the Junction
+you arrived at, so a chain is one key per hop. Following a Junction is never an edit: it is not on
+the undo stack, and nothing about it is saved or shared.
+
+**Find one.** `⌘K` lists every linked Junction by label with where it is ("Junction A · Payment
+Execution · continues to Partner Adapter").
+
+**Copies.** A Junction copied on its own is one more place its group is drawn. Junctions of one
+group copied together become a group of their own, so a copied flow keeps its continuation points
+without joining the flow it came from. Deleting one Junction leaves the others linked; undo puts it
+back in its group.
 
 ### Legend
 

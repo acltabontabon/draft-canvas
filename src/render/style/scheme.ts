@@ -39,6 +39,12 @@ function accentHolds(palette: AccentPalette, canvas: string): boolean {
   );
 }
 
+/** Code is coloured for the theme, not the style: its block keeps the theme's tone of paper. */
+function codeHolds(base: Theme, key: (typeof SCHEME_COLOURS)[number], value: string): boolean {
+  if (key !== 'codeBg') return true;
+  return contrast(base.text, value) >= CONTRAST.text;
+}
+
 function mix(a: string, b: string, amount: number): string {
   const channel = (hex: string, at: number) => parseInt(hex.slice(at, at + 2), 16);
   const part = (at: number) => Math.round(channel(a, at) + (channel(b, at) - channel(a, at)) * amount).toString(16).padStart(2, '0');
@@ -80,7 +86,7 @@ export function schemeTheme(base: Theme, scheme: StyleScheme | undefined): Theme
   if (surfaceHolds(base, scheme)) {
     for (const key of SCHEME_COLOURS) {
       const value = scheme[key];
-      if (value !== undefined && value !== base[key]) {
+      if (value !== undefined && value !== base[key] && codeHolds(base, key, value)) {
         next[key] = value;
         changed = true;
       }

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { indexOf, pathOf } from '../../collab/fileIndex';
 import type { PeerView, Presence, Role } from '../../collab/protocol';
+import { motionMs } from '../../lib/motion';
 import { answerKnock, setCollaboratorRole } from '../../store/collabBridge';
 import { removePerson, undoPersonChanges } from './peerActions';
 import { useCollabStore, type KnockView } from '../../store/collabStore';
@@ -162,7 +163,7 @@ function DockPerson({ peer, owner, presenting }: { peer: PeerView; owner: boolea
     // Their pointer, or failing that what they have selected, framed with a soft glide.
     const target = presence.pointer ?? centreOf(presence.selection.nodes);
     if (!target) return;
-    const glide = () => void setCenter(target.x, target.y, { duration: 420, zoom: Math.max(0.8, getZoom()) });
+    const glide = () => void setCenter(target.x, target.y, { duration: motionMs(420), zoom: Math.max(0.8, getZoom()) });
     // A room just entered moves the camera to that room's own view from an effect on `path`
     // (`Canvas`), which would cut this glide short: a frame later, it has run.
     if (elsewhere) requestAnimationFrame(glide);

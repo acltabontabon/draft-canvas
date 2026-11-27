@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useReactFlow, useViewportStore } from '@xyflow/react';
 import { flowFitViewNodes, hasSomethingToFit, useEditorStore, viewLevel } from '../../store/editorStore';
 import { useShallow } from 'zustand/react/shallow';
-import { CanvasSettingsButton, HelpMenu, HistoryControls } from './HelpMenu';
+import { CanvasSettingsButton, HelpMenu } from './HelpMenu';
 import { useCollabStore } from '../../store/collabStore';
 import { fitPadding } from '../../lib/fitPadding';
 import { count } from '../../lib/plural';
@@ -20,6 +20,7 @@ import { pointsOf } from '../../document/openPoints';
 import { roomMayHaveOutage } from '../../store/outage';
 import { toggleOutage } from '../../commands/outage';
 import type { SaveFailure } from '../../storage/saveFailure';
+import { HistoryStatus } from './history/HistoryStatus';
 
 /**
  * The save indicator is the only place the local-first promise is visible while
@@ -53,12 +54,45 @@ function saveLabel(save: { status: string; message?: string; failure?: SaveFailu
     case 'dirty':
       return 'Unsaved changes';
     default:
-      return (
-        <>
-          <Icon name="lock" /> Saved locally
-        </>
-      );
+      return 'Saved locally';
   }
+}
+
+/** How long "Saved" is read before it recedes to the lock alone. */
+const SAVED_SHOWN_MS = 1600;
+const SAVED_FADE_MS = 400;
+
+/**
+ * Saved is the quiet state, and quieter still now: a small lock, and the word only for a moment
+ * after a save lands. Unsaved work is a soft dot; only what asks something of the person — nothing
+ * stored, a save that failed — keeps its words. The words never leave the label itself: a screen
+ * reader (and anything reading the bar's text) still finds "Saved locally".
+ */
+function SaveMark({ save, durable }: { save: { status: string; message?: string; failure?: SaveFailure }; durable: boolean }) {
+  const [recede, setRecede] = useState<'shown' | 'fading' | 'hidden'>('hidden');
+  const quiet = durable && (save.status === 'saved' || save.status === 'idle' || save.status === 'dirty' || save.status === 'saving');
+  useEffect(() => {
+    if (save.status !== 'saved' || motionMs(1) === 0) return;
+    const show = window.setTimeout(() => setRecede('shown'), 0);
+    const fade = window.setTimeout(() => setRecede('fading'), SAVED_SHOWN_MS);
+    const hide = window.setTimeout(() => setRecede('hidden'), SAVED_SHOWN_MS + SAVED_FADE_MS);
+    return () => {
+      window.clearTimeout(show);
+      window.clearTimeout(fade);
+      window.clearTimeout(hide);
+      setRecede('hidden');
+    };
+  }, [save.status]);
+  if (!quiet) return <>{saveLabel(save, durable)}</>;
+  const busy = save.status === 'dirty' || save.status === 'saving';
+  return (
+    <>
+      {busy ? <span className="dc-save-dot" data-busy={save.status === 'saving' ? 'true' : undefined} aria-hidden="true" /> : <Icon name="lock" />}
+      <span className="dc-save-word" data-recede={save.status === 'saved' ? recede : 'hidden'}>
+        {saveLabel(save, durable)}
+      </span>
+    </>
+  );
 }
 
 interface StatusBarProps {
@@ -156,7 +190,7 @@ function LiveStatus({ role }: { role: 'host' | 'guest' }) {
         <span className="dc-muted dc-status-hint">
           {status === 'ended'
             ? 'This copy isn’t saved anywhere.'
-            : `${owner ? `${owner}’s` : 'The owner’s'} copy is the one that’s saved. Nothing goes through a server.`}
+            : `${owner ? `${owner}’s` : 'The owner’s'} copy is the one that’s saved, with its history. Nothing goes through a server.`}
         </span>
       </div>
     );
@@ -219,9 +253,15 @@ export function StatusBar({ durable, presenting = false, onResolveConflict, onSa
         <DesktopStatus />
       ) : (
         <div className="dc-status-left">
-          <span className="dc-save" data-status={save.status} data-durable={durable ? undefined : 'false'}>
-            {saveLabel(save, durable)}
+          <span
+            className="dc-save"
+            data-status={save.status}
+            data-durable={durable ? undefined : 'false'}
+            title={durable && (save.status === 'saved' || save.status === 'idle') ? 'Saved in this browser. Nothing is uploaded.' : undefined}
+          >
+            <SaveMark save={save} durable={durable} />
           </span>
+          {durable && <HistoryStatus />}
           {save.conflict && onResolveConflict && <ConflictChoice conflict={save.conflict} onResolveConflict={onResolveConflict} />}
           {failed && <SaveFailureChoice failure={save.failure} actions={onSaveFailure!} />}
           {failed && save.message && <span className="dc-muted dc-status-hint">{save.message}</span>}
@@ -242,7 +282,6 @@ export function StatusBar({ durable, presenting = false, onResolveConflict, onSa
         <OutageChip />
         <OpenPointsChip />
         <LevelChip />
-        <HistoryControls />
         <ZoomControls />
         <CanvasSettingsButton />
         <HelpMenu />

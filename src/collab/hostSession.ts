@@ -209,6 +209,11 @@ export class HostSession {
     this.scheduleHeartbeat();
   }
 
+  /** How many commits the owner has numbered this session: which shared state a capture holds. */
+  get seq(): number {
+    return this.core.seq;
+  }
+
   get isEnded(): boolean {
     return this.ended;
   }

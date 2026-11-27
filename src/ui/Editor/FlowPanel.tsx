@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
+import { Fragment, useEffect, useId, useRef, useState, type FocusEvent, type KeyboardEvent } from 'react';
 import { useReactFlow } from '@xyflow/react';
 import { categoryOf } from '../../document/connectorSemantics';
 import { effectiveConnectorText } from '../../document/edgeSemantics';
@@ -24,8 +24,8 @@ import { Icon } from '../common/Icon';
  * is hovered or focused; the active row keeps its Present button showing, so the primary action
  * for "the flow I'm working on" is always one click. Expanding a row reveals its ordered steps.
  *
- * Semantics: a tree, as the Outline is — each flow is a treeitem that opens onto its steps (a nested
- * group), with `aria-expanded`. It used to be a listbox of options, whose children are
+ * Semantics: a tree, as the Outline is — each flow is a treeitem that opens onto its steps (a group
+ * beside its row, the row's through `aria-owns`), with `aria-expanded`. It used to be a listbox of options, whose children are
  * presentational: the Rename / Present / Delete buttons and the step list inside every row were
  * flattened out of what a screen reader could reach. One row at a time is in the Tab order (roving
  * tabindex); the buttons inside a row stay tabbable, since Present has no key of its own.
@@ -52,6 +52,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
   // "Whole diagram" row.
   const [activeRow, setActiveRow] = useState<string | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const stepsIdBase = useId();
 
   // A "new flow" made elsewhere (palette, a connector's chip) asks to be named here. One-shot:
   // consumed and cleared at once, so it can't re-fire on a remount — see `flowRenameRequestId`.
@@ -129,7 +130,9 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
     if (isEditableTarget(target)) return; // the rename field owns its own keys
-    const row = target.closest<HTMLElement>('.dc-flow-row');
+    // A flow's steps sit beside its row, not inside it: a key pressed among them is still that flow's.
+    const holder = target.closest<HTMLElement>('.dc-flow-steps-holder');
+    const row = target.closest<HTMLElement>('.dc-flow-row') ?? (holder?.previousElementSibling as HTMLElement | null) ?? null;
     const flowId = row?.dataset.flowId || null;
     const flow = flowId ? document.flows.find((f) => f.id === flowId) : undefined;
     const consume = () => {
@@ -235,7 +238,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
               <span className="dc-flow-item-text">
                 <button type="button" className="dc-flow-title" tabIndex={-1}>
                   Whole diagram
-                </button>
+                </button>{' '}
                 <span className="dc-muted dc-flow-item-meta">Everything, nothing dimmed</span>
               </span>
             </div>
@@ -245,9 +248,10 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
             const selected = selectedFlowId === flow.id;
             const playable = flowIsPlayable(document, flow);
             const steps = flow.steps.length;
+            const stepsId = `${stepsIdBase}-${flow.id}`;
             return (
+              <Fragment key={flow.id}>
               <li
-                key={flow.id}
                 className="dc-flow-row dc-flow-item"
                 data-flow-id={flow.id}
                 data-selected={selected ? 'true' : undefined}
@@ -256,6 +260,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                 aria-level={1}
                 aria-selected={selected}
                 aria-expanded={expanded}
+                aria-owns={expanded ? stepsId : undefined}
                 aria-label={`${flow.title}, ${steps === 0 ? 'no steps' : count(steps, 'step')}`}
                 tabIndex={tabbable === flow.id ? 0 : -1}
                 onFocus={rememberRow(flow.id)}
@@ -302,7 +307,7 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                       >
                         {flow.title}
                       </button>
-                    )}
+                    )}{' '}
                     <span className="dc-muted dc-flow-item-meta dc-flow-step-count">
                       {steps === 0 ? 'no steps' : count(steps, 'step')}
                     </span>
@@ -344,9 +349,16 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                     />
                   </span>
                 </div>
+              </li>
 
+                {/*
+                  Beside the flow's row, not inside it, and the row's by `aria-owns`: a row that held
+                  its steps had their text inside it, and its own name ("Checkout, 3 steps") left
+                  most of that out. The name a row is given has to contain the words on it.
+                */}
                 {expanded && (
-                  <ol className="dc-flow-steps" role="group">
+                  <li className="dc-flow-steps-holder" role="none" data-selected={selected ? 'true' : undefined}>
+                  <ol className="dc-flow-steps" role="group" id={stepsId}>
                     {flow.steps.map((step, index) => (
                       <StepRow
                         key={step.id}
@@ -379,8 +391,9 @@ export function FlowPanel({ onPresent }: { onPresent: (flowId?: string) => void 
                       </li>
                     )}
                   </ol>
+                  </li>
                 )}
-              </li>
+              </Fragment>
             );
           })}
         </ul>
@@ -509,17 +522,22 @@ function StepRow({
           target: target ? categoryOf(target) : undefined,
         })
       : undefined);
+  /** The words on the step's row, which its name repeats. */
+  const shown = edge
+    ? `${source ? displayNameFor(source) : 'Untitled'} → ${target ? displayNameFor(target) : 'Untitled'}`
+    : extraNodes.length > 0
+      ? extraNodes.map((n) => displayNameFor(n)).join(', ')
+      : step.viewport
+        ? 'Pinned view'
+        : 'Empty step';
   const hasExtras = extraNodes.length > 0 || extraEdges.length > 0 || step.viewport !== undefined;
 
   return (
-    <li
-      className="dc-flow-step-row-group"
-      role="treeitem"
-      aria-level={2}
-      aria-label={`Step ${index + 1}${edge ? `: ${source ? displayNameFor(source) : 'Untitled'} to ${target ? displayNameFor(target) : 'Untitled'}` : ''}${detail ? `, ${detail}` : ''}`}
-    >
-      <div className="dc-flow-step-row">
-        <span className="dc-flow-step-index">{index + 1}</span>
+    // The step is its row alone, not the chips and tools under it: a step's name ("Step 1: Shopper →
+    // Orders API, places order") says the words on its row, in their order, and nothing else is in it.
+    <li className="dc-flow-step-row-group" role="none">
+      <div className="dc-flow-step-row" role="treeitem" aria-level={2} aria-label={`Step ${index + 1}: ${shown}${detail ? `, ${detail}` : ''}`}>
+        <span className="dc-flow-step-index">{index + 1}</span>{' '}
         <button
           type="button"
           className="dc-flow-step-label"
@@ -538,12 +556,8 @@ function StepRow({
               {' '}
               {target ? displayNameFor(target) : 'Untitled'}
             </>
-          ) : extraNodes.length > 0 ? (
-            extraNodes.map((n) => displayNameFor(n)).join(', ')
-          ) : step.viewport ? (
-            'Pinned view'
           ) : (
-            'Empty step'
+            shown
           )}
           {detail && (
             <>

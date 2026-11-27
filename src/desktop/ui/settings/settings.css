@@ -55,38 +55,131 @@
 
 /* ---- AI agents: connecting one ------------------------------------------------ */
 
-.dc-prefs-client {
+/* The picker takes the row to itself, so its last pill never sits alone in a column of two. */
+.dc-prefs-agents {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
   min-width: 0;
-  margin-top: 2px;
 }
 
-/* The agent skill: the second half of connecting an agent, apart from the connector's setup above it
-   by space rather than a rule, the way the other groups on this page are. */
-.dc-prefs-skill {
+/* Connect, add the skill, try it: the same three steps whichever agent is chosen. Each has its number
+   in the margin, joined to the next by a hairline, and the number becomes a tick once the step is done. */
+.dc-agent-steps {
+  display: flex;
+  flex-direction: column;
+  margin: 6px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dc-agent-step {
+  position: relative;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  column-gap: 12px;
+  padding-bottom: 22px;
+}
+
+.dc-agent-step:last-child {
+  padding-bottom: 0;
+}
+
+.dc-agent-step:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  top: 26px;
+  bottom: 4px;
+  left: 10.5px;
+  width: 1px;
+  background: var(--dc-border);
+}
+
+.dc-agent-step-mark {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: 1px solid var(--dc-border-strong);
+  border-radius: 50%;
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--dc-text-muted);
+}
+
+.dc-agent-step[data-done] .dc-agent-step-mark {
+  border-color: transparent;
+  background: var(--dc-selection-soft);
+  color: var(--dc-selection);
+}
+
+.dc-agent-step-body {
   display: flex;
   flex-direction: column;
   align-items: flex-start;
   gap: 8px;
   min-width: 0;
-  margin-top: 14px;
 }
 
-.dc-prefs-skill .dc-prefs-inline {
+.dc-agent-step-body > * {
+  max-width: 100%;
+}
+
+/* What a step holds that needs the width: a config to copy, or a row of button and words. */
+.dc-agent-step-body > .dc-prefs-inline,
+.dc-agent-step-body > .dc-prefs-copy,
+.dc-agent-step-body > .dc-prefs-disclosure {
   align-self: stretch;
 }
 
-.dc-prefs-skill .dc-prefs-step {
-  font-weight: 600;
-}
-
-.dc-prefs-step {
+.dc-agent-step-title {
   margin: 0;
   font-size: 13px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--dc-text);
+}
+
+/* The words that lead into something to copy. */
+.dc-prefs-step {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--dc-text-muted);
+}
+
+/* The dialog gives every paragraph room below it; inside a step the gaps are the step's own. */
+.dc-agent-steps .dc-agent-step-body p {
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* Whether an agent is connected right now, as the facts under the access switch say it. */
+.dc-prefs-live {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 12.5px;
+  font-weight: 500;
   line-height: 1.5;
   color: var(--dc-text);
+}
+
+.dc-prefs-live .dc-prefs-dot {
+  flex: none;
+}
+
+.dc-prefs-live[data-tone='off'] {
+  color: var(--dc-text-muted);
+}
+
+.dc-prefs-live[data-tone='on'] .dc-prefs-dot {
+  background: var(--dc-selection);
+  box-shadow: 0 0 0 3px var(--dc-selection-soft);
+}
+
+.dc-prefs-live[data-tone='warn'] .dc-prefs-dot {
+  background: var(--dc-prefs-warn);
 }
 
 .dc-prefs-inline {
@@ -105,6 +198,20 @@
 .dc-prefs-inline a.dc-button:focus-visible {
   outline: 2px solid var(--dc-selection);
   outline-offset: 2px;
+}
+
+/* A button and the sentence about it share a line while there is room; the sentence never squeezes
+   the button, and takes the next line whole when it is long. */
+.dc-prefs-inline > .dc-prefs-description {
+  flex: 1 1 260px;
+  min-width: 0;
+}
+
+@media (max-width: 560px) {
+  /* Seven agents in two columns: the last one takes the row. */
+  .dc-prefs-agents .dc-segmented-option:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
 }
 
 /* ---- Updates ------------------------------------------------------------------ */

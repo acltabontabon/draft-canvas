@@ -1,5 +1,6 @@
 import { Button } from '../../ui/common/Button';
 import { Icon } from '../../ui/common/Icon';
+import { HistoryStatus } from '../../ui/Editor/history/HistoryStatus';
 import { desktopStore } from '../store';
 import { useDesktopController, useDesktopState } from '../useDesktop';
 import { UpdateChip } from './Updates';
@@ -32,6 +33,7 @@ export function DesktopStatus() {
         <span className="dc-save" data-status={doc.dirty ? 'dirty' : 'saved'}>
           Quick Draft
         </span>
+        <HistoryStatus />
         <span className="dc-muted dc-status-hint">Kept on this computer until you save it.</span>
         <Button variant="quiet" onClick={() => void controller.save()}>
           Save…
@@ -65,6 +67,7 @@ export function DesktopStatus() {
           </>
         )}
       </span>
+      <HistoryStatus />
       {/* Said apart from the label, which changes with every edit. Only news is announced. */}
       <span className="dc-sr-only" role="status">
         {doc.outside === 'changed'

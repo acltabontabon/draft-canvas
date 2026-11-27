@@ -1,0 +1,27 @@
+[
+  {
+    "file": "history.png",
+    "alt": "The timeline open under the diagram, comparing the first revision with now: the deleted Catalog Cache is outlined where it stood, the renamed worker is marked, and the list reads 2 removed, 1 changed.",
+    "platform": "shared"
+  },
+  {
+    "file": "a-style-of-your-own.png",
+    "alt": "Appearance docked beside the canvas with the High seas style pack added: the online store diagram redrawn with its own shape drawings, colours and backdrop.",
+    "platform": "shared"
+  },
+  {
+    "file": "api-and-external-redrawn.png",
+    "alt": "The Orders API drawn as a body holding out three operations, with the storefront and mobile app connectors each landing on one, next to the Payment Provider as a dashed external card with an arrow leaving its corner.",
+    "platform": "shared"
+  },
+  {
+    "file": "linked-junctions.png",
+    "alt": "The pointer resting on junction A after the Orders API shows a card picturing where it continues, the order events queue and fulfilment worker drawn elsewhere, with Go there.",
+    "platform": "shared"
+  },
+  {
+    "file": "publish-your-history.png",
+    "alt": "Settings → History on the desktop: the diagram’s history connected to a GitHub repository, with the first-publish preview listing the branch and its three revisions before anything is sent.",
+    "platform": "desktop"
+  }
+]

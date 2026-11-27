@@ -167,10 +167,16 @@ describe('nothing on the canvas can reach a network', () => {
         'simple-icons',
         // Reads a Text element's Markdown. Parsing only: layout and drawing stay the app's own.
         'marked',
+        // Canvas Evolution's browser history backend (docs/reference/evolution.md, ADR-1): a maintained
+        // Git implementation instead of thousands of lines of our own. Loaded only in the history
+        // worker, and never its network client: `isomorphic-git/http/*` is imported nowhere.
+        'isomorphic-git',
+        // The `Buffer` isomorphic-git expects, installed as a global in the history worker only.
+        'buffer',
       ]),
     );
     // A short, auditable dependency list is part of the promise.
-    expect(deps).toHaveLength(11);
+    expect(deps).toHaveLength(13);
     for (const name of deps) {
       expect(name).not.toMatch(/analytics|telemetry|sentry|tracking|posthog|mixpanel|segment/i);
     }
@@ -259,6 +265,9 @@ describe('where a diagram is stored does not depend on where the app is served f
     );
     expect(readFileSync(join(SRC, 'crypto/keyStore.ts'), 'utf8')).toContain(
       "const KEY_DB_NAME = 'draft-canvas-keys'",
+    );
+    expect(readFileSync(join(SRC, 'evolution/browser/historyDb.ts'), 'utf8')).toContain(
+      "const HISTORY_DB_NAME = 'draft-canvas-history'",
     );
   });
 });

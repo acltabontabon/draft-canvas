@@ -4,9 +4,10 @@ name = "draft-canvas"
 version = "0.0.0"
 description = "Draft Canvas Desktop"
 edition = "2021"
-# The highest `rust-version` among the locked dependencies (darling, icu_*), so an older toolchain
-# fails up front with a clear message rather than deep in a dependency. CI builds with stable.
-rust-version = "1.88"
+# The highest `rust-version` among the locked dependencies (gix 0.91 and faster-hex 2), which also
+# covers std's `File::lock` (the history store's writer lock), so an older toolchain fails up front
+# with a clear message rather than deep in a dependency. CI builds with stable.
+rust-version = "1.95"
 license = "Apache-2.0"
 publish = false
 
@@ -57,6 +58,18 @@ ts-rs = "12"
 notify = "8"
 # Edits Codex's config.toml keeping its comments and order (`agent/clients.rs`).
 toml_edit = "0.25"
+# Canvas Evolution's desktop history (`history/`): bare repositories in the app's own data folder,
+# read and written in process. No network, worktree, index, diff, attributes or credential features:
+# the object database (loose and packed, with pack indexing for bundle import), ref transactions with
+# compare-and-swap, and `revision` for Git's own merge-base. SHA-1 only; SHA-256 repositories are
+# refused. 0.90 is the newest release whose rust-version (1.88) is not above this crate's.
+gix = { version = "0.91", default-features = false, features = ["sha1", "revision"] }
+# gix's own pack crate, named only for `streaming-input`: indexing an imported pack (`Bundle::write_to_directory`),
+# which gix enables only with its network features.
+gix-pack = { version = "0.78", default-features = false, features = ["streaming-input"] }
+# Deflate for the packs history exports and the bounded pre-scan of imported ones (`history/pack.rs`);
+# already in the tree through Tauri.
+flate2 = "1.1"
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Networking_WinSock", "Win32_Storage_FileSystem", "Win32_UI_WindowsAndMessaging", "Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_Diagnostics_ToolHelp"] }

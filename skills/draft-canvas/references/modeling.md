@@ -87,6 +87,11 @@ and ids are unique across the whole file.
 - **Fans bundle.** Two or more relationships leaving (or reaching) one element from the same side,
   with the same `semantic` and `kind`, are drawn as one trunk with branches. Give genuinely different
   paths different meanings.
+- **Continue far-off paths at linked junctions.** When one relationship would cross the whole view,
+  or a path carries on in another view, end it at a `junction` and start it again from a junction
+  with the same `link` and the same short label (`"A"`, `"B"`). The person can jump from one to
+  the other. Use it for a real continuation of a path, not for lines that merely meet: a link adds
+  no relationship, so a flow cannot step across it and an outage read stops at each end.
 - **Direction.** Leave `layout.direction` out; both are tried and the clearer one kept.
 - **Boundaries only when real:** the system, a bounded context/domain, a deployment or network zone.
 

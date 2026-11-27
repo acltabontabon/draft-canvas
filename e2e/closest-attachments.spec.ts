@@ -47,8 +47,8 @@ test('fixed attachment points are visible and one click switches the old loop to
   await page.getByRole('button', { name: 'Pinned', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Pinned', exact: true })).toHaveAttribute('aria-pressed', 'true');
   expect(await pathFor(page).getAttribute('d')).toBe(automatic);
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
-  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  await page.keyboard.press('ControlOrMeta+z');
+  await page.keyboard.press('ControlOrMeta+z');
   expect(await pathFor(page).getAttribute('d')).toBe(before);
 });
 

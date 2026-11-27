@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { createNode } from '../src/document/factory';
+import { createDocument, createNode } from '../src/document/factory';
 import { KIND_FIELDS, STYLE_KINDS, STYLE_LIMITS, STYLE_SHAPE_KEYS, artSlotOf, normalizeStyle, type DocumentStyle, type StyleScheme } from '../src/document/style';
 import { readStyleFile, serializeStyleFile } from '../src/document/styleFile';
 import { ACCENTS, NODE_TYPES, type DraftNode, type DraftNodeType } from '../src/document/types';
@@ -11,6 +11,7 @@ import { MAX_STYLE_PACK_BYTES } from '../src/gallery/source';
 import { describeContext, describeNode, sizingContext } from '../src/nodes/describe';
 import { drawnBounds, isWords } from '../src/render/style/art';
 import { resolveStyle } from '../src/render/style/resolve';
+import { renderDocumentSvg } from '../src/render/svg/document';
 import { schemeTheme } from '../src/render/style/scheme';
 import { THEMES, type ThemeName } from '../src/render/theme/tokens';
 
@@ -53,7 +54,7 @@ const nodeOf = (type: DraftNodeType, kind?: string): DraftNode => {
 describe('the style packs', () => {
   it('are there to check', () => {
     expect(IDS.length).toBeGreaterThanOrEqual(7);
-    expect(ART_KEYS.length).toBeGreaterThanOrEqual(34);
+    expect(ART_KEYS.length).toBeGreaterThanOrEqual(33);
   });
 
   it('are listed in the catalog exactly as they are on disk', () => {
@@ -153,6 +154,33 @@ describe.each(IDS)('%s', (id) => {
     expect(tile, 'a backdrop').toBeDefined();
     expect(Math.min(tile!.w, tile!.h)).toBeGreaterThanOrEqual(120);
     expect(Math.max(tile!.w, tile!.h)).toBeLessThanOrEqual(640);
+  });
+
+  it('draws External as its dashed card in the pack’s colours, its words clear, the old glyph kept but not drawn', () => {
+    // External was a glyph before format 33, and the packs still carry that glyph for the apps that
+    // draw one. Stretched over today's card it covered the name and the tag.
+    const key = 'service:external';
+    expect(style.shapes?.[key]?.art, 'kept for apps that draw External as a glyph').toBeDefined();
+    const again = readStyleFile(serializeStyleFile(style.name ?? id, style));
+    expect(again.ok && again.style.shapes?.[key]?.art, 'and still there once opened and saved here').toBe(style.shapes?.[key]?.art);
+    const { art: _art, fit: _fit, ...rest } = style.shapes![key]!;
+    const shapes = { ...style.shapes! };
+    if (Object.keys(rest).length > 0) shapes[key] = rest;
+    else delete shapes[key];
+    const without: DocumentStyle = { ...style, shapes };
+    const node = { ...nodeOf('service', 'external'), text: 'Payment Provider' };
+    for (const name of ['light', 'dark'] as const) {
+      const theme = resolved.theme(name);
+      const drawn = describeNode(node, describeContext(theme, resolved));
+      expect(drawn, name).toEqual(describeNode(node, describeContext(resolveStyle(without).theme(name), resolveStyle(without))));
+      const flat = (list: typeof drawn.shapes): typeof drawn.shapes => list.flatMap((shape) => (shape.t === 'group' ? flat(shape.children) : [shape]));
+      const words = flat(drawn.shapes).filter(isWords);
+      expect(words, name).toEqual(flat(describeNode(node, describeContext(theme)).shapes).filter(isWords));
+      expect(words.some((shape) => shape.t === 'text' && /payment/i.test(JSON.stringify(shape))), name).toBe(true);
+      // The export reads the same describer: the same picture as with no drawing given at all.
+      const doc = { ...createDocument(), nodes: [node] };
+      expect(renderDocumentSvg({ ...doc, style }, { theme: name }).svg, name).toBe(renderDocumentSvg({ ...doc, style: without }, { theme: name }).svg);
+    }
   });
 
   it('gives every kind that has a drawing one of its own', () => {

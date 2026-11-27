@@ -10,6 +10,7 @@ import { DesktopExplorer } from '../DesktopExplorer';
 import { AgentSettings } from './AgentSettings';
 import { AppearanceSettingsPage, CanvasSettingsPage } from './CanvasSettingsPage';
 import { GeneralSettings } from './GeneralSettings';
+import { DesktopHistorySettings } from './HistoryRemoteSettings';
 import { SupportSettings } from './SupportSettings';
 import { UpdateSettings } from './UpdateSettings';
 import '../desktop.css';
@@ -44,8 +45,8 @@ function RenameTargetDialog() {
     return <RenameFileDialog currentName={doc.name} onSubmit={(newStem) => controller.renameOpenFile(newStem)} onClose={onClose} />;
   }
   if (renameTarget.kind === 'recent') {
-    const { handle, name } = renameTarget;
-    return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameFile(handle, newStem)} onClose={onClose} />;
+    const { handle, name, displayPath } = renameTarget;
+    return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameFile(handle, newStem, displayPath)} onClose={onClose} />;
   }
   const { project, relPath, name } = renameTarget;
   return <RenameFileDialog currentName={name} onSubmit={(newStem) => controller.renameProjectFile(project, relPath, newStem)} onClose={onClose} />;
@@ -84,6 +85,7 @@ const CATEGORIES: readonly [SettingsCategoryEntry<SettingsCategory>, ...Settings
   { id: 'general', label: 'General', icon: 'sliders', Page: GeneralSettings },
   { id: 'appearance', label: 'Appearance', icon: 'palette', Page: AppearanceSettingsPage },
   { id: 'canvas', label: 'Canvas', icon: 'pencil', Page: CanvasSettingsPage },
+  { id: 'history', label: 'History', icon: 'timeline', Page: DesktopHistorySettings },
   { id: 'agents', label: 'AI agents', icon: 'agent', Page: AgentSettings },
   { id: 'updates', label: 'Updates', icon: 'refresh', Page: UpdateSettings },
   { id: 'support', label: 'Support', icon: 'help', Page: SupportSettings },

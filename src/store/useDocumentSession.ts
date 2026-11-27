@@ -386,6 +386,13 @@ export function useDocumentSession(): DocumentSession {
           if (sharedRef.current) return;
           if (state.revision !== previous.revision && state.document.metadata.id === openId) warnIfNearFileLimit(module, notify);
         });
+        // History follows the host's working copy (the desktop's file or draft), not this id.
+        void import('./evolution/bridge').then((history) => {
+          const key = history.hostCopyKey();
+          if (!cancelled && !sharedRef.current && key) {
+            void history.attachHistory(key);
+          }
+        });
         return;
       }
       // What's on disk right now, so a later save can tell a rename made here from one made in
@@ -408,11 +415,16 @@ export function useDocumentSession(): DocumentSession {
         // No new revision means the camera is all that moved: remembered, but not a content change.
         autosave.current?.schedule(fileWithLiveViewport(state), { cameraOnly: state.revision === previous.revision });
       });
+      // Canvas Evolution records this copy's history in the background (`store/evolution/`).
+      void import('./evolution/bridge').then((history) => {
+        if (!cancelled && !sharedRef.current) void history.attachHistory({ kind: 'library', documentId: openId });
+      });
     });
     return () => {
       cancelled = true;
       unsubscribe?.();
       autosave.current?.untrack(openId);
+      void import('./evolution/bridge').then((history) => history.detachHistoryFor(openId));
     };
   }, [notify, openId]);
 
@@ -1030,6 +1042,19 @@ export function useDocumentSession(): DocumentSession {
         }
         const clone = cloneDocumentAsNew(source, titleWithSuffix(source.metadata.title, ' copy'));
         await repository.save(clone);
+        // A duplicate starts without history; when the original has one, it can be copied too.
+        void import('./evolution/bridge').then(async (history) => {
+          const from = { kind: 'library' as const, documentId: id };
+          if (!(await history.hasHistory(from).catch(() => false))) return;
+          notify(`“${clone.metadata.title}” starts with no history.`, 'info', {
+            label: 'Copy its history too',
+            run: () =>
+              void history
+                .duplicateHistory(from, { kind: 'library', documentId: clone.metadata.id }, { documentId: clone.metadata.id, title: clone.metadata.title })
+                .then((copied) => notify(copied ? 'History copied. The two diagrams now record separately.' : 'There was no history to copy.'))
+                .catch(() => notify('The history could not be copied.', 'error')),
+          });
+        });
       } catch (error) {
         logDiagnostic(error, { operation: 'duplicate-document', documentId: id });
         notify(storageFailureNotice('duplicate that diagram', error), 'error');

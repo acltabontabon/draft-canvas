@@ -45,6 +45,8 @@ export interface AutosaveOptions {
 interface Queued {
   document: DraftDocument;
   cameraOnly: boolean;
+  /** The user chose this document's copy in a conflict. Retained if that write fails. */
+  overwrite?: boolean;
 }
 
 /** What a closing page still owes the store for one document — see `Autosave.unsavedForStash`. */
@@ -127,8 +129,6 @@ export class Autosave {
   private conflict: DocumentConflictError['kind'] | null = null;
   /** The document that conflict is about. */
   private conflictId: string | null = null;
-  /** The next write replaces whatever is stored — the user chose this editor's copy. */
-  private overwriteNext = false;
   private state: SaveState = { status: 'idle' };
 
   constructor(options: AutosaveOptions) {
@@ -233,7 +233,11 @@ export class Autosave {
       return;
     }
     const queued = this.queue.get(id);
-    this.queue.set(id, { document, cameraOnly: options?.cameraOnly === true && (queued === undefined || queued.cameraOnly) });
+    this.queue.set(id, {
+      document,
+      cameraOnly: options?.cameraOnly === true && (queued === undefined || queued.cameraOnly),
+      overwrite: queued?.overwrite,
+    });
     // Kept, not written: the conflict (and its message) stays up until the user resolves it.
     if (this.conflict) return;
     // The last write failed, and the status bar is asking what to do about it: moving the camera is
@@ -288,11 +292,12 @@ export class Autosave {
   }
 
   private async write(): Promise<void> {
-    const [id, { document, cameraOnly }] = this.queue.entries().next().value!;
+    const [id, queued] = this.queue.entries().next().value!;
+    const { document, cameraOnly, overwrite } = queued;
     this.queue.delete(id);
     this.inFlight = true;
     this.writing = document;
-    this.writingCameraOnly = cameraOnly && !this.overwriteNext;
+    this.writingCameraOnly = cameraOnly && !overwrite;
     this.firstDirtyAt = 0;
     this.waitingOnCamera = false;
 
@@ -309,9 +314,8 @@ export class Autosave {
       const adopted = await this.repository.save(
         document,
         base,
-        this.overwriteNext ? { overwrite: true } : cameraOnly ? { cameraOnly: true } : undefined,
+        overwrite ? { overwrite: true } : cameraOnly ? { cameraOnly: true } : undefined,
       );
-      this.overwriteNext = false;
       this.baselines.set(id, adopted ?? sharedMetadataOf(document.metadata));
       if (adopted && base) {
         // An edit queued during this write still carries the old values, and would read as this
@@ -345,12 +349,13 @@ export class Autosave {
       // since a full disk would only fail again in a tight loop.
       const newer = this.queue.get(id);
       if (!newer) {
-        this.queue = new Map([[id, { document, cameraOnly }], ...this.queue]);
+        this.queue = new Map([[id, queued], ...this.queue]);
       } else {
         // The newer version queued behind this write inherits what this one carried: a pan made while
         // a content write was failing was queued as camera-only, and written that way the content
         // edit would ride a save that keeps the old content stamp — or is dropped outright.
-        newer.cameraOnly &&= cameraOnly;
+        newer.cameraOnly &&= cameraOnly && !overwrite;
+        newer.overwrite ||= overwrite;
       }
       this.clearSavingIndicator();
       if (error instanceof DocumentConflictError) {
@@ -393,9 +398,9 @@ export class Autosave {
     const conflicting = this.queue.get(id);
     if (conflicting) {
       this.queue.delete(id);
-      this.queue = new Map([[id, conflicting], ...this.queue]);
+      this.queue = new Map([[id, { ...conflicting, cameraOnly: false, overwrite: true }], ...this.queue]);
     }
-    this.overwriteNext = true;
+    this.emit({ status: 'dirty', message: undefined, failure: undefined, conflict: undefined });
     return this.flush();
   }
 
@@ -435,7 +440,7 @@ export class Autosave {
   private raise(id: string, error: DocumentConflictError): void {
     this.conflict = error.kind;
     this.conflictId = id;
-    this.emit({ status: 'error', message: error.message, conflict: error.kind });
+    this.emit({ status: 'error', message: error.message, failure: undefined, conflict: error.kind });
     this.onConflict?.(id, error.kind);
   }
 

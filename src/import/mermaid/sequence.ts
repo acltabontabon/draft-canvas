@@ -36,11 +36,13 @@ const ENTITIES: Record<string, string> = { lt: '<', gt: '>', amp: '&', quot: '"'
 function decode(text: string): string {
   return text
     .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/#(\d{1,7});/g, (whole, code: string) => {
+    // One pass: the decoded hash in `#35;lt#59;` is literal text, never a second entity.
+    .replace(/#(\d{1,7}|[a-z]+);/gi, (whole, code: string) => {
+      const name = code.toLowerCase();
+      if (Object.hasOwn(ENTITIES, name)) return ENTITIES[name]!;
       const value = Number(code);
       return value > 0 && value <= 0x10ffff ? String.fromCodePoint(value) : whole;
     })
-    .replace(/#([a-z]+);/gi, (whole, name: string) => (Object.hasOwn(ENTITIES, name.toLowerCase()) ? ENTITIES[name.toLowerCase()]! : whole))
     .trim();
 }
 

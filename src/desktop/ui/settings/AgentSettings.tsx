@@ -6,16 +6,22 @@ import type { AgentClient, AgentClientSetup, AgentSettings as AgentState, AgentS
 import { useDesktopController, useDesktopState } from '../../useDesktop';
 import { setNodiShown, useNodiShown } from '../../nodiShown';
 import {
+  agentOptions,
+  type AgentChoice,
   claudeCodeCommand,
   clientLine,
   codexConfigToml,
   connectionSummary,
+  connectTitle,
   cursorDeeplink,
+  firstAgent,
   folderRows,
   geminiCommand,
   genericConfigJson,
+  opencodeConfigJson,
   skillLine,
   skillTargetOf,
+  tryLine,
 } from './agentModel';
 import { ChoiceRow, CopyField, Disclosure, SettingRow, SettingsPage, SettingsSection } from '../../../ui/settings/layout';
 
@@ -160,21 +166,14 @@ function CodeFolders({ agent }: { agent: AgentState }) {
   );
 }
 
-type Client = AgentClient | 'cursor' | 'other';
-
-const CLIENTS: { value: Client; label: string }[] = [
-  { value: 'claude-code', label: 'Claude Code' },
-  { value: 'codex', label: 'Codex' },
-  { value: 'cursor', label: 'Cursor' },
-  { value: 'gemini', label: 'Gemini CLI' },
-  { value: 'junie', label: 'Junie' },
-  { value: 'other', label: 'Other MCP clients' },
-];
-
-/** How to point an agent at the connector — one client at a time, never every setup at once. */
+/**
+ * Connecting an agent, one agent at a time and the same three steps for each: point it at the
+ * connector, add the skill, then try it. A step's number becomes a tick once it is done, and the one
+ * solid button on show is the step to take next.
+ */
 function Connect({ agent, platform }: { agent: AgentState; platform: Platform }) {
   const controller = useDesktopController();
-  const [client, setClient] = useState<Client>('claude-code');
+  const [picked, setPicked] = useState<AgentChoice | null>(null);
   const [setups, setSetups] = useState<AgentClientSetup[]>([]);
   const sidecarPath = agent.sidecarPath;
   useEffect(() => {
@@ -199,6 +198,16 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
   const skillOf = (target: AgentSkillTarget) => skills.find((skill) => skill.target === target);
   const skillChanged = (setup: AgentSkillSetup) => setSkills((all) => [...all.filter((s) => s.target !== setup.target), setup]);
 
+  // Opens on an agent that is already set up; once the person picks one, it stays picked.
+  const client = picked ?? firstAgent(setups);
+  const setup = client === 'cursor' || client === 'other' ? undefined : setupOf(client);
+  const oneClick = { setup, blocked: !!agent.sidecarWarning, onConnected: connected };
+  // Cursor's link is a button too, though nothing here can tell whether it has been used.
+  const connectPending = client === 'cursor' || !!(setup?.automatic && clientLine(setup)?.action);
+  const skill = skillOf(skillTargetOf(client));
+  const skillState = skillLine(skill);
+  const trial = tryLine(client, agent);
+
   return (
     <SettingsSection title="Connect an agent" description="Draft Canvas needs to be running while the agent works.">
       {!sidecarPath ? (
@@ -211,62 +220,113 @@ function Connect({ agent, platform }: { agent: AgentState; platform: Platform })
               <span>{agent.sidecarWarning}</span>
             </p>
           )}
-          <SegmentedControl name="agent-client" legend="Agent to connect" value={client} options={CLIENTS} onChange={setClient} />
-          <div className="dc-prefs-client">
-            {client === 'claude-code' && (
-              <OneClick setup={setupOf('claude-code')} blocked={!!agent.sidecarWarning} onConnected={connected}>
-                <p className="dc-prefs-step">Run this once in a terminal:</p>
-                <CopyField label="Terminal command" value={claudeCodeCommand(sidecarPath)} />
-              </OneClick>
-            )}
-            {client === 'codex' && (
-              <OneClick setup={setupOf('codex')} blocked={!!agent.sidecarWarning} onConnected={connected}>
-                <p className="dc-prefs-step">Paste into {setupOf('codex')?.location ?? (platform === 'windows' ? '.codex\\config.toml in your user folder' : '~/.codex/config.toml')}:</p>
-                <CopyField label="Codex MCP config" value={codexConfigToml(sidecarPath)} multiline />
-              </OneClick>
-            )}
-            {client === 'cursor' && (
-              <>
-                <div className="dc-prefs-inline">
-                  <a className="dc-button dc-button-solid" href={cursorDeeplink(sidecarPath)}>
-                    <Icon name="external" size={14} />
-                    Add to Cursor
-                  </a>
-                  <span className="dc-prefs-description">Opens Cursor and adds Draft Canvas to its MCP servers.</span>
-                </div>
-                <Disclosure summary="Copy the config instead">
-                  <p className="dc-prefs-step">
-                    {platform === 'windows'
-                      ? 'Paste into .cursor\\mcp.json in your user folder, or a project’s .cursor\\mcp.json:'
-                      : 'Paste into ~/.cursor/mcp.json, or a project’s .cursor/mcp.json:'}
-                  </p>
-                  <CopyField label="Cursor MCP config" value={genericConfigJson(sidecarPath)} multiline />
-                </Disclosure>
-              </>
-            )}
-            {client === 'gemini' && (
-              <OneClick setup={setupOf('gemini')} blocked={!!agent.sidecarWarning} onConnected={connected}>
-                <p className="dc-prefs-step">Run this once in a terminal:</p>
-                <CopyField label="Terminal command" value={geminiCommand(sidecarPath)} />
-              </OneClick>
-            )}
-            {client === 'junie' && (
-              <OneClick setup={setupOf('junie')} blocked={!!agent.sidecarWarning} onConnected={connected}>
-                <p className="dc-prefs-step">Paste into {setupOf('junie')?.location ?? (platform === 'windows' ? '.junie\\mcp\\mcp.json in your user folder' : '~/.junie/mcp/mcp.json')}:</p>
-                <CopyField label="Junie MCP config" value={genericConfigJson(sidecarPath)} multiline />
-              </OneClick>
-            )}
-            {client === 'other' && (
-              <>
-                <p className="dc-prefs-step">Add this server to your agent’s MCP configuration:</p>
-                <CopyField label="MCP config" value={genericConfigJson(sidecarPath)} multiline />
-              </>
-            )}
+          <div className="dc-prefs-agents">
+            <SegmentedControl name="agent-client" legend="Agent to connect" value={client} options={agentOptions(setups)} onChange={setPicked} />
           </div>
-          <SkillStep setup={skillOf(skillTargetOf(client))} onChanged={skillChanged} />
+          {/* The role is said outright: Safari drops it from a list drawn without markers. */}
+          <ol className="dc-agent-steps" role="list" aria-label={`Steps to ${connectTitle(client).replace(/^C/, 'c')}`}>
+            <Step number={1} title={connectTitle(client)} done={setup?.state === 'ready'}>
+              {client === 'claude-code' && (
+                <OneClick {...oneClick}>
+                  <p className="dc-prefs-step">Run this once in a terminal:</p>
+                  <CopyField label="Terminal command" value={claudeCodeCommand(sidecarPath)} />
+                </OneClick>
+              )}
+              {client === 'codex' && (
+                <OneClick {...oneClick}>
+                  <p className="dc-prefs-step">Paste into {setup?.location ?? (platform === 'windows' ? '.codex\\config.toml in your user folder' : '~/.codex/config.toml')}:</p>
+                  <CopyField label="Codex MCP config" value={codexConfigToml(sidecarPath)} multiline />
+                </OneClick>
+              )}
+              {client === 'cursor' && (
+                <>
+                  <div className="dc-prefs-inline">
+                    <a className="dc-button dc-button-solid" href={cursorDeeplink(sidecarPath)}>
+                      <Icon name="external" size={14} />
+                      Add to Cursor
+                    </a>
+                    <span className="dc-prefs-description">Opens Cursor and adds Draft Canvas to its MCP servers.</span>
+                  </div>
+                  <Disclosure summary="Copy the config instead">
+                    <p className="dc-prefs-step">
+                      {platform === 'windows'
+                        ? 'Paste into .cursor\\mcp.json in your user folder, or a project’s .cursor\\mcp.json:'
+                        : 'Paste into ~/.cursor/mcp.json, or a project’s .cursor/mcp.json:'}
+                    </p>
+                    <CopyField label="Cursor MCP config" value={genericConfigJson(sidecarPath)} multiline />
+                  </Disclosure>
+                </>
+              )}
+              {client === 'gemini' && (
+                <OneClick {...oneClick}>
+                  <p className="dc-prefs-step">Run this once in a terminal:</p>
+                  <CopyField label="Terminal command" value={geminiCommand(sidecarPath)} />
+                </OneClick>
+              )}
+              {client === 'junie' && (
+                <OneClick {...oneClick}>
+                  <p className="dc-prefs-step">Paste into {setup?.location ?? (platform === 'windows' ? '.junie\\mcp\\mcp.json in your user folder' : '~/.junie/mcp/mcp.json')}:</p>
+                  <CopyField label="Junie MCP config" value={genericConfigJson(sidecarPath)} multiline />
+                </OneClick>
+              )}
+              {client === 'opencode' && (
+                <OneClick {...oneClick}>
+                  <p className="dc-prefs-step">
+                    Paste into {setup?.location ?? (platform === 'windows' ? '.config\\opencode\\opencode.json in your user folder' : '~/.config/opencode/opencode.json')}, or a project’s
+                    opencode.json:
+                  </p>
+                  <CopyField label="OpenCode MCP config" value={opencodeConfigJson(sidecarPath)} multiline />
+                </OneClick>
+              )}
+              {client === 'other' && (
+                <>
+                  <p className="dc-prefs-step">Add this server to your agent’s MCP configuration:</p>
+                  <CopyField label="MCP config" value={genericConfigJson(sidecarPath)} multiline />
+                </>
+              )}
+            </Step>
+            {skill && skillState && (
+              <Step number={2} title="Add the skill" done={skill.state === 'ready' || skill.state === 'newer'}>
+                <SkillStep setup={skill} primary={!connectPending} onChanged={skillChanged} />
+              </Step>
+            )}
+            <Step number={skill && skillState ? 3 : 2} title="Try it" done={trial.live.tone === 'on'}>
+              <p className="dc-prefs-description">{trial.text}</p>
+              {/* "Set up" is what a configuration file says. Whether an agent got through is the app's own
+                  to tell, and it tells it the same way for every agent. */}
+              <p className="dc-prefs-live" data-tone={trial.live.tone} role="status">
+                <span className="dc-prefs-dot" aria-hidden="true" />
+                {trial.live.text}
+              </p>
+              {trial.command && (
+                <Disclosure summary="Check from a terminal instead">
+                  <p className="dc-prefs-step">Run this in your project folder. It should list draft-canvas as connected; a project’s own configuration can override this setup.</p>
+                  <CopyField label="Terminal command" value={trial.command} />
+                </Disclosure>
+              )}
+            </Step>
+          </ol>
         </>
       )}
     </SettingsSection>
+  );
+}
+
+/** One step of connecting an agent: its number, or a tick once it is done, and what it is called. */
+function Step({ number, title, done, children }: { number: number; title: string; done: boolean; children: ReactNode }) {
+  return (
+    <li className="dc-agent-step" data-done={done ? '' : undefined}>
+      <span className="dc-agent-step-mark" aria-hidden="true">
+        {done ? <Icon name="check" size={12} /> : number}
+      </span>
+      <div className="dc-agent-step-body">
+        <h5 className="dc-agent-step-title">
+          {title}
+          {done && <span className="dc-sr-only"> (done)</span>}
+        </h5>
+        {children}
+      </div>
+    </li>
   );
 }
 
@@ -304,12 +364,14 @@ function OneClick({
           <Button variant="solid" disabled={busy || blocked} onClick={() => void connect()}>
             {busy ? 'Setting up…' : line.action}
           </Button>
-          <span className="dc-prefs-description">{line.text}</span>
+          <span className="dc-prefs-description" data-tone={line.tone ?? undefined}>
+            {line.text}
+          </span>
         </div>
       ) : (
-        <p className="dc-prefs-note" data-tone="on" role="status">
-          <Icon name="check" size={13} />
-          <span>{line.text}</span>
+        // The step's tick says it is done; this says where.
+        <p className="dc-prefs-description" role="status">
+          {line.text}
         </p>
       )}
       <Disclosure summary="Set it up by hand instead">{children}</Disclosure>
@@ -319,15 +381,15 @@ function OneClick({
 
 /**
  * The agent skill (`agent/skill.rs`): what teaches the agent to draw a repository well, installed in
- * the folder the chosen agent reads skills from. Below the connector's setup because it only helps an
- * agent that can reach Draft Canvas. An edited copy is never replaced without the person asking, and
- * then kept as a backup.
+ * the folder the chosen agent reads skills from. After the connector's setup because it only helps an
+ * agent that can reach Draft Canvas; its button is the solid one once that is done (`primary`). An
+ * edited copy is never replaced without the person asking, and then kept as a backup.
  */
-function SkillStep({ setup, onChanged }: { setup: AgentSkillSetup | undefined; onChanged: (setup: AgentSkillSetup) => void }) {
+function SkillStep({ setup, primary, onChanged }: { setup: AgentSkillSetup; primary: boolean; onChanged: (setup: AgentSkillSetup) => void }) {
   const controller = useDesktopController();
   const [busy, setBusy] = useState<'install' | 'remove' | null>(null);
   const line = skillLine(setup);
-  if (!setup || !line) return null;
+  if (!line) return null;
   const run = async (what: 'install' | 'remove') => {
     setBusy(what);
     const after = what === 'install' ? await controller.installAgentSkill(setup.target) : await controller.removeAgentSkill(setup.target);
@@ -335,11 +397,10 @@ function SkillStep({ setup, onChanged }: { setup: AgentSkillSetup | undefined; o
     if (after) onChanged(after);
   };
   return (
-    <div className="dc-prefs-skill">
-      <p className="dc-prefs-step">Agent skill</p>
+    <>
       {line.action ? (
         <div className="dc-prefs-inline">
-          <Button variant="solid" disabled={busy !== null} onClick={() => void run('install')}>
+          <Button variant={primary ? 'solid' : undefined} className={primary ? undefined : 'dc-prefs-outline'} disabled={busy !== null} onClick={() => void run('install')}>
             {busy === 'install' ? 'Installing…' : line.action}
           </Button>
           <span className="dc-prefs-description" data-tone={line.tone ?? undefined}>
@@ -347,9 +408,8 @@ function SkillStep({ setup, onChanged }: { setup: AgentSkillSetup | undefined; o
           </span>
         </div>
       ) : (
-        <p className="dc-prefs-note" data-tone={line.tone ?? 'on'} role="status">
-          <Icon name="check" size={13} />
-          <span>{line.text}</span>
+        <p className="dc-prefs-description" role="status">
+          {line.text}
         </p>
       )}
       {line.removable && (
@@ -357,7 +417,7 @@ function SkillStep({ setup, onChanged }: { setup: AgentSkillSetup | undefined; o
           {busy === 'remove' ? 'Removing…' : 'Remove skill'}
         </Button>
       )}
-    </div>
+    </>
   );
 }
 
