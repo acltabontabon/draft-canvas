@@ -23,7 +23,7 @@ import { Lru } from '../lib/lru';
 import { routingPlan } from './bundles';
 import { endpointPlan, type EdgeSpread } from './endpoints';
 import { connectorCaptionSize, edgeLabelSize } from './labelLayout';
-import { obstaclesForEdge } from './obstacles';
+import { obstacleKey, obstaclesForEdge } from './obstacles';
 import { MAX_POPS } from './pathfinder';
 import { stepPolyline } from './waypoints';
 import {
@@ -80,8 +80,10 @@ export interface EdgeRoutes {
  *  routes still on screen and recomputes most of them. */
 const SHARED = new Lru<string, EdgeRoutes>(LIMITS.maxEdges);
 
+/** Every input, serialised: the obstacles by `obstacleKey`, which keeps the key of a list it has seen,
+ *  after the rest as JSON — which never holds a raw NUL, so the two parts cannot run together. */
 function keyOf(inputs: EdgeRouteInputs): string {
-  return JSON.stringify([
+  return `${JSON.stringify([
     inputs.source,
     inputs.target,
     inputs.routing,
@@ -92,13 +94,12 @@ function keyOf(inputs: EdgeRouteInputs): string {
     inputs.hasResponse,
     inputs.lane,
     inputs.spine,
-    inputs.obstacles,
     inputs.waypoints,
     inputs.mode ?? '',
     inputs.fallback ?? true,
     inputs.spread ?? null,
     inputs.tracks ?? null,
-  ]);
+  ])}\u0000${obstacleKey(inputs.obstacles)}`;
 }
 
 /**
