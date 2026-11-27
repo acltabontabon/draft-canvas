@@ -893,14 +893,22 @@ mod tests {
     #[test]
     fn saves_creates_renames_and_moves_past_the_legacy_path_limit() {
         let dir = tempdir().unwrap();
+        // Folders deep enough that the file's own path ends at 250 characters, under the legacy limit,
+        // while its temp file (the same name with a `.dctmp-…` prefix and suffix) crosses it. Built to
+        // that length rather than past a fixed depth: a runner's temp folder is longer than a laptop's,
+        // and the file then landed past the limit itself.
+        const FILE: &str = "architecture-overview.draftcanvas";
+        let folder_length = 250 - FILE.len() - 1;
         let mut deep = dir.path().to_path_buf();
-        while deep.as_os_str().len() < 200 {
+        while deep.as_os_str().len() + 32 <= folder_length {
             deep.push("nested-folder-for-a-long-path");
         }
+        let rest = folder_length - deep.as_os_str().len() - 1;
+        deep.push("n".repeat(rest));
         fs::create_dir_all(&deep).unwrap();
         let name = |stem: &str| deep.join(format!("{stem}.draftcanvas"));
         let path = name("architecture-overview");
-        assert!(path.as_os_str().len() < 260);
+        assert_eq!(path.as_os_str().len(), 250);
         let temp = temp_path(&deep, &path);
         assert!(
             temp.as_os_str().len() > 260,
