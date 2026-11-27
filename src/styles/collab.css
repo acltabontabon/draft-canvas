@@ -45,6 +45,35 @@
   }
 }
 
+/*
+ * An editor wearing a diagram's own colours (`useEditorDress`) is its own light or dark, whatever the
+ * app around it is, and a peer's cursor and the ring round what they hold are drawn on its canvas:
+ * picked by the root's theme, a light canvas on a dark device drew those rings at 1.2:1.
+ */
+.dc-editor[data-theme='dark'] {
+  --dc-peer-ink: #0f1115;
+  --dc-peer-0: #5fd6c9;
+  --dc-peer-1: #a5b4fc;
+  --dc-peer-2: #f9a8d4;
+  --dc-peer-3: #fcd34d;
+  --dc-peer-4: #86efac;
+  --dc-peer-5: #c4b5fd;
+  --dc-peer-6: #7dd3fc;
+  --dc-peer-7: #fca5a5;
+}
+
+.dc-editor[data-theme='light'] {
+  --dc-peer-ink: #ffffff;
+  --dc-peer-0: #0f766e;
+  --dc-peer-1: #4f46e5;
+  --dc-peer-2: #be185d;
+  --dc-peer-3: #b45309;
+  --dc-peer-4: #15803d;
+  --dc-peer-5: #7c3aed;
+  --dc-peer-6: #0369a1;
+  --dc-peer-7: #b91c1c;
+}
+
 [data-peer-color='0'] { --dc-peer: var(--dc-peer-0); }
 [data-peer-color='1'] { --dc-peer: var(--dc-peer-1); }
 [data-peer-color='2'] { --dc-peer: var(--dc-peer-2); }
