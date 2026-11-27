@@ -1,4 +1,5 @@
 // Read-only check of the zone settings managed outside Wrangler. This never changes Cloudflare.
+import { realpathSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
 export async function checkCloudflareTls({ zoneId, token, request = fetch }) {
@@ -46,7 +47,10 @@ export async function checkCloudflareTls({ zoneId, token, request = fetch }) {
   };
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// Node runs a script from its real path, so `import.meta.url` is the link's target: argv[1] is
+// resolved the same way, or a script reached through a link (macOS's /tmp, a linked checkout)
+// exited 0 having done nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   try {
     if (process.argv.length !== 2) throw new Error('Usage: node scripts/check-cloudflare-tls.mjs (read-only; no arguments)');
     const result = await checkCloudflareTls({

@@ -2,9 +2,9 @@
 // Generate a cask only from the published installer's verified bytes. This tooling never runs in
 // the editor; both architectures share the desktop app's signed in-app updater.
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
 const STABLE = /^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
 
@@ -85,7 +85,10 @@ export function caskForRelease(tag, directory) {
   return buildCask({ version, armSha256: digestOf('arm64'), intelSha256: digestOf('x64') });
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
+// Node runs a script from its real path, so `import.meta.url` is the link's target: argv[1] is
+// resolved the same way, or a script reached through a link (macOS's /tmp, a linked checkout)
+// exited 0 having done nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   try {
     const [command, tag, path] = process.argv.slice(2);
     if (!path) throw new Error('Usage: homebrew-cask.mjs generate|check-release|check-update <vX.Y.Z> <path>');

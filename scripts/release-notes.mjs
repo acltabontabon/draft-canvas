@@ -15,7 +15,7 @@
 // it leads with the desktop reel, lists only what reaches the desktop app, and has no "Get it"
 // (there's nothing yet to open on the web).
 
-import { lstatSync, readFileSync } from 'node:fs';
+import { lstatSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { ChangelogError, REPO, parseChangelog, parseVersion, releaseNotes, unwrap, versionFromTag, whatsNew, withDraft } from './changelog.mjs';
@@ -212,9 +212,10 @@ export function releaseBody(tag, changelog, { platform, mediaDirectory } = {}) {
   return `${parts.join('\n\n')}\n`;
 }
 
-// `file://${argv[1]}` is never this module's URL on Windows (backslashes, a drive letter), so the
-// script exited 0 there having done nothing.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+// `file://${argv[1]}` is never this module's URL on Windows (backslashes, a drive letter), and Node
+// runs a script from its real path, so one reached through a link (macOS's /tmp, a linked checkout)
+// didn't match either: both exited 0 having done nothing.
+if (process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href) {
   const args = process.argv.slice(2);
   const tag = args.find((arg) => !arg.startsWith('--') && args[args.indexOf(arg) - 1] !== '--platform');
   const platform = args.includes('--platform') ? args[args.indexOf('--platform') + 1] : undefined;
