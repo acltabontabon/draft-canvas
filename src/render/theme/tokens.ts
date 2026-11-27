@@ -175,6 +175,9 @@ export function applyThemeVariables(theme: Theme, root: HTMLElement): void {
   set('edge-label-bg', theme.edgeLabelBg);
   set('code-bg', theme.codeBg);
   set('shadow', theme.shadow);
+  // A style's canvas can move it (`render/style/scheme.ts`), and the canvas draws a removed item
+  // in `theme.danger`: the stylesheets' danger has to be the same colour.
+  set('danger', theme.danger);
   for (const [name, palette] of Object.entries(theme.accents)) {
     // No `-line`: nothing in CSS draws with an accent's line colour (connectors get it from the theme
     // object, in the display list).

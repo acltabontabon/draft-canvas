@@ -257,7 +257,9 @@ means stays out of it: a dashed asynchronous call is dashed in every style.
 **Canvas** is the paper. **Colours** picks a set for the shapes, lines and canvas
 together. **Canvas colour** takes any colour, your brand's included: words, lines and shapes are
 adjusted to stay readable on it, and the diagram is then drawn on that colour in light and dark
-alike. **Brand colour** is the one colour that marks what is selected and what to press. **Backdrop** prints a quiet pattern on the canvas behind the diagram (drafting paper,
+alike. **Brand colour** is the one colour that marks what is selected and what to press. Without one,
+or with one too close to the canvas to be seen, the usual colour is used, deepened or lightened
+wherever the canvas would hide it. **Backdrop** prints a quiet pattern on the canvas behind the diagram (drafting paper,
 contours, honeycomb, stars), or your own: **Your SVG…** repeats a picture edge to edge, for a
 watermark or a brand pattern, at the strength and size you choose. The backdrop moves with the
 diagram and is drawn in image exports, except transparent ones.

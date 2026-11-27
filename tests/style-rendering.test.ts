@@ -146,7 +146,8 @@ describe('a style’s colours', () => {
     expect(theme.accents.teal.line).toBe('#2f6f66');
     expect(theme.accents.blue).toBe(LIGHT.accents.blue);
     // The panels and hairlines beside the canvas follow it, so the editor is one piece of paper;
-    // each still reads against it. What marks a selection or a danger is not a canvas's to change.
+    // each still reads against it. What marks a selection or a danger stays the built-in colour
+    // wherever that can be read (`tests/style-palettes.test.ts` has the canvases where it cannot).
     expect([theme.surface, theme.border]).not.toEqual([LIGHT.surface, LIGHT.border]);
     expect(contrast(theme.text, theme.surface)).toBeGreaterThanOrEqual(CONTRAST.text);
     expect(contrast(theme.text, theme.surfaceRaised)).toBeGreaterThanOrEqual(CONTRAST.text);
