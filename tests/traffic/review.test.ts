@@ -66,16 +66,16 @@ describe('outage review — each reading is the one taking that thing down gives
   });
 
   it('where a severed route shares a Junction leg with a route stopped before it', () => {
-    // A is inside a loop the walk never enters, so its write to D through the Junction stops in
-    // every reading, and marks the shared leg first. Z's write, asynchronous, is the one severed.
-    const nodes = [node('X', 'service'), node('A', 'service'), node('B', 'service'), node('Z', 'service'), node('J', 'ellipse'), node('D', 'database')];
+    // Z's asynchronous write is the only way into a loop (D publishes to Q, Q hands to A, A writes
+    // D through the same Junction leg). Severed, the loop goes quiet, and A's write, which comes
+    // first, stops and marks the shared leg before Z's is read.
+    const nodes = [node('Z', 'service'), node('J', 'ellipse'), node('D', 'database'), node('Q', 'queue'), node('A', 'service')];
     const edges = [
-      edge('xb', 'X', 'B', { semantic: 'calls' }),
-      edge('ba', 'B', 'A', { semantic: 'calls' }),
-      edge('ab', 'A', 'B', { semantic: 'calls' }),
-      edge('aj', 'A', 'J', { semantic: 'writes' }),
       edge('zj', 'Z', 'J', { semantic: 'writes', async: true }),
+      edge('aj', 'A', 'J', { semantic: 'writes' }),
       edge('jd', 'J', 'D', { semantic: 'writes' }),
+      edge('dq', 'D', 'Q', { semantic: 'publishes' }),
+      edge('qa', 'Q', 'A', { semantic: 'consumes' }),
     ];
     const flows = [{ id: 'f', title: 'Write', steps: [{ id: 's', edgeId: 'zj' }] }];
     const severed = outageOf(analyzeTraffic({ nodes, edges }), nodes, edges, { id: 'zj', connector: true }, flows)!;
@@ -87,10 +87,13 @@ describe('outage review — each reading is the one taking that thing down gives
 
 describe('outage review — scale', () => {
   it('reviews a landscape of 2,000 shapes in well under a second', () => {
-    const { nodes, edges, flows } = landscape(2000);
+    // In tiers, with loops the walk goes round. Its calls forward into the next 30 instead (see
+    // `landscape`) wait dozens deep, so every reading genuinely fails most of the services, and the
+    // review costs what those readings hold: no sharing between them makes that cheaper.
+    const { nodes, edges, flows } = landscape(2000, 7, 'tiers');
     const analysis = analyzeTraffic({ nodes, edges });
     expect(nodes.length).toBeGreaterThan(1800);
-    expect(edges.length).toBeGreaterThan(3500);
+    expect(edges.length).toBeGreaterThan(3300);
     outageReview(analysis, nodes, edges, flows);
     const started = performance.now();
     const review = outageReview(analysis, nodes, edges, flows);

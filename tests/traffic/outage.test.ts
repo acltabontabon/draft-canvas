@@ -768,6 +768,96 @@ describe('outage walk — what a shape is decides how it reads', () => {
   });
 });
 
+describe('outage walk — work that goes round a loop', () => {
+  // The analysis counts a loop once, so the routes inside one carry no counted paths. Work still
+  // travels them: the walk once skipped them, called everything only a loop reached quiet whatever
+  // went down, and never failed a caller that waits inside one.
+  const events = [
+    node('shopper', 'actor', { text: 'Shopper' }),
+    node('orders', 'service', { text: 'Orders' }),
+    node('ordersDb', 'database', { text: 'Orders DB' }),
+    node('orderEvents', 'queue', { text: 'Order events' }),
+    node('billing', 'service', { text: 'Billing' }),
+    node('ledger', 'database', { text: 'Ledger' }),
+    node('billingEvents', 'queue', { text: 'Billing events' }),
+  ];
+  const choreography = [
+    edge('place', 'shopper', 'orders', { semantic: 'calls' }),
+    edge('save', 'orders', 'ordersDb', { semantic: 'writes' }),
+    edge('announce', 'orders', 'orderEvents', { semantic: 'publishes', async: true }),
+    edge('bill', 'orderEvents', 'billing', { semantic: 'consumes', async: true }),
+    edge('book', 'billing', 'ledger', { semantic: 'writes' }),
+    edge('settled', 'billing', 'billingEvents', { semantic: 'publishes', async: true }),
+    edge('close', 'billingEvents', 'orders', { semantic: 'consumes', async: true }),
+  ];
+
+  it('reaches what only a loop leads to, so losing something else leaves it running', () => {
+    const outage = walk(events, choreography, 'ordersDb');
+
+    expect(outage.nodes.get('orders')).toBe('failing');
+    expect(outage.nodes.get('shopper')).toBe('failing');
+    for (const id of ['orderEvents', 'billing', 'ledger']) expect(outage.nodes.get(id), id).toBe('unaffected');
+    // What Billing events hands the failing Orders comes back, as it would outside a loop.
+    expect(outage.nodes.get('billingEvents')).toBe('retrying');
+    expect(outage.notes.some((note) => note.id.startsWith('quiet:'))).toBe(false);
+    expect(outage.headline).toBe('Orders DB is down. Order events, Billing and 1 more carry on.');
+    // What only Billing leads to goes quiet when Billing is down, loop or no loop.
+    expect(walk(events, choreography, 'billing').notes.find((note) => note.id.startsWith('quiet:'))?.text).toBe('Everything that reaches Billing events and Ledger comes through Billing.');
+  });
+
+  it('holds and redelivers for a consumer inside the loop', () => {
+    const outage = walk(events, choreography, 'ledger');
+
+    expect(outage.nodes.get('billing')).toBe('failing');
+    expect(outage.nodes.get('orderEvents')).toBe('retrying');
+    expect(outage.notes.map((note) => note.note)).toContain('keeps redelivering — no dead-letter drawn');
+    expect(walk(events, choreography, 'billing').nodes.get('orderEvents')).toBe('holding');
+  });
+
+  it('fails a caller that waits inside a loop of calls', () => {
+    const nodes = [node('shopper', 'actor', { text: 'Shopper' }), node('orders', 'service', { text: 'Orders' }), node('payments', 'service', { text: 'Payments' }), node('ledger', 'database', { text: 'Ledger' })];
+    const edges = [
+      edge('buy', 'shopper', 'orders', { semantic: 'calls' }),
+      edge('charge', 'orders', 'payments', { semantic: 'calls' }),
+      edge('confirm', 'payments', 'orders', { semantic: 'calls' }),
+      edge('book', 'payments', 'ledger', { semantic: 'writes' }),
+    ];
+    const outage = walk(nodes, edges, 'ledger');
+
+    expect(Object.fromEntries(outage.nodes)).toEqual({ ledger: 'down', payments: 'failing', orders: 'failing', shopper: 'failing' });
+    expect(outage.notes.map((note) => note.id)).toEqual(['no-fallback:payments', 'chain:orders', 'people:shopper']);
+    // A connector inside the loop carries work, so it can be taken down too.
+    expect(walk(nodes, edges, { id: 'confirm', connector: true }).connector).toEqual({ from: ['payments'], to: ['orders'] });
+  });
+
+  it('reads the Saga (choreography) starter: losing the orders store stops nothing the events lead to', () => {
+    const parsedSaga = parseDocument(readFileSync(join(process.cwd(), 'tests/fixtures/starters/starters/patterns/saga-choreography/saga-choreography.draftcanvas'), 'utf8'));
+    if (!parsedSaga.ok) throw new Error(parsedSaga.error);
+    const saga = parsedSaga.document;
+    const read = (id: string) => outageOf(analyzeTraffic({ nodes: saga.nodes, edges: saga.edges }), saga.nodes, saga.edges, { id }, saga.flows)!;
+
+    // It read "Everything that reaches Adyen, Delivery Service, Kitchen Service and 6 more comes
+    // through Orders DB", though the events go on from an Order Service that is still running.
+    const orders = read('order-db');
+    expect(orders.nodes.get('order')).toBe('failing');
+    expect(orders.nodes.get('customer')).toBe('failing');
+    for (const id of ['orders-events', 'adyen', 'payment-db', 'payments-events', 'kitchen', 'kitchen-db', 'delivery']) expect(orders.nodes.get(id), id).toBe('unaffected');
+    expect(orders.notes.some((note) => note.id.startsWith('quiet:'))).toBe(false);
+    expect(orders.headline).toBe('Orders DB is down. orders.events, Payments DB and 5 more carry on.');
+    // What kitchen.events hands the failing Order Service comes back, and goes the way drawn for
+    // a failure: to the Payment Service's refund, so the flow drawn for that comes into use.
+    expect(orders.nodes.get('kitchen-events')).toBe('retrying');
+    expect(orders.nodes.get('payment')).toBe('catching');
+    expect(orders.flows.find((flow) => flow.title === 'Restaurant rejects the ticket')?.state).toBe('recovery');
+
+    // And a store inside the loop: the payment fails, so its events come back to the queue.
+    const payments = read('payment-db');
+    expect(payments.nodes.get('payment')).toBe('failing');
+    expect(payments.nodes.get('orders-events')).toBe('retrying');
+    for (const line of outageSummary(payments)) expect(line).not.toMatch(INVENTED);
+  });
+});
+
 describe('product facts', () => {
   it('matches only an assigned product name, with an optional version', () => {
     expect(outageFact({ type: 'queue', technology: 'Kafka 3.7' })?.name).toBe('Kafka');

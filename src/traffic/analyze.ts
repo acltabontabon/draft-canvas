@@ -43,8 +43,9 @@ function workloadOf(interaction: TrafficInteraction): WorkloadKind | undefined {
   return undefined;
 }
 
-/** Iterative Tarjan over baseline interactions, so a deep chain can't exhaust the call stack. */
-function stronglyConnected(ids: string[], outgoing: Map<string, TrafficInteraction[]>): { components: Component[]; componentOf: Map<string, number> } {
+/** Iterative Tarjan over baseline interactions, so a deep chain can't exhaust the call stack.
+ *  Components come sources first; the outage walk (`outage.ts`) reads its loops with it too. */
+export function stronglyConnected(ids: readonly string[], outgoing: ReadonlyMap<string, readonly TrafficInteraction[]>): { components: Component[]; componentOf: Map<string, number> } {
   const adjacency = new Map<string, string[]>();
   for (const id of ids) {
     const targets = [...new Set((outgoing.get(id) ?? []).map((interaction) => interaction.to))].sort(compareText);

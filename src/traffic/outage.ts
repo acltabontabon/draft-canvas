@@ -2,6 +2,7 @@ import { linkedCompensations } from '../document/compensation';
 import { categoryOf, type NodeCategory } from '../document/connectorSemantics';
 import { displayNameFor } from '../document/factory';
 import type { DraftEdge, DraftFlow, DraftNode, EdgeSemantic } from '../document/types';
+import { stronglyConnected } from './analyze';
 import { trafficRoleOf } from './eligibility';
 import { outageFact, sourceOf, type OutageFact, type OutageSource } from './technology';
 import type { TrafficAnalysis, TrafficInteraction } from './types';
@@ -123,10 +124,22 @@ export interface Outage {
   flows: OutageFlow[];
 }
 
-/** Whoever makes this interaction holds its request open until it returns. */
+/** Whoever makes this interaction holds its request open until it returns — inside a loop too: a
+ *  call round one waits on its answer like any other. It used to be passed over there, so taking
+ *  down what a loop of calls waits on failed none of the callers in it. */
 export function waitsOn(interaction: TrafficInteraction): boolean {
-  if (interaction.loop) return false;
   return (interaction.class === 'request' || interaction.class === 'data') && interaction.sync;
+}
+
+/**
+ * Whether work travels an interaction in an outage walk: every route the analysis counts paths
+ * over, and every route inside a loop that work enters. The analysis counts a loop once and gives
+ * the routes inside it no paths of their own, because how often a loop repeats is what a drawing
+ * doesn't say; but work goes round it all the same. The walk once followed counted routes only, so
+ * whatever was reached only round a loop read as quiet whatever was taken down.
+ */
+export function carriesWork(analysis: TrafficAnalysis, interaction: TrafficInteraction): boolean {
+  return interaction.paths.possible > 0 || (interaction.loop && (analysis.nodes.get(interaction.from)?.paths.possible ?? 0) > 0);
 }
 
 function runs(node: DraftNode): boolean {
@@ -243,12 +256,7 @@ export function outageReadings(
   const graph = graphOf(analysis, nodes, edges);
   const told = flowStepsOf(flows, graph.edgeById);
   const reach = reachOf(graph, told);
-  const read = (target: OutageTarget) => {
-    if (reach) return readOutage(graph, told, target, reach);
-    const outage = readOutage(graph, told, target, null);
-    return outage && glanceOf(outage, analysis);
-  };
-  return { lostBy: graph.lostBy, read };
+  return { lostBy: graph.lostBy, read: (target) => readOutage(graph, told, target, reach) };
 }
 
 type EdgeStates = Pick<ReadonlyMap<string, OutageEdgeState>, 'get'>;
@@ -275,8 +283,10 @@ interface Graph {
   edges: readonly DraftEdge[];
   drawn: ReadonlyMap<string, DraftNode>;
   edgeById: ReadonlyMap<string, DraftEdge>;
-  /** The interactions that carry work, in the analysis's order, and by where they arrive and leave. */
+  /** The interactions that carry work (`carriesWork`), in the analysis's order, and by where they
+   *  arrive and leave. */
   baseline: readonly TrafficInteraction[];
+  works: ReadonlySet<TrafficInteraction>;
   into: ReadonlyMap<string, TrafficInteraction[]>;
   outOf: ReadonlyMap<string, TrafficInteraction[]>;
   /** A drawn way out of a failure, by the shape it leaves: a fallback, a dead-letter route. */
@@ -298,7 +308,7 @@ interface Graph {
 function graphOf(analysis: TrafficAnalysis, nodes: readonly DraftNode[], edges: readonly DraftEdge[]): Graph {
   const drawn = new Map(nodes.map((node) => [node.id, node]));
   const names = new Map<string, string>();
-  const baseline = analysis.interactions.filter((item) => item.paths.possible > 0);
+  const baseline = analysis.interactions.filter((item) => carriesWork(analysis, item));
   // Compensation undoes finished work; it is not somewhere a failing call can go instead.
   const compensating = new Set(edges.filter((edge) => edge.semantic === 'compensates').map((edge) => edge.id));
   // Indexed the first time they are asked for: one reading of a shape needs none of them.
@@ -327,6 +337,7 @@ function graphOf(analysis: TrafficAnalysis, nodes: readonly DraftNode[], edges: 
     drawn,
     edgeById: new Map(edges.map((edge) => [edge.id, edge])),
     baseline,
+    works: new Set(baseline),
     into: group(baseline, (item) => item.to),
     outOf: group(baseline, (item) => item.from),
     escapes: group(
@@ -387,15 +398,20 @@ function insideOf(nodes: readonly DraftNode[], drawn: ReadonlyMap<string, DraftN
 
 /**
  * How far work travels with nothing down: what each reading of a review starts from, so it need
- * only work out what its own outage changes. Every route that carries work runs from one place to
- * a later one (the analysis counts a loop once and gives the routes inside it nothing to carry), so
- * a shape stays reached while any route still arrives at it from a shape that is.
+ * only work out what its own outage changes. Work reaches the reached shapes part by part: a loop
+ * is one part (what reaches one of its shapes reaches them all, round the loop), every other shape
+ * a part of its own, and work only ever runs on from a part to a later one. So a part stays reached
+ * while any route still arrives at it from a part that is, unless something inside it is down or
+ * severed; that part alone is walked again.
  */
 interface Reach {
   /** Reached from an entry point, with nothing down. */
   reached: ReadonlySet<string>;
-  /** How many routes carrying work arrive at each reached shape from reached shapes. */
-  arrivals: ReadonlyMap<string, number>;
+  /** Each reached shape's part, numbered so work only runs to a later one, and each part's shapes. */
+  part: ReadonlyMap<string, number>;
+  members: readonly (readonly string[])[];
+  /** How many routes carrying work arrive at each part from reached shapes outside it. */
+  arrivals: readonly number[];
   /** Shapes that take part but no route walked from an entry point arrives at: quiet in every
    *  reading that says nothing else of them. */
   unreached: ReadonlySet<string>;
@@ -411,9 +427,7 @@ interface Reach {
   flowsAt: ReadonlyMap<string, number[]>;
 }
 
-/** `null` if the routes carrying work ever loop back, which the analysis rules out: then every
- *  reading of the review reads the whole graph, as `outageOf` does. */
-function reachOf(graph: Graph, flows: readonly FlowSteps[]): Reach | null {
+function reachOf(graph: Graph, flows: readonly FlowSteps[]): Reach {
   const { analysis, baseline, outOf, into, edgeById } = graph;
   const reached = new Set<string>();
   const pending = [...analysis.entries];
@@ -423,19 +437,13 @@ function reachOf(graph: Graph, flows: readonly FlowSteps[]): Reach | null {
     reached.add(at);
     for (const item of outOf.get(at) ?? []) pending.push(item.to);
   }
-  const arrivals = new Map<string, number>();
-  for (const item of baseline) if (reached.has(item.from)) arrivals.set(item.to, (arrivals.get(item.to) ?? 0) + 1);
-  // Every reached shape is released once all that arrives at it has been: a loop never is.
-  const left = new Map(arrivals);
-  const ready = [...reached].filter((id) => !left.get(id));
-  for (let head = 0; head < ready.length; head += 1) {
-    for (const item of outOf.get(ready[head]!) ?? []) {
-      const count = left.get(item.to)! - 1;
-      left.set(item.to, count);
-      if (count === 0) ready.push(item.to);
-    }
+  const { components, componentOf: part } = stronglyConnected([...reached], outOf);
+  const arrivals = components.map(() => 0);
+  for (const item of baseline) {
+    if (!reached.has(item.from)) continue;
+    const to = part.get(item.to)!;
+    if (part.get(item.from) !== to) arrivals[to]! += 1;
   }
-  if (ready.length !== reached.size) return null;
   const unreached = new Set<string>();
   for (const id of analysis.nodes.keys()) if (takesPartIn(analysis, id) && !reached.has(id)) unreached.add(id);
   const stale = new Set<string>();
@@ -469,7 +477,117 @@ function reachOf(graph: Graph, flows: readonly FlowSteps[]): Reach | null {
     }
     for (const step of flow.flow.steps) for (const id of step.extraNodeIds ?? []) add(flowsAt, id, index);
   });
-  return { reached, arrivals, unreached, stale, entries: new Set(analysis.entries), routeOrder: new Map(baseline.map((item, index) => [item, index])), breaks, flowsOver, flowsAt };
+  return {
+    reached,
+    part,
+    members: components.map((component) => component.members),
+    arrivals,
+    unreached,
+    stale,
+    entries: new Set(analysis.entries),
+    routeOrder: new Map(baseline.map((item, index) => [item, index])),
+    breaks,
+    flowsOver,
+    flowsAt,
+  };
+}
+
+/**
+ * Of what work reached with nothing down, what an outage leaves it no longer reaching: the shapes
+ * step 5's walk from the entry points does not arrive at, worked out from what is down and what is
+ * severed, part by part (`Reach`). A part that nothing still reached arrives at fades whole; a part
+ * with something down or severed inside it is walked again from what still arrives at it. Parts are
+ * read in order, smallest first, so each is read once everything before it is settled.
+ */
+function fadedBy(
+  reach: Reach,
+  graph: Graph,
+  down: ReadonlySet<string>,
+  cut: ReadonlySet<TrafficInteraction>,
+  gone: (item: TrafficInteraction) => boolean,
+): Set<string> {
+  const { into, outOf, works } = graph;
+  const faded = new Set<string>();
+  const lostArrivals = new Map<number, number>();
+  const broken = new Set<number>();
+  const queued = new Set<number>();
+  const heap: number[] = [];
+  const queue = (part: number) => {
+    if (queued.has(part)) return;
+    queued.add(part);
+    heap.push(part);
+    for (let at = heap.length - 1; at > 0; ) {
+      const up = (at - 1) >> 1;
+      if (heap[up]! <= heap[at]!) break;
+      [heap[up], heap[at]] = [heap[at]!, heap[up]!];
+      at = up;
+    }
+  };
+  const next = () => {
+    const smallest = heap[0]!;
+    const last = heap.pop()!;
+    if (heap.length > 0) {
+      heap[0] = last;
+      for (let at = 0; ; ) {
+        let low = at;
+        for (const child of [2 * at + 1, 2 * at + 2]) if (child < heap.length && heap[child]! < heap[low]!) low = child;
+        if (low === at) break;
+        [heap[low], heap[at]] = [heap[at]!, heap[low]!];
+        at = low;
+      }
+    }
+    return smallest;
+  };
+  const arrivesNoMore = (part: number) => {
+    lostArrivals.set(part, (lostArrivals.get(part) ?? 0) + 1);
+    queue(part);
+  };
+  for (const id of down) {
+    const part = reach.part.get(id);
+    if (part === undefined) continue;
+    broken.add(part);
+    queue(part);
+  }
+  // A severed route that carried work: lost to the part it arrived at, or a break inside a loop.
+  for (const item of cut) {
+    if (!works.has(item) || !reach.reached.has(item.from)) continue;
+    const to = reach.part.get(item.to)!;
+    if (reach.part.get(item.from) !== to) arrivesNoMore(to);
+    else {
+      broken.add(to);
+      queue(to);
+    }
+  }
+  while (heap.length > 0) {
+    const part = next();
+    const members = reach.members[part]!;
+    let fading: readonly string[] = members;
+    if (!broken.has(part)) {
+      // Whole, it is reached while anything still reached arrives at it, or it starts work itself.
+      if (reach.arrivals[part]! - (lostArrivals.get(part) ?? 0) > 0 || members.some((id) => reach.entries.has(id))) continue;
+    } else {
+      // Something inside is down or severed: walked again from what still arrives at it.
+      const inside = new Set<string>();
+      const walk = members.filter(
+        (id) => !down.has(id) && (reach.entries.has(id) || (into.get(id) ?? []).some((item) => reach.part.get(item.from) !== part && !faded.has(item.from) && !gone(item))),
+      );
+      for (let head = 0; head < walk.length; head += 1) {
+        const at = walk[head]!;
+        if (inside.has(at)) continue;
+        inside.add(at);
+        for (const item of outOf.get(at) ?? []) if (reach.part.get(item.to) === part && !gone(item)) walk.push(item.to);
+      }
+      fading = members.filter((id) => !inside.has(id));
+    }
+    for (const id of fading) faded.add(id);
+    for (const id of fading) {
+      for (const item of outOf.get(id) ?? []) {
+        const to = reach.part.get(item.to)!;
+        if (to !== part && !cut.has(item)) arrivesNoMore(to);
+      }
+    }
+  }
+  return faded;
 }
 
 /** A shape that runs and that work reaches, or that starts it. */
@@ -486,6 +604,8 @@ function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTar
 function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTarget, reach: Reach): OutageGlance | null;
 function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTarget, reach: Reach | null): Outage | OutageGlance | null {
   const { analysis, nodes, edges, drawn, edgeById, baseline, into, outOf, escapes } = graph;
+  /** Work travels this route: counted by the analysis, or inside a loop work enters. */
+  const carries = (item: TrafficInteraction) => graph.works.has(item);
   // A connector down is a partition: both ends run, and the work that travelled it does not. It is
   // read by the same rules as a shape down, applied to that one route instead of to everything
   // that reaches a shape.
@@ -495,7 +615,7 @@ function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTar
   const targetNode = target.connector ? undefined : drawn.get(target.id);
   const lost = targetNode ? graph.lostBy(target.id).filter((id) => analysis.nodes.has(id)) : [];
   // A dead-letter or fallback route carries nothing until something fails, and can still be severed.
-  if (target.connector ? ![...cut].some((item) => item.paths.possible > 0 || item.class === 'failure') : !targetNode || lost.length === 0) return null;
+  if (target.connector ? ![...cut].some((item) => carries(item) || item.class === 'failure') : !targetNode || lost.length === 0) return null;
   const down = new Set(lost);
   /** This route no longer arrives: what it leads to is down, or the connector it runs over is. */
   const gone = (item: TrafficInteraction) => down.has(item.to) || cut.has(item);
@@ -633,7 +753,7 @@ function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTar
     if (roleOf(caller) === 'origin') people.push(caller);
     else (gone(item) ? direct : further).push(caller);
   };
-  for (const item of cut) if (item.paths.possible > 0) wait(item);
+  for (const item of cut) if (carries(item)) wait(item);
   for (let head = 0; head < failed.length; head += 1) {
     for (const item of into.get(failed[head]!) ?? []) if (!cut.has(item)) wait(item);
   }
@@ -828,7 +948,7 @@ function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTar
           });
     }
   };
-  for (const item of cut) if (item.paths.possible > 0) held(item);
+  for (const item of cut) if (carries(item)) held(item);
   for (const consumer of failed) {
     if (roleOf(consumer) === 'origin') continue;
     for (const item of into.get(consumer) ?? []) {
@@ -842,7 +962,7 @@ function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTar
   //    labelled write, a publish, a command, or a call someone drew a recovery action for. A plain
   //    call may be a question asked, and an unlabelled data connector may be a read.
   const lasting = (item: TrafficInteraction) =>
-    item.paths.possible > 0 &&
+    carries(item) &&
     !gone(item) &&
     state.get(item.to) !== 'failing' &&
     state.get(item.to) !== 'down' &&
@@ -980,13 +1100,13 @@ function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTar
   }
   // What a broker does when it restarts says nothing about one that never went down.
   for (const id of ends?.to ?? []) {
-    refused(id, [...cut].filter((item) => item.to === id && item.class === 'publish' && item.paths.possible > 0));
+    refused(id, [...cut].filter((item) => item.to === id && item.class === 'publish' && carries(item)));
     stranding(id, [...cut].filter((item) => item.to === id && item.class === 'failure'));
   }
   // A call nobody waits on fails without anyone hearing of it: the caller carries on, and the
   // drawing is silent on the calls themselves. True of a shape that is down as of a severed route.
   const unanswered = (severed ? [...cut] : lost.flatMap((id) => into.get(id) ?? [])).filter(
-    (item) => item.class === 'request' && !item.sync && item.paths.possible > 0 && !state.has(item.from),
+    (item) => item.class === 'request' && !item.sync && carries(item) && !state.has(item.from),
   );
   for (const [to, calls] of group(unanswered, (item) => item.to)) {
     const callers = [...new Set(calls.map((item) => item.from))];
@@ -1008,27 +1128,8 @@ function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTar
   // A review's reading stops here. What steps 5 and 6 would add, it works out from `reach` — how
   // far work reached with nothing down — visiting only what this outage changes.
   if (reach) {
-    // What is no longer reached: counted down along the routes that stop arriving, from what is
-    // down and from the severed connector. A shape fades once nothing still reached arrives at it.
-    const faded = new Set<string>();
-    const fading: string[] = [];
-    const arriving = new Map<string, number>();
-    const fade = (id: string) => {
-      faded.add(id);
-      fading.push(id);
-    };
-    const arrivesNoMore = (item: TrafficInteraction) => {
-      if (faded.has(item.to)) return;
-      const count = (arriving.get(item.to) ?? reach.arrivals.get(item.to)!) - 1;
-      arriving.set(item.to, count);
-      // An entry point is reached however little arrives at it.
-      if (count === 0 && !reach.entries.has(item.to)) fade(item.to);
-    };
-    for (const id of lost) if (reach.reached.has(id) && !faded.has(id)) fade(id);
-    for (const item of cut) if (item.paths.possible > 0 && reach.reached.has(item.from)) arrivesNoMore(item);
-    for (let head = 0; head < fading.length; head += 1) {
-      for (const item of outOf.get(fading[head]!) ?? []) if (!gone(item)) arrivesNoMore(item);
-    }
+    // What is no longer reached, from what is down and from the severed connector.
+    const faded = fadedBy(reach, graph, down, cut, gone);
     // Quiet, as step 5 reads it: takes part, nothing above said otherwise, and is not reached.
     const isQuiet = (id: string) => (reach.unreached.has(id) || faded.has(id)) && !state.has(id) && takesPart(id);
     const silent = (id: string) => down.has(id) || isQuiet(id);
@@ -1054,7 +1155,7 @@ function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTar
     const changed = new Set<string>(state.keys());
     for (const id of faded) changed.add(id);
     for (const id of moved) for (const item of outOf.get(id) ?? []) if (item.class === 'data') changed.add(item.to);
-    for (const item of cut) if (item.paths.possible > 0 && item.class === 'data') changed.add(item.to);
+    for (const item of cut) if (carries(item) && item.class === 'data') changed.add(item.to);
     let stores = reach.stale.size;
     for (const id of changed) stores += Number(stale(id)) - Number(reach.stale.has(id));
     const affected = [...state.values()].filter((value) => value !== 'down').length + quiet + stores;
@@ -1073,9 +1174,9 @@ function readOutage(graph: Graph, flows: readonly FlowSteps[], target: OutageTar
     // connector and nothing above said anything of it — asked in the order the routes come, since
     // a route marked first has then been said something of.
     const stopped = new Map<TrafficInteraction, boolean>();
-    const earlier = (item: TrafficInteraction, other: TrafficInteraction) => other.paths.possible > 0 && reach.routeOrder.get(other)! < reach.routeOrder.get(item)!;
+    const earlier = (item: TrafficInteraction, other: TrafficInteraction) => carries(other) && reach.routeOrder.get(other)! < reach.routeOrder.get(item)!;
     const stops = (item: TrafficInteraction): boolean => {
-      if (!(item.paths.possible > 0)) return false;
+      if (!carries(item)) return false;
       const known = stopped.get(item);
       if (known !== undefined) return known;
       const value =

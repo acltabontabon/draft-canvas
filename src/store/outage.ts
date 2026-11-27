@@ -1,5 +1,5 @@
 import type { DraftEdge, DraftFlow, DraftNode } from '../document/types';
-import { analyzeTraffic, mayHaveTraffic, outageOf, outageReview, type Outage, type OutageEdgeState, type OutageReview, type OutageState, type TrafficAnalysis } from '../traffic';
+import { analyzeTraffic, carriesWork, mayHaveTraffic, outageOf, outageReview, type Outage, type OutageEdgeState, type OutageReview, type OutageState, type TrafficAnalysis } from '../traffic';
 import type { EditorStore } from './editorStore';
 import { nodeIndex } from './selectors';
 
@@ -131,8 +131,9 @@ function litJunctions(analysis: TrafficAnalysis): ReadonlySet<string> {
   let ids = junctionsOnRoutes.get(analysis);
   if (!ids) {
     const lit = new Set<string>();
+    // Lit with the routes the walk follows, round a loop included.
     for (const interaction of analysis.interactions) {
-      if (interaction.paths.possible > 0) for (const junctionId of interaction.junctionIds) lit.add(junctionId);
+      if (carriesWork(analysis, interaction)) for (const junctionId of interaction.junctionIds) lit.add(junctionId);
     }
     junctionsOnRoutes.set(analysis, (ids = lit));
   }

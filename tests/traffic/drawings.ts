@@ -23,14 +23,21 @@ export interface Drawing {
  * An ordinary microservice landscape of about `total` shapes: people, gateways, services (some with
  * three instances), queues and topics, dead-letter queues, workers, stores and caches, in zones, with
  * about two connectors a shape — mostly calls forward, the odd one back — and ten flows.
+ *
+ * Its services call forward into the next 30 (`calls: 'chains'`), so calls that wait run dozens
+ * deep, and the odd call back joins most of them into one loop: 753 of 1,881 shapes at 2,000.
+ * Losing almost anything they wait on then fails most of the services, so every reading is large.
+ * In tiers (`calls: 'tiers'`) each service calls the tier below, as an architecture is usually
+ * drawn, and the odd call back, to the tier above, doesn't wait: the loops are still there, and a
+ * failure travels only as far up as the tiers go.
  */
-export function landscape(total: number, seed = 7): Drawing {
+export function landscape(total: number, seed = 7, calls: 'chains' | 'tiers' = 'chains'): Drawing {
   const next = random(seed);
   const pick = <T,>(list: readonly T[]) => list[Math.floor(next() * list.length)]!;
   const nodes: DraftNode[] = [];
   const edges: DraftEdge[] = [];
-  const connect = (source: string, target: string, semantic: DraftEdge['semantic']) => {
-    edges.push(createEdge({ id: `e${edges.length}`, source, target, semantic }));
+  const connect = (source: string, target: string, semantic: DraftEdge['semantic'], async = false) => {
+    edges.push({ ...createEdge({ id: `e${edges.length}`, source, target, semantic }), ...(async ? { async: true } : {}) });
   };
   const zones: string[] = [];
   for (let index = 0; index < Math.max(1, Math.floor(total / 40)); index += 1) {
@@ -56,14 +63,24 @@ export function landscape(total: number, seed = 7): Drawing {
   const deadLetters = add('dlq', 0.03, (id, index) => createNode({ id, type: 'queue', deliveryRole: 'dead-letter', x: index * 10, y: 350, text: `DLQ ${index}` }));
   const workers = add('wk', 0.15, (id, index) => createNode({ id, type: 'service', serviceKind: 'worker', x: index * 10, y: 400, text: `Worker ${index}` }));
   const stores = add('db', 0.2, (id, index) => createNode({ id, type: 'database', databaseKind: index % 5 === 0 ? 'cache' : 'sql', x: index * 10, y: 500, text: `Store ${index}` }));
+  const tiers: string[][] = Array.from({ length: 5 }, () => []);
+  const tierOf = (index: number) => Math.floor((index * tiers.length) / services.length);
+  services.forEach((service, index) => tiers[tierOf(index)]!.push(service));
   for (const person of people) connect(person, pick(gateways), 'calls');
-  for (const gateway of gateways) for (let k = 0; k < 4; k += 1) connect(gateway, pick(services), 'routes');
+  for (const gateway of gateways) for (let k = 0; k < 4; k += 1) connect(gateway, pick(calls === 'tiers' ? tiers[0]! : services), 'routes');
   services.forEach((service, index) => {
-    for (let k = 0; k < 2; k += 1) {
-      const later = index + 1 + Math.floor(next() * 30);
-      if (later < services.length) connect(service, services[later]!, 'calls');
+    if (calls === 'chains') {
+      for (let k = 0; k < 2; k += 1) {
+        const later = index + 1 + Math.floor(next() * 30);
+        if (later < services.length) connect(service, services[later]!, 'calls');
+      }
+      if (next() < 0.05 && index > 5) connect(service, services[index - 1 - Math.floor(next() * 5)]!, 'calls');
+    } else {
+      const below = tiers[tierOf(index) + 1];
+      if (below) for (let k = 0; k < 2; k += 1) connect(service, pick(below), 'calls');
+      const above = tiers[tierOf(index) - 1];
+      if (above && next() < 0.05) connect(service, pick(above), 'calls', true);
     }
-    if (next() < 0.05 && index > 5) connect(service, services[index - 1 - Math.floor(next() * 5)]!, 'calls');
     connect(service, pick(stores), next() < 0.5 ? 'reads' : 'writes');
     if (next() < 0.4) connect(service, pick(queues), 'publishes');
   });
