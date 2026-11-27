@@ -336,6 +336,12 @@ def text_len(value) -> int:
     return len(value) if isinstance(value, str) else 0
 
 
+def is_in(value, allowed) -> bool:
+    """`value in allowed` for a value read from the request: only a string is one of a set of words.
+    A list or an object there raised TypeError (unhashable), and the check printed nothing at all."""
+    return isinstance(value, str) and value in allowed
+
+
 def check(request: dict, repo: str | None) -> Report:
     r = Report()
     if not isinstance(request, dict):
@@ -348,7 +354,7 @@ def check(request: dict, repo: str | None) -> Report:
         r.error('title', 'required')
     elif len(request['title']) > MAX['title']:
         r.error('title', f'longer than {MAX["title"]} characters')
-    if request.get('level') is not None and request['level'] not in LEVELS:
+    if request.get('level') is not None and not is_in(request['level'], LEVELS):
         r.error('level', f'"{request["level"]}" is not one of {sorted(LEVELS)}')
     if 'starter' in request:
         r.warn('starter', 'a starter request is checked only partly here; its own elements come from the app')
@@ -359,7 +365,7 @@ def check(request: dict, repo: str | None) -> Report:
     def collect(path: str, body: dict, depth: int, outer: str | None):
         view = View(path, body, depth)
         # As the app derives it: a view without a level of its own is one step below the view around it.
-        own = body.get('level') if body.get('level') in LEVELS else None
+        own = body.get('level') if is_in(body.get('level'), LEVELS) else None
         view.level = own or (NARROWER[outer] if outer else 'container')
         views.append(view)
         for n in view.nodes:
@@ -385,7 +391,7 @@ def check(request: dict, repo: str | None) -> Report:
         ):
             for item in items:
                 ident = item.get('id')
-                if not isinstance(ident, str) or not ID.match(ident):
+                if not isinstance(ident, str) or not ID.fullmatch(ident):
                     r.error(f'{view.path} {kind}', f'id {ident!r} must start with a letter and use letters, digits, _ . - (≤ 64)')
                     continue
                 if ident in seen_ids:
@@ -415,7 +421,7 @@ NARROWER = {'context': 'container', 'container': 'component', 'component': 'comp
 
 def check_depth(views: list[View], r: Report):
     """C4 depth: a system of several containers gets a component view of the one doing the work."""
-    containers = [(v, n) for v in views if v.level == 'container' for n in v.nodes if n.get('type') in RUNS]
+    containers = [(v, n) for v in views if v.level == 'container' for n in v.nodes if is_in(n.get('type'), RUNS)]
     if len(containers) < 3 or any(v.level == 'component' for v in views):
         return
     calls = {}
@@ -488,7 +494,7 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
         for item in items:
             unknown_fields(item, allowed, f'{p} {kind} {item.get("id")}', r)
     level = view.body.get('level')
-    if not is_top and level is not None and level not in LEVELS:
+    if not is_top and level is not None and not is_in(level, LEVELS):
         r.error(f'{p}.level', f'"{level}" is not one of {sorted(LEVELS)}')
     countable = [n for n in view.nodes if n.get('type') != 'junction']
     if len(countable) > 25:
@@ -530,23 +536,23 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
                 r.error(f'{p} element {nid}', f'{field} longer than {MAX[field]}')
         if text_len(n.get('description')) > SOFT['description']:
             r.warn(f'{p} element {nid}', 'description is long — one sentence of ~90 characters reads best on the shape')
-        if typ not in NO_FIELDS:
+        if not is_in(typ, NO_FIELDS):
             if not n.get('description'):
                 missing_desc.append(nid)
             # A software system in a context view has no single technology; containers and components do.
-            if not n.get('technology') and typ not in EXTERNAL and level != 'context':
+            if not n.get('technology') and not is_in(typ, EXTERNAL) and level != 'context':
                 missing_tech.append(nid)
             if not n.get('evidence'):
                 missing_evidence.append(nid)
         if n.get('group') is not None and n['group'] not in view.group_ids:
             r.error(f'{p} element {nid}', f'group "{n["group"]}" is not a group of this view')
-        if n.get('color') is not None and n['color'] not in COLORS:
+        if n.get('color') is not None and not is_in(n['color'], COLORS):
             r.error(f'{p} element {nid}', f'color "{n["color"]}" is not one of {sorted(COLORS)}')
         if isinstance(n.get('inside'), dict) and isinstance(typ, str) and not can_hold_inside(typ):
             r.error(
                 f'{p} element {nid}', f'a {typ} has no inside view — only services, APIs, workers, gateways and (non-port) components do'
             )
-        if isinstance(n.get('inside'), dict) and typ in EXTERNAL:
+        if isinstance(n.get('inside'), dict) and is_in(typ, EXTERNAL):
             r.warn(f'{p} element {nid}', 'an inside view of an external system — you rarely know its insides; check this is yours')
         check_attachments(n, f'{p} element {nid}', r)
         check_evidence(n, f'{p} element {nid}', r, repo)
@@ -580,9 +586,9 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
             r.error(f'{p} group {gid}', 'label is required')
         elif len(g['label']) > MAX['groupLabel']:
             r.error(f'{p} group {gid}', f'label longer than {MAX["groupLabel"]}')
-        if g.get('kind') is not None and g['kind'] not in GROUP_KINDS:
+        if g.get('kind') is not None and not is_in(g['kind'], GROUP_KINDS):
             r.error(f'{p} group {gid}', f'kind "{g["kind"]}" is not one of {sorted(GROUP_KINDS)}')
-        if g.get('color') is not None and g['color'] not in COLORS:
+        if g.get('color') is not None and not is_in(g['color'], COLORS):
             r.error(f'{p} group {gid}', f'color "{g["color"]}" is not one of {sorted(COLORS)}')
         if g.get('parent') is not None and g['parent'] not in view.group_ids:
             r.error(f'{p} group {gid}', f'parent "{g["parent"]}" is not a group of this view')
@@ -637,7 +643,7 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
             r.error(f'{p} relationship {rid}', f'label longer than {MAX["relLabel"]}')
         elif len(label) > SOFT['relLabel']:
             r.warn(f'{p} relationship {rid}', f'label "{label}" is {len(label)} characters — a verb phrase of ≤ 32 keeps the line clean')
-        if rel.get('semantic') is not None and rel['semantic'] not in SEMANTICS:
+        if rel.get('semantic') is not None and not is_in(rel['semantic'], SEMANTICS):
             r.error(f'{p} relationship {rid}', f'semantic "{rel["semantic"]}" is unknown')
         elif rel.get('semantic') is not None:
             offered = offered_between(type_of.get(src), type_of.get(dst))
@@ -647,9 +653,9 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
                     f'Draft Canvas doesn\'t offer "{rel["semantic"]}" from {type_of.get(src)} to {type_of.get(dst)} '
                     f'and would use "{offered[0]}" instead — choose one of {", ".join(offered)}, or leave semantic out',
                 )
-        if rel.get('kind') is not None and rel['kind'] not in KINDS:
+        if rel.get('kind') is not None and not is_in(rel['kind'], KINDS):
             r.error(f'{p} relationship {rid}', f'kind "{rel["kind"]}" is not one of {sorted(KINDS)}')
-        if rel.get('color') is not None and rel['color'] not in COLORS:
+        if rel.get('color') is not None and not is_in(rel['color'], COLORS):
             r.error(f'{p} relationship {rid}', f'color "{rel["color"]}" is not one of {sorted(COLORS)}')
         for field in ('condition', 'response'):
             if isinstance(rel.get(field), str) and len(rel[field]) > MAX[field]:
@@ -697,7 +703,7 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
             r.error(f'{p} flow {fid}', 'title is required')
         elif len(title) > MAX['flowTitle']:
             r.error(f'{p} flow {fid}', f'title longer than {MAX["flowTitle"]}')
-        if flow.get('color') is not None and flow['color'] not in COLORS:
+        if flow.get('color') is not None and not is_in(flow['color'], COLORS):
             r.error(f'{p} flow {fid}', f'color "{flow["color"]}" is not one of {sorted(COLORS)}')
         if flow.get('variantOf') is not None:
             base = next((f for f in view.flows if f.get('id') == flow['variantOf']), None)
@@ -775,7 +781,7 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
         if links is not None and not isinstance(links, dict):
             r.error(where, 'links is an object: {participantId: elementId}')
         for name, element in (links or {}).items() if isinstance(links, dict) else ():
-            if element not in view.node_ids:
+            if not is_in(element, view.node_ids):
                 r.error(where, f'links.{name}: no element "{element}" in this view — a participant stands for an element of the same view')
 
     # Notes.
@@ -785,9 +791,9 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
         nid = note.get('id')
         kind = note.get('kind', 'note')
         where = f'{p} note {nid}'
-        if kind not in NOTE_KINDS:
+        if not is_in(kind, NOTE_KINDS):
             r.error(where, f'kind "{kind}" is not one of {sorted(NOTE_KINDS)}')
-        if note.get('color') is not None and note['color'] not in COLORS:
+        if note.get('color') is not None and not is_in(note['color'], COLORS):
             r.error(where, f'color "{note["color"]}" is not one of {sorted(COLORS)}')
         about = note.get('about', note.get('near'))
         if about is None:
@@ -807,7 +813,7 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
                     where,
                     f'{code.count(chr(10)) + 1} lines of code — a snippet of ≤ 15 lines reads on the canvas; trim to the part that matters',
                 )
-            if note.get('language') is not None and note['language'] not in LANGUAGES:
+            if note.get('language') is not None and not is_in(note['language'], LANGUAGES):
                 r.error(where, f'language "{note["language"]}" is not one of {sorted(LANGUAGES)}')
         else:
             for field in ('code', 'language'):
@@ -837,7 +843,7 @@ def check_view(view: View, r: Report, repo: str | None, request: dict, is_top: b
                             r.error(where, f'style.{field} is true or false')
                     elif field not in LABEL_STYLE:
                         r.error(where, f'style.{field} is not one of {sorted([*LABEL_STYLE, "bold", "italic"])}')
-                    elif value not in LABEL_STYLE[field]:
+                    elif not is_in(value, LABEL_STYLE[field]):
                         r.error(where, f'style.{field} "{value}" is not one of {sorted(LABEL_STYLE[field])}')
 
 
@@ -1011,7 +1017,7 @@ PAIRINGS = load_pairings()
 
 def normalized_type(word: str | None) -> str:
     """A type word the way the app reads it: case and spaces or underscores don't matter."""
-    return re.sub(r'[\s_]+', '-', (word or '').strip().lower())
+    return re.sub(r'[\s_]+', '-', (word if isinstance(word, str) else '').strip().lower())
 
 
 def can_hold_inside(word: str) -> bool:
@@ -1054,7 +1060,13 @@ def main() -> int:
         else:
             print(f'Could not read the request: {error}', file=sys.stderr)
         return 2
-    report = check(request, args.repo)
+    try:
+        report = check(request, args.repo)
+    except Exception as error:  # noqa: BLE001 — a request the checker can't follow still gets an answer
+        # A value of a shape nothing here expected: say so in the format asked for, never a traceback
+        # (which --json callers read as no answer at all).
+        report = Report()
+        report.error('request', f'could not be checked ({type(error).__name__}: {error}); give each field the type the app takes')
     if args.json:
         print(json.dumps({'errors': report.errors, 'warnings': report.warnings, 'valid': not report.errors}))
         return 1 if report.errors else 0
