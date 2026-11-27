@@ -1945,6 +1945,10 @@ function useStreamedReply(text: string, streaming: boolean): string {
   useEffect(
     () => () => {
       if (timer.current !== null) clearTimeout(timer.current);
+      // Forgotten as well as cleared. StrictMode mounts, unmounts and mounts again: a cleared id left
+      // here was taken for a redraw still on its way, none was asked for again, and a streamed reply
+      // stayed at its first chunk until it finished.
+      timer.current = null;
     },
     [],
   );
