@@ -8,6 +8,7 @@ import { HostSession } from '../../src/collab/hostSession';
 import { encode, MAX_COLLABORATORS, PROTOCOL_VERSION, type PeerView } from '../../src/collab/protocol';
 import { changeKeys, revertKeys } from '../../src/collab/selective';
 import { indexOf } from '../../src/collab/fileIndex';
+import { embed, viewOf } from '../../src/depth/tree';
 import { createDocument, createEdge, createNode } from '../../src/document/factory';
 import { addFlow, createFlow, deleteFlow } from '../../src/document/flow';
 import { addEdges, addNodes, removeElements, updateNode } from '../../src/document/operations';
@@ -679,6 +680,34 @@ it('selective undo of any set of deletions restores the list order exactly', () 
     }),
     { seed: 4242, numRuns: 200 },
   );
+});
+
+it('selective undo refuses to empty a room somebody else has since given a level', () => {
+  const owner = createNode({ id: 'n_owner', type: 'service', x: 0, y: 0, text: 'Payments' });
+  const f0 = addNodes(createDocument('Levels'), [owner]);
+  // One step puts the first shape inside the Service, which is what makes its room exist.
+  const f1 = embed(f0, [owner.id], addNodes(viewOf(f0, [owner.id])!, [createNode({ id: 'n_inner', type: 'service', x: 0, y: 0, text: 'Ledger' })]));
+  // Somebody else then says what level that room is drawn at.
+  const f2 = embed(f1, [owner.id], { ...viewOf(f1, [owner.id])!, level: 'context' });
+  expect(viewOf(f2, [owner.id])!.level).toBe('context');
+
+  // Taking the shape back would take the room, and their level with it.
+  const step = revertKeys(f2, f1, f0, changeKeys(f0, f1));
+  expect(step.blocked).toBe(true);
+  expect(step.file).toBe(f2);
+});
+
+it('selective undo of deleting a shape brings back the level of the room inside it', () => {
+  const owner = createNode({ id: 'n_owner', type: 'service', x: 0, y: 0, text: 'Payments' });
+  const alone = addNodes(createDocument('Levels'), [owner]);
+  const inside = addNodes(viewOf(alone, [owner.id])!, [createNode({ id: 'n_inner', type: 'service', x: 0, y: 0, text: 'Ledger' })]);
+  const f0 = embed(alone, [owner.id], { ...inside, level: 'container' });
+  const f1 = removeElements(f0, [owner.id]);
+
+  const step = revertKeys(f1, f1, f0, changeKeys(f0, f1));
+  expect(step.blocked).toBe(false);
+  expect(viewOf(step.file, [owner.id])?.level).toBe('container');
+  expect(step.file).toEqual(f0);
 });
 
 it('selective undo refuses to take away a connector somebody else changed, even one the undone edit added', () => {
