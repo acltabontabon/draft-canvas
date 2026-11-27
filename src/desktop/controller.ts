@@ -20,6 +20,7 @@ import { DocsPublisher } from './docs';
 import type { DocsSettings } from '../export/docs/marker';
 import { picturesOf } from '../export/docs/names';
 import { logDiagnostic } from '../lib/diagnostics';
+import { isEditableTarget } from '../lib/isEditableTarget';
 import { isRecord } from '../lib/isRecord';
 import { exampleCanvas } from '../gallery/example';
 import {
@@ -533,14 +534,29 @@ export class DesktopController {
   }
 
   /**
+   * Why opening another diagram over the one open would interrupt the person: a field has the keyboard
+   * (a label, the title, Nodi's message), and replacing the canvas would close it under them, with
+   * what they typed into it. Not part of `quietOpenRefusal`: that settles whether an agent's change
+   * may be made at all, and someone typing only holds back the open, never the change to the file.
+   */
+  private typingRefusal(): string | null {
+    if (this.session.kind === 'none' || typeof document === 'undefined' || !isEditableTarget(document.activeElement)) return null;
+    return 'Someone is typing, and opening another diagram would close the field under them.';
+  }
+
+  /**
    * An agent's `activate`/`open`: makes `handle` the open document without a single question — so it
    * refuses whenever a question would have been needed (unsaved changes, a recovery copy to decide
-   * about, a live session it would end). Never brings the window forward; says so in a notice instead.
+   * about, a live session it would end), and while someone is typing. Never brings the window forward;
+   * says so in a notice instead.
    */
   private async openQuietly(handle: Handle): Promise<{ opened: true } | { opened: false; reason: string }> {
     if (this.session.kind === 'file' && this.session.handle === handle) return { opened: true };
-    await this.flushApp();
-    const refusal = this.quietOpenRefusal();
+    // An agent's flush, as `agentHost.flush` is. The settling one took the field from under the person
+    // mid-word, committing the half-typed text, and the open was then refused for the very change that
+    // made. Someone typing is a reason not to open (`typingRefusal`), never something to interrupt.
+    await this.flushApp({ keepFocus: true });
+    const refusal = this.quietOpenRefusal() ?? this.typingRefusal();
     if (refusal) return { opened: false, reason: refusal };
     const opened = await this.api.openHandle(handle);
     const parsed = deserializeDocument(opened.text);
@@ -551,9 +567,9 @@ export class DesktopController {
     }
     const leaving = this.session;
     if (leaving.kind === 'quick' || leaving.kind === 'pending') await this.discard(leaving.id);
-    // The person can edit or start sharing while the shell reads the target and its recovery list.
-    await this.flushApp();
-    const latestRefusal = this.quietOpenRefusal();
+    // The person can edit, type or start sharing while the shell reads the target and its recovery list.
+    await this.flushApp({ keepFocus: true });
+    const latestRefusal = this.quietOpenRefusal() ?? this.typingRefusal();
     if (latestRefusal) return { opened: false, reason: latestRefusal };
     this.session = {
       kind: 'file',

@@ -85,3 +85,28 @@ it('keeps the Quick Draft ⌘N opened while Back’s close of the last file was 
   await waitFor(() => expect(app.h.api.quitAck).toHaveBeenLastCalledWith('ready'));
   expect([...app.h.recovery.values()].map((held) => held.entry.title)).toEqual(['My architecture']);
 });
+
+it('leaves the field being typed in alone when an agent asks to show a diagram it changed', async () => {
+  const app = await connect();
+  await app.open('payments');
+  // The person is typing the diagram's title: like every inline field, it commits when it lets go.
+  const field = document.createElement('input');
+  field.addEventListener('blur', () => useEditorStore.getState().rename(field.value));
+  document.body.append(field);
+  field.focus();
+  field.value = 'Payments ledg';
+  try {
+    // An agent changed another, closed diagram and asked for it to be shown once written.
+    const other = app.h.addFile('ledger');
+    rememberPendingWrite(41, { title: 'ledger', before: documentText('ledger'), after: documentText('ledger'), activate: true });
+    app.h.hostEvent({ type: 'agent-file-written', id: 41, handle: other, displayPath: '~/work/ledger.draftcanvas', stamp: 'v1:1', created: false });
+
+    // Not opened over the typing: the notice offers it, and the field keeps its focus and its words.
+    await waitFor(() => expect(app.notices).toContain('An AI agent updated “ledger”.'));
+    expect(document.activeElement).toBe(field);
+    expect(title()).toBe('payments');
+    expect(app.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'payments', dirty: false });
+  } finally {
+    field.remove();
+  }
+});
