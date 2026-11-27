@@ -5,6 +5,9 @@ On Windows and Linux, use `Ctrl` for `⌘` and `Alt` for `⌥`.
 **Keyboard.** `⌘K` runs any command, `?` lists shortcuts, and `Shift+F10` opens the context menu (the
 canvas menu when nothing is selected). See [keyboard shortcuts](keyboard-and-commands.md).
 In **Appearance**, use `←` and `→` to switch tabs, or `Home` and `End` to jump to the first or last tab.
+The canvas is one `Tab` stop: `⌥` + arrow keys move the selection, and the **Outline** reaches every
+connector. Finishing a shape's name, or closing a toolbar or panel from the keyboard, puts focus back
+on the canvas.
 
 **Screen reader.** **Outline** (`⌥O`) shows the view as a tree of shapes, boundaries and connectors,
 in sync with the canvas. Names, kinds, relationships and selection changes are announced. The
