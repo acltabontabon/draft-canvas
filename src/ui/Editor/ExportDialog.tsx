@@ -281,6 +281,10 @@ export function ExportDialog() {
   // count spans every room, since the source does.
   const playableFlowCount = countPlayableFlows(document);
   const sourceInfo = SOURCE_FORMAT_INFO[sourceFormat];
+  // Several sequence diagrams go out as Markdown, one Mermaid block each (`sourceFileNameFor`): the
+  // file card says so rather than calling it a Mermaid file.
+  const sourceFileName = sourceFileNameFor(document, sourceFormat);
+  const sourceIsMarkdown = sourceFileName.endsWith('.md');
   // A sequence drawn on the canvas is sequence source too, with or without a Flow beside it.
   const sequenceCount = countSequences(document);
   const sourceEmpty = sourceInfo.family === 'sequence' && playableFlowCount + sequenceCount === 0;
@@ -374,16 +378,16 @@ export function ExportDialog() {
             },
           }
         : {
-            fileName: sourceFileNameFor(document, sourceFormat),
+            fileName: sourceFileName,
             empty: sourceEmpty,
             visual: {
               type: 'file',
               icon: 'code',
-              badge: sourceInfo.badge,
+              badge: sourceIsMarkdown ? 'MD' : sourceInfo.badge,
               meta: sourceEmpty
                 ? 'Nothing yet'
                 : sourceInfo.family === 'sequence'
-                  ? `${[playableFlowCount > 0 ? count(playableFlowCount, 'Flow') : null, sequenceCount > 0 ? count(sequenceCount, 'sequence') : null].filter(Boolean).join(' · ')} · plain text`
+                  ? `${[playableFlowCount > 0 ? count(playableFlowCount, 'Flow') : null, sequenceCount > 0 ? count(sequenceCount, 'sequence') : null].filter(Boolean).join(' · ')} · ${sourceIsMarkdown ? 'Markdown' : 'plain text'}`
                   : `${count(sourceText?.split('\n').length ?? 0, 'line')} · ${sourceFormat === 'drawio' ? 'XML' : 'plain text'}`,
             },
           };
