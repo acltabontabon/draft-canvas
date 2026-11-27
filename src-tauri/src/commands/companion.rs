@@ -273,6 +273,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         let server_env = companion::server_env(&request.run_id, agent.dir(), code.is_some());
         let command = match backend.command(&RunSpec {
             program: &program,
+            version: located.version.as_deref(),
             work_dir: &work_dir,
             mcp_config: &config,
             server: &sidecar,

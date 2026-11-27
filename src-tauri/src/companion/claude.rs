@@ -625,6 +625,7 @@ pub(crate) mod tests {
     fn the_command_keeps_the_agent_to_draft_canvas_and_the_prompt_off_the_command_line() {
         let spec = RunSpec {
             program: Path::new("/bin/claude"),
+            version: Some("2.1.310"),
             work_dir: Path::new("/tmp/work"),
             mcp_config: Path::new("/tmp/runs/r/mcp.json"),
             server: Path::new("/App/draft-canvas-mcp"),

@@ -85,6 +85,9 @@ pub enum SessionArg<'a> {
 
 pub struct RunSpec<'a> {
     pub program: &'a Path,
+    /// The version `locate` read from `program`, when it read one: what anything learned about this
+    /// CLI is kept under, so the run doesn't ask for it a second time.
+    pub version: Option<&'a str>,
     pub work_dir: &'a Path,
     /// The Draft Canvas server as a file (`mcp_config`), for an agent that reads one…
     pub mcp_config: &'a Path,
