@@ -30,6 +30,9 @@ struct Open {
     calls: Vec<Weak<CallRegistry>>,
     writes: Writes,
     history: crate::companion::history::History,
+    /// The model has given its final answer: its connection admits nothing more, and only the host's
+    /// one authorized edit (`Writes::Final`) may still run.
+    model_done: bool,
 }
 
 enum Writes {
@@ -54,6 +57,7 @@ impl Runs {
                 calls: Vec::new(),
                 writes: Writes::Normal,
                 history: Default::default(),
+                model_done: false,
             },
         );
     }
@@ -66,6 +70,7 @@ impl Runs {
                 calls: Vec::new(),
                 writes: Writes::Deferred,
                 history: Default::default(),
+                model_done: false,
             },
         );
     }
@@ -127,9 +132,29 @@ impl Runs {
         let Some(entry) = open.get_mut(run) else {
             return false;
         };
+        if entry.model_done && !matches!(entry.writes, Writes::Final(..)) {
+            return false;
+        }
         entry.calls.retain(|c| c.strong_count() > 0);
         entry.calls.push(Arc::downgrade(call));
         true
+    }
+
+    /// The model of a planned run has given its terminal result. Its tool authority ends here, as any
+    /// agent's does at its terminal event: nothing more is admitted until the host authorizes the one
+    /// final edit, and the model's calls still in flight are handed back for cancelling. Kept open, a
+    /// CLI that went on after its answer could still read the diagram, the code it was lent and
+    /// previews until its process exited.
+    pub fn end_model(&self, run: &str) -> Vec<Arc<CallRegistry>> {
+        let mut open = lock(&self.open);
+        let Some(entry) = open.get_mut(run) else {
+            return Vec::new();
+        };
+        entry.model_done = true;
+        std::mem::take(&mut entry.calls)
+            .iter()
+            .filter_map(Weak::upgrade)
+            .collect()
     }
 
     /// Ends a run: nothing more is admitted for it, and the calls still in flight are handed back for
@@ -302,6 +327,29 @@ mod tests {
             .is_err());
         runs.close("a");
         assert_eq!(runs.history("a", &json!({})).unwrap_err().code, "CANCELLED");
+    }
+
+    #[test]
+    fn a_planned_run_admits_only_the_host_edit_after_its_model_ends() {
+        let runs = Runs::default();
+        runs.open_deferred("r", policy(true));
+        let model_call = Arc::new(CallRegistry::new("s".into()));
+        assert!(runs.track("r", &model_call));
+        assert_eq!(
+            runs.end_model("r").len(),
+            1,
+            "the model's call still in flight is handed back for cancelling"
+        );
+        let late = Arc::new(CallRegistry::new("s".into()));
+        assert!(
+            !runs.track("r", &late),
+            "the model's connection admits nothing more"
+        );
+        let args = json!({"diagramId":"d_1","requestId":"host","rename":{"from":"A","to":"B"}});
+        runs.authorize("r", "update_diagram", &args).unwrap();
+        let executor = Arc::new(CallRegistry::new("s".into()));
+        assert!(runs.track("r", &executor), "the host's one edit still runs");
+        assert!(runs.check_write("r", "update_diagram", &args).is_ok());
     }
 
     #[test]

@@ -25,12 +25,16 @@ pub fn instructions(mode: ApplyMode) -> String {
 }
 
 type Authorize = Arc<dyn Fn(&str, &Value) -> Result<(), String> + Send + Sync>;
+type ModelDone = Arc<dyn Fn() + Send + Sync>;
 
 pub struct Finalizer {
     pub sidecar: PathBuf,
     pub env: Vec<(&'static str, String)>,
     pub request: PromptRequest,
     pub authorize: Authorize,
+    /// Called once the model has given its terminal result: its own connection admits nothing more,
+    /// while the host's one `authorize`d edit stays possible.
+    pub model_done: ModelDone,
 }
 
 #[derive(Deserialize)]
@@ -224,7 +228,13 @@ impl Planner {
                     ref mut summary, ..
                 } => {
                     *summary = None;
-                    self.stopped = Some(event);
+                    // The first ending that isn't a success stands. Claude reports a Draft Canvas it
+                    // couldn't reach at init and still ends its turn later; that later end-turn
+                    // replaced the failure, so the person never saw why and a decision made without
+                    // any tools could still be applied.
+                    if !failed(self.stopped.as_ref()) {
+                        self.stopped = Some(event);
+                    }
                     None
                 }
                 RunEvent::ToolCall { id, tool, .. } if tool == "StructuredOutput" => {
@@ -246,6 +256,11 @@ impl Planner {
             })
         )
     }
+}
+
+/// An ending other than a finished turn: failed, cancelled, refused or out of turns.
+pub(crate) fn failed(stop: Option<&RunEvent>) -> bool {
+    matches!(stop, Some(RunEvent::Stopped { reason, .. }) if !matches!(reason, StopReason::EndTurn))
 }
 
 #[cfg(test)]
@@ -409,6 +424,25 @@ mod tests {
             assert!(parser.parse(&line).is_empty());
         }
         assert!(parser.decision.is_none());
+    }
+
+    #[test]
+    fn a_failed_start_is_not_replaced_by_the_turn_that_ends_later() {
+        let mut parser = Planner::new(backend(AgentKind::ClaudeCode).parser());
+        let init = r#"{"type":"system","subtype":"init","session_id":"s","mcp_servers":[{"name":"draft-canvas","status":"failed"}]}"#;
+        parser.parse(init);
+        assert!(failed(parser.stopped.as_ref()));
+        let result = json!({"type":"result","subtype":"success","is_error":false,"result":"done","structured_output":{"tool":"reply","args":"{}","text":"Done."}}).to_string();
+        parser.parse(&result);
+        assert!(
+            !parser.succeeded(),
+            "a decision made without Draft Canvas is never applied"
+        );
+        assert!(matches!(
+            &parser.stopped,
+            Some(RunEvent::Stopped { reason: StopReason::Failed { message }, .. })
+                if message.contains("couldn’t reach Draft Canvas")
+        ));
     }
 
     #[test]

@@ -289,6 +289,8 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
         };
         let final_agent = agent.inner().clone();
         let final_run = request.run_id.clone();
+        let done_agent = agent.inner().clone();
+        let done_run = request.run_id.clone();
         let finalizer = companion::decision::Finalizer {
             sidecar: sidecar.clone(),
             env: server_env.clone(),
@@ -296,6 +298,7 @@ pub async fn companion_send(app: AppHandle, request: PromptRequest) -> Result<()
             authorize: Arc::new(move |tool, args| {
                 final_agent.runs.authorize(&final_run, tool, args)
             }),
+            model_done: Arc::new(move || done_agent.end_model_turn(&done_run)),
         };
         let started = companion.start_prepared(
             Launch {
