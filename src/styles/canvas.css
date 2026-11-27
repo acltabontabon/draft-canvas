@@ -6208,13 +6208,9 @@
   display: none;
 }
 
-/* React Flow 13 ships its styles in a cascade layer, which every rule outside one outranks whatever
-   its specificity: the app-wide `:focus-visible` outline (`tokens.css`) now reaches a focused
-   connector, where React Flow used to take it off. */
-.react-flow__edge:focus,
-.react-flow__edge:focus-visible {
-  outline: none;
-}
+/* No outline rule for `.react-flow__edge`: a connector is no Tab stop (`projectEdges` leaves it
+   unfocusable; the canvas is the one stop), and one that ever took focus must show it. Taking the
+   app-wide `:focus-visible` outline off it left every connector an invisible Tab stop. */
 
 .react-flow__attribution {
   display: none;

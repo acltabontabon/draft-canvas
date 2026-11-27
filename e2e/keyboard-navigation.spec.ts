@@ -398,4 +398,21 @@ test.describe('keyboard focus around the canvas', () => {
     await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(0);
     await expect(canvas(page)).toBeFocused();
   });
+
+  test('connectors are not Tab stops: the canvas is the one stop for the whole diagram', async ({ page }) => {
+    await newCanvas(page, 'Connector tab stops');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Service', { x: 700, y: 300 });
+    await connectShapes(page, 0, 1);
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(0);
+    await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+    await expect(page.locator('.react-flow__edge[tabindex]')).toHaveCount(0);
+    // Still named for a screen reader, as an image of the relationship it draws.
+    await expect(page.locator('.react-flow__edge')).toHaveAttribute('aria-label', /.+/);
+
+    await canvas(page).focus();
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => document.activeElement?.closest('.react-flow__renderer') ?? null)).toBeNull();
+  });
 });
