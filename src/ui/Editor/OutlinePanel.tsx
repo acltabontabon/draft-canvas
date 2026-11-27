@@ -3,6 +3,8 @@ import { useReactFlow } from '@xyflow/react';
 import type { CommandContext } from '../../commands/types';
 import type { DraftDocument } from '../../document/types';
 import { canvasBounds } from '../../canvas/canvasFrame';
+import { focusCanvas } from '../../canvas/canvasFocus';
+import { isImeKeyEvent } from '../../lib/isEditableTarget';
 import { centerOf } from '../../lib/math';
 import { motionMs } from '../../lib/motion';
 import { useEditorStore } from '../../store/editorStore';
@@ -30,19 +32,32 @@ export function OutlinePanel({ buildCommandContext }: { buildCommandContext: () 
   const open = useUiStore((state) => state.outlinePanelOpen);
   const presenting = useEditorStore((state) => state.mode === 'present');
   if (!open || presenting) return null;
+  // Its Close button hands focus back to the canvas too, as Escape in the tree does: the button going
+  // away with the panel dropped focus to <body>.
+  const close = () => {
+    useUiStore.getState().setOutlinePanelOpen(false);
+    focusCanvas();
+  };
   return (
-    <aside className="dc-outline" role="complementary" aria-label="Outline" data-dc-keyboard-region="">
+    <aside
+      className="dc-outline"
+      role="complementary"
+      aria-label="Outline"
+      data-dc-keyboard-region=""
+      // Escape on the header's Close button too, not only in the tree (which claims its own first).
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape' || event.defaultPrevented || isImeKeyEvent(event)) return;
+        event.stopPropagation();
+        close();
+      }}
+    >
       <div className="dc-outline-header">
         <strong className="dc-outline-title">Outline</strong>
-        <Button variant="quiet" icon="close" aria-label="Close outline" onClick={() => useUiStore.getState().setOutlinePanelOpen(false)} />
+        <Button variant="quiet" icon="close" aria-label="Close outline" onClick={close} />
       </div>
       <OutlineTree buildCommandContext={buildCommandContext} />
     </aside>
   );
-}
-
-function focusCanvas(): void {
-  document.querySelector<HTMLElement>('.dc-canvas')?.focus();
 }
 
 const subscribeToRoom = (onChange: () => void) => {

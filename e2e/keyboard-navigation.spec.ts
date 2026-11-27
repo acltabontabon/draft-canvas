@@ -415,4 +415,45 @@ test.describe('keyboard focus around the canvas', () => {
     await page.keyboard.press('Tab');
     expect(await page.evaluate(() => document.activeElement?.closest('.react-flow__renderer') ?? null)).toBeNull();
   });
+
+  test('the Open points panel closes on Escape from inside it, and hands focus back to the canvas', async ({ page }) => {
+    await newCanvas(page, 'Open points focus');
+    await create(page, 'Service', { x: 400, y: 300 });
+    const openPanel = () =>
+      page.evaluate(async () => (await import('/src/store/uiStore.ts')).useUiStore.getState().setOpenPointsPanelOpen(true));
+    const panel = page.getByRole('complementary', { name: 'Open points' });
+    const close = panel.getByRole('button', { name: 'Close open points' });
+
+    await openPanel();
+    await expect(panel).toBeVisible();
+    await close.focus();
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(canvas(page)).toBeFocused();
+    // The panel's Escape was the panel's: the shape stays selected.
+    await expect(selectedNodes(page)).toHaveCount(1);
+
+    await openPanel();
+    await expect(panel).toBeVisible();
+    await close.focus();
+    await page.keyboard.press('Enter');
+    await expect(panel).toBeHidden();
+    await expect(canvas(page)).toBeFocused();
+
+    // The Outline's own Close button, the same two ways.
+    const outline = page.getByRole('complementary', { name: 'Outline' });
+    const closeOutline = outline.getByRole('button', { name: 'Close outline' });
+    await page.keyboard.press('Alt+o');
+    await expect(outline).toBeVisible();
+    await closeOutline.focus();
+    await page.keyboard.press('Escape');
+    await expect(outline).toBeHidden();
+    await expect(canvas(page)).toBeFocused();
+    await page.keyboard.press('Alt+o');
+    await expect(outline).toBeVisible();
+    await closeOutline.focus();
+    await page.keyboard.press('Enter');
+    await expect(outline).toBeHidden();
+    await expect(canvas(page)).toBeFocused();
+  });
 });
