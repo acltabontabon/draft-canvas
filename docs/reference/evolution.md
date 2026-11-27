@@ -88,7 +88,8 @@ Rules:
 - **Per copy, not per history.** A pause lives in the binding too, so copies continuing one history
   pause separately (`repo.json`'s old `paused` is only read, and lifted on resume). Removing history
   from one of them deletes only its binding while another copy is bound to it; deleting the shared
-  history is a separate choice the person makes.
+  history is a separate choice the person makes. A library diagram deleted since keeps its binding,
+  so a restored backup takes it back to its history, but it no longer counts as another copy.
 
 ### ADR-3: one recoverable operation protocol
 

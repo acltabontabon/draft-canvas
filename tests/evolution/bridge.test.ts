@@ -2,11 +2,14 @@ import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { createDocument, createNode } from '../../src/document/factory';
 import { addNodes } from '../../src/document/operations';
 import type { DraftDocument } from '../../src/document/types';
+import { copyIdOf } from '../../src/evolution/identity';
 import { MAIN_REF } from '../../src/evolution/refs';
 import { readHistoryText } from '../../src/evolution/snapshot';
 import { parseMessage } from '../../src/evolution/trailers';
 import { setTimelineOpen } from '../../src/commands/evolution';
-import { attachHistory, detachHistory, historyService, noteExternalChange } from '../../src/store/evolution/bridge';
+import { __setRepository } from '../../src/storage';
+import { MemoryRepository } from '../../src/storage/MemoryRepository';
+import { attachHistory, detachHistory, historyCopyExists, historyService, noteExternalChange } from '../../src/store/evolution/bridge';
 import { useEvolutionStore, type CompareState, type MergeSession } from '../../src/store/evolution/evolutionStore';
 import { showRevision } from '../../src/store/evolution/historyView';
 import { useEditorStore } from '../../src/store/editorStore';
@@ -97,5 +100,23 @@ describe('the history bridge', { timeout: 30_000 }, () => {
     setTimelineOpen(false);
     expect(useEvolutionStore.getState().compare).toBe(compare);
     useEvolutionStore.setState({ compare: null, merge: null });
+  });
+
+  it('takes a library diagram for gone once the library no longer holds it, and a desktop copy for there', async () => {
+    const repository = new MemoryRepository();
+    __setRepository(repository);
+    try {
+      const doc = createDocument('Kept');
+      await repository.save(doc);
+      const key = { kind: 'library' as const, documentId: doc.metadata.id };
+      expect(await historyCopyExists(copyIdOf(key))).toBe(true);
+      await repository.remove(doc.metadata.id);
+      expect(await historyCopyExists(copyIdOf(key))).toBe(false);
+      // Neither can be checked from the page, so neither is ever taken for gone.
+      expect(await historyCopyExists(copyIdOf({ kind: 'file', path: '/work/payments.draftcanvas' }))).toBe(true);
+      expect(await historyCopyExists(copyIdOf({ kind: 'draft', recoveryId: 'q_gone' }))).toBe(true);
+    } finally {
+      __setRepository(null);
+    }
   });
 });

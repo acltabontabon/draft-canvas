@@ -80,6 +80,11 @@ export interface ServiceDeps {
   /** Whether this device has shown the first-use note. */
   firstUseSeen: () => boolean;
   /**
+   * Whether a working copy is still on this device: a library diagram deleted since is not, though its
+   * binding is kept. Absent, or unsure, it is, so no history a diagram still uses is taken for unused.
+   */
+  copyExists?: (copyId: string) => Promise<boolean>;
+  /**
    * Serialises changes to a history's `repo.json` across tabs and windows, under the repository's
    * lock (Web Locks). Absent: within this page only.
    */
@@ -611,8 +616,17 @@ export class HistoryService {
     return this.othersOn(session, session.store.repoId);
   }
 
+  /**
+   * The other working copies on this device that record into `repoId`, leaving out any deleted since.
+   * A deleted diagram's binding is kept, and counted here it once kept the history from being removed
+   * for nobody, while Settings spoke of "the other diagram", which was gone.
+   */
   private async othersOn(session: Session, repoId: string): Promise<number> {
-    return (await this.deps.backend().bindings()).filter((binding) => binding.repoId === repoId && binding.copyId !== session.copyId).length;
+    const others = (await this.deps.backend().bindings()).filter((binding) => binding.repoId === repoId && binding.copyId !== session.copyId);
+    const exists = this.deps.copyExists;
+    if (!exists) return others.length;
+    const live = await Promise.all(others.map((binding) => exists(binding.copyId).catch(() => true)));
+    return live.filter(Boolean).length;
   }
 
   /**

@@ -55,6 +55,8 @@ function harness(initial: DraftDocument, backend = new BrowserBackend(new KvFs(n
   let generation = 1;
   let gesture = false;
   const clock = new ManualClock();
+  /** Working copies deleted from this device (their bindings stay). */
+  const gone = new Set<string>();
   const service = new HistoryService({
     backend: () => backend,
     compute: computing,
@@ -65,12 +67,14 @@ function harness(initial: DraftDocument, backend = new BrowserBackend(new KvFs(n
     signature: (at) => ({ name: 'Tester', email: 'tester@draftcanvas.invalid', timestamp: Math.floor(at / 1000), timezoneOffset: 0 }),
     holdCopy: async () => () => {},
     firstUseSeen: () => true,
+    copyExists: async (copyId) => !gone.has(copyId),
     ...(lock ? { lock } : {}),
   });
   return {
     service,
     backend,
     clock,
+    gone,
     edit(next: DraftDocument) {
       file = next;
       generation += 1;
@@ -388,6 +392,30 @@ describe('the history service', { timeout: 30_000 }, () => {
       const meta = await (await one.backend.open(repoId))!.meta();
       expect(meta.alternatives.map((alt) => alt.name)).toEqual(['Payments v2']);
       expect(meta.remote?.url).toBe('https://example.com/a.git');
+    });
+
+    it('removes it whole when the only other copy that continued it has since been deleted', async () => {
+      const { two, repoId } = await shared();
+      expect(await two.service.sharedWith()).toBe(1);
+      // The original is deleted from the library; its binding stays behind.
+      two.gone.add(copyIdOf(ORIGINAL));
+      // Settings once spoke of "the other diagram" still, and removing it kept the history for nobody.
+      expect(await two.service.sharedWith()).toBe(0);
+      await two.service.removeHistory();
+      expect(await two.backend.open(repoId)).toBeUndefined();
+      expect(await two.backend.bindings()).toEqual([]);
+      expect(useEvolutionStore.getState().capture).toEqual({ kind: 'empty' });
+    });
+
+    it('keeps it for a copy that still exists, whichever others are gone', async () => {
+      const { one, two, repoId, main } = await shared();
+      // A third copy continued it too, and has been deleted since.
+      await one.backend.putBinding({ copyId: 'lib_d_deleted', repoId, altId: null, documentId: 'd_deleted', lastSeen: null, at: 1 });
+      two.gone.add('lib_d_deleted');
+      expect(await two.service.sharedWith()).toBe(1);
+      await two.service.removeHistory();
+      expect(await (await one.backend.open(repoId))!.readRef(MAIN_REF)).toBe(main);
+      expect(await one.backend.binding(copyIdOf(ORIGINAL))).toMatchObject({ repoId });
     });
 
     it('removes it for every copy only when asked to', async () => {

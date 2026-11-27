@@ -12,7 +12,9 @@ import { HistoryError, type Signature } from '../../evolution/contracts';
 import { copyIdOf, type CopyKey } from '../../evolution/identity';
 import { randomId } from '../../evolution/hash';
 import { copyLock, hasWebLocks, processLocks, webLocks } from '../../evolution/locks';
+import { hostKind } from '../../host/hostInfo';
 import { readPreference, writePreference } from '../../lib/preferences';
+import { getRepository } from '../../storage';
 import { useCollabStore } from '../collabStore';
 import { documentLoadCount, fileOf, isInteracting, useEditorStore } from '../editorStore';
 import { useUiStore } from '../uiStore';
@@ -157,6 +159,21 @@ export async function hasHistory(key: CopyKey): Promise<boolean> {
   return (await backendFactory().binding(copyIdOf(key))) !== undefined;
 }
 
+const LIBRARY_COPY = copyIdOf({ kind: 'library', documentId: '' });
+
+/**
+ * Whether a working copy is still on this device: a library diagram is while the library holds it.
+ * A desktop file or draft is taken to exist, since neither can be checked from here (a file is
+ * reached through a grant, and a new draft has no recovery entry until it is first snapshotted).
+ *
+ * A deleted diagram's binding is kept rather than removed with it: a backup restores the diagram
+ * under its own id, and the binding takes it straight back to its history.
+ */
+export async function historyCopyExists(copyId: string): Promise<boolean> {
+  if (hostKind() || !copyId.startsWith(LIBRARY_COPY)) return true;
+  return (await getRepository()).has(copyId.slice(LIBRARY_COPY.length));
+}
+
 /** Collaboration reports who contributed to what will be captured (`collabBridge.ts`). */
 export function setHistoryAttribution(source: ((changedKeys: string[]) => Attribution) | undefined): void {
   attribution = source;
@@ -181,6 +198,7 @@ export function historyService(): HistoryService {
     holdCopy,
     attribution: (keys) => attribution?.(keys) ?? { contributors: [], agents: [] },
     firstUseSeen: () => readPreference(HISTORY_PREFS.note) === 'seen',
+    copyExists: historyCopyExists,
     // Every tab and window of this origin, as the worker's ref updates are: two may have copies of one history open.
     lock: hasWebLocks() ? webLocks : processLocks(),
   });
