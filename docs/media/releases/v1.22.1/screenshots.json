@@ -1,0 +1,12 @@
+[
+  {
+    "file": "outage-follows-loops.png",
+    "alt": "An outage of the carrier on an online store whose fulfillment worker reports back to the Orders API: the walk follows the loop and says what still works.",
+    "platform": "shared"
+  },
+  {
+    "file": "nodi-and-agents.png",
+    "alt": "Nodi answering a question about an online store's diagram, with each risk pinned to the shape it names.",
+    "platform": "desktop"
+  }
+]

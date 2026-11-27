@@ -52,8 +52,10 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, expect, type Browser, type Locator, type Page } from '@playwright/test';
 
-/** Home's start card is "Quick Draft"; the Library's own button for the same thing is "New canvas". */
-const START_BUTTON = /^(Quick Draft|New canvas)$/;
+/** Home's start card is "Quick Draft"; the Library's own button for the same thing is "New canvas".
+ * Matched as a prefix: since controls are named by the words they show, the card's name carries its
+ * line under the title too ("Quick Draft No title needed. Just begin."). */
+const START_BUTTON = /^(Quick Draft|New canvas)\b/;
 
 const REPO_ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 
