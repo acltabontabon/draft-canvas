@@ -1,3 +1,10 @@
+# Every text file is LF in a checkout too, as .editorconfig asks. Fixtures, generated catalogs, style
+# packs and starters are compared byte for byte (and by SHA-256) against what the app writes, and a
+# Windows checkout with core.autocrlf turned them into CRLF: 24 unit tests and `icons:check` failed
+# there, and the e2e gallery fixtures stopped matching their catalog. An existing Windows clone picks
+# this up with `git checkout-index --force --all` once (commit or set aside local edits first).
+* text=auto eol=lf
+
 # The agent skill is compiled into the desktop app and installed byte for byte; its hash is pinned in
 # src-tauri/src/agent/skill.rs. A Windows checkout must not turn its line endings into CRLF.
 skills/** text eol=lf
