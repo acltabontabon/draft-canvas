@@ -6,7 +6,7 @@ import { unzipFiles, zipFiles } from '../src/export/zip';
 import { backupFileName, backupIsStale, buildBackup, describeRestore, restoreBackup, worthBackingUp } from '../src/storage/backup';
 import { MemoryRepository } from '../src/storage/MemoryRepository';
 import { setFileSaver } from '../src/export/download';
-import { backUpLibrary } from '../src/ui/Library/backupActions';
+import { backUpLibrary, NOT_A_BACKUP, restoreLibrary } from '../src/ui/Library/backupActions';
 import { readPreference, writePreference } from '../src/lib/preferences';
 import { LAST_BACKUP_PREFERENCE } from '../src/storage/backup';
 
@@ -275,6 +275,21 @@ describe('restoreBackup', () => {
     expect(saved[2]!.name).toBe('Untitled project');
     expect(saved[2]!.createdAt).toBeGreaterThanOrEqual(before);
     expect(saved[2]!.updatedAt).toBe(saved[2]!.createdAt);
+  });
+
+  it('says in a person’s words that a file is no backup, or a damaged one, and restores nothing', async () => {
+    // A text file renamed .zip, and a real backup cut short: the ZIP reader's own words ("the
+    // end-of-central-directory record is missing") used to be the toast.
+    const { repository } = await seeded();
+    const { bytes } = await buildBackup(repository);
+    for (const data of [new TextEncoder().encode('just some notes'), bytes.slice(0, bytes.length - 40)]) {
+      const fresh = new MemoryRepository();
+      const notes: [string, string | undefined][] = [];
+      const file = { name: 'my-backup.zip', arrayBuffer: async () => data.buffer.slice(data.byteOffset, data.byteOffset + data.byteLength) } as unknown as File;
+      expect(await restoreLibrary(fresh, file, (message, tone) => notes.push([message, tone]))).toBeNull();
+      expect(notes).toEqual([[NOT_A_BACKUP, 'error']]);
+      expect(await fresh.list()).toEqual([]);
+    }
   });
 });
 
