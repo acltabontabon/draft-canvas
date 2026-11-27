@@ -723,6 +723,16 @@ export class DesktopController {
     return this.latestText !== this.savedText && contentOf(this.latestText) !== contentOf(this.savedText);
   }
 
+  /**
+   * A file loaded as it is saved and not on screen yet (the app hasn't said `opened`). `dirty` has
+   * nothing to compare it with and answers yes, so nothing writes it on a guess, but nothing in it has
+   * been edited. Told as unsaved, every open of a large diagram flashed "Unsaved changes" and told the
+   * shell the window was edited, and a quit asked to save a file nobody had touched, then cancelled.
+   */
+  private get loading(): boolean {
+    return this.session.kind === 'file' && this.expectBaseline && this.savedText === null;
+  }
+
   private get displayName(): string {
     return this.session.kind === 'file' ? this.session.name : QUICK_DRAFT_TITLE;
   }
@@ -733,15 +743,16 @@ export class DesktopController {
     let doc: DesktopDoc;
     let state: DocState;
     if (session.kind === 'file') {
+      const dirty = this.dirty && !this.loading;
       doc = {
         kind: 'file',
         name: session.name,
         displayPath: session.displayPath,
-        dirty: this.dirty,
+        dirty,
         readOnly: session.readOnly,
         ...(this.outside ? { outside: this.outside } : {}),
       };
-      state = { kind: 'file', dirty: this.dirty, name: session.name, handle: session.handle };
+      state = { kind: 'file', dirty, name: session.name, handle: session.handle };
     } else if (session.kind === 'quick' || session.kind === 'pending') {
       // A pending canvas has no file yet either, so it shows and is reported exactly like a Quick
       // Draft: the folder it remembers is an implementation detail of the next Save, not shell state.
@@ -1476,7 +1487,8 @@ export class DesktopController {
       else await this.discard(session.id);
       return true;
     }
-    if (!this.dirty) {
+    // Still loading what is saved (a revert, a reload): nothing in it to ask about.
+    if (!this.dirty || this.loading) {
       await this.discardCleanSnapshot();
       return true;
     }
@@ -1625,6 +1637,8 @@ export class DesktopController {
         }
         return void (await this.api.quitAck('ready'));
       }
+      // Still loading what is saved: nothing has been edited, so nothing to keep or ask about.
+      if (this.loading) return void (await this.api.quitAck('ready'));
       if (this.dirty) await this.snapshotNow();
       if (!this.dirty) {
         await this.discardCleanSnapshot();

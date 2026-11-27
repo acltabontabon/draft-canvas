@@ -896,6 +896,56 @@ describe('a file’s recovery copy', () => {
   });
 });
 
+describe('a file still on its way to the screen', () => {
+  /** The editor takes a while to show a large diagram: each load is shown when the test says. */
+  function slowEditor() {
+    const deliver = h.link.deliver;
+    let show = () => {};
+    h.link.deliver = (message) => {
+      const typed = message as { type?: string; text?: string; seq?: number };
+      deliver(typed.type === 'draft-canvas:load' ? { ...typed, type: 'held' } : message);
+      if (typed.type === 'draft-canvas:load') show = () => h.link.onOpened({ text: typed.text!, seq: typed.seq });
+    };
+    return () => show();
+  }
+
+  it('is not shown or reported as unsaved, and quitting does not ask about it', async () => {
+    const show = slowEditor();
+    await h.controller.start();
+    const handle = h.addFile('payments');
+    const opening = h.controller.openHandle(handle);
+    await h.settle();
+
+    expect(doc()).toMatchObject({ kind: 'file', name: 'payments', dirty: false });
+    expect(h.api.reportState).toHaveBeenLastCalledWith({ kind: 'file', dirty: false, name: 'payments', handle });
+    h.hostEvent({ type: 'quit-requested' });
+    await h.settle();
+    expect(h.asked).toEqual([]);
+    expect(h.api.quitAck.mock.calls.map(([decision]) => decision)).toEqual(['working', 'ready']);
+
+    show();
+    await opening;
+    expect(doc()).toMatchObject({ dirty: false });
+  });
+
+  it('is left without a question while what was reverted to is still on its way', async () => {
+    const show = slowEditor();
+    const handle = h.addFile('payments');
+    const opening = h.controller.openHandle(handle);
+    await h.settle();
+    show();
+    await opening;
+    h.edit(edited(), 1);
+    h.answer(0);
+    await h.controller.revert();
+
+    await h.controller.newQuickDraft();
+
+    expect(h.asked.map((question) => question.title)).toEqual(['Revert to the saved payments?']);
+    expect(doc()).toEqual({ kind: 'quick', dirty: false });
+  });
+});
+
 describe('going back to Home', () => {
   it('asks about unsaved changes before it closes the document', async () => {
     await openFile();
