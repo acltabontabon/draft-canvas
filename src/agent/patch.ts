@@ -87,7 +87,7 @@ import { anchorRectOf, attachNote, captionSizer, connectorFor, edgeLabelSize, fl
 import { pastDeadline, relaxLayoutAnchors, repairAnchors } from './route';
 import { arrangeView, fitGroups, placeBeside, placeInGroup, readArrange, scopeOf } from './arrange';
 import { arrangeFreshRoom } from './compile';
-import { checkQuality, isBetterReport, isClean, type QualityReport } from './quality';
+import { checkQuality, isBetterReport, isClean, type QualityIssue, type QualityReport } from './quality';
 import { moveInside, moveOutside } from './restructure';
 import { newFindings, REVIEW_LIMIT, reviewView } from './review';
 import { technologyAdvice } from './advice';
@@ -697,8 +697,12 @@ export function applyUpdate(file: DraftDocument, path: DepthPath, rawOps: unknow
     // nothing this request touched has nothing for a focused check to judge — skip its whole pass.
     if (!inTouchedRoom && !graph.nodes.some((n) => touched.has(n.id)) && !graph.edges.some((e) => touched.has(e.id))) return;
     const report = checkQuality(graph.nodes, graph.edges, ctx, inTouchedRoom ? undefined : touched, explicit);
-    quality.errors.push(...report.errors);
-    quality.warnings.push(...report.warnings);
+    // A problem in another view (a linked junction renamed there) says which, as a create's do: an
+    // arrange of this view, the op it was otherwise answered with, can't reach it.
+    const elsewhere = !samePath(graphPath, path);
+    const where = (issue: QualityIssue): QualityIssue => (elsewhere ? { ...issue, view: graphPath, message: `${graphPath.length ? `inside ${graphPath.join(' ▸ ')}` : 'in the top view'}: ${issue.message}` } : issue);
+    quality.errors.push(...report.errors.map(where));
+    quality.warnings.push(...report.warnings.map(where));
   });
   // What this change left a pattern missing (`review.ts`): only the findings it brought in, never the
   // view's standing ones — read_diagram's `review` lists those.

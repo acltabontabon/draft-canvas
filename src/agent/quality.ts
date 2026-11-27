@@ -28,6 +28,8 @@ export interface QualityIssue {
   kind: 'overlap' | 'outside-group' | 'clipped-text' | 'through-node' | 'label-over-node' | 'label-collision' | 'label-crossed' | 'shared-run' | 'invalid-geometry' | 'jog';
   ids: string[];
   message: string;
+  /** Found in another view than the one an update changes (a linked junction renamed there): its path. */
+  view?: readonly string[];
 }
 
 export interface QualityReport {
@@ -321,6 +323,17 @@ export function checkQuality(
   if (!explicit?.size) return { errors, warnings };
   const asked = (issue: QualityIssue) => ROUTE_KINDS.has(issue.kind) && issue.ids.some((id) => explicit.has(id));
   return { errors: errors.filter((issue) => !asked(issue)), warnings: [...warnings, ...errors.filter(asked)] };
+}
+
+/**
+ * What to say about problems only another view has, where no op of a request to this one reaches:
+ * which view, and the request that arranges it. Undefined when a problem is in this view.
+ */
+export function elsewhereFix(issues: readonly QualityIssue[]): string | undefined {
+  const view = issues.every((issue) => issue.view) ? issues[0]?.view : undefined;
+  if (!view) return undefined;
+  const request = view.length ? `a request with view: {inside: ${JSON.stringify(view)}}` : 'a request to the top view (no view)';
+  return `That view isn't the one this request changes, so no op here can make room there: arrange it first with {op:"arrange"} in ${request}, or shorten the text that grew there, then send this change again.`;
 }
 
 /**

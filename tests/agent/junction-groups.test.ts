@@ -2,12 +2,14 @@ import { describe, expect, it } from 'vitest';
 import { compose } from '../../src/agent/compile';
 import { validateToolInput } from '../../src/agent/contract';
 import { AgentError } from '../../src/agent/errors';
+import { runJob } from '../../src/agent/jobs';
 import { applyUpdate } from '../../src/agent/patch';
 import { diffForReview, prepareProposal } from '../../src/agent/proposal';
 import { readEdit, readLookup } from '../../src/agent/read';
 import { renamePatch } from '../../src/agent/rename';
 import { TOOLS } from '../../src/agent/schema';
 import type { DraftDocument } from '../../src/document/types';
+import { embed, viewOf } from '../../src/depth/tree';
 import { deserializeDocument } from '../../src/export/project';
 import { membersOf } from '../../src/junctions/groups';
 
@@ -144,6 +146,34 @@ describe('a junction joining a group', () => {
     const result = applyUpdate(spread(), [], [{ op: 'add', nodes: [{ id: 'n1', type: 'junction', label: 'Q', link: 'fresh' }, { id: 'n2', type: 'junction', label: 'Q', link: 'fresh' }] }], undefined);
     expect(labels(result.file, 'fresh')).toEqual([['n1', 'Q'], ['n2', 'Q']]);
     expect(result.advisories.some((line) => line.includes('joined group'))).toBe(false);
+  });
+});
+
+describe('a rename that crowds a counterpart in another view', () => {
+  // The counterpart inside Orders sits right beside Rules, as a person might put it: a longer label
+  // grows it into Rules there, in a view the request doesn't change.
+  const crowded = () => {
+    const file = spread();
+    const inside = viewOf(file, ['orders'])!;
+    const rules = inside.nodes.find((node) => node.id === 'rules')!;
+    return embed(file, ['orders'], { ...inside, nodes: inside.nodes.map((node) => (node.id === 'in' ? { ...node, x: rules.x - node.width - 12, y: rules.y + 4 } : node)) });
+  };
+  const rename = [{ op: 'update', id: 'out', set: { label: 'Payments' } }];
+
+  it('names that view, and suggests no arrange of this one, which could not help', () => {
+    const job = runJob({ kind: 'update', file: crowded(), path: [], ops: rename, layout: undefined }, Number.POSITIVE_INFINITY);
+    if (job.kind !== 'update') throw new Error('expected an update');
+    expect(job.problems).toEqual(['inside orders: in and rules overlap.']);
+    expect(job.suggestedOp).toBeUndefined();
+    expect(job.quality.errors[0]?.view).toEqual(['orders']);
+  });
+
+  it('is refused as a proposal saying the same', () => {
+    const error = refusal(() => prepareProposal(crowded(), [], rename, undefined, undefined));
+    expect(error.code).toBe('LAYOUT_CONSTRAINED');
+    expect(error.message).toContain('inside orders: in and rules overlap');
+    expect(error.message).toContain('view: {inside: ["orders"]}');
+    expect(error.details?.suggestedOp).toBeUndefined();
   });
 });
 

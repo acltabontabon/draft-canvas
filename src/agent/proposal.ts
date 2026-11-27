@@ -15,7 +15,7 @@ import type { Attachment, DraftDocument, DraftEdge, DraftFlow, DraftNode, OpenPo
 import { GEOMETRY_FIELDS } from '../document/fieldClasses';
 import { OPEN_POINT_LABELS } from '../document/openPoints';
 import { applyUpdate, type PatchResult } from './patch';
-import { smallestArrange, unreadableFix, type QualityIssue } from './quality';
+import { elsewhereFix, smallestArrange, unreadableFix, type QualityIssue } from './quality';
 
 export interface EntitySnapshot {
   kind: 'node' | 'edge' | 'flow' | 'open point' | 'view';
@@ -83,12 +83,15 @@ export interface PreparedProposal {
  * message, and the problems only in details cost them retries.
  */
 export function unreadableProposal(issues: readonly QualityIssue[], view: DraftDocument | undefined): AgentError {
-  const suggestedOp = view ? smallestArrange(view, issues) : { op: 'arrange' };
+  // An arrange in these ops lays out the proposal's own view only, never one a problem is in elsewhere.
+  const elsewhere = elsewhereFix(issues);
+  const here = issues.filter((issue) => !issue.view);
+  const suggestedOp = elsewhere ? undefined : view ? smallestArrange(view, here) : { op: 'arrange' };
   const first = issues[0]!.message.replace(/\.$/, '');
   const more = issues.length > 1 ? ` (and ${issues.length - 1} more)` : '';
-  return new AgentError('LAYOUT_CONSTRAINED', `The proposal would leave unreadable content: ${first}${more}. ${unreadableFix(issues, suggestedOp)}`, {
+  return new AgentError('LAYOUT_CONSTRAINED', `The proposal would leave unreadable content: ${first}${more}. ${elsewhere ?? unreadableFix(here, suggestedOp!)}`, {
     hint: 'Nothing was submitted. Move existing shapes with set.place or an arrange op in the same ops list; a top-level layout does not move them.',
-    details: { problems: issues, suggestedOp },
+    details: { problems: issues, ...(suggestedOp ? { suggestedOp } : {}) },
   });
 }
 

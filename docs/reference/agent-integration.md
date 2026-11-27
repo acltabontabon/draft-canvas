@@ -187,6 +187,8 @@ make: a missing dead-letter path belongs in the diagram only if the system has o
   pairing doesn't offer is `UNSUPPORTED`; on a new relationship it is left out with an advisory.
 - Boundaries and notes take `color` when added, as elements, relationships and flows do.
 - If new content cannot fit, `LAYOUT_CONSTRAINED` carries `suggestedOp`, an `arrange` to add to the request.
+  A problem in another view (a linked junction renamed there) names that view and carries none: no
+  op of this request reaches it, so arrange that view in a request of its own first.
 
 **Previews.** `preview_diagram` makes a candidate with no file, history, recovery copy or proposal.
 Render it with `render_diagram({diagramId, previewId})`, then apply it with

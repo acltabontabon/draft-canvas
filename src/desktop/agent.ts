@@ -669,7 +669,9 @@ function receiptCounts(result: Extract<JobResult, { kind: 'update' }>) {
 
 function layoutConstrained(result: Extract<JobResult, { kind: 'update' }>) {
   return new AgentError('LAYOUT_CONSTRAINED', `The change would leave the diagram unreadable: ${result.problems[0]}`, {
-    hint: 'Nothing changed. Existing shapes are only moved by an arrange op: add {op:"arrange"} (for the view, or a scope) to the same request, or shorten long text. Don\'t create a replacement diagram.',
+    hint: result.elsewhere
+      ? `Nothing changed. ${result.elsewhere} Don't create a replacement diagram.`
+      : 'Nothing changed. Existing shapes are only moved by an arrange op: add {op:"arrange"} (for the view, or a scope) to the same request, or shorten long text. Don\'t create a replacement diagram.',
     details: { problems: result.problems.slice(0, 10), ...(result.suggestedOp ? { suggestedOp: result.suggestedOp } : {}) },
   });
 }
