@@ -420,14 +420,56 @@ fn rename_no_replace(old: &Path, new: &Path) -> io::Result<()> {
     }
 }
 
+/// `path` as the NUL-terminated wide string the raw Win32 file calls below take. std's own file calls
+/// add the verbatim `\\?\` prefix themselves once a path nears the legacy 260-character limit, and these
+/// calls must be given it: without it a document about 240 characters deep was written to its temp
+/// file fine, then the swap failed with "path not found" because the temp file's longer name crossed
+/// the limit. Same threshold and prefixes as std's: shorter paths are passed exactly as they were.
+#[cfg(windows)]
+fn win32_path(path: &Path) -> Vec<u16> {
+    use std::os::windows::ffi::OsStrExt;
+    const LEGACY_MAX_PATH: usize = 248;
+    const SEP: u16 = b'\\' as u16;
+    const COLON: u16 = b':' as u16;
+    const QUERY: u16 = b'?' as u16;
+    const DOT: u16 = b'.' as u16;
+    const VERBATIM: [u16; 4] = [SEP, SEP, QUERY, SEP];
+    const UNC: [u16; 8] = [
+        SEP,
+        SEP,
+        QUERY,
+        SEP,
+        b'U' as u16,
+        b'N' as u16,
+        b'C' as u16,
+        SEP,
+    ];
+    let wide = |p: &Path| -> Vec<u16> { p.as_os_str().encode_wide().collect() };
+    let mut out = wide(path);
+    if out.len() >= LEGACY_MAX_PATH && !out.starts_with(&VERBATIM) {
+        // `absolute` is GetFullPathNameW: separators unified and `.`/`..` resolved, which a verbatim
+        // path no longer does for itself.
+        if let Ok(absolute) = std::path::absolute(path) {
+            let absolute = wide(&absolute);
+            out = match absolute.as_slice() {
+                [_, COLON, SEP, ..] => [&VERBATIM[..], &absolute].concat(),
+                // Already verbatim, or a device path: as it is.
+                [SEP, SEP, QUERY | DOT, SEP, ..] => absolute,
+                [SEP, SEP, rest @ ..] => [&UNC[..], rest].concat(),
+                _ => absolute,
+            };
+        }
+    }
+    out.push(0);
+    out
+}
+
 #[cfg(windows)]
 fn rename_no_replace(old: &Path, new: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{MoveFileExW, MOVEFILE_WRITE_THROUGH};
     const ERROR_FILE_EXISTS: i32 = 80;
     const ERROR_ALREADY_EXISTS: i32 = 183;
-    let wide = |p: &Path| -> Vec<u16> { p.as_os_str().encode_wide().chain(Some(0)).collect() };
-    let (old_w, new_w) = (wide(old), wide(new));
+    let (old_w, new_w) = (win32_path(old), win32_path(new));
     // Without MOVEFILE_REPLACE_EXISTING the move fails when the name is taken.
     // SAFETY: both buffers are NUL-terminated and outlive the call.
     if unsafe { MoveFileExW(old_w.as_ptr(), new_w.as_ptr(), MOVEFILE_WRITE_THROUGH) } != 0 {
@@ -634,7 +676,6 @@ fn install(temp: &Path, target: &Path, _existing: bool, clobber: bool) -> io::Re
 /// before it is reported, instead of failing a save the person can't do anything about.
 #[cfg(windows)]
 fn install(temp: &Path, target: &Path, existing: bool, clobber: bool) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
     use windows_sys::Win32::Storage::FileSystem::{
         MoveFileExW, ReplaceFileW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
     };
@@ -648,8 +689,7 @@ fn install(temp: &Path, target: &Path, existing: bool, clobber: bool) -> io::Res
     const ERROR_UNABLE_TO_MOVE_REPLACEMENT: i32 = 1176;
     const ERROR_UNABLE_TO_MOVE_REPLACEMENT_2: i32 = 1177;
 
-    let wide = |p: &Path| -> Vec<u16> { p.as_os_str().encode_wide().chain(Some(0)).collect() };
-    let (temp_w, target_w) = (wide(temp), wide(target));
+    let (temp_w, target_w) = (win32_path(temp), win32_path(target));
     let mut attempt = 1;
     loop {
         // SAFETY: both buffers are NUL-terminated and outlive the call; the optional pointers are null.
@@ -827,6 +867,47 @@ mod tests {
         assert_eq!(fs::read_to_string(&path).unwrap(), "new contents");
         assert_eq!(new_stamp, read_document(&path).unwrap().stamp);
         assert!(temp_leftovers(dir.path()).is_empty());
+    }
+
+    /// A folder deep enough that a document in it stays under the legacy 260-character limit while its
+    /// temp file's name (`.<name>.dctmp-<pid>-<id>`) goes past it: the swap's raw Win32 calls failed
+    /// there with "couldn't find" until they were given verbatim paths.
+    #[cfg(windows)]
+    #[test]
+    fn saves_creates_renames_and_moves_past_the_legacy_path_limit() {
+        let dir = tempdir().unwrap();
+        let mut deep = dir.path().to_path_buf();
+        while deep.as_os_str().len() < 200 {
+            deep.push("nested-folder-for-a-long-path");
+        }
+        fs::create_dir_all(&deep).unwrap();
+        let name = |stem: &str| deep.join(format!("{stem}.draftcanvas"));
+        let path = name("architecture-overview");
+        assert!(path.as_os_str().len() < 260);
+        let temp = temp_path(&deep, &path);
+        assert!(
+            temp.as_os_str().len() > 260,
+            "the temp file must cross the limit"
+        );
+
+        create_new_atomic(&path, b"first").unwrap();
+        let stamp = read_document(&path).unwrap().stamp;
+        let WriteOutcome::Saved { .. } = write_atomic(&path, b"second", Some(&stamp)).unwrap()
+        else {
+            panic!("expected a save");
+        };
+        assert_eq!(fs::read_to_string(&path).unwrap(), "second");
+
+        let renamed = name("architecture-overview-renamed");
+        rename_atomic(&path, &renamed).unwrap();
+        assert!(!path.exists());
+        let moved_dir = deep.join("moved");
+        fs::create_dir(&moved_dir).unwrap();
+        let moved = moved_dir.join("architecture-overview.draftcanvas");
+        move_atomic(&renamed, &moved).unwrap();
+        assert_eq!(fs::read_to_string(&moved).unwrap(), "second");
+        assert!(temp_leftovers(&deep).is_empty());
+        assert!(temp_leftovers(&moved_dir).is_empty());
     }
 
     #[test]
