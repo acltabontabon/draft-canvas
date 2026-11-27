@@ -830,6 +830,50 @@ describe('a file’s recovery copy', () => {
     expect(crashed.store.getSnapshot().doc).toMatchObject({ dirty: false });
   });
 
+  /** A copy this version can't read: written by a newer one before a downgrade, say. */
+  const newerCopy = (title: string) => JSON.stringify({ ...(JSON.parse(documentText(title)) as object), version: 99 });
+
+  it('opens the file as it is on disk, keeping the copy, when the recovered changes can’t be read', async () => {
+    const crashed = createHarness();
+    const handle = crashed.addFile('ledger');
+    const id = 'f_55555555-5555-4555-8555-555555555555';
+    const copy = newerCopy('ledger');
+    crashed.recovery.set(id, {
+      text: copy,
+      entry: { id, title: 'ledger', updatedAt: Date.now(), bytes: 10, origin: { kind: 'file', name: 'ledger', displayPath: crashed.files.get(handle)!.displayPath, handle, baseStamp: 'v1:1' } },
+    });
+    crashed.answer(0);
+
+    await crashed.controller.openHandle(handle);
+    await crashed.settle();
+
+    expect(crashed.errors).toEqual([{ title: 'Couldn’t recover the unsaved changes to ledger.draftcanvas', message: expect.stringContaining('newer version') }]);
+    expect(crashed.loads().map((load) => load.text)).toEqual([crashed.files.get(handle)!.text]);
+    expect(crashed.store.getSnapshot().doc).toMatchObject({ name: 'ledger', dirty: false });
+    expect(crashed.recovery.get(id)?.text).toBe(copy);
+  });
+
+  it('says so, and settles nothing, when a draft picked on Home can’t be read', async () => {
+    const ledger = h.addFile('ledger');
+    const id = 'f_66666666-6666-4666-8666-666666666666';
+    h.recovery.set(id, {
+      text: newerCopy('ledger'),
+      entry: { id, title: 'ledger', updatedAt: Date.now(), bytes: 10, origin: { kind: 'file', name: 'ledger', displayPath: h.files.get(ledger)!.displayPath, handle: ledger, baseStamp: 'v1:1' } },
+    });
+    await openFile();
+    h.edit(edited());
+    await h.settle();
+
+    await h.controller.recover(id);
+    await h.settle();
+
+    expect(h.errors).toEqual([{ title: 'Couldn’t recover the draft', message: expect.stringContaining('newer version') }]);
+    expect(h.asked).toEqual([]);
+    expect(doc()).toMatchObject({ name: 'payments', dirty: true });
+    expect(h.loads()).toHaveLength(1);
+    expect(h.recovery.has(id)).toBe(true);
+  });
+
   it('does not open the file at all when the user cancels', async () => {
     const crashed = createHarness();
     const handle = crashed.addFile('payments');

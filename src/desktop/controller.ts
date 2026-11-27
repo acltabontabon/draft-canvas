@@ -822,6 +822,18 @@ export class DesktopController {
       await this.api.showError(`Draft Canvas couldn’t open ${opened.name}.draftcanvas`, parsed.error);
       return false;
     }
+    // Recovered changes are checked as the file's own text is, and a draft picked on Home before
+    // anything is settled. Loaded unchecked, a copy this version can't read (written by a newer one
+    // before a downgrade, or damaged) left the previous diagram on screen under a banner blaming the
+    // file, while this one was taken for open with unsaved changes, and the next open waited 10 s.
+    const recoveredText = recovered ? await this.api.recoveryRead(recovered.id) : null;
+    if (recoveredText !== null) {
+      const readable = deserializeDocument(recoveredText);
+      if (!readable.ok) {
+        await this.api.showError('Couldn’t recover the draft', readable.error);
+        return false;
+      }
+    }
     if (!settled && !(await this.settleBeforeLeaving())) return false;
 
     let text = opened.text;
@@ -831,8 +843,8 @@ export class DesktopController {
     let staleBase: string | null = null;
     const movedSince = (entry: RecoveryEntry) =>
       entry.origin.kind === 'file' && entry.origin.baseStamp !== opened.stamp ? entry.origin.baseStamp : null;
-    if (recovered) {
-      text = await this.api.recoveryRead(recovered.id);
+    if (recovered && recoveredText !== null) {
+      text = recoveredText;
       baseline = false;
       recoveryId = recovered.id;
       staleBase = movedSince(recovered);
@@ -850,12 +862,22 @@ export class DesktopController {
           ['Recover', 'Discard', 'Cancel'],
         );
         if (choice === 2) return false;
-        for (const entry of found) if (choice === 1 || entry.id !== newest.id) await this.discard(entry.id);
-        if (choice === 0) {
-          text = await this.api.recoveryRead(newest.id);
-          baseline = false;
-          recoveryId = newest.id;
-          staleBase = movedSince(newest);
+        const copy = choice === 0 ? await this.api.recoveryRead(newest.id) : null;
+        const readable = copy === null ? null : deserializeDocument(copy);
+        if (readable && !readable.ok) {
+          // Kept, with the others, for a version that can read it; the file opens as it is on disk.
+          await this.api.showError(
+            `Couldn’t recover the unsaved changes to ${opened.name}.draftcanvas`,
+            `${readable.error} They are kept, and ${opened.name}.draftcanvas opens as it is on disk.`,
+          );
+        } else {
+          for (const entry of found) if (choice === 1 || entry.id !== newest.id) await this.discard(entry.id);
+          if (copy !== null) {
+            text = copy;
+            baseline = false;
+            recoveryId = newest.id;
+            staleBase = movedSince(newest);
+          }
         }
       }
     }

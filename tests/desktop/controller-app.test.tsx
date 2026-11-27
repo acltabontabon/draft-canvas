@@ -86,6 +86,25 @@ it('keeps the Quick Draft ⌘N opened while Back’s close of the last file was 
   expect([...app.h.recovery.values()].map((held) => held.entry.title)).toEqual(['My architecture']);
 });
 
+it('shows the file itself, and says why, when its recovered changes can’t be read', async () => {
+  const app = await connect();
+  await app.open('payments');
+  const ledger = app.h.addFile('ledger');
+  // Kept by a newer version, before a downgrade.
+  app.h.recovery.set('f_old', {
+    text: JSON.stringify({ ...(JSON.parse(documentText('ledger')) as object), version: 99 }),
+    entry: { id: 'f_old', title: 'ledger', updatedAt: Date.now() - 60_000, bytes: 80, origin: { kind: 'file', name: 'ledger', displayPath: '~/work/ledger.draftcanvas', handle: ledger, baseStamp: 'v1:1' } },
+  });
+  app.h.answer(0);
+
+  await app.controller.openHandle(ledger);
+
+  expect(title()).toBe('ledger');
+  expect(app.store.getSnapshot().doc).toMatchObject({ kind: 'file', name: 'ledger', dirty: false });
+  expect(app.h.errors.map((error) => error.title)).toEqual(['Couldn’t recover the unsaved changes to ledger.draftcanvas']);
+  expect(app.h.recovery.has('f_old')).toBe(true);
+});
+
 it('leaves the field being typed in alone when an agent asks to show a diagram it changed', async () => {
   const app = await connect();
   await app.open('payments');
