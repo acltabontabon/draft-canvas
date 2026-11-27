@@ -164,7 +164,24 @@ fn display_path_in(path: &Path, home: Option<&Path>) -> String {
 /// rename in Explorer or Finder (or a re-pointed link) the two strings differ, and "Remove from Home"
 /// or "Remove from Recent" found nothing to remove while opening the item again added it twice.
 pub fn same_place(stored: &str, path: &Path) -> bool {
-    Path::new(stored) == path || dunce::canonicalize(stored).is_ok_and(|real| real == path)
+    let stored = Path::new(stored);
+    // Only a stored path that could lead here is looked up on disk: one ending in the same name, give
+    // or take case. Every entry was resolved before, on each open and under the lists' locks, and an
+    // entry on an offline network share can take many seconds to answer.
+    stored == path
+        || (same_name_ignoring_case(stored, path)
+            && dunce::canonicalize(stored).is_ok_and(|real| real == path))
+}
+
+/// Whether two paths end in the same name ignoring case: what a case-only rename, or a link in a
+/// folder above, leaves alike.
+fn same_name_ignoring_case(a: &Path, b: &Path) -> bool {
+    match (a.file_name(), b.file_name()) {
+        (Some(a), Some(b)) => {
+            a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase()
+        }
+        _ => false,
+    }
 }
 
 pub(crate) fn home_dir() -> Option<PathBuf> {
@@ -180,6 +197,33 @@ pub(crate) fn home_dir() -> Option<PathBuf> {
 mod tests {
     use super::*;
     use crate::errors::ErrorKind;
+
+    #[test]
+    fn a_stored_path_is_looked_up_only_when_it_could_lead_here() {
+        let dir = tempfile::tempdir().unwrap();
+        let real = dunce::canonicalize(dir.path()).unwrap();
+        let here = real.join("Payments.draftcanvas");
+        std::fs::write(&here, "{}").unwrap();
+        assert!(same_place(here.to_str().unwrap(), &here));
+        // Another name is never resolved on disk, so an entry on an offline share isn't asked.
+        assert!(!same_name_ignoring_case(
+            &real.join("Orders.draftcanvas"),
+            &here
+        ));
+        assert!(!same_place(
+            real.join("Orders.draftcanvas").to_str().unwrap(),
+            &here
+        ));
+        assert!(same_name_ignoring_case(
+            &PathBuf::from("/elsewhere/PAYMENTS.draftcanvas"),
+            &here
+        ));
+        #[cfg(any(windows, target_os = "macos"))]
+        assert!(same_place(
+            real.join("PAYMENTS.draftcanvas").to_str().unwrap(),
+            &here
+        ));
+    }
 
     #[test]
     fn extension_check_ignores_case() {
