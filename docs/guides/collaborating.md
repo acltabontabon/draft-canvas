@@ -63,6 +63,8 @@ there later.
 ![The owner's canvas with Grace's face in the people column, her named pointer, and her selection outlined in her colour.](../media/guides/collab-live.png)
 
 - **Edits** reach everyone when committed. Changes from others wait while you drag or resize.
+  On a large diagram, a collaborator's **Make room** shows on the others' screens a few times a
+  second rather than with every movement; where they let go always arrives.
 - **Undo** takes back only your own edits. If someone changed or built on the same thing since,
   their work stays and Draft Canvas says why. An undo that, with what others have added since,
   would take the diagram past its [size limits](../reference/schema.md#limits) is refused until
