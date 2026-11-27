@@ -195,6 +195,29 @@ fn parse_codex(text: &str) -> Result<toml_edit::DocumentMut, AppError> {
     })
 }
 
+/// An agent's settings file as text, without the byte-order mark a Windows editor may have put at its
+/// start. The writer (`docio::read_document`) already dropped it; the readers didn't, so a BOM'd
+/// Junie or Gemini file read as "not set up" though the entry was there, and a BOM'd OpenCode file
+/// was refused as having "a mistake on line 1".
+fn read_config_text(path: &Path) -> std::io::Result<String> {
+    let text = std::fs::read_to_string(path)?;
+    Ok(match text.strip_prefix('\u{feff}') {
+        Some(rest) => rest.to_string(),
+        None => text,
+    })
+}
+
+/// `out` with the line endings `source` had: a file saved on Windows keeps CRLF throughout. The
+/// writers end the lines they add with `\n` while the lines they keep still end `\r\n`, which
+/// left one file with both.
+fn with_endings_of(source: &str, out: String) -> String {
+    if source.contains("\r\n") {
+        out.replace("\r\n", "\n").replace('\n', "\r\n")
+    } else {
+        out
+    }
+}
+
 /// `text` with the connector set up: the existing Draft Canvas entry pointed at `sidecar` (and
 /// switched back on), or a new `[mcp_servers.draft-canvas]` table. Settings someone added to the entry
 /// themselves — an approval mode, a longer timeout — are kept.
@@ -241,14 +264,14 @@ pub fn codex_with_connector(text: &str, sidecar: &Path) -> Result<String, AppErr
             toml_edit::value(CODEX_TOOL_TIMEOUT_SECS),
         );
     }
-    Ok(doc.to_string())
+    Ok(with_endings_of(text, doc.to_string()))
 }
 
 fn codex_status(sidecar: &Path) -> ClientSetup {
     let path = codex_config();
     let entry = path
         .as_deref()
-        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|p| read_config_text(p).ok())
         .and_then(|text| text.parse::<toml_edit::DocumentMut>().ok())
         .and_then(|doc| codex_entry(&doc));
     ClientSetup {
@@ -298,6 +321,12 @@ fn edit_config(
                     Err(e) => return Err(e),
                 }
             }
+            // Saved as UTF-16, say, by PowerShell 5.1's `>`: "isn't a Draft Canvas file" said nothing useful.
+            Err(e) if e.kind == ErrorKind::NotADocument => {
+                return Err(unavailable(format!(
+                    "{agent}’s settings file isn’t saved as UTF-8 text, so Draft Canvas left it alone. Save it as UTF-8, then try again."
+                )))
+            }
             Err(e) => return Err(e),
         };
         if let WriteOutcome::Saved { .. } = outcome {
@@ -332,7 +361,7 @@ fn servers_entry(config: &Value) -> Option<Entry> {
 }
 
 fn read_servers_entry(path: Option<PathBuf>) -> Option<Entry> {
-    let text = std::fs::read_to_string(path?).ok()?;
+    let text = read_config_text(&path?).ok()?;
     servers_entry(&serde_json::from_str(&without_comments(&text)).ok()?)
 }
 
@@ -856,7 +885,7 @@ pub fn junie_with_connector(text: &str, sidecar: &Path) -> Result<String, AppErr
         .map_err(|_| refuse())?;
     let mut out = String::from_utf8(out).map_err(|_| refuse())?;
     out.push('\n');
-    Ok(out)
+    Ok(with_endings_of(text, out))
 }
 
 fn junie_status(sidecar: &Path) -> ClientSetup {
@@ -1130,17 +1159,14 @@ pub fn opencode_with_connector(text: &str, sidecar: &Path, file: &str) -> Result
     let mut out = String::from_utf8(out).map_err(|_| refuse())?;
     out.push('\n');
     // The formatter ends lines with `\n`; a file saved on Windows keeps its own endings throughout.
-    if text.contains("\r\n") {
-        out = out.replace("\r\n", "\n").replace('\n', "\r\n");
-    }
-    Ok(out)
+    Ok(with_endings_of(text, out))
 }
 
 /// What the two files say, as far as they can be read: whether Draft Canvas is configured, which is
 /// not the same as connected. A project's own `opencode.json`, `OPENCODE_CONFIG` and managed
 /// settings can all override these files and can't be seen from here; `opencode mcp list` can.
 fn opencode_setup(dir: Option<&Path>, sidecar: &Path) -> ClientSetup {
-    let texts = OPENCODE_FILES.map(|file| std::fs::read_to_string(dir?.join(file)).ok());
+    let texts = OPENCODE_FILES.map(|file| read_config_text(&dir?.join(file)).ok());
     let mut found = Vec::new();
     let mut holder = None;
     for (file, text) in OPENCODE_FILES.into_iter().zip(&texts) {
@@ -1180,7 +1206,7 @@ fn opencode_connect_in(dir: &Path, sidecar: &Path) -> Result<(), AppError> {
     let mut texts = [None, None];
     for (file, text) in OPENCODE_FILES.into_iter().zip(&mut texts) {
         let path = dir.join(file);
-        *text = match std::fs::read_to_string(&path) {
+        *text = match read_config_text(&path) {
             Ok(text) => Some(text),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             Err(e) => {
@@ -1553,6 +1579,58 @@ mod tests {
         })
         .unwrap();
         assert_eq!(std::fs::read_to_string(&path).unwrap(), first);
+    }
+
+    #[test]
+    fn settings_saved_with_a_byte_order_mark_or_crlf_are_read_and_kept_whole() {
+        let dir = tempfile::tempdir().unwrap();
+        let sidecar = Path::new(SIDECAR);
+        // Junie: a BOM'd file that is set up reads as set up.
+        let junie = dir.path().join("mcp.json");
+        let entry = format!("{{\r\n  \"mcpServers\": {{\r\n    \"draft-canvas\": {{ \"command\": {} }}\r\n  }}\r\n}}\r\n", serde_json::to_string(SIDECAR).unwrap());
+        std::fs::write(&junie, format!("\u{feff}{entry}")).unwrap();
+        assert_eq!(
+            state_of(read_servers_entry(Some(junie.clone())).as_ref(), sidecar),
+            SetupState::Ready
+        );
+        // Rewriting a CRLF file keeps CRLF on every line, old and new.
+        let other =
+            "{\r\n  \"mcpServers\": {\r\n    \"other\": { \"command\": \"x\" }\r\n  }\r\n}\r\n";
+        let out = junie_with_connector(other, sidecar).unwrap();
+        assert!(
+            out.contains("\r\n") && !out.replace("\r\n", "").contains('\n'),
+            "{out:?}"
+        );
+        let codex =
+            codex_with_connector("model = \"a\"\r\n\r\n[other]\r\nx = 1\r\n", sidecar).unwrap();
+        assert!(
+            codex.contains("\r\n") && !codex.replace("\r\n", "").contains('\n'),
+            "{codex:?}"
+        );
+        // OpenCode: a BOM'd file is read, not refused.
+        let oc = dir.path().join("opencode");
+        std::fs::create_dir_all(&oc).unwrap();
+        std::fs::write(oc.join("opencode.json"), "\u{feff}{}\n").unwrap();
+        opencode_connect_in(&oc, sidecar).unwrap();
+        assert_eq!(opencode_setup(Some(&oc), sidecar).state, SetupState::Ready);
+    }
+
+    #[test]
+    fn a_settings_file_that_isnt_utf8_is_left_alone_and_said_so() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        // UTF-16 with a BOM, as Windows PowerShell 5.1 writes it.
+        let utf16: Vec<u8> = [0xFF, 0xFE]
+            .into_iter()
+            .chain("model = \"a\"\n".encode_utf16().flat_map(u16::to_le_bytes))
+            .collect();
+        std::fs::write(&path, &utf16).unwrap();
+        let error = edit_config(&path, "Codex", |text| {
+            codex_with_connector(text, Path::new(SIDECAR))
+        })
+        .unwrap_err();
+        assert!(error.message.contains("UTF-8"), "{}", error.message);
+        assert_eq!(std::fs::read(&path).unwrap(), utf16);
     }
 
     #[test]
