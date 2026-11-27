@@ -34,6 +34,7 @@ import { ownerAt, viewOf } from '../../depth/tree';
 import { displayNameFor } from '../../document/factory';
 import { useUiStore } from '../../store/uiStore';
 import { copyPreparedShareLink, copyShareLink } from '../../share';
+import { roomIdScope } from '../../export/levels';
 import { collectRooms } from '../../export/rooms';
 import { flowIsPlayable } from '../../document/flow';
 import { ExportSharePanel, type ShareChoice } from './ExportSharePanel';
@@ -131,6 +132,8 @@ export function ExportDialog() {
   const document = useEditorStore((state) =>
     open ? (state.path.length > 0 && wholeCanvas ? fileOf(state) : state.document) : null,
   );
+  // A picture of this room is not the file's: inlined beside it, each keeps its own ids.
+  const idScope = useEditorStore((state) => (wholeCanvas ? undefined : roomIdScope(state.path)));
   const selection = useEditorStore((state) => (open ? state.selection : null));
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const { name } = useTheme();
@@ -300,6 +303,7 @@ export function ExportDialog() {
     theme: paletteName,
     transparent,
     only,
+    idScope,
     selectedFlowId: selectedFlowId ?? undefined,
     preset,
     deviceStyle: mine,

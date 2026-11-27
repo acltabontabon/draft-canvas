@@ -64,6 +64,17 @@ function slugOf(title: string): string {
   return fileNameFor(title, '');
 }
 
+/**
+ * What a picture of the room at `path` scopes its ids by (`render/svg/ids.ts`), `within` the scope
+ * of the room the export starts from. Every room is drawn with the file's id, so the levels of one
+ * file once handed out the same clip and backdrop ids with different definitions: inlined on one
+ * page, the second picture was cut and offset by the first's. The top keeps the scope it is given.
+ */
+export function roomIdScope(path: readonly string[], within?: string): string | undefined {
+  if (path.length === 0) return within;
+  return within ? `${within}.${path.join('.')}` : `level-${path.join('.')}`;
+}
+
 /** The archive's members, rendered — SVG text or PNG bytes per room, in tree order. */
 export async function renderEveryLevel(document: DraftDocument, options: EveryLevelOptions): Promise<ZipEntry[]> {
   const { format, scale, ...rest } = options;
@@ -72,7 +83,7 @@ export async function renderEveryLevel(document: DraftDocument, options: EveryLe
   const entries: ZipEntry[] = [];
   for (const level of collectLevels(document)) {
     await loadTechnologyIcons(level.room.document.nodes);
-    const rendered = renderDocumentSvg(level.room.document, roomOptions);
+    const rendered = renderDocumentSvg(level.room.document, { ...roomOptions, idScope: roomIdScope(level.room.path, options.idScope) });
     if (format === 'svg') {
       entries.push({ name: `${level.name}.svg`, data: rendered.svg });
       continue;

@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { createDocument, createEdge, createNode } from '../src/document/factory';
+import { normalizeStyle } from '../src/document/style';
 import type { DraftDocument, DraftNode } from '../src/document/types';
-import { collectLevels, renderEveryLevel, zipEveryLevel } from '../src/export/levels';
+import { collectLevels, renderEveryLevel, roomIdScope, zipEveryLevel } from '../src/export/levels';
 import { collectRooms, hasRooms, roomTitleFor } from '../src/export/rooms';
 import { unzipFiles } from '../src/export/zip';
+import { BUILTIN_BACKDROPS } from '../src/render/style/backdrops';
+import { renderDocumentSvg } from '../src/render/svg/document';
 
 const decoder = new TextDecoder();
 
@@ -107,6 +110,37 @@ describe('renderEveryLevel / zipEveryLevel', () => {
     const doc = threeLevels();
     const entries = await renderEveryLevel(doc, { format: 'svg', only: new Set([doc.nodes[2]!.id]) });
     expect(entries[0]!.data).toContain('Orders API');
+  });
+
+  it('gives each room’s picture ids of its own, so several can be inlined on one page', async () => {
+    // Each room is drawn in the file's id, so every member once had the same clip and backdrop ids
+    // with different definitions: inlined together, the second resolved `url(#…)` to the first's.
+    const note = (text: string, width: number, height: number) => createNode({ type: 'note', x: 0, y: 0, width, height, text });
+    const owner = { ...createNode({ type: 'service', x: 300, y: 0, text: 'Orders API' }), inside: room([note('Inner note', 260, 180)]) };
+    const tile = BUILTIN_BACKDROPS[0]!.asset;
+    const style = normalizeStyle({ v: 1, hand: { base: 'clean' }, backdrop: { art: tile.id }, assets: [tile] }).style;
+    const doc = { ...createDocument('Checkout'), nodes: [note('Root note', 160, 90), owner], style };
+    const entries = await renderEveryLevel(doc, { format: 'svg', theme: 'light' });
+    const definitions = new Map<string, Set<string>>();
+    for (const entry of entries) {
+      for (const match of (entry.data as string).matchAll(/<(clipPath|pattern|filter|marker)\b[^>]*\bid="([^"]+)"[^>]*>[\s\S]*?<\/\1>/g)) {
+        definitions.set(match[2]!, (definitions.get(match[2]!) ?? new Set()).add(match[0]));
+      }
+    }
+    expect(definitions.size).toBeGreaterThan(2);
+    expect([...definitions].filter(([, found]) => found.size > 1).map(([id]) => id)).toEqual([]);
+    // The top is the picture a single export of it is, byte for byte; a room is the one its own export is.
+    expect(entries[0]!.data).toBe(renderDocumentSvg(doc, { theme: 'light' }).svg);
+    const inside = collectRooms(doc)[1]!;
+    expect(entries[1]!.data).toBe(renderDocumentSvg(inside.document, { theme: 'light', idScope: roomIdScope(inside.path) }).svg);
+  });
+
+  it('scopes a room by its whole path, from wherever the export starts', () => {
+    expect(roomIdScope([])).toBeUndefined();
+    expect(roomIdScope([], 'docs-top')).toBe('docs-top');
+    expect(roomIdScope(['a', 'b'])).toBe('level-a.b');
+    // Every level of the room the editor is in: its own rooms are scoped as if from the top.
+    expect(roomIdScope(['b'], roomIdScope(['a']))).toBe(roomIdScope(['a', 'b']));
   });
 
   it('zips them into an archive that reads back with the same members', async () => {
