@@ -165,6 +165,44 @@ test('the diagram is framed again in the canvas the panel leaves it', async ({ p
   expect(Math.max(...(await page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((node) => node.getBoundingClientRect().right))))).toBeLessThan(edge);
 });
 
+test('the diagram is framed in the canvas that is left even when React Flow measures it late', async ({ page }) => {
+  // React Flow frames a fit for the size its own ResizeObserver last reported. A busy WebKit
+  // delivered that report after the panel's fallback timer had run: the diagram was framed for the
+  // canvas as it was, nothing moved, and it stayed under the panel. Reports held back here make that
+  // happen every time.
+  await page.addInitScript(() => {
+    const Native = window.ResizeObserver;
+    const late = window as unknown as { lateResizeMs: number };
+    late.lateResizeMs = 0;
+    window.ResizeObserver = class extends Native {
+      constructor(callback: ResizeObserverCallback) {
+        super((entries, observer) => {
+          if (late.lateResizeMs > 0) window.setTimeout(() => callback(entries, observer), late.lateResizeMs);
+          else callback(entries, observer);
+        });
+      }
+    };
+  });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await newCanvas(page, 'Measured late');
+  await create(page, 'Service', { x: 300, y: 240 });
+  await page.keyboard.press('Escape');
+  // Framed as Fit to view frames it, so a fit for the canvas as it was moves nothing.
+  const viewport = () => page.locator('.react-flow__viewport').evaluate((element) => (element as HTMLElement).style.transform);
+  const unfitted = await viewport();
+  await page.keyboard.press('Shift+1');
+  await expect.poll(viewport).not.toBe(unfitted);
+  await nextFrames(page);
+
+  await page.evaluate(() => {
+    (window as unknown as { lateResizeMs: number }).lateResizeMs = 700;
+  });
+  const settings = await openAppearance(page);
+  await expect
+    .poll(async () => (await settings.boundingBox())!.x - (await page.locator('.react-flow__node').first().evaluate((node) => node.getBoundingClientRect().right)))
+    .toBeGreaterThan(8);
+});
+
 test('closing Appearance after changing rooms keeps the current room in view', async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await newCanvas(page, 'Appearance across rooms');

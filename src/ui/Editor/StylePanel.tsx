@@ -1,4 +1,4 @@
-import { useReactFlow, type Viewport } from '@xyflow/react';
+import { useReactFlow, useReactFlowStoreApi, type Viewport } from '@xyflow/react';
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from 'react';
 import { useDiagramStyle } from '../../canvas/useDiagramStyle';
 import { pathKey } from '../../depth/tree';
@@ -40,6 +40,9 @@ interface Camera {
 const LEAVE_MS = 260;
 /** How long the canvas takes to give up the room: `dc-style-panel-room` in `settings.css` runs as long. */
 const ROOM_MS = 300;
+/** How often, and how many times, the fit looks again for React Flow to have measured the canvas. */
+const CATCH_UP_MS = 50;
+const CATCH_UP_TRIES = 20;
 
 export function StylePanel() {
   const open = useUiStore((state) => state.stylePanelOpen);
@@ -94,6 +97,7 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
     document.querySelector<HTMLElement>('.dc-canvas')?.focus();
   };
   const { fitView, getZoom } = useReactFlow();
+  const flow = useReactFlowStoreApi().viewportStore;
   // The colours and backdrop the canvas beside it is drawn in, for the cover.
   const resolved = useDiagramStyle();
   const { name: device } = useTheme();
@@ -131,6 +135,16 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
     const opened = sizeOf();
     let fittedAt: string | null = null;
     let quiet = 0;
+    // `fitView` frames for React Flow's own measure of its pane, which a ResizeObserver of its own
+    // keeps, and in a busy WebKit that measure trailed the canvas past the fallback timer below: the
+    // diagram was framed for the canvas as it was, nothing moved, and the canvas that was left was
+    // taken for framed. So the fit waits for React Flow to catch up, a little at a time, not for ever.
+    const caughtUp = () => {
+      const pane = canvas?.querySelector<HTMLElement>('.react-flow');
+      const { width, height } = flow.getState();
+      return !pane || (pane.offsetWidth === width && pane.offsetHeight === height);
+    };
+    let waited = 0;
     const fit = () => {
       const now = sizeOf();
       // Framed for the canvas that is left: done. Framed only for the canvas as it was, because a timer
@@ -141,6 +155,13 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
       if (!useUiStore.getState().stylePanelOpen) return;
       const state = useEditorStore.getState();
       if (!hasSomethingToFit(state)) return;
+      if (!caughtUp() && waited < CATCH_UP_TRIES) {
+        waited += 1;
+        window.clearTimeout(quiet);
+        quiet = window.setTimeout(fit, CATCH_UP_MS);
+        return;
+      }
+      waited = 0;
       fittedAt = now;
       void fitView({ padding: fitPadding(0.2), duration: motionMs(360), maxZoom: getZoom(), nodes: flowFitViewNodes(state) });
     };
@@ -172,7 +193,7 @@ function Panel({ leaving, camera }: { leaving: boolean; camera: RefObject<Camera
       window.clearTimeout(quiet);
       window.clearTimeout(last);
     };
-  }, [fitView, getZoom, camera]);
+  }, [fitView, getZoom, camera, flow]);
   return (
     <aside
       ref={panel}
