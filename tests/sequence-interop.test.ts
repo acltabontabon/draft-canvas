@@ -401,6 +401,7 @@ describe('reading hostile Mermaid', () => {
     ['a box with a long colour', `box rgb(1${spaces}2${spaces}) a${spaces}b`],
     ['a line of statements', `a->>b: c;${spaces};`.repeat(8)],
     ['an entity code that never closes', `a->>b: #${'x'.repeat(60_000)}`],
+    ['a description that never closes', `accDescr {${`${spaces}\n`.repeat(8)}`],
   ])('reads %s in one pass', (_name, line) => {
     expect(timed(`sequenceDiagram\n${line}\n`).ms).toBeLessThan(500);
   });

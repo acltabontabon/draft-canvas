@@ -51,6 +51,10 @@ function decode(text: string): string {
 const SOLID = /\S/g;
 /** A `;`, or an entity code whose `;` is not one: Mermaid encodes every `#…;` before it reads a word. */
 const SEPARATOR = /#\w+;|;/g;
+/** An accessible title or description, `accTitle: …` and `accDescr: …`: the rest of the line, `;` and all. */
+const ACCESSIBLE_LINE = /acc(?:title|descr)\s*:/iy;
+/** `accDescr {`: a description that runs to the next `}`, over as many lines as it takes. */
+const ACCESSIBLE_BLOCK = /accdescr\s*\{/iy;
 
 /**
  * The statements of a text, ended where Mermaid ends them: at a line break and at every `;`, even in
@@ -60,14 +64,37 @@ const SEPARATOR = /#\w+;|;/g;
  * A comment is a statement that starts `%%`, and it runs to the end of its line, `;` and all. (A
  * directive, `%%{…}%%`, is one too: it configures a renderer this is not.) A `%%` later in a
  * statement is text — Mermaid keeps `A->>B: 100%% done` whole — and cutting there read it as "100".
+ *
+ * An accessible title or description is one statement however it is written, and a description
+ * between braces is given as its opening alone: its lines are words, never statements, so an `end`
+ * in it closed the frame around it.
  */
 function statementsOf(text: string): string[] {
+  const lines = text.split(/\r?\n/);
   const statements: string[] = [];
-  for (const line of text.split(/\r?\n/)) {
+  for (let row = 0; row < lines.length; row += 1) {
+    let line = lines[row]!;
     for (let at = 0; at < line.length; ) {
       SOLID.lastIndex = at;
       const start = SOLID.exec(line)?.index;
       if (start === undefined || line.startsWith('%%', start)) break;
+      ACCESSIBLE_LINE.lastIndex = start;
+      if (ACCESSIBLE_LINE.test(line)) {
+        statements.push(line.slice(start).trimEnd());
+        break;
+      }
+      ACCESSIBLE_BLOCK.lastIndex = start;
+      if (ACCESSIBLE_BLOCK.test(line)) {
+        statements.push(line.slice(start, ACCESSIBLE_BLOCK.lastIndex));
+        // Mermaid drops comment lines before it reads anything, so a `}` in one closes nothing.
+        let close = line.indexOf('}', ACCESSIBLE_BLOCK.lastIndex);
+        while (close === -1 && row + 1 < lines.length) {
+          line = lines[(row += 1)]!;
+          close = line.trimStart().startsWith('%%') ? -1 : line.indexOf('}');
+        }
+        at = close === -1 ? line.length : close + 1;
+        continue;
+      }
       let end = line.length;
       SEPARATOR.lastIndex = start;
       for (let found = SEPARATOR.exec(line); found; found = SEPARATOR.exec(line)) {
@@ -307,6 +334,11 @@ export function parseMermaidSequence(text: string, participantIds?: ReadonlyMap<
     // `title Checkout`, and Mermaid's older `title: Checkout`.
     if (word === 'title' || word === 'title:') {
       title = decode(rest.replace(/^:\s*/, ''));
+      continue;
+    }
+    // What a screen reader says for Mermaid's picture: a sequence here has no place for it.
+    if (/^acc(?:title\s*:|descr\s*[:{])/i.test(line)) {
+      unsupported.add('an accessible title or description (accTitle, accDescr)');
       continue;
     }
     if (word === 'autonumber') {

@@ -144,6 +144,8 @@ async function mermaidDb(text: string) {
     getMessages(): { type: number; message: string; wrap: boolean; from?: unknown; to?: unknown }[];
     getActors(): Map<string, { description: string; wrap: boolean }>;
     getBoxes(): { name?: string }[];
+    getAccTitle(): string;
+    getAccDescription(): string;
   };
 }
 
@@ -337,5 +339,35 @@ describe('a sequence written by hand, read as Mermaid reads it', () => {
       expect(back.ok && back.sequence.participants.map((participant) => participant.name)).toEqual(['Alice', 'Bob']);
       expect(back.ok && back.unsupported).toEqual([`a line it couldn’t read: “${line}”`]);
     }
+  });
+
+  it('leaves the accessible title and description out of what is said, as Mermaid does', async () => {
+    // Their words were read as statements: `accDescr: Alice->>Bob …` as a message from "accDescr: Alice",
+    // and the `end` in `accDescr { … }` closed the loop around it.
+    const text = [
+      'sequenceDiagram',
+      '  accTitle: Signing in; for screen readers',
+      '  loop every minute',
+      '    accDescr: Alice->>Bob asks; Bob-->>Alice answers',
+      '    accDescr {',
+      '      %% a comment line is gone before Mermaid reads: }',
+      '      Alice->>Bob: shown as words',
+      '      end',
+      '    } Alice->>Bob: ping',
+      '    Bob-->>Alice: pong',
+      '  end',
+      '  Alice->>Bob: done',
+    ].join('\n');
+    const db = await mermaidDb(text);
+    expect(db.getAccTitle()).toBe('Signing in; for screen readers');
+    expect(db.getAccDescription()).toBe('Alice->>Bob: shown as words\nend');
+    expect([...db.getActors().keys()]).toEqual(['Alice', 'Bob']);
+    expect(db.getMessages().map((entry) => [entry.type, entry.message])).toEqual([[10, 'every minute'], [0, 'ping'], [1, 'pong'], [11, ''], [0, 'done']]);
+    const read = parseMermaidSequence(text);
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.sequence.participants.map((participant) => participant.name)).toEqual(['Alice', 'Bob']);
+    expect(read.sequence.items.map((item) => (item.t === 'fragment' ? [item.operator, item.operands.flatMap((branch) => branch.items.map((inner) => (inner.t === 'message' ? inner.label : inner.t)))] : item.t === 'message' ? item.label : item.t))).toEqual([['loop', ['ping', 'pong']], 'done']);
+    expect(read.unsupported).toEqual(['an accessible title or description (accTitle, accDescr)']);
   });
 });
