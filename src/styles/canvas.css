@@ -3806,6 +3806,13 @@
   color: var(--dc-text-faint);
 }
 
+/* On the row the keyboard is on, the faint hint fell under 4.5:1 against the selection tint (4.36:1
+   light, 3.7:1 dark): the hint for the very row about to be chosen was the hardest to read. It takes
+   the muted text there, still a step quieter than the row's own name. */
+.dc-context-menu-item[data-highlighted='true'] .dc-context-menu-shortcut {
+  color: var(--dc-text-muted);
+}
+
 /* Names what the menu acts on. Not a row: no hover, no highlight, never focused. */
 .dc-context-menu-header {
   padding: 6px 10px 4px;
