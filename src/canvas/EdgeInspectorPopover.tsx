@@ -51,6 +51,7 @@ import { rightClearance } from './canvasFrame';
 import { clampCenterX } from './popoverPlacement';
 import { useLastPresent, usePopoverPresence } from './usePopoverPresence';
 import { usePopoverKeyboard } from './usePopoverKeyboard';
+import { useCanvasFocusReturn } from './canvasFocus';
 import { InspectorSelect, type InspectorSelectOption } from './InspectorSelect';
 import { CADENCE_PRESETS, DATA_SEMANTICS } from '../document/dataFlow';
 import { isImeKeyEvent, overlayAboveCanvasIsOpen } from '../lib/isEditableTarget';
@@ -186,6 +187,7 @@ function EdgeInspectorBody({ edgeId, closing }: { edgeId: string; closing: boole
   const panelRef = useRef<HTMLDivElement>(null);
   const dragControl = usePopoverDrag(panelRef, edgeId);
   usePopoverKeyboard(panelRef);
+  useCanvasFocusReturn(panelRef, closing);
 
   // Observed rather than read per placement: a value that only changes when the toolbar wraps.
   const toolbarHeight = useToolbarHeight(true);
@@ -410,6 +412,18 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
   const selectedFlowId = useEditorStore((state) => state.selectedFlowId);
   const memberOf = flows.filter((flow) => stepIndexOf(flow, edge.id) !== undefined);
   const [editingLabel, setEditingLabel] = useState(false);
+  // Leaving the label field from the keyboard (Enter keeps what was typed, Escape takes it back)
+  // lands on the chip that opened it. The field unmounting with focus in it dropped focus to <body>,
+  // with the toolbar still open round it. Once the field has gone: a click or Tab away has already put
+  // focus somewhere, and keeps it there.
+  const captionRef = useRef<HTMLButtonElement>(null);
+  const refocusCaption = useRef(false);
+  useLayoutEffect(() => {
+    if (editingLabel || !refocusCaption.current) return;
+    refocusCaption.current = false;
+    const active = window.document.activeElement;
+    if (active === null || active === window.document.body) captionRef.current?.focus({ preventScroll: true });
+  }, [editingLabel]);
 
   const relation = edge.semantic
     ? relationLabel(edge.semantic, sourceNode && categoryOf(sourceNode), targetNode && categoryOf(targetNode))
@@ -480,8 +494,17 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
             onKeyDown={(event) => {
               event.stopPropagation();
               if (isImeKeyEvent(event)) return;
-              if (event.key === 'Enter') event.currentTarget.blur();
-              if (event.key === 'Escape') setEditingLabel(false);
+              if (event.key === 'Enter') {
+                // Kept from the chip focus lands on, which the same Enter would otherwise press, and
+                // so open the field again.
+                event.preventDefault();
+                refocusCaption.current = true;
+                event.currentTarget.blur();
+              }
+              if (event.key === 'Escape') {
+                refocusCaption.current = true;
+                setEditingLabel(false);
+              }
             }}
           />
         ) : (
@@ -489,6 +512,7 @@ const EdgeInspectorRow = memo(function EdgeInspectorRow({
           // `ExpandedPanel`'s own "Interaction" section for the semantic *type* picker, a
           // distinct concept this chip no longer doubles as a shortcut to.
           <button
+            ref={captionRef}
             type="button"
             className="dc-edge-inspector-caption"
             data-empty={caption ? undefined : 'true'}

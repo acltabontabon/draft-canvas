@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { armTool, create, newCanvas, nextFrames } from './canvas';
+import { armTool, clickEdge, connect as connectShapes, create, newCanvas, nextFrames } from './canvas';
 
 /**
  * Alt+Arrow (spatial navigation between nearby elements) and Alt+Shift+Left/Right (relationship
@@ -290,5 +290,92 @@ test.describe('keyboard focus around the canvas', () => {
     await expect(history).toBeHidden();
     await page.waitForTimeout(400);
     expect(await depth(page)).toBe(1);
+  });
+
+  test('finishing a name from the keyboard puts focus back on the canvas', async ({ page }) => {
+    await newCanvas(page, 'Name focus');
+    await create(page, 'Service', { x: 400, y: 300 });
+    await canvas(page).focus();
+    const editor = page.locator('.dc-node-editor');
+
+    await page.keyboard.press('Enter');
+    await expect(editor).toBeFocused();
+    await page.keyboard.type('Orders');
+    await page.keyboard.press('Escape');
+    await expect(editor).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+    // Escape still reverts a name: handing focus back must not commit what was typed.
+    await expect(page.locator('.dc-node').first()).not.toContainText('Orders');
+
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('Orders API');
+    await page.keyboard.press('Enter');
+    await expect(editor).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+    await expect(page.locator('.dc-node').first()).toContainText('Orders API');
+    await expect(selectedNodes(page)).toHaveCount(1);
+  });
+
+  test('a shape toolbar closed from the keyboard puts focus back on the canvas', async ({ page }) => {
+    await newCanvas(page, 'Toolbar focus');
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Queue', { x: 650, y: 300 });
+    const toolbar = page.getByRole('toolbar', { name: 'Element options' });
+    await expect(toolbar).toBeVisible();
+
+    // Escape inside the toolbar deselects, and the toolbar that held focus goes with the selection.
+    await canvas(page).focus();
+    await page.keyboard.press('Tab');
+    await expect(toolbar.getByRole('button', { name: 'Element colour' })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(selectedNodes(page)).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+
+    // Its Delete button, pressed from the keyboard, removes the shape the toolbar was about.
+    await page.locator('.dc-node').first().click();
+    await expect(toolbar).toBeVisible();
+    const remove = toolbar.getByRole('button', { name: 'Delete', exact: true });
+    await canvas(page).focus();
+    for (let i = 0; i < 12 && !(await remove.evaluate((el) => el === document.activeElement)); i += 1) {
+      await page.keyboard.press('Tab');
+    }
+    await expect(remove).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.locator('.dc-node')).toHaveCount(1);
+    await expect(canvas(page)).toBeFocused();
+  });
+
+  /** A Service sending to a Queue, its connector's toolbar open: a connector whose caption chip is its
+   *  name (a request/response pairing shows its operation editor there instead). */
+  async function connectorToolbar(page: Page, title: string) {
+    await newCanvas(page, title);
+    await create(page, 'Service', { x: 300, y: 300 });
+    await create(page, 'Queue', { x: 700, y: 300 });
+    await connectShapes(page, 0, 1);
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+    await clickEdge(page, page.locator('.dc-edge[data-selected="true"] .dc-edge-line'));
+    const toolbar = page.getByRole('toolbar', { name: 'Connector options' });
+    await expect(toolbar).toBeVisible();
+    return toolbar;
+  }
+
+  test('the connector toolbar’s label field hands focus back to the chip that opened it', async ({ page }) => {
+    const toolbar = await connectorToolbar(page, 'Connector label focus');
+    const caption = toolbar.locator('.dc-edge-inspector-caption');
+    await caption.focus();
+    await page.keyboard.press('Enter');
+    const field = toolbar.getByRole('textbox', { name: 'Connector label' });
+    await expect(field).toBeFocused();
+    await page.keyboard.type('pays');
+    await page.keyboard.press('Escape');
+    await expect(field).toHaveCount(0);
+    await expect(caption).toBeFocused();
+    await expect(caption).not.toHaveText('pays');
+    await page.keyboard.press('Enter');
+    await page.keyboard.type('pays');
+    await page.keyboard.press('Enter');
+    await expect(field).toHaveCount(0);
+    await expect(caption).toBeFocused();
+    await expect(caption).toHaveText('pays');
   });
 });
