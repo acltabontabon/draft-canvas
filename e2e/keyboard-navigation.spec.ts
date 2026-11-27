@@ -378,4 +378,24 @@ test.describe('keyboard focus around the canvas', () => {
     await expect(caption).toBeFocused();
     await expect(caption).toHaveText('pays');
   });
+
+  test('Escape on the connector colour flyout closes the flyout alone', async ({ page }) => {
+    // As the shape toolbar's colour panel does: the connector stays selected, its toolbar open.
+    const toolbar = await connectorToolbar(page, 'Connector colour flyout');
+    const swatch = toolbar.getByRole('button', { name: 'Connector colour' });
+    await swatch.focus();
+    await page.keyboard.press('Enter');
+    const flyout = toolbar.locator('.dc-connector-palette-flyout');
+    await expect(flyout).toBeVisible();
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('Escape');
+    await expect(flyout).toHaveCount(0);
+    await expect(toolbar).toBeVisible();
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(1);
+    await expect(swatch).toBeFocused();
+    // A second Escape is the canvas's again: it deselects, and focus lands on the canvas.
+    await page.keyboard.press('Escape');
+    await expect(page.locator('.dc-edge[data-selected="true"]')).toHaveCount(0);
+    await expect(canvas(page)).toBeFocused();
+  });
 });

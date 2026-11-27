@@ -1320,6 +1320,26 @@ function ExpandedPanel({
   const [editingBehavior, setEditingBehavior] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [conditionOpen, setConditionOpen] = useState(false);
+  const swatchRef = useRef<HTMLButtonElement>(null);
+
+  // Escape closes the colour flyout alone, as it closes the shape toolbar's colour panel: it fell
+  // through to the editor's Escape, which deselected the connector and took the whole toolbar, and
+  // focus with it. Captured and deferred like the membership checklist's (see its comment above).
+  useEffect(() => {
+    if (!paletteOpen) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || isImeKeyEvent(event)) return;
+      if (window.document.querySelector('.dc-inspector-select-menu') || overlayAboveCanvasIsOpen()) return;
+      event.stopPropagation();
+      // Back to the swatch that opened it when focus was in the toolbar (on a colour, say), not the page.
+      const toolbar = swatchRef.current?.closest('.dc-edge-inspector');
+      const active = window.document.activeElement;
+      setPaletteOpen(false);
+      if (toolbar && active && toolbar.contains(active)) swatchRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKeyDown, true);
+    return () => window.removeEventListener('keydown', onKeyDown, true);
+  }, [paletteOpen]);
 
   // A Junction is a routing/convergence point, not a system component of its own — it has no
   // semantic identity, so every capability lookup below resolves *through* it to whatever it
@@ -1591,6 +1611,7 @@ function ExpandedPanel({
             <Tooltip content={{ title: currentAccentChip ? 'Connector colour' : 'Automatic colour', description: currentAccentChip ? 'Choose a fixed colour or return to automatic.' : 'This connector follows its source colour. Click to choose a fixed colour.' }}>
               {(tip) => (
                 <button
+                  ref={swatchRef}
                   type="button"
                   className="dc-inspector-color-swatch dc-connector-color-swatch"
                   data-auto={currentAccentChip ? undefined : 'true'}
