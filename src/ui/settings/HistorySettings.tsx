@@ -246,7 +246,7 @@ export function HistorySettings({ children }: { children?: ReactNode } = {}) {
               <ConfirmAction
                 label="Remove this diagram’s history…"
                 confirmLabel="Remove from this diagram"
-                warning={`This history is shared: ${others} on this device ${shared === 1 ? 'continues' : 'continue'} it, so it is kept for ${shared === 1 ? 'that diagram' : 'them'} and nothing is deleted. This diagram stops using it and stays as it is. Recording starts a new history with your next change unless you turn it off above first.`}
+                warning={`${shared === 1 ? 'Another diagram on this device continues' : `${shared} other diagrams on this device continue`} this history, so it is kept for ${shared === 1 ? 'that diagram' : 'them'} and nothing is deleted. This diagram stops using it and stays as it is. Recording starts a new history with your next change unless you turn it off above first.`}
                 onConfirm={async () => {
                   await historyService().removeHistory();
                   setMessage(`This diagram no longer uses that history. It is still on this device for ${others}.`);
