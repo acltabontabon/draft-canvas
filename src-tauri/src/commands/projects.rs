@@ -200,6 +200,7 @@ fn move_file_now(
         move_atomic(&grant.path, &target)?;
     }
     let new_handle = state.grant_file(&target)?;
+    state.retire_file_handle(handle, &new_handle);
     let new_grant = state.file(&new_handle)?;
     // A Recent entry is best-effort. The caller still needs the new handle after a successful move.
     let _ = state
@@ -367,8 +368,15 @@ mod tests {
         assert_eq!(recents.len(), 1);
         assert_eq!(Path::new(&recents[0].path), target);
 
-        // Asked again, it is already there: nothing moves, nothing is renumbered.
+        // The handle the file had before the move names nothing now.
+        assert_eq!(
+            state.file(&handle).err().unwrap().kind,
+            ErrorKind::InvalidHandle
+        );
+
+        // Asked again, it is already there: nothing moves, nothing is renumbered, and it keeps its handle.
         let again = move_file_now(&state, &moved.handle, &project.handle, true).unwrap();
+        assert_eq!(again.handle, moved.handle);
         assert_eq!(state.file(&again.handle).unwrap().path, target);
     }
 

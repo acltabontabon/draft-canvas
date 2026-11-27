@@ -208,9 +208,10 @@ fn rename_file_now(
     let stem = validate_rename_stem(new_stem)?;
     let target = grant.path.with_file_name(format!("{stem}.{DOC_EXT}"));
     rename_atomic(&grant.path, &target)?;
-    // The old handle now names a path that is gone; a fresh one is minted for the new path, and the page
-    // is the one that swaps it in for whatever session was using the old one.
+    // The old handle now names a path that is gone; a fresh one is minted for the new path, the old one
+    // is retired, and the page is the one that swaps the new one in for whatever session was using it.
     let new_handle = state.grant_file(&target)?;
+    state.retire_file_handle(handle, &new_handle);
     let new_grant = state.file(&new_handle)?;
     // A Recent entry is best-effort. The caller still needs the new handle after a successful rename.
     let _ = state
@@ -548,8 +549,24 @@ mod tests {
             "{\"x\":1}"
         );
         assert_eq!(state.file(&renamed.handle).unwrap().name, "roadmap");
-        // The old handle no longer resolves to anything.
-        assert!(state.file(&handle).is_err() || state.file(&handle).unwrap().path != path);
+        // The old handle no longer resolves to anything, and a new file at the old name is a new
+        // document with a handle of its own.
+        assert_eq!(
+            state.file(&handle).err().unwrap().kind,
+            ErrorKind::InvalidHandle
+        );
+        fs::write(&path, "{}").unwrap();
+        assert_ne!(state.grant_file(&path).unwrap(), handle);
+    }
+
+    #[test]
+    fn renaming_a_file_to_its_own_name_keeps_its_handle() {
+        let (dir, state) = test_state();
+        let path = doc(&dir, "plan.draftcanvas", "{}");
+        let handle = state.grant_file(&path).unwrap();
+        let renamed = rename_file_now(&state, &handle, "plan").unwrap();
+        assert_eq!(renamed.handle, handle);
+        assert_eq!(state.file(&handle).unwrap().name, "plan");
     }
 
     #[test]

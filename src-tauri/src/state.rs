@@ -269,6 +269,14 @@ impl AppState {
         Ok(lock(&self.grants).insert_file(canonical))
     }
 
+    /// After a rename or move: `old` stops naming anything once the file has a handle of its own at the
+    /// new path. Renaming a file to the name it already has keeps its one handle.
+    pub fn retire_file_handle(&self, old: &str, new: &str) {
+        if old != new {
+            lock(&self.grants).revoke_file(old);
+        }
+    }
+
     pub fn grant_project(&self, path: &Path) -> Result<Handle, AppError> {
         let canonical = validate_folder(path)?;
         if let Some(watches) = lock(&self.watches).as_mut() {
